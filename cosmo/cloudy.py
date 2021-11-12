@@ -669,6 +669,11 @@ class cloudyIon():
         return [element['name'] for element in self._el]
 
     @staticmethod
+    def atomicMasses(self):
+        """ Dict of all atomic name:atomic weight pairs we have stored. """
+        return {element['name']:element['mass'] for element in self._el}
+
+    @staticmethod
     def ionList():
         """ List of all elements + ion numbers we track. """
         ions = []

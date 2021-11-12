@@ -4,7 +4,7 @@ Synthetic absorption spectra generation.
 """
 import numpy as np
 import h5py
-from os.path import expanduser
+from os.path import isfile, expanduser
 import matplotlib.pyplot as plt
 from scipy.special import wofz
 
@@ -35,9 +35,9 @@ instruments = {'COS-G130M'  : {'wave_min':1150, 'wave_max':1450, 'dwave':0.01},
                'MIKE'       : {'wave_min':3350, 'wave_max':9500, 'dwave':0.07}, # approximate only
                'KECK-HIRES' : {'wave_min':3000, 'wave_max':9250, 'dwave':0.04}} # approximate only
 
-def _line_params(lineName):
+def _line_params(line):
     """ Return 3-tuple of (f,Gamma,wave0). """
-    return lines[lineName]['f'], lines[lineName]['gamma'], lines[lineName]['wave0']
+    return lines[line]['f'], lines[line]['gamma'], lines[line]['wave0']
 
 def _voigt0(wave_cm, b, wave0_ang, gamma):
     """ Dimensionless Voigt profile (shape).
@@ -68,7 +68,7 @@ def _voigt_tau(wave, N, b, wave0, f, gamma, wave0_rest=None):
 
     Args:
       wave (array[float]): wavelength grid in [ang]
-      N (float): column density of absorbing species in [log cm^-2]
+      N (float): column density of absorbing species in [cm^-2]
       b (float): doppler parameter, equal to sqrt(2kT/m) where m is the particle mass.
         b = sigma*sqrt(2) where sigma is the velocity dispersion.
       wave0 (float): central wavelength of the transition in [ang]
@@ -86,7 +86,7 @@ def _voigt_tau(wave, N, b, wave0, f, gamma, wave0_rest=None):
     consts = 0.014971475 # sqrt(pi)*e^2 / m_e / c = cm^2/s
     wave0_rest_cm = wave0_rest * 1e-8
 
-    tau_wave = (consts * 10**N * f * wave0_rest_cm) * phi_wave
+    tau_wave = (consts * N * f * wave0_rest_cm) * phi_wave
     return tau_wave
 
 def _equiv_width(tau,wave_ang):
@@ -99,9 +99,9 @@ def _equiv_width(tau,wave_ang):
 
     return res
 
-def curveOfGrowth(lineName='MgII 2803'):
+def curveOfGrowth(line='MgII 2803'):
     """ Plot relationship between EW and N for a given transition (e.g. HI, MgII line). """
-    f, gamma, wave0_ang = _line_params(lineName)
+    f, gamma, wave0_ang = _line_params(line)
 
     # run config
     nPts = 201
@@ -124,7 +124,7 @@ def curveOfGrowth(lineName='MgII 2803'):
     for N in [12,15,18,21]:
         for j, sigma in enumerate([30]):
             b = sigma * np.sqrt(2)
-            tau = _voigt_tau(wave_ang, N, b, wave0_ang, f, gamma)
+            tau = _voigt_tau(wave_ang, 10.0**N, b, wave0_ang, f, gamma)
             flux = np.exp(-1*tau)
             EW = _equiv_width(tau,wave_ang)
             print(N,b,EW)
@@ -132,7 +132,7 @@ def curveOfGrowth(lineName='MgII 2803'):
             ax.plot(dvel, flux, lw=lw, linestyle=linestyles[j], label='N = %f b = %d' % (N,b))
 
     ax.legend()
-    fig.savefig('flux_%s.pdf' % lineName)
+    fig.savefig('flux_%s.pdf' % line)
     plt.close(fig)
 
     # plot cog
@@ -165,7 +165,7 @@ def curveOfGrowth(lineName='MgII 2803'):
         ax.plot(cols, EW, lw=lw, label='b = %d km/s' % b)
 
     ax.legend()
-    fig.savefig('cog_%s.pdf' % lineName)
+    fig.savefig('cog_%s.pdf' % line)
     plt.close(fig)
 
 def create_master_grid(line=None, instrument=None):
@@ -260,7 +260,16 @@ def deposit_single_line(wave_edges_master, tau_master, N, b, f, gamma, wave0, z_
                 print('WARNING: max edge of local grid hit edge of master!')
             master_finalind = wave_edges_master.size - 1
 
-        assert master_startind != master_finalind # otherwise check
+        if master_startind == master_finalind:
+            if n_iter < 20:
+                # extend, see if wings of this feature will enter master spectrum
+                local_fac *= 1.2
+                n_iter += 1
+                continue
+
+            if debug:
+                print('WARNING: absorber entirely off edge of master spectrum! skipping!')
+            return
 
         # create local grid specification aligned with master
         nmaster_covered = master_finalind - master_startind # difference of bin edge indices
@@ -335,6 +344,180 @@ def deposit_single_line(wave_edges_master, tau_master, N, b, f, gamma, wave0, z_
 
     return
 
+def generate_spectrum_uniform_grid():
+    """ Testing. Generate an absorption spectrum by ray-tracing through a uniform grid. """
+    from util.simParams import simParams
+    from util.sphMap import sphGridWholeBox, sphMap
+    from cosmo.cloudy import cloudyIon
+
+    # config
+    sP = simParams(run='tng100-2', redshift=0.0)
+
+    line = 'LyA'
+    instrument = 'test_EUV' # 'SDSS-BOSS' #
+    nCells = 128
+    haloID = None # if None, then full box
+
+    posInds = [int(nCells/2),int(nCells/2)] # [0,0] # (x,y) pixel indices to ray-trace along
+    projAxis = 2 # z
+
+    # init
+    element = lines[line]['ion'].split(' ')[0]
+    ion_amu = {el['symbol']:el['mass'] for el in cloudyIon._el}[element]
+    ion_mass = ion_amu * sP.units.mass_proton # g
+
+    # quick caching
+    cacheFile = f"cache_{line}_{nCells}_h{haloID}_{sP.snap}.hdf5"
+    if isfile(cacheFile):
+        # load now
+        print(f'Loading [{cacheFile}].')
+        with h5py.File(cacheFile,'r') as f:
+            grid_dens = f['grid_dens'][()]
+            grid_vel = f['grid_vel'][()]
+            grid_temp = f['grid_temp'][()]
+            if haloID is not None:
+                boxSizeImg = f['boxSizeImg'][()]
+    else:
+        # load
+        massField = '%s mass' % lines[line]['ion']
+        velField = 'vel_' + ['x','y','z'][projAxis]
+
+        pos = sP.snapshotSubsetP('gas', 'pos', haloID=haloID) # code
+        vel_los = sP.snapshotSubsetP('gas', velField, haloID=haloID) # code
+        mass = sP.snapshotSubsetP('gas', massField, haloID=haloID) # code
+        hsml = sP.snapshotSubsetP('gas', 'hsml', haloID=haloID) # code
+        temp = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', haloID=haloID) # K
+
+        # grid
+        if haloID is None:
+            grid_mass = sphGridWholeBox(sP, pos, hsml, mass, None, nCells=nCells)
+            grid_vel = sphGridWholeBox(sP, pos, hsml, mass, vel_los, nCells=nCells)
+            grid_temp = sphGridWholeBox(sP, pos, hsml, mass, temp, nCells=nCells)
+
+            pxVol = (sP.boxSize / nCells)**3 # code units (ckpc/h)^3
+        else:
+            halo = sP.halo(haloID)
+            haloSizeRvir = 2.0
+            boxSizeImg = halo['Group_R_Crit200'] * np.array([haloSizeRvir,haloSizeRvir,haloSizeRvir])
+            boxCen = halo['GroupPos']
+
+            grid_mass = sphMap( pos=pos, hsml=hsml, mass=mass, quant=None, axes=[0,1], 
+                                ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, 
+                                boxCen=boxCen, nPixels=[nCells, nCells, nCells] )
+            grid_vel  = sphMap( pos=pos, hsml=hsml, mass=mass, quant=vel_los, axes=[0,1], 
+                                ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, 
+                                boxCen=boxCen, nPixels=[nCells, nCells, nCells] )
+            grid_temp = sphMap( pos=pos, hsml=hsml, mass=mass, quant=temp, axes=[0,1], 
+                                ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, 
+                                boxCen=boxCen, nPixels=[nCells, nCells, nCells] )
+
+            pxVol = np.prod(boxSizeImg) / nCells**3 # code units
+
+        # unit conversions: mass -> density
+        grid_dens = sP.units.codeDensToPhys(grid_mass/pxVol, cgs=True, numDens=True) # H atoms/cm^3
+        grid_dens /= ion_amu # [ions/cm^3]
+
+        # unit conversions: line-of-sight velocity
+        grid_vel = sP.units.particleCodeVelocityToKms(grid_vel) # physical km/s
+
+        # save
+        with h5py.File(cacheFile,'w') as f:
+            f['grid_dens'] = grid_dens
+            f['grid_vel'] = grid_vel
+            f['grid_temp'] = grid_temp
+            if haloID is not None:
+                f['boxSizeImg'] = boxSizeImg
+        print(f'Saved [{cacheFile}].')
+
+    # create master grid
+    master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
+
+    # create theory-space master grids
+    master_dens   = np.zeros(nCells, dtype='float32') # density for each ray segment
+    master_dx     = np.zeros(nCells, dtype='float32') # pathlength for each ray segment
+    master_temp   = np.zeros(nCells, dtype='float32') # temp for each ray segment
+    master_towave = np.zeros(nCells, dtype='float32') # wavelength each ray segment was deposited to (central)
+
+    # init
+    f, gamma, wave0 = _line_params(line)
+
+    boxSize = sP.boxSize if haloID is None else boxSizeImg[projAxis]
+
+    dx_Mpc = sP.units.codeLengthToMpc(boxSize / nCells)
+    dx_cm  = sP.units.codeLengthToKpc(boxSize / nCells) * sP.units.kpc_in_cm
+
+    # assign sP.redshift to the front intersectiomn (beginning) of the box
+    z_vals = np.linspace(sP.redshift, sP.redshift+0.1, 200)
+    lengths = sP.units.redshiftToComovingDist(z_vals) - sP.units.redshiftToComovingDist(sP.redshift)
+
+    # ray trace a single pixel from front of box to back of box
+    for i in range(nCells):
+        # doppler shift
+        vel_los = grid_vel[posInds[0], posInds[1], i]
+        z_doppler = vel_los / units.c_km_s
+
+        # cosmological redshift
+        pathlength = dx_Mpc * i # Mpc from start of box (at sP.redshift)
+        z_cosmo = np.interp(pathlength, lengths, z_vals)
+
+        # effective redshift
+        z_eff = (1+z_doppler)*(1+z_cosmo) - 1 
+
+        # column density
+        dens = grid_dens[posInds[0], posInds[1], i]
+        N = dens * dx_cm # cm^-2
+
+        # doppler parameter b = sqrt(2kT/m) where m is the particle mass
+        temp = grid_temp[posInds[0], posInds[1], i]
+        b = np.sqrt(2 * sP.units.boltzmann * temp / ion_mass) # cm/s
+        b /= 1e5 # km/s
+
+        # deposit
+        if 1:
+            print(f'{i:3d} N = {np.log10(N):.2f}, {b = :5.2f}, {vel_los = :7.2f}, {z_cosmo = :.5f}, {z_eff = :.4f}')
+
+        deposit_single_line(master_edges, tau_master, N, b, f, gamma, wave0, z_eff)
+
+        # store theory-space values along ray
+        master_dens[i] = dens
+        master_dx[i] = dx_Mpc
+        master_temp[i] = temp
+        master_towave[i] = wave0 * (1 + z_eff)
+
+    # calculate flux
+    flux_master = np.exp(-1*tau_master)
+
+    master_dl = np.cumsum(master_dx)
+
+    # plot
+    fig = plt.figure(figsize=(22,10))
+
+    ax = fig.add_subplot(221) # upper left
+    xcen = master_towave.mean()
+    ax.set_xlabel('Wavelength [ Ang ]')
+    ax.set_xlim([xcen-25,xcen+25])
+    ax.set_ylabel('Relative Flux')
+    ax.plot(master_mid, flux_master, '-', lw=lw, label=line)
+    ax.legend(loc='best')
+
+    ax = fig.add_subplot(222) # upper right
+    ax.set_xlabel('Distance Along Ray [ Mpc ]')
+    ax.set_ylabel('Density [log cm$^{-3}$]')
+    ax.plot(master_dl, np.log10(master_dens), '-', lw=lw)
+
+    ax = fig.add_subplot(223) # lower left
+    ax.set_xlabel('Distance Along Ray [ Mpc ]')
+    ax.set_ylabel('Wavelength Deposited [ Ang ]')
+    ax.plot(master_dl, master_towave, '-', lw=lw)
+
+    ax = fig.add_subplot(224) # lower right
+    ax.set_xlabel('Distance Along Ray [ Mpc ]')
+    ax.set_ylabel('Temperature [log K]')
+    ax.plot(master_dl, np.log10(master_temp), '-', lw=lw)
+
+    fig.savefig(f"spectrum_box_{line}_{nCells}_h{haloID}_{posInds[0]}-{posInds[1]}_z{sP.redshift:.0f}.pdf")
+    plt.close(fig)
+
 def single_line_test():
     """ Testing.
 
@@ -368,7 +551,7 @@ def single_line_test():
     z_doppler = vel_los / units.c_km_s
     z_eff = (1+z_doppler)*(1+z_cosmo) - 1 # effective redshift
 
-    wave_local, tau_local, flux_local = deposit_single_line(master_edges, tau_master, N, b, f, gamma, wave0, z_eff, debug=True)
+    wave_local, tau_local, flux_local = deposit_single_line(master_edges, tau_master, 10.0**N, b, f, gamma, wave0, z_eff, debug=True)
 
     # compute flux
     flux_master = np.exp(-1*tau_master)
@@ -391,7 +574,7 @@ def single_line_test():
     ax.plot(wave_local, tau_local, '-', lw=lw, label='local')
 
     ax.legend(loc='best')
-    fig.savefig('spectrum_single_%s.pdf' % (lineName))
+    fig.savefig('spectrum_single_%s.pdf' % line)
     plt.close(fig)
 
 def test_LyA_vs_coldens():
@@ -445,7 +628,7 @@ def test_LyA_vs_coldens():
 
     # loop over N values, compute a local spectrum for each and plot
     for i, N in enumerate(N_vals):
-        wave, tau, flux = deposit_single_line(master_edges, tau_master, N, b, f, gamma, wave0, z_eff, debug=True)
+        wave, tau, flux = deposit_single_line(master_edges, tau_master, 10.0**N, b, f, gamma, wave0, z_eff, debug=True)
 
         # plot
         ax.plot(wave, flux, '-', lw=lw, color=sm.to_rgba(N))
@@ -482,7 +665,7 @@ def multi_line_test():
     for line in lines:
         f, gamma, wave0 = _line_params(line)
 
-        deposit_single_line(master_edges, tau_master, N, b, f, gamma, wave0, z_eff)
+        deposit_single_line(master_edges, tau_master, 10.0**N, b, f, gamma, wave0, z_eff)
 
     # compute flux
     flux_master = np.exp(-1*tau_master)
@@ -540,7 +723,7 @@ def benchmark():
         if i % (n/10) == 0:
             print(i, N_vals[i], b_vals[i], vel_los[i], z_eff)
 
-        deposit_single_line(master_edges, tau_master, N_vals[i], b_vals[i], f, gamma, wave0, z_eff)
+        deposit_single_line(master_edges, tau_master, 10.0**N_vals[i], b_vals[i], f, gamma, wave0, z_eff)
 
     tot_time = time.time() - start_time
     print('depositions took [%g] sec, i.e. [%g] each' % (tot_time, tot_time/n))
