@@ -681,6 +681,13 @@ def _process_custom_func(sP,op,ptProperty,gc,subhaloID,particles,rr,i0,i1,wValid
         sP.correctPeriodicDistVecs(loc_val)
         loc_val /= scale_rad
 
+        if ptProperty == 'shape_ellipsoid':
+            ellipsoid_rin  = 1.8 # rhalfstars
+            ellipsoid_rout = 2.2 # rhalfstars
+        if ptProperty == 'shape_ellipsoid_1r':
+            ellipsoid_rin  = 0.8 # rhalfstars
+            ellipsoid_rout = 1.2 # rhalfstars
+
         # fit, and save ratios of second and third axes lengths to major axis
         q, s, _, _ = ellipsoidfit(loc_val, loc_wt, scale_rad, ellipsoid_rin, ellipsoid_rout)
 
@@ -1004,12 +1011,6 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
     if ptProperty in ['shape_ellipsoid','shape_ellipsoid_1r']:
         gc['SubhaloRhalfStars'] = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])[:,sP.ptNum('stars')]
-        if ptProperty == 'shape_ellipsoid':
-            ellipsoid_rin  = 1.8 # rhalfstars
-            ellipsoid_rout = 2.2 # rhalfstars
-        if ptProperty == 'shape_ellipsoid_1r':
-            ellipsoid_rin  = 0.8 # rhalfstars
-            ellipsoid_rout = 1.2 # rhalfstars
         fieldsLoad.append('pos')
         allocSize = (nSubsDo,2) # q,s
 
@@ -1313,6 +1314,9 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         #bands += ['jwst_f070w','jwst_f090w','jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR (NIRCAM) wide
 
         if indivStarMags: bands = ['sdss_r','jwst_f150w']
+
+    if str(bands) == 'all':
+        bands = pop.bands
 
     nBands = len(bands)
 

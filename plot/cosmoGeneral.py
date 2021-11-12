@@ -751,7 +751,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQua
       ylim (list[float][2]): if not None, override default y-axis limits.
       clim (list[float][2]): if not None, override default colorbar limits.
       cbarticks (list[float]): if not None, override automatic colorbar tick values.
-      filterFlag (bool): exclude SubhaloFlag==0 (non-cosmological) objects.
+      filterFlag (bool): if True, exclude SubhaloFlag==0 (non-cosmological) objects.
       colorbarInside (bool): place colorbar (assuming scatterColor is used) inside the panel. 
       fig_subplot:
 
@@ -1310,7 +1310,7 @@ def plots4():
     sPs.append( simParams(run='tng100-1', redshift=0.0) )
 
     xQuant = 'mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
-    yQuant = 'frac_halogas_sfcold'
+    yQuant = 'xray_0.5-2.0kev_r500'
     scatterColor = 'ssfr' #'size_gas' #'M_bulge_counter_rot' # 'size_stars'
     cenSatSelect = 'cen'
     filterFlag = False #True

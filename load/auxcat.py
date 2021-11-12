@@ -768,6 +768,8 @@ fieldComputeFunctionMapping = \
                                          iso='padova07', imf='chabrier', dust='cf00'),
    'Subhalo_StellarPhot_p07c_cf00dust_rad30pkpc' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00', rad=30.0),
+   'Subhalo_StellarPhot_p07c_cf00dust_allbands' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00', bands='all', minStellarMass=9.0),
    'Subhalo_StellarPhot_p07k_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='kroupa', dust='none'),
    'Subhalo_StellarPhot_p07k_cf00dust' : partial(subhaloStellarPhot, 

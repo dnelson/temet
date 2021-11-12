@@ -38,7 +38,7 @@ def pick_halos():
     # note: skipped h604 (corrupt GroupNsubs != Nsubgroups_Total in snap==53, replaced with 616)
     return hInds
 
-def _halo_ids_run(res=13, onlyDone=False):
+def _halo_ids_run(res=14, onlyDone=False):
     """ Parse runs.txt and return the list of (all) halo IDs. """
     path = expanduser("~") + "/sims.TNG_zooms/"
 
@@ -51,6 +51,8 @@ def _halo_ids_run(res=13, onlyDone=False):
             line = line.split(' ')[0]
         if line.isdigit():
             halo_inds.append(int(line))
+        if 'running:' in line and onlyDone:
+            break
         if 'OLD:' in line:
             break
 
@@ -251,7 +253,7 @@ def sizefacComparison():
     """ Compare SizeFac 2,3,4 runs (contamination and CPU times) in the testing set. """
 
     # config
-    zoomRes  = 13
+    zoomRes  = 14
     redshift = 0.0
 
     if 0:
@@ -266,7 +268,7 @@ def sizefacComparison():
         variants = ['sf2_n160s','sf2_n160s_mpc','sf2_n320s','sf2_n640s','sf3']
 
     if 1:
-        # main TNG1-Cluster sample
+        # main TNG-Cluster sample
         hInds    = _halo_ids_run(onlyDone=True)
         variants = ['sf3']
         run      = 'tng_zoom'

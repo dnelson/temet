@@ -9,6 +9,7 @@ from . import lightcone
 from . import mergertree
 from . import perf
 from . import skirt
+from . import spectrum
 from . import stellarPop # requires fsps
 from . import util
 from . import xray
