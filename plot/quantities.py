@@ -2352,6 +2352,16 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
+    if prop in ['yparam','sz_y','sz_yparam']:
+        label = 'Sunyaev-Zeldovich y-parameter [ kpc$^2$ ]'
+        lim = [-5.0, -10.0]
+        log = True
+
+    if prop in ['vesc','escapevel']:
+        label = 'Escape Velocity [ km/s ]'
+        lim = [1.0, 4.0]
+        log = True
+
     # todo: u_ke, p_tot, p_sync
 
     if ('MHI' in ptProperty or 'MH2' in ptProperty) and '_popping' in ptProperty:
@@ -2519,6 +2529,11 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         log = False
     if prop in ['rad_rvir','halo_rad_rvir']:
         label = '%s Radial Distance / Halo R$_{\\rm vir}$ [ log ]' % typeStr
+        lim = [-2.0, 3.0]
+        if haloLims: lim = [-2.5, 0.5]
+        log = True
+    if prop in ['rad_r500','halo_rad_r500']:
+        label = '%s Radial Distance / Halo R$_{\\rm 500}$ [ log ]' % typeStr
         lim = [-2.0, 3.0]
         if haloLims: lim = [-2.5, 0.5]
         log = True

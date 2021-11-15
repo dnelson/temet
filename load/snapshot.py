@@ -673,6 +673,13 @@ def snapshotSubset(sP, partType, fields,
             P_gas = 10.0**snapshotSubset(sP, partType, 'P_gas', **kwargs)
             r[field] = ( P_B + P_gas )
 
+        # sunyaev-zeldovich y-parameter (per gas cell) [pkpc^2]
+        if field in ['yparam','sz_y','sz_yparam']:
+            temp = snapshotSubset(sP, partType, 'temp_sfcold_linear', **kwargs)
+            xe = snapshotSubset(sP, partType, 'ElectronAbundance', **kwargs)
+            mass = snapshotSubset(sP, partType, 'Masses', **kwargs)
+            r[field] = sP.units.calcSunyaevZeldovichYparam(mass, xe, temp)
+
         # escape velocity (based on Potential field) [physical km/s]
         if field in ['vesc','escapevel']:
             pot = snapshotSubset(sP, partType, 'Potential', **kwargs)
@@ -1184,7 +1191,7 @@ def snapshotSubset(sP, partType, fields,
             r[field] = pos
 
         # 3D radial distance from halo center, [code] or [physical kpc] or [dimensionless fraction of rvir=r200crit]
-        if field in ['rad','rad_kpc','rad_kpc_linear','halo_rad','halo_rad_kpc','rad_rvir','halo_rad_rvir']:
+        if field in ['rad','rad_kpc','rad_kpc_linear','halo_rad','halo_rad_kpc','rad_rvir','halo_rad_rvir','rad_r500','halo_rad_r500']:
             if sP.isZoom:
                 subhaloID = sP.zoomSubhaloID
                 print('WARNING: snapshotSubset() using zoomSubhaloID [%d] for zoom run to compute [%s]!' % (subhaloID,field))
@@ -1197,8 +1204,11 @@ def snapshotSubset(sP, partType, fields,
             haloPos = halo['GroupPos'] # note: is identical to SubhaloPos of GroupFirstSub
 
             rad = sP.periodicDists(haloPos, pos)
+            
+            # what kind of distance?
             if '_kpc' in field: rad = sP.units.codeLengthToKpc(rad)
             if '_rvir' in field: rad = rad / halo['Group_R_Crit200']
+            if '_r500' in field: rad = rad / halo['Group_R_Crit500']
 
             r[field] = rad
 

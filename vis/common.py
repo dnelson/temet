@@ -30,7 +30,7 @@ colDensityFields  = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI
                      'xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet','xray_lum_0.5-2.0kev',
                      'p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha',
                      'H2_BR','H2_GK','H2_KMT','HI_BR','HI_GK','HI_KMT']
-totSumFields      = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','tau0_LyB']
+totSumFields      = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','tau0_LyB','sz_yparam']
 velLOSFieldNames  = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','vel_z','bfield_x','bfield_y','bfield_z']
 haloCentricFields = ['tff','tcool_tff','menc','specangmom_mag','vrad','vrel','delta_rho']
@@ -45,7 +45,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
               'coldens','coldens_msunkpc2','coldens_msun_ster',
               'OVI_OVII_ionmassratio',# (generalize),
               'HI','HI_segmented','H2_BR','H2_GK','H2_KMT','HI_BR','HI_GK','HI_KMT',
-              'xray','xray_lum','sfr_halpha','halpha','p_sync_ska',
+              'xray','xray_lum','sz_yparam','sfr_halpha','halpha','p_sync_ska',
               'temp','temperature','temp_sfcold',
               'ent','entr','entropy',
               'bmag','bmag_uG','bfield_x','bfield_y','bfield_z',
@@ -650,7 +650,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
     if partFieldLoad in volDensityFields+colDensityFields+totSumFields or \
       ' ' in partFieldLoad or 'metals_' in partFieldLoad or 'stellarBand-' in partFieldLoad or \
       'stellarBandObsFrame-' in partFieldLoad or 'sb_' in partFieldLoad:
-        # distribute mass and calculate column/volume density grid
+        # distribute 'mass' and calculate column/volume density grid
         quant = None
 
         if partFieldLoad in volDensityFields+colDensityFields or \
@@ -871,6 +871,15 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
         config['label']  = 'Gas Synchrotron Emission, SKA [log W Hz$^{-1}$ kpc$^{-2}$]'
         config['ctName'] = 'perula'
+
+    if partField in ['sz_yparam']:
+        # per-cell yparam has [kpc^2] units, normalize by pixel area
+        pxSizesCode = [boxSizeImg[0] / nPixels[0], boxSizeImg[1] / nPixels[1]]
+        pxAreaKpc2 = np.prod(sP.units.codeLengthToKpc(pxSizesCode))
+        grid /= pxAreaKpc2
+        
+        config['label'] = 'Thermal Sunyaev-Zeldovich y-parameter [log]'
+        config['ctName'] = 'turbo'
 
     if 'metals_' in partField:
         # all of GFM_Metals as well as GFM_MetalsTagged (projected as column densities)

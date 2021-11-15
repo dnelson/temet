@@ -1055,6 +1055,33 @@ class units(object):
             csnd = logZeroSafe(csnd)
         return csnd
 
+    def calcSunyaevZeldovichYparam(self, mass, xe, temp):
+        """ Calculate per-cell SZ y-parameter (e.g. McCarthy+2014 Eqn 2, Roncarelli+2007 Eqn 5, Kay+2012 Eqn 12).
+
+        Args:
+          mass (ndarray[float]): gas cell masses [code units].
+          xe (ndarray[float]): gas electron number density fraction [code units, i.e. dimensionless linear].
+          temp (ndarray[float]): gas temperature [linear K].
+
+        Return:
+          ndarray[float]: y-parameter in units of area [pkpc^2].
+        """
+        # Y_i = k * sigma_T / (m_e * c^2) * (n_e,i * m_i / rho_i) * T_i
+        # Y_i = k * sigma_T / (m_e * c^2) * (m_i / mu_e / m_H) * T_i
+        #   with mu_e=1.14 a reasonable mean molecular weight per free elctron in a fully ionized plasma with X=0.76
+
+        # prefactor: [erg s^2 / K / g] = cm^2 / K
+        consts = self.boltzmann * self.sigma_thomson / (self.mass_electron * self.c_cgs**2)
+
+        # mass * ne/rho [dimensionless]
+        massfac = self.hydrogen_massfrac * xe * mass * (self.UnitMass_in_g / self.mass_proton)
+        #massfac = mass * (self.UnitMass_in_g / self.mass_proton) / 1.14 # essentially identical
+
+        Y = consts * temp * massfac # cm^2
+        Y /= (self.kpc_in_km * self.km_in_cm)**2 # kpc^2
+
+        return Y
+
     def codeDensToCritRatio(self, rho, baryon=False, log=False, redshiftZero=False):
         """ Normalize code density by the critical (total/baryonic) density at some redshift. 
         If redshiftZero, normalize by rho_crit,0 instead of rho_crit(z). """

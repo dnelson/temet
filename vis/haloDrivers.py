@@ -10,16 +10,12 @@ from util.helper import pSplit, logZeroNaN, evenlySample
 from cosmo.util import crossMatchSubhalosBetweenRuns
 from util import simParams
 
-def oneHaloSingleField(conf=0, haloID=None, subhaloInd=None, snap=None):
+def oneHaloSingleField(conf=0, haloID=None, subhaloInd=None, redshift=0.0):
     """ In a single panel(s) centered on a halo, show one field from the box. """
     panels = []
 
-    run        = 'tng' #'tng_zoom_dm'
-    res        = 1820
-    variant    = None #'sf2' # None
+    sP = simParams(run='tng100-1', redshift=redshift, variant=None)
 
-    redshift   = 0.0
-    #redshift   = simParams(res=2160,run='tng',snap=snap).redshift
     rVirFracs  = [0.5, 1.0] # None
     method     = 'sphMap'
     nPixels    = [1200,1200] #[800,800] #[1920,1920]
@@ -33,8 +29,6 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloInd=None, snap=None):
     mpb        = None
 
     excludeSubhaloFlag = True
-
-    sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
 
     if haloID is not None:
         # periodic box, FoF/Halo ID
@@ -64,7 +58,8 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloInd=None, snap=None):
         #panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} )
         #panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-3.0,3.5]} )
         #panels.append( {'partType':'gas', 'partField':'temp',   'valMinMax':[4.0,6.0]} )
-        panels.append( {'partType':'gas', 'partField':'xray_lum_05-2kev',  'valMinMax':[34,38]} )
+        #panels.append( {'partType':'gas', 'partField':'xray_lum_05-2kev',  'valMinMax':[34,38]} )
+        panels.append( {'partType':'gas', 'partField':'sz_yparam',  'valMinMax':[-8, -3]} )
     if conf == 6:
         panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
 
@@ -88,8 +83,8 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloInd=None, snap=None):
         plotStyle    = 'edged'
         rasterPx     = 1200
         colorbars    = True
-        saveFilename = './oneHaloSingleField_%d_%s_%d_%d_ID-%d_%s.png' % \
-          (conf,run,res,snap if snap is not None else redshift,subhaloInd if subhaloInd is not None else haloID,method)
+        saveFilename = './oneHaloSingleField_%d_%s_z%.1f_ID-%d_%s.png' % \
+          (conf,sP.simName,redshift,subhaloInd if subhaloInd is not None else haloID,method)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
