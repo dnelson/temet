@@ -38,6 +38,17 @@ def loadSingleHaloVPPP(sP, haloID):
     # return (n_ngb[ncells], ngb_list[n_ngb.sum()], ngb_offset[ncells])
     return num_ngb, ngb_inds, offset_ngb
 
+def loadGlobalVPPP(sP):
+    """ Load global Voronoi connectivity information for a snapshot. """
+    filename = sP.derivPath + 'voronoi/mesh_%02d.hdf5' % sP.snap
+
+    with h5py.File(filename,'r') as f:
+        num_ngb = f['num_ngb'][()]
+        offset_ngb = f['offset_ngb'][()]
+        ngb_inds = f['ngb_inds'][()]
+
+    return num_ngb, ngb_inds, offset_ngb
+
 def _localVoronoiMaxima(connectivity, property):
     """ For a given set of gas cells with connectivity, identify all of those which correspond to 
     local maximum of the given property vector, defined as all natural neighbors have a smaller value. """

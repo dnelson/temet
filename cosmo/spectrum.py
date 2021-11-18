@@ -1,6 +1,6 @@
 """
 Synthetic absorption spectra generation.
-# https://github.com/aaramburo/SpecWizard/blob/master/specwizard_subroutines.F90
+Inspired by SpecWizard (Schaye), pygad (Rottgers), Trident (Hummels).
 """
 import numpy as np
 import h5py
@@ -10,6 +10,7 @@ from scipy.special import wofz
 
 from plot.config import *
 from util import units
+from util.helper import logZeroNaN
 
 # line data (Morton+2003)
 # f [dimensionless]
@@ -31,13 +32,22 @@ instruments = {'COS-G130M'  : {'wave_min':1150, 'wave_max':1450, 'dwave':0.01},
                'COS-G140L'  : {'wave_min':1130, 'wave_max':2330, 'dwave':0.08},
                'COS-G160M'  : {'wave_min':1405, 'wave_max':1777, 'dwave':0.012},
                'test_EUV'   : {'wave_min':800,  'wave_max':1300, 'dwave':0.1}, # to see LySeries at rest
+               'test_EUV2'  : {'wave_min':1200, 'wave_max':2000, 'dwave':0.1}, # testing redshift shifts
                'SDSS-BOSS'  : {'wave_min':3600, 'wave_max':10400, 'dwave':1.0}, # dwave approx, constant in log(dwave) only
                'MIKE'       : {'wave_min':3350, 'wave_max':9500, 'dwave':0.07}, # approximate only
                'KECK-HIRES' : {'wave_min':3000, 'wave_max':9250, 'dwave':0.04}} # approximate only
 
 def _line_params(line):
-    """ Return 3-tuple of (f,Gamma,wave0). """
-    return lines[line]['f'], lines[line]['gamma'], lines[line]['wave0']
+    """ Return 5-tuple of (f,Gamma,wave0,ion_amu,ion_mass). """
+    from cosmo.cloudy import cloudyIon
+
+    mass_proton = 1.672622e-24 # cgs
+
+    element = lines[line]['ion'].split(' ')[0]
+    ion_amu = {el['symbol']:el['mass'] for el in cloudyIon._el}[element]
+    ion_mass = ion_amu * mass_proton # g
+
+    return lines[line]['f'], lines[line]['gamma'], lines[line]['wave0'], ion_amu, ion_mass
 
 def _voigt0(wave_cm, b, wave0_ang, gamma):
     """ Dimensionless Voigt profile (shape).
@@ -101,7 +111,7 @@ def _equiv_width(tau,wave_ang):
 
 def curveOfGrowth(line='MgII 2803'):
     """ Plot relationship between EW and N for a given transition (e.g. HI, MgII line). """
-    f, gamma, wave0_ang = _line_params(line)
+    f, gamma, wave0_ang, _, _ = _line_params(line)
 
     # run config
     nPts = 201
@@ -175,7 +185,7 @@ def create_master_grid(line=None, instrument=None):
     a global spectrum is made corresponding to the instrumental properties.
     """
     if line is not None:
-        f, gamma, wave0_restframe = _line_params(line)
+        f, gamma, wave0_restframe, _, _ = _line_params(line)
 
     # master wavelength grid, observed-frame [ang]
     if line is not None:
@@ -196,7 +206,7 @@ def create_master_grid(line=None, instrument=None):
 
     return wave_mid, wave_edges, tau_master
 
-def deposit_single_line(wave_edges_master, tau_master, N, b, f, gamma, wave0, z_eff, debug=False):
+def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_eff, debug=False):
     """ Add the absorption profile of a single transition, from a single cell, to a spectrum.
 
     Args:
@@ -213,6 +223,8 @@ def deposit_single_line(wave_edges_master, tau_master, N, b, f, gamma, wave0, z_
     Return:
       None.
     """
+    if N == 0:
+        return # empty
 
     # local (to the line), rest-frame wavelength grid
     dwave_local = 0.01 # ang
@@ -344,27 +356,118 @@ def deposit_single_line(wave_edges_master, tau_master, N, b, f, gamma, wave0, z_
 
     return
 
+def _spectrum_debug_plot(sP, line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos):
+    """ Plot some quick diagnostic panels for spectra. """
+
+    # calculate derivative quantities
+    flux_master = np.exp(-1*tau_master)
+    master_dl = np.cumsum(master_dx)
+
+    # start
+    fig = plt.figure(figsize=(26,14))
+
+    ax = fig.add_subplot(321) # upper left
+    w = np.where(tau_master > 0)[0]
+    xminmax = master_mid[ [w[0]-5, w[-1]+5] ]
+    xcen = np.mean(xminmax)
+
+    ax.set_xlabel('Wavelength [ Ang ]')
+    ax.set_xlim([xminmax[0], xminmax[1]]) # [xcen-25,xcen+25]
+    ax.set_ylabel('Relative Flux')
+    ax.plot(master_mid, flux_master, '-', lw=lw, label=line)
+    ax.legend(loc='best')
+
+    ax = fig.add_subplot(322) # upper right
+    ax.set_xlabel('Distance Along Ray [ Mpc ]')
+    ax.set_ylabel('Density [log cm$^{-3}$]')
+    ax.plot(master_dl, logZeroNaN(master_dens), '-', lw=lw)
+
+    ax = fig.add_subplot(323) # center left
+    ax.set_xlabel('$\Delta$ v [ km/s ]')
+    ax.set_xlim([-300, 300])
+    ax.set_ylabel('Relative Flux')
+    dv = (master_mid-xcen)/xcen * sP.units.c_km_s
+    ax.plot(dv, flux_master, '-', lw=lw, label=line)
+
+    ax = fig.add_subplot(324) # center right
+    ax.set_xlabel('Distance Along Ray [ Mpc ]')
+    ax.set_ylabel('Column Density [log cm$^{-2}$]')
+    ax.plot(master_dl, logZeroNaN(master_dens*master_dx*sP.units.Mpc_in_cm), '-', lw=lw)
+
+    ax = fig.add_subplot(325) # lower left
+    ax.set_xlabel('Distance Along Ray [ Mpc ]')
+    ax.set_ylabel('Line-of-sight Velocity [ km/s ]')
+    ax.plot(master_dl, master_vellos, '-', lw=lw)
+    #ax.set_ylabel('Wavelength Deposited [ Ang ]')
+    #ax.plot(master_dl, master_towave, '-', lw=lw)
+
+    ax = fig.add_subplot(326) # lower right
+    ax.set_xlabel('Distance Along Ray [ Mpc ]')
+    ax.set_ylabel('Temperature [ log K ]')
+    ax.plot(master_dl, logZeroNaN(master_temp), '-', lw=lw)
+
+    fig.savefig(plotName)
+    plt.close(fig)
+
+def create_spectrum_from_traced_ray(sP, f, gamma, wave0, ion_mass, instrument, 
+    master_dens, master_dx, master_temp, master_vellos):
+    """ Given a completed ray traced through a volume, and the properties of all the intersected cells 
+    (dens, dx, temp, vellos), create the final absorption spectrum, depositing a Voigt absorption 
+    profile for each cell. """
+    nCells = master_dens.size
+
+    # create master grid
+    master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
+
+    # assign sP.redshift to the front intersectiom (beginning) of the box
+    z_start = sP.redshift # 0.1 # change to imagine that this snapshot is at a different redshift
+
+    z_vals = np.linspace(z_start, z_start+0.1, 200)
+    lengths = sP.units.redshiftToComovingDist(z_vals) - sP.units.redshiftToComovingDist(z_start)
+
+    # cumulative pathlength, Mpc from start of box i.e. start of ray (at z_start)
+    cum_pathlength = np.zeros(nCells, dtype='float32') 
+    cum_pathlength[1:] = np.cumsum(master_dx)[:-1] # Mpc
+
+    # cosmological redshift of each intersected cell
+    z_cosmo = np.interp(cum_pathlength, lengths, z_vals)
+
+    # doppler shift
+    z_doppler = master_vellos / units.c_km_s
+
+    # effective redshift
+    z_eff = (1+z_doppler)*(1+z_cosmo) - 1
+
+    # column density
+    N = master_dens * (master_dx * sP.units.Mpc_in_cm) # cm^-2
+
+    # doppler parameter b = sqrt(2kT/m) where m is the particle mass
+    b = np.sqrt(2 * sP.units.boltzmann * master_temp / ion_mass) # cm/s
+    b /= 1e5 # km/s
+
+    # deposit each intersected cell as an absorption profile onto spectrum
+    for i in range(nCells):
+        print(f'[{i:3d}] N = {logZeroNaN(N[i]):6.3f} {b[i] = :7.2f} {z_eff[i] = :.6f}')
+        deposit_single_line(master_edges, tau_master, f, gamma, wave0, N[i], b[i], z_eff[i])
+
+    return master_mid, tau_master, z_eff
+
 def generate_spectrum_uniform_grid():
-    """ Testing. Generate an absorption spectrum by ray-tracing through a uniform grid. """
+    """ Generate an absorption spectrum by ray-tracing through a uniform grid (deposit using sphMap). """
     from util.simParams import simParams
     from util.sphMap import sphGridWholeBox, sphMap
     from cosmo.cloudy import cloudyIon
 
     # config
-    sP = simParams(run='tng100-2', redshift=0.0)
+    sP = simParams(run='tng50-4', redshift=0.5)
 
-    line = 'LyA'
-    instrument = 'test_EUV' # 'SDSS-BOSS' #
-    nCells = 128
-    haloID = None # if None, then full box
+    line = 'OVI 1031' #'LyA'
+    instrument = 'test_EUV2' # 'SDSS-BOSS' #
+    nCells = 64
+    haloID = 150 # if None, then full box
 
-    posInds = [int(nCells/2),int(nCells/2)] # [0,0] # (x,y) pixel indices to ray-trace along
-    projAxis = 2 # z
-
-    # init
-    element = lines[line]['ion'].split(' ')[0]
-    ion_amu = {el['symbol']:el['mass'] for el in cloudyIon._el}[element]
-    ion_mass = ion_amu * sP.units.mass_proton # g
+    posInds = [int(nCells*0.5),int(nCells*0.5)] # [0,0] # (x,y) pixel indices to ray-trace along
+    projAxis = 2 # z, to simplify vellos
 
     # quick caching
     cacheFile = f"cache_{line}_{nCells}_h{haloID}_{sP.snap}.hdf5"
@@ -414,6 +517,8 @@ def generate_spectrum_uniform_grid():
             pxVol = np.prod(boxSizeImg) / nCells**3 # code units
 
         # unit conversions: mass -> density
+        f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
+
         grid_dens = sP.units.codeDensToPhys(grid_mass/pxVol, cgs=True, numDens=True) # H atoms/cm^3
         grid_dens /= ion_amu # [ions/cm^3]
 
@@ -429,94 +534,264 @@ def generate_spectrum_uniform_grid():
                 f['boxSizeImg'] = boxSizeImg
         print(f'Saved [{cacheFile}].')
 
-    # create master grid
-    master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
+    # print ray starting location in global space (note: possible the grid is permuted/transposed still)
+    print(f'{boxSizeImg = }')
+    if haloID is None:
+        boxCen = np.zeros(3) + sP.boxSize/2
+    else:
+        halo = sP.halo(haloID)
+        boxCen = halo['GroupPos']
+    pxScale = boxSizeImg[0] / grid_dens.shape[0]
+
+    ray_x = boxCen[0] - boxSizeImg[0]/2 + posInds[0]*pxScale
+    ray_y = boxCen[1] - boxSizeImg[1]/2 + posInds[1]*pxScale
+    ray_z = boxCen[2] - boxSizeImg[2]/2
+    print(f'Starting {ray_x = :.4f} {ray_y = :.4f} {ray_z = :4f}')
 
     # create theory-space master grids
     master_dens   = np.zeros(nCells, dtype='float32') # density for each ray segment
     master_dx     = np.zeros(nCells, dtype='float32') # pathlength for each ray segment
     master_temp   = np.zeros(nCells, dtype='float32') # temp for each ray segment
-    master_towave = np.zeros(nCells, dtype='float32') # wavelength each ray segment was deposited to (central)
+    master_vellos = np.zeros(nCells, dtype='float32') # line of sight velocity
 
     # init
-    f, gamma, wave0 = _line_params(line)
+    f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
 
     boxSize = sP.boxSize if haloID is None else boxSizeImg[projAxis]
-
     dx_Mpc = sP.units.codeLengthToMpc(boxSize / nCells)
-    dx_cm  = sP.units.codeLengthToKpc(boxSize / nCells) * sP.units.kpc_in_cm
 
-    # assign sP.redshift to the front intersectiomn (beginning) of the box
-    z_vals = np.linspace(sP.redshift, sP.redshift+0.1, 200)
-    lengths = sP.units.redshiftToComovingDist(z_vals) - sP.units.redshiftToComovingDist(sP.redshift)
-
-    # ray trace a single pixel from front of box to back of box
+    # 'ray trace' a single pixel from front of box to back of box
     for i in range(nCells):
-        # doppler shift
-        vel_los = grid_vel[posInds[0], posInds[1], i]
-        z_doppler = vel_los / units.c_km_s
+        # store cell properties
+        master_vellos[i] = grid_vel[posInds[0], posInds[1], i]
+        master_dens[i] = grid_dens[posInds[0], posInds[1], i]
+        master_temp[i] = grid_temp[posInds[0], posInds[1], i]
+        master_dx[i] = dx_Mpc # constant
 
-        # cosmological redshift
-        pathlength = dx_Mpc * i # Mpc from start of box (at sP.redshift)
-        z_cosmo = np.interp(pathlength, lengths, z_vals)
-
-        # effective redshift
-        z_eff = (1+z_doppler)*(1+z_cosmo) - 1 
-
-        # column density
-        dens = grid_dens[posInds[0], posInds[1], i]
-        N = dens * dx_cm # cm^-2
-
-        # doppler parameter b = sqrt(2kT/m) where m is the particle mass
-        temp = grid_temp[posInds[0], posInds[1], i]
-        b = np.sqrt(2 * sP.units.boltzmann * temp / ion_mass) # cm/s
-        b /= 1e5 # km/s
-
-        # deposit
-        if 1:
-            print(f'{i:3d} N = {np.log10(N):.2f}, {b = :5.2f}, {vel_los = :7.2f}, {z_cosmo = :.5f}, {z_eff = :.4f}')
-
-        deposit_single_line(master_edges, tau_master, N, b, f, gamma, wave0, z_eff)
-
-        # store theory-space values along ray
-        master_dens[i] = dens
-        master_dx[i] = dx_Mpc
-        master_temp[i] = temp
-        master_towave[i] = wave0 * (1 + z_eff)
-
-    # calculate flux
-    flux_master = np.exp(-1*tau_master)
-
-    master_dl = np.cumsum(master_dx)
+    # create spectrum
+    master_mid, tau_master, z_eff = create_spectrum_from_traced_ray(sP, f, gamma, wave0, ion_mass, instrument, 
+                                      master_dens, master_dx, master_temp, master_vellos)
 
     # plot
-    fig = plt.figure(figsize=(22,10))
+    plotName = f"spectrum_box_{sP.simName}_{line}_{nCells}_h{haloID}_{posInds[0]}-{posInds[1]}_z{sP.redshift:.0f}.pdf"
 
-    ax = fig.add_subplot(221) # upper left
-    xcen = master_towave.mean()
-    ax.set_xlabel('Wavelength [ Ang ]')
-    ax.set_xlim([xcen-25,xcen+25])
-    ax.set_ylabel('Relative Flux')
-    ax.plot(master_mid, flux_master, '-', lw=lw, label=line)
-    ax.legend(loc='best')
+    _spectrum_debug_plot(sP, line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos)
 
-    ax = fig.add_subplot(222) # upper right
-    ax.set_xlabel('Distance Along Ray [ Mpc ]')
-    ax.set_ylabel('Density [log cm$^{-3}$]')
-    ax.plot(master_dl, np.log10(master_dens), '-', lw=lw)
+def generate_spectrum_voronoi_precomputed(debug=1, verify=True):
+    """ Generate an absorption spectrum by ray-tracing through the Voronoi mesh (use precomputed VPPP). 
+    Args:
+      debug (int): verbosity level for diagnostic outputs: 0 (silent), 1, 2, or 3 (most verbose).
+      verify (bool): if True, brute-force distance calculation verify parent cell at each step.
+    """
+    from util.simParams import simParams
+    from util.voronoi import loadSingleHaloVPPP, loadGlobalVPPP
+    from cosmo.cloudy import cloudyIon
 
-    ax = fig.add_subplot(223) # lower left
-    ax.set_xlabel('Distance Along Ray [ Mpc ]')
-    ax.set_ylabel('Wavelength Deposited [ Ang ]')
-    ax.plot(master_dl, master_towave, '-', lw=lw)
+    # config
+    sP = simParams(run='tng50-3', redshift=0.5)
 
-    ax = fig.add_subplot(224) # lower right
-    ax.set_xlabel('Distance Along Ray [ Mpc ]')
-    ax.set_ylabel('Temperature [log K]')
-    ax.plot(master_dl, np.log10(master_temp), '-', lw=lw)
+    line = 'OVI 1031' #'LyA'
+    instrument = 'test_EUV2' # 'SDSS-BOSS'
+    haloID = 150 # if None, then full box
 
-    fig.savefig(f"spectrum_box_{line}_{nCells}_h{haloID}_{posInds[0]}-{posInds[1]}_z{sP.redshift:.0f}.pdf")
-    plt.close(fig)
+    ray_offset_x = 0.0 # relative to halo center, in units of rvir
+    ray_offset_y = 0.5 # relative to halo center, in units of rvir
+    ray_offset_z = -1.0 # relative to halo center, in units of rvir
+    projAxis = 2 # z, to simplify vellos for now
+
+    fof_scope_mesh = False
+
+    # load halo
+    halo = sP.halo(haloID)
+
+    print(f"Halo [{haloID}] center {halo['GroupPos']} and Rvir = {halo['Group_R_Crit200']:.2f}")
+
+    # ray starting position, and total requested pathlength
+    ray_start_x = halo['GroupPos'][0]        + ray_offset_x*halo['Group_R_Crit200']
+    ray_start_y = halo['GroupPos'][1]        + ray_offset_y*halo['Group_R_Crit200']
+    ray_start_z = halo['GroupPos'][projAxis] + ray_offset_z*halo['Group_R_Crit200']
+
+    total_dl = np.abs(ray_offset_z*2) * halo['Group_R_Crit200'] # twice distance to center
+
+    # ray direction
+    ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
+    ray_dir[projAxis] = 1.0
+
+    # load cell properties (pos,vel,species dens,temp)
+    densField = '%s numdens' % lines[line]['ion']
+    velLosField = 'vel_'+['x','y','z'][projAxis]
+
+    haloIDLoad = haloID if fof_scope_mesh else None # if global mesh, then global gas load
+
+    cell_pos    = sP.snapshotSubsetP('gas', 'pos', haloID=haloIDLoad) # code
+    cell_vellos = sP.snapshotSubsetP('gas', velLosField, haloID=haloIDLoad) # code
+    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', haloID=haloIDLoad) # K
+    cell_dens   = sP.snapshotSubset('gas', densField, haloID=haloIDLoad) # ions/cm^3
+
+    cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
+
+    # load mesh neighbor connectivity
+    if fof_scope_mesh:
+        num_ngb, ngb_inds, offset_ngb = loadSingleHaloVPPP(sP, haloID=haloID)
+    else:
+        num_ngb, ngb_inds, offset_ngb = loadGlobalVPPP(sP)
+
+    # ray starting position and path length so far
+    ray_pos = np.array([ray_start_x, ray_start_y, ray_start_z])
+    dl = 0.0
+
+    # locate starting cell
+    dists = sP.periodicDists(ray_pos, cell_pos)
+    cur_cell_ind = np.where(dists == dists.min())[0][0]
+    prev_cell_ind = -1
+    
+    print(f'Starting cell index [{cur_cell_ind}] at distance = {dists[cur_cell_ind]:.2f} ckpc/h, {total_dl = :.3f}.')
+
+    # allocate
+    max_steps = 10000
+    n_step = 0
+
+    master_dens   = np.zeros(max_steps, dtype='float32') # density for each ray segment
+    master_dx     = np.zeros(max_steps, dtype='float32') # pathlength for each ray segment
+    master_temp   = np.zeros(max_steps, dtype='float32') # temp for each ray segment
+    master_vellos = np.zeros(max_steps, dtype='float32') # line of sight velocity
+
+    # while total dl does not exceed request, start tracing through mesh
+    while 1:
+        # current Voronoi cell
+        cur_cell_pos = cell_pos[cur_cell_ind]
+        
+        if debug: print(f'[{n_step:3d}] {dl = :7.3f} {ray_pos = } {cur_cell_ind = }')
+
+        local_dl = np.inf
+        next_ngb_index = -1
+
+        if verify:
+            dists = sP.periodicDists(ray_pos, cell_pos)
+            mindist_cell_ind = np.where(dists == dists.min())[0][0]
+            # due to round-off, answer should be ambiguous between previous and current cell (we sit on the face)
+            if mindist_cell_ind not in [prev_cell_ind,cur_cell_ind]:
+                if fof_scope_mesh:
+                    dist_to_halo_cen = sP.periodicDists(ray_pos, halo['GroupPos']) / halo['Group_R_Crit200']
+                    # note: still fail if we start too early i.e. before fof-scope!
+                    assert dist_to_halo_cen > 1.0 and dl > total_dl/2 # otherwise check
+                    if debug: print(' -- NOTE: Termination! Leaving fof-scope mesh.')
+                    break
+                else:
+                    assert 0 # should not occur
+
+        # loop over all natural neighbors
+        for i in range(num_ngb[cur_cell_ind]):
+            # neighbor properties
+            ngb_index = ngb_inds[offset_ngb[cur_cell_ind]+i]
+            ngb_pos = cell_pos[ngb_index]
+
+            if ngb_index == -1: # outside of fof-scope mesh
+                assert fof_scope_mesh # otherwise should not occur
+                if debug > 1: print(f' [{i:2d} of {num_ngb[cur_cell_ind]:2d}] with {ngb_index = } skip')
+                continue
+
+            if debug > 1: print(f' [{i:2d} of {num_ngb[cur_cell_ind]:2d}] with {ngb_index = } and {ngb_pos = }')
+
+            # edge midpoint, i.e. a point on the Voronoi face plane shared with this neighbor
+            m = 0.5 * (ngb_pos + cur_cell_pos)
+
+            # the vector from the current ray position to m
+            c = m - ray_pos
+
+            # the vector from the current cell to the neighbor, which is a normal vector to the face plane
+            q = ngb_pos - cur_cell_pos
+
+            # test intersection of a ray and a plane. because the dot product of two perpendicular vectors is
+            # zero, we can write (p-m).n = 0 for some point p on the face, because (p-m) is a vector on the face.
+            # then, we have the parametric ray equation ray_pos+ray_dir*s = p for some scalar distance s. If the 
+            # ray and plane intersect, this point p is the same in both equations, so substituting and 
+            # re-arranging for s we solve for s = c.q / (ray_dir.q)
+            cdotq = np.sum(c * q)
+            ddotq = np.sum(ray_dir * q)
+
+            # s gives the point where the ray (ray_pos + s*ray_dir)
+            # intersects the plane perpendicular to q containing c, i.e. the Voronoi face with this neighbor
+            if cdotq > 0:
+                # standard case, ray_pos is inside the cell, calculate length to intersection
+                s = cdotq / ddotq
+            else:
+                # point is on the wrong side of face (i.e. outside), could be due to numerical roundoff error
+                # (if distance to the face is ~eps), or because we are not in the cell we think we are
+                # (if distance to the face is large)
+                if ddotq > 0:
+                    # direciton is away from cell, so it was supposed to have intersected this face?
+                    # set s=0 i.e. there is no local pathlength
+                    if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} > 0, direction is out of cell (set next, local_dl=0)')
+                    s = 0
+                    assert 0 # check when/how this really happens
+                else:
+                    # direction is into the cell, so it must have entered the cell through this face (ignore)
+                    if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} < 0, direction is into cell (ignore)')
+                    s = np.inf
+
+                # if np.abs(ddotq) < eps, then the plane and ray are parallel
+                #   - if the ray and face perfectly coincide, there is an infinity of intersection solutions
+                #   - or, if the ray is off the face, there is no intersectin
+                # either way, we treat this as a non-intersection
+                if np.abs(ddotq) < 1e-10:
+                    assert 0 # check when/how this really happens
+                
+            if s >= 0 and s < local_dl:
+                # we have a valid intersection, and it is closer than all previous intersections, so mark this
+                # neighbor as the new best candidate for the exit face
+                next_ngb_index = ngb_index
+                local_dl = s
+                if debug > 1: print(f'  -- new next neighbor: [{ngb_index}] with {local_dl = }')
+
+        # calculate local pathlength, accumulate
+        assert local_dl > 0
+        assert np.isfinite(local_dl)
+        dl += local_dl
+        ray_pos += ray_dir*local_dl
+
+        master_dens[n_step] = cell_dens[cur_cell_ind] # ions/cm^3
+        master_dx[n_step] = local_dl # code!
+        master_temp[n_step] = cell_temp[cur_cell_ind] # K
+        master_vellos[n_step] = cell_vellos[cur_cell_ind] # km/s
+
+        # have we exceeded the requested total pathlength?
+        if dl >= total_dl:
+            # integrate final cell partially
+            master_dx[n_step] -= (dl-total_dl)
+            if debug > 1: print('  -- reached total pathlength, terminating.')
+            break
+
+        # do we have a next valid neighbor? if not, exit
+        if next_ngb_index == -1:
+            assert fof_scope_mesh # otherwise should not happen
+            if debug > 1: print('  -- next neighbor is outside FoF scope, terminating.')
+            break
+
+        # move to next cell
+        prev_cell_ind = cur_cell_ind
+        cur_cell_ind = next_ngb_index
+        n_step += 1
+
+    # reduce arrays to used size
+    master_dens   = master_dens[0:n_step]
+    master_dx     = master_dx[0:n_step]
+    master_temp   = master_temp[0:n_step]
+    master_vellos = master_vellos[0:n_step]
+
+    # convert length units, all other units already appropriate
+    master_dx = sP.units.codeLengthToMpc(master_dx)
+
+    # create spectrum
+    f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
+
+    master_mid, tau_master, z_eff = create_spectrum_from_traced_ray(sP, f, gamma, wave0, ion_mass, instrument, 
+                                      master_dens, master_dx, master_temp, master_vellos)
+
+    # plot
+    plotName = f"spectrum_voronoi_{sP.simName}_{line}_{n_step}_h{haloID}_z{sP.redshift:.0f}.pdf"
+
+    _spectrum_debug_plot(sP, line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos)
 
 def single_line_test():
     """ Testing.
@@ -546,12 +821,12 @@ def single_line_test():
     master_mid, master_edges, tau_master = create_master_grid(line=line, instrument=None)
 
     # deposit
-    f, gamma, wave0 = _line_params(line)
+    f, gamma, wave0, _, _ = _line_params(line)
 
     z_doppler = vel_los / units.c_km_s
     z_eff = (1+z_doppler)*(1+z_cosmo) - 1 # effective redshift
 
-    wave_local, tau_local, flux_local = deposit_single_line(master_edges, tau_master, 10.0**N, b, f, gamma, wave0, z_eff, debug=True)
+    wave_local, tau_local, flux_local = deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff, debug=True)
 
     # compute flux
     flux_master = np.exp(-1*tau_master)
@@ -600,7 +875,7 @@ def test_LyA_vs_coldens():
     z_doppler = vel_los / units.c_km_s
     z_eff = (1+z_doppler)*(1+z_cosmo) - 1 # effective redshift
 
-    f, gamma, wave0 = _line_params(line)
+    f, gamma, wave0, _, _ = _line_params(line)
 
     # start plot
     fig = plt.figure(figsize=(13,6))
@@ -628,7 +903,7 @@ def test_LyA_vs_coldens():
 
     # loop over N values, compute a local spectrum for each and plot
     for i, N in enumerate(N_vals):
-        wave, tau, flux = deposit_single_line(master_edges, tau_master, 10.0**N, b, f, gamma, wave0, z_eff, debug=True)
+        wave, tau, flux = deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff, debug=True)
 
         # plot
         ax.plot(wave, flux, '-', lw=lw, color=sm.to_rgba(N))
@@ -663,9 +938,9 @@ def multi_line_test():
     z_eff = (1+z_doppler)*(1+z_cosmo) - 1 # effective redshift
 
     for line in lines:
-        f, gamma, wave0 = _line_params(line)
+        f, gamma, wave0, _, _ = _line_params(line)
 
-        deposit_single_line(master_edges, tau_master, 10.0**N, b, f, gamma, wave0, z_eff)
+        deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff)
 
     # compute flux
     flux_master = np.exp(-1*tau_master)
@@ -709,7 +984,7 @@ def benchmark():
     # create master grid
     master_mid, master_edges, tau_master = create_master_grid(line=line, instrument=instrument)
 
-    f, gamma, wave0 = _line_params(line)
+    f, gamma, wave0, _, _ = _line_params(line)
 
     # start timer
     start_time = time.time()
@@ -723,7 +998,7 @@ def benchmark():
         if i % (n/10) == 0:
             print(i, N_vals[i], b_vals[i], vel_los[i], z_eff)
 
-        deposit_single_line(master_edges, tau_master, 10.0**N_vals[i], b_vals[i], f, gamma, wave0, z_eff)
+        deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N_vals[i], b_vals[i], z_eff)
 
     tot_time = time.time() - start_time
     print('depositions took [%g] sec, i.e. [%g] each' % (tot_time, tot_time/n))

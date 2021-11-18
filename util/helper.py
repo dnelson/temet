@@ -102,6 +102,7 @@ def logZeroNaN(x):
     """ Take log10, setting zeros to NaN silently and leaving NaN as NaN (same as the default 
     behavior, but suppress warnings). """
     r = x.copy()
+    if r.ndim == 0: r = np.array(r)
     r[~np.isfinite(r)] = 0.0
     return logZeroSafe(r, np.nan)
 
