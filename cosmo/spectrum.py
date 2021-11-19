@@ -11,6 +11,7 @@ from scipy.special import wofz
 from plot.config import *
 from util import units
 from util.helper import logZeroNaN
+from util.treeSearch import buildFullTree, _treeSearchNearest
 
 # line data (Morton+2003)
 # f [dimensionless]
@@ -577,68 +578,15 @@ def generate_spectrum_uniform_grid():
 
     _spectrum_debug_plot(sP, line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos)
 
-def generate_spectrum_voronoi_precomputed(debug=1, verify=True):
-    """ Generate an absorption spectrum by ray-tracing through the Voronoi mesh (use precomputed VPPP). 
-    Args:
-      debug (int): verbosity level for diagnostic outputs: 0 (silent), 1, 2, or 3 (most verbose).
-      verify (bool): if True, brute-force distance calculation verify parent cell at each step.
-    """
-    from util.simParams import simParams
-    from util.voronoi import loadSingleHaloVPPP, loadGlobalVPPP
-    from cosmo.cloudy import cloudyIon
+def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell_temp, cell_dens, 
+                                   num_ngb, ngb_inds, offset_ngb,
+                                   ray_pos, ray_dir, total_dl, sP, debug, verify, fof_scope_mesh):
+    """ For a single ray, specified by its starting location, direction, and length, ray-trace through 
+    a Voronoi mesh as specified by the pre-computed natural neighbor connectivity information. """
 
-    # config
-    sP = simParams(run='tng50-3', redshift=0.5)
-
-    line = 'OVI 1031' #'LyA'
-    instrument = 'test_EUV2' # 'SDSS-BOSS'
-    haloID = 150 # if None, then full box
-
-    ray_offset_x = 0.0 # relative to halo center, in units of rvir
-    ray_offset_y = 0.5 # relative to halo center, in units of rvir
-    ray_offset_z = -1.0 # relative to halo center, in units of rvir
-    projAxis = 2 # z, to simplify vellos for now
-
-    fof_scope_mesh = False
-
-    # load halo
-    halo = sP.halo(haloID)
-
-    print(f"Halo [{haloID}] center {halo['GroupPos']} and Rvir = {halo['Group_R_Crit200']:.2f}")
-
-    # ray starting position, and total requested pathlength
-    ray_start_x = halo['GroupPos'][0]        + ray_offset_x*halo['Group_R_Crit200']
-    ray_start_y = halo['GroupPos'][1]        + ray_offset_y*halo['Group_R_Crit200']
-    ray_start_z = halo['GroupPos'][projAxis] + ray_offset_z*halo['Group_R_Crit200']
-
-    total_dl = np.abs(ray_offset_z*2) * halo['Group_R_Crit200'] # twice distance to center
-
-    # ray direction
-    ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
-    ray_dir[projAxis] = 1.0
-
-    # load cell properties (pos,vel,species dens,temp)
-    densField = '%s numdens' % lines[line]['ion']
-    velLosField = 'vel_'+['x','y','z'][projAxis]
-
-    haloIDLoad = haloID if fof_scope_mesh else None # if global mesh, then global gas load
-
-    cell_pos    = sP.snapshotSubsetP('gas', 'pos', haloID=haloIDLoad) # code
-    cell_vellos = sP.snapshotSubsetP('gas', velLosField, haloID=haloIDLoad) # code
-    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', haloID=haloIDLoad) # K
-    cell_dens   = sP.snapshotSubset('gas', densField, haloID=haloIDLoad) # ions/cm^3
-
-    cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
-
-    # load mesh neighbor connectivity
-    if fof_scope_mesh:
-        num_ngb, ngb_inds, offset_ngb = loadSingleHaloVPPP(sP, haloID=haloID)
-    else:
-        num_ngb, ngb_inds, offset_ngb = loadGlobalVPPP(sP)
-
-    # ray starting position and path length so far
-    ray_pos = np.array([ray_start_x, ray_start_y, ray_start_z])
+    # path length accumulated
     dl = 0.0
+    n_step = 0
 
     # locate starting cell
     dists = sP.periodicDists(ray_pos, cell_pos)
@@ -649,8 +597,7 @@ def generate_spectrum_voronoi_precomputed(debug=1, verify=True):
 
     # allocate
     max_steps = 10000
-    n_step = 0
-
+    
     master_dens   = np.zeros(max_steps, dtype='float32') # density for each ray segment
     master_dx     = np.zeros(max_steps, dtype='float32') # pathlength for each ray segment
     master_temp   = np.zeros(max_steps, dtype='float32') # temp for each ray segment
@@ -782,6 +729,112 @@ def generate_spectrum_voronoi_precomputed(debug=1, verify=True):
     # convert length units, all other units already appropriate
     master_dx = sP.units.codeLengthToMpc(master_dx)
 
+    return master_dens, master_dx, master_temp, master_vellos
+
+def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, cell_dens, 
+                                   NextNode, length, center, sibling, nextnode, 
+                                   ray_pos, ray_dir, total_dl, sP, debug, verify, fof_scope_mesh):
+    """ For a single ray, specified by its starting location, direction, and length, ray-trace through 
+    a Voronoi mesh using neighbor searches in a pre-computed tree. """
+    pass
+
+    # make a neighbor search
+    # dist, index = calcHsml(cell_pos, sP.boxSize, posSearch=search_pos, nearest=True, tree=tree)
+    # assert index.min() >= 0 and index.max() < pos.shape[0]
+    # (todo: we will need this to be fast, since we will call with single points)
+    # so change to direct numba call of
+    # 
+    # ind0 = 0
+    # ind1 = search_pos.shape[0] - 1
+    # posMask = np.ones(pos.shape[0], dtype=np.bool) # unmasked
+    # _treeSearchNearestIterate(search_pos,ind0,ind1,boxSizeSim,cell_pos,posMask,
+    #                                               NextNode,length,center,sibling,nextnode)
+    # indeed cut the code out of this function and use _treeSearchNearest() directly for h-acceleration
+    pass
+
+def generate_spectrum_voronoi(use_precomputed_mesh=True, debug=1, verify=True):
+    """ Generate an absorption spectrum by ray-tracing through the Voronoi mesh.
+    Args:
+      use_precomputed_mesh (bool): if True, use pre-computed Voronoi mesh connectivity from VPPP, 
+        otherwise use tree-based, connectivity-free method.
+      debug (int): verbosity level for diagnostic outputs: 0 (silent), 1, 2, or 3 (most verbose).
+      verify (bool): if True, brute-force distance calculation verify parent cell at each step.
+    """
+    from util.simParams import simParams
+    from util.voronoi import loadSingleHaloVPPP, loadGlobalVPPP
+    from cosmo.cloudy import cloudyIon
+
+    # config
+    sP = simParams(run='tng50-4', redshift=0.5)
+
+    line = 'OVI 1031' #'LyA'
+    instrument = 'test_EUV2' # 'SDSS-BOSS'
+    haloID = 150 # if None, then full box
+
+    ray_offset_x = 0.0 # relative to halo center, in units of rvir
+    ray_offset_y = 0.5 # relative to halo center, in units of rvir
+    ray_offset_z = -1.0 # relative to halo center, in units of rvir
+    projAxis = 2 # z, to simplify vellos for now
+
+    fof_scope_mesh = False
+
+    # load halo
+    halo = sP.halo(haloID)
+
+    print(f"Halo [{haloID}] center {halo['GroupPos']} and Rvir = {halo['Group_R_Crit200']:.2f}")
+
+    # ray starting position, and total requested pathlength
+    ray_start_x = halo['GroupPos'][0]        + ray_offset_x*halo['Group_R_Crit200']
+    ray_start_y = halo['GroupPos'][1]        + ray_offset_y*halo['Group_R_Crit200']
+    ray_start_z = halo['GroupPos'][projAxis] + ray_offset_z*halo['Group_R_Crit200']
+
+    total_dl = np.abs(ray_offset_z*2) * halo['Group_R_Crit200'] # twice distance to center
+
+    # ray direction
+    ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
+    ray_dir[projAxis] = 1.0
+
+    # load cell properties (pos,vel,species dens,temp)
+    densField = '%s numdens' % lines[line]['ion']
+    velLosField = 'vel_'+['x','y','z'][projAxis]
+
+    haloIDLoad = haloID if fof_scope_mesh else None # if global mesh, then global gas load
+
+    cell_pos    = sP.snapshotSubsetP('gas', 'pos', haloID=haloIDLoad) # code
+    cell_vellos = sP.snapshotSubsetP('gas', velLosField, haloID=haloIDLoad) # code
+    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', haloID=haloIDLoad) # K
+    cell_dens   = sP.snapshotSubset('gas', densField, haloID=haloIDLoad) # ions/cm^3
+
+    cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
+
+    # ray starting position
+    ray_pos = np.array([ray_start_x, ray_start_y, ray_start_z])
+
+    # use precomputed connectivity method, or tree-based method?
+    if use_precomputed_mesh:
+        # load mesh neighbor connectivity
+        if fof_scope_mesh:
+            num_ngb, ngb_inds, offset_ngb = loadSingleHaloVPPP(sP, haloID=haloID)
+        else:
+            num_ngb, ngb_inds, offset_ngb = loadGlobalVPPP(sP)
+
+        # ray-trace
+        master_dens, master_dx, master_temp, master_vellos = \
+          trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell_temp, cell_dens, 
+                                       num_ngb, ngb_inds, offset_ngb, ray_pos, ray_dir, total_dl, 
+                                       sP, debug, verify, fof_scope_mesh)
+
+    else:
+        # construct neighbor tree
+        tree = buildFullTree(cell_pos, boxSizeSim=sP.boxSize, treePrec=cell_pos.dtype, verbose=True)
+        NextNode, length, center, sibling, nextnode = tree
+
+        # ray-trace
+        master_dens, master_dx, master_temp, master_vellos = \
+          trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, cell_dens, 
+                                       NextNode, length, center, sibling, nextnode, ray_pos, ray_dir, total_dl, 
+                                       sP, debug, verify, fof_scope_mesh)
+
     # create spectrum
     f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
 
@@ -789,7 +842,8 @@ def generate_spectrum_voronoi_precomputed(debug=1, verify=True):
                                       master_dens, master_dx, master_temp, master_vellos)
 
     # plot
-    plotName = f"spectrum_voronoi_{sP.simName}_{line}_{n_step}_h{haloID}_z{sP.redshift:.0f}.pdf"
+    meshStr = 'vppp' if use_precomputed_mesh else 'treebased'
+    plotName = f"spectrum_voronoi_{sP.simName}_{line}_{meshStr}_h{haloID}_z{sP.redshift:.0f}.pdf"
 
     _spectrum_debug_plot(sP, line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos)
 
