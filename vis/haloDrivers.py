@@ -17,7 +17,7 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloInd=None, redshift=0.0):
     sP = simParams(run='tng100-1', redshift=redshift, variant=None)
 
     rVirFracs  = [0.5, 1.0] # None
-    method     = 'sphMap'
+    method     = 'sphMap' # 'voronoi_slice'
     nPixels    = [1200,1200] #[800,800] #[1920,1920]
     axes       = [0,1]
     labelZ     = True
@@ -27,8 +27,6 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloInd=None, redshift=0.0):
     relCoords  = True
     rotation   = None
     mpb        = None
-
-    excludeSubhaloFlag = True
 
     if haloID is not None:
         # periodic box, FoF/Halo ID
@@ -51,8 +49,7 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloInd=None, redshift=0.0):
                         'method':'histo', 'nPixels':[4000,4000], 'smoothFWHM':0.5} )
     if conf == 4:
         # gas column density
-        #panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 8.0]} )
-        panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 8.0]} )
+        panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.0, 7.0]} )
     if conf == 5:
         # magnetic field strength
         #panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} )
@@ -61,7 +58,11 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloInd=None, redshift=0.0):
         #panels.append( {'partType':'gas', 'partField':'xray_lum_05-2kev',  'valMinMax':[34,38]} )
         panels.append( {'partType':'gas', 'partField':'sz_yparam',  'valMinMax':[-8, -3]} )
     if conf == 6:
+        # stellar composite
         panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+    if conf == 7:
+        # gas temp
+        panels.append( {'partType':'gas', 'partField':'temp_sfcold', 'valMinMax':[4.0, 6.8]} )
 
     if 1:
         size = 2.5

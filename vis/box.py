@@ -73,7 +73,7 @@ def renderBox(panels_in, plotConfig, localVars, skipExisting=True, retInfo=False
     partType    = 'dm'        # which particle type to project
     partField   = 'coldens'   # which quantity/field to project for that particle type
     valMinMax   = None        # if not None (auto), then stretch colortable between 2-tuple [min,max] field values
-    method      = 'sphMap'    # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, histo, voronoi_*, ...
+    method      = 'sphMap'    # sphMap, sphMap_subhalo, sphMap_global, sphMap_minIP, sphMap_maxIP, histo, voronoi_slice, voronoi_slice_subhalo
     nPixels     = 1400        # number of pixels per dimension of images when projecting (960 1400)
     zoomFac     = 1.0         # [0,1], only in axes, not along projection direction
     #hsmlFac     = 1.0        # multiplier on smoothing lengths for sphMap (dm 0.2) (gas 2.5)
@@ -90,7 +90,7 @@ def renderBox(panels_in, plotConfig, localVars, skipExisting=True, retInfo=False
     ctName      = None        # if not None (automatic based on field), specify colormap name
     plotHalos   = 20          # plot virial circles for the N most massive halos in the box
     labelHalos  = False       # label halo virial circles with values like M*, Mhalo, SFR
-    projType    = 'ortho'     # projection type, 'ortho', 'equirectangular'
+    projType    = 'ortho'     # projection type, 'ortho', 'equirectangular', 'mollweide'
     projParams  = {}          # dictionary of parameters associated to this projection type
     rotMatrix   = None        # rotation matrix
     rotCenter   = None        # rotation center
@@ -188,7 +188,7 @@ def renderBoxFrames(panels_in, plotConfig, localVars, curTask=0, numTasks=1, ski
     partType    = 'dm'        # which particle type to project
     partField   = 'coldens'   # which quantity/field to project for that particle type
     valMinMax   = None        # if not None (auto), then stretch colortable between 2-tuple [min,max] field values
-    method      = 'sphMap'    # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, histo, voronoi_*, ...
+    method      = 'sphMap'    # sphMap, sphMap_subhalo, sphMap_global, sphMap_minIP, sphMap_maxIP, histo, voronoi_slice, voronoi_slice_subhalo
     nPixels     = 960         # number of pixels per dimension of images when projecting
     zoomFac     = 1.0         # [0,1], only in axes, not along projection direction
     #hsmlFac     = 2.5        # multiplier on smoothing lengths for sphMap
@@ -205,7 +205,7 @@ def renderBoxFrames(panels_in, plotConfig, localVars, curTask=0, numTasks=1, ski
     ctName      = None        # if not None (automatic based on field), specify colormap name
     plotHalos   = 0           # plot virial circles for the N most massive halos in the box
     labelHalos  = False       # label halo virial circles with values like M*, Mhalo, SFR
-    projType    = 'ortho'     # projection type, 'ortho', 'equirectangular'
+    projType    = 'ortho'     # projection type, 'ortho', 'equirectangular', 'mollweide'
     projParams  = {}          # dictionary of parameters associated to this projection type
     rotMatrix   = None        # rotation matrix
     rotCenter   = None        # rotation center

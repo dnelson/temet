@@ -631,8 +631,7 @@ def buildFullTree(pos, boxSizeSim, treePrec=None, verbose=False):
         print(' tree: increase alloc %g to %g and redo...' % (num_iter+0.7,num_iter+1.7), flush=True)
 
     assert numNodes > 0, 'Tree: construction failed!'
-    if verbose:
-        print(' tree: construction took [%g] sec.' % (time.time()-start_time))
+    if verbose: print(' tree: construction took [%g] sec.' % (time.time()-start_time))
 
     # memory optimization: subset arrays to used portions
     length = length[0:numNodes]
@@ -680,19 +679,14 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
     # handle small inputs
     if pos.shape[0] < nNGB-nNGBDev:
         nNGBDev = nNGB - pos.shape[0] + 1
-        print('WARNING: Less particles than requested neighbors. Increasing nNGBDev to [%d]!' % nNGBDev)
-
-    build_start_time = time.time()
+        if verbose: print('WARNING: Less particles than requested neighbors. Increasing nNGBDev to [%d]!' % nNGBDev)
 
     # build tree
     if tree is None:
-        NextNode, length, center, sibling, nextnode = buildFullTree(pos,boxSizeSim,treePrec)
+        NextNode, length, center, sibling, nextnode = buildFullTree(pos,boxSizeSim,treePrec,verbose=verbose)
     else:
         NextNode, length, center, sibling, nextnode = tree # split out list
         
-    build_done_time = time.time()
-    #print(' calcHsml(): tree build took [%g] sec (serial).' % (time.time()-build_start_time))
-
     if posSearch is None:
         posSearch = pos # set search coordinates as a view onto the same pos used to make the tree
     if posMask is None:
@@ -700,7 +694,9 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
 
     if posSearch.shape[0] < nThreads:
         nThreads = 1
-        #print('WARNING: Less particles than requested threads. Just running in serial.') 
+        if verbose: print('WARNING: Less particles than requested threads. Just running in serial.') 
+
+    start_time = time.time()
 
     # single threaded?
     # ----------------
@@ -711,12 +707,13 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
         if nearest:
             dists, indices = _treeSearchNearestIterate(posSearch,ind0,ind1,boxSizeSim,pos,posMask,
                                                        NextNode,length,center,sibling,nextnode)
+            if verbose: print(' calcHsml(): search took [%g] sec (serial).' % (time.time()-start_time))
             return dists, indices
         else:
             hsml = _treeSearchHsmlSet(posSearch,ind0,ind1,nNGB,nNGBDev,boxSizeSim,pos,
                                       NextNode,length,center,sibling,nextnode,weighted_num)
 
-            #print(' calcHsml(): search took [%g] sec (serial).' % (time.time()-build_done_time))
+            if verbose: print(' calcHsml(): search took [%g] sec (serial).' % (time.time()-start_time))
             return hsml
 
     # else, multithreaded
@@ -756,8 +753,8 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
         def run(self):
             # call JIT compiled kernel (normQuant=False since we handle this later)
             if nearest:
-                self.dists, self.indices = _treeSearchNearestIterate(self.posSearch,self.ind0,self.ind1,self.posMask,
-                                                                     self.boxSizeSim,self.pos,self.NextNode,
+                self.dists, self.indices = _treeSearchNearestIterate(self.posSearch,self.ind0,self.ind1,self.boxSizeSim,
+                                                                     self.pos,self.posMask,self.NextNode,
                                                                      self.length,self.center,self.sibling,self.nextnode)
             else:
                 self.hsml = _treeSearchHsmlSet(self.posSearch,self.ind0,self.ind1,self.nNGB,self.nNGBDev,
@@ -768,9 +765,11 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
     threads = [searchThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
 
     # allocate master return grids
-    hsml = np.zeros( posSearch.shape[0], dtype=np.float32 )
     if nearest:
         indices = np.zeros( posSearch.shape[0], dtype=np.int64 )
+        dists = np.zeros( posSearch.shape[0], dtype=np.float32 )
+    else:
+        hsml = np.zeros( posSearch.shape[0], dtype=np.float32 )
 
     # launch each thread, detach, and then wait for each to finish
     for thread in threads:
@@ -786,7 +785,8 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
         else:
             hsml[thread.ind0 : thread.ind1 + 1] = thread.hsml
 
-    #print(' calcHsml(): search took [%g] sec (nThreads=%d).' % (time.time()-build_done_time, nThreads))
+    if verbose: print(' calcHsml(): search took [%g] sec (nThreads=%d).' % (time.time()-start_time, nThreads))
+
     if nearest:
         return dists, indices
     return hsml

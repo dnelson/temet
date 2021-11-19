@@ -1343,8 +1343,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         # accumulate per chunk by using a minimum reduction between the master grid and each chunk grid
         if '_minIP' in method: grid_quant.fill(np.inf)
 
-        disableChunkLoad = (sP.isPartType(partType,'dm') and not sP.snapHasField(partType, 'SubfindHsml') and method != 'histo') or \
-                           sP.isPartType(partType,'stars') # use custom CalcHsml always for stars now
+        disableChunkLoad = (sP.isPartType(partType,'dm') and not sP.snapHasField(partType, 'SubfindHsml') and method != 'histo')
+        disableChunkLoad |= sP.isPartType(partType,'stars') # use custom CalcHsml always for stars now
+        disableChunkLoad |= ('voronoi_' in method) # need complete mesh at once
 
         if len(sP.data) and np.count_nonzero( [key for key in sP.data.keys() if 'snap%d'%sP.snap in key] ):
             print(' gridBox(): have fields in sP.data, disabling chunking (possible spatial subset already applied)')
@@ -1387,7 +1388,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 pos, _ = remapPositions(sP, pos, remapRatio, nPixels)
 
             # load: sizes (hsml) and manipulate as needed
-            if method != 'histo':
+            if (method != 'histo') and ('voronoi' not in method):
                 if 'stellarBand-' in partField or (partType == 'stars' and 'coldens' in partField):
                     hsml = getHsmlForPartType(sP, partType, indRange=indRange, nNGB=32, 
                                               useSnapHsml=snapHsmlForStars, alsoSFRgasForStars=alsoSFRgasForStars)
@@ -1404,7 +1405,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, 
                                                        weightField, indRange=indRange)
 
-            if method != 'histo':
+            if (method != 'histo') and ('voronoi' not in method):
                 assert mass.size == 1 or (mass.size == hsml.size)
 
             if mass.sum() == 0:
@@ -1449,6 +1450,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     inds_flag, inds_snap = match3(flagged_ids, sub_ids)
                     if inds_snap is not None and len(inds_snap):
                         mass[inds_snap] = 0.0
+            if excludeSubhaloFlag and method != 'sphMap':
+                print('WARNING: excludeSubhaloFlag only implemented for method == sphMap!')
 
             # non-orthographic projection? project now, converting pos from a 3-vector into a 2-vector
             hsml_1 = None
@@ -1623,6 +1626,47 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     grid_q *= grid_d # pre-emptively undo normalization below == unweighted stddev(los_vel)
                 else:
                     assert refGrid is None # not supported except for this one field
+
+            elif method in ['voronoi_slice','voronoi_slice_subhalo']:
+                # Voronoi mesh slice, fof-scope or subhalo-scope, using tree nearest neighbor search as answer (no gradients)
+                # note: only for a specified non-mass quantity, in which case the map gives the direct value of the 
+                # nearest gas cell (no weighting relevant)
+                assert quant is not None # otherwise we would be imaging mass
+                assert not normCol # otherwise check what it would mean
+                assert hsml_1 is None # meaningless
+                assert ('_minIP' not in method) and ('_maxIP' not in method) # meaningless
+
+                # define (x,y) pixel centers
+                pxSize = [boxSizeImg[0] / nPixels[0], boxSizeImg[1] / nPixels[1]]
+
+                xpts = np.linspace(boxCenter[0]-boxSizeImg[0]/2, 
+                                   boxCenter[0]+boxSizeImg[0]/2-pxSize[0], 
+                                   nPixels[0]) + pxSize[0]/2
+                ypts = np.linspace(boxCenter[1]-boxSizeImg[1]/2, 
+                                   boxCenter[1]+boxSizeImg[1]/2-pxSize[1], 
+                                   nPixels[1]) + pxSize[1]/2
+
+                # explode into nPixels[0]*nPixels[1] arrays
+                xpts, ypts = np.meshgrid(xpts, ypts, indexing='ij')
+
+                # construct [N,3] list of search positions
+                search_pos = np.zeros( (nPixels[0]*nPixels[1],3), dtype=pos.dtype)
+                
+                search_pos[:,0] = xpts.ravel()
+                search_pos[:,1] = ypts.ravel()
+                search_pos[:,2] = boxCenter[2] # slice location along line-of-sight
+
+                # periodic wrap search positions
+                sP.correctPeriodicPosVecs(search_pos)
+
+                # construct tree, find nearest gas cell (parent Voronoi cell) to each pixel center
+                dist, index = calcHsml(pos, sP.boxSize, posSearch=search_pos, nearest=True)
+
+                assert index.min() >= 0 and index.max() < pos.shape[0]
+
+                # sample values from cells onto grid pixels
+                grid_d = np.ones( nPixels, dtype='float32' )
+                grid_q = quant[index].reshape(nPixels).T
 
             else:
                 # todo: e.g. external calls to ArepoVTK for voronoi_* based visualization
