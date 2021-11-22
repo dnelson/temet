@@ -103,9 +103,10 @@ def _TNGboxSliceConfig(res):
         centerHaloID = None
         nSlicesTot = None
         curSlice = None
-    if res in [1,2]:
+    if res in [None,1,2]:
         # original Millennium simulations
-        dmMM[1] += 0.5
+        dmMM[0] += 2.0
+        dmMM[1] += 1.0
 
         centerHaloID = None
         nSlicesTot = None
@@ -230,6 +231,31 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s%s.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr,mStr)
+
+    renderBox(panels, plotConfig, locals())
+
+def singleFullBox(conf=1):
+    """ Create a full box view. """
+    sP = simParams(run='tng-local-dark', redshift=0.0)
+
+    panels, _, _, _ = _TNGboxFieldConfig(res=None, conf=conf, thinSlice=False)
+
+    nPixels    = 1000
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = True
+    labelSim   = False
+    plotHalos  = False
+    method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
+    axesUnits  = 'mpc'
+    hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
+
+    class plotConfig:
+        plotStyle  = 'open' # open, edged
+        colorbars  = True
+
+        saveFilename = './boxImage_%s_%s-%s_axes%d%d.png' % \
+          (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1])
 
     renderBox(panels, plotConfig, locals())
 

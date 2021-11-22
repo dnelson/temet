@@ -86,6 +86,7 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      'tng-cluster':['tng',8192],
                      'tng-cluster-old':['tng',6144],
                      'tng-cluster-dark':['tng_dm',2048],
+                     'tng-local-dark':['tng_dm_local',512],
                      'eagle':['eagle',1504],
                      'eagle-dark':['eagle_dm',1504],
                      'eagle100-1':['eagle',1504],
@@ -218,6 +219,7 @@ class simParams:
             res_L75  = [455, 910, 1820]
             res_L205 = [625, 1250, 2500]
             res_L680 = [2048, 6144, 8192] # DM-parent, virtual-old, virtual
+            res_L500 = [512] if 'local' in run else [] # CF3 test
 
             self.validResLevels = res_L25 + res_L35 + res_L75 + res_L205 + res_L680
             self.groupOrdered = True
@@ -228,6 +230,7 @@ class simParams:
             if res in res_L35:  self.gravSoft = 3.12 / (res/270)
             if res in res_L75:  self.gravSoft = 4.0 / (res/455)
             if res in res_L205: self.gravSoft = 8.0 / (res/625)
+            if res in res_L500: self.gravSoft = 6.0 / (res/2048)
 
             if res in res_L680: self.gravSoft = 16.0 / (res/1024)
             if res == 6144: self.gravSoft = 16.0 / (8192/1024) # 2.0, e.g. as if run was 8192^3
@@ -237,23 +240,31 @@ class simParams:
             if res in res_L75:  self.targetGasMass = 9.43950e-5 * (8 ** np.log2(1820/res))
             if res in res_L205: self.targetGasMass = 7.43736e-4 * (8 ** np.log2(2500/res))
             if res in res_L680: self.targetGasMass = 1.82873e-3 * (8 ** np.log2(6144/res))
+            if res in res_L500: self.targetGasMass = 0.0 # DMO so far
 
             if res in res_L25:  self.boxSize = 25000.0
             if res in res_L35:  self.boxSize = 35000.0
             if res in res_L75:  self.boxSize = 75000.0
             if res in res_L205: self.boxSize = 205000.0
             if res in res_L680: self.boxSize = 680000.0
+            if res in res_L500: self.boxSize = 500000.0
 
             if res in res_L35:  boxSizeName = 50
             if res in res_L75:  boxSizeName = 100
             if res in res_L205: boxSizeName = 300
             if res in res_L680: boxSizeName = 1
+            if res in res_L500: boxSizeName = 500
 
             # common: Planck2015 cosmology
             self.omega_m     = 0.3089
             self.omega_L     = 0.6911
             self.omega_b     = 0.0486
             self.HubbleParam = 0.6774
+
+            if 'local' in run: # CF3
+                self.omega_m = 0.312
+                self.omega_L = 0.688
+                self.HubbleParam = 0.671
 
             # subboxes
             if res in res_L75:
@@ -265,7 +276,7 @@ class simParams:
             if res in res_L205:
                 self.subboxCen  = [[44000,49000,148000],[20000,175000,15000],[169000,97900,138000]]
                 self.subboxSize = [15000, 15000, 10000]
-            if res in res_L680:
+            if res in res_L680 + res_L500:
                 self.subboxCen  = []
                 self.subboxSize = []
 

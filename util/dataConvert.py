@@ -2297,31 +2297,62 @@ def convertMillennium2Snapshot(snap=67):
     fOut.close()
     print('All done.')
 
-def convertGadgetICsToHDF5():
-    """ Convert a Gadget-1 binary format ICs (dm-only, 8 byte IDs, 4 byte pos/vel) into HDF5 format (keep original ordering). """
-    loadPath = '/virgo/simulations/IllustrisTNG/InitialConditions/L35n2160TNG/output/ICs.%s' 
-    savePath = '/virgo/simulations/IllustrisTNG/L35n2160TNG/output/snap_ics.hdf5'
-
+def convertGadgetICsToHDF5(aip=False):
+    """ Convert a Gadget-1/2 binary format ICs (dm-only, only pos/vel/IDs) into HDF5 format (keep original ordering). """
     ptNum = 1
     longids = True # 64 bit, else 32 bit
 
+    loadPath = '/virgo/simulations/IllustrisTNG/InitialConditions/L35n2160TNG/output/ICs.%s' 
+    savePath = '/virgo/simulations/IllustrisTNG/L35n2160TNG/output/snap_ics.hdf5'
+
+    if aip:
+        loadPath = '/u/dnelson/sims.TNG/L500n512TNG_DM/ICs/'
+        loadPath += 'CF3_082719_BGc_CMB_RGmi0p0_err250_Rmax150_512_500_15545_z69.gadget'
+        savePath = '/u/dnelson/sims.TNG/L500n512TNG_DM/ICs/ICs_CF3_15545.hdf5'
+
+        longids = False
+
     # read header of first snapshot chunk
-    nChunks = len( glob.glob(loadPath % '*') )
+    nChunks = len( glob.glob(loadPath.replace('%s','*')) )
     print('Found [%d] chunks, loading...' % nChunks)
 
-    with open(loadPath % 0,'rb') as f:
+    fileName = loadPath % 0 if nChunks > 1 else loadPath
+    with open(fileName,'rb') as f:
         header = f.read(260)
 
-    npart      = struct.unpack('iiiiii', header[4:4+24])[ptNum]
-    masstable  = struct.unpack('dddddd', header[28:28+48])
-    scalefac   = struct.unpack('d', header[76:76+8])[0]
-    redshift   = struct.unpack('d', header[84:84+8])[0]
-    #nPartTot   = struct.unpack('iiiiii', header[100:100+24])[ptNum]
-    nFiles     = struct.unpack('i', header[128:128+4])[0]
-    BoxSize    = struct.unpack('d', header[132:132+8])[0]
-    Omega0     = struct.unpack('d', header[140:140+8])[0]
-    OmegaL     = struct.unpack('d', header[148:148+8])[0]
-    Hubble     = struct.unpack('d', header[156:156+8])[0]
+    if aip:
+        # CLUES/CF3 ICs from Wang Peng/AIP, seems non-standard
+        npart      = struct.unpack('iiiiii', header[20:20+6*4])[ptNum]
+        masstable  = struct.unpack('dddddd', header[44:44+48])
+        scalefac   = struct.unpack('d', header[92:92+8])[0]
+        redshift   = struct.unpack('d', header[100:100+8])[0]
+        #FlagSfr   = struct.unpack('h', header[108:108+2])[0]
+        #FlagFB    = struct.unpack('h', header[110:110+2])[0]
+        #dummy     = struct.unpack('i', header[112:112+4])[0]
+        nPartTot   = struct.unpack('iiiiii', header[116:116+6*4])[ptNum]
+        #dummy     = struct.unpack('i', header[140:140+4])[0]
+        nFiles     = struct.unpack('h', header[144:144+2])[0]
+        #dummy     = struct.unpack('h', header[146:146+2])[0]
+        BoxSize    = struct.unpack('d', header[148:148+8])[0]
+        Omega0     = struct.unpack('d', header[156:156+8])[0]
+        OmegaL     = struct.unpack('d', header[164:164+8])[0]
+        Hubble     = struct.unpack('d', header[172:172+8])[0]
+        # then: 48*2 bytes dummy
+    else:
+        # standard Gadget-2 header structure
+        npart      = struct.unpack('iiiiii', header[4:4+24])[ptNum]
+        masstable  = struct.unpack('dddddd', header[28:28+48])
+        scalefac   = struct.unpack('d', header[76:76+8])[0]
+        redshift   = struct.unpack('d', header[84:84+8])[0]
+        #FlagSfr   = struct.unpack('i', header[92:92+4])[0]
+        #FlagFB    = struct.unpack('i', header[96:96+4])[0]
+        #nPartTot   = struct.unpack('iiiiii', header[100:100+24])[ptNum]
+        #FlagCool  = struct.unpack('i', header[124:124+4])[0]
+        nFiles     = struct.unpack('i', header[128:128+4])[0]
+        BoxSize    = struct.unpack('d', header[132:132+8])[0]
+        Omega0     = struct.unpack('d', header[140:140+8])[0]
+        OmegaL     = struct.unpack('d', header[148:148+8])[0]
+        Hubble     = struct.unpack('d', header[156:156+8])[0]
 
     assert nFiles == nChunks
 
@@ -2335,13 +2366,15 @@ def convertGadgetICsToHDF5():
         ids_dtype = 'int32'
 
     # nPartTot is wrong, has no highword, so read and accumulate manually
-    nPartTot = 0
-    for i in range(nChunks):
-        with open(loadPath % i,'rb') as f:
-            header = f.read(28)
-            npart  = struct.unpack('iiiiii', header[4:4+24])[ptNum]
-        nPartTot += npart
-    print('Found new nPartTot [%d]' % nPartTot)
+    if not aip:
+        nPartTot = 0
+        for i in range(nChunks):
+            fileName = loadPath % i if nChunks > 1 else loadPath
+            with open(fileName,'rb') as f:
+                header = f.read(28)
+                npart  = struct.unpack('iiiiii', header[4:4+24])[ptNum]
+            nPartTot += npart
+        print('Found new nPartTot [%d]' % nPartTot)
 
     # open file for writing
     fOut = h5py.File(savePath, 'w')
@@ -2361,6 +2394,14 @@ def convertGadgetICsToHDF5():
     header.attrs['OmegaLambda'] = OmegaL
     header.attrs['Redshift'] = redshift
     header.attrs['Time'] = scalefac
+    if aip:
+        # add flags needed to actually start an AREPO run
+        header.attrs['Flag_Sfr'] = 0
+        header.attrs['Flag_Cooling'] = 0
+        header.attrs['Flag_StellarAge'] = 0
+        header.attrs['Flag_Metals'] = 0
+        header.attrs['Flag_Feedback'] = 0
+        header.attrs['Flag_DoublePrecision'] = 0
 
     # create group and datasets
     pt = fOut.create_group('PartType%d' % ptNum)
@@ -2377,17 +2418,25 @@ def convertGadgetICsToHDF5():
 
     for i in range(nChunks):
         # full read
-        with open(loadPath % i,'rb') as f:
+        fileName = loadPath % i if nChunks > 1 else loadPath
+        with open(fileName,'rb') as f:
             data = f.read()
 
         # local particle counts
-        npart_local = struct.unpack('iiiiii', data[4:4+24])[ptNum]
+        if aip:
+            npart_local = struct.unpack('iiiiii', data[20:20+24])[ptNum]
+            start_off = 276
+            skip_off = 24 # 2 byte recordmarker + 22 bytes of something
+        else:
+            npart_local = struct.unpack('iiiiii', data[4:4+24])[ptNum]
+            start_off = 260
+            skip_off = 8
 
         # cast and save
-        start_pos = 268 + 0*npart_local
-        start_vel = 276 + 12*npart_local
-        start_ids = 284 + 24*npart_local
-        start_mass = 292 + (24+ids_size)*npart_local
+        start_pos = start_off + 1*skip_off + 0*npart_local
+        start_vel = start_off + 2*skip_off + 12*npart_local
+        start_ids = start_off + 3*skip_off + 24*npart_local
+        start_mass = start_off + 4*skip_off + (24+ids_size)*npart_local
 
         pos = struct.unpack('f' * npart_local*3, data[start_pos:start_pos + npart_local*12])
         vel = struct.unpack('f' * npart_local*3, data[start_vel:start_vel + npart_local*12])
@@ -3479,7 +3528,7 @@ def supplementVirtualSimHDF5():
 
             _addPostprocessingCat(fSim,filepath,baseName,gNames)
 
-    if 0:
+    if 1:
         # change to re-ordered tracer_tracks, first delete old then add new
         gName = '/Snapshots/99/PartType2/'
         for key in fSim[gName]:
