@@ -11,4 +11,5 @@ from . import subfind
 from . import tpcf
 from . import treeSearch
 from .units import units
+from . import virtualSimFile
 from . import voronoi
