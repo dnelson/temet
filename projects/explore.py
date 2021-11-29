@@ -819,3 +819,17 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, hot=F
         print('rho_gasdens = ', rho_z_gasdens)
         print('rho_nh0frac = ', rho_z_nh0frac)
         print('rho_smbhs = ', rho_z_nh0frac)
+
+def abhijeetMgIISurfDens():
+    """ Test for Anand+ (2022). """
+    from projects.oxygen import stackedRadialProfiles
+
+    sPs = [simParams(run='tng100-1',redshift=0.5)]
+
+    haloMassBins = [[12.5,13.0],[13.0,14.0]]
+    fieldTypes = ['30Mpc_GlobalFoF'] # 30 Mpc is roughly dz=0.01 at z=0.5
+
+    stackedRadialProfiles(sPs, 'mg2_test2.pdf', ions=['MgII'], redshift=0.5, cenSatSelect='cen', projDim='2Dz',
+                          radRelToR500=True, massDensityMsun=True, haloMassBins=haloMassBins, xlim=[1.0,4.0],
+                          stellarMassBins=None, fieldTypes=fieldTypes, combine2Halo=True, median=False)
+

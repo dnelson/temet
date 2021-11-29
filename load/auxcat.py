@@ -422,6 +422,8 @@ fieldComputeFunctionMapping = \
      partial(fofRadialSumType,ptProperty='xray_lum_0.5-2.0kev',ptType='gas',rad='Group_R_Crit500'),
 
    # subhalo: masses
+   'Subhalo_Mass_25pkpc_Stars' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=25.0),
    'Subhalo_Mass_30pkpc_Stars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0),
    'Subhalo_Mass_100pkpc_Stars' : \
@@ -1114,6 +1116,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='Mg II mass',op='sum',scope='global_fof'),
    'Subhalo_RadProfile2Dz_6Mpc_GlobalFoF_MgII_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='Mg II mass',op='sum',scope='global_fof',proj2D=[2,5700]),
+   'Subhalo_RadProfile2Dz_30Mpc_GlobalFoF_MgII_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='Mg II mass',op='sum',scope='global_fof',minHaloMass=12.5,proj2D=[2,30500]),
 
    'Subhalo_RadProfile3D_GlobalFoF_HIGK_popping_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='MHIGK_popping',op='sum',scope='global_fof'),

@@ -805,8 +805,8 @@ def bfield_strength_vs_halomass(sPs, redshifts):
         bmax = np.log10(3.0) # uG
         mass_range = sPs[0].units.m500_to_m200(np.array([5e14, 9e14])) # msun
 
-        ax.fill_between(np.log10(mass_range), y1=[bmin,bmin], y2=[bmax,bmax], color='#cccccc', 
-            label='Di Gennaro+20 ($z \sim 0.8$)')
+        ax.fill_between(np.log10(mass_range), y1=[bmin,bmin], y2=[bmax,bmax], edgecolor='#cccccc', 
+            facecolor='none', lw=lw, label='Di Gennaro+20 ($z \sim 0.8$)', zorder=2)
 
         # Boehringer+2016 (https://arxiv.org/abs/1610.02887)
         # -- about ~90 measurements have mean r/r500 = 0.32, median r/r500 = 0.25
@@ -814,8 +814,8 @@ def bfield_strength_vs_halomass(sPs, redshifts):
         bmax = np.log10(6.0) # uG
         mass_range = [2e14,4e14] # m200 msun
 
-        ax.fill_between(np.log10(mass_range), y1=[bmin,bmin], y2=[bmax,bmax], color='#eeeeee', 
-            label='B$\\rm\\"{o}$hringer+16 ($z \sim 0.1$)')
+        ax.fill_between(np.log10(mass_range), y1=[bmin,bmin], y2=[bmax,bmax], edgecolor='#eeeeee', 
+            facecolor='none', lw=lw, label='B$\\rm\\"{o}$hringer+16 ($z \sim 0.1$)', zorder=2)
 
     def _draw_data2(ax):
         """ Draw additional data constraints on figure, individual halos. """
@@ -860,7 +860,7 @@ def stellar_mass_vs_halomass(sPs, conf=0):
         yQuant = 'mstar_30pkpc'
         ylabel = 'BCG Stellar Mass [ log M$_{\\rm sun}$ ]'
         ylim = [10.9, 13.1]
-        scatterColor = 'massfrac_exsitu2'
+        scatterColor = None #'massfrac_exsitu2' (TODO: can re-enable)
 
         def _draw_data(ax):
             # Kravtsov+ 2018 (Table 1 for M500crit + Table 4)
@@ -872,23 +872,23 @@ def stellar_mass_vs_halomass(sPs, conf=0):
             ax.scatter(m500c, mstar_30pkpc, s=markersize+20, c='#000000', marker='D', alpha=1.0, label=label)
 
             # empirical SMHM relations
-            #b = behrooziSMHM(sPs[0], redshift=0.0)
-            #m = mosterSMHM(sPs[0], redshift=0.0)
-            #k = kravtsovSMHM(sPs[0])
+            b = behrooziSMHM(sPs[0], redshift=0.0)
+            m = mosterSMHM(sPs[0], redshift=0.0)
+            k = kravtsovSMHM(sPs[0])
 
-            #ax.plot(b['m500c'], b['mstar_mid'], color='#333333', label='Behroozi+ (2013)')
-            #ax.fill_between(b['m500c'], b['mstar_low'], b['mstar_high'], color='#333333', interpolate=True, alpha=0.3)
+            ax.plot(b['m500c'], b['mstar_mid'], color='#333333', label='Behroozi+ (2013)')
+            ax.fill_between(b['m500c'], b['mstar_low'], b['mstar_high'], color='#333333', interpolate=True, alpha=0.3)
 
-            #ax.plot(m['m500c'], m['mstar_mid'], color='#dddddd', label='Moster+ (2013)')
-            #ax.fill_between(m['m500c'], m['mstar_low'], m['mstar_high'], color='#dddddd', interpolate=True, alpha=0.3)
+            ax.plot(m['m500c'], m['mstar_mid'], color='#dddddd', label='Moster+ (2013)')
+            ax.fill_between(m['m500c'], m['mstar_low'], m['mstar_high'], color='#dddddd', interpolate=True, alpha=0.3)
 
-            #ax.plot(k['m500c'], k['mstar_mid'], color='#888888', label='Kravtsov+ (2014)')
+            ax.plot(k['m500c'], k['mstar_mid'], color='#888888', label='Kravtsov+ (2014)')
 
     if conf == 1:
         yQuant = 'mstar_r500'
         ylabel = 'Total Halo Stellar Mass [ log M$_{\\rm sun}$ ]' # BCG+SAT+ICL (e.g. <r500c)
         ylim = [11.9, 13.5]
-        scatterColor = 'massfrac_exsitu'
+        scatterColor = None #'massfrac_exsitu' (TODO: can re-enable)
 
         def _draw_data(ax):
             # Kravtsov+ 2018 (Figure 7 for r500c, Figure 8 for satellites within r500c)
@@ -1030,13 +1030,13 @@ def paperPlots():
         blackholeVsStellarMass(sPs, pdf, twiceR=True, xlim=[11,13.0], ylim=[7.5,11], actualLargestBHMasses=True)
         pdf.close()
 
-        #pdf = PdfPages('blackhole_masses_vs_mbulge_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        #blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, xlim=[11,13.0], ylim=[7.5,11], actualLargestBHMasses=True)
-        #pdf.close()
+        pdf = PdfPages('blackhole_masses_vs_mbulge_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
+        blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, xlim=[11,13.0], ylim=[7.5,11], actualLargestBHMasses=True)
+        pdf.close()
 
-        #pdf = PdfPages('blackhole_masses_vs_mhalo_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        #blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, xlim=[13.8,15.4], ylim=[8.5,11], actualLargestBHMasses=True)
-        #pdf.close()
+        pdf = PdfPages('blackhole_masses_vs_mhalo_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
+        blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, xlim=[13.8,15.4], ylim=[8.5,11], actualLargestBHMasses=True)
+        pdf.close()
 
     # figure X - BCG stellar sizes
     if 0:

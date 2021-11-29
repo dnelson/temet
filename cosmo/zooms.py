@@ -42,6 +42,14 @@ def _halo_ids_run(res=14, onlyDone=False):
     """ Parse runs.txt and return the list of (all) halo IDs. """
     path = expanduser("~") + "/sims.TNG_zooms/"
 
+    if res == 14 and onlyDone:
+        # runs.txt file no longer relevant, use directories which exist
+        from glob import glob
+        dirs = glob(path + 'L680n2048TNG_h*_L%d_sf3' % res)
+        halo_inds = sorted([int(folder.split('_')[-3][1:]) for folder in dirs])
+
+        return halo_inds
+
     with open(path + 'runs.txt','r') as f:
         runs_txt = [line.strip() for line in f.readlines()]
 
@@ -865,9 +873,9 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
     saveFilename = 'lengths_hind_%03d.hdf5' % snap
     with h5py.File(outPath + saveFilename,'w') as f:
         # particle lengths in all fofs for this hInd (file 1)
-        f['GroupLenType_hInd'] = GroupLenType_hInd 
+        f['GroupLenType_hInd'] = GroupLenType_hInd
         # particle lengths outside fofs for this hInd (file 2)
-        f['OuterFuzzLenType_hInd'] = OuterFuzzLenType_hInd 
+        f['OuterFuzzLenType_hInd'] = OuterFuzzLenType_hInd
         # halo IDs of original zooms
         f['HaloIDs'] = np.array(hInds, dtype='int32')
 
@@ -1043,8 +1051,6 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
 
     print('Done.')
 
-    # TODO: add offsets from lengths_hind_%03d.hdf5 to offsets files during their construction
-
 def testVirtualParentBoxGroupCat(snap=99):
     """ Compare all group cat fields (1d histograms) vs TNG300-1 to check unit conversions, etc. """
     from matplotlib.backends.backend_pdf import PdfPages
@@ -1209,64 +1215,6 @@ def testVirtualParentBoxSnapshot(snap=99):
 
         # finish
         pdf.close()
-
-def test_variant_box():
-    """ Test if a variant box is responsible for a noted difference. """
-    from matplotlib.backends.backend_pdf import PdfPages
-
-    sP1 = simParams(run='tng',res=512,redshift=0.0,variant='0000')
-    sP2 = simParams(run='tng',res=512,redshift=0.0,variant='5008')
-
-    # 4503 = sh03: STEEPER_SFR_FOR_STARBURST (1.0)
-    # 5001 = 17Oct2016 gfm_metal_cooling bugfix
-    # 5002 = 17Nov2016 benergy_wind_spawning fix
-    # 5003 = 8May2017 z>6 UVB fix
-    # 5004 = 6Apr2018 velocity gradients sign/limiter fixes (see StarFormationRate!)
-    # 5005 = 7May2018 vel slope limiter fix
-    # --- not included in TNG-Cluster -- 5006 = 7May2018 wind-recoupling/stellar-evo energy injection fix
-    # --- not included in TNG-Cluster -- 5007 = 13May2018 gas total energy kick fix
-    # 5008 = 3Oct2018 mhd missing scalefactor in powell source term fix
-    # --- not included in TNG-Cluster -- 5011 = subfind phase2 pot fix (see StarFormationRate!)
-
-    # TODO: understand PartType0: ElectronAbundance, GFM_CoolingRate, StarFormationRate differences
-
-    # TODO: verify PartType0: NeutralHydrogenAbundance, InternalEnergy
-
-    pt = 'gas'
-    fields = ['ElectronAbundance','GFM_CoolingRate','StarFormationRate','NeutralHydrogenAbundance','InternalEnergy']
-    haloID = 0
-
-    pdf = PdfPages('compare_%s_h%d_%s.pdf' % (sP2.simName,haloID,pt))
-
-    for field in fields:
-        # start plot
-        print(field)
-
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
-
-        ax.set_xlabel(field + ' [log]')
-        ax.set_ylabel('N')
-        ax.set_yscale('log')
-
-        # load and histogram
-        for i, sP in enumerate([sP1,sP2]):
-            vals = sP.snapshotSubset(pt, field, haloID=haloID)
-
-            vals = vals[np.isfinite(vals) & (vals > 0)]
-            vals = vals.ravel() # 1D for all multi-D
-
-            vals = np.log10(vals)
-
-            ax.hist(vals, bins=50, alpha=0.6, label=sP.simName)
-
-        # finish plot
-        ax.legend(loc='best')
-        pdf.savefig()
-        plt.close(fig)
-
-    # finish
-    pdf.close()
 
 def check_all():
     """ TEMP CHECK NSUBS. """

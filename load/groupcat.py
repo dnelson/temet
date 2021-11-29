@@ -233,7 +233,7 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 if '_gyr' in quant: r[field] *= 1e9 # 1/yr to 1/Gyr
 
             # virial radius (r200 or r500) of parent halo [code, pkpc]
-            if quantName in ['rhalo_200_code', 'rhalo_200','rhalo_500', 'rhalo_200_parent']:
+            if quantName in ['rhalo_200_code', 'rhalo_200', 'rhalo_500_code', 'rhalo_500', 'rhalo_200_parent']:
                 od = 200 if '_200' in quant else 500
 
                 gc = groupCat(sP, fieldsHalos=['Group_R_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
@@ -758,7 +758,7 @@ def groupCatNumChunks(basePath, snapNum, subbox=None):
     return nChunks
 
 def groupCatOffsetList(sP):
-    """ Make the offset table for the group catalog files, to be able to quickly determine which
+    """ Make the offset table for the group catalog files, to be able to quickly determine within
         which file a given group/subgroup number exists. """
     saveFilename = sP.derivPath + 'offsets/groupcat_' + str(sP.snap) + '.hdf5'
 
@@ -803,7 +803,7 @@ def groupCatOffsetList(sP):
 
 def groupCatOffsetListIntoSnap(sP):
     """ Make the offset table (by type) for every group/subgroup, such that the global location of 
-        the members of any group/subgroup can be quickly located. """
+        the particle/cell members of any group/subgroup can be quickly located. """
     saveFilename = sP.derivPath + 'offsets/snap_groups_' + str(sP.snap) + '.hdf5'
 
     if not isdir(sP.derivPath+'offsets'):

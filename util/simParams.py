@@ -84,7 +84,6 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      'tng50-3-dark':['tng_dm',540],
                      'tng50-4-dark':['tng_dm',270],
                      'tng-cluster':['tng',8192],
-                     'tng-cluster-old':['tng',6144],
                      'tng-cluster-dark':['tng_dm',2048],
                      'tng-local-dark':['tng_dm_local',512],
                      'eagle':['eagle',1504],
@@ -394,7 +393,7 @@ class simParams:
             self.simNameAlt = self.simName
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
-            if res in res_L35+res_L75+res_L205 and self.variant == 'None':
+            if res in res_L35+res_L75+res_L205+res_L680 and self.variant == 'None':
                 # override flagship name
                 if res in res_L35: resInd = len(res_L35) - res_L35.index(res)
                 if res in res_L75: resInd = len(res_L75) - res_L75.index(res)
@@ -1266,8 +1265,8 @@ class simParams:
             else:
                 self.redshift = self.snapNumToRedshift()
 
-            assert self.redshift >= 0.0
-            if self.redshift < 1e-10: self.redshift = 0.0
+            assert self.redshift >= -1e-15
+            if np.abs(self.redshift) < 1e-10: self.redshift = 0.0
         self.units = units(sP=self)
 
         # clear cache
