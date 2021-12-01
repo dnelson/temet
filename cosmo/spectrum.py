@@ -744,6 +744,13 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
     """ For a single ray, specified by its starting location, direction, and length, ray-trace through 
     a Voronoi mesh using neighbor searches in a pre-computed tree. """
 
+    # if a bisection along a ray converges to this level (in code units), we have iterated to an 
+    # actual face which gives the correct next natural neighbor. in this case we stop, as our
+    # criterion won't otherwise find it (the midpoint of the two cells, although in the face-plane, 
+    # is not actually in the face polygon, but is instead inside a different natural neighbor of the 
+    # current cell)
+    abs_tol = 0.01
+
     # path length accumulated
     dl = 0.0
     n_step = 0
@@ -763,6 +770,8 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
     prev_cell_inds = np.zeros(max_steps, dtype='int64') - 1
     num_prev_inds = 0
 
+    iter_counter  = np.zeros(max_steps, dtype='int32')
+
     #def _locate_nearest_cell(xyz,pos,posMask,boxSizeSim,NextNode,length,center,sibling,nextnode,h_guess=1.0):
     def _locate_nearest_cell(xyz,pos,h_guess=1.0):
         NumPart = pos.shape[0]
@@ -774,7 +783,6 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
         while loc_index == -1:
             loc_index, loc_dist2 = _treeSearchNearest(xyz,h_guess,NumPart,boxSizeSim,pos,posMask,
                                                       NextNode,length,center,sibling,nextnode)
-            #print(iter_num,loc_index,np.sqrt(loc_dist2),h_guess)
             h_guess *= 2.0
             iter_num += 1
 
@@ -825,7 +833,9 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
         # ending target for this segment is the global ray endpoint, unless we have previously failed a 
         # bisection and thus have a closer guess
         end_cell_local_ind = -1
-        ray_search_length = total_dl - dl # total remaining length
+
+        raylength_left = 0.0
+        raylength_right = total_dl - dl # total remaining length
 
         # TODO: change prev_cell_ind into a stack of previous inds
         #if num_prev_inds > 0 and prev_cell_inds[num_prev_inds-1] >= 0:
@@ -839,14 +849,18 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
 
         # while the cell containing the end of the segment is not a natural neighbor of the current cell
         local_dl = np.inf
-        n_search = 0
 
         for n_iter in range(1000):
-            # set distance along ray based on number of bisections
-            ray_length_local = ray_search_length * 0.5**n_search
-            ray_end_local = ray_pos + ray_dir * ray_length_local
+            # set distance along ray as midpoint between bracketing
+            iter_counter[n_step] = n_iter
+            assert n_iter < 100 and (raylength_right - raylength_left) > abs_tol # otherwise failure
 
-            assert n_iter < 100 and ray_length_local > 0.001 # otherwise failure
+            # new test position along ray
+            ray_left = ray_pos + ray_dir * raylength_left
+            ray_right = ray_pos + ray_dir * raylength_right
+            ray_end_local = 0.5 * (ray_left + ray_right)
+
+            if debug > 1: print(f' ({n_iter:2d}) L+R midpoint = {(raylength_left+raylength_right)*0.5:.5f}')
 
             # locate parent cell of this point
             end_cell_local_ind, dist_end_local = _locate_nearest_cell(ray_end_local,cell_pos)
@@ -857,6 +871,14 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
                 min_index_verify = np.where(dists == dists.min())[0][0]
                 assert min_index_verify == end_cell_local_ind
 
+            # is this parent the same as the current cell? then we have skipped over the neighbor
+            if end_cell_local_ind == cur_cell_ind:
+                # set new endpoint as candidate ray position (inside some other natural neighbor)
+                raylength_left = (raylength_right + raylength_left) * 0.5
+
+                if debug > 1: print(f'  !! neighbor was skipped, set new [L={raylength_left:.4f} R={raylength_right:.4f}] and re-search')
+                continue
+
             # edge midpoint, i.e. a point on the Voronoi face plane shared with this neighbor, if the 
             # current and final cells are actually natural neighbors
             m = 0.5 * (end_cell_pos_local + cur_cell_pos)
@@ -864,23 +886,35 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
             # locate parent cell of this point: is it in one of the two cells?
             cand_cell_ind, dist_cand = _locate_nearest_cell(m,cell_pos)
 
-            if debug: print(f' ({n_search:2d}) {ray_end_local = } candidate {end_cell_local_ind = } {ray_length_local = :7.3f}')
+            if verify:
+                dists = sP.periodicDists(m, cell_pos)
+                min_index_verify = np.where(dists == dists.min())[0][0]
+                # note: if we are actually at the natural neighbor, then cand_cell_ind could be either
+                # end_cell_local_ind or cur_cell_ind, so likely we should also allow cur_cell_ind here
+                assert min_index_verify in [cand_cell_ind,end_cell_local_ind]
 
-            if cand_cell_ind not in [cur_cell_ind,end_cell_local_ind]:
+            if debug: print(f' ({n_iter:2d}) {ray_end_local = } {cand_cell_ind = } {end_cell_local_ind = } [L={raylength_left:.4f} R={raylength_right:.4f}]')
+
+            # if it isn't in either cell, and our bisection has not yet converged, then continue
+            # but if our bisection has converged, then assume that the parent cell of the 
+            # local ray end position is a natural neighbor whose shared face does not, unfortunately, 
+            # contain the midpoint of the line segment between the two cell centers
+            if cand_cell_ind not in [cur_cell_ind,end_cell_local_ind] and \
+                ((raylength_right - raylength_left) > 2*abs_tol):
                 # no: modify end point (bisection), and continue loop
-                n_search += 1
+                raylength_right = (raylength_right + raylength_left) * 0.5
 
                 # update stack
                 #prev_cell_inds[num_prev_inds] = cand_cell_ind
                 #num_prev_inds += 1
                 # TODO: prev_cell_inds has duplicates...
-                if debug > 1: print(f' -- {end_cell_local_ind = } not a match, bisecting...')
+                if debug > 1: print(f' -- {end_cell_local_ind = } not a match, bisecting [L={raylength_left:.4f} R={raylength_right:.4f}]...')
                 continue
 
             # yes: found -a- natural neighbor, which may be the correct next cell
             if debug > 1: print(f' -- {end_cell_local_ind = } matches, finding ray-face intersection...')
 
-            if verify:
+            if verify and ((raylength_right - raylength_left) > 2*abs_tol):
                 dists = sP.periodicDists(m, cell_pos)
                 min_index_verify = np.where(dists == dists.min())[0][0]
                 assert min_index_verify in [cur_cell_ind,end_cell_local_ind]
@@ -951,8 +985,14 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
             if cand_index not in [cur_cell_ind,end_cell_local_ind]:
                 # set new endpoint as candidate ray position (inside some other natural neighbor)
                 ray_search_length = np.sum( (cand_new_ray_pos - ray_pos) * ray_dir )
-                n_search = 0
-                if debug > 1: print(f'  !! neighbor is incorrect, set new {ray_search_length = :.4f} and re-search')
+                if ray_search_length > raylength_left:
+                    # move right, such that new 0.5*(L+R) is at this point
+                    raylength_right = 2*ray_search_length - raylength_left
+                else:
+                    # move left (todo, should this ever actually happen?)
+                    assert 0
+
+                if debug > 1: print(f'  !! neighbor is incorrect, set new [L={raylength_left:.4f} R={raylength_right:.4f}] and re-search')
                 continue
 
             # calculate local pathlength, update ray position
@@ -1005,6 +1045,10 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
     master_dx     = master_dx[0:n_step]
     master_temp   = master_temp[0:n_step]
     master_vellos = master_vellos[0:n_step]
+
+    iter_counter = iter_counter[0:n_step]
+
+    if debug: print('iter_counter: ', iter_counter)
 
     # convert length units, all other units already appropriate
     master_dx = sP.units.codeLengthToMpc(master_dx)
