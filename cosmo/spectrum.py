@@ -691,21 +691,28 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell
                 local_dl = s
                 if debug > 1: print(f'  -- new next neighbor: [{ngb_index}] with {local_dl = }')
 
-        # calculate local pathlength, accumulate
+        # have we exceeded the requested total pathlength?
         assert local_dl > 0
         assert np.isfinite(local_dl)
+
+        if dl+local_dl >= total_dl:
+            # integrate final cell partially, to end of ray
+            local_dl = total_dl - dl
+
+        # calculate local pathlength, update ray position
         dl += local_dl
         ray_pos += ray_dir*local_dl
 
+        if debug: print(f' ** accumulate {cur_cell_ind = }, {local_dl = :.3f}, next cell index = {next_ngb_index}')
+
+        # accumulate
         master_dens[n_step] = cell_dens[cur_cell_ind] # ions/cm^3
         master_dx[n_step] = local_dl # code!
         master_temp[n_step] = cell_temp[cur_cell_ind] # K
         master_vellos[n_step] = cell_vellos[cur_cell_ind] # km/s
 
-        # have we exceeded the requested total pathlength?
-        if dl >= total_dl:
+        if dl >= (total_dl - 1e-10):
             # integrate final cell partially
-            master_dx[n_step] -= (dl-total_dl)
             if debug > 1: print('  -- reached total pathlength, terminating.')
             break
 
@@ -736,21 +743,273 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
                                    ray_pos, ray_dir, total_dl, sP, debug, verify, fof_scope_mesh):
     """ For a single ray, specified by its starting location, direction, and length, ray-trace through 
     a Voronoi mesh using neighbor searches in a pre-computed tree. """
-    pass
 
-    # make a neighbor search
-    # dist, index = calcHsml(cell_pos, sP.boxSize, posSearch=search_pos, nearest=True, tree=tree)
-    # assert index.min() >= 0 and index.max() < pos.shape[0]
-    # (todo: we will need this to be fast, since we will call with single points)
-    # so change to direct numba call of
-    # 
-    # ind0 = 0
-    # ind1 = search_pos.shape[0] - 1
-    # posMask = np.ones(pos.shape[0], dtype=np.bool) # unmasked
-    # _treeSearchNearestIterate(search_pos,ind0,ind1,boxSizeSim,cell_pos,posMask,
-    #                                               NextNode,length,center,sibling,nextnode)
-    # indeed cut the code out of this function and use _treeSearchNearest() directly for h-acceleration
-    pass
+    # path length accumulated
+    dl = 0.0
+    n_step = 0
+
+    # no masking of search candidates
+    posMask = np.ones(cell_pos.shape[0], dtype=np.bool)
+
+    # allocate
+    max_steps = 10000
+    
+    master_dens   = np.zeros(max_steps, dtype='float32') # density for each ray segment
+    master_dx     = np.zeros(max_steps, dtype='float32') # pathlength for each ray segment
+    master_temp   = np.zeros(max_steps, dtype='float32') # temp for each ray segment
+    master_vellos = np.zeros(max_steps, dtype='float32') # line of sight velocity
+
+    # for bisection stack: indices of previous failed candidate cell(s)
+    prev_cell_inds = np.zeros(max_steps, dtype='int64') - 1
+    num_prev_inds = 0
+
+    #def _locate_nearest_cell(xyz,pos,posMask,boxSizeSim,NextNode,length,center,sibling,nextnode,h_guess=1.0):
+    def _locate_nearest_cell(xyz,pos,h_guess=1.0):
+        NumPart = pos.shape[0]
+        boxSizeSim = sP.boxSize
+
+        loc_index = -1
+        iter_num = 0
+
+        while loc_index == -1:
+            loc_index, loc_dist2 = _treeSearchNearest(xyz,h_guess,NumPart,boxSizeSim,pos,posMask,
+                                                      NextNode,length,center,sibling,nextnode)
+            #print(iter_num,loc_index,np.sqrt(loc_dist2),h_guess)
+            h_guess *= 2.0
+            iter_num += 1
+
+            if iter_num > 1000:
+                print('ERROR: Failed to converge.')
+                break
+
+        return loc_index, np.sqrt(loc_dist2)
+
+    # locate starting cell
+    cur_cell_ind, dist = _locate_nearest_cell(ray_pos,cell_pos)
+
+    # where will we terminate ray, globally?
+    ray_end = ray_pos + ray_dir * total_dl
+
+    end_cell_ind, dist_end = _locate_nearest_cell(ray_end,cell_pos)
+    end_cell_pos = cell_pos[end_cell_ind]
+
+    print(f'Starting cell index [{cur_cell_ind}], ending cell index [{end_cell_ind}], {total_dl = :.3f}.')
+
+    if verify:
+        # verify start
+        dists = sP.periodicDists(ray_pos, cell_pos)
+        mindist_cell_ind = np.where(dists == dists.min())[0][0]
+        assert mindist_cell_ind == cur_cell_ind
+        # verify end
+        dists = sP.periodicDists(ray_end, cell_pos)
+        mindist_cell_ind = np.where(dists == dists.min())[0][0]
+        assert mindist_cell_ind == end_cell_ind
+
+    prev_cell_ind = -1 # for verify only
+
+    # loop while still intersecting cells
+    finished = False
+
+    while not finished:
+        # current Voronoi cell
+        cur_cell_pos = cell_pos[cur_cell_ind]
+
+        if debug: print(f'[{n_step:3d}] {dl = :7.3f} {ray_pos = } {cur_cell_ind = }')
+
+        if verify:
+            dists = sP.periodicDists(ray_pos, cell_pos)
+            mindist_cell_ind = np.where(dists == dists.min())[0][0]
+            # due to round-off, answer should be ambiguous between previous and current cell (we sit on the face)
+            assert mindist_cell_ind in [prev_cell_ind,cur_cell_ind]
+
+        # ending target for this segment is the global ray endpoint, unless we have previously failed a 
+        # bisection and thus have a closer guess
+        end_cell_local_ind = -1
+        ray_search_length = total_dl - dl # total remaining length
+
+        # TODO: change prev_cell_ind into a stack of previous inds
+        #if num_prev_inds > 0 and prev_cell_inds[num_prev_inds-1] >= 0:
+        #    import pdb; pdb.set_trace()
+        #    # set ray_search_length (conservative)
+        #    prev_cell_inds[num_prev_inds] = -1
+        #    num_prev_inds -= 1
+        ##if prev_cell_ind != cur_cell_ind:
+        ##    end_cell_local_ind = prev_cell_ind
+        ##    ray_search_length = 0 # TODO
+
+        # while the cell containing the end of the segment is not a natural neighbor of the current cell
+        local_dl = np.inf
+        n_search = 0
+
+        for n_iter in range(1000):
+            # set distance along ray based on number of bisections
+            ray_length_local = ray_search_length * 0.5**n_search
+            ray_end_local = ray_pos + ray_dir * ray_length_local
+
+            assert n_iter < 100 and ray_length_local > 0.001 # otherwise failure
+
+            # locate parent cell of this point
+            end_cell_local_ind, dist_end_local = _locate_nearest_cell(ray_end_local,cell_pos)
+            end_cell_pos_local = cell_pos[end_cell_local_ind]
+
+            if verify:
+                dists = sP.periodicDists(ray_end_local, cell_pos)
+                min_index_verify = np.where(dists == dists.min())[0][0]
+                assert min_index_verify == end_cell_local_ind
+
+            # edge midpoint, i.e. a point on the Voronoi face plane shared with this neighbor, if the 
+            # current and final cells are actually natural neighbors
+            m = 0.5 * (end_cell_pos_local + cur_cell_pos)
+
+            # locate parent cell of this point: is it in one of the two cells?
+            cand_cell_ind, dist_cand = _locate_nearest_cell(m,cell_pos)
+
+            if debug: print(f' ({n_search:2d}) {ray_end_local = } candidate {end_cell_local_ind = } {ray_length_local = :7.3f}')
+
+            if cand_cell_ind not in [cur_cell_ind,end_cell_local_ind]:
+                # no: modify end point (bisection), and continue loop
+                n_search += 1
+
+                # update stack
+                #prev_cell_inds[num_prev_inds] = cand_cell_ind
+                #num_prev_inds += 1
+                # TODO: prev_cell_inds has duplicates...
+                if debug > 1: print(f' -- {end_cell_local_ind = } not a match, bisecting...')
+                continue
+
+            # yes: found -a- natural neighbor, which may be the correct next cell
+            if debug > 1: print(f' -- {end_cell_local_ind = } matches, finding ray-face intersection...')
+
+            if verify:
+                dists = sP.periodicDists(m, cell_pos)
+                min_index_verify = np.where(dists == dists.min())[0][0]
+                assert min_index_verify in [cur_cell_ind,end_cell_local_ind]
+
+            # need to do ray-face intersection
+            if 1:
+                # edge midpoint, i.e. a point on the Voronoi face plane shared with this neighbor
+                ngb_pos = end_cell_pos_local
+                #m = 0.5 * (ngb_pos + cur_cell_pos)
+
+                # the vector from the current ray position to m
+                c = m - ray_pos
+
+                # the vector from the current cell to the neighbor, which is a normal vector to the face plane
+                q = ngb_pos - cur_cell_pos
+
+                # test intersection of a ray and a plane. because the dot product of two perpendicular vectors is
+                # zero, we can write (p-m).n = 0 for some point p on the face, because (p-m) is a vector on the face.
+                # then, we have the parametric ray equation ray_pos+ray_dir*s = p for some scalar distance s. If the 
+                # ray and plane intersect, this point p is the same in both equations, so substituting and 
+                # re-arranging for s we solve for s = c.q / (ray_dir.q)
+                cdotq = np.sum(c * q)
+                ddotq = np.sum(ray_dir * q)
+
+                # s gives the point where the ray (ray_pos + s*ray_dir)
+                # intersects the plane perpendicular to q containing c, i.e. the Voronoi face with this neighbor
+                if cdotq > 0:
+                    # standard case, ray_pos is inside the cell, calculate length to intersection
+                    s = cdotq / ddotq
+                else:
+                    # point is on the wrong side of face (i.e. outside), could be due to numerical roundoff error
+                    # (if distance to the face is ~eps), or because we are not in the cell we think we are
+                    # (if distance to the face is large)
+                    if ddotq > 0:
+                        # direciton is away from cell, so it was supposed to have intersected this face?
+                        # set s=0 i.e. there is no local pathlength
+                        if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} > 0, direction is out of cell (set next, local_dl=0)')
+                        s = 0
+                        assert 0 # check when/how this really happens
+                    else:
+                        # direction is into the cell, so it must have entered the cell through this face (ignore)
+                        if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} < 0, direction is into cell (ignore)')
+                        s = np.inf
+
+                    # if np.abs(ddotq) < eps, then the plane and ray are parallel
+                    #   - if the ray and face perfectly coincide, there is an infinity of intersection solutions
+                    #   - or, if the ray is off the face, there is no intersectin
+                    # either way, we treat this as a non-intersection
+                    if np.abs(ddotq) < 1e-10:
+                        assert 0 # check when/how this really happens
+                    
+                if s >= 0 and s < local_dl:
+                    # we have a valid intersection, and it is closer than all previous intersections, so mark this
+                    # neighbor as the new best candidate for the exit face
+                    local_dl = s
+                    if debug > 1: print(f'  -- new next neighbor: [{end_cell_local_ind}] with {local_dl = }')
+                else:
+                    # should not occur, we thought we had here a valid intersection
+                    assert 0
+
+            # candidate new ray position must be within the current, or next, cell
+            # if not, we intersected the face-plane outside of the extent of the face polygon
+            # and there is in fact a closer face intersection (closer natural neighbor)
+            cand_new_ray_pos = ray_pos + ray_dir*local_dl
+
+            cand_index, _ = _locate_nearest_cell(cand_new_ray_pos,cell_pos)
+
+            if cand_index not in [cur_cell_ind,end_cell_local_ind]:
+                # set new endpoint as candidate ray position (inside some other natural neighbor)
+                ray_search_length = np.sum( (cand_new_ray_pos - ray_pos) * ray_dir )
+                n_search = 0
+                if debug > 1: print(f'  !! neighbor is incorrect, set new {ray_search_length = :.4f} and re-search')
+                continue
+
+            # calculate local pathlength, update ray position
+            assert local_dl > 0
+            assert np.isfinite(local_dl)
+            dl += local_dl
+            ray_pos += ray_dir*local_dl
+
+            if debug: print(f' ** accumulate {cur_cell_ind = }, {local_dl = :.3f}, next cell index = {end_cell_local_ind}')
+
+            # accumulate
+            master_dens[n_step] = cell_dens[cur_cell_ind] # ions/cm^3
+            master_dx[n_step] = local_dl # code!
+            master_temp[n_step] = cell_temp[cur_cell_ind] # K
+            master_vellos[n_step] = cell_vellos[cur_cell_ind] # km/s
+
+            # are we finished unexpectedly?
+            assert dl < total_dl
+            assert cur_cell_ind != end_cell_ind # dl should exceed total_dl first
+
+            # update cur_cell_ind (global ending cell always remains the same)
+            prev_cell_ind = cur_cell_ind # for verify only
+            cur_cell_ind = end_cell_local_ind
+            n_step += 1
+
+            # is the next cell the end?
+            if cur_cell_ind == end_cell_ind:
+                # remaining path-length
+                local_dl = total_dl - dl
+                if debug: print(f'[{n_step:3d}] {dl = :7.3f} {ray_pos = } {cur_cell_ind = }')
+
+                dl += local_dl
+                ray_pos += ray_dir*local_dl
+
+                # accumulate
+                master_dens[n_step] = cell_dens[cur_cell_ind] # ions/cm^3
+                master_dx[n_step] = local_dl # code!
+                master_temp[n_step] = cell_temp[cur_cell_ind] # K
+                master_vellos[n_step] = cell_vellos[cur_cell_ind] # km/s
+
+                # we are done with the entire ray integration
+                if debug: print(f' ** accumulate {cur_cell_ind = }, {local_dl = :.3f}, finished.')
+                finished = True
+
+            # terminate bisection search, move on to next
+            break
+
+    # reduce arrays to used size
+    master_dens   = master_dens[0:n_step]
+    master_dx     = master_dx[0:n_step]
+    master_temp   = master_temp[0:n_step]
+    master_vellos = master_vellos[0:n_step]
+
+    # convert length units, all other units already appropriate
+    master_dx = sP.units.codeLengthToMpc(master_dx)
+
+    return master_dens, master_dx, master_temp, master_vellos
 
 def generate_spectrum_voronoi(use_precomputed_mesh=True, debug=1, verify=True):
     """ Generate an absorption spectrum by ray-tracing through the Voronoi mesh.
