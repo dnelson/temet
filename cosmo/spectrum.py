@@ -11,6 +11,7 @@ from scipy.special import wofz
 from plot.config import *
 from util import units
 from util.helper import logZeroNaN
+from util.sphMap import _NEAREST_POS
 from util.treeSearch import buildFullTree, _treeSearchNearest
 
 # line data (Morton+2003)
@@ -578,13 +579,37 @@ def generate_spectrum_uniform_grid():
 
     _spectrum_debug_plot(sP, line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos)
 
+def _periodic_wrap_point(pos, pos_ref, boxSize, boxHalf):
+    """ If pos is more than a half-box away from pos_ref, wrap it into the same octant. """
+    dx = pos[0] - pos_ref[0]
+    dy = pos[1] - pos_ref[1]
+    dz = pos[2] - pos_ref[2]
+
+    if dx > boxHalf:
+        pos[0] -= boxSize
+    if dx < -boxHalf:
+        pos[0] += boxSize
+    if dy > boxHalf:
+        pos[1] -= boxSize
+    if dy < -boxHalf:
+        pos[1] += boxSize
+    if dz > boxHalf:
+        pos[2] -= boxSize
+    if dz < -boxHalf:
+        pos[2] += boxSize
+
+    return
+
 def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell_temp, cell_dens, 
                                    num_ngb, ngb_inds, offset_ngb,
-                                   ray_pos, ray_dir, total_dl, sP, debug, verify, fof_scope_mesh):
+                                   ray_pos_in, ray_dir, total_dl, sP, debug, verify, fof_scope_mesh):
     """ For a single ray, specified by its starting location, direction, and length, ray-trace through 
     a Voronoi mesh as specified by the pre-computed natural neighbor connectivity information. """
 
     # path length accumulated
+    boxHalf = sP.boxSize / 2
+    ray_pos = ray_pos_in.copy()
+
     dl = 0.0
     n_step = 0
 
@@ -593,7 +618,7 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell
     cur_cell_ind = np.where(dists == dists.min())[0][0]
     prev_cell_ind = -1
     
-    print(f'Starting cell index [{cur_cell_ind}] at distance = {dists[cur_cell_ind]:.2f} ckpc/h, {total_dl = :.3f}.')
+    if debug: print(f'Starting cell index [{cur_cell_ind}] at distance = {dists[cur_cell_ind]:.2f} ckpc/h, {total_dl = :.3f}.')
 
     # allocate
     max_steps = 10000
@@ -606,7 +631,8 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell
     # while total dl does not exceed request, start tracing through mesh
     while 1:
         # current Voronoi cell
-        cur_cell_pos = cell_pos[cur_cell_ind]
+        cur_cell_pos = cell_pos[cur_cell_ind].copy()
+        _periodic_wrap_point(cur_cell_pos, ray_pos, sP.boxSize, boxHalf)
         
         if debug: print(f'[{n_step:3d}] {dl = :7.3f} {ray_pos = } {cur_cell_ind = }')
 
@@ -631,7 +657,8 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell
         for i in range(num_ngb[cur_cell_ind]):
             # neighbor properties
             ngb_index = ngb_inds[offset_ngb[cur_cell_ind]+i]
-            ngb_pos = cell_pos[ngb_index]
+            ngb_pos = cell_pos[ngb_index].copy()
+            _periodic_wrap_point(ngb_pos, ray_pos, sP.boxSize, boxHalf)
 
             if ngb_index == -1: # outside of fof-scope mesh
                 assert fof_scope_mesh # otherwise should not occur
@@ -679,7 +706,7 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell
 
                 # if np.abs(ddotq) < eps, then the plane and ray are parallel
                 #   - if the ray and face perfectly coincide, there is an infinity of intersection solutions
-                #   - or, if the ray is off the face, there is no intersectin
+                #   - or, if the ray is off the face, there is no intersection
                 # either way, we treat this as a non-intersection
                 if np.abs(ddotq) < 1e-10:
                     assert 0 # check when/how this really happens
@@ -702,6 +729,10 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell
         # calculate local pathlength, update ray position
         dl += local_dl
         ray_pos += ray_dir*local_dl
+
+        # wrap ray_pos if it has left the box
+        for i in range(3):
+            ray_pos[i] = _NEAREST_POS(ray_pos[i], sP.boxSize)
 
         if debug: print(f' ** accumulate {cur_cell_ind = }, {local_dl = :.3f}, next cell index = {next_ngb_index}')
 
@@ -733,14 +764,11 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell
     master_temp   = master_temp[0:n_step]
     master_vellos = master_vellos[0:n_step]
 
-    # convert length units, all other units already appropriate
-    master_dx = sP.units.codeLengthToMpc(master_dx)
-
     return master_dens, master_dx, master_temp, master_vellos
 
 def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, cell_dens, 
                                    NextNode, length, center, sibling, nextnode, 
-                                   ray_pos, ray_dir, total_dl, sP, debug, verify, fof_scope_mesh):
+                                   ray_pos_in, ray_dir, total_dl, sP, debug, verify):
     """ For a single ray, specified by its starting location, direction, and length, ray-trace through 
     a Voronoi mesh using neighbor searches in a pre-computed tree. """
 
@@ -752,11 +780,13 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
     abs_tol = 0.01
 
     # path length accumulated
+    ray_pos = ray_pos_in.copy()
     dl = 0.0
     n_step = 0
 
     # no masking of search candidates
     posMask = np.ones(cell_pos.shape[0], dtype=np.bool)
+    boxHalf = sP.boxSize / 2
 
     # allocate
     max_steps = 10000
@@ -801,7 +831,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
     end_cell_ind, dist_end = _locate_nearest_cell(ray_end,cell_pos)
     end_cell_pos = cell_pos[end_cell_ind]
 
-    print(f'Starting cell index [{cur_cell_ind}], ending cell index [{end_cell_ind}], {total_dl = :.3f}.')
+    if debug: print(f'Starting cell index [{cur_cell_ind}], ending cell index [{end_cell_ind}], {total_dl = :.3f}.')
 
     if verify:
         # verify start
@@ -853,9 +883,10 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
         for n_iter in range(1000):
             # set distance along ray as midpoint between bracketing
             iter_counter[n_step] = n_iter
-            assert n_iter < 100 and (raylength_right - raylength_left) > abs_tol # otherwise failure
 
-            # new test position along ray
+            assert n_iter < 100 and (raylength_right - raylength_left) > 1e-10 # otherwise failure
+
+            # new test position along ray (ray_end_local can be outside box, which is ok for _locate_nearest_cell)
             ray_left = ray_pos + ray_dir * raylength_left
             ray_right = ray_pos + ray_dir * raylength_right
             ray_end_local = 0.5 * (ray_left + ray_right)
@@ -864,7 +895,9 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
 
             # locate parent cell of this point
             end_cell_local_ind, dist_end_local = _locate_nearest_cell(ray_end_local,cell_pos)
-            end_cell_pos_local = cell_pos[end_cell_local_ind]
+            end_cell_pos_local = cell_pos[end_cell_local_ind].copy()
+
+            _periodic_wrap_point(end_cell_pos_local, cur_cell_pos, sP.boxSize, boxHalf)
 
             if verify:
                 dists = sP.periodicDists(ray_end_local, cell_pos)
@@ -873,7 +906,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
 
             # is this parent the same as the current cell? then we have skipped over the neighbor
             if end_cell_local_ind == cur_cell_ind:
-                # set new endpoint as candidate ray position (inside some other natural neighbor)
+                # no: modify starting point (bisection), and continue loop
                 raylength_left = (raylength_right + raylength_left) * 0.5
 
                 if debug > 1: print(f'  !! neighbor was skipped, set new [L={raylength_left:.4f} R={raylength_right:.4f}] and re-search')
@@ -900,7 +933,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
             # local ray end position is a natural neighbor whose shared face does not, unfortunately, 
             # contain the midpoint of the line segment between the two cell centers
             if cand_cell_ind not in [cur_cell_ind,end_cell_local_ind] and \
-                ((raylength_right - raylength_left) > 2*abs_tol):
+                ((raylength_right - raylength_left) > abs_tol):
                 # no: modify end point (bisection), and continue loop
                 raylength_right = (raylength_right + raylength_left) * 0.5
 
@@ -914,66 +947,63 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
             # yes: found -a- natural neighbor, which may be the correct next cell
             if debug > 1: print(f' -- {end_cell_local_ind = } matches, finding ray-face intersection...')
 
-            if verify and ((raylength_right - raylength_left) > 2*abs_tol):
+            if verify and ((raylength_right - raylength_left) > abs_tol):
                 dists = sP.periodicDists(m, cell_pos)
                 min_index_verify = np.where(dists == dists.min())[0][0]
                 assert min_index_verify in [cur_cell_ind,end_cell_local_ind]
 
-            # need to do ray-face intersection
-            if 1:
-                # edge midpoint, i.e. a point on the Voronoi face plane shared with this neighbor
-                ngb_pos = end_cell_pos_local
-                #m = 0.5 * (ngb_pos + cur_cell_pos)
+            # the vector from the current ray position to m
+            ray_pos_wrapped = ray_pos.copy()
+            _periodic_wrap_point(ray_pos_wrapped, cur_cell_pos, sP.boxSize, boxHalf)
 
-                # the vector from the current ray position to m
-                c = m - ray_pos
+            c = m - ray_pos_wrapped
 
-                # the vector from the current cell to the neighbor, which is a normal vector to the face plane
-                q = ngb_pos - cur_cell_pos
+            # the vector from the current cell to the neighbor, which is a normal vector to the face plane
+            q = end_cell_pos_local - cur_cell_pos
 
-                # test intersection of a ray and a plane. because the dot product of two perpendicular vectors is
-                # zero, we can write (p-m).n = 0 for some point p on the face, because (p-m) is a vector on the face.
-                # then, we have the parametric ray equation ray_pos+ray_dir*s = p for some scalar distance s. If the 
-                # ray and plane intersect, this point p is the same in both equations, so substituting and 
-                # re-arranging for s we solve for s = c.q / (ray_dir.q)
-                cdotq = np.sum(c * q)
-                ddotq = np.sum(ray_dir * q)
+            # test intersection of a ray and a plane. because the dot product of two perpendicular vectors is
+            # zero, we can write (p-m).n = 0 for some point p on the face, because (p-m) is a vector on the face.
+            # then, we have the parametric ray equation ray_pos+ray_dir*s = p for some scalar distance s. If the 
+            # ray and plane intersect, this point p is the same in both equations, so substituting and 
+            # re-arranging for s we solve for s = c.q / (ray_dir.q)
+            cdotq = np.sum(c * q)
+            ddotq = np.sum(ray_dir * q)
 
-                # s gives the point where the ray (ray_pos + s*ray_dir)
-                # intersects the plane perpendicular to q containing c, i.e. the Voronoi face with this neighbor
-                if cdotq > 0:
-                    # standard case, ray_pos is inside the cell, calculate length to intersection
-                    s = cdotq / ddotq
+            # s gives the point where the ray (ray_pos + s*ray_dir)
+            # intersects the plane perpendicular to q containing c, i.e. the Voronoi face with this neighbor
+            if cdotq > 0:
+                # standard case, ray_pos is inside the cell, calculate length to intersection
+                s = cdotq / ddotq
+            else:
+                # point is on the wrong side of face (i.e. outside), could be due to numerical roundoff error
+                # (if distance to the face is ~eps), or because we are not in the cell we think we are
+                # (if distance to the face is large)
+                if ddotq > 0:
+                    # direciton is away from cell, so it was supposed to have intersected this face?
+                    # set s=0 i.e. there is no local pathlength
+                    if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} > 0, direction is out of cell (set next, local_dl=0)')
+                    s = 0
+                    assert 0 # check when/how this really happens
                 else:
-                    # point is on the wrong side of face (i.e. outside), could be due to numerical roundoff error
-                    # (if distance to the face is ~eps), or because we are not in the cell we think we are
-                    # (if distance to the face is large)
-                    if ddotq > 0:
-                        # direciton is away from cell, so it was supposed to have intersected this face?
-                        # set s=0 i.e. there is no local pathlength
-                        if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} > 0, direction is out of cell (set next, local_dl=0)')
-                        s = 0
-                        assert 0 # check when/how this really happens
-                    else:
-                        # direction is into the cell, so it must have entered the cell through this face (ignore)
-                        if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} < 0, direction is into cell (ignore)')
-                        s = np.inf
+                    # direction is into the cell, so it must have entered the cell through this face (ignore)
+                    if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} < 0, direction is into cell (ignore)')
+                    s = np.inf
 
-                    # if np.abs(ddotq) < eps, then the plane and ray are parallel
-                    #   - if the ray and face perfectly coincide, there is an infinity of intersection solutions
-                    #   - or, if the ray is off the face, there is no intersectin
-                    # either way, we treat this as a non-intersection
-                    if np.abs(ddotq) < 1e-10:
-                        assert 0 # check when/how this really happens
-                    
-                if s >= 0 and s < local_dl:
-                    # we have a valid intersection, and it is closer than all previous intersections, so mark this
-                    # neighbor as the new best candidate for the exit face
-                    local_dl = s
-                    if debug > 1: print(f'  -- new next neighbor: [{end_cell_local_ind}] with {local_dl = }')
-                else:
-                    # should not occur, we thought we had here a valid intersection
-                    assert 0
+                # if np.abs(ddotq) < eps, then the plane and ray are parallel
+                #   - if the ray and face perfectly coincide, there is an infinity of intersection solutions
+                #   - or, if the ray is off the face, there is no intersection
+                # either way, we treat this as a non-intersection
+                if np.abs(ddotq) < 1e-10:
+                    assert 0 # check when/how this really happens
+                
+            if s >= 0 and s < local_dl:
+                # we have a valid intersection, and it is closer than all previous intersections, so mark this
+                # neighbor as the new best candidate for the exit face
+                local_dl = s
+                if debug > 1: print(f'  -- new next neighbor: [{end_cell_local_ind}] with {local_dl = }')
+            else:
+                # should not occur, we thought we had here a valid intersection
+                assert 0
 
             # candidate new ray position must be within the current, or next, cell
             # if not, we intersected the face-plane outside of the extent of the face polygon
@@ -1037,6 +1067,10 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
                 if debug: print(f' ** accumulate {cur_cell_ind = }, {local_dl = :.3f}, finished.')
                 finished = True
 
+            # wrap ray_pos if it has left the box
+            for i in range(3):
+                ray_pos[i] = _NEAREST_POS(ray_pos[i], sP.boxSize)
+
             # terminate bisection search, move on to next
             break
 
@@ -1050,16 +1084,14 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
 
     if debug: print('iter_counter: ', iter_counter)
 
-    # convert length units, all other units already appropriate
-    master_dx = sP.units.codeLengthToMpc(master_dx)
-
     return master_dens, master_dx, master_temp, master_vellos
 
-def generate_spectrum_voronoi(use_precomputed_mesh=True, debug=1, verify=True):
+def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1, verify=True):
     """ Generate an absorption spectrum by ray-tracing through the Voronoi mesh.
     Args:
       use_precomputed_mesh (bool): if True, use pre-computed Voronoi mesh connectivity from VPPP, 
         otherwise use tree-based, connectivity-free method.
+      compare (bool): if True, run both methods and compare results.
       debug (int): verbosity level for diagnostic outputs: 0 (silent), 1, 2, or 3 (most verbose).
       verify (bool): if True, brute-force distance calculation verify parent cell at each step.
     """
@@ -1114,7 +1146,7 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, debug=1, verify=True):
     ray_pos = np.array([ray_start_x, ray_start_y, ray_start_z])
 
     # use precomputed connectivity method, or tree-based method?
-    if use_precomputed_mesh:
+    if use_precomputed_mesh or compare:
         # load mesh neighbor connectivity
         if fof_scope_mesh:
             num_ngb, ngb_inds, offset_ngb = loadSingleHaloVPPP(sP, haloID=haloID)
@@ -1127,19 +1159,36 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, debug=1, verify=True):
                                        num_ngb, ngb_inds, offset_ngb, ray_pos, ray_dir, total_dl, 
                                        sP, debug, verify, fof_scope_mesh)
 
-    else:
+    if (not use_precomputed_mesh) or compare:
         # construct neighbor tree
-        tree = buildFullTree(cell_pos, boxSizeSim=sP.boxSize, treePrec=cell_pos.dtype, verbose=True)
+        tree = buildFullTree(cell_pos, boxSizeSim=sP.boxSize, treePrec=cell_pos.dtype, verbose=debug)
         NextNode, length, center, sibling, nextnode = tree
+
+        if compare:
+            ray_pos = np.array([ray_start_x, ray_start_y, ray_start_z]) # reset
+            master_dens2 = master_dens.copy()
+            master_dx2 = master_dx.copy()
+            master_temp2 = master_temp.copy()
+            master_vellos2 = master_vellos.copy()
 
         # ray-trace
         master_dens, master_dx, master_temp, master_vellos = \
           trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, cell_dens, 
                                        NextNode, length, center, sibling, nextnode, ray_pos, ray_dir, total_dl, 
-                                       sP, debug, verify, fof_scope_mesh)
+                                       sP, debug, verify)
+
+        if compare:
+            assert np.allclose(master_dens2,master_dens)
+            assert np.allclose(master_dx,master_dx2)
+            assert np.allclose(master_temp,master_temp2)
+            assert np.allclose(master_vellos,master_vellos2)
+            print(master_dx,master_dx2,'Comparison success.')
 
     # create spectrum
     f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
+
+    # convert length units, all other units already appropriate
+    master_dx = sP.units.codeLengthToMpc(master_dx)
 
     master_mid, tau_master, z_eff = create_spectrum_from_traced_ray(sP, f, gamma, wave0, ion_mass, instrument, 
                                       master_dens, master_dx, master_temp, master_vellos)
@@ -1322,7 +1371,7 @@ def multi_line_test():
     fig.savefig('spectrum_multi_%s.pdf' % ('-'.join(lines)))
     plt.close(fig)
 
-def benchmark():
+def benchmark_line():
     """ Deposit many random lines. """
     import time
 
@@ -1359,3 +1408,100 @@ def benchmark():
 
     tot_time = time.time() - start_time
     print('depositions took [%g] sec, i.e. [%g] each' % (tot_time, tot_time/n))
+
+def benchmark_test_voronoi(compare=True):
+    """ Run a large number of rays through the (fullbox) Voronoi mesh, in each case comparing the 
+    results from pre-computed vs. tree-based approaches, for correctness (and speed). """
+    import time
+    from util.simParams import simParams
+    from util.voronoi import loadGlobalVPPP
+
+    # config
+    sP = simParams(run='tng50-4', redshift=0.5)
+
+    projAxis = 2 # z, to simplify vellos for now
+
+    num_rays = 100
+    verify = False
+
+    # load global cell properties (pos,vel,species dens,temp)
+    velLosField = 'vel_'+['x','y','z'][projAxis]
+
+    cell_pos    = sP.snapshotSubsetP('gas', 'pos') # code
+    cell_vellos = sP.snapshotSubsetP('gas', velLosField) # code
+    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold_linear') # K
+    cell_dens   = sP.snapshotSubset('gas', 'nh') # ions/cm^3
+
+    cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
+
+    # construct neighbor tree
+    tree = buildFullTree(cell_pos, boxSizeSim=sP.boxSize, treePrec=cell_pos.dtype, verbose=True)
+    NextNode, length, center, sibling, nextnode = tree
+
+    # load mesh neighbor connectivity
+    if compare:
+        num_ngb, ngb_inds, offset_ngb = loadGlobalVPPP(sP)
+
+    # init random number generator and counters
+    rng = np.random.default_rng(424242)
+
+    N_intersects = 0
+    total_pathlength = 0.0
+    time_a = 0.0
+    time_b = 0.0
+
+    for i in range(num_rays):
+        # ray direction
+        ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
+        ray_dir[projAxis] = 1.0
+
+        # ray starting position and length (random)
+        ray_pos = rng.uniform(low=0.0, high=sP.boxSize, size=3)
+
+        total_dl = rng.uniform(low=sP.boxSize/100, high=sP.boxSize/2)
+
+        print(f'[{i:3d}] {ray_pos = } {total_dl = }')
+
+        # (A) ray-trace with precomputed connectivity method
+        start_time = time.time()
+
+        if compare:
+            master_dens, master_dx, master_temp, master_vellos = \
+              trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell_temp, cell_dens, 
+                                           num_ngb, ngb_inds, offset_ngb, ray_pos, ray_dir, total_dl, 
+                                           sP, debug=0, verify=verify, fof_scope_mesh=False)
+
+        time_a += (time.time() - start_time) # accumulate
+        
+        # (B) ray-trace with tree-based method
+        start_time = time.time()
+
+        master_dens2, master_dx2, master_temp2, master_vellos2 = \
+          trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, cell_dens, 
+                                       NextNode, length, center, sibling, nextnode, ray_pos, ray_dir, total_dl, 
+                                       sP, debug=0, verify=verify)
+
+        time_b += (time.time() - start_time)
+
+        # compare
+        N_intersects += master_dens2.size
+        total_pathlength += total_dl
+
+        if compare:
+            assert np.allclose(master_dens2,master_dens)
+            assert np.allclose(master_dx,master_dx2)
+            assert np.allclose(master_temp,master_temp2)
+            assert np.allclose(master_vellos,master_vellos2)
+
+    # stats
+    avg_intersections = N_intersects / sP.units.codeLengthToMpc(total_pathlength) # per pMpc
+    avg_time_a = time_a / num_rays / N_intersects # per intersection (w/ connectivity)
+    avg_time_b = time_b / num_rays / N_intersects # per intersection (tree-based)
+
+    time_1000_crossings_a = avg_time_a * avg_intersections * sP.units.codeLengthToMpc(sP.boxSize) * 1000
+    time_1000_crossings_b = avg_time_b * avg_intersections * sP.units.codeLengthToMpc(sP.boxSize) * 1000
+
+    print(f'For {num_rays = }, have {N_intersects = } and {total_pathlength = :.2f}')
+    print(f'Time per ray, w/ connectivity: [{time_a/num_rays:.2f}] sec, tree-based: [{time_b/num_rays:.2f}] sec')
+    print(f'Mean intersections per pMpc: [{avg_intersections:.2f}]')
+    print(f'Time for 1000x full box crossings: [{time_1000_crossings_a:.2f}] vs [{time_1000_crossings_b:.2f}] sec')
