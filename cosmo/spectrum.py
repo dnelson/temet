@@ -798,6 +798,8 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
 
     # for bisection stack: indices of previous failed candidate cell(s)
     prev_cell_inds = np.zeros(max_steps, dtype='int64') - 1
+    prev_cell_cen = np.zeros(max_steps, dtype='float32')
+
     num_prev_inds = 0
 
     iter_counter  = np.zeros(max_steps, dtype='int32')
@@ -867,15 +869,29 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
         raylength_left = 0.0
         raylength_right = total_dl - dl # total remaining length
 
-        # TODO: change prev_cell_ind into a stack of previous inds
-        #if num_prev_inds > 0 and prev_cell_inds[num_prev_inds-1] >= 0:
-        #    import pdb; pdb.set_trace()
-        #    # set ray_search_length (conservative)
-        #    prev_cell_inds[num_prev_inds] = -1
-        #    num_prev_inds -= 1
-        ##if prev_cell_ind != cur_cell_ind:
-        ##    end_cell_local_ind = prev_cell_ind
-        ##    ray_search_length = 0 # TODO
+        # bisection acceleration: from the last ray position, we can use the 'closest' failed 
+        # distance as a (closer) starting point
+        while num_prev_inds > 0 and prev_cell_inds[num_prev_inds-1] == cur_cell_ind:
+            # avoid self, pop from stack
+            if debug > 1: print(' -- remove self from prev_cell_inds stack!')
+            prev_cell_cen[num_prev_inds-1] = 0.0 # for safety only
+            prev_cell_inds[num_prev_inds-1] = -1 # for safety only
+            num_prev_inds -= 1
+
+        if num_prev_inds > 0 and prev_cell_inds[num_prev_inds-1] >= 0:
+            # set first ray_end_local to known (shorter) result
+            raylength_right = 2 * prev_cell_cen[num_prev_inds-1]
+            end_cell_local_ind = prev_cell_inds[num_prev_inds-1]
+
+            if debug > 1: print(' -- prev_cell_inds stack: ', prev_cell_inds[0:num_prev_inds+2])
+            if debug > 1: print(' -- prev_cell_cen stack: ', prev_cell_cen[0:num_prev_inds+2])
+            # pop from stack
+            prev_cell_cen[num_prev_inds-1] = 0.0 # for safety only
+            prev_cell_inds[num_prev_inds-1] = -1 # for safety only
+            num_prev_inds -= 1
+            if debug: print(f' -- set {raylength_right = } from {num_prev_inds = } index {end_cell_local_ind}')
+
+        assert raylength_right > 0.0 # otherwise used an empty prev_cell_cen value?
 
         # while the cell containing the end of the segment is not a natural neighbor of the current cell
         local_dl = np.inf
@@ -887,14 +903,18 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
             assert n_iter < 100 and (raylength_right - raylength_left) > 1e-10 # otherwise failure
 
             # new test position along ray (ray_end_local can be outside box, which is ok for _locate_nearest_cell)
-            ray_left = ray_pos + ray_dir * raylength_left
-            ray_right = ray_pos + ray_dir * raylength_right
-            ray_end_local = 0.5 * (ray_left + ray_right)
+            raylength_cen = 0.5 * (raylength_left + raylength_right)
+
+            ray_end_local = ray_pos + ray_dir * raylength_cen
 
             if debug > 1: print(f' ({n_iter:2d}) L+R midpoint = {(raylength_left+raylength_right)*0.5:.5f}')
 
             # locate parent cell of this point
-            end_cell_local_ind, dist_end_local = _locate_nearest_cell(ray_end_local,cell_pos)
+            if n_iter > 0 or end_cell_local_ind == -1:
+                # only skip this tree-research, possibly, on first iteration if we have a saved index
+                # from a previous bisection
+                end_cell_local_ind, dist_end_local = _locate_nearest_cell(ray_end_local,cell_pos)
+
             end_cell_pos_local = cell_pos[end_cell_local_ind].copy()
 
             _periodic_wrap_point(end_cell_pos_local, cur_cell_pos, sP.boxSize, boxHalf)
@@ -934,13 +954,16 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
             # contain the midpoint of the line segment between the two cell centers
             if cand_cell_ind not in [cur_cell_ind,end_cell_local_ind] and \
                 ((raylength_right - raylength_left) > abs_tol):
+                # update stack (avoid duplicates)
+                if num_prev_inds == 0 or prev_cell_inds[num_prev_inds-1] != end_cell_local_ind:
+                    prev_cell_inds[num_prev_inds] = end_cell_local_ind
+                    prev_cell_cen[num_prev_inds] = raylength_cen
+                    if debug > 1: print(f' -- adding {num_prev_inds = } index {end_cell_local_ind} cen {raylength_cen}')
+                    num_prev_inds += 1
+
                 # no: modify end point (bisection), and continue loop
                 raylength_right = (raylength_right + raylength_left) * 0.5
 
-                # update stack
-                #prev_cell_inds[num_prev_inds] = cand_cell_ind
-                #num_prev_inds += 1
-                # TODO: prev_cell_inds has duplicates...
                 if debug > 1: print(f' -- {end_cell_local_ind = } not a match, bisecting [L={raylength_left:.4f} R={raylength_right:.4f}]...')
                 continue
 
@@ -1032,6 +1055,10 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
             ray_pos += ray_dir*local_dl
 
             if debug: print(f' ** accumulate {cur_cell_ind = }, {local_dl = :.3f}, next cell index = {end_cell_local_ind}')
+
+            # update lengths i.e. maximum search distance along the ray at which to start the next bisection(s)
+            for i in range(num_prev_inds):
+                prev_cell_cen[i] -= local_dl
 
             # accumulate
             master_dens[n_step] = cell_dens[cur_cell_ind] # ions/cm^3
@@ -1417,7 +1444,7 @@ def benchmark_test_voronoi(compare=True):
     from util.voronoi import loadGlobalVPPP
 
     # config
-    sP = simParams(run='tng50-4', redshift=0.5)
+    sP = simParams(run='tng50-3', redshift=0.5)
 
     projAxis = 2 # z, to simplify vellos for now
 

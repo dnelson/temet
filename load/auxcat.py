@@ -426,6 +426,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=25.0),
    'Subhalo_Mass_30pkpc_Stars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0),
+   'Subhalo_Mass_2rhalf_Stars' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='2rhalfstars'),
    'Subhalo_Mass_100pkpc_Stars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=100.0,minStellarMass=10.0),
    'Subhalo_Mass_min_30pkpc_2rhalf_Stars' : \
