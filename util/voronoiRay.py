@@ -3,13 +3,26 @@ Algorithms and methods related to ray-tracing through a Voronoi mesh.
 """
 import numpy as np
 import time
+from numba import jit
 
+from util.helper import periodicDistsN
 from util.sphMap import _NEAREST_POS
 from util.voronoi import loadSingleHaloVPPP, loadGlobalVPPP
-from util.treeSearch import buildFullTree, _treeSearchNearest
+from util.treeSearch import buildFullTree, _treeSearchNearest, _treeSearchNearestSingle
 
+@jit(nopython=True, nogil=True, cache=True)
 def _periodic_wrap_point(pos, pos_ref, boxSize, boxHalf):
-    """ If pos is more than a half-box away from pos_ref, wrap it into the same octant. """
+    """ If pos is more than a half-box away from pos_ref, wrap it into the same octant.
+
+    Args:
+      pos (float[3]): x,y,z coordinates to wrap. Modified in place.
+      pos_ref (float[3]): x,y,z coordinates to use as reference point.
+      boxSize (float): the simulation box size, for periodic boundaries.
+      boxHalf (float): half of the simulation box size, for periodic boundaries.
+
+    Return:
+      None
+    """
     dx = pos[0] - pos_ref[0]
     dy = pos[1] - pos_ref[1]
     dz = pos[2] - pos_ref[2]
@@ -29,55 +42,92 @@ def _periodic_wrap_point(pos, pos_ref, boxSize, boxHalf):
 
     return
 
-def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell_temp, cell_dens, 
+@jit(nopython=True, nogil=True, cache=True)
+def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_quant1, cell_quant2, cell_quant3, 
                                    num_ngb, ngb_inds, offset_ngb,
-                                   ray_pos_in, ray_dir, total_dl, sP, debug, verify, fof_scope_mesh):
+                                   ray_pos_in, ray_dir, total_dl, boxSize, debug, verify, fof_scope_mesh):
     """ For a single ray, specified by its starting location, direction, and length, ray-trace through 
-    a Voronoi mesh as specified by the pre-computed natural neighbor connectivity information. """
+    a Voronoi mesh as specified by the pre-computed natural neighbor connectivity information.
+
+    Args:
+      cell_pos (ndarray[float]): Voronoi cell center positions [N,3].
+      cell_quant1 (ndarray[float]): some per-cell quantity to integrate, or None to skip.
+      cell_quant2 (ndarray[float]): a second per-cell quantity to integrate, or None to skip.
+      cell_quant3 (ndarray[float]): a third  per-cell quantity to integrate, or None to skip.
+      num_ngb (array[int]): Voronoi mesh connectivity, first return of :func:`util.voronoi.loadSingleHaloVPPP` 
+        or :func:`util.voronoi.loadGlobalVPPP` .
+      ngb_inds (array[int]): Voronoi mesh connectivity, second return of :func:`util.voronoi.loadSingleHaloVPPP` 
+        or :func:`util.voronoi.loadGlobalVPPP` .
+      offset_ngb (array[int]): Voronoi mesh connectivity, third return of :func:`util.voronoi.loadSingleHaloVPPP` 
+        or :func:`util.voronoi.loadGlobalVPPP` .
+      ray_pos_in (float[3]): x,y,z coordinates of ray starting position.
+      ray_dir (float[3]): normalized unit vector specifying ray direction.
+      total_dl (float): pathlength to integrate ray (code units i.e. same as cell_pos).
+      boxSize (float): simulation box size, for periodic boundaries (code units).
+      debug (bool): if True, >=1, or >=2, print increasing verbose debugging information (disabled for @jit).
+      verify (bool): if True, do brute-force distance verification every step of parent Voronoi cell.
+      fof_scope_mesh (bool): if True, indicate that we have loaded and are working with a fof-scope set of cell 
+        data and mesh connectivity, i.e. not a correct not periodic mesh at the edges.
+
+    Return:
+      a 4-tuple composed of
+
+      - **dx** (ndarray[float]): per-cell path length, in order, for each intersected cell (code/input units).
+      - **q1** (ndarray[float]): per-cell first quantity, in order, for each intersected cell (code/input units), or None if skipped.
+      - **q2** (ndarray[float]): per-cell second quantity, in order, for each intersected cell (code/input units), or None if skipped.
+      - **q3** (ndarray[float]): per-cell third quantity, in order, for each intersected cell (code/input units), or None if skipped.
+    """
 
     # path length accumulated
-    boxHalf = sP.boxSize / 2
+    boxHalf = boxSize / 2
     ray_pos = ray_pos_in.copy()
 
     dl = 0.0
     n_step = 0
 
     # locate starting cell
-    dists = sP.periodicDists(ray_pos, cell_pos)
+    dists = periodicDistsN(ray_pos, cell_pos, boxSize)
     cur_cell_ind = np.where(dists == dists.min())[0][0]
     prev_cell_ind = -1
     
-    if debug: print(f'Starting cell index [{cur_cell_ind}] at distance = {dists[cur_cell_ind]:.2f} ckpc/h, {total_dl = :.3f}.')
+    #if debug: print(f'Starting cell index [{cur_cell_ind}] at distance = {dists[cur_cell_ind]:.2f} ckpc/h, {total_dl = :.3f}.')
 
     # allocate
     max_steps = 10000
-    
-    master_dens   = np.zeros(max_steps, dtype='float32') # density for each ray segment
-    master_dx     = np.zeros(max_steps, dtype='float32') # pathlength for each ray segment
-    master_temp   = np.zeros(max_steps, dtype='float32') # temp for each ray segment
-    master_vellos = np.zeros(max_steps, dtype='float32') # line of sight velocity
+
+    master_dx = np.zeros(max_steps, dtype=np.float32) # pathlength for each ray segment
+    master_quant1 = None
+    master_quant2 = None
+    master_quant3 = None
+
+    if cell_quant1 is not None:
+        master_quant1 = np.zeros(max_steps, dtype=np.float32) # first quantity for each segment
+    if cell_quant2 is not None:
+        master_quant2 = np.zeros(max_steps, dtype=np.float32) # second quantity for each segment
+    if cell_quant3 is not None:
+        master_quant3 = np.zeros(max_steps, dtype=np.float32) # third quantity for each segment
 
     # while total dl does not exceed request, start tracing through mesh
     while 1:
         # current Voronoi cell
         cur_cell_pos = cell_pos[cur_cell_ind].copy()
-        _periodic_wrap_point(cur_cell_pos, ray_pos, sP.boxSize, boxHalf)
+        _periodic_wrap_point(cur_cell_pos, ray_pos, boxSize, boxHalf)
         
-        if debug: print(f'[{n_step:3d}] {dl = :7.3f} {ray_pos = } {cur_cell_ind = }')
+        #if debug: print(f'[{n_step:3d}] {dl = :7.3f} {ray_pos = } {cur_cell_ind = }')
 
         local_dl = np.inf
         next_ngb_index = -1
 
         if verify:
-            dists = sP.periodicDists(ray_pos, cell_pos)
+            dists = periodicDistsN(ray_pos, cell_pos, boxSize)
             mindist_cell_ind = np.where(dists == dists.min())[0][0]
             # due to round-off, answer should be ambiguous between previous and current cell (we sit on the face)
             if mindist_cell_ind not in [prev_cell_ind,cur_cell_ind]:
                 if fof_scope_mesh:
-                    dist_to_halo_cen = sP.periodicDists(ray_pos, halo['GroupPos']) / halo['Group_R_Crit200']
+                    dist_to_halo_cen = 2.0 #sP.periodicDists(ray_pos, halo['GroupPos']) / halo['Group_R_Crit200']
                     # note: still fail if we start too early i.e. before fof-scope!
                     assert dist_to_halo_cen > 1.0 and dl > total_dl/2 # otherwise check
-                    if debug: print(' -- NOTE: Termination! Leaving fof-scope mesh.')
+                    #if debug: print(' -- NOTE: Termination! Leaving fof-scope mesh.')
                     break
                 else:
                     assert 0 # should not occur
@@ -87,14 +137,14 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell
             # neighbor properties
             ngb_index = ngb_inds[offset_ngb[cur_cell_ind]+i]
             ngb_pos = cell_pos[ngb_index].copy()
-            _periodic_wrap_point(ngb_pos, ray_pos, sP.boxSize, boxHalf)
+            _periodic_wrap_point(ngb_pos, ray_pos, boxSize, boxHalf)
 
             if ngb_index == -1: # outside of fof-scope mesh
                 assert fof_scope_mesh # otherwise should not occur
-                if debug > 1: print(f' [{i:2d} of {num_ngb[cur_cell_ind]:2d}] with {ngb_index = } skip')
+                #if debug > 1: print(f' [{i:2d} of {num_ngb[cur_cell_ind]:2d}] with {ngb_index = } skip')
                 continue
 
-            if debug > 1: print(f' [{i:2d} of {num_ngb[cur_cell_ind]:2d}] with {ngb_index = } and {ngb_pos = }')
+            #if debug > 1: print(f' [{i:2d} of {num_ngb[cur_cell_ind]:2d}] with {ngb_index = } and {ngb_pos = }')
 
             # edge midpoint, i.e. a point on the Voronoi face plane shared with this neighbor
             m = 0.5 * (ngb_pos + cur_cell_pos)
@@ -125,12 +175,12 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell
                 if ddotq > 0:
                     # direciton is away from cell, so it was supposed to have intersected this face?
                     # set s=0 i.e. there is no local pathlength
-                    if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} > 0, direction is out of cell (set next, local_dl=0)')
+                    #if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} > 0, direction is out of cell (set next, local_dl=0)')
                     s = 0
                     assert 0 # check when/how this really happens
                 else:
                     # direction is into the cell, so it must have entered the cell through this face (ignore)
-                    if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} < 0, direction is into cell (ignore)')
+                    #if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} < 0, direction is into cell (ignore)')
                     s = np.inf
 
                 # if np.abs(ddotq) < eps, then the plane and ray are parallel
@@ -145,7 +195,7 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell
                 # neighbor as the new best candidate for the exit face
                 next_ngb_index = ngb_index
                 local_dl = s
-                if debug > 1: print(f'  -- new next neighbor: [{ngb_index}] with {local_dl = }')
+                #if debug > 1: print(f'  -- new next neighbor: [{ngb_index}] with {local_dl = }')
 
         # have we exceeded the requested total pathlength?
         assert local_dl > 0
@@ -161,25 +211,28 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell
 
         # wrap ray_pos if it has left the box
         for i in range(3):
-            ray_pos[i] = _NEAREST_POS(ray_pos[i], sP.boxSize)
+            ray_pos[i] = _NEAREST_POS(ray_pos[i], boxSize)
 
-        if debug: print(f' ** accumulate {cur_cell_ind = }, {local_dl = :.3f}, next cell index = {next_ngb_index}')
+        #if debug: print(f' ** accumulate {cur_cell_ind = }, {local_dl = :.3f}, next cell index = {next_ngb_index}')
 
-        # accumulate
-        master_dens[n_step] = cell_dens[cur_cell_ind] # ions/cm^3
-        master_dx[n_step] = local_dl # code!
-        master_temp[n_step] = cell_temp[cur_cell_ind] # K
-        master_vellos[n_step] = cell_vellos[cur_cell_ind] # km/s
+        # accumulate (all code units and/or same units as input)
+        master_dx[n_step] = local_dl
+        if cell_quant1 is not None:
+            master_quant1[n_step] = cell_quant1[cur_cell_ind]
+        if cell_quant2 is not None:
+            master_quant2[n_step] = cell_quant2[cur_cell_ind]
+        if cell_quant3 is not None:
+            master_quant3[n_step] = cell_quant3[cur_cell_ind]
 
         if dl >= (total_dl - 1e-10):
             # integrate final cell partially
-            if debug > 1: print('  -- reached total pathlength, terminating.')
+            #if debug > 1: print('  -- reached total pathlength, terminating.')
             break
 
         # do we have a next valid neighbor? if not, exit
         if next_ngb_index == -1:
             assert fof_scope_mesh # otherwise should not happen
-            if debug > 1: print('  -- next neighbor is outside FoF scope, terminating.')
+            #if debug > 1: print('  -- next neighbor is outside FoF scope, terminating.')
             break
 
         # move to next cell
@@ -188,36 +241,48 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell
         n_step += 1
 
     # reduce arrays to used size
-    master_dens   = master_dens[0:n_step]
-    master_dx     = master_dx[0:n_step]
-    master_temp   = master_temp[0:n_step]
-    master_vellos = master_vellos[0:n_step]
+    master_dx = master_dx[0:n_step]
+    if cell_quant1 is not None:
+        master_quant1 = master_quant1[0:n_step]
+    if cell_quant2 is not None:
+        master_quant2 = master_quant2[0:n_step]
+    if cell_quant3 is not None:
+        master_quant3 = master_quant3[0:n_step]
 
-    return master_dens, master_dx, master_temp, master_vellos
+    return master_dx, master_quant1, master_quant2, master_quant3
 
-def _locate_nearest_cell(xyz,pos,posMask,boxSizeSim,NextNode,length,center,sibling,nextnode,h_guess=1.0):
-    """ Iterate on tree-search until we have at least one neighbor, return nearest. """
-    NumPart = pos.shape[0]
-    loc_index = -1
-    iter_num = 0
-
-    while loc_index == -1:
-        loc_index, loc_dist2 = _treeSearchNearest(xyz,h_guess,NumPart,boxSizeSim,pos,posMask,
-                                                  NextNode,length,center,sibling,nextnode)
-        h_guess *= 2.0
-        iter_num += 1
-
-        if iter_num > 1000:
-            print('ERROR: Failed to converge.')
-            break
-
-    return loc_index, np.sqrt(loc_dist2)
-
-def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, cell_dens, 
+@jit(nopython=True, nogil=True, cache=True)
+def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_quant1, cell_quant2, cell_quant3, 
                                              NextNode, length, center, sibling, nextnode, 
-                                             ray_pos_in, ray_dir, total_dl, sP, debug, verify):
+                                             ray_pos_in, ray_dir, total_dl, boxSize, debug, verify):
     """ For a single ray, specified by its starting location, direction, and length, ray-trace through 
-    a Voronoi mesh using neighbor searches in a pre-computed tree. """
+    a Voronoi mesh using neighbor searches in a pre-computed tree.
+
+    Args:
+      cell_pos (ndarray[float]): Voronoi cell center positions [N,3].
+      cell_quant1 (ndarray[float]): some per-cell quantity to integrate, or None to skip.
+      cell_quant2 (ndarray[float]): a second per-cell quantity to integrate, or None to skip.
+      cell_quant3 (ndarray[float]): a third  per-cell quantity to integrate, or None to skip.
+      NextNode (array[int]): neighbor tree, first return of :func:`util.treeSearch.buildFullTree`.
+      length (array[int]): neighbor tree, second return of :func:`util.treeSearch.buildFullTree`.
+      center (array[int]): neighbor tree, third return of :func:`util.treeSearch.buildFullTree`.
+      sibling (array[int]): neighbor tree, fourth return of :func:`util.treeSearch.buildFullTree`.
+      nextnode (array[int]): neighbor tree, fifth return of :func:`util.treeSearch.buildFullTree`.
+      ray_pos_in (float[3]): x,y,z coordinates of ray starting position.
+      ray_dir (float[3]): normalized unit vector specifying ray direction.
+      total_dl (float): pathlength to integrate ray (code units i.e. same as cell_pos).
+      boxSize (float): simulation box size, for periodic boundaries (code units).
+      debug (bool): if True, >=1, or >=2, print increasing verbose debugging information (disabled for @jit).
+      verify (bool): if True, do brute-force distance verification every step of parent Voronoi cell.
+
+    Return:
+      a 4-tuple composed of
+
+      - **dx** (ndarray[float]): per-cell path length, in order, for each intersected cell (code/input units).
+      - **q1** (ndarray[float]): per-cell first quantity, in order, for each intersected cell (code/input units), or None if skipped.
+      - **q2** (ndarray[float]): per-cell second quantity, in order, for each intersected cell (code/input units), or None if skipped.
+      - **q3** (ndarray[float]): per-cell third quantity, in order, for each intersected cell (code/input units), or None if skipped.
+    """
 
     # if a bisection along a ray converges to this level (in code units), we have iterated to an 
     # actual face which gives the correct next natural neighbor. in this case we stop, as our
@@ -231,47 +296,49 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
     dl = 0.0
     n_step = 0
 
-    # no masking of search candidates
-    posMask = np.ones(cell_pos.shape[0], dtype=np.bool)
-    boxSize = sP.boxSize
-    boxHalf = sP.boxSize / 2
+    boxHalf = boxSize / 2
 
     # allocate
     max_steps = 10000
     
-    master_dens   = np.zeros(max_steps, dtype='float32') # density for each ray segment
-    master_dx     = np.zeros(max_steps, dtype='float32') # pathlength for each ray segment
-    master_temp   = np.zeros(max_steps, dtype='float32') # temp for each ray segment
-    master_vellos = np.zeros(max_steps, dtype='float32') # line of sight velocity
+    master_dx = np.zeros(max_steps, dtype=np.float32) # pathlength for each ray segment
+    master_quant1 = None
+    master_quant2 = None
+    master_quant3 = None
+
+    if cell_quant1 is not None:
+        master_quant1 = np.zeros(max_steps, dtype=np.float32) # first quantity for each segment
+    if cell_quant2 is not None:
+        master_quant2 = np.zeros(max_steps, dtype=np.float32) # second quantity for each segment
+    if cell_quant3 is not None:
+        master_quant3 = np.zeros(max_steps, dtype=np.float32) # third quantity for each segment
 
     # for bisection stack: indices of previous failed candidate cell(s)
-    prev_cell_inds = np.zeros(max_steps, dtype='int64') - 1
-    prev_cell_cen = np.zeros(max_steps, dtype='float32')
+    prev_cell_inds = np.zeros(max_steps, dtype=np.int64) - 1
+    prev_cell_cen = np.zeros(max_steps, dtype=np.float32)
 
     num_prev_inds = 0
 
-    iter_counter  = np.zeros(max_steps, dtype='int32')
+    iter_counter  = np.zeros(max_steps, dtype=np.int32)
 
     # locate starting cell
-    #cur_cell_ind, dist = _locate_nearest_cell(ray_pos,cell_pos)
-    cur_cell_ind, h_guess = _locate_nearest_cell(ray_pos,cell_pos,posMask,boxSize,NextNode,length,center,sibling,nextnode,h_guess=1.0)
+    cur_cell_ind, h_guess = _treeSearchNearestSingle(ray_pos,cell_pos,boxSize,NextNode,length,center,sibling,nextnode,h=1.0)
 
     # where will we terminate ray, globally?
     ray_end = ray_pos + ray_dir * total_dl
 
-    #end_cell_ind, dist_end = _locate_nearest_cell(ray_end,cell_pos)
-    end_cell_ind, h_guess = _locate_nearest_cell(ray_end,cell_pos,posMask,boxSize,NextNode,length,center,sibling,nextnode,h_guess)
+    end_cell_ind, h_guess = _treeSearchNearestSingle(ray_end,cell_pos,boxSize,NextNode,length,center,sibling,nextnode,h_guess)
     end_cell_pos = cell_pos[end_cell_ind]
 
-    if debug: print(f'Starting cell index [{cur_cell_ind}], ending cell index [{end_cell_ind}], {total_dl = :.3f}.')
+    #if debug: print(f'Starting cell index [{cur_cell_ind}], ending cell index [{end_cell_ind}], {total_dl = :.3f}.')
 
     if verify:
         # verify start
-        dists = sP.periodicDists(ray_pos, cell_pos)
+        dists = periodicDistsN(ray_pos, cell_pos, boxSize)
         mindist_cell_ind = np.where(dists == dists.min())[0][0]
         assert mindist_cell_ind == cur_cell_ind
         # verify end
-        dists = sP.periodicDists(ray_end, cell_pos)
+        dists = periodicDistsN(ray_end, cell_pos, boxSize)
         mindist_cell_ind = np.where(dists == dists.min())[0][0]
         assert mindist_cell_ind == end_cell_ind
 
@@ -284,10 +351,10 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
         # current Voronoi cell
         cur_cell_pos = cell_pos[cur_cell_ind]
 
-        if debug: print(f'[{n_step:3d}] {dl = :7.3f} {ray_pos = } {cur_cell_ind = }')
+        #if debug: print(f'[{n_step:3d}] {dl = :7.3f} {ray_pos = } {cur_cell_ind = }')
 
         if verify:
-            dists = sP.periodicDists(ray_pos, cell_pos)
+            dists = periodicDistsN(ray_pos, cell_pos, boxSize)
             mindist_cell_ind = np.where(dists == dists.min())[0][0]
             # due to round-off, answer should be ambiguous between previous and current cell (we sit on the face)
             assert mindist_cell_ind in [prev_cell_ind,cur_cell_ind]
@@ -303,7 +370,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
         # distance as a (closer) starting point
         while num_prev_inds > 0 and prev_cell_inds[num_prev_inds-1] == cur_cell_ind:
             # avoid self, pop from stack
-            if debug > 1: print(' -- remove self from prev_cell_inds stack!')
+            #if debug > 1: print(' -- remove self from prev_cell_inds stack!')
             prev_cell_cen[num_prev_inds-1] = 0.0 # for safety only
             prev_cell_inds[num_prev_inds-1] = -1 # for safety only
             num_prev_inds -= 1
@@ -313,13 +380,13 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
             raylength_right = 2 * prev_cell_cen[num_prev_inds-1]
             end_cell_local_ind = prev_cell_inds[num_prev_inds-1]
 
-            if debug > 1: print(' -- prev_cell_inds stack: ', prev_cell_inds[0:num_prev_inds+2])
-            if debug > 1: print(' -- prev_cell_cen stack: ', prev_cell_cen[0:num_prev_inds+2])
+            #if debug > 1: print(' -- prev_cell_inds stack: ', prev_cell_inds[0:num_prev_inds+2])
+            #if debug > 1: print(' -- prev_cell_cen stack: ', prev_cell_cen[0:num_prev_inds+2])
             # pop from stack
             prev_cell_cen[num_prev_inds-1] = 0.0 # for safety only
             prev_cell_inds[num_prev_inds-1] = -1 # for safety only
             num_prev_inds -= 1
-            if debug: print(f' -- set {raylength_right = } from {num_prev_inds = } index {end_cell_local_ind}')
+            #if debug: print(f' -- set {raylength_right = } from {num_prev_inds = } index {end_cell_local_ind}')
 
         assert raylength_right > 0.0 # otherwise used an empty prev_cell_cen value?
 
@@ -332,26 +399,25 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
 
             assert n_iter < 100 and (raylength_right - raylength_left) > 1e-10 # otherwise failure
 
-            # new test position along ray (ray_end_local can be outside box, which is ok for _locate_nearest_cell)
+            # new test position along ray (ray_end_local can be outside box, which is ok for __treeSearchNearestSingle)
             raylength_cen = 0.5 * (raylength_left + raylength_right)
 
             ray_end_local = ray_pos + ray_dir * raylength_cen
 
-            if debug > 1: print(f' ({n_iter:2d}) L+R midpoint = {(raylength_left+raylength_right)*0.5:.5f}')
+            #if debug > 1: print(f' ({n_iter:2d}) L+R midpoint = {(raylength_left+raylength_right)*0.5:.5f}')
 
             # locate parent cell of this point
             if n_iter > 0 or end_cell_local_ind == -1:
                 # only skip this tree-research, possibly, on first iteration if we have a saved index
                 # from a previous bisection
-                #end_cell_local_ind, dist_end_local = _locate_nearest_cell(ray_end_local,cell_pos)
-                end_cell_local_ind, dist_end_local = _locate_nearest_cell(ray_end_local,cell_pos,posMask,boxSize,NextNode,length,center,sibling,nextnode,h_guess)
+                end_cell_local_ind, dist_end_local = _treeSearchNearestSingle(ray_end_local,cell_pos,boxSize,NextNode,length,center,sibling,nextnode,h_guess)
 
             end_cell_pos_local = cell_pos[end_cell_local_ind].copy()
 
-            _periodic_wrap_point(end_cell_pos_local, cur_cell_pos, sP.boxSize, boxHalf)
+            _periodic_wrap_point(end_cell_pos_local, cur_cell_pos, boxSize, boxHalf)
 
             if verify:
-                dists = sP.periodicDists(ray_end_local, cell_pos)
+                dists = periodicDistsN(ray_end_local, cell_pos, boxSize)
                 min_index_verify = np.where(dists == dists.min())[0][0]
                 assert min_index_verify == end_cell_local_ind
 
@@ -360,7 +426,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
                 # no: modify starting point (bisection), and continue loop
                 raylength_left = (raylength_right + raylength_left) * 0.5
 
-                if debug > 1: print(f'  !! neighbor was skipped, set new [L={raylength_left:.4f} R={raylength_right:.4f}] and re-search')
+                #if debug > 1: print(f'  !! neighbor was skipped, set new [L={raylength_left:.4f} R={raylength_right:.4f}] and re-search')
                 continue
 
             # edge midpoint, i.e. a point on the Voronoi face plane shared with this neighbor, if the 
@@ -368,17 +434,16 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
             m = 0.5 * (end_cell_pos_local + cur_cell_pos)
 
             # locate parent cell of this point: is it in one of the two cells?
-            #cand_cell_ind, dist_cand = _locate_nearest_cell(m,cell_pos)
-            cand_cell_ind, h_guess = _locate_nearest_cell(m,cell_pos,posMask,boxSize,NextNode,length,center,sibling,nextnode,h_guess)
+            cand_cell_ind, h_guess = _treeSearchNearestSingle(m,cell_pos,boxSize,NextNode,length,center,sibling,nextnode,h_guess)
 
             if verify:
-                dists = sP.periodicDists(m, cell_pos)
+                dists = periodicDistsN(m, cell_pos, boxSize)
                 min_index_verify = np.where(dists == dists.min())[0][0]
                 # note: if we are actually at the natural neighbor, then cand_cell_ind could be either
                 # end_cell_local_ind or cur_cell_ind, so likely we should also allow cur_cell_ind here
                 assert min_index_verify in [cand_cell_ind,end_cell_local_ind]
 
-            if debug: print(f' ({n_iter:2d}) {ray_end_local = } {cand_cell_ind = } {end_cell_local_ind = } [L={raylength_left:.4f} R={raylength_right:.4f}]')
+            #if debug: print(f' ({n_iter:2d}) {ray_end_local = } {cand_cell_ind = } {end_cell_local_ind = } [L={raylength_left:.4f} R={raylength_right:.4f}]')
 
             # if it isn't in either cell, and our bisection has not yet converged, then continue
             # but if our bisection has converged, then assume that the parent cell of the 
@@ -390,26 +455,26 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
                 if num_prev_inds == 0 or prev_cell_inds[num_prev_inds-1] != end_cell_local_ind:
                     prev_cell_inds[num_prev_inds] = end_cell_local_ind
                     prev_cell_cen[num_prev_inds] = raylength_cen
-                    if debug > 1: print(f' -- adding {num_prev_inds = } index {end_cell_local_ind} cen {raylength_cen}')
+                    #if debug > 1: print(f' -- adding {num_prev_inds = } index {end_cell_local_ind} cen {raylength_cen}')
                     num_prev_inds += 1
 
                 # no: modify end point (bisection), and continue loop
                 raylength_right = (raylength_right + raylength_left) * 0.5
 
-                if debug > 1: print(f' -- {end_cell_local_ind = } not a match, bisecting [L={raylength_left:.4f} R={raylength_right:.4f}]...')
+                #if debug > 1: print(f' -- {end_cell_local_ind = } not a match, bisecting [L={raylength_left:.4f} R={raylength_right:.4f}]...')
                 continue
 
             # yes: found -a- natural neighbor, which may be the correct next cell
-            if debug > 1: print(f' -- {end_cell_local_ind = } matches, finding ray-face intersection...')
+            #if debug > 1: print(f' -- {end_cell_local_ind = } matches, finding ray-face intersection...')
 
             if verify and ((raylength_right - raylength_left) > abs_tol):
-                dists = sP.periodicDists(m, cell_pos)
+                dists = periodicDistsN(m, cell_pos, boxSize)
                 min_index_verify = np.where(dists == dists.min())[0][0]
                 assert min_index_verify in [cur_cell_ind,end_cell_local_ind]
 
             # the vector from the current ray position to m
             ray_pos_wrapped = ray_pos.copy()
-            _periodic_wrap_point(ray_pos_wrapped, cur_cell_pos, sP.boxSize, boxHalf)
+            _periodic_wrap_point(ray_pos_wrapped, cur_cell_pos, boxSize, boxHalf)
 
             c = m - ray_pos_wrapped
 
@@ -436,12 +501,12 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
                 if ddotq > 0:
                     # direciton is away from cell, so it was supposed to have intersected this face?
                     # set s=0 i.e. there is no local pathlength
-                    if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} > 0, direction is out of cell (set next, local_dl=0)')
+                    #if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} > 0, direction is out of cell (set next, local_dl=0)')
                     s = 0
                     assert 0 # check when/how this really happens
                 else:
                     # direction is into the cell, so it must have entered the cell through this face (ignore)
-                    if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} < 0, direction is into cell (ignore)')
+                    #if debug > 2: print(f'  -- cdotq <= 0! {ddotq = :g} < 0, direction is into cell (ignore)')
                     s = np.inf
 
                 # if np.abs(ddotq) < eps, then the plane and ray are parallel
@@ -455,7 +520,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
                 # we have a valid intersection, and it is closer than all previous intersections, so mark this
                 # neighbor as the new best candidate for the exit face
                 local_dl = s
-                if debug > 1: print(f'  -- new next neighbor: [{end_cell_local_ind}] with {local_dl = }')
+                #if debug > 1: print(f'  -- new next neighbor: [{end_cell_local_ind}] with {local_dl = }')
             else:
                 # should not occur, we thought we had here a valid intersection
                 assert 0
@@ -465,8 +530,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
             # and there is in fact a closer face intersection (closer natural neighbor)
             cand_new_ray_pos = ray_pos + ray_dir*local_dl
 
-            #cand_index, _ = _locate_nearest_cell(cand_new_ray_pos,cell_pos)
-            cand_index, h_guess = _locate_nearest_cell(cand_new_ray_pos,cell_pos,posMask,boxSize,NextNode,length,center,sibling,nextnode,h_guess)
+            cand_index, h_guess = _treeSearchNearestSingle(cand_new_ray_pos,cell_pos,boxSize,NextNode,length,center,sibling,nextnode,h_guess)
 
             if cand_index not in [cur_cell_ind,end_cell_local_ind]:
                 # set new endpoint as candidate ray position (inside some other natural neighbor)
@@ -478,7 +542,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
                     # move left (todo, should this ever actually happen?)
                     assert 0
 
-                if debug > 1: print(f'  !! neighbor is incorrect, set new [L={raylength_left:.4f} R={raylength_right:.4f}] and re-search')
+                #if debug > 1: print(f'  !! neighbor is incorrect, set new [L={raylength_left:.4f} R={raylength_right:.4f}] and re-search')
                 continue
 
             # calculate local pathlength, update ray position
@@ -487,17 +551,20 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
             dl += local_dl
             ray_pos += ray_dir*local_dl
 
-            if debug: print(f' ** accumulate {cur_cell_ind = }, {local_dl = :.3f}, next cell index = {end_cell_local_ind}')
+            #if debug: print(f' ** accumulate {cur_cell_ind = }, {local_dl = :.3f}, next cell index = {end_cell_local_ind}')
 
             # update lengths i.e. maximum search distance along the ray at which to start the next bisection(s)
             for i in range(num_prev_inds):
                 prev_cell_cen[i] -= local_dl
 
-            # accumulate
-            master_dens[n_step] = cell_dens[cur_cell_ind] # ions/cm^3
-            master_dx[n_step] = local_dl # code!
-            master_temp[n_step] = cell_temp[cur_cell_ind] # K
-            master_vellos[n_step] = cell_vellos[cur_cell_ind] # km/s
+            # accumulate (all code units and/or same units as input)
+            master_dx[n_step] = local_dl
+            if cell_quant1 is not None:
+                master_quant1[n_step] = cell_quant1[cur_cell_ind]
+            if cell_quant2 is not None:
+                master_quant2[n_step] = cell_quant2[cur_cell_ind]
+            if cell_quant3 is not None:
+                master_quant3[n_step] = cell_quant3[cur_cell_ind]
 
             # are we finished unexpectedly?
             assert dl < total_dl
@@ -512,47 +579,60 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, c
             if cur_cell_ind == end_cell_ind:
                 # remaining path-length
                 local_dl = total_dl - dl
-                if debug: print(f'[{n_step:3d}] {dl = :7.3f} {ray_pos = } {cur_cell_ind = }')
+                #if debug: print(f'[{n_step:3d}] {dl = :7.3f} {ray_pos = } {cur_cell_ind = }')
 
                 dl += local_dl
                 ray_pos += ray_dir*local_dl
 
-                # accumulate
-                master_dens[n_step] = cell_dens[cur_cell_ind] # ions/cm^3
-                master_dx[n_step] = local_dl # code!
-                master_temp[n_step] = cell_temp[cur_cell_ind] # K
-                master_vellos[n_step] = cell_vellos[cur_cell_ind] # km/s
+                # accumulate (all code units and/or same units as input)
+                master_dx[n_step] = local_dl
+                if cell_quant1 is not None:
+                    master_quant1[n_step] = cell_quant1[cur_cell_ind]
+                if cell_quant2 is not None:
+                    master_quant2[n_step] = cell_quant2[cur_cell_ind]
+                if cell_quant3 is not None:
+                    master_quant3[n_step] = cell_quant3[cur_cell_ind]
 
                 # we are done with the entire ray integration
-                if debug: print(f' ** accumulate {cur_cell_ind = }, {local_dl = :.3f}, finished.')
+                #if debug: print(f' ** accumulate {cur_cell_ind = }, {local_dl = :.3f}, finished.')
                 finished = True
 
             # wrap ray_pos if it has left the box
             for i in range(3):
-                ray_pos[i] = _NEAREST_POS(ray_pos[i], sP.boxSize)
+                ray_pos[i] = _NEAREST_POS(ray_pos[i], boxSize)
 
             # terminate bisection search, move on to next
             break
 
     # reduce arrays to used size
-    master_dens   = master_dens[0:n_step]
-    master_dx     = master_dx[0:n_step]
-    master_temp   = master_temp[0:n_step]
-    master_vellos = master_vellos[0:n_step]
+    master_dx = master_dx[0:n_step]
+    if cell_quant1 is not None:
+        master_quant1 = master_quant1[0:n_step]
+    if cell_quant2 is not None:
+        master_quant2 = master_quant2[0:n_step]
+    if cell_quant3 is not None:
+        master_quant3 = master_quant3[0:n_step]
 
     iter_counter = iter_counter[0:n_step]
+    #if debug: print('iter_counter: ', iter_counter)
 
-    if debug: print('iter_counter: ', iter_counter)
-
-    return master_dens, master_dx, master_temp, master_vellos
+    return master_dx, master_quant1, master_quant2, master_quant3
 
 def benchmark_test_voronoi(compare=True):
     """ Run a large number of rays through the (fullbox) Voronoi mesh, in each case comparing the 
-    results from pre-computed vs. tree-based approaches, for correctness (and speed). """
+    results from pre-computed vs. tree-based approaches, for correctness (and speed).
+
+    Args:
+      compare (bool): if True, then run both methods and assert they have the same return.
+        Otherwise, run only the tree-based method for timing.
+
+    Returns:
+      None
+    """
     from util.simParams import simParams
 
     # config
-    sP = simParams(run='tng50-3', redshift=0.5)
+    sP = simParams(run='tng50-4', redshift=0.5)
 
     projAxis = 2 # z, to simplify vellos for now
 
@@ -562,12 +642,8 @@ def benchmark_test_voronoi(compare=True):
     # load global cell properties (pos,vel,species dens,temp)
     velLosField = 'vel_'+['x','y','z'][projAxis]
 
-    cell_pos    = sP.snapshotSubsetP('gas', 'pos') # code
-    cell_vellos = sP.snapshotSubsetP('gas', velLosField) # code
-    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold_linear') # K
-    cell_dens   = sP.snapshotSubset('gas', 'nh') # ions/cm^3
-
-    cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
+    cell_pos  = sP.snapshotSubsetP('gas', 'pos') # code
+    cell_dens = sP.snapshotSubset('gas', 'nh') # ions/cm^3
 
     # construct neighbor tree
     tree = buildFullTree(cell_pos, boxSizeSim=sP.boxSize, treePrec=cell_pos.dtype, verbose=True)
@@ -601,20 +677,20 @@ def benchmark_test_voronoi(compare=True):
         start_time = time.time()
 
         if compare:
-            master_dens, master_dx, master_temp, master_vellos = \
-              trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell_temp, cell_dens, 
+            master_dx, master_dens, _, _ = \
+              trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_dens, None, None, 
                                            num_ngb, ngb_inds, offset_ngb, ray_pos, ray_dir, total_dl, 
-                                           sP, debug=0, verify=verify, fof_scope_mesh=False)
+                                           sP.boxSize, debug=0, verify=verify, fof_scope_mesh=False)
 
         time_a += (time.time() - start_time) # accumulate
         
         # (B) ray-trace with tree-based method
         start_time = time.time()
 
-        master_dens2, master_dx2, master_temp2, master_vellos2 = \
-          trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, cell_dens, 
+        master_dx2, master_dens2, _, _ = \
+          trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_dens, None, None, 
                                        NextNode, length, center, sibling, nextnode, ray_pos, ray_dir, total_dl, 
-                                       sP, debug=0, verify=verify)
+                                       sP.boxSize, debug=0, verify=verify)
 
         time_b += (time.time() - start_time)
 
@@ -625,8 +701,6 @@ def benchmark_test_voronoi(compare=True):
         if compare:
             assert np.allclose(master_dens2,master_dens)
             assert np.allclose(master_dx,master_dx2)
-            assert np.allclose(master_temp,master_temp2)
-            assert np.allclose(master_vellos,master_vellos2)
 
     # stats
     avg_intersections = N_intersects / sP.units.codeLengthToMpc(total_pathlength) # per pMpc

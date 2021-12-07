@@ -451,6 +451,79 @@ def _treeSearchNearest(xyz,h,NumPart,boxSizeSim,pos,posMask,next_node,length,cen
     return min_index, min_dist2
 
 @jit(nopython=True, nogil=True, cache=True)
+def _treeSearchNearestSingle(xyz,pos,boxSizeSim,next_node,length,center,sibling,nextnode,h=1.0):
+    """ Iterate on tree-search until we have at least one neighbor, return nearest. """
+    NumPart = pos.shape[0]
+    loc_index = -1
+    min_dist2 = np.inf
+    iter_num = 0
+    boxHalf = 0.5 * boxSizeSim
+
+    while loc_index == -1:
+        #loc_index, loc_dist2 = _treeSearchNearest(xyz,h_guess,NumPart,boxSizeSim,pos,posMask,
+        #                                          NextNode,length,center,sibling,nextnode)
+
+        h2 = h * h
+
+        # start search
+        no = NumPart
+
+        while no >= 0:
+            if no < NumPart:
+                # single particle
+                assert next_node[no] != no # Going into infinite loop.
+
+                p = no
+                no = next_node[no]
+
+                dx = _NEAREST( pos[p,0] - xyz[0], boxHalf, boxSizeSim )
+                dy = _NEAREST( pos[p,1] - xyz[1], boxHalf, boxSizeSim )
+                dz = _NEAREST( pos[p,2] - xyz[2], boxHalf, boxSizeSim )
+                
+                r2 = dx*dx + dy*dy + dz*dz
+
+                if r2 == 0:
+                    continue # no self
+
+                if r2 >= h2:
+                    continue
+
+                # new closest?
+                if r2 < min_dist2:
+                    min_dist2 = r2
+                    loc_index = p
+            else:
+                # internal node
+                ind = no-NumPart
+                no = sibling[ind] # in case the node can be discarded
+
+                if _NEAREST( center[0,ind] - xyz[0], boxHalf, boxSizeSim ) + 0.5 * length[ind] < -h:
+                    continue
+                if _NEAREST( center[0,ind] - xyz[0], boxHalf, boxSizeSim ) - 0.5 * length[ind] > h:
+                    continue
+
+                if _NEAREST( center[1,ind] - xyz[1], boxHalf, boxSizeSim ) + 0.5 * length[ind] < -h:
+                    continue
+                if _NEAREST( center[1,ind] - xyz[1], boxHalf, boxSizeSim ) - 0.5 * length[ind] > h:
+                    continue
+
+                if _NEAREST( center[2,ind] - xyz[2], boxHalf, boxSizeSim ) + 0.5 * length[ind] < -h:
+                    continue
+                if _NEAREST( center[2,ind] - xyz[2], boxHalf, boxSizeSim ) - 0.5 * length[ind] > h:
+                    continue
+
+                no = nextnode[ind] # we need to open the node
+
+        h *= 2.0
+        iter_num += 1
+
+        if iter_num > 1000:
+            print('ERROR: Failed to converge.')
+            break
+
+    return loc_index, np.sqrt(min_dist2)
+
+@jit(nopython=True, nogil=True, cache=True)
 def _treeSearchHsmlIterate(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
                           next_node,length,center,sibling,nextnode,weighted_num):
     """ Helper routine for calcHsml(), see below. """

@@ -650,7 +650,7 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
         master_dens, master_dx, master_temp, master_vellos = \
           trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell_temp, cell_dens, 
                                        num_ngb, ngb_inds, offset_ngb, ray_pos, ray_dir, total_dl, 
-                                       sP, debug, verify, fof_scope_mesh)
+                                       sP.boxSize, debug, verify, fof_scope_mesh)
 
     if (not use_precomputed_mesh) or compare:
         # construct neighbor tree
@@ -665,10 +665,10 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
             master_vellos2 = master_vellos.copy()
 
         # ray-trace
-        master_dens, master_dx, master_temp, master_vellos = \
-          trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_vellos, cell_temp, cell_dens, 
+        master_dx, master_dens, master_temp, master_vellos = \
+          trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_dens, cell_temp, cell_vellos, 
                                        NextNode, length, center, sibling, nextnode, ray_pos, ray_dir, total_dl, 
-                                       sP, debug, verify)
+                                       sP.boxSize, debug, verify)
 
         if compare:
             assert np.allclose(master_dens2,master_dens)
