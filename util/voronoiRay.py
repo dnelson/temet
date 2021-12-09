@@ -3,9 +3,10 @@ Algorithms and methods related to ray-tracing through a Voronoi mesh.
 """
 import numpy as np
 import time
+import threading
 from numba import jit
 
-from util.helper import periodicDistsN
+from util.helper import periodicDistsN, pSplitRange
 from util.sphMap import _NEAREST_POS
 from util.voronoi import loadSingleHaloVPPP, loadGlobalVPPP
 from util.treeSearch import buildFullTree, _treeSearchNearest, _treeSearchNearestSingle
@@ -43,17 +44,13 @@ def _periodic_wrap_point(pos, pos_ref, boxSize, boxHalf):
     return
 
 @jit(nopython=True, nogil=True, cache=True)
-def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_quant1, cell_quant2, cell_quant3, 
-                                   num_ngb, ngb_inds, offset_ngb,
+def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, num_ngb, ngb_inds, offset_ngb,
                                    ray_pos_in, ray_dir, total_dl, boxSize, debug, verify, fof_scope_mesh):
     """ For a single ray, specified by its starting location, direction, and length, ray-trace through 
     a Voronoi mesh as specified by the pre-computed natural neighbor connectivity information.
 
     Args:
       cell_pos (ndarray[float]): Voronoi cell center positions [N,3].
-      cell_quant1 (ndarray[float]): some per-cell quantity to integrate, or None to skip.
-      cell_quant2 (ndarray[float]): a second per-cell quantity to integrate, or None to skip.
-      cell_quant3 (ndarray[float]): a third  per-cell quantity to integrate, or None to skip.
       num_ngb (array[int]): Voronoi mesh connectivity, first return of :func:`util.voronoi.loadSingleHaloVPPP` 
         or :func:`util.voronoi.loadGlobalVPPP` .
       ngb_inds (array[int]): Voronoi mesh connectivity, second return of :func:`util.voronoi.loadSingleHaloVPPP` 
@@ -70,12 +67,10 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_quant1, cell
         data and mesh connectivity, i.e. not a correct not periodic mesh at the edges.
 
     Return:
-      a 4-tuple composed of
+      a 2-tuple composed of
 
       - **dx** (ndarray[float]): per-cell path length, in order, for each intersected cell (code/input units).
-      - **q1** (ndarray[float]): per-cell first quantity, in order, for each intersected cell (code/input units), or None if skipped.
-      - **q2** (ndarray[float]): per-cell second quantity, in order, for each intersected cell (code/input units), or None if skipped.
-      - **q3** (ndarray[float]): per-cell third quantity, in order, for each intersected cell (code/input units), or None if skipped.
+      - **ind** (ndarray[float]): per-cell index, in order, for each intersected cell.
     """
 
     # path length accumulated
@@ -96,16 +91,7 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_quant1, cell
     max_steps = 10000
 
     master_dx = np.zeros(max_steps, dtype=np.float32) # pathlength for each ray segment
-    master_quant1 = None
-    master_quant2 = None
-    master_quant3 = None
-
-    if cell_quant1 is not None:
-        master_quant1 = np.zeros(max_steps, dtype=np.float32) # first quantity for each segment
-    if cell_quant2 is not None:
-        master_quant2 = np.zeros(max_steps, dtype=np.float32) # second quantity for each segment
-    if cell_quant3 is not None:
-        master_quant3 = np.zeros(max_steps, dtype=np.float32) # third quantity for each segment
+    master_ind = np.zeros(max_steps, dtype=np.int64) # index
 
     # while total dl does not exceed request, start tracing through mesh
     while 1:
@@ -217,15 +203,11 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_quant1, cell
 
         # accumulate (all code units and/or same units as input)
         master_dx[n_step] = local_dl
-        if cell_quant1 is not None:
-            master_quant1[n_step] = cell_quant1[cur_cell_ind]
-        if cell_quant2 is not None:
-            master_quant2[n_step] = cell_quant2[cur_cell_ind]
-        if cell_quant3 is not None:
-            master_quant3[n_step] = cell_quant3[cur_cell_ind]
+        master_ind[n_step] = cur_cell_ind
+        n_step += 1
 
         if dl >= (total_dl - 1e-10):
-            # integrate final cell partially
+            # finished
             #if debug > 1: print('  -- reached total pathlength, terminating.')
             break
 
@@ -238,31 +220,21 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_quant1, cell
         # move to next cell
         prev_cell_ind = cur_cell_ind
         cur_cell_ind = next_ngb_index
-        n_step += 1
 
     # reduce arrays to used size
     master_dx = master_dx[0:n_step]
-    if cell_quant1 is not None:
-        master_quant1 = master_quant1[0:n_step]
-    if cell_quant2 is not None:
-        master_quant2 = master_quant2[0:n_step]
-    if cell_quant3 is not None:
-        master_quant3 = master_quant3[0:n_step]
+    master_ind = master_ind[0:n_step]
 
-    return master_dx, master_quant1, master_quant2, master_quant3
+    return master_dx, master_ind
 
 @jit(nopython=True, nogil=True, cache=True)
-def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_quant1, cell_quant2, cell_quant3, 
-                                             NextNode, length, center, sibling, nextnode, 
+def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center, sibling, nextnode, 
                                              ray_pos_in, ray_dir, total_dl, boxSize, debug, verify):
     """ For a single ray, specified by its starting location, direction, and length, ray-trace through 
     a Voronoi mesh using neighbor searches in a pre-computed tree.
 
     Args:
       cell_pos (ndarray[float]): Voronoi cell center positions [N,3].
-      cell_quant1 (ndarray[float]): some per-cell quantity to integrate, or None to skip.
-      cell_quant2 (ndarray[float]): a second per-cell quantity to integrate, or None to skip.
-      cell_quant3 (ndarray[float]): a third  per-cell quantity to integrate, or None to skip.
       NextNode (array[int]): neighbor tree, first return of :func:`util.treeSearch.buildFullTree`.
       length (array[int]): neighbor tree, second return of :func:`util.treeSearch.buildFullTree`.
       center (array[int]): neighbor tree, third return of :func:`util.treeSearch.buildFullTree`.
@@ -276,12 +248,10 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_quant1, cell_quant2,
       verify (bool): if True, do brute-force distance verification every step of parent Voronoi cell.
 
     Return:
-      a 4-tuple composed of
+      a 2-tuple composed of
 
       - **dx** (ndarray[float]): per-cell path length, in order, for each intersected cell (code/input units).
-      - **q1** (ndarray[float]): per-cell first quantity, in order, for each intersected cell (code/input units), or None if skipped.
-      - **q2** (ndarray[float]): per-cell second quantity, in order, for each intersected cell (code/input units), or None if skipped.
-      - **q3** (ndarray[float]): per-cell third quantity, in order, for each intersected cell (code/input units), or None if skipped.
+      - **ind** (ndarray[float]): per-cell index, in order, for each intersected cell.
     """
 
     # if a bisection along a ray converges to this level (in code units), we have iterated to an 
@@ -302,16 +272,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_quant1, cell_quant2,
     max_steps = 10000
     
     master_dx = np.zeros(max_steps, dtype=np.float32) # pathlength for each ray segment
-    master_quant1 = None
-    master_quant2 = None
-    master_quant3 = None
-
-    if cell_quant1 is not None:
-        master_quant1 = np.zeros(max_steps, dtype=np.float32) # first quantity for each segment
-    if cell_quant2 is not None:
-        master_quant2 = np.zeros(max_steps, dtype=np.float32) # second quantity for each segment
-    if cell_quant3 is not None:
-        master_quant3 = np.zeros(max_steps, dtype=np.float32) # third quantity for each segment
+    master_ind = np.zeros(max_steps, dtype=np.int64) # index
 
     # for bisection stack: indices of previous failed candidate cell(s)
     prev_cell_inds = np.zeros(max_steps, dtype=np.int64) - 1
@@ -559,12 +520,12 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_quant1, cell_quant2,
 
             # accumulate (all code units and/or same units as input)
             master_dx[n_step] = local_dl
-            if cell_quant1 is not None:
-                master_quant1[n_step] = cell_quant1[cur_cell_ind]
-            if cell_quant2 is not None:
-                master_quant2[n_step] = cell_quant2[cur_cell_ind]
-            if cell_quant3 is not None:
-                master_quant3[n_step] = cell_quant3[cur_cell_ind]
+            master_ind[n_step] = cur_cell_ind
+            n_step += 1
+
+            if n_step >= max_steps:
+                print('RAY ALLOC FAILURE')
+                assert 0
 
             # are we finished unexpectedly?
             assert dl < total_dl
@@ -573,7 +534,6 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_quant1, cell_quant2,
             # update cur_cell_ind (global ending cell always remains the same)
             prev_cell_ind = cur_cell_ind # for verify only
             cur_cell_ind = end_cell_local_ind
-            n_step += 1
 
             # is the next cell the end?
             if cur_cell_ind == end_cell_ind:
@@ -586,12 +546,8 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_quant1, cell_quant2,
 
                 # accumulate (all code units and/or same units as input)
                 master_dx[n_step] = local_dl
-                if cell_quant1 is not None:
-                    master_quant1[n_step] = cell_quant1[cur_cell_ind]
-                if cell_quant2 is not None:
-                    master_quant2[n_step] = cell_quant2[cur_cell_ind]
-                if cell_quant3 is not None:
-                    master_quant3[n_step] = cell_quant3[cur_cell_ind]
+                master_ind[n_step] = cur_cell_ind
+                n_step += 1
 
                 # we are done with the entire ray integration
                 #if debug: print(f' ** accumulate {cur_cell_ind = }, {local_dl = :.3f}, finished.')
@@ -606,17 +562,304 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_quant1, cell_quant2,
 
     # reduce arrays to used size
     master_dx = master_dx[0:n_step]
-    if cell_quant1 is not None:
-        master_quant1 = master_quant1[0:n_step]
-    if cell_quant2 is not None:
-        master_quant2 = master_quant2[0:n_step]
-    if cell_quant3 is not None:
-        master_quant3 = master_quant3[0:n_step]
+    master_ind = master_ind[0:n_step]
 
     iter_counter = iter_counter[0:n_step]
-    #if debug: print('iter_counter: ', iter_counter)
+    if debug: print('iter_counter: ', iter_counter)
 
-    return master_dx, master_quant1, master_quant2, master_quant3
+    return master_dx, master_ind
+
+@jit(nopython=True, nogil=True, cache=True)
+def _rayTraceFull(pos, NextNode, length, center, sibling, nextnode, ray_pos, ray_dir, total_dl, boxSize, ind0, ind1):
+    """ Helper for below. Run a series of rays, from ind0 to ind1, and return concatenated results. 
+    Full return mode. """
+    n_rays = ind1 - ind0 + 1
+
+    # estimate alloc size as (n_rays * avg_intersections_per_ray * safety_fac)
+    avg_intersections_per_boxlength = boxSize / pos.shape[0]**(1/3)
+    n_alloc = int(n_rays * (total_dl / avg_intersections_per_boxlength)) * 100
+
+    # allocate for full (dx,ind) lists for each ray, along with per-ray offset/length info
+    offset = 0
+
+    offsets = np.zeros(n_rays, dtype=np.int32)
+    lengths = np.zeros(n_rays, dtype=np.int32)
+
+    r_dx = np.zeros(n_alloc, dtype=np.float32)
+    r_ind = np.zeros(n_alloc, dtype=np.int64)
+
+    for i in range(n_rays):
+        ray_pos_local = ray_pos[ind0+i,:]
+
+        dx, ind = trace_ray_through_voronoi_mesh_treebased(pos, NextNode, length, center, sibling, nextnode, 
+                                             ray_pos_local, ray_dir, total_dl, boxSize, debug=0, verify=False)
+
+        # stamp
+        offsets[i] = offset
+        lengths[i] = dx.size
+        r_dx[offset:offset+dx.size] = dx
+        r_ind[offset:offset+dx.size] = ind
+        offset += dx.size
+
+        if offset >= n_alloc:
+            print('WARNING: ALLOC FAILURE FOR RAY RETURN.')
+            assert 0
+
+    # return 4-tuple
+    r_dx = r_dx[0:offset]
+    r_ind = r_ind[0:offset]
+
+    return offsets, lengths, r_dx, r_ind
+
+@jit(nopython=True, nogil=True, cache=True)
+def _rayTraceReduced(pos, NextNode, length, center, sibling, nextnode, ray_pos, ray_dir, total_dl, boxSize, 
+                     ind0, ind1, quant, quant2, mode):
+    """ Helper for below. Run a series of rays, from ind0 to ind1, and return concatenated results. 
+    Reduced mode i.e. compute one answer (number) per ray. """
+    n_rays = ind1 - ind0 + 1
+
+    # allocate for some statistical operation producing one float answer per ray
+    r_answer = np.zeros(n_rays, dtype=np.float32)
+
+    for i in range(n_rays):
+        ray_pos_local = ray_pos[ind0+i,:]
+
+        dx, ind = trace_ray_through_voronoi_mesh_treebased(pos, NextNode, length, center, sibling, nextnode, 
+                                             ray_pos_local, ray_dir, total_dl, boxSize, debug=0, verify=False)
+
+        if mode == 1:
+            # intersection count per ray
+            r_answer[i] = dx.size
+        elif mode == 2:
+            # sum of dx
+            r_answer[i] = np.sum(dx)
+        elif mode == 3:
+            # sum of quant
+            r_answer[i] = np.sum(quant[ind])
+        elif mode == 4:
+            # sum of quant*dx (if quant is a number density, this is the total integrated column density)
+            r_answer[i] = np.sum(quant[ind] * dx)
+        elif mode == 5:
+            # mean quant of all intersected cells
+            r_answer[i] = np.mean(quant[ind])
+        elif mode == 6:
+            # mean quant (e.g. temp), weighted by quant2 (e.g. mass), of all intersected cells (ala sphMap)
+            r_answer[i] = np.sum(quant[ind]*quant2[ind]) / np.sum(quant2[ind])
+
+    return r_answer
+
+def rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=None, quant2=None, mode='full', nThreads=4, tree=None):
+    """ For a given set of particle coordinates, assumed to be Voronoi cell center positions, perform a 
+    tree-based ray-tracing through this implicit Voronoi mesh, for a number of specified ray_pos initial ray 
+    positions, in a given direction, for a total pathlength. The operation while tracing is specified by mode.
+
+    Args:
+      sP (:py:class:`util.simParams.simParams`): simParams instance.
+      ray_pos (ndarray[float][M,3]): starting ray positions in (x,y,z) space.
+      ray_dir (float[3]): normalized unit vector specifying (the same) direction for all rays.
+      total_dl (float): path length to integrate all rays (same units as pos).
+      pos (ndarray[float][N,3]): array of 3-coordinates for the gas cells.
+      quant (ndarray[float][N]): if not None, a quantity with the same size as pos to operate on.
+      quant2 (ndarray[float][N]): if not None, a second quantity with the same size as pos to operate on, e.g. for weighting.
+      mode (str): one of the following modes of operation:
+        **full**: here
+        **count**: here
+      nThreads (int): do multithreaded calculation (mem required=nThreads times more).
+      tree (list or None) if not None, should be a list of all the needed tree arrays (pre-computed), 
+                        i.e the exact return of :py:func:`util.treeSearch.buildFullTree`.
+    """
+    modes = {'full':0, 'count':1, 'dx_sum':2, 'quant_sum':3, 'quant_dx_sum':4, 'quant_mean':5, 'quant_weighted_mean':6}
+    assert mode in modes
+    if 'quant' in mode: assert quant is not None, 'Quant required given requested mode.'
+    if 'quant_weighted' in mode: assert quant2 is not None, 'Quant2 required as the weights.'
+
+    assert pos.ndim == 2 and pos.shape[1] == 3, 'Strange dimensions of pos.'
+    assert pos.dtype in [np.float32, np.float64], 'pos not in float32/64.'
+    if isinstance(ray_dir,list): ray_dir = np.array(ray_dir)
+    assert ray_dir.ndim == 1 and ray_dir.size == 3, 'Strange ray_dir.'
+    assert quant is None or (quant.ndim == 1 and quant.size == pos.shape[0]), 'Strange quant shape.'
+    assert quant2 is None or (quant2.ndim == 1 and quant2.size == pos.shape[0]), 'Strange quant2 shape.'
+    
+    # build tree
+    if tree is None:
+        NextNode, length, center, sibling, nextnode = buildFullTree(pos,sP.boxSize,pos.dtype)
+    else:
+        NextNode, length, center, sibling, nextnode = tree # split out list
+
+    n_rays = ray_pos.shape[0]
+
+    # help numba
+    mode = modes[mode] # convert string to number
+    if quant is None: quant = np.zeros(1, dtype='float32') # unused, but for type inference
+    if quant2 is None: quant2 = np.zeros(1, dtype='float32')
+
+    # single threaded?
+    # ----------------
+    if nThreads == 1 or n_rays < nThreads:
+        ind0 = 0
+        ind1 = n_rays - 1
+
+        if mode == modes['full']:
+            result = _rayTraceFull(pos,NextNode,length,center,sibling,nextnode,
+                                   ray_pos,ray_dir,total_dl,sP.boxSize,ind0,ind1)
+        else:
+            result = _rayTraceReduced(pos,NextNode,length,center,sibling,nextnode,
+                                      ray_pos,ray_dir,total_dl,sP.boxSize,ind0,ind1,
+                                      quant,quant2,mode)
+
+        return result
+
+    # else, multithreaded
+    # -------------------
+    class rtThread(threading.Thread):
+        """ Subclass Thread() to provide local storage which can be retrieved after 
+            this thread terminates and added to the global return. """
+        def __init__(self, threadNum, nThreads):
+            super(rtThread, self).__init__()
+
+            # determine local slice
+            self.ind0, self.ind1 = pSplitRange([0, n_rays-1], nThreads, threadNum, inclusive=True)
+
+            # copy others into local space (non-self inputs to _calc() appears to prevent GIL release)
+            self.ray_dir  = ray_dir
+            self.total_dl = total_dl
+            self.boxSize  = sP.boxSize
+            self.mode     = mode
+
+            # create views to other arrays
+            self.pos     = pos
+            self.quant   = quant
+            self.quant2  = quant2
+
+            self.ray_pos = ray_pos
+
+            self.NextNode  = NextNode
+            self.length    = length
+            self.center    = center
+            self.sibling   = sibling
+            self.nextnode  = nextnode
+
+        def run(self):
+            # call JIT compiled kernel
+            if self.mode == 0:
+                self.result = _rayTraceFull(self.pos,self.NextNode,self.length,self.center,self.sibling,self.nextnode,
+                                            self.ray_pos,self.ray_dir,self.total_dl,self.boxSize,self.ind0,self.ind1)
+            else:
+                self.result = _rayTraceReduced(self.pos,self.NextNode,self.length,self.center,self.sibling,self.nextnode,
+                                               self.ray_pos,self.ray_dir,self.total_dl,self.boxSize,self.ind0,self.ind1,
+                                               self.quant,self.quant2,self.mode)
+
+    # create threads
+    threads = [rtThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
+
+    # launch each thread, detach, and then wait for each to finish
+    for thread in threads:
+        thread.start()
+        
+    for thread in threads:
+        thread.join()
+
+    # all threads are done, determine return size and allocate
+    if mode == modes['full']:
+        # offsets, lengths, r_dx, r_ind = result
+        n_alloc = np.sum([thread.result[2].size for thread in threads])
+
+        # allocate
+        offsets = np.zeros(n_rays, dtype=threads[0].result[0].dtype)
+        lengths = np.zeros(n_rays, dtype=threads[0].result[1].dtype)
+
+        r_dx = np.zeros(n_alloc, dtype=threads[0].result[2].dtype)
+        r_ind = np.zeros(n_alloc, dtype=threads[0].result[3].dtype)
+
+        # add the result array from each thread to the global
+        offset = 0
+
+        for thread in threads:
+            loc_offsets, loc_lengths, loc_r_dx, loc_r_ind = thread.result
+            # thread local to global offset
+            offsets[thread.ind0 : thread.ind1 + 1] = loc_offsets + offset
+            lengths[thread.ind0 : thread.ind1 + 1] = loc_lengths
+
+            r_dx[offset : offset + loc_r_dx.size] = loc_r_dx
+            r_ind[offset : offset + loc_r_dx.size] = loc_r_ind
+            offset += loc_r_dx.size
+
+        return offsets, lengths, r_dx, r_ind
+    else:
+        n_alloc = np.sum([thread.result.size for thread in threads])
+        assert n_alloc == n_rays
+
+        # allocate
+        result = np.zeros( n_alloc, dtype=threads[0].result.dtype)
+
+        # add the result array from each thread to the global
+        for thread in threads:
+            result[thread.ind0 : thread.ind1 + 1] = thread.result
+
+    return result
+
+def benchmark_test_raytracing():
+    """ Run a large number of rays using the threaded-code. """
+    import matplotlib.pyplot as plt
+    from plot.config import figsize, lw
+    from util.simParams import simParams
+
+    # config
+    sP = simParams(run='tng50-4', redshift=0.5)
+    ray_dir = [0.0, 0.0, 1.0]
+    n_rays = 10000
+
+    # loop over:
+    total_dls = [1000.0, 5000.0]
+    nThreads = [1,1,2,4,8,16,32]
+
+    # load global cell positions
+    pos = sP.snapshotSubsetP('gas', 'pos') # code
+
+    quant = np.zeros( pos.shape[0], dtype='float32') + 0.5
+    quant2 = np.zeros( pos.shape[0], dtype='float32') + 2.0
+    mode = 'quant_weighted_mean' #'count' #'full'
+
+    # init random number generator, create rays
+    rng = np.random.default_rng(424242)
+    ray_pos = rng.uniform(low=0.0, high=sP.boxSize, size=(n_rays,3))
+
+    # build tree
+    tree = buildFullTree(pos,sP.boxSize,pos.dtype)
+
+    # start scaling plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    # loop over requested path lengths
+    for total_dl in total_dls:
+        times = []
+
+        # loop over requested numbers of threads
+        for nThread in nThreads:
+            start_time = time.time()
+
+            # run and time
+            result = rayTrace(sP,ray_pos,ray_dir,total_dl,pos,quant=quant,quant2=quant2,mode=mode,nThreads=nThread,tree=tree)
+
+            total_time = (time.time() - start_time)
+            print(f'[{nThread = :2d}] [{total_dl = :.1f}] ray-tracing total {total_time = :.3f} sec.')
+            times.append(total_time)
+
+            if mode == 'full':
+                # split output, sanity check
+                offsets, lengths, r_dx, r_ind = result
+                assert lengths.sum() == r_dx.size
+
+        # add to plot
+        ax.set_xlabel('Number of Threads')
+        ax.set_ylabel('Time [sec]')
+        ax.plot(nThreads[1:], times[1:], 'o-', lw=lw, label='dl = %d' % total_dl)
+
+    # finish scaling plot
+    ax.legend(loc='upper right')
+    fig.savefig('benchmark_test_raytracing_%s.pdf' % mode)
+    plt.close(fig)
 
 def benchmark_test_voronoi(compare=True):
     """ Run a large number of rays through the (fullbox) Voronoi mesh, in each case comparing the 
@@ -639,11 +882,8 @@ def benchmark_test_voronoi(compare=True):
     num_rays = 100
     verify = False
 
-    # load global cell properties (pos,vel,species dens,temp)
-    velLosField = 'vel_'+['x','y','z'][projAxis]
-
-    cell_pos  = sP.snapshotSubsetP('gas', 'pos') # code
-    cell_dens = sP.snapshotSubset('gas', 'nh') # ions/cm^3
+    # load global cell positions
+    cell_pos = sP.snapshotSubsetP('gas', 'pos') # code
 
     # construct neighbor tree
     tree = buildFullTree(cell_pos, boxSizeSim=sP.boxSize, treePrec=cell_pos.dtype, verbose=True)
@@ -677,30 +917,30 @@ def benchmark_test_voronoi(compare=True):
         start_time = time.time()
 
         if compare:
-            master_dx, master_dens, _, _ = \
-              trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_dens, None, None, 
-                                           num_ngb, ngb_inds, offset_ngb, ray_pos, ray_dir, total_dl, 
-                                           sP.boxSize, debug=0, verify=verify, fof_scope_mesh=False)
+            master_dx, master_ind = \
+              trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, num_ngb, ngb_inds, offset_ngb, 
+                                                               ray_pos, ray_dir, total_dl, sP.boxSize, 
+                                                               debug=0, verify=verify, fof_scope_mesh=False)
 
         time_a += (time.time() - start_time) # accumulate
         
         # (B) ray-trace with tree-based method
         start_time = time.time()
 
-        master_dx2, master_dens2, _, _ = \
-          trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_dens, None, None, 
-                                       NextNode, length, center, sibling, nextnode, ray_pos, ray_dir, total_dl, 
-                                       sP.boxSize, debug=0, verify=verify)
+        master_dx2, master_ind2 = \
+          trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center, sibling, nextnode, 
+                                                   ray_pos, ray_dir, total_dl, sP.boxSize, 
+                                                   debug=0, verify=verify)
 
         time_b += (time.time() - start_time)
 
         # compare
-        N_intersects += master_dens2.size
+        N_intersects += master_dx2.size
         total_pathlength += total_dl
 
         if compare:
-            assert np.allclose(master_dens2,master_dens)
             assert np.allclose(master_dx,master_dx2)
+            assert np.array_equal(master_ind,master_ind2)
 
     # stats
     avg_intersections = N_intersects / sP.units.codeLengthToMpc(total_pathlength) # per pMpc

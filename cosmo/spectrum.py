@@ -604,7 +604,7 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
     ray_offset_z = -2.0 # relative to halo center, in units of rvir
     projAxis = 2 # z, to simplify vellos for now
 
-    fof_scope_mesh = True
+    fof_scope_mesh = False
 
     # load halo
     halo = sP.halo(haloID)
@@ -647,10 +647,14 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
             num_ngb, ngb_inds, offset_ngb = loadGlobalVPPP(sP)
 
         # ray-trace
-        master_dens, master_dx, master_temp, master_vellos = \
-          trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, cell_vellos, cell_temp, cell_dens, 
+        master_dx, master_ind = trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, 
                                        num_ngb, ngb_inds, offset_ngb, ray_pos, ray_dir, total_dl, 
                                        sP.boxSize, debug, verify, fof_scope_mesh)
+
+        master_dens = cell_dens[master_ind]
+        master_temp = cell_temp[master_ind]
+        master_vellos = cell_vellos[master_ind]
+        assert np.abs(master_dx.sum() - total_dl) < 1e-4
 
     if (not use_precomputed_mesh) or compare:
         # construct neighbor tree
@@ -659,22 +663,22 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
 
         if compare:
             ray_pos = np.array([ray_start_x, ray_start_y, ray_start_z]) # reset
-            master_dens2 = master_dens.copy()
+            master_ind2 = master_ind.copy()
             master_dx2 = master_dx.copy()
-            master_temp2 = master_temp.copy()
-            master_vellos2 = master_vellos.copy()
 
         # ray-trace
-        master_dx, master_dens, master_temp, master_vellos = \
-          trace_ray_through_voronoi_mesh_treebased(cell_pos, cell_dens, cell_temp, cell_vellos, 
+        master_dx, master_ind = trace_ray_through_voronoi_mesh_treebased(cell_pos, 
                                        NextNode, length, center, sibling, nextnode, ray_pos, ray_dir, total_dl, 
                                        sP.boxSize, debug, verify)
 
+        master_dens = cell_dens[master_ind]
+        master_temp = cell_temp[master_ind]
+        master_vellos = cell_vellos[master_ind]
+        assert np.abs(master_dx.sum() - total_dl) < 1e-4
+
         if compare:
-            assert np.allclose(master_dens2,master_dens)
             assert np.allclose(master_dx,master_dx2)
-            assert np.allclose(master_temp,master_temp2)
-            assert np.allclose(master_vellos,master_vellos2)
+            assert np.array_equal(master_ind,master_ind2)
             print(master_dx,master_dx2,'Comparison success.')
 
     # create spectrum
