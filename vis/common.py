@@ -15,6 +15,7 @@ from scipy.ndimage import gaussian_filter
 
 from util.sphMap import sphMap
 from util.treeSearch import calcHsml
+from util.voronoiRay import rayTrace
 from util.helper import loadColorTable, logZeroMin, logZeroNaN, pSplitRange
 from util.boxRemap import remapPositions
 from cosmo.cloudy import cloudyIon, cloudyEmission, getEmissionLines
@@ -681,6 +682,14 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
             quant[w] = 0.0
             mass[w] = 0.0
 
+    # for an actual voronoi-based ray-tracing, we don't spread out a 'mass', but instead
+    # integrate a density * pathlength directly to obtain a column/surface density
+    if 'voronoi_proj' in method and partFieldLoad not in volDensityFields+totSumFields:
+        print("Note: Normalizing 'mass' field [%s,%s] by Volume for [%s]!" % (weightField,partField,method))
+        assert partType == 'gas' # could extend to dm,stars with a auto volume estimate
+        vol = sP.snapshotSubsetP(partType, 'volume', indRange=indRange)
+        mass /= vol # [code mass / code volume]
+
     # quantity pre-processing (need to remove log for means)
     if partField in loggedFields:
         quant = 10.0**quant
@@ -716,7 +725,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     gridOffset = 0.0 # add to final grid
 
     # volume densities
-    if partField in volDensityFields:
+    if partField in volDensityFields and 'voronoi' not in method:
         grid /= boxSizeImg[2] # mass/area -> mass/volume (normalizing by projection ray length)
 
     if partField in ['dens','density']:
@@ -1631,8 +1640,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 # Voronoi mesh slice, fof-scope or subhalo-scope, using tree nearest neighbor search as answer (no gradients)
                 # note: only for a specified non-mass quantity, in which case the map gives the direct value of the 
                 # nearest gas cell (no weighting relevant)
+                assert axes == [0,1] # otherwise check everything
                 assert quant is not None # otherwise we would be imaging mass
-                assert not normCol # otherwise check what it would mean
+                assert not normCol # meaningless
                 assert hsml_1 is None # meaningless
                 assert ('_minIP' not in method) and ('_maxIP' not in method) # meaningless
 
@@ -1668,9 +1678,79 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 grid_d = np.ones( nPixels, dtype='float32' )
                 grid_q = quant[index].reshape(nPixels).T
 
+            elif method in ['voronoi_proj','voronoi_proj_subhalo','voronoi_proj_global']:
+                # Voronoi mesh-based projection, either fof-scope, subhalo-scope, or global, using the tree-based 
+                # ray-tracing algorithm. note: chunk-based loading is here disabled.
+                assert axes == [0,1] # otherwise check everything
+                assert hsml_1 is None # unsupported
+                assert ('_minIP' not in method) and ('_maxIP' not in method) # need to add 'mode' support
+
+                # define (x,y) pixel centers
+                pxSize = [boxSizeImg[0] / nPixels[0], boxSizeImg[1] / nPixels[1]]
+
+                xpts = np.linspace(boxCenter[0]-boxSizeImg[0]/2, 
+                                   boxCenter[0]+boxSizeImg[0]/2-pxSize[0], 
+                                   nPixels[0]) + pxSize[0]/2
+                ypts = np.linspace(boxCenter[1]-boxSizeImg[1]/2, 
+                                   boxCenter[1]+boxSizeImg[1]/2-pxSize[1], 
+                                   nPixels[1]) + pxSize[1]/2
+
+                # explode into nPixels[0]*nPixels[1] arrays
+                xpts, ypts = np.meshgrid(xpts, ypts, indexing='ij')
+
+                # construct [N,3] list of search positions
+                ray_pos = np.zeros( (nPixels[0]*nPixels[1],3), dtype=pos.dtype)
+                
+                ray_pos[:,0] = xpts.ravel()
+                ray_pos[:,1] = ypts.ravel()
+                ray_pos[:,2] = boxCenter[2] - boxSizeImg[2]/2
+
+                total_dl = boxSizeImg[2] # path length
+
+                ray_dir = np.array([0,0,1.0], dtype='float32') # given axes
+
+                # periodic wrap search positions
+                sP.correctPeriodicPosVecs(ray_pos)
+
+                # decide mode and ray-trace
+                if partField in colDensityFields or \
+                (' ' in partField and 'mass' not in partField and 'frac' not in partField):
+                    # sum of dl_i * quant_i for each intersected cell, and here we want quant to be a 
+                    # number density (or mass density), so the result is a column density (or mass surface density).
+                    # we have loaded 'Masses' [code] or a mass-like field (HI mass) or a luminosity-like 
+                    # field (e.g. xray, erg/s), and already normalized by Volume, so we have volume densities
+                    assert normCol # we have effectively already done this in our integration
+                    mode = 'quant_dx_sum'
+                    # mass has units of [code mass / code volume], so grid_q has [code mass / code area]
+                    result = rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=mass, mode=mode)
+                    grid_d = result.reshape(nPixels).T
+                    grid_q = np.zeros(nPixels, dtype='float32') # dummy
+
+                elif partField in volDensityFields:
+                    assert not normCol # check what it would mean
+                    mode = 'quant_mean' # unweighted
+                    result = rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=mass, mode=mode)
+                    grid_d = result.reshape(nPixels).T
+                    grid_q = np.zeros(nPixels, dtype='float32') # dummy
+
+                elif partField in totSumFields:
+                    assert 0 # needs to be checked, implement tau0 and yparam direct integrations to verify
+                    assert not normCol # check what it would mean
+                    mode = 'quant_sum'
+                    result = rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=mass, mode=mode)
+                    grid_d = result.reshape(nPixels).T
+                    grid_q = np.zeros(nPixels, dtype='float32') # dummy
+                    
+                else:
+                    # weighted average of quant_i using dens_i*dl (column density) as the weight
+                    assert not normCol # check what it would mean                    
+                    mode = 'quant_weighted_dx_mean'
+                    result = rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=quant, quant2=mass, mode=mode)
+                    grid_q = result.reshape(nPixels).T
+                    grid_d = np.ones( nPixels, dtype='float32' ) # dummy normalization
+
             else:
-                # todo: e.g. external calls to ArepoVTK for voronoi_* based visualization
-                raise Exception('Not implemented.')
+                raise Exception('Method not implemented.')
 
             # accumulate for chunked processing
             if '_minIP' in method:

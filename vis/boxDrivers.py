@@ -234,21 +234,22 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
     renderBox(panels, plotConfig, locals())
 
-def singleFullBox(conf=1):
+def singleFullBox(conf=0):
     """ Create a full box view. """
-    sP = simParams(run='tng-local-dark', redshift=0.0)
+    sP = simParams(run='tng100-3', redshift=0.0)
 
     panels, _, _, _ = _TNGboxFieldConfig(res=None, conf=conf, thinSlice=False)
 
-    nPixels    = 1000
+    nPixels    = 200
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = True
     labelSim   = False
     plotHalos  = False
-    method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
+    method     = 'voronoi_proj_global' # sphMap, sphMap_minIP, sphMap_maxIP
     axesUnits  = 'mpc'
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
+    sliceFac   = 0.5
 
     class plotConfig:
         plotStyle  = 'open' # open, edged

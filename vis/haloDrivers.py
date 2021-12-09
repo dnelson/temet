@@ -17,7 +17,7 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloInd=None, redshift=0.0):
     sP = simParams(run='tng100-1', redshift=redshift, variant=None)
 
     rVirFracs  = [0.5, 1.0] # None
-    method     = 'sphMap' # 'voronoi_slice'
+    method     = 'sphMap' # 'voronoi_slice', 'voronoi_proj'
     nPixels    = [1200,1200] #[800,800] #[1920,1920]
     axes       = [0,1]
     labelZ     = True

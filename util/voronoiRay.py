@@ -529,7 +529,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
 
             # are we finished unexpectedly?
             assert dl < total_dl
-            assert cur_cell_ind != end_cell_ind # dl should exceed total_dl first
+            assert cur_cell_ind != end_cell_ind # dl should exceed total_dl first (note: unless exactly full box total_dl)
 
             # update cur_cell_ind (global ending cell always remains the same)
             prev_cell_ind = cur_cell_ind # for verify only
@@ -637,14 +637,18 @@ def _rayTraceReduced(pos, NextNode, length, center, sibling, nextnode, ray_pos, 
             # sum of quant
             r_answer[i] = np.sum(quant[ind])
         elif mode == 4:
-            # sum of quant*dx (if quant is a number density, this is the total integrated column density)
+            # sum of quant*dx (if quant is a number or mass density, this is the integrated column or surface density)
             r_answer[i] = np.sum(quant[ind] * dx)
         elif mode == 5:
             # mean quant of all intersected cells
             r_answer[i] = np.mean(quant[ind])
         elif mode == 6:
-            # mean quant (e.g. temp), weighted by quant2 (e.g. mass), of all intersected cells (ala sphMap)
+            # mean quant (e.g. temp), weighted by quant2 (e.g. mass), of all intersected cells
+            # note however the pathlength through each cell is not considered
             r_answer[i] = np.sum(quant[ind]*quant2[ind]) / np.sum(quant2[ind])
+        elif mode == 7:
+            # mean quant (e.g. temp) weighted by quant2*dx (e.g. dens*dl = column density), of all intersected cells
+            r_answer[i] = np.sum(quant[ind]*quant2[ind]*dx) / np.sum(quant2[ind]*dx)
 
     return r_answer
 
@@ -668,7 +672,8 @@ def rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=None, quant2=None, mode=
       tree (list or None) if not None, should be a list of all the needed tree arrays (pre-computed), 
                         i.e the exact return of :py:func:`util.treeSearch.buildFullTree`.
     """
-    modes = {'full':0, 'count':1, 'dx_sum':2, 'quant_sum':3, 'quant_dx_sum':4, 'quant_mean':5, 'quant_weighted_mean':6}
+    modes = {'full':0, 'count':1, 'dx_sum':2, 'quant_sum':3, 'quant_dx_sum':4, 
+             'quant_mean':5, 'quant_weighted_mean':6, 'quant_weighted_dx_mean':7}
     assert mode in modes
     if 'quant' in mode: assert quant is not None, 'Quant required given requested mode.'
     if 'quant_weighted' in mode: assert quant2 is not None, 'Quant2 required as the weights.'
