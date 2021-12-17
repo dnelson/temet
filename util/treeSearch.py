@@ -1040,8 +1040,9 @@ def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, posMask=None, tr
 
 def benchmark():
     """ Benchmark performance of calcHsml(). """
-    np.random.seed(424242)
+    import matplotlib.pyplot as plt
     from util.simParams import simParams
+    from plot.config import figsize, lw
 
     # config data
     if 0:
@@ -1049,37 +1050,54 @@ def benchmark():
         class sP:
             boxSize = 100.0
 
+        rng = np.random.default_rng(424242)
+
         nPts = 100000
 
         posDtype = 'float32'
-        pos = np.random.uniform(low=0.0, high=sP.boxSize, size=(nPts,3)).astype(posDtype)
+        pos = rng.uniform(low=0.0, high=sP.boxSize, size=(nPts,3)).astype(posDtype)
 
     if 1:
         # load some gas in a box
-        sP = simParams(res=128, run='tng', redshift=0.0, variant='0000')
-        pos = sP.snapshotSubset('gas', 'pos')
+        sP = simParams(run='tng50-4', redshift=0.0)
+        pos = sP.snapshotSubsetP('gas', 'pos')
 
     # config
     nNGB = 32
     nNGBDev = 1
     treePrec = 'single'
-    nThreads = 16
-    posSearch = None #pos[0:5000,:]
+    nThreads = [1,1,2,4,8,16,32]
+    posSearch = pos[0:50000,:] # None #
 
-    # warmup (compile)
-    hsml = calcHsml(pos,sP.boxSize,posSearch=posSearch,
-                    nNGB=nNGB,nNGBDev=nNGBDev,treePrec=treePrec,nThreads=nThreads)
+    # build tree
+    tree = buildFullTree(pos,sP.boxSize,pos.dtype,verbose=True)
 
     # calculate and time
-    start_time = time.time()
     nLoops = 4
+    times = []
 
-    for i in np.arange(nLoops):
-        hsml = calcHsml(pos,sP.boxSize,posSearch=posSearch,
-                        nNGB=nNGB,nNGBDev=nNGBDev,treePrec=treePrec,nThreads=nThreads)
+    for nThread in nThreads:
 
-    print('%d estimates of HSMLs took [%g] sec on avg' % (nLoops,(time.time()-start_time)/nLoops))
-    print('hsml min %g max %g mean %g' % (np.min(hsml), np.max(hsml), np.mean(hsml)))
+        start_time = time.time()
+
+        for i in np.arange(nLoops):
+            hsml = calcHsml(pos,sP.boxSize,posSearch=posSearch,
+                            nNGB=nNGB,nNGBDev=nNGBDev,tree=tree,nThreads=nThread)
+
+        times.append( (time.time() - start_time)/nLoops )
+        print('[nThreads=%2d] estimate of HSMLs took [%g] sec on avg' % (nThread,times[-1]))
+        print(' hsml min %g max %g mean %g' % (np.min(hsml), np.max(hsml), np.mean(hsml)))
+
+    # scaling plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Number of Threads')
+    ax.set_ylabel('Time [sec]')
+    ax.plot(nThreads[1:], times[1:], 'o-', lw=lw)
+
+    fig.savefig('benchmark_treeSearch.pdf')
+    plt.close(fig)
 
 def checkVsSubfindHsml():
     """ Compare our result vs SubfindHsml output. """

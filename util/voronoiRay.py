@@ -229,7 +229,9 @@ def trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, num_ngb, ngb_inds
 
 @jit(nopython=True, nogil=True, cache=True)
 def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center, sibling, nextnode, 
-                                             ray_pos_in, ray_dir, total_dl, boxSize, debug, verify):
+                                             ray_pos_in, ray_dir, total_dl, boxSize, 
+                                             #master_dx, master_ind, prev_cell_inds, prev_cell_cen, 
+                                             debug, verify):
     """ For a single ray, specified by its starting location, direction, and length, ray-trace through 
     a Voronoi mesh using neighbor searches in a pre-computed tree.
 
@@ -278,9 +280,9 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
     prev_cell_inds = np.zeros(max_steps, dtype=np.int64) - 1
     prev_cell_cen = np.zeros(max_steps, dtype=np.float32)
 
-    num_prev_inds = 0
+    ##iter_counter  = np.zeros(max_steps, dtype=np.int32)
 
-    iter_counter  = np.zeros(max_steps, dtype=np.int32)
+    num_prev_inds = 0
 
     # locate starting cell
     cur_cell_ind, h_guess = _treeSearchNearestSingle(ray_pos,cell_pos,boxSize,NextNode,length,center,sibling,nextnode,h=1.0)
@@ -356,7 +358,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
 
         for n_iter in range(1000):
             # set distance along ray as midpoint between bracketing
-            iter_counter[n_step] = n_iter
+            #iter_counter[n_step] = n_iter
 
             assert n_iter < 100 and (raylength_right - raylength_left) > 1e-10 # otherwise failure
 
@@ -519,13 +521,13 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
                 prev_cell_cen[i] -= local_dl
 
             # accumulate (all code units and/or same units as input)
+            if n_step >= master_dx.size:
+                print('RAY ALLOC FAILURE')
+                assert 0
+
             master_dx[n_step] = local_dl
             master_ind[n_step] = cur_cell_ind
             n_step += 1
-
-            if n_step >= max_steps:
-                print('RAY ALLOC FAILURE')
-                assert 0
 
             # are we finished unexpectedly?
             assert dl < total_dl
@@ -560,12 +562,16 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
             # terminate bisection search, move on to next
             break
 
+    # for safety only
+    prev_cell_cen[0] = 0.0
+    prev_cell_inds[0] = -1
+
     # reduce arrays to used size
     master_dx = master_dx[0:n_step]
     master_ind = master_ind[0:n_step]
 
-    iter_counter = iter_counter[0:n_step]
-    if debug: print('iter_counter: ', iter_counter)
+    #iter_counter = iter_counter[0:n_step]
+    #if debug: print('iter_counter: ', iter_counter)
 
     return master_dx, master_ind
 
@@ -579,31 +585,49 @@ def _rayTraceFull(pos, NextNode, length, center, sibling, nextnode, ray_pos, ray
     avg_intersections_per_boxlength = boxSize / pos.shape[0]**(1/3)
     n_alloc = int(n_rays * (total_dl / avg_intersections_per_boxlength)) * 100
 
-    # allocate for full (dx,ind) lists for each ray, along with per-ray offset/length info
-    offset = 0
+    if total_dl < boxSize/10:
+        # likely fof-scope and/or halo-centered, e.g. in an overdense region
+        n_alloc *= 2
 
+    # allocate (return per ray)
     offsets = np.zeros(n_rays, dtype=np.int32)
     lengths = np.zeros(n_rays, dtype=np.int32)
 
-    r_dx = np.zeros(n_alloc, dtype=np.float32)
-    r_ind = np.zeros(n_alloc, dtype=np.int64)
+    # allocate (internal ray arrays)
+    #max_steps = 10000
+    #master_dx = np.zeros(max_steps, dtype=np.float32) # pathlength for each ray segment
+    #master_ind = np.zeros(max_steps, dtype=np.int64) # index
+    #prev_cell_inds = np.zeros(max_steps, dtype=np.int64) - 1
+    #prev_cell_cen = np.zeros(max_steps, dtype=np.float32)
 
-    for i in range(n_rays):
-        ray_pos_local = ray_pos[ind0+i,:]
+    # possibly iterate for allocation
+    i = 0
+    while i != n_rays - 1:
+        # allocate for full (dx,ind) lists for each ray, along with per-ray offset/length info
+        offset = 0
 
-        dx, ind = trace_ray_through_voronoi_mesh_treebased(pos, NextNode, length, center, sibling, nextnode, 
-                                             ray_pos_local, ray_dir, total_dl, boxSize, debug=0, verify=False)
+        r_dx = np.zeros(n_alloc, dtype=np.float32)
+        r_ind = np.zeros(n_alloc, dtype=np.int64)
 
-        # stamp
-        offsets[i] = offset
-        lengths[i] = dx.size
-        r_dx[offset:offset+dx.size] = dx
-        r_ind[offset:offset+dx.size] = ind
-        offset += dx.size
+        for i in range(n_rays):
+            ray_pos_local = ray_pos[ind0+i,:]
 
-        if offset >= n_alloc:
-            print('WARNING: ALLOC FAILURE FOR RAY RETURN.')
-            assert 0
+            dx, ind = trace_ray_through_voronoi_mesh_treebased(pos, NextNode, length, center, sibling, nextnode, 
+                                                 ray_pos_local, ray_dir, total_dl, boxSize, 
+                                                 #master_dx, master_ind, prev_cell_inds, prev_cell_cen, 
+                                                 debug=0, verify=False)
+
+            # stamp
+            if offset+dx.size >= n_alloc:
+                print('WARNING: REALLOC FOR RAY RETURN.', n_alloc, n_alloc*2)
+                n_alloc *= 2
+                break
+
+            offsets[i] = offset
+            lengths[i] = dx.size
+            r_dx[offset:offset+dx.size] = dx
+            r_ind[offset:offset+dx.size] = ind
+            offset += dx.size
 
     # return 4-tuple
     r_dx = r_dx[0:offset]
@@ -906,6 +930,13 @@ def benchmark_test_voronoi(compare=True):
     time_a = 0.0
     time_b = 0.0
 
+    # allocate (internal ray arrays)
+    #max_steps = 10000
+    #master_dx = np.zeros(max_steps, dtype=np.float32) # pathlength for each ray segment
+    #master_ind = np.zeros(max_steps, dtype=np.int64) # index
+    #prev_cell_inds = np.zeros(max_steps, dtype=np.int64) - 1
+    #prev_cell_cen = np.zeros(max_steps, dtype=np.float32)
+
     for i in range(num_rays):
         # ray direction
         ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
@@ -935,6 +966,7 @@ def benchmark_test_voronoi(compare=True):
         master_dx2, master_ind2 = \
           trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center, sibling, nextnode, 
                                                    ray_pos, ray_dir, total_dl, sP.boxSize, 
+                                                   #master_dx, master_ind, prev_cell_inds, prev_cell_cen, 
                                                    debug=0, verify=verify)
 
         time_b += (time.time() - start_time)
