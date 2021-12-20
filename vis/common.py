@@ -20,6 +20,7 @@ from util.helper import loadColorTable, logZeroMin, logZeroNaN, pSplitRange
 from util.boxRemap import remapPositions
 from cosmo.cloudy import cloudyIon, cloudyEmission, getEmissionLines
 from cosmo.stellarPop import sps
+from cosmo.spectrum import create_spectra_from_traced_rays
 
 # all frames output here (current directory if empty string)
 savePathDefault = expanduser("~") + '/' # for testing/quick outputs
@@ -548,7 +549,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         mass *= elem_mass_frac
 
     # metal ion mass (do column densities) [e.g. "O VI", "O VI mass", "O VI frac", "O VI fracmass"]
-    if ' ' in partField:
+    if ' ' in partField and 'EW_' not in partField:
         element = partField.split()[0]
         ionNum  = partField.split()[1]
         field   = 'mass'
@@ -623,6 +624,23 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
             sfr = sP.snapshotSubsetP(partType, 'sfr', indRange=indRange)
             w = np.where(sfr > 0.0)
             mass[w] = 0.0
+
+    # equivalent width map via synthetic spectra (e.g. "EW_MgII 2803")
+    if partField.startswith('EW_'):
+        # only possible via voronoi projection
+        assert 'voronoi_proj' in method
+
+        # load number density of relevant species as 'mass'
+        from cosmo.spectrum import lines
+        line = partField.replace('EW_','')
+        element, ionNum = lines[line]['ion'].split(' ')
+        field = 'mass'
+
+        # use cache or calculate on the fly, as needed
+        mass = sP.snapshotSubsetP('gas', '%s %s %s' % (element,ionNum,field), indRange=indRange)
+
+        assert mass.min() >= 0.0
+        #mass[mass < 0] = 0.0 # clip -eps values to 0.0
 
     # single stellar band, replace mass array with linear luminosity of each star particle
     if 'stellarBand-' in partField or 'stellarBandObsFrame-' in partField:
@@ -813,7 +831,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         if sP.isPartType(partType,'stars'): config['ctName'] = 'gray'
 
     # hydrogen/metal/ion column densities
-    if (' ' in partField and ' mass' not in partField and ' frac' not in partField):
+    if (' ' in partField and ' mass' not in partField and ' frac' not in partField and 'EW_' not in partField):
         assert 'sb_' not in partField
         ion = cloudyIon(sP=None)
 
@@ -931,6 +949,13 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         if lineName[-1] == 'A': lineName = lineName[:-1] + '$\AA$' # Angstrom
         config['label']  = '%s %s %s]' % (lineName,eLabel,uLabel)
         config['ctName'] = 'inferno' # 'cividis'
+
+    if 'EW_' in partField:
+        # equivalent width maps via synthetic spectra
+        grid = grid
+        lineName = partField.replace('EW_','')
+        config['label'] = '%s Equivalent Width [ log $\AA$ ]' % lineName
+        config['ctName'] = 'cividis'
 
     # gas: mass-weighted quantities
     if partField in ['temp','temperature','temp_sfcold','temp_linear']:
@@ -1714,7 +1739,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
                 # decide mode and ray-trace
                 if partField in colDensityFields or \
-                (' ' in partField and 'mass' not in partField and 'frac' not in partField):
+                (' ' in partField and 'mass' not in partField and 'frac' not in partField and 'EW_' not in partField):
                     # sum of dl_i * quant_i for each intersected cell, and here we want quant to be a 
                     # number density (or mass density), so the result is a column density (or mass surface density).
                     # we have loaded 'Masses' [code] or a mass-like field (HI mass) or a luminosity-like 
@@ -1741,6 +1766,36 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     grid_d = result.reshape(nPixels).T
                     grid_q = np.zeros(nPixels, dtype='float32') # dummy
                     
+                elif 'EW_' in partField:
+                    # equivalent width map via synthetic spectra
+                    from cosmo.spectrum import _line_params
+
+                    # obtain full rays
+                    rays_off, rays_len, rays_dl, rays_inds = rayTrace(sP, ray_pos, ray_dir, total_dl, pos, mode='full')
+
+                    # load additional required properties
+                    assert normCol
+                    assert nChunks == 1
+                    lineName = partField.replace('EW_','')
+                    f, gamma, wave0, ion_amu, ion_mass = _line_params(lineName)
+
+                    cell_temp = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', indRange=indRange) # K
+                    
+                    velLosField = 'vel_' + ['x','y','z'][3-axes[0]-axes[1]]
+                    cell_vellos = sP.snapshotSubsetP('gas', velLosField, indRange=indRange) # code
+                    cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
+
+                    assert cell_temp.size == cell_vellos.size == mass.size
+
+                    # create spectra and derive EW (per ray) at the same time
+                    instrument = 'idealized'
+                    result = create_spectra_from_traced_rays(sP, f, gamma, wave0, ion_mass, instrument, 
+                                                             rays_off, rays_len, rays_dl, rays_inds,
+                                                             mass, cell_temp, cell_vellos, reduceToEW=True)
+
+                    grid_d = result.reshape(nPixels).T
+                    grid_q = np.zeros(nPixels, dtype='float32') # dummy
+
                 else:
                     # weighted average of quant_i using dens_i*dl (column density) as the weight
                     assert not normCol # check what it would mean                    

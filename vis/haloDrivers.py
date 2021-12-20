@@ -54,9 +54,9 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloInd=None, redshift=0.0):
         # magnetic field strength
         #panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} )
         #panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-3.0,3.5]} )
-        #panels.append( {'partType':'gas', 'partField':'temp',   'valMinMax':[4.0,6.0]} )
         #panels.append( {'partType':'gas', 'partField':'xray_lum_05-2kev',  'valMinMax':[34,38]} )
         panels.append( {'partType':'gas', 'partField':'sz_yparam',  'valMinMax':[-8, -3]} )
+        #panels.append( {'partType':'gas', 'partField':'EW_MgII 2803',  'valMinMax':[-1.0,1.0]} )
     if conf == 6:
         # stellar composite
         panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )

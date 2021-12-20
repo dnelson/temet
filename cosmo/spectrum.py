@@ -11,7 +11,7 @@ from numba import jit
 
 from plot.config import *
 from util import units
-from util.helper import logZeroNaN
+from util.helper import logZeroNaN, closest
 from util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
   trace_ray_through_voronoi_mesh_with_connectivity, rayTrace
 
@@ -28,15 +28,18 @@ lines = {'LyA'       : {'f':0.4164,   'gamma':4.49e8,  'wave0':1215.670,  'ion':
          'OVI 1037'  : {'f':6.580e-2, 'gamma':4.076e8, 'wave0':1037.6167, 'ion':'O VI'},
          'OVI 1031'  : {'f':1.325e-1, 'gamma':4.149e8, 'wave0':1031.9261, 'ion':'O VI'},
          'MgII 2803' : {'f':0.6155,   'gamma':2.592e8, 'wave0':2803.5315, 'ion':'Mg II'},
-         'MgII 2796' : {'f':0.3058,   'gamma':2.612e8, 'wave0':2796.3543, 'ion':'Mg II'}}
+         'MgII 2796' : {'f':0.3058,   'gamma':.2612e8, 'wave0':2796.3543, 'ion':'Mg II'}}
 
 # instrument characteristics (in Ang)
-instruments = {'COS-G130M'  : {'wave_min':1150, 'wave_max':1450, 'dwave':0.01},
+instruments = {'idealized'  : {'wave_min':1000, 'wave_max':12000, 'dwave':0.1}, # used for EW map vis
+               'COS-G130M'  : {'wave_min':1150, 'wave_max':1450, 'dwave':0.01},
                'COS-G140L'  : {'wave_min':1130, 'wave_max':2330, 'dwave':0.08},
                'COS-G160M'  : {'wave_min':1405, 'wave_max':1777, 'dwave':0.012},
                'test_EUV'   : {'wave_min':800,  'wave_max':1300, 'dwave':0.1}, # to see LySeries at rest
                'test_EUV2'  : {'wave_min':1200, 'wave_max':2000, 'dwave':0.1}, # testing redshift shifts
                'SDSS-BOSS'  : {'wave_min':3600, 'wave_max':10400, 'dwave':1.0}, # dwave approx, constant in log(dwave) only
+               '4MOST_LRS'  : {'wave_min':4000, 'wave_max':8860, 'dwave':0.8},  # assume R=5000 = lambda/dlambda
+               '4MOST_HRS'  : {'wave_min':3926, 'wave_max':6810, 'dwave':0.2},  # but gaps! assume R=18000
                'MIKE'       : {'wave_min':3350, 'wave_max':9500, 'dwave':0.07}, # approximate only
                'KECK-HIRES' : {'wave_min':3000, 'wave_max':9250, 'dwave':0.04}} # approximate only
 
@@ -498,11 +501,10 @@ def create_spectra_from_traced_rays(sP, f, gamma, wave0, ion_mass, instrument,
         master_temp = cell_temp[master_inds]
         master_vellos = cell_vellos[master_inds]
 
-        if i % 100 == 0: print(f'[{i:4d}] {nCells = }')
+        #if i % 100 == 0: print(f'[{i:4d}] {nCells = }')
 
-        # reducing? then reset tau_master now
-        if reduceToEW:
-            tau_master *= 0.0
+        # reset tau_master for each ray
+        tau_master *= 0.0
 
         # cumulative pathlength, Mpc from start of box i.e. start of ray (at z_start)
         cum_pathlength = np.zeros(nCells, dtype=np.float32) 
@@ -792,95 +794,173 @@ def generate_spectra_voronoi():
     from cosmo.cloudy import cloudyIon
 
     # config
-    sP = simParams(run='tng100-1', redshift=0.5)
+    sP = simParams(run='tng50-1', redshift=0.5)
 
-    lineNames = ['OVI 1031'] #'LyA'
-    instrument = 'test_EUV2' # 'SDSS-BOSS'
-    haloID = 800 # if None, then full box
+    lineNames = ['MgII 2796','MgII 2803']
+    instrument = '4MOST_LRS' # 'SDSS-BOSS'
+    haloID = 150 # 150 for TNG50-1, 800 for TNG100-1 # if None, then full box
 
     nRaysPerDim = 50 # total number of rays is square of this number
     projAxis = 2 # z, to simplify vellos for now
 
     fof_scope_mesh = True
 
-    # load halo
-    halo = sP.halo(haloID)
-    cen = halo['GroupPos']
-    size = 2 * halo['Group_R_Crit200']
+    # caching file
+    saveFilename = 'spectra_%s_z%.1f_halo%d-%d_n%d_%s_%s.hdf5' % \
+      (sP.simName,sP.redshift,haloID,projAxis,nRaysPerDim,instrument,'-'.join(lineNames))
 
-    print(f"Halo [{haloID}] center {cen} and Rvir = {halo['Group_R_Crit200']:.2f}")
+    if not isfile(saveFilename):
+        # load halo
+        halo = sP.halo(haloID)
+        cen = halo['GroupPos']
+        mass = sP.units.codeMassToLogMsun(halo['Group_M_Crit200'])[0]
+        size = 2 * halo['Group_R_Crit200']
 
-    # ray starting positions, and total requested pathlength
-    xpts = np.linspace(cen[0]-size/2, cen[0]+size/2, nRaysPerDim)
-    ypts = np.linspace(cen[1]-size/2, cen[1]+size/2, nRaysPerDim)
+        print(f"Halo [{haloID}] mass = {mass:.2f} and Rvir = {halo['Group_R_Crit200']:.2f}")
 
-    xpts, ypts = np.meshgrid(xpts, ypts, indexing='ij')
+        # ray starting positions, and total requested pathlength
+        xpts = np.linspace(cen[0]-size/2, cen[0]+size/2, nRaysPerDim)
+        ypts = np.linspace(cen[1]-size/2, cen[1]+size/2, nRaysPerDim)
 
-    # construct [N,3] list of search positions
-    ray_pos = np.zeros( (nRaysPerDim**2,3), dtype='float64')
-    
-    ray_pos[:,0] = xpts.ravel()
-    ray_pos[:,1] = ypts.ravel()
-    ray_pos[:,2] = cen[2] - size/2
+        xpts, ypts = np.meshgrid(xpts, ypts, indexing='ij')
 
-    # total requested pathlength (twice distance to halo center)
-    total_dl = size
+        # construct [N,3] list of search positions
+        ray_pos = np.zeros( (nRaysPerDim**2,3), dtype='float64')
+        
+        ray_pos[:,0] = xpts.ravel()
+        ray_pos[:,1] = ypts.ravel()
+        ray_pos[:,2] = cen[2] - size/2
 
-    # ray direction
-    ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
-    ray_dir[projAxis] = 1.0
+        # total requested pathlength (twice distance to halo center)
+        total_dl = size
 
-    # load cell properties (pos,vel,species dens,temp)
-    haloIDLoad = haloID if fof_scope_mesh else None # if global mesh, then global gas load
+        # ray direction
+        ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
+        ray_dir[projAxis] = 1.0
 
-    cell_pos = sP.snapshotSubsetP('gas', 'pos', haloID=haloIDLoad) # code
+        # load cell properties (pos,vel,species dens,temp)
+        haloIDLoad = haloID if fof_scope_mesh else None # if global mesh, then global gas load
 
-    # ray-trace
-    rays_off, rays_len, rays_dl, rays_inds = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, mode='full',nThreads=1)
+        cell_pos = sP.snapshotSubsetP('gas', 'pos', haloID=haloIDLoad) # code
 
-    # load other cell properties
-    velLosField = 'vel_'+['x','y','z'][projAxis]
+        # ray-trace
+        rays_off, rays_len, rays_dl, rays_inds = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, mode='full',nThreads=1)
 
-    cell_vellos = sP.snapshotSubsetP('gas', velLosField, haloID=haloIDLoad) # code
-    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', haloID=haloIDLoad) # K
-    
-    cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
+        # load other cell properties
+        velLosField = 'vel_'+['x','y','z'][projAxis]
 
-    # convert length units, all other units already appropriate
-    rays_dl = sP.units.codeLengthToMpc(rays_dl)
+        cell_vellos = sP.snapshotSubsetP('gas', velLosField, haloID=haloIDLoad) # code
+        cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', haloID=haloIDLoad) # K
+        
+        cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
 
-    # loop over requested line(s)
+        # convert length units, all other units already appropriate
+        rays_dl = sP.units.codeLengthToMpc(rays_dl)
+
+        # sample master grid
+        master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
+        tau_master = np.zeros( (nRaysPerDim**2,tau_master.size), dtype=tau_master.dtype )
+
+        EWs = {}
+
+        # start cache
+        with h5py.File(saveFilename,'w') as f:
+            f['master_wave'] = master_mid
+
+        # loop over requested line(s)
+        for line in lineNames:
+            densField = '%s numdens' % lines[line]['ion']
+            cell_dens = sP.snapshotSubset('gas', densField, haloID=haloIDLoad) # ions/cm^3
+
+            # create spectra
+            f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
+
+            master_wave, tau_local = \
+              create_spectra_from_traced_rays(sP, f, gamma, wave0, ion_mass, instrument, 
+                                              rays_off, rays_len, rays_dl, rays_inds,
+                                              cell_dens, cell_temp, cell_vellos, reduceToEW=False)
+
+            assert np.array_equal(master_wave,master_mid)
+            tau_master += tau_local
+
+            EW_local = create_spectra_from_traced_rays(sP, f, gamma, wave0, ion_mass, instrument, 
+                                                       rays_off, rays_len, rays_dl, rays_inds,
+                                                       cell_dens, cell_temp, cell_vellos, reduceToEW=True)
+
+            EWs[line] = EW_local
+
+            with h5py.File(saveFilename,'r+') as f:
+                # save tau per line
+                f['tau_%s' % line.replace(' ','_')] = tau_local
+                # save EWs per line
+                f['EW_%s' % line.replace(' ','_')] = EW_local
+
+        # calculate flux and total EW
+        flux = np.exp(-1*tau_master)
+
+        with h5py.File(saveFilename,'r+') as f:
+            f['flux'] = flux
+
+        print(f'Saved: [{saveFilename}]')
+    else:
+        # load cache
+        EWs = {}
+        with h5py.File(saveFilename,'r') as f:
+            master_wave = f['master_wave'][()]
+            flux = f['flux'][()]
+            for line in lineNames:
+                EWs[line] = f['EW_%s' % line.replace(' ','_')][()]
+        print(f'Loaded: [{saveFilename}]')
+
+    # plot config
+    EW_targets = [0.1, 0.2, 0.4, 1.0, 2.0, 8.0] # Ang
+    xlim = [4200,4230] # Ang
+
+    # total EW
+    EW_total = np.zeros(flux.shape[0], dtype='float32')
     for line in lineNames:
-        densField = '%s numdens' % lines[line]['ion']
-        cell_dens = sP.snapshotSubset('gas', densField, haloID=haloIDLoad) # ions/cm^3
+        EW_total += EWs[line]
 
-        # create spectra
-        f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
+    # plot hist of EW
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
 
-        master_mid, tau_allrays = \
-          create_spectra_from_traced_rays(sP, f, gamma, wave0, ion_mass, instrument, 
-                                          rays_off, rays_len, rays_dl, rays_inds,
-                                          cell_dens, cell_temp, cell_vellos, reduceToEW=False)
+    ax.set_xlabel('Equivalent Width [ Ang ]')
+    ax.set_ylabel('Fraction')
+    ax.set_yscale('log')
 
-    # plot
-    flux_allrays = np.exp(-1*tau_allrays)
+    valMinMax = [-2.0,1.0]
+    nBins = 30
 
-    ray_inds = [0,10,500,1000,2100]
+    for line in lineNames:
+        yy, xx = np.histogram(logZeroNaN(EWs[line]), bins=nBins, density=True, range=valMinMax)
+        xx = xx[:-1] + 0.5*(valMinMax[1]-valMinMax[0])/nBins
+
+        ax.plot(xx, yy, label=line)
+
+    fig.savefig('spectra_EW_hist_%s_%s_%s.pdf' % (sP.simName,instrument,'-'.join(lineNames)))
+    plt.close(fig)
+
+    # plot some sample spectra
+    ray_inds = []
+    for EW_target in EW_targets:
+        _, ind = closest(EW_total, EW_target)
+        ray_inds.append(ind)
 
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
     ax.set_xlabel('Wavelength [ Ang ]')
     ax.set_ylabel('Relative Flux')
-    ax.set_xlim([1540,1560]) # testing
+    ax.set_xlim(xlim)
 
     for ray_ind in ray_inds:
-        ax.plot(master_mid, flux_allrays[ray_ind,:], '-', lw=1.0)
+        label = f'EW = {EW_total[ray_ind]:.2f} Ang' #'EW = %.2f Ang [#%d]' % (EW_total[ray_ind],ray_ind)
+        ax.plot(master_wave, flux[ray_ind,:], '-', lw=lw, label=label)
 
-    fig.savefig('spectra_%s.pdf' % '-'.join(lineNames))
+    ax.legend(loc='lower left')
+    fig.savefig('spectra_%s_%s_%s.pdf' % (sP.simName,instrument,'-'.join(lineNames)))
     plt.close(fig)
-
-    import pdb; pdb.set_trace()
 
 def single_line_test():
     """ Testing.

@@ -137,6 +137,19 @@ In general, loading an auxCat which has already been created:
     x = sP.auxCat('Subhalo_Mass_30pkpc_Stars')
 
 
+Synthetic Observations
+----------------------
+
+Functionality for creating "mock" or "synthetic" observations of certain types is included for:
+
+* Gas absorption (i.e. column densities) for hydrogen and metal ions (using CLOUDY postprocessing).
+* Gas absorption spectra (and equivalent widths) for hydrogen and metal ions, using the Voronoi mesh.
+* Gas emission (i.e. line fluxes) using CLOUDY postprocessing.
+* X-ray emission using APEC/AtomDB models.
+* Stellar light emission, optionally including dust attenuation models and/or emission lines, using FSPS.
+* Stellar light and dust emission, using SKIRT radiative transfer postprocessing.
+
+
 simParams
 ---------
 
