@@ -49,8 +49,10 @@ import platform
 import numpy as np
 import getpass
 import h5py
+import os
 from os import path, mkdir
 from functools import partial
+from glob import glob
 
 from ..util.units import units
 from illustris_python.util import partTypeNum
@@ -168,8 +170,8 @@ class simParams:
     winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=TNG Model, 3=Auriga model)
 
     def __init__(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None, 
-                       haloInd=None, subhaloInd=None, refPos=None, refVel=None, path=None,
-                       name = None):
+                       haloInd=None, subhaloInd=None, refPos=None, refVel=None, arepoPath=None,
+                       simName = None):
         """ Fill parameters based on inputs. """
 
         self.basePath = path.expanduser("~") + '/'
@@ -177,9 +179,9 @@ class simParams:
         if getpass.getuser() == 'wwwrun': # freyator
             self.basePath = '/u/dnelson/'
 
-        if path is not None:
+        if arepoPath is not None:
             # Deduce parameters from simulation path
-            self.scan_simulation(path, name=name)
+            self.scan_simulation(arepoPath, simName=simName)
         else:
             # old, hardcoded lookup based on given **kwargs.
             self.lookup_simulation(res=res, run=run, variant=variant, redshift=redshift, snap=snap, hInd=hInd,
@@ -271,16 +273,27 @@ class simParams:
         self.setRedshift(self.redshift)
         self.setSnap(self.snap)
 
-    def scan_simulation(self, path, name=None):
-        self.arepoPath = path
-        self.simPath   = self.arepoPath + 'output/'
-        self.derivPath = self.arepoPath + 'data.files/'
-        self.postPath  = self.arepoPath + 'postprocessing/'
-        self.plotPath  = self.basePath + 'plots/'
+    def scan_simulation(self, arepoPath, simName=None):
+        self.arepoPath = arepoPath
+        self.simPath   = os.path.join(self.arepoPath, 'output/')
+        self.derivPath = os.path.join(self.arepoPath, 'data.files/')
+        self.postPath  = os.path.join(self.arepoPath, 'postprocessing/')
+        self.plotPath  = os.path.join(self.basePath, 'plots/')
 
-        self.simName = name
-        if name is None:
-            self.simName    = path.rstrip("/").split("/")[-1]
+        self.simName = simName
+        if simName is None:
+            self.simName    = arepoPath.rstrip("/").split("/")[-1]
+
+        p = os.path.join(self.simPath,"snap*/snap_*.hdf5")
+        hdf5files = glob(p)
+        hdf5file = hdf5files[0]
+        with h5py.File(hdf5file, 'r') as hf:
+            header = dict(hf["Header"].attrs)
+
+        self.omega_m     = header["Omega0"]
+        self.omega_L     = header["OmegaLambda"]
+        self.omega_b     = header["OmegaBaryon"] 
+        self.HubbleParam = header["HubbleParam"]
 
 
     def lookup_simulation(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None,
