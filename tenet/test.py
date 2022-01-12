@@ -9,8 +9,8 @@ from os import path, mkdir, rename
 import matplotlib.pyplot as plt
 
 import cosmo
-from ..plot.config import figsize
-from ..util import simParams
+from .plot.config import figsize
+from .util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -116,7 +116,7 @@ def hbt_check():
 
 def marc_sigma1():
     """ Test. """
-    from ..plot.cosmoGeneral import quantMedianVsSecondQuant
+    from .plot.cosmoGeneral import quantMedianVsSecondQuant
     sP = simParams(run='tng300-1',redshift=0.0)
 
     xQuant = 'sigma1kpc_stars'
@@ -137,9 +137,9 @@ def marc_sigma1():
 
 def exportBoxGrids(sP, partType='dm', partField='mass', nCells=[64,128,256,512]):
     """ Export 3D uniform Cartesian grids, of different resolutions. """
-    from ..util.sphMap import sphGridWholeBox
-    from ..util.simParams import simParams
-    from ..util.helper import logZeroSafe
+    from .util.sphMap import sphGridWholeBox
+    from .util.simParams import simParams
+    from .util.helper import logZeroSafe
 
     # config
     label, limits, takeLog = sP.simParticleQuantity(partType, partField)
@@ -306,7 +306,7 @@ def minify_gergo_hydrogen_files():
 def half_Kband_radii():
     """ Test for Hannah's paper. """
     sP = simParams(run='tng50-1',redshift=2.0)
-    from ..cosmo.auxcatalog import findHalfLightRadius
+    from .cosmo.auxcatalog import findHalfLightRadius
 
     subhaloIDs = [25821,39745,55106,60750,79350,92271,99303]
 
@@ -390,7 +390,7 @@ def copy_eagle_config_param_attrs(snap=28):
 
 def rewrite_sfrs_eagle(snap=28):
     """ Rewrite particle-level SFR values from original EAGLE snaps into new snaps. """
-    from ..tracer.tracerMC import match3
+    from .tracer.tracerMC import match3
 
     loadPath = '/virgo/simulations/Eagle/L0100N1504/REFERENCE/data/'
     savePath = '/virgo/simulations/Illustris/Eagle-L68n1504FP/output/'
@@ -762,7 +762,7 @@ def compare_subhalos_all_quantities(snap=28):
 
 def lgal_cat_check():
     """ Check Reza's L-Galaxies catalog. """
-    from ..util.helper import running_median
+    from .util.helper import running_median
 
     sP = simParams(run='tng100-1', redshift=0.0) # tng300-1
 
@@ -1032,7 +1032,7 @@ def integrate():
 
 def plot_dist256():
     """ Plot distance to 256th gas cell (i.e. BH accretion radius) vs M*. """
-    from ..util.helper import running_median
+    from .util.helper import running_median
 
     # load
     sP = simParams(run='tng100-1',redshift=0.0)
@@ -1063,7 +1063,7 @@ def plot_dist256():
 def check_load_memusage():
     """ Check memory usage with snapshotSubset(). """
     import multiprocessing as mp
-    from ..util.helper import pSplitRange, reportMemory
+    from .util.helper import pSplitRange, reportMemory
     import gc
     import tracemalloc
 
@@ -1150,7 +1150,7 @@ def check_load_memusage():
 def check_groupcat_snap_rewrite(GrNr=0):
     """ Check custom Subfind. """
     sP = simParams(res=2160,run='tng',snap=69) # 69-99
-    from ..tracer.tracerMC import match3
+    from .tracer.tracerMC import match3
     #sP = simParams(res=128,run='tng',snap=4,variant='0000')
 
     final_save_file = sP.derivPath + 'fof0_save_%s_%d.hdf5' % (sP.simName,sP.snap)
@@ -1382,7 +1382,7 @@ def try_hsc_gri_composite():
 
 def check_tracer_tmax_vs_curtemp():
     """ Can a tracer maxtemp ever be below the current parent gas cell temperature? """
-    from ..tracer.tracerMC import match3
+    from .tracer.tracerMC import match3
     #sP = simParams(res=11,run='zooms2_josh',redshift=2.25,hInd=2,variant='FPorig') # snap=52
     sP = simParams(res=11,run='zooms2_josh',redshift=2.25,hInd=2,variant='FP')
     #sP = simParams(res=11,run='zooms2_josh',snap=10,hInd=2,variant='FPorig')
@@ -1671,7 +1671,7 @@ def _numba_argsort(x):
 def benchmark_sort():
     """ Testing sort speed. """
     import time
-    from ..tracer.tracerMC import match3, _match3
+    from .tracer.tracerMC import match3, _match3
 
     N = 20000000
     N2 = 10000
@@ -1742,7 +1742,7 @@ def vis_cholla_snapshot():
              'momentum_z':[0.0, 1.0]}
 
     # start plot
-    from ..util.helper import loadColorTable
+    from .util.helper import loadColorTable
     from  matplotlib.colors import Normalize
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -1772,7 +1772,7 @@ def vis_cholla_snapshot():
 
 def new_mw_fgas_sample():
     """ Sample of Guinevere. """
-    from ..cosmo.util import crossMatchSubhalosBetweenRuns
+    from .cosmo.util import crossMatchSubhalosBetweenRuns
 
     sP_illustris = simParams(res=1820, run='illustris', redshift=0.0)
     sP_tng = simParams(res=1820, run='tng', redshift=0.0)
@@ -2195,8 +2195,8 @@ def checkStellarAssemblyMergerMass():
 
 def checkColorCombos():
     """ Check (r-i) from color TNG paper. """
-    from ..cosmo.color import loadSimGalColors
-    from ..util.helper import array_equal_nan
+    from .cosmo.color import loadSimGalColors
+    from .util.helper import array_equal_nan
 
     sP = simParams(res=1820,run='tng',redshift=0.0)
 
@@ -2214,8 +2214,8 @@ def checkColorCombos():
 
 def checkInfallTime():
     """ Check infall times. """
-    from ..tracer.tracerMC import match3
-    from ..util.helper import closest
+    from .tracer.tracerMC import match3
+    from .util.helper import closest
 
     sP = simParams(res=1820, run='tng', redshift=0.0)
     subhaloID = 131059
@@ -2608,7 +2608,7 @@ def richardCutout():
 
 def checkIllustrisMetalRatioVsSolar():
     """ Check corrupted GFM_Metals content vs solar expectation. """
-    from ..cosmo.cloudy import cloudyIon
+    from .cosmo.cloudy import cloudyIon
     element = 'O'
     ionNum = 'VI'
     sP = simParams(res=910,run='tng',redshift=0.0)
@@ -2666,7 +2666,7 @@ def checkIllustrisMetalRatioVsSolar():
 
 def checkTracerLoad():
     """ Check new code to load tracers from snapshots. """
-    from ..tracer.tracerMC import match3
+    from .tracer.tracerMC import match3
 
     #basePath = '/n/home07/dnelson/dev.prime/realizations/L25n32_trTest/output/'
     basePath = '/n/home07/dnelson/sims.zooms/128_20Mpc_h0_L9/output/'
