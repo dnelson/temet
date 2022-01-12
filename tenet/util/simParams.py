@@ -179,6 +179,11 @@ class simParams:
         if getpass.getuser() == 'wwwrun': # freyator
             self.basePath = '/u/dnelson/'
 
+        if redshift and snap:
+            print("Warning: simParams: both redshift and snap specified.")
+        self.redshift = redshift
+        self.snap     = snap
+
         if arepoPath is not None:
             # Deduce parameters from simulation path
             self.scan_simulation(arepoPath, simName=simName)
@@ -290,10 +295,12 @@ class simParams:
         with h5py.File(hdf5file, 'r') as hf:
             header = dict(hf["Header"].attrs)
 
+        self.boxSize     = header["BoxSize"]
         self.omega_m     = header["Omega0"]
         self.omega_L     = header["OmegaLambda"]
         self.omega_b     = header["OmegaBaryon"] 
         self.HubbleParam = header["HubbleParam"]
+
 
 
     def lookup_simulation(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None,
@@ -313,8 +320,6 @@ class simParams:
             raise Exception("Res should be numeric.")
         if hInd is not None and not isinstance(hInd, (int,np.uint32,np.int32,np.int64)):
             raise Exception("hInd should be numeric.")
-        if redshift and snap:
-            print("Warning: simParams: both redshift and snap specified.")
         if haloInd is not None and subhaloInd is not None:
             raise Exception("Cannot specify both haloInd and subhaloInd.")
         if variant is not None and not isinstance(variant, str):
@@ -324,8 +329,6 @@ class simParams:
         self.run      = run
         self.variant  = str(variant)
         self.res      = res
-        self.redshift = redshift
-        self.snap     = snap
         self.hInd     = hInd
 
         # pick analysis parameters
