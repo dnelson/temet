@@ -50,9 +50,11 @@ import numpy as np
 import getpass
 import h5py
 import os
+import hashlib
 from os import path, mkdir
 from functools import partial
 from glob import glob
+from pathlib import Path
 
 from ..util.units import units
 from illustris_python.util import partTypeNum
@@ -281,7 +283,14 @@ class simParams:
     def scan_simulation(self, arepoPath, simName=None):
         self.arepoPath = arepoPath
         self.simPath   = os.path.join(self.arepoPath, 'output/')
-        self.derivPath = os.path.join(self.arepoPath, 'data.files/')
+        writable = os.access(self.arepoPath, os.W_OK)
+        if writable: 
+            self.derivPath = os.path.join(self.arepoPath, 'data.files/')
+        else:
+            hsh = hash_path(self.arepoPath,length=8)
+            self.derivPath = os.path.join(os.path.expanduser("~/tenetdata/"),hsh,"data.files")
+            Path(self.derivPath).mkdir(parents=True, exist_ok=True)
+
         self.postPath  = os.path.join(self.arepoPath, 'postprocessing/')
         self.plotPath  = os.path.join(self.basePath, 'plots/')
 
@@ -1475,3 +1484,10 @@ class simParams:
     # operator overloads
     def __eq__(self, other): 
         return self.__dict__ == other.__dict__
+
+def hash_path(path,length=16):
+    sha = hashlib.sha256()
+    sha.update(path.strip("/ ").encode())
+    return sha.hexdigest()[:length]
+
+
