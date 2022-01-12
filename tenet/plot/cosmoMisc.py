@@ -8,9 +8,9 @@ from matplotlib.backends.backend_pdf import PdfPages
 from os.path import isfile, expanduser
 from scipy.signal import savgol_filter
 
-from util import simParams
-from util.helper import running_median, logZeroNaN
-from plot.config import *
+from ..util import simParams
+from ..util.helper import running_median, logZeroNaN
+from ..plot.config import *
 
 def plotRedshiftSpacings():
     """ Compare redshift spacing of snapshots of different runs. """

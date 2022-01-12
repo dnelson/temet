@@ -7,9 +7,9 @@ import numpy as np
 import h5py
 from os.path import isfile
 
-from util.helper import logZeroNaN, running_median_clipped
-from cosmo.cloudy import cloudyIon
-from plot.config import *
+from ..util.helper import logZeroNaN, running_median_clipped
+from ..cosmo.cloudy import cloudyIon
+from ..plot.config import *
 
 quantDescriptions = {
   'None'             : 'Count of the number of galaxies in each bin.',
@@ -1408,8 +1408,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quantname[0:3] == 'tr_':
         # tracer tracks quantity (tr_zacc_mean_mode=smooth)
-        from tracer.tracerMC import defParPartTypes
-        from tracer.tracerEvo import ACCMODES
+        from ..tracer.tracerMC import defParPartTypes
+        from ..tracer.tracerEvo import ACCMODES
         ACCMODES['ALL'] = len(ACCMODES) # add 'all' mode last
         defParPartTypes.append('all') # add 'all' parent type last
 
@@ -1486,7 +1486,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         # integrated galaxy colors, different dust models (e.g. 'color_C_gr') (also e.g. 'color_UV' from snap)
         vals = sP.groupCat(sub=quantname)
 
-        from plot.config import bandRenamesToFSPS
+        from ..plot.config import bandRenamesToFSPS
 
         bands = quantname.split("_")[-1]
         bands = [bands[0],bands[1]]
@@ -1941,7 +1941,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         # mock SDSS fiber spectrum MCMC fit quantities
         # withVel=True, addRealism=True, dustModel=p07c_cf00dust_res_conv, directions=z
         import json
-        from tracer.tracerMC import match3
+        from ..tracer.tracerMC import match3
 
         if quant == 'fiber_zred':
             acInd = 0
@@ -2123,7 +2123,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         # NOTE: do not mix inclination* fields with others, as they do not correspond.
         minMax = [0, 90]
 
-        from projects.mg2emission import gridPropertyVsInclinations
+        from ..projects.mg2emission import gridPropertyVsInclinations
 
         subInds, inclinations, _ = gridPropertyVsInclinations(sP, propName='inclination')
 
@@ -2138,7 +2138,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quantname in ['inclination_mg2_lumsize'] or 'inclination_mg2_shape_' in quantname:
         # CUSTOM! see above.
-        from projects.mg2emission import gridPropertyVsInclinations
+        from ..projects.mg2emission import gridPropertyVsInclinations
 
         propName = quantname.split("inclination_")[1]
         subInds, inclinations, props = gridPropertyVsInclinations(sP, propName=propName)

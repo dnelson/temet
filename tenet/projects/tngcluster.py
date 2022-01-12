@@ -10,8 +10,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.optimize import leastsq
 from os.path import isfile
 
-from plot.cosmoGeneral import quantMedianVsSecondQuant
-from plot.config import *
+from ..plot.cosmoGeneral import quantMedianVsSecondQuant
+from ..plot.config import *
 
 def satelliteVelocityDistribution(sP, minMasses, sub_N=1):
     """ Calculate relative velocity between Nth most massive satellite and central halo, in units 
@@ -64,7 +64,7 @@ def satelliteVelocityDistribution(sP, minMasses, sub_N=1):
 
 def plotRelativeVelDists():
     """ Do we have a bullet cluster in the volume? Based on relative velocity of sub-component. """
-    from util import simParams
+    from ..util import simParams
     
     for snap in range(99,60,-1):
         sP = simParams(res=625, run='tng_dm', snap=snap)
@@ -92,7 +92,7 @@ def plotRelativeVelDists():
 
 def clusterEntropyCores():
     """ Plot radial profiles of cluster entropy and measure CC/NCC central entropy values. """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
 
     # config
     sP = simParams(res=2500, run='tng', redshift=0.4)
@@ -429,7 +429,7 @@ def clusterEntropyCores():
 
 def vis_fullbox_virtual(sP, conf=0):
     """ Visualize the entire virtual reconstructed box. """
-    from vis.box import renderBox
+    from ..vis.box import renderBox
 
     axes       = [0,1] # x,y
     labelZ     = True
@@ -489,7 +489,7 @@ def vis_fullbox_virtual(sP, conf=0):
 
 def vis_gallery(sP, conf=0, num=20):
     """ Visualize the entire virtual reconstructed box. """
-    from vis.halo import renderSingleHalo
+    from ..vis.halo import renderSingleHalo
 
     rVirFracs  = [1.0]
     axes       = [0,1] # x,y
@@ -549,7 +549,7 @@ def vis_gallery(sP, conf=0, num=20):
 
 def mass_function():
     """ Plot halo mass function from the parent box (TNG300) and the zoom sample. """
-    from cosmo.zooms import _halo_ids_run
+    from ..cosmo.zooms import _halo_ids_run
     
     mass_range = [14.0, 15.5]
     binSize = 0.1
@@ -656,8 +656,8 @@ def mass_function():
 
 def sample_halomasses_vs_redshift(sPs):
     """ Compare simulation vs observed cluster samples as a function of (redshift,mass). """
-    from load.data import rossetti17planck, pintoscastro19, hilton20act, adami18xxl
-    from load.data import bleem20spt, piffaretti11rosat
+    from ..load.data import rossetti17planck, pintoscastro19, hilton20act, adami18xxl
+    from ..load.data import bleem20spt, piffaretti11rosat
 
     redshifts = np.linspace(0.0, 0.6, 13) #[0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
     zspread = (redshifts[1]-redshifts[0]) / 3 # add random noise along redshift axis
@@ -844,7 +844,7 @@ def bfield_strength_vs_halomass(sPs, redshifts):
 
 def stellar_mass_vs_halomass(sPs, conf=0):
     """ Plot various stellar mass quantities vs halo mass. """
-    from load.data import behrooziSMHM, mosterSMHM, kravtsovSMHM
+    from ..load.data import behrooziSMHM, mosterSMHM, kravtsovSMHM
 
     xQuant = 'mhalo_500_log'
     cenSatSelect = 'cen'
@@ -937,7 +937,7 @@ def stellar_mass_vs_halomass(sPs, conf=0):
 
 def gas_fraction_vs_halomass(sPs):
     """ Plot f_gas vs halo mass. """
-    from load.data import giodini2009, lovisari2015
+    from ..load.data import giodini2009, lovisari2015
 
     xQuant = 'mhalo_500_log'
     cenSatSelect = 'cen'
@@ -981,7 +981,7 @@ def gas_fraction_vs_halomass(sPs):
 
 def paperPlots():
     """ Plots for TNG-Cluster intro paper. """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
 
     # all analysis at z=0 unless changed below
     TNG300 = simParams(run='tng300-1', redshift=0.0)
@@ -1024,7 +1024,7 @@ def paperPlots():
 
     # figure X - black hole mass scaling relation
     if 0:
-        from plot.globalComp import blackholeVsStellarMass
+        from ..plot.globalComp import blackholeVsStellarMass
 
         pdf = PdfPages('blackhole_masses_vs_mstar_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
         blackholeVsStellarMass(sPs, pdf, twiceR=True, xlim=[11,13.0], ylim=[7.5,11], actualLargestBHMasses=True)
@@ -1040,7 +1040,7 @@ def paperPlots():
 
     # figure X - BCG stellar sizes
     if 0:
-        from plot.sizes import galaxySizes
+        from ..plot.sizes import galaxySizes
         pdf = PdfPages('galaxy_stellar_sizes_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
         galaxySizes(sPs, pdf, xlim=[11.0,13.0], ylim=[3,300], onlyRedData=True)
         pdf.close()

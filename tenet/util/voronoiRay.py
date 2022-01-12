@@ -6,10 +6,10 @@ import time
 import threading
 from numba import jit
 
-from util.helper import periodicDistsN, pSplitRange
-from util.sphMap import _NEAREST_POS
-from util.voronoi import loadSingleHaloVPPP, loadGlobalVPPP
-from util.treeSearch import buildFullTree, _treeSearchNearest, _treeSearchNearestSingle
+from ..util.helper import periodicDistsN, pSplitRange
+from ..util.sphMap import _NEAREST_POS
+from ..util.voronoi import loadSingleHaloVPPP, loadGlobalVPPP
+from ..util.treeSearch import buildFullTree, _treeSearchNearest, _treeSearchNearestSingle
 
 @jit(nopython=True, nogil=True, cache=True)
 def _periodic_wrap_point(pos, pos_ref, boxSize, boxHalf):
@@ -830,8 +830,8 @@ def rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=None, quant2=None, mode=
 def benchmark_test_raytracing():
     """ Run a large number of rays using the threaded-code. """
     import matplotlib.pyplot as plt
-    from plot.config import figsize, lw
-    from util.simParams import simParams
+    from ..plot.config import figsize, lw
+    from ..util.simParams import simParams
 
     # config
     sP = simParams(run='tng50-4', redshift=0.5)
@@ -901,7 +901,7 @@ def benchmark_test_voronoi(compare=True):
     Returns:
       None
     """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
 
     # config
     sP = simParams(run='tng50-4', redshift=0.5)

@@ -1,5 +1,5 @@
 """
-Visualizations for individual halos/subhalos from cosmological runs.
+Visualizations for individual halos/subhalos from ..cosmological runs.
 """
 import numpy as np
 from datetime import datetime
@@ -7,11 +7,11 @@ from os.path import isfile
 from copy import deepcopy
 from getpass import getuser
 
-from vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac, gridBox
-from cosmo.mergertree import mpbSmoothedProperties
-from util.rotation import meanAngMomVector, rotationMatrixFromVec, momentOfInertiaTensor, \
+from ..vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac, gridBox
+from ..cosmo.mergertree import mpbSmoothedProperties
+from ..util.rotation import meanAngMomVector, rotationMatrixFromVec, momentOfInertiaTensor, \
   rotationMatricesFromInertiaTensor, rotationMatrixFromAngleDirection
-from util.simParams import simParams
+from ..util.simParams import simParams
 
 def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclination, mpb, cenShift, depthFac, **kwargs):
     """ Factor out some box/image related calculations common to all halo plots. """
@@ -447,7 +447,7 @@ def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=Non
     which should iterate from 0 to the number of bins, in which case all subhalo IDs in that bin 
     are returned (limited to numPerBin), as appropriate for a multi-system single-quantity figure. """
     assert selType in ['linear','even','random']
-    from util.helper import evenlySample
+    from ..util.helper import evenlySample
 
     gc = sP.groupCat(fieldsHalos=['Group_M_Crit200','GroupFirstSub'])
     haloMasses = sP.units.codeMassToLogMsun(gc['halos']['Group_M_Crit200'])
@@ -502,7 +502,7 @@ def selectHalosFromMassBins(sP, massBins, numPerBin, selType='linear'):
     """ Select one or more FoF-halo indices from an input set of massBins (log Mhalo) and a 
     requested number of halos per bin. """
     assert selType in ['linear','even','random']
-    from util.helper import evenlySample
+    from ..util.helper import evenlySample
 
     gc = sP.groupCat(fieldsHalos=['Group_M_Crit200'])
     haloMasses = sP.units.codeMassToLogMsun(gc)

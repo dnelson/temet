@@ -9,7 +9,7 @@ from scipy.signal import savgol_filter
 from scipy import interpolate
 
 import illustris_python as il
-from util.helper import running_sigmawindow, iterable
+from ..util.helper import running_sigmawindow, iterable
 
 treeName_default = "SubLink"
 
@@ -182,7 +182,7 @@ def mpbPositionComplete(sP, id, extraFields=None):
     """ Load a particular MPB of subhalo id, and return it along with a filled version of SubhaloPos 
     which interpolates for any skipped intermediate snapshots as well as back beyond the end of the 
     tree to the beginning of the simulation. The return indexed by snapshot number. """
-    from tracer.tracerMC import match3
+    from ..tracer.tracerMC import match3
     if extraFields is None: extraFields = []
 
     fields = ['SubfindID','SnapNum','SubhaloPos']
@@ -343,9 +343,9 @@ def mpbSmoothedProperties(sP, id, fillSkippedEntries=True, extraFields=None):
 
 def debugPlot():
     """ Testing MPB loading and smoothing. """
-    from util import simParams
+    from ..util import simParams
     import matplotlib.pyplot as plt
-    from plot.cosmoGeneral import addRedshiftAgeAxes
+    from ..plot.cosmoGeneral import addRedshiftAgeAxes
 
     # config
     #sP = simParams(res=455, run='tng', redshift=0.0) 
@@ -634,9 +634,9 @@ def stellarMergerContribution(sP):
 
 def stellarMergerContributionPlot():
     """ Driver. """
-    from util.simParams import simParams
-    from plot.config import sKn, sKo
-    from util.helper import running_median
+    from ..util.simParams import simParams
+    from ..plot.config import sKn, sKo
+    from ..util.helper import running_median
     from scipy.signal import savgol_filter
     import matplotlib.pyplot as plt
     import csv
@@ -862,8 +862,8 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
     """ Visualize a full merger tree of a given subhalo. saveFilename can either be a string, BytesIO buffer, or None. 
     If a buffer, output_fmt should specify the required format (e.g. 'pdf', 'png', 'jpg'). If None, then the plot 
     is rendered herein and the final image array (uint8) is returned, for e.g. image manipulation procedures. """
-    from plot.config import figsize
-    from util.helper import loadColorTable, logZeroNaN
+    from ..plot.config import figsize
+    from ..util.helper import loadColorTable, logZeroNaN
     import matplotlib.pyplot as plt
     from matplotlib.colors import Normalize, LogNorm
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
@@ -1014,7 +1014,7 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
         return image
 
 def test_plot_tree():
-    from util.simParams import simParams
+    from ..util.simParams import simParams
     sP = simParams(res=1820,run='tng',redshift=0.0)
 
     for haloID in [200]: #[20,200,210,600,2000,20000]:
@@ -1029,7 +1029,7 @@ def test_plot_tree_mem(haloID=19):
     import time
     from imageio import imread, imwrite
     from scipy.misc import imresize
-    from util.simParams import simParams
+    from ..util.simParams import simParams
 
     # config
     sP = simParams(res=1820,run='tng',snap=99)

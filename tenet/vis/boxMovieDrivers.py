@@ -5,11 +5,11 @@ import numpy as np
 from datetime import datetime
 from os.path import isfile, expanduser
 
-from vis.common import savePathBase
-from vis.box import renderBox, renderBoxFrames
-from util import simParams
-from cosmo.util import subboxSubhaloCat
-from util.rotation import rotationMatrixFromAngleDirection
+from ..vis.common import savePathBase
+from ..vis.box import renderBox, renderBoxFrames
+from ..util import simParams
+from ..cosmo.util import subboxSubhaloCat
+from ..util.rotation import rotationMatrixFromAngleDirection
 
 def subbox_4x2_movie(curTask=0, numTasks=1):
     """ Render a movie comparing several quantities of a single subbox (4x2 panels, 4K). """
@@ -338,7 +338,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     """ Use the subbox tracking catalog to create a movie highlighting the evolution of a single galaxy.
     If frameNum is not None, then use this for save filename instead of sbSnapNum. 
     If rotSeqFrameNum is not None, then proceed to render rotation squence (at fixed time iff sbSnapNum is kept fixed). """
-    from projects.outflows_analysis import selection_subbox_overlap
+    from ..projects.outflows_analysis import selection_subbox_overlap
 
     if 0:
         # helper to make subhalo selection
@@ -639,7 +639,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
 
 def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
     """ Control creation of individual frames using the above function. """
-    from cosmo.util import validSnapList
+    from ..cosmo.util import validSnapList
 
     # movie config
     #minZ = 0.1260 # stop after sb snap 3399 which was what existed when we originally made the movies (to keep frameNum sync)

@@ -8,8 +8,8 @@ from os.path import isfile, isdir
 from os import mkdir
 
 import illustris_python as il
-from util.helper import iterable, logZeroNaN
-from cosmo.color import loadColors, gfmBands, vegaMagCorrections
+from ..util.helper import iterable, logZeroNaN
+from ..cosmo.color import loadColors, gfmBands, vegaMagCorrections
 
 def gcPath(basePath, snapNum, chunkNum=0, noLocal=False, checkExists=False):
     """ Find and return absolute path to a group catalog HDF5 file.
@@ -62,7 +62,7 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
        halo,group     : shorthands for fieldsHalos
        sq             : squeeze single field return into a numpy array instead of within a dict
     """
-    from load.auxcat import auxCat
+    from ..load.auxcat import auxCat
 
     assert sP.snap is not None, "Must specify sP.snap for groupCat() load."
     assert sP.subbox is None, "No groupCat() for subbox snapshots."
@@ -339,7 +339,7 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
 
             # isolated flag (1 if 'isolated' according to criterion, 0 if not, -1 if unprocessed)
             if 'isolated3d,' in quantName:
-                from cosmo.clustering import isolationCriterion3D
+                from ..cosmo.clustering import isolationCriterion3D
 
                 # e.g. 'isolated3d,mstar_30pkpc,max,in_300pkpc'
                 _, quant, max_type, dist = quant.split(',')

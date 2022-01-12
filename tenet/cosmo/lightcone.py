@@ -7,10 +7,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from os.path import isfile
 
-from util.boxRemap import remapPositions, findCuboidRemapInds
-from util.simParams import simParams
-from util.helper import pSplitRange
-from plot.config import figsize, lw
+from ..util.boxRemap import remapPositions, findCuboidRemapInds
+from ..util.simParams import simParams
+from ..util.helper import pSplitRange
+from ..plot.config import figsize, lw
 
 def _load(sP,group,field,inds):
     """ Helper to handle loading a subset, specified by inds, of a particle dataset vs halo catalog
@@ -128,7 +128,7 @@ def lightcone_coordinates(sP,group,pos,vel,config,snap_index):
 
     pos -= np.array([config['cone_x_pos'],config['cone_y_pos'],config['cone_z_pos']])
 
-    # compute line-of-sight distance from observer to points
+    # compute line-of-sight distance from ..observer to points
     r   = np.sqrt(np.square(pos).sum(axis=1)) # ckpc/h
    
     # create mapping from co-moving distance to redshift, for quicker interpolation

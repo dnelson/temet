@@ -7,7 +7,7 @@ import h5py
 import time
 from os import path
 
-from ICs.utilities import write_ic_file
+from ..ICs.utilities import write_ic_file
 from numba import jit
 
 @jit(nopython=True, cache=True)
@@ -267,8 +267,8 @@ def _generate_grid(level, i, j, k, Radius, Angle, pIndex, BoxSize, MaxLevel, Min
 
 def _get_ic_inds(sP, dmIDs_halo, simpleMethod=False):
     """ Helper function for below, return the DM particle indices from the ICs snapshot corresponding to dmIDs_halo. """
-    from util.helper import pSplitRange
-    from tracer.tracerMC import match3
+    from ..util.helper import pSplitRange
+    from ..tracer.tracerMC import match3
     from os.path import isfile
     from sys import stdout
 
@@ -515,7 +515,7 @@ def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
 
 def generate_set():
     """ Driver. """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
 
     if 1:
         # TNG-Cluster

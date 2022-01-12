@@ -3,7 +3,7 @@ ArepoVTK/Web: building image pyramids.
 """
 import h5py
 import numpy as np
-from util.png import Reader as pngReader, Writer as pngWriter
+from ..util.png import Reader as pngReader, Writer as pngWriter
 import os.path
 from os import mkdir
 
@@ -764,9 +764,9 @@ def combine4All():
 
 def pyramidTNG(fieldName='gassynch'):
     """ Combine files for TNG Explorer2D and write out image pyramid files. """
-    from vis.boxDrivers import TNG_explorerImageSegments
-    from vis.common import gridBox
-    from util.helper import loadColorTable
+    from ..vis.boxDrivers import TNG_explorerImageSegments
+    from ..vis.common import gridBox
+    from ..util.helper import loadColorTable
 
     fileBase = os.path.expanduser("~") + '/data/frames/'
     nPixels = 16384

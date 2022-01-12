@@ -12,9 +12,9 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from astropy.io import fits
 
-from util.helper import logZeroMin, logZeroNaN
-from util.simParams import simParams
-from util.rotation import momentOfInertiaTensor, rotationMatricesFromInertiaTensor, rotateCoordinateArray
+from ..util.helper import logZeroMin, logZeroNaN
+from ..util.simParams import simParams
+from ..util.rotation import momentOfInertiaTensor, rotationMatricesFromInertiaTensor, rotateCoordinateArray
 
 stars_source_fsps = """
     <ParticleSource filename="{filenameStars}" importVelocity="true" importVelocityDispersion="false" useColumns="" sourceWeight="1" wavelengthBias="0.5">
@@ -711,7 +711,7 @@ def vis(subhaloID=343503):
 def plot_sed(subhaloID=343503):
     """ Plot a spectral energy distribution .dat output file. As above, simply looks for 
     existing output files in the current working directory. """
-    from plot.config import lw, figsize
+    from ..plot.config import lw, figsize
 
     instNames = ['faceon','edgeon','random']
 

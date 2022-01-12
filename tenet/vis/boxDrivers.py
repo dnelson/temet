@@ -4,11 +4,11 @@ Render specific fullbox visualizations.
 import numpy as np
 from datetime import datetime
 
-from vis.common import savePathDefault
-from vis.box import renderBox, renderBoxFrames
-from vis.halo import renderSingleHalo
-from util.helper import pSplit
-from util import simParams
+from ..vis.common import savePathDefault
+from ..vis.box import renderBox, renderBoxFrames
+from ..vis.halo import renderSingleHalo
+from ..util.helper import pSplit
+from ..util import simParams
 
 def realizations(conf=1):
     """ Render a whole box image at one redshift, of one field, comparing multiple runs. """

@@ -12,11 +12,11 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 
-from util import simParams
-from util.helper import loadColorTable, logZeroNaN, running_median, sampleColorTable
-from plot.config import *
-from vis.halo import renderSingleHalo
-from vis.box import renderBox
+from ..util import simParams
+from ..util.helper import loadColorTable, logZeroNaN, running_median, sampleColorTable
+from ..plot.config import *
+from ..vis.halo import renderSingleHalo
+from ..vis.box import renderBox
 
 def singleHaloImage(sP, conf=0):
     """ Metallicity distribution in CGM image. """
@@ -75,7 +75,7 @@ def _get_dist_theta_grid(size, nPixels):
 
     if 0:
         # debug plots
-        from util.helper import plot2d
+        from ..util.helper import plot2d
         plot2d(dist, label='distance [pkpc]', filename='test_dist.pdf')
         plot2d(theta, label='theta [deg]', filename='test_theta.pdf')
 
@@ -473,7 +473,7 @@ def paperPlots():
 
     if 0:
         # figure 2: TNG50 lines for massflow rate vs angle
-        from projects.outflows import gasOutflowRatesVsQuantStackedInMstar
+        from ..projects.outflows import gasOutflowRatesVsQuantStackedInMstar
         mStarBins = [[10.3,10.7]] #[ [9.4,9.6],[10.3,10.7] ]
 
         config = {'radInd':7, 'vcutInd':0, 'stat':'mean', 'ylim':[-15,15], 'skipZeros':False, 'sterNorm':True}

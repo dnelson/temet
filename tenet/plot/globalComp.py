@@ -8,14 +8,14 @@ import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from load.data import *
-from util.helper import running_median, running_histogram, logZeroNaN, iterable
-from plot.sizes import galaxySizes, galaxyHISizeMass
-from plot.cosmoGeneral import addRedshiftAgeAxes
-from plot.general import plotPhaseSpace2D
-from plot.config import *
-from projects.oxygen import nOVIcddf
-from projects.color import galaxyColorPDF, galaxyColor2DPDFs
+from ..load.data import *
+from ..util.helper import running_median, running_histogram, logZeroNaN, iterable
+from ..plot.sizes import galaxySizes, galaxyHISizeMass
+from ..plot.cosmoGeneral import addRedshiftAgeAxes
+from ..plot.general import plotPhaseSpace2D
+from ..plot.config import *
+from ..projects.oxygen import nOVIcddf
+from ..projects.color import galaxyColorPDF, galaxyColor2DPDFs
 
 def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False, 
                         simRedshift=0.0, dataRedshift=0.0, fig_subplot=[None,None]):
@@ -201,7 +201,7 @@ def stellarMassHaloMassMultiPanel(sPs, pdf, ylog=False, allMassTypes=False, use3
 
 def sfrAvgVsRedshift(sPs, pdf):
     """ Average SFRs in some halo mass bins vs. redshift vs. abundance matching lines. """
-    from util import simParams
+    from ..util import simParams
 
     # config
     plotMassBins  = [10.6,11.2,11.8]
@@ -1259,7 +1259,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
 
     minNumStars = 1
     if clean: minNumStars = 1 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
-    if clean: from plot.config import figsize # do not override
+    if clean: from ..plot.config import figsize # do not override
 
     # plot setup
     if fig_subplot[0] is None:
@@ -1389,7 +1389,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
 
         # testing
         if sdssFiberFits and sP.simName == 'TNG100-1':
-            from plot.general import simSubhaloQuantity
+            from ..plot.general import simSubhaloQuantity
 
             sP.setRedshift(0.1)
             yy, _, _, _ = simSubhaloQuantity(sP, 'fiber_logzsol')
@@ -1444,7 +1444,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
 def massMetallicityGas(sPs, pdf, simRedshift=0.0):
     """ Gas mass-metallicity relation at z=0. 
         (Torrey 2013 Figure 10) (Schaye Figure 13)"""
-    from util import simParams
+    from ..util import simParams
 
     # config
     metalFields = ['SubhaloGasMetallicitySfrWeighted','SubhaloGasMetallicitySfr']
@@ -1706,7 +1706,7 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
 def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
     """ CDDF (column density distribution function) of neutral (atomic) hydrogen in the whole box.
         (Vog 14a Fig 4). If simRedshift is None, then use sP.redshift. """
-    from util import simParams
+    from ..util import simParams
 
     # config
     if molecular:
@@ -1831,7 +1831,7 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
             ax.plot(xx, yy, '-', lw=3.0, linestyle=linestyles[i], color=c, label=label)
 
         # custom test
-        from cosmo.hydrogen import calculateCDDF
+        from ..cosmo.hydrogen import calculateCDDF
         files = [] #['save_440839_sphmap1920','save_440839_histo1920','save_440839_histo200']
 
         for file in files:
@@ -1867,7 +1867,7 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
 def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
     """ PDF of log of DLA (nHI>20.3) metallicities in the whole box colDens grid.
         (Vog 14a Fig 4) """
-    from util import simParams
+    from ..util import simParams
 
     # config
     speciesList = ['nHI_noH2','nHI']
@@ -2003,7 +2003,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
 
     minNumStars = 1
     if clean: minNumStars = 1 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
-    if clean: from plot.config import figsize # do not override
+    if clean: from ..plot.config import figsize # do not override
 
     # plot setup
     if fig_subplot[0] is None:
@@ -2122,7 +2122,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
 
         # testing
         if sdssFiberFits and sP.simName == 'TNG100-1':
-            from plot.general import simSubhaloQuantity
+            from ..plot.general import simSubhaloQuantity
 
             sP.setRedshift(0.1)
             yy, _, _, _ = simSubhaloQuantity(sP, 'fiber_tage')
@@ -2394,7 +2394,7 @@ def plots():
     """ Plot portfolio of global population comparisons between runs. """
     from matplotlib.backends.backend_pdf import PdfPages
     from datetime import datetime
-    from util import simParams
+    from ..util import simParams
 
     sPs = []
     # add runs: zooms

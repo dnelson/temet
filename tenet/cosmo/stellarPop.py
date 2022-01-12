@@ -11,9 +11,9 @@ from scipy.ndimage import map_coordinates
 from scipy.interpolate import interp1d
 from getpass import getuser
 
-from util.helper import logZeroMin, trapsum, iterable, rootPath
-from util.sphMap import sphMap
-from util.rotation import rotationMatrixFromVec, rotateCoordinateArray
+from ..util.helper import logZeroMin, trapsum, iterable, rootPath
+from ..util.sphMap import sphMap
+from ..util.rotation import rotationMatrixFromVec, rotateCoordinateArray
 
 @jit(nopython=True, nogil=True, cache=True)
 def _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda_sol,redshift,
@@ -747,7 +747,7 @@ class sps():
         if 0:
             # DEBUG
             import matplotlib.pyplot as plt
-            from plot.config import figsize, linestyles
+            from ..plot.config import figsize, linestyles
 
             # plot (A)
             fig = plt.figure(figsize=figsize)
@@ -871,7 +871,7 @@ class sps():
             mags = stars['GFM_StellarPhotometrics']
         elif '_dustC' in band:
             # view direction dependent dust attenuation calculation on the fly
-            from cosmo.hydrogen import hydrogenMass
+            from ..cosmo.hydrogen import hydrogenMass
 
             assert rotMatrix is not None and rotCenter is not None
             assert sP.subhaloInd is not None # use to load gas based on -subhalo- id (e.g. called from within vis)
@@ -1142,7 +1142,7 @@ def debug_check_redshifting(redshift=0.8):
     """ Verify we understand what is going on with redshifting and apparent vs. absolute magnitudes 
     of the band magnitudes (from FSPS) and the band magnitudes derived from our convolving our 
     spectra with the bandpass filters manually. """
-    from util import simParams
+    from ..util import simParams
     sP = simParams(res=1820,run='tng',redshift=redshift)
     pop = sps(sP, 'padova07', 'chabrier', 'none', redshifted=True)
 
@@ -1179,8 +1179,8 @@ def debug_check_redshifting(redshift=0.8):
 def debug_dust_plots():
     """ Plot intermediate aspects of the resolved dust calculation. """
     import matplotlib.pyplot as plt
-    from util import simParams
-    from util.helper import logZeroNaN
+    from ..util import simParams
+    from ..util.helper import logZeroNaN
 
     sP = simParams(res=1820,run='tng',redshift=0.0)
 
@@ -1365,8 +1365,8 @@ def debug_dust_plots():
 def debug_plot_spectra():
     """ Check mock spectra. """
     import matplotlib.pyplot as plt
-    from util import simParams
-    from plot.config import figsize, linestyles
+    from ..util import simParams
+    from ..plot.config import figsize, linestyles
 
     sP = simParams(res=270,run='tng',redshift=0.8)
     acFields = ['Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_p07c_cf00dust_res_conv_z',
@@ -1403,8 +1403,8 @@ def debug_plot_spectra():
 def debug_check_rawspec():
     """ Check spectral tables. """
     import matplotlib.pyplot as plt
-    from util import simParams
-    from plot.config import figsize, linestyles
+    from ..util import simParams
+    from ..plot.config import figsize, linestyles
 
     zInd = 5
     ageInd = 30

@@ -10,9 +10,9 @@ from os import mkdir
 from scipy.interpolate import interp1d
 from collections import OrderedDict
 
-from cosmo.color import loadSimGalColors
-from util.tpcf import tpcf, quantReductionInRad
-from util.helper import pSplitRange
+from ..cosmo.color import loadSimGalColors
+from ..util.tpcf import tpcf, quantReductionInRad
+from ..util.helper import pSplitRange
 
 def _covar_matrix(x_avg, x_subs):
     """ Compute covariance matrix from a jackknife set of samplings x_subs. Slightly different 
@@ -679,7 +679,7 @@ def lightcone3DtoSkyCoords(pos, vel, sP, velType):
     periodic cube, into (ra,dec,redshift). The observer is assumed to be placed at the origin of the cube, 
     (0,0,0), and the view direction is right now hardcoded. """
 
-    # comoving distance from observer, removing little h
+    # comoving distance from ..observer, removing little h
     pos = sP.units.codeLengthToComovingKpc(pos)
 
     rr = np.sqrt( pos[:,0]**2 + pos[:,1]**2 + pos[:,2]**2 ) # ckpc

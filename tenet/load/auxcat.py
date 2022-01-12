@@ -9,15 +9,15 @@ from os.path import isfile, isdir
 from os import mkdir, unlink
 from getpass import getuser
 
-from util.helper import iterable, curRepoVersion
+from ..util.helper import iterable, curRepoVersion
 
 # generative functions
-from cosmo.auxcatalog import fofRadialSumType, subhaloRadialReduction, subhaloStellarPhot, \
+from ..cosmo.auxcatalog import fofRadialSumType, subhaloRadialReduction, subhaloStellarPhot, \
   wholeBoxColDensGrid, wholeBoxCDDF, mergerTreeQuant, tracerTracksQuant, subhaloCatNeighborQuant, \
   subhaloRadialProfile
 
-from projects.outflows_analysis import instantaneousMassFluxes, massLoadingsSN, outflowVelocities
-from projects.rshock import healpixThresholdedRadius
+from ..projects.outflows_analysis import instantaneousMassFluxes, massLoadingsSN, outflowVelocities
+from ..projects.rshock import healpixThresholdedRadius
 
 # save these as separate datasets, if present
 largeAttrNames = ['subhaloIDs','partInds','wavelength']
@@ -115,7 +115,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
                 # load specific subhalos?
                 if subhaloIDs is not None:
-                    from tracer.tracerMC import match3
+                    from ..tracer.tracerMC import match3
                     
                     subhaloIDs = iterable(subhaloIDs)
                     subIDs_file = f['subhaloIDs'][()]

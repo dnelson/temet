@@ -415,7 +415,7 @@ def makeColorBars():
 
 def _get_cmap_colors(ctName):
     """ Handle LinearSegmentedColormap by sampling it. """
-    from util.helper import loadColorTable
+    from ..util.helper import loadColorTable
 
     rgb = loadColorTable(ctName, valMinMax=[12.0, 22.0]) # dummy range for custom tables
 
@@ -452,8 +452,8 @@ def writeColorTable(ctName='inferno'):
 
 def writeColormapPNGs():
     """ Output .png images of colormaps for loading as textures in three.js / Explorer3D volume rendering. """
-    from util.helper import validColorTableNames
-    from util.png import Writer as pngWriter
+    from ..util.helper import validColorTableNames
+    from ..util.png import Writer as pngWriter
 
     ctNames = [ctName for ctName in validColorTableNames() if '_r' not in ctName and ctName[-1] != '0']
     for ctName in ['HI_segmented','H2_segmented']:

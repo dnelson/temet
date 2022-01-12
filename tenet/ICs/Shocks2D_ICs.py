@@ -5,7 +5,7 @@ http://www-troja.fjfi.cvut.cz/%7Eliska/CompareEuler/compare8/
 """
 import numpy as np
 import h5py
-from ICs.utilities import write_ic_file
+from ..ICs.utilities import write_ic_file
 
 def create_ics(numPartPerDim=200, config=1, filename='ics.hdf5'):
     """ Create idealized ICs of Rosswog+ (2019) tests. """

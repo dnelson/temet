@@ -8,9 +8,9 @@ import time
 from os.path import isfile, isdir
 from os import mkdir
 
-from util.helper import iterable, nUnique, bincount, reportMemory
-from cosmo.mergertree import mpbSmoothedProperties, loadTreeFieldnames
-from cosmo.util import inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
+from ..util.helper import iterable, nUnique, bincount, reportMemory
+from ..cosmo.mergertree import mpbSmoothedProperties, loadTreeFieldnames
+from ..cosmo.util import inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
 
 debug = False # enable expensive debug consistency checks and verbose output
 

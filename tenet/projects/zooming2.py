@@ -9,12 +9,12 @@ from os.path import isfile
 from scipy.signal import savgol_filter
 from scipy.interpolate import interp1d
 
-from util.simParams import simParams
-from util.helper import running_median, logZeroNaN
-from plot.general import plotPhaseSpace2D, plotHistogram1D, plotSingleRadialProfile
-from vis.halo import renderSingleHalo
-from vis.box import renderBox
-from plot.config import *
+from ..util.simParams import simParams
+from ..util.helper import running_median, logZeroNaN
+from ..plot.general import plotPhaseSpace2D, plotHistogram1D, plotSingleRadialProfile
+from ..vis.halo import renderSingleHalo
+from ..vis.box import renderBox
+from ..plot.config import *
 
 def check_box(snap):
     panels = []
@@ -288,7 +288,7 @@ def figure1_res_statistics(conf=0):
 def tracer_ambient_hot_halo():
     """ Check the existence of an ambient/pre-existing hot halo at r<0.25rvir, as opposed to the possibility that all 
     hot gas is arising from wind. """
-    from tracer.tracerMC import match3
+    from ..tracer.tracerMC import match3
 
     sP = simParams(res=11,run='zooms2_josh',redshift=2.25,variant='FP',hInd=2)
 
@@ -589,8 +589,8 @@ def gas_components_radial_profiles():
 
 def mgii_radial_profile():
     """ Compare MgII column density profiles. """
-    from cosmo.cloudy import cloudyIon
-    from tracer.tracerMC import match3
+    from ..cosmo.cloudy import cloudyIon
+    from ..tracer.tracerMC import match3
 
     redshift = 2.25
 
@@ -741,7 +741,7 @@ def mgii_radial_profile():
 
 def hi_covering_frac():
     """ Plot radial profiles of HI covering fractions. """
-    from obs.galaxySample import addIonColumnPerSystem, ionCoveringFractions
+    from ..obs.galaxySample import addIonColumnPerSystem, ionCoveringFractions
 
     redshift = 2.25
 

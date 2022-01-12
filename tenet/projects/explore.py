@@ -7,11 +7,11 @@ import h5py
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 
-from util import simParams
-from util.helper import logZeroNaN, running_median
-from plot.config import *
-from vis.halo import renderSingleHalo
-from vis.box import renderBox
+from ..util import simParams
+from ..util.helper import logZeroNaN, running_median
+from ..plot.config import *
+from ..vis.halo import renderSingleHalo
+from ..vis.box import renderBox
 
 def celineWriteH2CDDFBand():
     """ Use H2 CDDFs with many variations (TNG100) to derive an envelope band, f(N_H2) vs. N_H2, and write a text file. """
@@ -128,8 +128,8 @@ def celineH2GalaxyImage():
 
 def celineHIH2RadialProfiles():
     """ Compute stacked radial profiles of N_HI(b) and N_H2(b). """
-    from util.simParams import simParams
-    from plot.general import plotStackedRadialProfiles1D
+    from ..util.simParams import simParams
+    from ..plot.general import plotStackedRadialProfiles1D
 
     sPs = []
     sPs.append( simParams(res=1820,run='tng',redshift=2.0) )
@@ -154,7 +154,7 @@ def celineHIH2RadialProfiles():
 
 def celineHIDensityVsColumn():
     """ Re-create Rahmati+ (2013) Fig 2. """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
     sP = simParams(run='tng100-1', redshift=3.0)
 
     N_HI = sP.snapshotSubset('gas', 'hi_column')
@@ -309,7 +309,7 @@ def amyDIGzProfiles():
             xdist = np.abs(yy) * pxSize
 
             # debug plots
-            #from util.helper import plot2d
+            #from ..util.helper import plot2d
             #plot2d(grid, label='sb [log erg/s/kpc^2]', filename='test_grid.pdf')
             #plot2d(xdist, label='x distance[pkpc]', filename='test_xdist.pdf')
             #plot2d(zdist, label='z distance[pkpc]', filename='test_zdist.pdf')
@@ -447,7 +447,7 @@ def martinSubboxProj3DGrid():
 
 def auroraVoyage2050WhitePaper():
     """ Create plots for Aurora's ESA Voyage 2050 white paper. """
-    from projects.oxygen import stackedRadialProfiles
+    from ..projects.oxygen import stackedRadialProfiles
 
     redshift = 0.1
 
@@ -488,7 +488,7 @@ def auroraVoyage2050WhitePaper():
 
 def smitaXMMproposal():
     """ Dependence of OVII on sSFR at fixed mass. """
-    from plot.cosmoGeneral import quantHisto2D
+    from ..plot.cosmoGeneral import quantHisto2D
 
     sP =  simParams(res=1820, run='tng', redshift=0.0)
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
@@ -515,8 +515,8 @@ def smitaXMMproposal():
 
 def nachoAngularQuenchingDens():
     """ Variation of CGM gas density with azimuthal angle (for Martin Navarro+20). """
-    from projects.outflows import gasOutflowRates2DStackedInMstar
-    from projects.outflows_analysis import loadRadialMassFluxes
+    from ..projects.outflows import gasOutflowRates2DStackedInMstar
+    from ..projects.outflows_analysis import loadRadialMassFluxes
 
     sP = simParams(run='tng100-1',redshift=0.0)
     #mStarBins = [[9.8,10.2],[10.4,10.6],[10.9,11.1],[11.3,11.7]] # exploration
@@ -603,7 +603,7 @@ def nachoAngularQuenchingDens():
 
 def nachoAngularQuenchingImage():
     """ Images of delta rho/rho (for Martin Navarro+20). """
-    from projects.xrayAngularDependence import stackedHaloImage
+    from ..projects.xrayAngularDependence import stackedHaloImage
 
     conf = 0
     median = True
@@ -617,7 +617,7 @@ def nachoAngularQuenchingImage():
 
 def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, hot=False, higal=False):
     """ Compute Omega_Q(z) for various components (Q). Rob Yates paper 2021. """
-    from cosmo.hydrogen import neutral_fraction
+    from ..cosmo.hydrogen import neutral_fraction
     sP = simParams(run='eagle')
     
     snaps = sP.validSnapList(onlyFull=True)
@@ -822,7 +822,7 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, hot=F
 
 def abhijeetMgIISurfDens():
     """ Test for Anand+ (2022). """
-    from projects.oxygen import stackedRadialProfiles
+    from ..projects.oxygen import stackedRadialProfiles
 
     sPs = [simParams(run='tng100-1',redshift=0.5)]
 

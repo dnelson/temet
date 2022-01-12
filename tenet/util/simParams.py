@@ -52,7 +52,7 @@ import h5py
 from os import path, mkdir
 from functools import partial
 
-from util.units import units
+from ..util.units import units
 from illustris_python.util import partTypeNum
 
 run_abbreviations = {'illustris-1':['illustris',1820],
@@ -906,20 +906,20 @@ class simParams:
             self.groupOrdered = False
 
         # attach various functions pre-specialized to this sP, for convenience
-        from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicPairwiseDists, periodicDistsSq, \
+        from ..cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicPairwiseDists, periodicDistsSq, \
                                validSnapList, cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs, \
                                correctPeriodicPosBoxWrap
-        from cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
-        from load.snapshot import snapshotSubset, snapshotHeader, snapshotSubsetParallel, snapHasField, snapFields, snapNumChunks, \
+        from ..cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
+        from ..load.snapshot import snapshotSubset, snapshotHeader, snapshotSubsetParallel, snapHasField, snapFields, snapNumChunks, \
                                   snapPath, snapConfigVars, snapParameterVars, subboxVals, haloOrSubhaloSubset, \
                                   snapshotSubsetLoadIndicesChunked
-        from load.auxcat import auxCat
-        from load.groupcat import groupCat, groupCatSingle, groupCatHeader, \
+        from ..load.auxcat import auxCat
+        from ..load.groupcat import groupCat, groupCatSingle, groupCatHeader, \
                                   gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, groupCatHasField, groupCatFields, \
                                   groupCat_subhalos, groupCat_halos, groupCatSingle_subhalo, groupCatSingle_halo
-        from cosmo.mergertree import loadMPB, loadMDB, loadMPBs
-        from plot.quantities import simSubhaloQuantity, simParticleQuantity
-        from util.helper import periodicDistsN, periodicDistsIndexed
+        from ..cosmo.mergertree import loadMPB, loadMDB, loadMPBs
+        from ..plot.quantities import simSubhaloQuantity, simParticleQuantity
+        from ..util.helper import periodicDistsN, periodicDistsIndexed
 
         # cosmo helpers
         self.redshiftToSnapNum     = partial(redshiftToSnapNum, sP=self)
@@ -1418,7 +1418,7 @@ class simParams:
     @property
     def cpuHours(self):
         """ Return CPU core hours to z=0 for this simulation. """
-        from cosmo.perf import loadCpuTxt
+        from ..cosmo.perf import loadCpuTxt
         data = loadCpuTxt(self.arepoPath, keys=['total','numCPUs'])
         
         final_timestep_sec_per_cpu = np.squeeze(data['total'])[-1,2] # cumulative

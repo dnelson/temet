@@ -16,11 +16,11 @@ Observational data processing, reduction, and analysis (eROSITA).
 import numpy as np
 import h5py
 from os.path import expanduser, isfile
-from util.helper import logZeroNaN, loadColorTable, running_median
-from plot.config import figsize
-from util.simParams import simParams
-from util.rotation import rotationMatrixFromAngle
-from projects.azimuthalAngleCGM import _get_dist_theta_grid
+from ..util.helper import logZeroNaN, loadColorTable, running_median
+from ..plot.config import figsize
+from ..util.simParams import simParams
+from ..util.rotation import rotationMatrixFromAngle
+from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
 
 from scipy.ndimage import gaussian_filter, shift, center_of_mass, rotate
 from scipy.interpolate import interp1d
@@ -382,7 +382,7 @@ def parse_apetool_output_cat(source='liu', param_eef=0.9):
                     color='red', ecolor='red', alpha=0.9, capsize=0.0, fmt='o', label='Mean Stack')
 
         # observational points from Anderson+
-        from load.data import anderson2015
+        from ..load.data import anderson2015
         a15 = anderson2015(sP)
 
         ax.errorbar(a15['stellarMass'], a15['xray_LumBol'],xerr=a15['stellarMass_err'],
@@ -444,7 +444,7 @@ def gama_overlap():
     """ Load GAMA catalog, find sources which are in the eFEDS footprint. 
     Note this defines the input catalog for the aperture photometry, so changing here e.g. the 
     additional catalogs we cross-match against requires new photometry to be run. """
-    from tracer.tracerMC import match3
+    from ..tracer.tracerMC import match3
 
     path = basePathGAMA + 'LambdarInputCatUVOptNIR.fits'
 

@@ -15,7 +15,7 @@ from prospect.io import write_results
 from prospect.sources import CSPSpecBasis
 from prospect.utils import smoothing
 from prospect import fitting
-from util.helper import pSplitRange
+from ..util.helper import pSplitRange
 
 # config (don't change anything...)
 zBin = 'z0.0-0.1'
@@ -337,7 +337,7 @@ def load_obs(ind, run_params, doSim=None):
     obs['phot_mask'] = None  # optional, no associated masks
 
     # lsf: such that we convolve the theoretical spectra with the instrument resolution (wave-dependent)
-    from util.simParams import simParams
+    from ..util.simParams import simParams
     sP = doSim['sP'] if doSim is not None else simParams(res=1820,run='tng') # just for units
 
     obs['lsf_wave'], obs['lsf_delta_v'] = getLSFSmoothing(spec, sP)
@@ -420,7 +420,7 @@ def load_model_params(redshift=None):
         # set the lumdist parameter to get the spectral units (and thus masses) correct. note that, by 
         # having both `lumdist` and `zred` we decouple the redshift from the distance (necessary since 
         # zred represents only the residual redshift in the fitting)
-        from util.simParams import simParams
+        from ..util.simParams import simParams
         sP = simParams(res=1820,run='tng') # for cosmology
         lumDist = sP.units.redshiftToLumDist(redshift)
 
@@ -788,7 +788,7 @@ def combineAndSaveSpectralFits(nSpec, objs=None, doSim=None):
     file can then be loaded through load.auxCat(). Note save size: condensed subhaloIDs only. """
     import getpass
     import datetime
-    from util.helper import curRepoVersion
+    from ..util.helper import curRepoVersion
 
     nFound = 0
     indRange = [0, nSpec-1]

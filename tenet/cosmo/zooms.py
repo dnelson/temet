@@ -11,16 +11,16 @@ from collections import OrderedDict
 from scipy.stats import binned_statistic
 from numba import jit
 
-from cosmo.perf import loadCpuTxt, getCpuTxtLastTimestep
-from util.simParams import simParams
-from util.helper import logZeroNaN
-from vis.halo import renderSingleHalo
-from vis.box import renderBox
-from plot.config import *
+from ..cosmo.perf import loadCpuTxt, getCpuTxtLastTimestep
+from ..util.simParams import simParams
+from ..util.helper import logZeroNaN
+from ..vis.halo import renderSingleHalo
+from ..vis.box import renderBox
+from ..plot.config import *
 
 def pick_halos():
     """ Testing. """
-    from vis.halo import selectHalosFromMassBins
+    from ..vis.halo import selectHalosFromMassBins
     sP = simParams(res=2048, run='tng_dm', redshift=0.0)
     #sP = simParams(res=2500, run='tng', redshift=0.0)
 
@@ -1129,7 +1129,7 @@ def testVirtualParentBoxGroupCat(snap=99):
 def testVirtualParentBoxSnapshot(snap=99):
     """ Compare all snapshot fields (1d histograms) vs TNG300-1 to check unit conversions, etc. """
     from matplotlib.backends.backend_pdf import PdfPages
-    from util.helper import closest
+    from ..util.helper import closest
 
     # config
     haloID = 0 # for particle comparison, indexing primary targets of TNG-Cluster

@@ -8,11 +8,11 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
 import illustris_python as il
-from util import units
-from util.helper import isUnique, nUnique, iterable, logZeroNaN, sampleColorTable, getWhiteBlackColors
-from cosmo.util import crossMatchSubhalosBetweenRuns, snapNumToRedshift, cenSatSubhaloIndices
-from cosmo.color import loadSimGalColors, gfmBands
-from plot.config import *
+from ..util import units
+from ..util.helper import isUnique, nUnique, iterable, logZeroNaN, sampleColorTable, getWhiteBlackColors
+from ..cosmo.util import crossMatchSubhalosBetweenRuns, snapNumToRedshift, cenSatSubhaloIndices
+from ..cosmo.color import loadSimGalColors, gfmBands
+from ..plot.config import *
     
 def matchedUniqueGCIDs(gc1,gc2,matchPath,snapNum):
     """ Return i1,i2 two sets of indices into gc1,gc2 based on matching results, such that
@@ -169,7 +169,7 @@ def globalCatComparison(sP1,sP22,matchPath):
 def timeSeriesMultiPanelComp(sP1, shID1, sP2, shID2):
     """ A few panels of time-series evolution of two subhalos shID1 and shID2 from sP1 and sP2, 
     respectively. Can be lists, in which case all are individually plotted. """
-    from vis.common import setAxisColors
+    from ..vis.common import setAxisColors
 
     # visual config
     xMinMax = [0.0, 2.0]
@@ -293,7 +293,7 @@ def illustrisVsTNG_RedEvoComp(candInd=None):
     """ Driver for Illustris-1 vs TNG100-1 comparison of time evolution of massive galaxies which 
     are red/quenched in TNG but still blue/star-forming in Illustris. If candInd is not None, just 
     an individual system, otherwise all of them. """
-    from util import simParams
+    from ..util import simParams
 
     # config
     sP1 = simParams(res=1820, run='illustris', redshift=0.0)
@@ -316,7 +316,7 @@ def illustrisVsTNG_RedEvoComp(candInd=None):
         subhaloInds2 = w[0]
 
         # centrals only
-        from tracer.tracerMC import match3
+        from ..tracer.tracerMC import match3
         cen_inds2 = cenSatSubhaloIndices(sP2, cenSatSelect='cen')
 
         _,i2 = match3(cen_inds2, subhaloInds2)

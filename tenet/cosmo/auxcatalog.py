@@ -11,11 +11,11 @@ from getpass import getuser
 from scipy.signal import medfilt
 from scipy.ndimage import gaussian_filter
 
-from util.helper import logZeroMin, logZeroNaN, logZeroSafe, binned_statistic_weighted
-from util.helper import pSplit as pSplitArr, pSplitRange, numPartToChunkLoadSize, mvbe
-from util.sphMap import sphMap
-from util.treeSearch import calcParticleIndices, buildFullTree, calcHsml, calcQuantReduction
-from util.rotation import rotateCoordinateArray, rotationMatrixFromVec, momentOfInertiaTensor, \
+from ..util.helper import logZeroMin, logZeroNaN, logZeroSafe, binned_statistic_weighted
+from ..util.helper import pSplit as pSplitArr, pSplitRange, numPartToChunkLoadSize, mvbe
+from ..util.sphMap import sphMap
+from ..util.treeSearch import calcParticleIndices, buildFullTree, calcHsml, calcQuantReduction
+from ..util.rotation import rotateCoordinateArray, rotationMatrixFromVec, momentOfInertiaTensor, \
   rotationMatricesFromInertiaTensor, ellipsoidfit
 
 # todo: as soon as snapshotSubset() can handle halo-centric quantities for more than one halo, we can 
@@ -1106,7 +1106,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
         if 'bandLum' in weighting:
             # prepare sps interpolator
-            from cosmo.stellarPop import sps
+            from ..cosmo.stellarPop import sps
             pop = sps(sP, 'padova07', 'chabrier', 'cf00')
 
             # load additional fields, snapshot wide
@@ -1294,9 +1294,9 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
       - **result** (:py:class:`~numpy.ndarray`): 1d array, value for each subhalo.
       - **attrs** (dict): metadata.
     """
-    from cosmo.stellarPop import sps
+    from ..cosmo.stellarPop import sps
     from healpy.pixelfunc import nside2npix, pix2vec
-    from cosmo.hydrogen import hydrogenMass
+    from ..cosmo.hydrogen import hydrogenMass
 
     # mutually exclusive options, at most one can be enabled
     assert sum([sizes,indivStarMags,np.clip(fullSubhaloSpectra,0,1)]) in [0,1]
@@ -2139,9 +2139,9 @@ def tracerTracksQuant(sP, pSplit, quant, op, time, norm=None):
       - **result** (:py:class:`~numpy.ndarray`): 1d array, value for each subhalo.
       - **attrs** (dict): metadata.
     """
-    from tracer.tracerEvo import tracersTimeEvo, tracersMetaOffsets, trValsAtAccTimes, \
+    from ..tracer.tracerEvo import tracersTimeEvo, tracersMetaOffsets, trValsAtAccTimes, \
       accTime, accMode, ACCMODES, mpbValsAtRedshifts, mpbValsAtAccTimes
-    from tracer.tracerMC import defParPartTypes, fields_in_log
+    from ..tracer.tracerMC import defParPartTypes, fields_in_log
 
     assert pSplit is None # not implemented
     assert op in ['mean'] #,'sample']
@@ -2667,10 +2667,10 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSF
     """
     assert pSplit is None # not implemented
 
-    from cosmo import hydrogen
-    from util.sphMap import sphMapWholeBox
-    from util.helper import reportMemory
-    from cosmo.cloudy import cloudyIon
+    from ..cosmo import hydrogen
+    from ..util.sphMap import sphMapWholeBox
+    from ..util.helper import reportMemory
+    from ..cosmo.cloudy import cloudyIon
 
     # hard-coded parameters for whole box (halo-independent) computations, could generalize
     boxGridSizeHI     = 1.5 # code units, e.g. ckpc/h
@@ -2928,7 +2928,7 @@ def wholeBoxCDDF(sP, pSplit, species, gridSize=None, omega=False):
       To define a new catalog for a CDDF, it must be specified twice: the actual grid, and the CDDF.
     """
     assert pSplit is None # not implemented
-    from cosmo.hydrogen import calculateCDDF
+    from ..cosmo.hydrogen import calculateCDDF
 
     if omega:
         mass = sP.snapshotSubset('gas', species + ' mass')
@@ -3036,7 +3036,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         For scopes `global` and `global_fof`, four profiles are saved: [all, self-halo, other-halo, diffuse],
         otherwise only a single 'all' profile is computed.
     """
-    from projects.rshock import healpix_shells_points
+    from ..projects.rshock import healpix_shells_points
 
     assert op in ['sum','mean','median','min','max','count','kernel_mean',np.std] # todo: or is a lambda
     assert scope in ['global','global_fof','global_spatial','subfind','fof','subfind_global']

@@ -4,7 +4,7 @@ derivations of common halo properties (e.g. virial temperature) and cosmological
 (e.g. age at a given redshift).
 """
 import numpy as np
-from util.helper import logZeroSafe, logZeroNaN, logZeroMin
+from ..util.helper import logZeroSafe, logZeroNaN, logZeroMin
 
 class units(object):
     """ Contains static methods which perform various unit conversions.

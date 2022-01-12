@@ -6,8 +6,8 @@ import threading
 import time
 from numba import jit, void, int32
 
-from util.helper import pSplit
-from util.sphMap import _NEAREST, _getkernel
+from ..util.helper import pSplit
+from ..util.sphMap import _NEAREST, _getkernel
 
 @jit(nopython=True, nogil=True) #, cache=True)
 def _updateNodeRecursive(no,sib,NumPart,last,suns,nextnode,next_node,sibling):
@@ -1041,8 +1041,8 @@ def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, posMask=None, tr
 def benchmark():
     """ Benchmark performance of calcHsml(). """
     import matplotlib.pyplot as plt
-    from util.simParams import simParams
-    from plot.config import figsize, lw
+    from ..util.simParams import simParams
+    from ..plot.config import figsize, lw
 
     # config data
     if 0:
@@ -1101,7 +1101,7 @@ def benchmark():
 
 def checkVsSubfindHsml():
     """ Compare our result vs SubfindHsml output. """
-    from util import simParams
+    from ..util import simParams
     import matplotlib.pyplot as plt
 
     nNGB = 64

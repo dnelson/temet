@@ -15,18 +15,18 @@ from functools import partial
 from scipy.stats import binned_statistic, binned_statistic_2d
 from scipy.interpolate import interp1d
 
-from cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs, correctPeriodicDistVecs
-from cosmo.mergertree import loadMPBs, mpbPositionComplete
-from plot.quantities import simSubhaloQuantity
-from util.helper import pSplitRange, logZeroNaN, iterable
-from util.treeSearch import calcParticleIndices, buildFullTree
-from util.rotation import momentOfInertiaTensor, rotationMatricesFromInertiaTensor, rotateCoordinateArray
-from tracer.tracerMC import match3
-from util import simParams
+from ..cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs, correctPeriodicDistVecs
+from ..cosmo.mergertree import loadMPBs, mpbPositionComplete
+from ..plot.quantities import simSubhaloQuantity
+from ..util.helper import pSplitRange, logZeroNaN, iterable
+from ..util.treeSearch import calcParticleIndices, buildFullTree
+from ..util.rotation import momentOfInertiaTensor, rotationMatricesFromInertiaTensor, rotateCoordinateArray
+from ..tracer.tracerMC import match3
+from ..util import simParams
 
 def fit_vout():
     """ For text discussion and fit equations relating to outflow velocities. """
-    from plot.config import figsize, lw
+    from ..plot.config import figsize, lw
     import matplotlib.pyplot as plt
     import pickle
     from scipy.optimize import leastsq

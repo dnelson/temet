@@ -69,7 +69,7 @@ def checkVisJobs():
     os.remove(tempJobFile)
    
 def submitExpandedJobs(jobNum):
-    from vis.arepovtk import expandedJobNums
+    from ..vis.arepovtk import expandedJobNums
 
     # config
     totNumJobs   = 256

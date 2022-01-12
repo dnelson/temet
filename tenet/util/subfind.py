@@ -9,7 +9,7 @@ import h5py
 import multiprocessing as mp
 from os.path import isfile
 from numba import jit, prange
-from util.sphMap import _NEAREST
+from ..util.sphMap import _NEAREST
 
 # DOUBLEPRECISION == 1
 MyFloat = np.float64
@@ -2703,7 +2703,7 @@ def run_subfind_customfof0save_phase2(sP, GrNr=0):
 
 def verify_results(sP, GrNr=0):
     """ Check results vs. actual group catalog for a test run where the subgroups of FOF0 are computed in AREPO. """
-    from tracer.tracerMC import match3
+    from ..tracer.tracerMC import match3
 
     # load group catalog
     fof0 = sP.groupCatSingle(haloID=GrNr)
@@ -2870,7 +2870,7 @@ def _find_so_quantities(dists, mass, rhoBack, Deltas):
 def add_so_quantities(sP, GrNr=0):
     """ FoF0 is missing SO quantities (Group_R_Crit200, etc). Need to derive now. """
     import gc
-    from util.helper import pSplitRange, reportMemory
+    from ..util.helper import pSplitRange, reportMemory
 
     assert GrNr == 0 # no generalization for chunkNum
     assert 'fof0test' in sP.arepoPath # only modify L35n2160TNG_fof0test/ files
@@ -2964,7 +2964,7 @@ def add_so_quantities(sP, GrNr=0):
 
 def rewrite_snapshot(sP, GrNr=0):
     """ Rewrite a snapshot which is missing FOF0 subhalos using the phase2 (final) results. """
-    from tracer.tracerMC import match3
+    from ..tracer.tracerMC import match3
 
     assert GrNr == 0 # no generalization
     assert 'fof0test' in sP.arepoPath # testing, only modify L35n2160TNG_fof0test/ files
@@ -3073,7 +3073,7 @@ def rewrite_snapshot(sP, GrNr=0):
 def rewrite_particle_level_cat(sP, filename, partType):
     """ Take an input HDF5 filename (with at most one dataset), whose size is assumed to correspond to the 
     size of sP.NumPart[partType] at that snapshot, and shuffle the fof0 segment into the new order. """
-    from tracer.tracerMC import match3
+    from ..tracer.tracerMC import match3
 
     GrNr = 0
     final_save_file = sP.derivPath + 'fof0/fof0_save_%s_%d.hdf5' % (sP.simName,sP.snap)
@@ -3138,11 +3138,11 @@ def rewrite_particle_level_cat(sP, filename, partType):
 
 def compare_subhalos_all_quantities(snap_start=67):
     """ Plot diagnostic histograms. """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
     from matplotlib.backends.backend_pdf import PdfPages
     import matplotlib.pyplot as plt
-    from plot.config import figsize
-    from util.helper import logZeroNaN
+    from ..plot.config import figsize
+    from ..util.helper import logZeroNaN
 
     nBins = 50
 
@@ -3263,7 +3263,7 @@ def compare_subhalos_all_quantities(snap_start=67):
 
 def run_subfind(snap):
     """ Main driver. """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
     #sP = simParams(res=128,run='tng',snap=snap,variant='0000') # note: collective vs. serial algorithm
     #sP = simParams(res=512,run='tng',snap=snap,variant='0000')
 
@@ -3283,7 +3283,7 @@ def run_subfind(snap):
 
 def benchmark():
     """ Benchmark. """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
     sP = simParams(res=256,run='tng',snap=4,variant='0000')
     #sP = simParams(res=2160,run='tng',snap=69)
 

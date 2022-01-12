@@ -4,11 +4,11 @@ Render specific halo visualizations.
 import numpy as np
 import h5py
 
-from vis.common import savePathDefault
-from vis.halo import renderSingleHalo, renderSingleHaloFrames, selectHalosFromMassBin
-from util.helper import pSplit, logZeroNaN, evenlySample
-from cosmo.util import crossMatchSubhalosBetweenRuns
-from util import simParams
+from ..vis.common import savePathDefault
+from ..vis.halo import renderSingleHalo, renderSingleHaloFrames, selectHalosFromMassBin
+from ..util.helper import pSplit, logZeroNaN, evenlySample
+from ..cosmo.util import crossMatchSubhalosBetweenRuns
+from ..util import simParams
 
 def oneHaloSingleField(conf=0, haloID=None, subhaloInd=None, redshift=0.0):
     """ In a single panel(s) centered on a halo, show one field from the box. """
@@ -768,8 +768,8 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
     If evo==False, then show full NxM panel sample at z=0.
     In either case, choose blueSample, redSample, or greenSample.
     If curPage specified, do a paged exploration instead. """
-    from cosmo.color import loadSimGalColors
-    from plot.config import defSimColorModel
+    from ..cosmo.color import loadSimGalColors
+    from ..plot.config import defSimColorModel
 
     # we have chosen by hand for L75n1820TNG z=0 from the massBin = [12.0,12.2] below these two sets
     # we define blue as (g-r)<0.6, red as (g-r)>0.7 and green as 0.5<(g-r)<0.7
@@ -1062,7 +1062,7 @@ def vogelsberger_redBlue42(run='illustris', sample='blue'):
 def yenting_vis_sample(redshift=1.0):
     """ For the raw TNG-Cluster halos (not in the virtual box), render some views of RIZ stellar 
     composite and SFR, to identify rings like Yen-Ting is after."""
-    from cosmo.zooms import _halo_ids_run
+    from ..cosmo.zooms import _halo_ids_run
 
     zoomHaloInds = _halo_ids_run(onlyDone=False)[1:] # skip first
 
@@ -1246,8 +1246,8 @@ def annalisa_tng50_presentation(setNum=0, stars=False):
 
 def erica_tng50_sfrmaps():
     """ Render some SFR surface density maps of TNG50 galaxies for Nelson, E.+2021 vs. 3D-HST paper. """
-    from util import simParams
-    from util.helper import closest
+    from ..util import simParams
+    from ..util.helper import closest
 
     # select halo
     sP = simParams(run='tng50-1', redshift=1.0)

@@ -9,7 +9,7 @@ from scipy import interpolate
 from scipy.signal import savgol_filter
 from collections import OrderedDict
 
-from util.helper import evenlySample, running_median
+from ..util.helper import evenlySample, running_median
 
 logOHp12_solar = 8.69 # Asplund+ (2009) Table 1
 
@@ -2461,7 +2461,7 @@ def rupke05():
 def rupke17():
     """ Load observational data points from Rupke+ (2017), outflow properties related to BHs (z<0.3). """
     path = dataBasePath + 'rupke/rupke17.txt'
-    from util.units import units
+    from ..util.units import units
 
     # load table
     with open(path,'r') as f:
@@ -2539,7 +2539,7 @@ def rupke19():
 def spence18(vel05=False):
     """ Load observational data points from Spence+ (2018), outflow properties (z<0.2). """
     path = dataBasePath + 'spence/spence18.txt'
-    from util.units import units
+    from ..util.units import units
 
     # load table
     with open(path,'r') as f:
@@ -2597,7 +2597,7 @@ def spence18(vel05=False):
 def toba17():
     """ Load observational data points from Toba+ (2017), BH outflow properties. """
     path = dataBasePath + 'toba/toba17.txt'
-    from util.units import units
+    from ..util.units import units
 
     # load table
     with open(path,'r') as f:
@@ -2777,7 +2777,7 @@ def decia2018():
     # debug plot
     if 0:
         import matplotlib.pyplot as plt
-        from plot.config import figsize
+        from ..plot.config import figsize
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
 
@@ -2891,7 +2891,7 @@ def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
 
 def loadSDSSFits(redshiftBounds=[0.0,0.1]):
     """ Load the fit results of the SDSS fiber spectrum MCMC chains. """
-    from obs.sdss import sdssSpectraFitsCatName, spectralFitQuantities
+    from ..obs.sdss import sdssSpectraFitsCatName, spectralFitQuantities
     assert redshiftBounds == [0.0,0.1]
     path1 = expanduser("~") + '/obs/SDSS/%s.hdf5' % sdssSpectraFitsCatName
     path2 = expanduser("~") + '/obs/SDSS/sdss_z0.0-0.1.hdf5'

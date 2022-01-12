@@ -11,12 +11,12 @@ from scipy.signal import savgol_filter
 from scipy.ndimage import gaussian_filter
 from scipy.stats import binned_statistic
 
-from vis.halo import renderSingleHalo, subsampleRandomSubhalos
-from util.helper import running_median, sampleColorTable, loadColorTable, logZeroNaN, mvbe
-from plot.cosmoGeneral import quantMedianVsSecondQuant, quantHisto2D
-from plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
-from plot.config import *
-from projects.azimuthalAngleCGM import _get_dist_theta_grid
+from ..vis.halo import renderSingleHalo, subsampleRandomSubhalos
+from ..util.helper import running_median, sampleColorTable, loadColorTable, logZeroNaN, mvbe
+from ..plot.cosmoGeneral import quantMedianVsSecondQuant, quantHisto2D
+from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
+from ..plot.config import *
+from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
 
 def singleHaloImageMGII(sP, subhaloInd, conf=1, size=100, rotation='edge-on', labelCustom=None,
                         rVirFracs=[0.25], fracsType='rVirial', font=16, cbars=True, psf=False):
@@ -469,7 +469,7 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
 
     if sP.redshift == 0.3 and not indiv:
         # Rupke+ 2019 Makani
-        from load.data import rupke19
+        from ..load.data import rupke19
         r19 = rupke19()
 
         ax.errorbar(r19['rad_kpc'], r19['sb'], yerr=[r19['sb_down'],r19['sb_up']], color='#000000', marker='s', alpha=0.6)
@@ -839,7 +839,7 @@ def _select_haloIDs(sP, mStarBin):
 
 def paperPlots():
     """ Plots for the TNG50 MgII CGM emission paper. """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
 
     redshifts = [0.3, 0.7, 1.0, 2.0]
 

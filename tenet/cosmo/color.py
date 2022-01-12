@@ -8,7 +8,7 @@ from os import mkdir
 from scipy.stats import gaussian_kde
 import matplotlib.pyplot as plt
 
-from cosmo.kCorr import kCorrections, coeff
+from ..cosmo.kCorr import kCorrections, coeff
 
 # dictionary of band name -> SubhaloStellarPhotometrics[:,i] index i (currently same for all sims, otherwise move into sP)
 gfmBands = {'U':0, 'B':1, 'V':2, 'K':3,
@@ -19,7 +19,7 @@ vegaMagCorrections = {'V': 0.02, 'U':0.79, 'B':-0.09}
 def loadColors(sP, quantName):
     """ Wrap the below function including some logic to take only a single lowercase string 'quantName' input.
     Loads either a color (difference of two band magntiudes), or just a band magnitude, for every subhalo. """
-    from plot.config import colorModelNames, bandRenamesToFSPS
+    from ..plot.config import colorModelNames, bandRenamesToFSPS
 
     names = {}
     for key,val in colorModelNames.items():
@@ -153,7 +153,7 @@ def stellarPhotToSDSSColor(photVector, bands):
 def calcSDSSColors(bands, redshiftRange=None, eCorrect=False, kCorrect=False, petro=False):
     """ Load the SDSS data files and compute a requested color, optionally restricting to a given 
     galaxy redshift range, correcting for extinction, and/or doing a K-correction. """
-    from load.data import loadSDSSData
+    from ..load.data import loadSDSSData
     assert redshiftRange is None, 'Not implemented.'
 
     sdss = loadSDSSData(petro=petro)

@@ -9,12 +9,12 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import gridspec
 from collections import OrderedDict
 
-from util.helper import running_median, logZeroNaN, sampleColorTable
-from cosmo.clustering import twoPointAutoCorrelationPeriodicCube, conformityRedFrac
-from plot.general import getWhiteBlackColors
-from vis.common import setAxisColors
-from tracer.tracerMC import match3
-from plot.config import *
+from ..util.helper import running_median, logZeroNaN, sampleColorTable
+from ..cosmo.clustering import twoPointAutoCorrelationPeriodicCube, conformityRedFrac
+from ..plot.general import getWhiteBlackColors
+from ..vis.common import setAxisColors
+from ..tracer.tracerMC import match3
+from ..plot.config import *
 
 def galaxyTwoPoint(sPs, saveBase='', cenSatSelects=['all','cen','sat'], 
                    colorBin=None, cType=None, mstarBin=None, mType=None):
@@ -426,7 +426,7 @@ def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
 
 def paperPlots():
     """ Construct all the final plots for the paper. """
-    from util import simParams
+    from ..util import simParams
     import plot.config
     plot.config.clean = True
 

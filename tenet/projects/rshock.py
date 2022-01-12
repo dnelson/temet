@@ -15,14 +15,14 @@ from os.path import isfile, isdir
 from os import mkdir
 import healpy
 
-from util import simParams
-from util.helper import running_median, logZeroNaN, logZeroSafe, loadColorTable, last_nonzero
-from util.treeSearch import calcParticleIndices, buildFullTree, calcHsml, calcQuantReduction
-from plot.config import *
-from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
-from plot.cosmoGeneral import quantHisto2D
-from vis.halo import renderSingleHalo
-from vis.box import renderBox
+from ..util import simParams
+from ..util.helper import running_median, logZeroNaN, logZeroSafe, loadColorTable, last_nonzero
+from ..util.treeSearch import calcParticleIndices, buildFullTree, calcHsml, calcQuantReduction
+from ..plot.config import *
+from ..plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
+from ..plot.cosmoGeneral import quantHisto2D
+from ..vis.halo import renderSingleHalo
+from ..vis.box import renderBox
 
 def plotHealpixShells(rad, data, label, rads=None, clim=None, ctName='viridis', saveFilename='plot.pdf'):
     """ Plot a series of healpix shell samplings. """
@@ -312,7 +312,7 @@ def healpixThresholdedRadius(sP, pSplit=None, ptType='Gas', quant='Temp', radMax
 def local_gas_subset(sP, haloID=0, maxRadR200=5.2, useTree=True):
     """ Obtain and cache a set of gas cells in the vicinity of a halo.
     Debugging only, independent of the auxCat-based sampling. """
-    from util.helper import reportMemory
+    from ..util.helper import reportMemory
 
     gas_local = {}
 

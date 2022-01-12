@@ -84,7 +84,7 @@ def createVirtualSimHDF5():
     """ Create a single 'simulation.hdf5' file which is made up of virtual datasets (HDF5 1.1x/h5py 2.9.x features). 
     Note: dataset details acquired from first chunk of last snapshot! Snapshot must be full, and first chunk must have 
     at least one of every particle type! Note: run in simulation root dir, since we make relative path links. """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
 
     sP = simParams(run='eagle')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
@@ -386,7 +386,7 @@ def createVirtualSimHDF5():
 
 def supplementVirtualSimHDF5AddSnapField():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
 
     sP = simParams(res=2500,run='tng')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
@@ -481,7 +481,7 @@ def supplementVirtualSimHDF5AddSnapField():
 
 def supplementVirtualSimHDF5AddOrUpdateGroupcatField():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
 
     sP = simParams(res=1820,run='illustris')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
@@ -572,7 +572,7 @@ def supplementVirtualSimHDF5AddOrUpdateGroupcatField():
 
 def supplementVirtualSimHDF5():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
 
     sP = simParams(run='tng100-1')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful

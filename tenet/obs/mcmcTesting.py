@@ -6,7 +6,7 @@ import time
 import emcee
 
 from scipy.special import erf
-from projects.color_analysis import _double_gaussian, _double_gaussian_rel
+from ..projects.color_analysis import _double_gaussian, _double_gaussian_rel
 
 def _single_gaussian(x, params, fixed=None):
     """ single gaussian test function """

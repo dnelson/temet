@@ -10,11 +10,11 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable, inset_locator
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
 
-from util import simParams
-from util.helper import loadColorTable, sampleColorTable, getWhiteBlackColors, running_median, \
+from ..util import simParams
+from ..util.helper import loadColorTable, sampleColorTable, getWhiteBlackColors, running_median, \
   logZeroNaN, iterable, evenlySample, gaussian_filter_nan
-from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
-from plot.config import *
+from ..plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
+from ..plot.config import *
 
 def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, subhaloIDs=None, haloIDs=None, 
       ylog=True, ylim=None, xlim=None, qRestrictions=None, nBins=400, medianPDF=False, 
@@ -855,8 +855,8 @@ def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas'
     If ctName is not None, sample from this colormap to choose line color per object. Assign based on the property ctProp.
     If colorbar is not False, then use this field (string) to display a colorbar mapping.
     """
-    from cosmo.auxcatalog import subhaloRadialProfile
-    from tracer.tracerMC import match3
+    from ..cosmo.auxcatalog import subhaloRadialProfile
+    from ..tracer.tracerMC import match3
 
     # config
     if xlim is None: xlim = [0.0,3.0] # for plot only [loc pkpc]
@@ -1450,7 +1450,7 @@ def oneRun_tempcheck():
 
 def compareRuns_RadProfiles():
     """ Driver. Compare median radial profile of a quantity, differentiating between two runs. """
-    #from projects.oxygen import variantsMain as variants
+    #from ..projects.oxygen import variantsMain as variants
     variants = ['0000','0010']
 
     sPs = []

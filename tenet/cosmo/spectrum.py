@@ -9,10 +9,10 @@ import matplotlib.pyplot as plt
 from scipy.special import wofz
 from numba import jit
 
-from plot.config import *
-from util import units
-from util.helper import logZeroNaN, closest
-from util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
+from ..plot.config import *
+from ..util import units
+from ..util.helper import logZeroNaN, closest
+from ..util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
   trace_ray_through_voronoi_mesh_with_connectivity, rayTrace
 
 # line data (Morton+2003)
@@ -45,7 +45,7 @@ instruments = {'idealized'  : {'wave_min':1000, 'wave_max':12000, 'dwave':0.1}, 
 
 def _line_params(line):
     """ Return 5-tuple of (f,Gamma,wave0,ion_amu,ion_mass). """
-    from cosmo.cloudy import cloudyIon
+    from ..cosmo.cloudy import cloudyIon
 
     mass_proton = 1.672622e-24 # cgs
 
@@ -65,7 +65,7 @@ def _voigt0(wave_cm, b, wave0_ang, gamma):
       wave0_ang (float): central wavelength of transition in angstroms.
       gamma (float): sum of transition probabilities (Einstein A coefficients).
     """
-    c_cgs = 2.9979e10 # speed of light in [cm/s], moved from util.units for JIT
+    c_cgs = 2.9979e10 # speed of light in [cm/s], moved from ..util.units for JIT
 
     nu = c_cgs / wave_cm # wave = c/nu
     wave_rest = wave0_ang * 1e-8 # angstrom -> cm
@@ -547,9 +547,9 @@ def create_spectra_from_traced_rays(sP, f, gamma, wave0, ion_mass, instrument,
 
 def generate_spectrum_uniform_grid():
     """ Generate an absorption spectrum by ray-tracing through a uniform grid (deposit using sphMap). """
-    from util.simParams import simParams
-    from util.sphMap import sphGridWholeBox, sphMap
-    from cosmo.cloudy import cloudyIon
+    from ..util.simParams import simParams
+    from ..util.sphMap import sphGridWholeBox, sphMap
+    from ..cosmo.cloudy import cloudyIon
 
     # config
     sP = simParams(run='tng50-4', redshift=0.5)
@@ -679,10 +679,10 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
       debug (int): verbosity level for diagnostic outputs: 0 (silent), 1, 2, or 3 (most verbose).
       verify (bool): if True, brute-force distance calculation verify parent cell at each step.
     """
-    from util.simParams import simParams
-    from util.voronoi import loadSingleHaloVPPP, loadGlobalVPPP
-    from cosmo.cloudy import cloudyIon
-    from util.treeSearch import buildFullTree
+    from ..util.simParams import simParams
+    from ..util.voronoi import loadSingleHaloVPPP, loadGlobalVPPP
+    from ..cosmo.cloudy import cloudyIon
+    from ..util.treeSearch import buildFullTree
 
     # config
     sP = simParams(run='tng50-4', redshift=0.5)
@@ -790,8 +790,8 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
 
 def generate_spectra_voronoi():
     """ Generate a large grid of absorption spectra by ray-tracing through the Voronoi mesh. """
-    from util.simParams import simParams
-    from cosmo.cloudy import cloudyIon
+    from ..util.simParams import simParams
+    from ..cosmo.cloudy import cloudyIon
 
     # config
     sP = simParams(run='tng50-1', redshift=0.5)
@@ -1026,7 +1026,7 @@ def test_LyA_vs_coldens():
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     from matplotlib.cm import ScalarMappable
     from matplotlib.colors import BoundaryNorm
-    from util.helper import sampleColorTable, loadColorTable
+    from ..util.helper import sampleColorTable, loadColorTable
 
     line = 'LyA'
     

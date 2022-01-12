@@ -9,16 +9,16 @@ from matplotlib.backends.backend_pdf import PdfPages
 from scipy.signal import savgol_filter
 from collections import OrderedDict
 
-from util import simParams
-from util.helper import running_median, logZeroNaN
-from plot.config import *
+from ..util import simParams
+from ..util.helper import running_median, logZeroNaN
+from ..plot.config import *
 
 def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,None], 
                 addHalfLightRad=None, onlyRedData=False, xlim=None, ylim=None):
     """ Galaxy sizes (half mass radii) vs stellar mass or halo mass, at redshift zero. 
     If addHalfLightRad is not None, then addHalfLightRad = [dustModel,band,show3D] e.g.
     addHalfLightRad = ['p07c_cf00dust_res_conv_efr_rad30pkpc','sdss_r',False]. """
-    from load.data import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass, mowla2019
+    from ..load.data import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass, mowla2019
 
     # plot setup
     if fig_subplot[0] is None:
@@ -522,8 +522,8 @@ def lumModelsRatios(res=1820, run='tng', redshifts=[0.0]):
 
 def clumpSizes(sP):
     """ Galaxy sizes of the very small things vs stellar mass or halo mass, at redshift zero. """
-    from load.data import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass
-    from cosmo.util import cenSatSubhaloIndices
+    from ..load.data import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass
+    from ..cosmo.util import cenSatSubhaloIndices
 
     centralsOnly = False
     vsMstarXaxis = True
@@ -587,7 +587,7 @@ def clumpSizes(sP):
 
 def characteristicSizes(sP, vsHaloMass=False):
     """ Compare many different 'characteristic' halo/galaxy sizes as a function of mass. """
-    from load.data import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass
+    from ..load.data import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass
 
     reBand = 'jwst_f115w' # for half light radii
 

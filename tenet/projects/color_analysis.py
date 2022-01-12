@@ -11,9 +11,9 @@ import time
 from os.path import isfile, expanduser
 from glob import glob
 
-from util.helper import leastsq_fit, least_squares_fit
-from plot.config import defSimColorModel
-from plot.quantities import bandMagRange
+from ..util.helper import leastsq_fit, least_squares_fit
+from ..plot.config import defSimColorModel
+from ..plot.quantities import bandMagRange
 
 def calcColorEvoTracks(sP, bands=['g','r'], simColorsModel=defSimColorModel):
     """ Using already computed StellarPhot auxCat's at several snapshots, load the MPBs and 
@@ -607,7 +607,7 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
     """ Do double gaussian and other methods to characterize the red and blue populations, e.g. their 
     location, extent, relative numbers, for sP at sP.snap, and save the results. """
     assert cenSatSelect in ['all', 'cen', 'sat']
-    from util.simParams import simParams
+    from ..util.simParams import simParams
 
     # global analysis config
     mag_range = bandMagRange(bands, tight=False)

@@ -14,23 +14,23 @@ from scipy.interpolate import interp1d
 from os.path import isfile
 from functools import partial
 
-from util import simParams
-from load.data import werk2013, johnson2015, berg2019, chen2018zahedy2019
-from plot.config import *
-from util.helper import running_median, logZeroNaN, iterable, contourf, loadColorTable, getWhiteBlackColors, closest, reducedChiSq
-from cosmo.cloudy import cloudyIon
-from plot.general import plotPhaseSpace2D
-from plot.quantities import simSubhaloQuantity, bandMagRange, quantList
-from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
-from plot.cloudy import ionAbundFracs2DHistos
-from vis.common import setAxisColors
-from cosmo.util import cenSatSubhaloIndices, redshiftToSnapNum, periodicDists
-from obs.galaxySample import obsMatchedSample, addIonColumnPerSystem, ionCoveringFractions
+from ..util import simParams
+from ..load.data import werk2013, johnson2015, berg2019, chen2018zahedy2019
+from ..plot.config import *
+from ..util.helper import running_median, logZeroNaN, iterable, contourf, loadColorTable, getWhiteBlackColors, closest, reducedChiSq
+from ..cosmo.cloudy import cloudyIon
+from ..plot.general import plotPhaseSpace2D
+from ..plot.quantities import simSubhaloQuantity, bandMagRange, quantList
+from ..plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
+from ..plot.cloudy import ionAbundFracs2DHistos
+from ..vis.common import setAxisColors
+from ..cosmo.util import cenSatSubhaloIndices, redshiftToSnapNum, periodicDists
+from ..obs.galaxySample import obsMatchedSample, addIonColumnPerSystem, ionCoveringFractions
 
 def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=False):
     """ CDDF (column density distribution function) of O VI in the whole box at z~0.
         (Schaye Fig 17) (Suresh+ 2016 Fig 11) """
-    from load.data import danforth2008, danforth2016, thomChen2008, tripp2008
+    from ..load.data import danforth2008, danforth2016, thomChen2008, tripp2008
 
     # config
     lw = 3.5
@@ -168,7 +168,7 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
                           boxDepth10=False, colorOff=0):
     """ CDDF (column density distribution function) of O VI in the whole box.
         (Schaye Fig 17) (Suresh+ 2016 Fig 11) """
-    from load.data import danforth2016, muzahid2011
+    from ..load.data import danforth2016, muzahid2011
 
     # plot setup
     lw = 3.0
@@ -674,7 +674,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
       emFlux (bool): then plot [photon/s/cm^2/ster].
       combine2Halo (bool): combine the other-halo and diffuse terms.
     """
-    from tracer.tracerMC import match3
+    from ..tracer.tracerMC import match3
 
     # config
     percs = [16,50,84] # [10,90] for oxygen paper
@@ -994,7 +994,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
 
 def ionTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0, colorOff=0):
     """ Plot the real-space 3D two point correlation function of e.g. OVI mass. """
-    from cosmo.clustering import twoPointAutoCorrelationParticle
+    from ..cosmo.clustering import twoPointAutoCorrelationParticle
 
     # visual config
     lw = 3.0
@@ -2231,7 +2231,7 @@ def paperPlots():
 
     # figure 1, 2: full box composite image components, and full box OVI/OVIII ratio
     if 0:
-        from vis.boxDrivers import TNG_oxygenPaperImages
+        from ..vis.boxDrivers import TNG_oxygenPaperImages
         for part in [3]: #[0,1,2,3]:
             TNG_oxygenPaperImages(part=part)
 
@@ -2427,7 +2427,7 @@ def paperPlots():
 
     # figure 15, 16: OVI red/blue image samples
     if 0:
-        from vis.haloDrivers import tngFlagship_galaxyStellarRedBlue
+        from ..vis.haloDrivers import tngFlagship_galaxyStellarRedBlue
         tngFlagship_galaxyStellarRedBlue(evo=False, redSample=1, conf=1)
         tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=1, conf=1)
 
@@ -2584,7 +2584,7 @@ def paperPlots():
 
     # exploration: cloudy ionization table
     if 0:
-        from cosmo.cloudy import plotIonAbundances
+        from ..cosmo.cloudy import plotIonAbundances
         plotIonAbundances(elements=['Oxygen'])
 
     # figure 4: testing toy model for total mass in different ions

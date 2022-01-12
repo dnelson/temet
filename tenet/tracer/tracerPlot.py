@@ -13,11 +13,11 @@ from scipy.signal import savgol_filter
 from os.path import isfile, isdir
 from os import mkdir
 
-from tracer import tracerMC
-from tracer import tracerEvo
-from util.helper import loadColorTable, logZeroSafe, closest
-from cosmo.util import redshiftToSnapNum, snapNumToRedshift
-from plot.cosmoGeneral import addRedshiftAgeAxes
+from ..tracer import tracerMC
+from ..tracer import tracerEvo
+from ..util.helper import loadColorTable, logZeroSafe, closest
+from ..cosmo.util import redshiftToSnapNum, snapNumToRedshift
+from ..plot.cosmoGeneral import addRedshiftAgeAxes
 
 # global configuration
 figsize1   = (14,8)  # set aspect ratio and relative text/label sizes
@@ -280,7 +280,7 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
 
 def plotEvo2D(ii):
     """ Plot various full 2D blocks showing evolution of 'all' tracer tracks vs redshift/radius. """
-    from util import simParams
+    from ..util import simParams
 
     # config
     #sP = simParams(res=11, run='zooms2', redshift=2.0, hInd=2)
@@ -379,7 +379,7 @@ def plotEvo2D(ii):
 def plotEvo1D():
     """ Plot various 1D views showing evolution of tracer tracks vs redshift/radius. """
     assert sP.isZoom # todo
-    from util import simParams
+    from ..util import simParams
 
     # config
     sP = simParams(res=9, run='zooms2', redshift=2.0, hInd=2)
@@ -528,7 +528,7 @@ def getValHistos(sP, field, extType, accMode=None):
 def plotValHistos():
     """ Plot (1D) histograms of extremum values, values at t_acc, or values at the extremum time 
     of another value. """
-    from util import simParams
+    from ..util import simParams
 
     # config
     sPs = []
@@ -701,7 +701,7 @@ def plotValHistos():
 
 def plotPosTempVsRedshift():
     """ Plot trMC position (projected) and temperature evolution vs redshift. """
-    from cosmo.util import correctPeriodicPosBoxWrap
+    from ..cosmo.util import correctPeriodicPosBoxWrap
 
     # config
     axis1 = 0

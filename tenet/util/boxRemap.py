@@ -3,7 +3,7 @@ Implementation of 'a volume and local structure preserving mapping of periodic b
 """
 import numpy as np
 from numba import jit
-from util.helper import closest
+from ..util.helper import closest
 
 class Plane:
     def __init__(self, p, n):
@@ -271,7 +271,7 @@ def CuboidTransformArray(pos_in, pos_out, nCellsTot, nFacesTot, faceOff, faceLen
 def findCuboidRemapInds(remapRatio, nPixels=None):
     """ Find the closest remapping matrix (3x3) to achieve the input remapping ratio of [x,y,z] relative extents. 
     Also input nPixels [x,y] of the final image to be made, in order to calculate newBoxSize. """
-    from util.helper import rootPath
+    from ..util.helper import rootPath
     assert len(remapRatio) == 3, 'Error: remapRatio should have three elements.'
     assert np.abs(1.0 - np.prod(remapRatio)) < 1e-3, 'Error: Check L1*L2*L3 == 1 constraint.'
 
@@ -345,7 +345,7 @@ def test():
     remapRatio = [5.0, 2.8125, 0.0711] # must satisfy L1*L2*L3 == 1 constraint, last entry gives fractional z-width
 
     # load from data
-    from util.simParams import simParams
+    from ..util.simParams import simParams
     sP = simParams(res=512, run='tng', redshift=0.0, variant='0000')
     pos = sP.snapshotSubset('gas','pos')
 

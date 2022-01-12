@@ -11,7 +11,7 @@ import struct
 def concatSubboxFilesAndMinify():
     """ Minify a series of subbox snapshots but removing unwanted fields, and re-save concatenated 
     into a smaller number of chunks. """
-    from util.helper import pSplitRange
+    from ..util.helper import pSplitRange
 
     # config
     outputPath = path.expanduser("~") + '/sims.TNG/L35n2160TNG/output/'
@@ -221,7 +221,7 @@ def concatSubboxFilesAndMinify():
 
 def groupCutoutFromSnap(run='tng'):
     """ Create a [full] subhalo/fof cutout from a snapshot (as would be done by the Web API). """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
 
     ptTypes = ['gas','dm','bhs','stars']
 
@@ -310,7 +310,7 @@ def groupCutoutFromSnap(run='tng'):
 
 def tracerCutoutFromTracerTracksCat():
     """ Create a subhalo cutout of tracers from the full postprocessing/tracer_tracks/ catalog. """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
     ptTypes = ['gas','stars','bhs']
 
     # get subhaloIDs
@@ -499,9 +499,9 @@ def finalizeSubfindHBTGroupCat(snap, prep=False):
     above, (ii) run Gadget-4 SubfindHBT, (iii) run finalizeSubfindHBTGroupCat(prep=True), 
     (iv) create SubLinkHBT trees, (v) run makeSubgroupOffsetsIntoSublinkTreeGlobal(basePath, treeName='SubLinkHBT'),
     (vi) run finalizeSubfindHBTGroupCat() to finish. """
-    from util.simParams import simParams
-    from tracer.tracerMC import match3
-    from util.helper import crossmatchHalosByCommonIDs
+    from ..util.simParams import simParams
+    from ..tracer.tracerMC import match3
+    from ..util.helper import crossmatchHalosByCommonIDs
 
     sP = simParams(run='tng100-2',snap=snap)
     basePath = path.expanduser("~") + '/data/gadget4/'
@@ -787,7 +787,7 @@ def finalizeSubfindHBTGroupCat(snap, prep=False):
 
 def makeSdssSpecObjIDhdf5():
     """ Transform some CSV files into a HDF5 for SDSS objid -> specobjid mapping. """
-    from util.helper import nUnique
+    from ..util.helper import nUnique
 
     files = sorted(glob.glob('z*.txt'))
     objid = np.zeros( (10000000), dtype='uint64' )
@@ -983,8 +983,8 @@ def redshiftWikiTable():
 
 def snapRedshiftsTxt():
     """ Output a text-file of snapshot redshifts, etc. """
-    from util.simParams import simParams
-    from cosmo.util import multiRunMatchedSnapList, snapNumToRedshift, snapNumToAgeFlat
+    from ..util.simParams import simParams
+    from ..cosmo.util import multiRunMatchedSnapList, snapNumToRedshift, snapNumToAgeFlat
 
     # config
     sP = simParams(res=1820,run='tng',redshift=0.0,variant='subbox0')
@@ -1073,9 +1073,9 @@ def tngVariantsLatexOrWikiTable(variants='all', fmt='wiki'):
 
 def export_ovi_phase():
     """ Export raw data points for OVI phase diagram. """
-    from cosmo.util import inverseMapPartIndicesToSubhaloIDs, cenSatSubhaloIndices
-    from tracer.tracerMC import match3
-    from util.simParams import simParams
+    from ..cosmo.util import inverseMapPartIndicesToSubhaloIDs, cenSatSubhaloIndices
+    from ..tracer.tracerMC import match3
+    from ..util.simParams import simParams
     from getpass import getuser
     
     sP = simParams(res=1820,run='tng',redshift=0.0)
@@ -1139,7 +1139,7 @@ def export_ovi_phase():
 
 def makeCohnVsuiteCatalog(redshift=0.0):
     """ Write a .txt file for input into Joanne Cohn's validation-suite. """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
     sP = simParams(res=1820,run='illustris',redshift=redshift)
 
     # load
@@ -1175,7 +1175,7 @@ def makeCohnVsuiteCatalog(redshift=0.0):
 
 def convertMillenniumSubhaloCatalog(snap=63):
     """ Convert a subhalo catalog ('sub_tab_NNN.X' files), custom binary format of Millennium simulation to Illustris-like HDF5. """
-    from tracer.tracerMC import match3
+    from ..tracer.tracerMC import match3
 
     savePath = path.expanduser("~") + '/sims.other/Millennium-1/output/'
     loadPath = '/virgo/simulations/Millennium/'
@@ -1537,7 +1537,7 @@ def convertMillenniumSubhaloCatalog(snap=63):
 
 def convertMillennium2SubhaloCatalog(snap=67):
     """ Convert a subhalo catalog ('subhalo_tab_NNN.X' files), custom binary format of Millennium-2 simulation to TNG-like HDF5. """
-    from tracer.tracerMC import match3
+    from ..tracer.tracerMC import match3
 
     savePath = path.expanduser("~") + '/sims.other/Millennium-2/output/'
     loadPath = '/virgo/simulations/Millennium2/BigRun/'
@@ -1807,8 +1807,8 @@ def convertMillennium2SubhaloCatalog(snap=67):
 
 def convertMillenniumSnapshot(snap=63):
     """ Convert a complete Millennium snapshot (+IDS) into Illustris-like group-ordered HDF5 format. """
-    from tracer.tracerMC import match3
-    from util.helper import isUnique
+    from ..tracer.tracerMC import match3
+    from ..util.helper import isUnique
 
     savePath = path.expanduser("~") + '/sims.other/Millennium-1/output/'
     loadPath = '/virgo/simulations/Recovered_Millennium/' 
@@ -2065,8 +2065,8 @@ def convertMillenniumSnapshot(snap=63):
 def convertMillennium2Snapshot(snap=67):
     """ Convert a complete Millennium-2 snapshot into TNG-like group-ordered HDF5 format. 
     Note all snapshots except 4-7 (inclusive) are already group-ordered. """
-    from tracer.tracerMC import match3
-    from util.helper import isUnique
+    from ..tracer.tracerMC import match3
+    from ..util.helper import isUnique
 
     savePath = path.expanduser("~") + '/sims.other/Millennium-2/output/'
     loadPath = '/virgo/simulations/Millennium2/BigRun/'
@@ -2461,7 +2461,7 @@ def convertGadgetICsToHDF5(aip=False):
 
 def splitSingleHDF5IntoChunks():
     """ Split a single-file snapshot/catalog/etc HDF5 into a number of roughly equally sized chunks. """
-    from util.helper import pSplitRange
+    from ..util.helper import pSplitRange
     basePath = path.expanduser("~") + '/sims.other/Millennium-1/output/snapdir_063/'
     fileName = 'milli_063.hdf5'
     numChunksSave = 16
@@ -2624,8 +2624,8 @@ def combineMultipleHDF5FilesIntoSingle():
 
 def convertEagleSnapshot(snap=20):
     """ Convert an EAGLE simulation snapshot (HDF5) to a TNG-like snapshot (field names, units, etc). """
-    from util.simParams import simParams
-    from cosmo.hydrogen import neutral_fraction
+    from ..util.simParams import simParams
+    from ..cosmo.hydrogen import neutral_fraction
     from scipy.ndimage.interpolation import map_coordinates
     from os.path import isdir, expanduser
     from os import mkdir
@@ -2861,8 +2861,8 @@ def convertEagleSnapshot(snap=20):
 
 def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
     """ Read the Voronoi mesh data from Chris Byrohl using his vppp (voro++ parallel) approach, save to HDF5. """
-    from util.simParams import simParams
-    from util.helper import pSplitRange
+    from ..util.simParams import simParams
+    from ..util.helper import pSplitRange
 
     sP = simParams(run='tng50-2', redshift=0.5)
     basepath = "/freya/ptmp/mpa/cbyrohl/public/vppp_dataset/IllustrisTNG50-2_z0.5_posdata"
@@ -3136,7 +3136,7 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
 
 def exportSubhalosBinary():
     """ Export a very minimal group catalog to a flat binary format (for WebGL/Explorer3D). """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
 
     # config
     sP = simParams(run='eagle',redshift=0.0)
@@ -3170,7 +3170,7 @@ def exportSubhalosBinary():
 
     if sP.simNameAlt == 'L680n2048TNG_DM':
         # TNG1 testing: load custom
-        from cosmo.zooms import _halo_ids_run
+        from ..cosmo.zooms import _halo_ids_run
         halo_inds = _halo_ids_run()
         inds = sP.halos('GroupFirstSub')[halo_inds]
 
@@ -3237,9 +3237,9 @@ def exportHierarchicalBoxGrids(sP, partType='gas', partField='mass', nCells=[32,
       This function is used to pre-compute the grids used in the Explorer3D WebGL volume rendering interface, as 
       well as on-the-fly grid generation for halo-scope volume rendering.
     """
-    from util.sphMap import sphGridWholeBox, sphMap
-    from util.simParams import simParams
-    from util.helper import logZeroSafe, logZeroMin
+    from ..util.sphMap import sphGridWholeBox, sphMap
+    from ..util.simParams import simParams
+    from ..util.helper import logZeroSafe, logZeroMin
     from io import BytesIO
 
     # config

@@ -13,14 +13,14 @@ from scipy.signal import savgol_filter
 from scipy.interpolate import griddata, interp1d
 from functools import partial
 
-from util import simParams
-from util.helper import running_median, logZeroNaN, nUnique, loadColorTable, sgolay2d, sampleColorTable, leastsq_fit
-from plot.config import *
-from plot.general import plotHistogram1D, plotPhaseSpace2D
-from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
-from projects.outflows_analysis import halo_selection, loadRadialMassFluxes
-from projects.outflows_vis import subboxOutflowTimeEvoPanels, galaxyMosaic_topN, singleHaloDemonstrationImage
-from tracer.tracerMC import match3
+from ..util import simParams
+from ..util.helper import running_median, logZeroNaN, nUnique, loadColorTable, sgolay2d, sampleColorTable, leastsq_fit
+from ..plot.config import *
+from ..plot.general import plotHistogram1D, plotPhaseSpace2D
+from ..plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
+from ..projects.outflows_analysis import halo_selection, loadRadialMassFluxes
+from ..projects.outflows_vis import subboxOutflowTimeEvoPanels, galaxyMosaic_topN, singleHaloDemonstrationImage
+from ..tracer.tracerMC import match3
 
 labels = {'rad'     : 'Radius [ pkpc ]',
           'vrad'    : 'Radial Velocity [ km/s ]',
@@ -80,8 +80,8 @@ def explore_vrad_halos(sP, haloIDs):
 
 def sample_comparison_z2_sins_ao(sP):
     """ Compare available galaxies vs. the SINS-AO sample of ~35 systems. """
-    from load.data import foersterSchreiber2018
-    from util.helper import closest
+    from ..load.data import foersterSchreiber2018
+    from ..util.helper import closest
 
     # config
     xlim = [9.0, 12.0]
@@ -551,7 +551,7 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
             f.write(out)
 
         # special plotting behavior (including observational data sets)
-        from load.data import heckman15, fiore17, fluetsch18, chisholm15, davies18, genzel14, leung17, rupke05, rupke17, bordoloi16
+        from ..load.data import heckman15, fiore17, fluetsch18, chisholm15, davies18, genzel14, leung17, rupke05, rupke17, bordoloi16
 
         color = '#555555'
         labels = []
@@ -1235,7 +1235,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                     #    print('%5.2f %6.2f %6.2f %6.2f' % (xm[i],ym[i],y_down[i],y_up[i]))
 
         # special plotting behavior (including observational data sets)
-        from load.data import chen10, rubin14, robertsborsani18, fiore17, heckman15, erb12, fluetsch18, toba17, \
+        from ..load.data import chen10, rubin14, robertsborsani18, fiore17, heckman15, erb12, fluetsch18, toba17, \
                                     bordoloi14, chisholm15, cicone16, genzel14, leung17, rupke05, rupke17, spence18, bordoloi16
 
         color = '#555555'
@@ -2320,7 +2320,7 @@ def stackedRadialProfiles(sPs, field, cenSatSelect='cen', projDim='3D', xaxis='l
                           haloMassBins=None, mStarBins=None, ylabel='', ylim=None, colorOff=0, saveName=None, pdf=None):
     """ Plot average/stacked radial profiles for a series of stellar mass bins and/or runs (sPs) i.e. at different 
     redshifts. """
-    from projects.oxygen import _resolutionLineHelper
+    from ..projects.oxygen import _resolutionLineHelper
     assert xaxis in ['log_pkpc','log_rvir','log_rhalf','log_re','pkpc','rvir','rhalf','re']
 
     percs = [16,84]

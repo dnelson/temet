@@ -4,7 +4,7 @@ Interpolation of scattered point sets onto a uniform grid using the SPH spline k
 import numpy as np
 import threading
 from numba import jit
-from util.helper import pSplit
+from ..util.helper import pSplit
 
 @jit(nopython=True, nogil=True, cache=True)
 def _NEAREST(x, BoxHalf, BoxSize):
@@ -1305,7 +1305,7 @@ def sphGridWholeBox(sP, pos, hsml, mass, quant, nCells=32):
 def benchmark():
     """ Benchmark performance of sphMap(). """
     np.random.seed(424242)
-    from util.simParams import simParams
+    from ..util.simParams import simParams
     import time
 
     # config data

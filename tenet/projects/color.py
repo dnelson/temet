@@ -14,21 +14,21 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d, gaussian_kde
 
-from util import simParams
-from util.helper import running_median, contourf, logZeroNaN, closest, loadColorTable, getWhiteBlackColors, leastsq_fit
-from tracer.tracerMC import match3
-from cosmo.color import loadSimGalColors, stellarPhotToSDSSColor, calcSDSSColors, calcMstarColor2dKDE
-from projects.color_analysis import calcColorEvoTracks, characterizeColorMassPlane, colorTransitionTimes
-from plot.quantities import simSubhaloQuantity, bandMagRange
-from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
-from vis.common import setAxisColors
-from plot.config import *
+from ..util import simParams
+from ..util.helper import running_median, contourf, logZeroNaN, closest, loadColorTable, getWhiteBlackColors, leastsq_fit
+from ..tracer.tracerMC import match3
+from ..cosmo.color import loadSimGalColors, stellarPhotToSDSSColor, calcSDSSColors, calcMstarColor2dKDE
+from ..projects.color_analysis import calcColorEvoTracks, characterizeColorMassPlane, colorTransitionTimes
+from ..plot.quantities import simSubhaloQuantity, bandMagRange
+from ..plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
+from ..vis.common import setAxisColors
+from ..plot.config import *
 
 def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel], 
                    simRedshift=0.0, splitCenSat=False, cenOnly=False, stellarMassBins=None, 
                    addPetro=False, minDMFrac=None):
     """ PDF of galaxy colors (by default: (u-i)), with no dust corrections. (Vog 14b Fig 13) """
-    from util import simParams
+    from ..util import simParams
 
     if cenOnly: assert splitCenSat is False
     allOnly = True if (splitCenSat is False and cenOnly is False) else False
@@ -145,7 +145,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                 gc_colors = np.reshape( gc_colors, gc_colors.shape[0]*gc_colors.shape[1] )
 
                 # replicate stellar masses
-                from re import findall # could replace with actual Nside return from loadSimGalColors()
+                from re import findall # could replace with actual Nside return from ..loadSimGalColors()
                 Nside = np.int32( findall(r'ns\d+',simColorsModel)[0][2:] )
                 assert Nside == 1
 
@@ -342,7 +342,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
 
 def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=False, simRedshift=0.0):
     """ 2D contours of galaxy colors/Mstar plane, multiple bands. """
-    from util import simParams
+    from ..util import simParams
     
     # config
     obs_color = '#000000'
@@ -2336,7 +2336,7 @@ def paperPlots():
 
     # figures 14-15: stellar image stamps of galaxies (red/blue samples)
     if 0:
-        from vis.haloDrivers import tngFlagship_galaxyStellarRedBlue
+        from ..vis.haloDrivers import tngFlagship_galaxyStellarRedBlue
         tngFlagship_galaxyStellarRedBlue(evo=False, redSample=1)
         tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=1)
 
@@ -2434,6 +2434,6 @@ def paperPlots():
 
     if 0:
         # individual galaxy time evolution tracks, matched TNG <-> Illustris, multiple quantities
-        from plot.compareTwoHalos import illustrisVsTNG_RedEvoComp
+        from ..plot.compareTwoHalos import illustrisVsTNG_RedEvoComp
         for candInd in range(10):
             illustrisVsTNG_RedEvoComp(candInd=candInd)

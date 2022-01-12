@@ -9,10 +9,10 @@ from os.path import isfile
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
-from util.helper import running_median, sampleColorTable
-from plot.config import *
-from vis.halo import renderSingleHalo
-from projects.azimuthalAngleCGM import _get_dist_theta_grid
+from ..util.helper import running_median, sampleColorTable
+from ..plot.config import *
+from ..vis.halo import renderSingleHalo
+from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
 
 valMinMaxQuant = {'coldens' : [18.5, 20.0], # in case we render actual quantities instead of deltas
                   'xray_lum_05-2kev' : [33, 37],
@@ -23,7 +23,7 @@ valMinMaxQuant = {'coldens' : [18.5, 20.0], # in case we render actual quantitie
 
 def _get():
     """ TEST. """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
 
     sP = simParams(run='tng100-1', redshift=0.0)
     subhaloInd = 472174
@@ -445,8 +445,8 @@ def stackedPropVsTheta(sP, mStarBin, distBins, conf=0, depthFac=1.0, stack2Dmaps
 
 def singleHaloImage():
     """ Quick test. """
-    from util import simParams
-    from util.helper import closest
+    from ..util import simParams
+    from ..util.helper import closest
 
     # select halo
     sP = simParams(run='tng100-1', redshift=0.0)
@@ -493,7 +493,7 @@ def singleHaloImage():
 
 def paperPlots():
     """ Plots for Truong+21 x-ray emission angular dependence paper. """
-    from util import simParams
+    from ..util import simParams
     
     sP = simParams(run='tng100-1', redshift=0.0)
     mStarBin = [10.90, 11.10]

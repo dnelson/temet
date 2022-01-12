@@ -13,14 +13,14 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.ndimage import gaussian_filter
 
-from util.sphMap import sphMap
-from util.treeSearch import calcHsml
-from util.voronoiRay import rayTrace
-from util.helper import loadColorTable, logZeroMin, logZeroNaN, pSplitRange
-from util.boxRemap import remapPositions
-from cosmo.cloudy import cloudyIon, cloudyEmission, getEmissionLines
-from cosmo.stellarPop import sps
-from cosmo.spectrum import create_spectra_from_traced_rays
+from ..util.sphMap import sphMap
+from ..util.treeSearch import calcHsml
+from ..util.voronoiRay import rayTrace
+from ..util.helper import loadColorTable, logZeroMin, logZeroNaN, pSplitRange
+from ..util.boxRemap import remapPositions
+from ..cosmo.cloudy import cloudyIon, cloudyEmission, getEmissionLines
+from ..cosmo.stellarPop import sps
+from ..cosmo.spectrum import create_spectra_from_traced_rays
 
 # all frames output here (current directory if empty string)
 savePathDefault = expanduser("~") + '/' # for testing/quick outputs
@@ -631,7 +631,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         assert 'voronoi_proj' in method
 
         # load number density of relevant species as 'mass'
-        from cosmo.spectrum import lines
+        from ..cosmo.spectrum import lines
         line = partField.replace('EW_','')
         element, ionNum = lines[line]['ion'].split(' ')
         field = 'mass'
@@ -1235,7 +1235,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             alsoSFRgasForStars=False, excludeSubhaloFlag=False, skipCellIndices=None, 
             ptRestrictions=None, weightField='mass', randomNoise=None, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
-    from util.rotation import rotateCoordinateArray
+    from ..util.rotation import rotateCoordinateArray
     
     optionalStr = ''
     if projType != 'ortho':
@@ -1473,7 +1473,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
             if excludeSubhaloFlag and method == 'sphMap':
                 # exclude any subhalos flagged as clumps, currently for fof-scope renders only
-                from tracer.tracerMC import match3
+                from ..tracer.tracerMC import match3
 
                 SubhaloFlag = sP.subhalos('SubhaloFlag')
                 sub_ids = sP.snapshotSubset(partType, 'subhalo_id', indRange=indRange)
@@ -1768,7 +1768,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     
                 elif 'EW_' in partField:
                     # equivalent width map via synthetic spectra
-                    from cosmo.spectrum import _line_params
+                    from ..cosmo.spectrum import _line_params
 
                     # obtain full rays
                     rays_off, rays_len, rays_dl, rays_inds = rayTrace(sP, ray_pos, ray_dir, total_dl, pos, mode='full')
@@ -1953,7 +1953,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
     # temporary: line integral convolution test
     if 'licMethod' in kwargs and kwargs['licMethod'] is not None:
-        from vis.lic import line_integral_convolution
+        from ..vis.lic import line_integral_convolution
         
         # temp config
         vecSliceWidth = kwargs['licSliceDepth']

@@ -5,10 +5,10 @@ import numpy as np
 import h5py
 from os.path import isfile
 
-from vis.common import savePathDefault, savePathBase
-from vis.halo import renderSingleHalo, renderSingleHaloFrames, selectHalosFromMassBin
-from util import simParams
-from util.rotation import rotationMatrixFromAngleDirection
+from ..vis.common import savePathDefault, savePathBase
+from ..vis.halo import renderSingleHalo, renderSingleHaloFrames, selectHalosFromMassBin
+from ..util import simParams
+from ..util.rotation import rotationMatrixFromAngleDirection
 
 def tngCluster_center_timeSeriesPanels(conf=0):
     """ Plot a time series of panels from subsequent snapshots in the center of fof0. """

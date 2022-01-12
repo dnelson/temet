@@ -644,7 +644,7 @@ def _findCellFaces(i, num_ngb, ngb_inds, offset_ngb, pos):
 
 def voronoiSliceWithPlane():
     """ Testing. """
-    from util.simParams import simParams
+    from ..util.simParams import simParams
     sP = simParams(run='tng50-1', redshift=0.5)
     haloID = 19
 

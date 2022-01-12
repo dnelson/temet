@@ -12,9 +12,9 @@ from os import mkdir, makedirs
 from getpass import getuser
 
 import illustris_python as il
-from util.helper import iterable, logZeroNaN, pSplitRange, numPartToChunkLoadSize
-from load.groupcat import groupCatOffsetList, groupCatOffsetListIntoSnap
-from vis.common import getHsmlForPartType, defaultHsmlFac
+from ..util.helper import iterable, logZeroNaN, pSplitRange, numPartToChunkLoadSize
+from ..load.groupcat import groupCatOffsetList, groupCatOffsetListIntoSnap
+from ..vis.common import getHsmlForPartType, defaultHsmlFac
 
 def subboxVals(subbox):
     """ Return sbNum (integer) and sbStr1 and sbStr2 for use in locating subbox files. """
@@ -294,7 +294,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
             with h5py.File(cacheFile, 'w') as f:
                 dset = f.create_dataset('field', (indRangeAll[1],), dtype='float32')
 
-            from cosmo.cloudy import cloudyIon, cloudyEmission
+            from ..cosmo.cloudy import cloudyIon, cloudyEmission
             if prop in ['mass','frac','numdens']:
                 ion = cloudyIon(sP, el=element, redshiftInterp=True)
             else:
@@ -350,7 +350,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
     
     if not useCache or not isfile(cacheFile):
         # don't use cache, or tried to use and it doesn't exist yet, so run computation now
-        from cosmo.cloudy import cloudyIon, cloudyEmission
+        from ..cosmo.cloudy import cloudyIon, cloudyEmission
         if prop in ['mass','frac','numdens']:
             ion = cloudyIon(sP, el=element, redshiftInterp=True)
         else:
@@ -786,7 +786,7 @@ def snapshotSubset(sP, partType, fields,
         if field in ['xray_lum_05-2kev','xray_flux_05-2kev','xray_lum_05-2kev_nomet','xray_flux_05-2kev_nomet',
                      'xray_counts_erosita','xray_counts_chandra',
                      'xray_lum_0.5-2.0kev','xray_lum_0.3-7.0kev','xray_lum_0.5-8.0kev','xray_lum_2.0-10.0kev']:
-            from cosmo.xray import xrayEmission
+            from ..cosmo.xray import xrayEmission
 
             instrument = field.replace('xray_','')
             if '.' not in instrument:
@@ -893,7 +893,7 @@ def snapshotSubset(sP, partType, fields,
         # cloudy based ionic mass (or emission flux) calculation, if field name has a space in it
         if " " in field:
             # hydrogen model mass calculation (todo: generalize to different molecular models)
-            from cosmo.hydrogen import hydrogenMass
+            from ..cosmo.hydrogen import hydrogenMass
 
             if field in ['h i mass', 'hi mass', 'h i numdens', 'himass', 'h1mass', 'hi_mass']:
                 if haloID is not None or subhaloID is not None:
@@ -985,7 +985,7 @@ def snapshotSubset(sP, partType, fields,
 
         if '_ionmassratio' in field:
             # per-cell ratio between two ionic masses, e.g. "O6_O8_ionmassratio"
-            from cosmo.cloudy import cloudyIon
+            from ..cosmo.cloudy import cloudyIon
             ion = cloudyIon(sP=None)
             ion1, ion2, _ = field.split('_')
 
@@ -995,7 +995,7 @@ def snapshotSubset(sP, partType, fields,
 
         if '_numratio' in field:
             # metal number density ratio e.g. "Si_H_numratio", relative to solar, [Si/H] = log(n_Si/n_H)_cell - log(n_Si/n_H)_solar
-            from cosmo.cloudy import cloudyIon
+            from ..cosmo.cloudy import cloudyIon
             el1, el2, _ = field.split('_')
 
             ion = cloudyIon(sP=None)

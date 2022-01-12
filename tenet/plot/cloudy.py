@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
 
-from util.helper import contourf, evenlySample, sampleColorTable, closest
-from cosmo.cloudy import loadFG11UVB, loadHM12UVB, loadP18UVB, cloudyIon
-from plot.config import *
+from ..util.helper import contourf, evenlySample, sampleColorTable, closest
+from ..cosmo.cloudy import loadFG11UVB, loadHM12UVB, loadP18UVB, cloudyIon
+from ..plot.config import *
 
 def plotUVB(uvbName='fg11'):
     """ Debug plots of the UVB(nu) as a function of redshift. """
@@ -110,7 +110,7 @@ def plotUVB(uvbName='fg11'):
 
 def plotIonAbundances(res='lg', elements=['Carbon']):
     """ Debug plots of the cloudy element ion abundance trends with (z,dens,Z,T). """
-    from util import simParams   
+    from ..util import simParams   
 
     # plot config
     abund_range = [-6.0,0.0]
@@ -291,8 +291,8 @@ def plotIonAbundances(res='lg', elements=['Carbon']):
 def ionAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshift=0.0, metal=-1.0):
     """ Plot 2D histograms of ion abundance fraction in (density,temperature) space at one Z,z. 
     Metal is metallicity in [log Solar]. """
-    from plot.config import figsize
-    from util.simParams import simParams
+    from ..plot.config import figsize
+    from ..util.simParams import simParams
     
     # visual config
     abund_range = [-6.0,0.0]

@@ -13,9 +13,9 @@ from os import remove, rename
 from glob import glob
 from scipy.interpolate import interp1d
 
-from util.helper import closest, tail, getWhiteBlackColors
-from vis.common import setAxisColors
-from plot.config import *
+from ..util.helper import closest, tail, getWhiteBlackColors
+from ..vis.common import setAxisColors
+from ..plot.config import *
 
 def getCpuTxtLastTimestep(filePath):
     """ Parse cpu.txt for last timestep number and number of CPUs/tasks and total CPU hours. """
@@ -412,7 +412,7 @@ def plotCpuTimes():
     """ Plot code time usage fractions from cpu.txt. Note that this function is being automatically 
     run and the resultant plot uploaded to http://www.illustris-project.org/w/images/c/ce/cpu_tng.pdf 
     as of May 2016 and modifications should be made with caution. """
-    from util import simParams
+    from ..util import simParams
 
     # config
     sPs = []
@@ -670,7 +670,7 @@ def plotCpuTimes():
 
 def plotTimebins():
     """ Plot analysis of timebins throughout the course of a run. """
-    from util import simParams
+    from ..util import simParams
 
     # run config and load/parse
     saveBase = expanduser('~') + '/timebins_%s.pdf'
@@ -812,7 +812,7 @@ def plotTimebins():
 
 def plotTimebinsFrame(pStyle='white', conf=0, timesteps=None):
     """ Plot analysis of timebins at one timestep. """
-    from util import simParams
+    from ..util import simParams
 
     # run config and load/parse
     barWidth = 0.4

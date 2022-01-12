@@ -7,14 +7,14 @@ import illustris_python as il
 import copy
 from os.path import isfile, isdir
 from os import mkdir
-from util.helper import closest
+from ..util.helper import closest
 
 # --- snapshot configuration & spacing ---
 
 def redshiftToSnapNum(redshifts=None, sP=None):
     """ Convert one or more input redshifts to closest matching snapshot numbers for a given sP. """
-    from util.helper import closest
-    from load.snapshot import subboxVals
+    from ..util.helper import closest
+    from ..load.snapshot import subboxVals
 
     assert sP is not None, "Must input sP."
 
@@ -93,7 +93,7 @@ def redshiftToSnapNum(redshifts=None, sP=None):
 def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=False,
                   reqTr=False, reqFluidQuants=False):
     """ Return a list of all snapshot numbers which exist. """
-    from util.helper import evenlySample, closest, contiguousIntSubsets
+    from ..util.helper import evenlySample, closest, contiguousIntSubsets
     if reqFluidQuants: assert reqTr
 
     if minRedshift is None:
@@ -233,7 +233,7 @@ def multiRunMatchedSnapList(runList, method='expand', **kwargs):
 
 def snapNumToRedshift(sP, snap=None, time=False, all=False):
     """ Convert snapshot number(s) to redshift or time (scale factor). """
-    from load.snapshot import subboxVals
+    from ..load.snapshot import subboxVals
 
     if not all and snap is None:
         snap = sP.snap
@@ -276,8 +276,8 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
     for TNG_method runs, or postprocessing/SubhaloMatchingToDark/ for Illustris/TNG to DMO runs, or 
     postprocessing/SubhaloMatchingToIllustris/ for TNG->Illustris runs.
     Return is an int32 array of the same size as input, where -1 indicates no match. """
-    from tracer.tracerMC import match3
-    from util.simParams import simParams
+    from ..tracer.tracerMC import match3
+    from ..util.simParams import simParams
 
     assert method in ['LHaloTree','SubLink','Lagrange','Positional','PositionalAll']
     assert sP_from != sP_to
@@ -827,8 +827,8 @@ def subboxSubhaloCat(sP, sbNum):
     """ Generate/return the SubboxSubhaloList catalog giving the intersection of fullbox subhalos 
     with the subbox volumes across time, using the merger trees, and some interpolated properties 
     of relevant subhalos at each subbox snapshot. """
-    from cosmo.mergertree import loadMPBs
-    from util.simParams import simParams
+    from ..cosmo.mergertree import loadMPBs
+    from ..util.simParams import simParams
     from scipy import interpolate
 
     minEdgeDistRedshifts = [100.0, 6.0, 4.0, 3.0, 2.0, 1.0, 0.0]
@@ -1015,9 +1015,9 @@ def subboxSubhaloCat(sP, sbNum):
 def subboxSubhaloCatExtend(sP, sbNum, redo=False):
     """ Extend the SubboxSubhaloList catalog with particle-level interpolated properties (i.e. M* < 30pkpc) of 
     the relevant subhalos at each subbox snapshot. Separated into second step since this is a heavy calculation, restartable. """
-    from cosmo.mergertree import loadMPBs
-    from util.simParams import simParams
-    from util.treeSearch import calcQuantReduction, buildFullTree
+    from ..cosmo.mergertree import loadMPBs
+    from ..util.simParams import simParams
+    from ..util.treeSearch import calcQuantReduction, buildFullTree
 
     fileBase = sP.postPath + '/SubboxSubhaloList/'
     filePath = fileBase + 'subbox%d_%d.hdf5' % (sbNum, sP.snap)

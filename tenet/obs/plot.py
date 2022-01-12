@@ -11,10 +11,10 @@ import json
 from datetime import datetime
 
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from obs.sdss import _indivSavePath, loadSDSSSpectrum, load_obs, mockSpectraAuxcatName, percentiles
-from plot.config import *
+from ..obs.sdss import _indivSavePath, loadSDSSSpectrum, load_obs, mockSpectraAuxcatName, percentiles
+from ..plot.config import *
 
-from load.data import loadSDSSFits
+from ..load.data import loadSDSSFits
 from matplotlib.backends.backend_pdf import PdfPages
 
 def plotSingleResult(ind, sps=None, doSim=None):
@@ -231,9 +231,9 @@ def plotMultiSpectra(doSim, simInds, sdssInds):
 
 def talkPlots():
     """ Quick driver (plots for Ringberg17 talk). """
-    from util.simParams import simParams
-    from tracer.tracerMC import match3
-    from cosmo.util import cenSatSubhaloIndices
+    from ..util.simParams import simParams
+    from ..tracer.tracerMC import match3
+    from ..cosmo.util import cenSatSubhaloIndices
     from prospect.sources import CSPSpecBasis
 
     singleInds = np.arange(300,400,20) # central #

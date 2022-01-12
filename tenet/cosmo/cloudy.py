@@ -10,8 +10,8 @@ from functools import partial
 from os.path import isfile, isdir, getsize
 from os import mkdir, remove
 
-from cosmo import hydrogen
-from util.helper import closest, iterable, logZeroNaN, rootPath
+from ..cosmo import hydrogen
+from ..util.helper import closest, iterable, logZeroNaN, rootPath
 
 basePath = rootPath + "tables/cloudy/"
 
@@ -159,7 +159,7 @@ def _loadExternalUVB(redshifts=None, hm12=False, puchwein18=False):
     if puchwein18:
         filePath = rootPath + '/data/puchwein/p18.uvb.txt'
 
-    from util.simParams import simParams
+    from ..util.simParams import simParams
     sP = simParams(res=1820,run='tng') # for units
 
     # make sure fields is not a single element
@@ -1262,7 +1262,7 @@ class cloudyEmission():
 
         # take into account dust-depletion of this species (i.e. taking it out of the gas phase)
         if dustDepletion:
-            from load.data import decia2018
+            from ..load.data import decia2018
             assert element == 'Mg' # can generalize in the future
 
             gasphase_frac_Si = decia2018()['gasphase_frac_Si']

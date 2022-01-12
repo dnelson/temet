@@ -6,12 +6,12 @@ import h5py
 from os.path import isfile, isdir
 from os import mkdir
 
-from load.data import werk2013, johnson2015, berg2019, chen2018zahedy2019
-from cosmo.util import redshiftToSnapNum
-from vis.common import getHsmlForPartType
-from util.sphMap import sphMap
-from util.helper import logZeroNaN, closest, iterable, reportMemory
-from cosmo.cloudy import cloudyIon
+from ..load.data import werk2013, johnson2015, berg2019, chen2018zahedy2019
+from ..cosmo.util import redshiftToSnapNum
+from ..vis.common import getHsmlForPartType
+from ..util.sphMap import sphMap
+from ..util.helper import logZeroNaN, closest, iterable, reportMemory
+from ..cosmo.cloudy import cloudyIon
 
 def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
     """ Get a matched sample of simulated galaxies which match an observational abs. line dataset. """

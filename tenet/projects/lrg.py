@@ -14,26 +14,26 @@ from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
 from os.path import isfile
 
-from util import simParams
-from util.helper import running_median, logZeroNaN, loadColorTable
-from util.voronoi import voronoiThresholdSegmentation
-from load.data import werk2013, berg2019, chen2018zahedy2019
-from cosmo.util import subboxSubhaloCat
-from plot.config import *
-from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
-from plot.cosmoGeneral import quantMedianVsSecondQuant
-from tracer.tracerMC import match3, globalAllTracersTimeEvo
-from tracer import tracerEvo
-from vis.halo import renderSingleHalo
-from vis.box import renderBox
-from projects.oxygen import obsSimMatchedGalaxySamples, obsColumnsDataPlot, obsColumnsDataPlotExtended, \
+from ..util import simParams
+from ..util.helper import running_median, logZeroNaN, loadColorTable
+from ..util.voronoi import voronoiThresholdSegmentation
+from ..load.data import werk2013, berg2019, chen2018zahedy2019
+from ..cosmo.util import subboxSubhaloCat
+from ..plot.config import *
+from ..plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
+from ..plot.cosmoGeneral import quantMedianVsSecondQuant
+from ..tracer.tracerMC import match3, globalAllTracersTimeEvo
+from ..tracer import tracerEvo
+from ..vis.halo import renderSingleHalo
+from ..vis.box import renderBox
+from ..projects.oxygen import obsSimMatchedGalaxySamples, obsColumnsDataPlot, obsColumnsDataPlotExtended, \
                             ionTwoPointCorrelation, totalIonMassVsHaloMass, stackedRadialProfiles, obsColumnsLambdaVsR
 
 def radialResolutionProfiles(sPs, saveName, redshift=0.5, cenSatSelect='cen', 
                              radRelToVirRad=False, haloMassBins=None, stellarMassBins=None):
     """ Plot average/stacked radial gas cellsize profiles in stellar mass bins. Specify one of 
     haloMassBins or stellarMassBins. If radRelToVirRad, then [r/rvir] instead of [pkpc]. """
-    from tracer.tracerMC import match3
+    from ..tracer.tracerMC import match3
 
     # config
     percs = [10,90]
@@ -839,7 +839,7 @@ def lrgHaloVisResolution(sP, haloIDs, sPs_other):
     """ Visualization: one halo, for four different resolution runs. """
 
     # cross match
-    from cosmo.util import crossMatchSubhalosBetweenRuns
+    from ..cosmo.util import crossMatchSubhalosBetweenRuns
 
     subIDs = [sP.halos('GroupFirstSub')[haloIDs]]
 
@@ -886,7 +886,7 @@ def lrgHaloVisResolution(sP, haloIDs, sPs_other):
 
 def _shrinking_center(sP, xyz, frac_stop=0.1, drop_frac_per_iter=0.05):
     """ Shrinking center algorithm: iteratively search for a center position given a [N,3] coordinate set. """
-    from util.helper import periodicDistsN
+    from ..util.helper import periodicDistsN
 
     # starting state
     mask = np.zeros(xyz.shape[0], dtype='int16') + 1
@@ -1938,7 +1938,7 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None, posOnly=False):
 
 def clumpPropertiesVsHaloMass(sPs):
     """ Run segmentation on a flat mass-selection of halos, plot clump properties / abundance vs halo mass. """
-    from vis.halo import selectHalosFromMassBins
+    from ..vis.halo import selectHalosFromMassBins
 
     # limits tailored to resolution convergence (showing all runs)
     lims = {'size'     : [0, 15.0],   # linear pkpc
@@ -2708,5 +2708,5 @@ def paperPlots():
         ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthreshs, sPs2=sPs2, radRelToVirRad=False, fullDepth=True)
 
         # helper: curve of growth for MgII
-        from plot.cloudy import curveOfGrowth
+        from ..plot.cloudy import curveOfGrowth
         curveOfGrowth(lineName='MgII2803')

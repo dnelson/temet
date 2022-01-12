@@ -7,7 +7,7 @@ import astropy.io.fits as pyfits
 from os.path import expanduser
 from scipy.integrate import cumtrapz
 
-from util.helper import rootPath, closest
+from ..util.helper import rootPath, closest
 
 basePath = rootPath + "tables/xray/"
 
@@ -79,7 +79,7 @@ def integrate_to_common_grid(bins_in, cont_in, bins_out):
 
 def apec_convert_tables():
     """ Load APEC tables (currently v3.0.9) and convert to a more suitable format for later use. """
-    from util.units import units
+    from ..util.units import units
 
     base = expanduser("~") + '/code/atomdb/'
     path_line = base + 'apec_line.fits'
@@ -470,10 +470,10 @@ class xrayEmission():
 
 def plotXrayEmissivities():
     """ Debug plots of the x-ray emissivity table trends with (z,band,T,Z). """
-    from util import simParams
+    from ..util import simParams
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
-    from util.helper import contourf, evenlySample, sampleColorTable
+    from ..util.helper import contourf, evenlySample, sampleColorTable
 
     # plot config
     emis_range = [-25.7,-21.8] # log erg cm^3 s^-1
@@ -656,8 +656,8 @@ def plotXrayEmissivities():
 
 def compare_tables_single_cell():
     """ Debugging: compare XSPEC-based and APEC_based tables, for single cell results. """
-    from util.helper import plothist, plotxy
-    from util.simParams import simParams
+    from ..util.helper import plothist, plotxy
+    from ..util.simParams import simParams
 
     # config
     sP = simParams(run='tng100-1', redshift=0.0)
@@ -719,8 +719,8 @@ def compare_tables_single_cell():
 
 def compare_tables():
     """ Debugging: compare XSPEC-based and APEC-based tables. """
-    from util.helper import plothist, plotxy
-    from util.simParams import simParams
+    from ..util.helper import plothist, plotxy
+    from ..util.simParams import simParams
 
     # config
     sP = simParams(run='tng100-1', redshift=0.0)
