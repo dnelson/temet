@@ -168,12 +168,125 @@ class simParams:
     winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=TNG Model, 3=Auriga model)
 
     def __init__(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None, 
-                       haloInd=None, subhaloInd=None, refPos=None, refVel=None):
+                       haloInd=None, subhaloInd=None, refPos=None, refVel=None, path=None,
+                       name = None):
         """ Fill parameters based on inputs. """
+
         self.basePath = path.expanduser("~") + '/'
 
         if getpass.getuser() == 'wwwrun': # freyator
             self.basePath = '/u/dnelson/'
+
+        if path is not None:
+            # Deduce parameters from simulation path
+            self.scan_simulation(path, name=name)
+        else:
+            # old, hardcoded lookup based on given **kwargs.
+            self.lookup_simulation(res=res, run=run, variant=variant, redshift=redshift, snap=snap, hInd=hInd,
+                                   haloInd=haloInd, subhaloInd=subhaloInd, refPos=refPos, refVel=refVel)
+        # attach various functions pre-specialized to this sP, for convenience
+        from ..cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicPairwiseDists, \
+            periodicDistsSq, \
+            validSnapList, cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs, \
+            correctPeriodicPosBoxWrap
+        from ..cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs, \
+            inverseMapPartIndicesToHaloIDs
+        from ..load.snapshot import snapshotSubset, snapshotHeader, snapshotSubsetParallel, snapHasField, \
+            snapFields, snapNumChunks, \
+            snapPath, snapConfigVars, snapParameterVars, subboxVals, haloOrSubhaloSubset, \
+            snapshotSubsetLoadIndicesChunked
+        from ..load.auxcat import auxCat
+        from ..load.groupcat import groupCat, groupCatSingle, groupCatHeader, \
+            gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, groupCatHasField, groupCatFields, \
+            groupCat_subhalos, groupCat_halos, groupCatSingle_subhalo, groupCatSingle_halo
+        from ..cosmo.mergertree import loadMPB, loadMDB, loadMPBs
+        from ..plot.quantities import simSubhaloQuantity, simParticleQuantity
+        from ..util.helper import periodicDistsN, periodicDistsIndexed
+
+        # cosmo helpers
+        self.redshiftToSnapNum = partial(redshiftToSnapNum, sP=self)
+        self.snapNumToRedshift = partial(snapNumToRedshift, self)
+        self.periodicDists = partial(periodicDists, sP=self)
+        self.periodicDistsSq = partial(periodicDistsSq, sP=self)
+        self.periodicPairwiseDists = partial(periodicPairwiseDists, sP=self)
+        self.periodicDistsN = partial(periodicDistsN, BoxSize=self.boxSize)
+        self.periodicDistsIndexed = partial(periodicDistsIndexed, BoxSize=self.boxSize)
+        self.validSnapList = partial(validSnapList, sP=self)
+
+        # loading
+        self.simSubhaloQuantity = partial(simSubhaloQuantity, self)
+        self.simParticleQuantity = partial(simParticleQuantity, self)
+
+        self.snapshotSubsetC = partial(snapshotSubsetLoadIndicesChunked, self)
+        self.snapshotSubsetP = partial(snapshotSubsetParallel, self)
+        self.snapshotSubset = partial(snapshotSubset, self)
+        self.snapshotHeader = partial(snapshotHeader, sP=self)
+        self.snapHasField = partial(snapHasField, self)
+        self.snapFields = partial(snapFields, self)
+        self.snapNumChunks = partial(snapNumChunks, self.simPath)
+        self.snapConfigVars = partial(snapConfigVars, self)
+        self.snapParameterVars = partial(snapParameterVars, self)
+        self.snapPath = partial(snapPath, self.simPath)
+        self.subboxVals = partial(subboxVals, self.subbox)
+        self.gcPath = partial(gcPath, self.simPath)
+        self.groupCatSingle = partial(groupCatSingle, sP=self)
+        self.groupCatHeader = partial(groupCatHeader, sP=self)
+        self.groupCatNumChunks = partial(groupCatNumChunks, self.simPath)
+        self.groupCatHasField = partial(groupCatHasField, self)
+        self.groupCatFields = partial(groupCatFields, self)
+        self.groupCat = partial(groupCat, sP=self)
+        self.auxCat = partial(auxCat, self)
+        self.loadMPB = partial(loadMPB, self)
+        self.loadMDB = partial(loadMDB, self)
+        self.loadMPBs = partial(loadMPBs, self)
+
+        # loading shortcuts
+        self.subhalos = partial(groupCat_subhalos, self)
+        self.halos = partial(groupCat_halos, self)
+        self.groups = partial(groupCat_halos, self)
+        self.subhalo = partial(groupCatSingle_subhalo, self)
+        self.halo = partial(groupCatSingle_halo, self)
+        self.group = partial(groupCatSingle_halo, self)
+
+        self.gas = partial(snapshotSubsetParallel, self, 'gas')
+        self.dm = partial(snapshotSubsetParallel, self, 'dm')
+        self.stars = partial(snapshotSubsetParallel, self, 'stars')
+        self.bhs = partial(snapshotSubsetParallel, self, 'bhs')
+        self.blackholes = partial(snapshotSubsetParallel, self, 'bhs')
+        self.tracers = partial(snapshotSubsetParallel, self, 'tracerMC')
+
+        # helpers
+        self.cenSatSubhaloIndices = partial(cenSatSubhaloIndices, sP=self)
+        self.correctPeriodicDistVecs = partial(correctPeriodicDistVecs, sP=self)
+        self.correctPeriodicPosVecs = partial(correctPeriodicPosVecs, sP=self)
+        self.correctPeriodicPosBoxWrap = partial(correctPeriodicPosBoxWrap, sP=self)
+        self.groupCatOffsetListIntoSnap = partial(groupCatOffsetListIntoSnap, self)
+        self.haloOrSubhaloSubset = partial(haloOrSubhaloSubset, self)
+
+        self.subhaloIDListToBoundingPartIndices = partial(subhaloIDListToBoundingPartIndices, self)
+        self.inverseMapPartIndicesToSubhaloIDs = partial(inverseMapPartIndicesToSubhaloIDs, self)
+        self.inverseMapPartIndicesToHaloIDs = partial(inverseMapPartIndicesToHaloIDs, self)
+
+        # if redshift passed in, convert to snapshot number and save, and attach units(z)
+        self.setRedshift(self.redshift)
+        self.setSnap(self.snap)
+
+    def scan_simulation(self, path, name=None):
+        self.arepoPath = path
+        self.simPath   = self.arepoPath + 'output/'
+        self.derivPath = self.arepoPath + 'data.files/'
+        self.postPath  = self.arepoPath + 'postprocessing/'
+        self.plotPath  = self.basePath + 'plots/'
+
+        self.simName = name
+        if name is None:
+            self.simName    = path.rstrip("/").split("/")[-1]
+
+
+    def lookup_simulation(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None,
+                                   haloInd=None, subhaloInd=None, refPos=None, refVel=None):
+        """ Fill parameters based on inputs. (hardcoded)"""
+
 
         # general validation
         if not run:
@@ -905,89 +1018,6 @@ class simParams:
             self.simName += '_sb' + str(sbNum)
             self.groupOrdered = False
 
-        # attach various functions pre-specialized to this sP, for convenience
-        from ..cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicPairwiseDists, periodicDistsSq, \
-                               validSnapList, cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs, \
-                               correctPeriodicPosBoxWrap
-        from ..cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
-        from ..load.snapshot import snapshotSubset, snapshotHeader, snapshotSubsetParallel, snapHasField, snapFields, snapNumChunks, \
-                                  snapPath, snapConfigVars, snapParameterVars, subboxVals, haloOrSubhaloSubset, \
-                                  snapshotSubsetLoadIndicesChunked
-        from ..load.auxcat import auxCat
-        from ..load.groupcat import groupCat, groupCatSingle, groupCatHeader, \
-                                  gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, groupCatHasField, groupCatFields, \
-                                  groupCat_subhalos, groupCat_halos, groupCatSingle_subhalo, groupCatSingle_halo
-        from ..cosmo.mergertree import loadMPB, loadMDB, loadMPBs
-        from ..plot.quantities import simSubhaloQuantity, simParticleQuantity
-        from ..util.helper import periodicDistsN, periodicDistsIndexed
-
-        # cosmo helpers
-        self.redshiftToSnapNum     = partial(redshiftToSnapNum, sP=self)
-        self.snapNumToRedshift     = partial(snapNumToRedshift, self)
-        self.periodicDists         = partial(periodicDists, sP=self)
-        self.periodicDistsSq       = partial(periodicDistsSq, sP=self)
-        self.periodicPairwiseDists = partial(periodicPairwiseDists, sP=self)
-        self.periodicDistsN        = partial(periodicDistsN, BoxSize=self.boxSize)
-        self.periodicDistsIndexed  = partial(periodicDistsIndexed, BoxSize=self.boxSize)
-        self.validSnapList         = partial(validSnapList, sP=self)
-
-        # loading
-        self.simSubhaloQuantity  = partial(simSubhaloQuantity, self)
-        self.simParticleQuantity = partial(simParticleQuantity, self)
-
-        self.snapshotSubsetC    = partial(snapshotSubsetLoadIndicesChunked, self)
-        self.snapshotSubsetP    = partial(snapshotSubsetParallel, self)
-        self.snapshotSubset     = partial(snapshotSubset, self)
-        self.snapshotHeader     = partial(snapshotHeader, sP=self)
-        self.snapHasField       = partial(snapHasField, self)
-        self.snapFields         = partial(snapFields, self)
-        self.snapNumChunks      = partial(snapNumChunks, self.simPath)
-        self.snapConfigVars     = partial(snapConfigVars, self)
-        self.snapParameterVars  = partial(snapParameterVars, self)
-        self.snapPath           = partial(snapPath, self.simPath)
-        self.subboxVals         = partial(subboxVals, self.subbox)
-        self.gcPath             = partial(gcPath, self.simPath)
-        self.groupCatSingle     = partial(groupCatSingle, sP=self)
-        self.groupCatHeader     = partial(groupCatHeader, sP=self)
-        self.groupCatNumChunks  = partial(groupCatNumChunks, self.simPath)
-        self.groupCatHasField   = partial(groupCatHasField, self)
-        self.groupCatFields     = partial(groupCatFields, self)
-        self.groupCat           = partial(groupCat, sP=self)
-        self.auxCat             = partial(auxCat, self)
-        self.loadMPB            = partial(loadMPB, self)
-        self.loadMDB            = partial(loadMDB, self)
-        self.loadMPBs           = partial(loadMPBs, self)
-
-        # loading shortcuts
-        self.subhalos           = partial(groupCat_subhalos, self)
-        self.halos              = partial(groupCat_halos, self)
-        self.groups             = partial(groupCat_halos, self)
-        self.subhalo            = partial(groupCatSingle_subhalo, self)
-        self.halo               = partial(groupCatSingle_halo, self)
-        self.group              = partial(groupCatSingle_halo, self)
-
-        self.gas                = partial(snapshotSubsetParallel, self, 'gas')
-        self.dm                 = partial(snapshotSubsetParallel, self, 'dm')
-        self.stars              = partial(snapshotSubsetParallel, self, 'stars')
-        self.bhs                = partial(snapshotSubsetParallel, self, 'bhs')
-        self.blackholes         = partial(snapshotSubsetParallel, self, 'bhs')
-        self.tracers            = partial(snapshotSubsetParallel, self, 'tracerMC')
-
-        # helpers
-        self.cenSatSubhaloIndices       = partial(cenSatSubhaloIndices, sP=self)
-        self.correctPeriodicDistVecs    = partial(correctPeriodicDistVecs, sP=self)
-        self.correctPeriodicPosVecs     = partial(correctPeriodicPosVecs, sP=self)
-        self.correctPeriodicPosBoxWrap  = partial(correctPeriodicPosBoxWrap, sP=self)
-        self.groupCatOffsetListIntoSnap = partial(groupCatOffsetListIntoSnap, self)
-        self.haloOrSubhaloSubset        = partial(haloOrSubhaloSubset, self)
-
-        self.subhaloIDListToBoundingPartIndices = partial(subhaloIDListToBoundingPartIndices, self)
-        self.inverseMapPartIndicesToSubhaloIDs = partial(inverseMapPartIndicesToSubhaloIDs, self)
-        self.inverseMapPartIndicesToHaloIDs = partial(inverseMapPartIndicesToHaloIDs, self)
-        
-        # if redshift passed in, convert to snapshot number and save, and attach units(z)
-        self.setRedshift(self.redshift)
-        self.setSnap(self.snap)
 
     def auxCatSplit(self, field, nThreads=1):
         """ Automatically do a pSplit auxCat calculation. """
