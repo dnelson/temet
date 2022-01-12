@@ -18,3 +18,4 @@ scipy
 astro-sedpy
 astro-prospector
 reproject
+illustris_python @ git+https://github.com/cbyrohl/illustris_python@master
