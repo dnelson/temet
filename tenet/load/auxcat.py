@@ -9,6 +9,7 @@ from os.path import isfile, isdir
 from os import mkdir, unlink
 from getpass import getuser
 
+from .snapshot import snapshotHeader
 from ..util.helper import iterable, curRepoVersion
 
 # generative functions

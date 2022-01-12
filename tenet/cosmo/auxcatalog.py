@@ -403,7 +403,7 @@ def _radialRestriction(sP, nSubsTot, rad):
 
     assert radSqMax is not None, 'Unrecognized [%s] rad specification.' % rad
     assert radSqMax.size == nSubsTot or (radSqMax.size == nSubsTot*2 and radSqMax.ndim == 2)
-    assert radSqMin.size == nSubsTot or (radSqMIn.size == nSubsTot*2 and radSqMin.ndim == 2)
+    assert radSqMin.size == nSubsTot or (radSqMin.size == nSubsTot*2 and radSqMin.ndim == 2)
 
     return radRestrictIn2D, radSqMin, radSqMax, slit_code
 

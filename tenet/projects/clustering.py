@@ -427,8 +427,8 @@ def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
 def paperPlots():
     """ Construct all the final plots for the paper. """
     from ..util import simParams
-    import plot.config
-    plot.config.clean = True
+    global clean
+    clean = True  # from plot.config
 
     L75   = simParams(res=1820,run='tng',redshift=0.0)
     L205  = simParams(res=2500,run='tng',redshift=0.0)

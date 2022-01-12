@@ -8,6 +8,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 from os.path import isfile, expanduser
 from scipy.signal import savgol_filter
 
+from .cosmoGeneral import addRedshiftAxis
+from ..cosmo.util import snapNumToRedshift
 from ..util import simParams
 from ..util.helper import running_median, logZeroNaN
 from ..plot.config import *

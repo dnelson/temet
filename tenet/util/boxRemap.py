@@ -3,6 +3,7 @@ Implementation of 'a volume and local structure preserving mapping of periodic b
 """
 import numpy as np
 from numba import jit
+from math import fmod
 from ..util.helper import closest
 
 class Plane:
@@ -14,7 +15,7 @@ class Plane:
 
     def normal(self):
         ell = np.sqrt(self.a**2 + self.b**2 + self.c**2)
-        return [self.a/e11, self.b/e11, self.c/e11]
+        return [self.a/ell, self.b/ell, self.c/ell]
 
     def test(self, x, y, z):
         # point-plane comparison: is positive, negative, or zero depending on if point is above, below, or on the plane

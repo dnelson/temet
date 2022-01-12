@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 from ..cosmo.kCorr import kCorrections, coeff
 
 # dictionary of band name -> SubhaloStellarPhotometrics[:,i] index i (currently same for all sims, otherwise move into sP)
+from ..util import simParams
+
 gfmBands = {'U':0, 'B':1, 'V':2, 'K':3,
             'g':4, 'r':5, 'i':6, 'z':7}
 

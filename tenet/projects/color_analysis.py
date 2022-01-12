@@ -11,6 +11,7 @@ import time
 from os.path import isfile, expanduser
 from glob import glob
 
+from ..cosmo.color import loadSimGalColors, calcSDSSColors
 from ..util.helper import leastsq_fit, least_squares_fit
 from ..plot.config import defSimColorModel
 from ..plot.quantities import bandMagRange
