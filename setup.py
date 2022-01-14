@@ -8,7 +8,7 @@ setup(
                       "healpy","llvmlite","matplotlib","numba","numpy",
                       "psutil","requests","requests-oauthlib","scipy",
                       "astro-sedpy","astro-prospector","reproject",
-                      "scikit-image","importlib_resources",
+                      "scikit-image",
                       "illustris_python @ git+https://github.com/cbyrohl/illustris_python@master",
                       ],
 )

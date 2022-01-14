@@ -4,17 +4,19 @@ Load external data files (observational points, etc) as well as AREPO .txt diagn
 import numpy as np
 import h5py
 import glob
+import os
 from os.path import isfile, expanduser
 from scipy import interpolate
 from scipy.signal import savgol_filter
 from collections import OrderedDict
-from importlib_resources import files, as_file
+from pathlib import Path
 
 from ..util.helper import evenlySample, running_median
 
 logOHp12_solar = 8.69 # Asplund+ (2009) Table 1
 
-dataBasePath = expanduser("~") + '/python/data/'
+dataBasePath = os.path.join(Path(__file__).parent.parent.absolute(),"data/")
+print(dataBasePath)
 
 
 def behrooziSMHM(sP, logHaloMass=None, redshift=0.1):
@@ -468,10 +470,10 @@ def mowla2019():
 
 def baldry2008SMF():
     """ Load observational data points from Baldry+ (2008). """
-    source = files('tenet.data').joinpath('baldry/gsmf-BGD08.txt')
-    with as_file(source) as f:
-        # Columns: log stellar mass (bin center), Ngal, ndens (/Mpc^3/dex), Poisson error, min n, max n
-        data = np.loadtxt(f)
+    path = dataBasePath + 'baldry/gsmf-BGD08.txt'
+
+    # Columns: log stellar mass (bin center), Ngal, ndens (/Mpc^3/dex), Poisson error, min n, max n
+    data = np.loadtxt(path)
 
     r = { 'stellarMass' : data[:,0],
           'numDens'     : data[:,2],
@@ -486,11 +488,11 @@ def baldry2008SMF():
 
 def baldry2012SMF():
     """ Load observational data points from Baldry+ (2012). """
-    source = files('tenet.data').joinpath('baldry/gsmf-B12.txt')
-    with as_file(source) as f:
-        # Columns: log mass, bin width, num dens, error, number in sample
-        # number density is per dex per 10^3 Mpc^3, assuming H0=70 km/s/Mpc
-        data = np.loadtxt(f)
+    path = dataBasePath + 'baldry/gsmf-B12.txt'
+
+    # Columns: log mass, bin width, num dens, error, number in sample
+    # number density is per dex per 10^3 Mpc^3, assuming H0=70 km/s/Mpc
+    data = np.loadtxt(path)
 
     r = { 'stellarMass' : data[:,0],
           'numDens'     : data[:,2] * 1e-3,
@@ -536,16 +538,15 @@ def liWhite2009SMF(little_h=0.704):
 def bernardi2013SMF():
     """ Load observational data points from Bernardi+ (2013). """
     models = ['Ser','SerExp','Ser_Simard','cmodel']
-    sources = [files('tenet.data').joinpath('bernardi/MsF_' + m + '.dat') for m in models]
+    paths = [dataBasePath + 'bernardi/MsF_' + m + '.dat' for m in models]
 
     # Columns: stellar mass (log msun), num dens (all), err, num dens (Ell), err, num dens (S0), err, 
     #          num dens (Sab), err, num dens (Scd), err
     # number densities are in log10( Mpc^-3 dex^-1 )
     r = {}
 
-    for i, source in enumerate(sources):
-        with as_file(source) as f:
-            data = np.loadtxt(f)
+    for i, path in enumerate(paths):
+        data = np.loadtxt(path)
         r[models[i]] = { 'stellarMass' : data[:,0], 
                          'numDens'     : 10.0**data[:,1],
                          'errorUp'     : 10.0**(data[:,1]+data[:,2]) - 10.0**data[:,1],
@@ -556,10 +557,10 @@ def bernardi2013SMF():
 
 def dsouza2015SMF():
     """ Load observational data points from D'Souza+ (2015) Fig 7. """
-    source = files('tenet.data').joinpath('dsouza/ds2015_fig7.txt')
-    with as_file(source) as f:
-        # columns: log10(M_star*h^2), log10(Phi/h^3 / Mpc^3 / log10(Mstar)), y_err
-        data = np.loadtxt(f,delimiter=',')
+    path = dataBasePath + 'dsouza/ds2015_fig7.txt'
+
+    # columns: log10(M_star*h^2), log10(Phi/h^3 / Mpc^3 / log10(Mstar)), y_err
+    data = np.loadtxt(path,delimiter=',')
 
     little_h = 0.72
 
