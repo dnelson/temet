@@ -283,13 +283,20 @@ class simParams:
     def scan_simulation(self, arepoPath, simName=None):
         self.arepoPath = arepoPath
         self.simPath   = os.path.join(self.arepoPath, 'output/')
+        derivPath = os.path.join(self.arepoPath, 'data.files/')
         writable = os.access(self.arepoPath, os.W_OK)
-        if writable: 
-            self.derivPath = os.path.join(self.arepoPath, 'data.files/')
+        if writable or (os.path.isdir(derivPath) and os.access(derivPath, os.W_OK)): 
+            # Either we want to be able to create a cache folder in the arepoPath
+            # or at least being able for an existing cache folder
+            self.derivPath = derivPath
         else:
+            # otherwise we create a new cache folder in the home folder of the user
             hsh = hash_path(self.arepoPath,length=8)
             self.derivPath = os.path.join(os.path.expanduser("~/tenetdata/"),hsh,"data.files")
-            Path(self.derivPath).mkdir(parents=True, exist_ok=True)
+            p = Path(self.derivPath)
+            p.mkdir(parents=True, exist_ok=True)
+            with open(os.path.join(p.parent,"simpath.txt"), 'w') as f:
+                f.write(self.arepoPath)
 
         self.postPath  = os.path.join(self.arepoPath, 'postprocessing/')
         self.plotPath  = os.path.join(self.basePath, 'plots/')
