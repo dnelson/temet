@@ -42,7 +42,15 @@ with this toolkit.
     :maxdepth: 1
     :caption: Reference
 
-    source/modules
+    source/tenet.ICs
+    source/tenet.cosmo
+    source/tenet.load
+    source/tenet.obs
+    source/tenet.plot
+    source/tenet.projects
+    source/tenet.tracer
+    source/tenet.util
+    source/tenet.vis
 
 
 Citation and Acknowledgment

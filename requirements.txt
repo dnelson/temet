@@ -19,4 +19,4 @@ astro-sedpy
 astro-prospector
 reproject
 scikit-image
-illustris_python @ git+https://github.com/cbyrohl/illustris_python@master
+illustris_python @ git+https://github.com/illustristng/illustris_python@master

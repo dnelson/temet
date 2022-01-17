@@ -1,19 +1,66 @@
 Installation
 ============
 
-In the future a ``pip install`` option will exist, but for now, manual installation is required.
+If the automatic (pip based) install doesn't work below, you may need to follow some of the manual steps.
 
-Manual Installation
--------------------
 
-The following steps will install this package and get the environment set up on a typical cluster environment, for instance the MPCDF machines (freya, isaac, draco, raven, virgo, and so on). 
+Python Environment
+------------------
 
-1. Clone the repository into your home directory, here into a ``python`` directory
+If you don't yet have a working python installation/environment, then e.g. on the MPCDF machines (vera, freya, isaac, raven, virgo, and so on) you can:
+
+1. Set up a clean anaconda environment:
+
+.. code-block:: bash
+
+    module load anaconda/3/2019.03
+    mkdir -p ~/.local/envs
+    conda create --prefix=~/.local/envs/myenv python=3.9
+    source activate ~/.local/envs/myenv
+
+2. Add the following lines to your ``~/.bashrc`` file for permanence
+
+.. code-block:: bash
+
+    module load intel/19.0.5
+    module load impi/2019.5
+    module load fftw/3.3.8
+    module load hdf5-serial/1.8.21
+    module load gsl/2.4
+
+    module load anaconda/3/2019.03
+    source activate ~/.local/envs/myenv
+    export PATH=$HOME/.local/envs/myenv/bin/:$PATH
+
+
+Automatic Installation
+----------------------
+
+1. Clone the repository into your home directory, here into a ``tenet`` directory
 
 .. code-block:: bash
 
     cd ~
-    git clone git@github.com:dnelson86/python.git
+    git clone git@github.com:dnelson86/tenet.git
+
+2. Install the package in 'editable' mode, meaning that the files in this directory are not copied anywhere, but are used as is. Any changes you make here are reflected (i.e. usable) in your python environment.
+
+.. code-block:: bash
+
+    pip install -e tenet
+
+
+Manual Installation
+-------------------
+
+If the above didn't work or gave errors, you may need to go through a manual installation:
+
+1. Clone the repository into your home directory, here into a ``tenet`` directory
+
+.. code-block:: bash
+
+    cd ~
+    git clone git@github.com:dnelson86/tenet.git
 
 2. Clone the public Illustris data analysis python scripts
 
@@ -28,44 +75,20 @@ For example, add the following lines to your ``~/.bashrc`` file
 
 .. code-block:: bash
 
-    export PYTHONPATH+=:$HOME/python/:$HOME/illustris_release/
-    export PYTHONSTARTUP=$HOME/python/.startup.py
+    export PYTHONPATH+=:$HOME/tenet/:$HOME/illustris_release/
 
-4. Load or install python (3.6+, 3.9.x recommended). For example, on the MPCDF machines, using a clean anaconda
-
-.. code-block:: bash
-
-    module load anaconda/3/2019.03
-    mkdir -p ~/.local/envs
-    conda create --prefix=~/.local/envs/myenv python=3.9
-    source activate ~/.local/envs/myenv
-
-and add the following lines to your ``~/.bashrc`` file for permanence
+4. Install all python dependencies as required
 
 .. code-block:: bash
 
-    module load intel/19.0.5
-    module load impi/2019.5
-    module load fftw/3.3.8
-    module load hdf5-serial/intel-18.0/1.8.21
-    module load gsl/2.4
-
-    module load anaconda/3/2019.03
-    source activate ~/.local/envs/myenv
-    export PATH=$HOME/.local/envs/myenv/bin/:$PATH
-
-5. Install all python dependencies as required
-
-.. code-block:: bash
-
-    pip install --user -r ~/python/requirements.txt
+    pip install --user -r ~/tenet/requirements.txt
 
 6. Point ``matplotlib`` to the default settings file
 
 .. code-block:: bash
 
     mkdir -p ~/.config/matplotlib
-    ln -s ~/python/matplotlibrc ~/.config/matplotlib/
+    ln -s ~/tenet/tenet/matplotlibrc ~/.config/matplotlib/
 
 and install the Roboto font used by default
 
@@ -80,8 +103,8 @@ and install the Roboto font used by default
 
 .. code-block:: bash
 
-    cd ~/python/tables/
-    wget -r -nH --cut-dirs=2 --no-parent --reject="index.html*" -e robots=off www.tng-project.org/files/dnelson_tables/
+    cd ~/tenet/tenet/tables/
+    wget -r -nH --cut-dirs=2 --no-parent --reject="index.html*" -e robots=off tenet.tng-project.org/tables/
 
 8. Organize simulation directories as follows
 
@@ -99,8 +122,8 @@ note that the last two lines create symlinks to the actual output directory wher
 Replace as needed with the actual path on your machine.
 
 
-Installation (continued)
-------------------------
+Manual Installation (continued)
+-------------------------------
 
 Several external tools and post-processing codes are used, for specific analysis routines. 
 The following additional installation steps are therefore optional, depending on application.

@@ -82,6 +82,8 @@ napoleon_numpy_docstring = False
 
 autodoc_member_order = 'bysource'
 
+add_module_names = False
+
 def setup(app):
     app.add_css_file('style.css')
     app.add_directive('exec', ExecDirective)

@@ -16,7 +16,6 @@ from ..util.helper import evenlySample, running_median
 logOHp12_solar = 8.69 # Asplund+ (2009) Table 1
 
 dataBasePath = os.path.join(Path(__file__).parent.parent.absolute(),"data/")
-print(dataBasePath)
 
 
 def behrooziSMHM(sP, logHaloMass=None, redshift=0.1):

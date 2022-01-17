@@ -1,10 +1,16 @@
 First Steps Walkthrough
 =======================
 
+Start by importing the library
+
+.. code-block:: python
+
+    import tenet
+
 Simulation Selection
 --------------------
 
-Most analysis is based around a "simulation parameters" object (typically called ``sP``), which 
+Most analysis is based around a "simulation parameters" object (typically called ``sP`` or ``sim``), which 
 specifies the simulation and snapshot of interest, among other details.
 
 Loading Data
@@ -15,7 +21,7 @@ command-line ``ipython`` session, or a Jupyter notebook, and
 
 .. code-block:: python
 
-    sP = simParams(res=910, run='tng', redshift=2.0)
+    sP = tenet.sim(res=910, run='tng', redshift=2.0)
 
     subs = sP.groupCat(fieldsSubhalos=['SubhaloMass','SubhaloPos'])
     sub_masses_logmsun = sP.units.codeMassToLogMsun( subs['SubhaloMass'] )
@@ -29,7 +35,7 @@ for example
 
 .. code-block:: python
 
-    sP = simParams(run='tng50-1', redshift=0.0)
+    sP = tenet.sim(run='tng50-1', redshift=0.0)
 
     subs = sP.subhalos('mstar_30pkpc')
     x = sP.gas('cellsize_kpc')
@@ -50,7 +56,7 @@ and stellar mass, the "mass-metallicity relation" (MZR).
 
 .. code-block:: python
 
-    sP = simParams(run='tng100-1', redshift=0.0)
+    sP = tenet.sim(run='tng100-1', redshift=0.0)
 
     plot.cosmoGeneral.quantMedianVsSecondQuant(sP, 'Z_gas', 'mstar_30pkpc')
 
@@ -63,7 +69,7 @@ We can enrich the plot in a number of ways, both by tweaking minor aesthetic opt
 additional information from the simulation. For example, we will shift the x-axis bounds, and also 
 include individual subhalos as colored points, coloring based on gas fraction::
 
-    sP = simParams(run='tng100-1', redshift=0.0)
+    sP = tenet.sim(run='tng100-1', redshift=0.0)
 
     plot.cosmoGeneral.quantMedianVsSecondQuant(sP, 'Z_gas', 'mstar_30pkpc', 
       xlim=[8.0, 11.5], scatterColor='fgas2')

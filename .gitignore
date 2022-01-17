@@ -1,10 +1,12 @@
 __pycache__
-docs/_build/
-docs/source/
+tenet/docs/_build/
+tenet/docs/source/
 .pyc
 .so
 .ipynb_checkpoints
+.startup.py
 illustris_website
 illustris_python
 illustris_idl
 misc
+tenet.egg-info
