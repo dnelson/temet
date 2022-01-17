@@ -56,6 +56,6 @@ setup(
                       "psutil","requests","requests-oauthlib","scipy",
                       "astro-sedpy","astro-prospector","reproject",
                       "scikit-image",
-                      "illustris_python",# @ git+https://github.com/illustristng/illustris_python@master",
+                      "illustris_python @ git+https://github.com/illustristng/illustris_python@master",
                       ],
 )

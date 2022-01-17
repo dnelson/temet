@@ -2162,278 +2162,278 @@ def paperPlots():
         pdf.close()
 
     # figure 2, 2x2 grid of different 2D color PDFs, TNG100 vs SDSS
-    #if 0:
-    #    simRedshift = 0.0
-    #    sPs = [L75]
-    #    dust = dust_C
+    if 0:
+        simRedshift = 0.0
+        sPs = [L75]
+        dust = dust_C
 
-    #    pdf = PdfPages('figure2_%s_%s_noK.pdf' % (sPs[0].simName,dust))
-    #    galaxyColor2DPDFs(sPs, pdf, simColorsModel=dust, simRedshift=simRedshift)
-    #    pdf.close()
+        pdf = PdfPages('figure2_%s_%s_noK.pdf' % (sPs[0].simName,dust))
+        galaxyColor2DPDFs(sPs, pdf, simColorsModel=dust, simRedshift=simRedshift)
+        pdf.close()
 
     # figure 3, stellar ages and metallicities vs mstar (2x1 in a row)
-    #if 0:
-    #    sPs = [L75, L205] # L75FP
-    #    simRedshift = 0.1
-    #    sdssFiberFits = False
+    if 0:
+        sPs = [L75, L205] # L75FP
+        simRedshift = 0.1
+        sdssFiberFits = False
 
-    #    pdf = PdfPages('figure3a_stellarAges_%s.pdf' % '_'.join([sP.simName for sP in sPs]))
-    #    plot.globalComp.stellarAges(sPs, pdf, simRedshift=simRedshift, sdssFiberFits=sdssFiberFits, centralsOnly=True)
-    #    pdf.close()
-    #    pdf = PdfPages('figure3b_massMetallicityStars_%s.pdf' % '_'.join([sP.simName for sP in sPs]))
-    #    plot.globalComp.massMetallicityStars(sPs, pdf, sdssFiberFits=sdssFiberFits, simRedshift=simRedshift)
-    #    pdf.close()
+        pdf = PdfPages('figure3a_stellarAges_%s.pdf' % '_'.join([sP.simName for sP in sPs]))
+        plot.globalComp.stellarAges(sPs, pdf, simRedshift=simRedshift, sdssFiberFits=sdssFiberFits, centralsOnly=True)
+        pdf.close()
+        pdf = PdfPages('figure3b_massMetallicityStars_%s.pdf' % '_'.join([sP.simName for sP in sPs]))
+        plot.globalComp.massMetallicityStars(sPs, pdf, sdssFiberFits=sdssFiberFits, simRedshift=simRedshift)
+        pdf.close()
 
     # figure 4: double gaussian fits, [peak/scatter vs Mstar] 2-panel
-    #if 0:
-    #    L75.setRedshift(0.0)
-    #    sPs = [L75]
-    #    colorMassPlaneFitSummary(sPs)
-    #    #for sP in sPs: colorMassPlaneFits(sP)
+    if 0:
+        L75.setRedshift(0.0)
+        sPs = [L75]
+        colorMassPlaneFitSummary(sPs)
+        #for sP in sPs: colorMassPlaneFits(sP)
 
     # figure 5: fullbox demonstratrion projections
-    #if 0:
-    #    # render each fullbox image used in the composite
-    #    for part in [0,1,2,3,4]:
-    #        vis.boxDrivers.TNG_colorFlagshipBoxImage(part=part)
+    if 0:
+        # render each fullbox image used in the composite
+        for part in [0,1,2,3,4]:
+            vis.boxDrivers.TNG_colorFlagshipBoxImage(part=part)
 
     # figure 6, grid of L205_cen 2d color histos vs. several properties (2x3)
-    #if 0:
-    #    sP = L205
-    #    figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
-    #    yQuant = 'color_C_gr'
-    #    params = {'cenSatSelect':'cen', 'cStatistic':'median_nan'}
+    if 0:
+        sP = L205
+        figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
+        yQuant = 'color_C_gr'
+        params = {'cenSatSelect':'cen', 'cStatistic':'median_nan'}
 
-    #    pdf = PdfPages('figure6_%s.pdf' % sP.simName)
-    #    fig = plt.figure(figsize=figsize_loc)
-    #    quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='ssfr', fig_subplot=[fig,321], **params)
-    #    quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Z_gas', fig_subplot=[fig,322], **params)
-    #    quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='fgas2', fig_subplot=[fig,323], **params)
-    #    quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='stellarage', fig_subplot=[fig,324], **params)
-    #    quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='bmag_2rhalf_masswt', fig_subplot=[fig,325], **params)
-    #    quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='pratio_halo_masswt', fig_subplot=[fig,326], **params)
-    #    pdf.close()
+        pdf = PdfPages('figure6_%s.pdf' % sP.simName)
+        fig = plt.figure(figsize=figsize_loc)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='ssfr', fig_subplot=[fig,321], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Z_gas', fig_subplot=[fig,322], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='fgas2', fig_subplot=[fig,323], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='stellarage', fig_subplot=[fig,324], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='bmag_2rhalf_masswt', fig_subplot=[fig,325], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='pratio_halo_masswt', fig_subplot=[fig,326], **params)
+        pdf.close()
 
     # figure 7: slice through 2d histo (one property)
-    #if 0:
-    #    sPs = [L75, L205]
-    #    xQuant = 'color_C_gr'
-    #    sQuant = 'mstar2_log'
-    #    sRange = [10.4,10.6]
-    #    css = 'cen'
-    #    quant = 'pratio_halo_masswt'
+    if 0:
+        sPs = [L75, L205]
+        xQuant = 'color_C_gr'
+        sQuant = 'mstar2_log'
+        sRange = [10.4,10.6]
+        css = 'cen'
+        quant = 'pratio_halo_masswt'
 
-    #    pdf = PdfPages('figure7_%s_slice_%s_%s-%.1f-%.1f_%s.pdf' % \
-    #        ('_'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
-    #    quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[quant], sQuant=sQuant,
-    #                 sRange=sRange, cenSatSelect=css)
-    #    pdf.close()
+        pdf = PdfPages('figure7_%s_slice_%s_%s-%.1f-%.1f_%s.pdf' % \
+            ('_'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
+        quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[quant], sQuant=sQuant,
+                     sRange=sRange, cenSatSelect=css)
+        pdf.close()
 
     # figure 8: BH cumegy vs mstar, model line on top (eddington transition to low-state?)
-    #if 0:
-    #    sPs = [L75, L205]
-    #    xQuant = 'mstar2_log'
-    #    yQuant = 'BH_CumEgy_ratioInv'
-    #    css = 'cen'
+    if 0:
+        sPs = [L75, L205]
+        xQuant = 'mstar2_log'
+        yQuant = 'BH_CumEgy_ratioInv'
+        css = 'cen'
 
-    #    def _add_theory_line(ax):
-    #        """ Special case: yQuant == BH_CumEgy_ratio add theory curve on top from BH model. """
-    #        # NOTE: moved here later, may need additional inputs (sP, cenSatSelect, ...) to work
-    #        # make a second y-axis on the right
-    #        color2 = '#999999'
+        def _add_theory_line(ax):
+            """ Special case: yQuant == BH_CumEgy_ratio add theory curve on top from BH model. """
+            # NOTE: moved here later, may need additional inputs (sP, cenSatSelect, ...) to work
+            # make a second y-axis on the right
+            color2 = '#999999'
 
-    #        ax2 = ax.twinx()
-    #        ax2.set_ylim([8e-5, 0.12])
-    #        ax2.set_yscale('log')
+            ax2 = ax.twinx()
+            ax2.set_ylim([8e-5, 0.12])
+            ax2.set_yscale('log')
 
-    #        #ax2.set_ylabel('BH Low State Transition Threshold ($\chi$)', color=color2)
-    #        ax2.set_ylabel('Blackhole Accretion Rate / Eddington Rate', color=color2)
-    #        ax2.tick_params('y', which='both', colors=color2)
+            #ax2.set_ylabel('BH Low State Transition Threshold ($\chi$)', color=color2)
+            ax2.set_ylabel('Blackhole Accretion Rate / Eddington Rate', color=color2)
+            ax2.tick_params('y', which='both', colors=color2)
 
-    #        # need median M_BH as a function of x-axis (e.g. M_star)
-    #        for bhIterNum, bhRedshift in enumerate([0.0]):
-    #            # more than 1 redshift
-    #            sP_loc = sP.copy()
-    #            sP_loc.setRedshift(bhRedshift)
+            # need median M_BH as a function of x-axis (e.g. M_star)
+            for bhIterNum, bhRedshift in enumerate([0.0]):
+                # more than 1 redshift
+                sP_loc = sP.copy()
+                sP_loc.setRedshift(bhRedshift)
 
-    #            sim_x_loc, _, _, take_log2 = sP_loc.simSubhaloQuantity(xQuant, clean)
-    #            if take_log2: sim_x_loc = logZeroNaN(sim_x_loc) # match
+                sim_x_loc, _, _, take_log2 = sP_loc.simSubhaloQuantity(xQuant, clean)
+                if take_log2: sim_x_loc = logZeroNaN(sim_x_loc) # match
 
-    #            # same filters as above
-    #            wSelect = sP_loc.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
-    #            sim_x_loc = sim_x_loc[wSelect]
+                # same filters as above
+                wSelect = sP_loc.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
+                sim_x_loc = sim_x_loc[wSelect]
 
-    #            for bhPropNum, bhPropName in enumerate(['BH_mass','BH_Mdot_edd']):
-    #                sim_m_bh, _, _, take_log2 = sP_loc.simSubhaloQuantity(bhPropName, clean)
-    #                if not take_log2: sim_m_bh = 10.0**sim_m_bh # undo log then
+                for bhPropNum, bhPropName in enumerate(['BH_mass','BH_Mdot_edd']):
+                    sim_m_bh, _, _, take_log2 = sP_loc.simSubhaloQuantity(bhPropName, clean)
+                    if not take_log2: sim_m_bh = 10.0**sim_m_bh # undo log then
 
-    #                # same filters as above
-    #                sim_m_bh = sim_m_bh[wSelect]
+                    # same filters as above
+                    sim_m_bh = sim_m_bh[wSelect]
 
-    #                wFinite = np.isfinite(sim_x_loc) & np.isfinite(sim_m_bh)
-    #                sim_x_loc2 = sim_x_loc[wFinite]
-    #                sim_m_bh = sim_m_bh[wFinite]
+                    wFinite = np.isfinite(sim_x_loc) & np.isfinite(sim_m_bh)
+                    sim_x_loc2 = sim_x_loc[wFinite]
+                    sim_m_bh = sim_m_bh[wFinite]
 
-    #                xm_bh, ym_bh, _ = running_median(sim_x_loc2,sim_m_bh,binSize=binSize*2,skipZeros=True)
-    #                ym_bh = savgol_filter(ym_bh,sKn,sKo)
-    #                w = np.where( (ym_bh > 0.0) ) #& (xm_bh > xMinMax[0]) & (xm_bh < xMinMax[1]))
-    #                xm_bh = xm_bh[w]
-    #                ym_bh = ym_bh[w]
+                    xm_bh, ym_bh, _ = running_median(sim_x_loc2,sim_m_bh,binSize=binSize*2,skipZeros=True)
+                    ym_bh = savgol_filter(ym_bh,sKn,sKo)
+                    w = np.where( (ym_bh > 0.0) ) #& (xm_bh > xMinMax[0]) & (xm_bh < xMinMax[1]))
+                    xm_bh = xm_bh[w]
+                    ym_bh = ym_bh[w]
 
-    #                # derive eddington ratio transition as a function of x-axis (e.g. M_star)
-    #                linestyle = '-' if (bhIterNum == 0 and bhPropNum == 0) else ':'
-    #                if bhPropName == 'BH_mass':
-    #                    ym_bh = sP.units.BH_chi(ym_bh)
+                    # derive eddington ratio transition as a function of x-axis (e.g. M_star)
+                    linestyle = '-' if (bhIterNum == 0 and bhPropNum == 0) else ':'
+                    if bhPropName == 'BH_mass':
+                        ym_bh = sP.units.BH_chi(ym_bh)
 
-    #                ax2.plot( xm_bh, ym_bh, linestyle=linestyle, lw=lw, color=color2)
+                    ax2.plot( xm_bh, ym_bh, linestyle=linestyle, lw=lw, color=color2)
 
-    #        ax.set_xlim(xMinMax) # fix
-    #        legendLoc = 'lower right'
+            ax.set_xlim(xMinMax) # fix
+            legendLoc = 'lower right'
 
-    #    pdf = PdfPages('figure8_medianTrend_%s_%s-%s_%s.pdf' % \
-    #        ('_'.join([sP.simName for sP in sPs]),xQuant,yQuant,css))
-    #    quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
-    #        f_post=_add_theory_line)
-    #    pdf.close()
+        pdf = PdfPages('figure8_medianTrend_%s_%s-%s_%s.pdf' % \
+            ('_'.join([sP.simName for sP in sPs]),xQuant,yQuant,css))
+        quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
+            f_post=_add_theory_line)
+        pdf.close()
 
     # figure 9: flux arrows in color-mass plane (9c unused)
-    #if 0:
-    #    sP = L205
-    #    dust = dust_C
-    #    css = 'cen'
-    #    minCount = 1
-    #    toRedshift = 0.3
+    if 0:
+        sP = L205
+        dust = dust_C
+        css = 'cen'
+        minCount = 1
+        toRedshift = 0.3
 
-    #    arrowMethod = 'arrow'
-    #    pdf = PdfPages('figure9a_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
-    #        (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
-    #    colorFluxArrows2DEvo(sP, pdf, bands=bands, toRedshift=toRedshift, cenSatSelect=css,
-    #                         minCount=minCount, simColorsModel=dust, arrowMethod=arrowMethod)
-    #    pdf.close()
+        arrowMethod = 'arrow'
+        pdf = PdfPages('figure9a_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
+            (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
+        colorFluxArrows2DEvo(sP, pdf, bands=bands, toRedshift=toRedshift, cenSatSelect=css,
+                             minCount=minCount, simColorsModel=dust, arrowMethod=arrowMethod)
+        pdf.close()
 
-    #    arrowMethod = 'stream'
-    #    pdf = PdfPages('figure9b_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
-    #        (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
-    #    colorFluxArrows2DEvo(sP, pdf, bands=bands, toRedshift=toRedshift, cenSatSelect=css,
-    #                         minCount=minCount, simColorsModel=dust, arrowMethod='stream')
-    #    pdf.close()
+        arrowMethod = 'stream'
+        pdf = PdfPages('figure9b_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
+            (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
+        colorFluxArrows2DEvo(sP, pdf, bands=bands, toRedshift=toRedshift, cenSatSelect=css,
+                             minCount=minCount, simColorsModel=dust, arrowMethod='stream')
+        pdf.close()
 
-    #    arrowMethod = 'stream_mass'
-    #    pdf = PdfPages('figure9c_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
-    #        (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
-    #    colorFluxArrows2DEvo(sP, pdf, bands=bands, toRedshift=toRedshift, cenSatSelect=css,
-    #                         minCount=minCount, simColorsModel=dust, arrowMethod=arrowMethod)
-    #    pdf.close()
+        arrowMethod = 'stream_mass'
+        pdf = PdfPages('figure9c_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
+            (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
+        colorFluxArrows2DEvo(sP, pdf, bands=bands, toRedshift=toRedshift, cenSatSelect=css,
+                             minCount=minCount, simColorsModel=dust, arrowMethod=arrowMethod)
+        pdf.close()
 
     # figure 10: timescale histogram for color transition
     # figure 11: distribution of initial M* when entering red sequence (crossing color cut) (Q1)
     # figure 12: as a function of M*ini, the Delta_M* from t_{red,ini} to z=0 (Q2)
     # figure 13: as a function of M*(z=0), the t_{red,ini} PDF (Q3)
-    #if 0:
-    #    sPs = [L75,L205]
-    #    simColorsModel = dust_C #'p07c_cf00dust_rad30pkpc' # Br
-    #    colorTransitionTimescale(sPs, bands=bands, simColorsModel=simColorsModel)
+    if 0:
+        sPs = [L75,L205]
+        simColorsModel = dust_C #'p07c_cf00dust_rad30pkpc' # Br
+        colorTransitionTimescale(sPs, bands=bands, simColorsModel=simColorsModel)
 
     # figures 14-15: stellar image stamps of galaxies (red/blue samples)
-    #if 0:
-    #    from ..vis.haloDrivers import tngFlagship_galaxyStellarRedBlue
-    #    tngFlagship_galaxyStellarRedBlue(evo=False, redSample=1)
-    #    tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=1)
+    if 0:
+        from ..vis.haloDrivers import tngFlagship_galaxyStellarRedBlue
+        tngFlagship_galaxyStellarRedBlue(evo=False, redSample=1)
+        tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=1)
 
     # figure 16: schematic / few N characteristic evolutionary tracks through color-mass 2d plane
-    #if 0:
-    #    colorTracksSchematic(L75, bands=bands)
-    #    #for pageNum in range(0,340):
-    #    #    colorTracksSchematic(L75, bands=bands, pageNum=pageNum)
+    if 0:
+        colorTracksSchematic(L75, bands=bands)
+        #for pageNum in range(0,340):
+        #    colorTracksSchematic(L75, bands=bands, pageNum=pageNum)
 
     # appendix figure 1, viewing angle variation (1 panel)
-    #if 0:
-    #    viewingAngleVariation()
+    if 0:
+        viewingAngleVariation()
 
     # appendix figure 2, dust model dependence (1x3 1D histos in a column)
-    #if 0:
-    #    sPs = [L75]
-    #    dusts = [dust_D, dust_C_all, dust_C, dust_B, dust_A]
-    #    massBins = ( [9.5,10.0], [10.0,10.5], [10.5,11.0] )
+    if 0:
+        sPs = [L75]
+        dusts = [dust_D, dust_C_all, dust_C, dust_B, dust_A]
+        massBins = ( [9.5,10.0], [10.0,10.5], [10.5,11.0] )
 
-    #    pdf = PdfPages('appendix2.pdf')
-    #    galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=dusts, stellarMassBins=massBins)
-    #    pdf.close()
+        pdf = PdfPages('appendix2.pdf')
+        galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=dusts, stellarMassBins=massBins)
+        pdf.close()
 
     # appendix figure 3, resolution convergence (1x3 1D histos in a column)
-    #if 0:
-    #    L75n910 = simParams(res=910,run='tng',redshift=0.0)
-    #    L75n455 = simParams(res=455,run='tng',redshift=0.0)
-    #    sPs = [L75, L75n910, L75n455]
-    #    dust = dust_C_all
-    #    massBins = ( [9.5,10.0], [10.0,10.5], [10.5,11.0] )
+    if 0:
+        L75n910 = simParams(res=910,run='tng',redshift=0.0)
+        L75n455 = simParams(res=455,run='tng',redshift=0.0)
+        sPs = [L75, L75n910, L75n455]
+        dust = dust_C_all
+        massBins = ( [9.5,10.0], [10.0,10.5], [10.5,11.0] )
 
-    #    pdf = PdfPages('appendix3_%s.pdf' % dust)
-    #    galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=[dust], stellarMassBins=massBins)
-    #    pdf.close()
+        pdf = PdfPages('appendix3_%s.pdf' % dust)
+        galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=[dust], stellarMassBins=massBins)
+        pdf.close()
 
     # appendix figure X, 2d density histos (3x1 in a row) all_L75, cen_L75, cen_L205
-    #if 0:
-    #    figsize_loc = [figsize[0]*3*0.7, figsize[1]*1*0.75]
+    if 0:
+        figsize_loc = [figsize[0]*3*0.7, figsize[1]*1*0.75]
 
-    #    pdf = PdfPages('appendix4.pdf')
-    #    fig = plt.figure(figsize=figsize_loc)
-    #    quantHisto2D(L75, pdf, bands, cenSatSelect='all', cQuant=None, fig_subplot=[fig,131])
-    #    quantHisto2D(L75, pdf, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132])
-    #    quantHisto2D(L205, pdf, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133])
-    #    pdf.close()
+        pdf = PdfPages('appendix4.pdf')
+        fig = plt.figure(figsize=figsize_loc)
+        quantHisto2D(L75, pdf, bands, cenSatSelect='all', cQuant=None, fig_subplot=[fig,131])
+        quantHisto2D(L75, pdf, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132])
+        quantHisto2D(L205, pdf, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133])
+        pdf.close()
 
     # supplemental figures:
     # ---------------------
-    #if 0:
-    #    # 6 other properties, 2d histos
-    #    sP = L205
-    #    figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
-    #    yQuant = 'color_C_gr'
-    #    params = {'cenSatSelect':'cen', 'cStatistic':'median_nan'}
+    if 0:
+        # 6 other properties, 2d histos
+        sP = L205
+        figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
+        yQuant = 'color_C_gr'
+        params = {'cenSatSelect':'cen', 'cStatistic':'median_nan'}
 
-    #    pdf = PdfPages('supp1_%s.pdf' % sP.simName)
-    #    fig = plt.figure(figsize=figsize_loc)
-    #    quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='surfdens1_stars', fig_subplot=[fig,321], **params)
-    #    quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Z_stars', fig_subplot=[fig,322], **params)
-    #    quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Krot_oriented_stars2', fig_subplot=[fig,323], **params)
-    #    quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Krot_oriented_gas2', fig_subplot=[fig,324], **params)
-    #    quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='xray_r500', fig_subplot=[fig,325], **params)
-    #    quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='size_stars', fig_subplot=[fig,326], **params)
-    #    pdf.close()
+        pdf = PdfPages('supp1_%s.pdf' % sP.simName)
+        fig = plt.figure(figsize=figsize_loc)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='surfdens1_stars', fig_subplot=[fig,321], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Z_stars', fig_subplot=[fig,322], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Krot_oriented_stars2', fig_subplot=[fig,323], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Krot_oriented_gas2', fig_subplot=[fig,324], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='xray_r500', fig_subplot=[fig,325], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='size_stars', fig_subplot=[fig,326], **params)
+        pdf.close()
 
-    #if 0:
-    #    # slices of other properties, pratio components
-    #    sPs = [L75, L205]
-    #    xQuant = 'color_C_gr'
-    #    sQuant = 'mstar2_log'
-    #    sRange = [10.4,10.6]
-    #    css = 'cen'
-    #    quants = ['ptot_gas_halo','ptot_b_halo','ssfr','fgas2','Z_gas','Z_stars','bmag_2rhalf_masswt',
-    #              'surfdens1_stars','surfdens2_stars','Krot_oriented_stars2','Krot_oriented_gas2',
-    #              'xray_r500','size_stars']
+    if 0:
+        # slices of other properties, pratio components
+        sPs = [L75, L205]
+        xQuant = 'color_C_gr'
+        sQuant = 'mstar2_log'
+        sRange = [10.4,10.6]
+        css = 'cen'
+        quants = ['ptot_gas_halo','ptot_b_halo','ssfr','fgas2','Z_gas','Z_stars','bmag_2rhalf_masswt',
+                  'surfdens1_stars','surfdens2_stars','Krot_oriented_stars2','Krot_oriented_gas2',
+                  'xray_r500','size_stars']
 
-    #    for quant in quants:
-    #        pdf = PdfPages('supp2_%s_slice_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
-    #            ('_'.join([sP.simName for sP in sPs]),quant,xQuant,sQuant,sRange[0],sRange[1],css))
-    #        quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[quant], sQuant=sQuant,
-    #                     sRange=sRange, cenSatSelect=css)
-    #        pdf.close()
+        for quant in quants:
+            pdf = PdfPages('supp2_%s_slice_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
+                ('_'.join([sP.simName for sP in sPs]),quant,xQuant,sQuant,sRange[0],sRange[1],css))
+            quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[quant], sQuant=sQuant,
+                         sRange=sRange, cenSatSelect=css)
+            pdf.close()
 
-    #if 0:
-    #    # star formation main sequence
-    #    sP = L205
-    #    figsize_loc = [figsize[0]*1*0.8, figsize[1]*2*0.7]
-    #    params = {'cenSatSelect':'cen', 'cStatistic':'median_nan'}
+    if 0:
+        # star formation main sequence
+        sP = L205
+        figsize_loc = [figsize[0]*1*0.8, figsize[1]*2*0.7]
+        params = {'cenSatSelect':'cen', 'cStatistic':'median_nan'}
 
-    #    pdf = PdfPages('supp3_%s.pdf' % sP.simName)
-    #    fig = plt.figure(figsize=figsize_loc)
-    #    quantHisto2D(sP, pdf, yQuant='ssfr', cQuant=None, fig_subplot=[fig,211], **params)
-    #    quantHisto2D(sP, pdf, yQuant='ssfr', cQuant='color_C_gr', fig_subplot=[fig,212], **params)
-    #    pdf.close()
+        pdf = PdfPages('supp3_%s.pdf' % sP.simName)
+        fig = plt.figure(figsize=figsize_loc)
+        quantHisto2D(sP, pdf, yQuant='ssfr', cQuant=None, fig_subplot=[fig,211], **params)
+        quantHisto2D(sP, pdf, yQuant='ssfr', cQuant='color_C_gr', fig_subplot=[fig,212], **params)
+        pdf.close()
 
-    #if 0:
-    #    # individual galaxy time evolution tracks, matched TNG <-> Illustris, multiple quantities
-    #    from ..plot.compareTwoHalos import illustrisVsTNG_RedEvoComp
-    #    for candInd in range(10):
-    #        illustrisVsTNG_RedEvoComp(candInd=candInd)
+    if 0:
+        # individual galaxy time evolution tracks, matched TNG <-> Illustris, multiple quantities
+        from ..plot.compareTwoHalos import illustrisVsTNG_RedEvoComp
+        for candInd in range(10):
+            illustrisVsTNG_RedEvoComp(candInd=candInd)
