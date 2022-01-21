@@ -33,7 +33,7 @@ def redshiftToSnapNum(redshifts=None, sP=None):
 
     # load from file if it exists, otherwise create
     r = {}
-    saveFilename = sP.derivPath + sbStr1 + 'snapnum.redshift.hdf5'
+    saveFilename = sP.derivPath + 'snapnum.' + sbStr1 + 'redshift.hdf5'
 
     if not isdir(sP.derivPath):
         mkdir(sP.derivPath)
@@ -243,7 +243,7 @@ def snapNumToRedshift(sP, snap=None, time=False, all=False):
 
     # load snapshot -> redshift mapping files
     r = {}
-    saveFilename = sP.derivPath + sbStr1 + 'snapnum.redshift.hdf5'
+    saveFilename = sP.derivPath + 'snapnum.' + sbStr1 + 'redshift.hdf5'
 
     if not isfile(saveFilename):
         # redshiftToSnapNum() not yet run, do it now

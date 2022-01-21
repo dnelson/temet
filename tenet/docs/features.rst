@@ -150,15 +150,39 @@ Functionality for creating "mock" or "synthetic" observations of certain types i
 * Stellar light and dust emission, using SKIRT radiative transfer postprocessing.
 
 
-simParams
----------
+Known Simulation Families
+-------------------------
 
-Testing.
+A few suites of simulations (those available on the MPCDF storage systems) are 'known' and can be selected 
+by name. In this case metadata and other important attributes are hardcoded in 
+:mod:`simParams <tenet.util.simParams>`. Currently, the simulation families specified in this way are:
 
-.. automodule:: util.simParams
-   :noindex:
+* Illustris
+    * Illustris-1, Illustris-2, Illustris-3, Illustris-1-Dark, Illustris-2-Dark, Illustris-3-Dark, Illustris-2-NR, Illustris-3-NR
 
-.. autoclass:: util.simParams.simParams
-   :noindex:
-   :members:
-   :undoc-members:
+* TNG100
+    * TNG100-1, TNG100-2, TNG100-3, TNG100-1-Dark, TNG100-2-Dark, TNG100-3-Dark
+
+* TNG300
+    * TNG300-1, TNG300-2, TNG300-3, TNG300-1-Dark, TNG300-2-Dark, TNG300-3-Dark
+
+* TNG50
+    * TNG50-1, TNG50-2, TNG50-3, TNG50-4, TNG50-1-Dark, TNG50-2-Dark, TNG50-3-Dark, TNG50-4-Dark
+
+* TNG variations
+    * L25n512_{xxxx}, L25n256_{xxxx}, L25n128_{xxxx} where `variant={xxxx}` gives the 4-digit variation number.
+
+* EAGLE
+    * Eagle100, Eagle100-Dark (rewritten versions)
+
+* Millennium
+    * Millennium-1, Millennium-2 (rewritten versions)
+
+* TNG-Cluster
+    * TNG-Cluster, TNG-Cluster-Dark
+
+* Auriga
+    * Au{h}_L{r}, Au{h}_L{r}_DM where `hInd={h}` gives the halo ID, and `res={r}` gives the resolution level.
+
+* TNG zooms
+    * TNG50_zoom, TNG100_zoom, TNG_zoom where `hInd` gives the haloID, and `res` gives the resolution.
