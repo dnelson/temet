@@ -1777,7 +1777,6 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     assert normCol
                     assert nChunks == 1
                     lineName = partField.replace('EW_','')
-                    f, gamma, wave0, ion_amu, ion_mass = _line_params(lineName)
 
                     cell_temp = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', indRange=indRange) # K
                     
@@ -1789,9 +1788,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
                     # create spectra and derive EW (per ray) at the same time
                     instrument = 'idealized'
-                    result = create_spectra_from_traced_rays(sP, f, gamma, wave0, ion_mass, instrument, 
-                                                             rays_off, rays_len, rays_dl, rays_inds,
-                                                             mass, cell_temp, cell_vellos, reduceToEW=True)
+                    _, _, result = create_spectra_from_traced_rays(sP, lineName, instrument, 
+                                                                   rays_off, rays_len, rays_dl, rays_inds,
+                                                                   mass, cell_temp, cell_vellos)
 
                     grid_d = result.reshape(nPixels).T
                     grid_q = np.zeros(nPixels, dtype='float32') # dummy

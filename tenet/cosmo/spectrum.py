@@ -7,7 +7,10 @@ import h5py
 from os.path import isfile, expanduser
 import matplotlib.pyplot as plt
 from scipy.special import wofz
+
 from numba import jit
+from numba.extending import get_cython_function_address
+import ctypes
 
 from ..plot.config import *
 from ..util import units
@@ -31,6 +34,8 @@ lines = {'LyA'       : {'f':0.4164,   'gamma':4.49e8,  'wave0':1215.670,  'ion':
          'MgII 2796' : {'f':0.3058,   'gamma':.2612e8, 'wave0':2796.3543, 'ion':'Mg II'}}
 
 # instrument characteristics (in Ang)
+# R = lambda/dlambda = c/dv
+# EW_restframe = W_obs / (1+z_abs)
 instruments = {'idealized'  : {'wave_min':1000, 'wave_max':12000, 'dwave':0.1}, # used for EW map vis
                'COS-G130M'  : {'wave_min':1150, 'wave_max':1450, 'dwave':0.01},
                'COS-G140L'  : {'wave_min':1130, 'wave_max':2330, 'dwave':0.08},
@@ -43,19 +48,32 @@ instruments = {'idealized'  : {'wave_min':1000, 'wave_max':12000, 'dwave':0.1}, 
                'MIKE'       : {'wave_min':3350, 'wave_max':9500, 'dwave':0.07}, # approximate only
                'KECK-HIRES' : {'wave_min':3000, 'wave_max':9250, 'dwave':0.04}} # approximate only
 
+# pull out some units for JITed functions
+sP_units_Mpc_in_cm = 3.08568e24
+sP_units_boltzmann = 1.380650e-16
+sP_units_c_km_s = 2.9979e5
+sP_units_c_cgs = 2.9979e10
+sP_units_mass_proton = 1.672622e-24
+
 def _line_params(line):
     """ Return 5-tuple of (f,Gamma,wave0,ion_amu,ion_mass). """
     from ..cosmo.cloudy import cloudyIon
 
-    mass_proton = 1.672622e-24 # cgs
-
     element = lines[line]['ion'].split(' ')[0]
     ion_amu = {el['symbol']:el['mass'] for el in cloudyIon._el}[element]
-    ion_mass = ion_amu * mass_proton # g
+    ion_mass = ion_amu * sP_units_mass_proton # g
 
     return lines[line]['f'], lines[line]['gamma'], lines[line]['wave0'], ion_amu, ion_mass
 
-#@jit(nopython=True, nogil=True, cache=True)
+# cpdef double complex wofz(double complex x0) nogil
+addr = get_cython_function_address("scipy.special.cython_special", "wofz")
+# first argument of CFUNCTYPE() is return type, which is actually 'complex double' but no support for this
+# pass the complex value x0 on the stack as two adjacent double values
+functype = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double, ctypes.c_double) 
+# Note: rather dangerous as the real part isn't strictly guaranteed to be the first 8 bytes
+wofz_complex_fn_realpart = functype(addr)
+
+@jit(nopython=True, nogil=True, cache=False)
 def _voigt0(wave_cm, b, wave0_ang, gamma):
     """ Dimensionless Voigt profile (shape).
 
@@ -65,11 +83,9 @@ def _voigt0(wave_cm, b, wave0_ang, gamma):
       wave0_ang (float): central wavelength of transition in angstroms.
       gamma (float): sum of transition probabilities (Einstein A coefficients).
     """
-    c_cgs = 2.9979e10 # speed of light in [cm/s], moved from ..util.units for JIT
-
-    nu = c_cgs / wave_cm # wave = c/nu
+    nu = sP_units_c_cgs / wave_cm # wave = c/nu
     wave_rest = wave0_ang * 1e-8 # angstrom -> cm
-    nu0 = c_cgs / wave_rest # Hz
+    nu0 = sP_units_c_cgs / wave_rest # Hz
     b_cgs = b * 1e5 # km/s -> cm/s
     dnu = b_cgs / wave_rest # Hz, "doppler width" = sigma/sqrt(2)
 
@@ -77,13 +93,16 @@ def _voigt0(wave_cm, b, wave0_ang, gamma):
     alpha = gamma / (4*np.pi*dnu)
     voigt_u = (nu - nu0) / dnu # z
 
-    # numba wofz: https://github.com/numba/numba/issues/3086
-    voigt_wofz = wofz(voigt_u + 1j*alpha).real # H(alpha,z)
+    # numba wofz issue: https://github.com/numba/numba/issues/3086
+    #voigt_wofz = wofz(voigt_u + 1j*alpha).real # H(alpha,z)
+    voigt_wofz = np.zeros(voigt_u.size, dtype=np.float64)
+    for i in range(voigt_u.size):
+        voigt_wofz[i] = wofz_complex_fn_realpart(voigt_u[i], alpha)
 
     phi_wave = voigt_wofz / b_cgs # s/cm
     return phi_wave
 
-#@jit(nopython=True, nogil=True, cache=True)
+@jit(nopython=True, nogil=True, cache=False)
 def _voigt_tau(wave, N, b, wave0, f, gamma, wave0_rest=None):
     """ Compute optical depth tau as a function of wavelength for a Voigt absorption profile.
 
@@ -110,7 +129,7 @@ def _voigt_tau(wave, N, b, wave0, f, gamma, wave0_rest=None):
     tau_wave = (consts * N * f * wave0_rest_cm) * phi_wave
     return tau_wave
 
-#@jit(nopython=True, nogil=True, cache=True)
+@jit(nopython=True, nogil=True, cache=True)
 def _equiv_width(tau,wave_ang):
     """ Compute the equivalent width by integrating the optical depth array across the given wavelength grid. """
     dang = wave_ang[1] - wave_ang[0]
@@ -218,6 +237,7 @@ def create_master_grid(line=None, instrument=None):
 
     return wave_mid, wave_edges, tau_master
 
+@jit(nopython=True, nogil=True, cache=False)
 def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_eff, debug=False):
     """ Add the absorption profile of a single transition, from a single cell, to a spectrum.
 
@@ -242,7 +262,7 @@ def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_
     dwave_local = 0.01 # ang
     edge_tol = 1e-4 # if the optical depth is larger than this by the edge of the local grid, redo
 
-    b_dwave = b / units.c_km_s * wave0 # v/c = dwave/wave
+    b_dwave = b / sP_units_c_km_s * wave0 # v/c = dwave/wave
 
     # adjust local resolution to make sure we sample narrow lines
     while b_dwave < dwave_local * 4:
@@ -255,14 +275,14 @@ def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_
     # prep local grid
     wave0_obsframe = wave0 * (1 + z_eff)
 
-    line_width_safety = b / units.c_km_s * wave0_obsframe
+    line_width_safety = b / sP_units_c_km_s * wave0_obsframe
 
     dwave_master = wave_edges_master[1] - wave_edges_master[0]
     nloc_per_master = int(np.round(dwave_master / dwave_local))
 
     n_iter = 0
     local_fac = 5.0
-    tau = [np.inf]
+    tau = np.array([np.inf], dtype=np.float64)
 
     while tau[0] > edge_tol or tau[-1] > edge_tol:
         # determine where local grid overlaps with master
@@ -307,7 +327,7 @@ def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_
         tau = _voigt_tau(wave_mid_local, N, b, wave0_obsframe, f, gamma, wave0_rest=wave0)
 
         # iterate and increase wavelength range of local grid if the optical depth at the edges is still large
-        if debug: print(f'{local_fac = }, {tau[0] = :.3g}, {tau[-1] = :.3g}, {edge_tol = }')
+        #if debug: print(f'{local_fac = }, {tau[0] = :.3g}, {tau[-1] = :.3g}, {edge_tol = }')
 
         if n_iter > 100:
             break
@@ -353,7 +373,7 @@ def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_
         tau_local_tot = np.sum(tau * dwave_local)
         tau_master_tot = np.sum(tau_master * dwave_master)
 
-        print(f'{EW_local = :.6f}, {EW_master = :.6f}, {tau_local_tot = :.5f}, {tau_master_tot = :.5f}')
+        #print(f'{EW_local = :.6f}, {EW_master = :.6f}, {tau_local_tot = :.5f}, {tau_master_tot = :.5f}')
 
     if debug:
         # get flux
@@ -460,37 +480,16 @@ def create_spectrum_from_traced_ray(sP, f, gamma, wave0, ion_mass, instrument,
 
     return master_mid, tau_master, z_eff
 
-#@jit(nopython=True, nogil=True, cache=True)
-def create_spectra_from_traced_rays(sP, f, gamma, wave0, ion_mass, instrument,
-                                    rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
-                                    cell_dens, cell_temp, cell_vellos, reduceToEW=False):
-    """ Given many completed rays traced through a volume, in the form of a composite list of 
-    intersected cell pathlengths and indices, extract the physical properties needed (dens, temp, vellos) 
-    and create the final absorption spectrum, depositing a Voigt absorption profile for each cell.
-
-    Args:
-      reduceToEW (bool): if True, compute a single equivalent width for each spectrum and return these values.
-    """
-    nRays = rays_len.size
-
-    # sample master grid
-    master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
-
-    # allocate
-    if reduceToEW:
-        # reduced return
-        EW_master = np.zeros( nRays, dtype=np.float32 )
-    else:
-        # full spectra return
-        tau_allrays = np.zeros( (nRays,tau_master.size), dtype=tau_master.dtype)
-
-    # assign sP.redshift to the front intersectiom (beginning) of the box
-    z_start = sP.redshift
-    z_vals = np.linspace(z_start, z_start+0.1, 200)
-    lengths = sP.units.redshiftToComovingDist(z_vals) - sP.units.redshiftToComovingDist(z_start)
+@jit(nopython=True, nogil=True, cache=False)
+def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
+                                     rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
+                                     cell_dens, cell_temp, cell_vellos, 
+                                     z_vals, z_lengths,
+                                     master_mid, master_edges, tau_master, tau_allrays, EW_master):
+    """ JITed helper (see below). """
 
     # loop over rays
-    for i in range(nRays):
+    for i in range(rays_len.size):
         # get local properties
         nCells = rays_len[i]
 
@@ -506,24 +505,24 @@ def create_spectra_from_traced_rays(sP, f, gamma, wave0, ion_mass, instrument,
         # reset tau_master for each ray
         tau_master *= 0.0
 
-        # cumulative pathlength, Mpc from start of box i.e. start of ray (at z_start)
+        # cumulative pathlength, Mpc from start of box i.e. start of ray (at sP.redshift)
         cum_pathlength = np.zeros(nCells, dtype=np.float32) 
         cum_pathlength[1:] = np.cumsum(master_dx)[:-1] # Mpc
 
         # cosmological redshift of each intersected cell
-        z_cosmo = np.interp(cum_pathlength, lengths, z_vals)
+        z_cosmo = np.interp(cum_pathlength, z_lengths, z_vals)
 
         # doppler shift
-        z_doppler = master_vellos / units.c_km_s
+        z_doppler = master_vellos / sP_units_c_km_s
 
         # effective redshift
         z_eff = (1+z_doppler)*(1+z_cosmo) - 1
 
         # column density
-        N = master_dens * (master_dx * sP.units.Mpc_in_cm) # cm^-2
+        N = master_dens * (master_dx * sP_units_Mpc_in_cm) # cm^-2
 
         # doppler parameter b = sqrt(2kT/m) where m is the particle mass
-        b = np.sqrt(2 * sP.units.boltzmann * master_temp / ion_mass) # cm/s
+        b = np.sqrt(2 * sP_units_boltzmann * master_temp / ion_mass) # cm/s
         b /= 1e5 # km/s
 
         # deposit each intersected cell as an absorption profile onto spectrum
@@ -531,19 +530,58 @@ def create_spectra_from_traced_rays(sP, f, gamma, wave0, ion_mass, instrument,
             #print(f' [{j:3d}] N = {logZeroNaN(N[j]):6.3f} {b[j] = :7.2f} {z_eff[j] = :.6f}')
             deposit_single_line(master_edges, tau_master, f, gamma, wave0, N[j], b[j], z_eff[j])
 
-        # reducing? compute now
-        if reduceToEW:
-            # compute EW and save
-            # note: is currently a global EW, i.e. not localized/restricted to a single absorber
-            EW_master[i] = _equiv_width(tau_master,master_mid)
-        else:
-            # stamp spectrum
-            tau_allrays[i,:] = tau_master
+        # stamp spectrum
+        tau_allrays[i,:] = tau_master
 
-    if reduceToEW:
-        return EW_master
+        # also compute EW and save
+        # note: is currently a global EW, i.e. not localized/restricted to a single absorber
+        EW_master[i] = _equiv_width(tau_master,master_mid)
 
-    return master_mid, tau_allrays
+    return master_mid, tau_allrays, EW_master
+
+def create_spectra_from_traced_rays(sP, line, instrument,
+                                    rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
+                                    cell_dens, cell_temp, cell_vellos):
+    """ Given many completed rays traced through a volume, in the form of a composite list of 
+    intersected cell pathlengths and indices, extract the physical properties needed (dens, temp, vellos) 
+    and create the final absorption spectrum, depositing a Voigt absorption profile for each cell.
+
+    Args:
+      f (float): oscillator strength of the transition
+      gamma (float): sum of transition probabilities (Einstein A coefficients) [1/s]
+      wave0 (float): rest-frame central wavelength of the transition in [ang]
+      ion_mass (float): mass of the species of interest [g]
+      instrument (str): string specifying the instrumental setup.
+      rays_off (array[int]): first entry from tuple return of :py:func:`util.voronoiRay.rayTrace`.
+      rays_len (array[int]): second entry from tuple return of :py:func:`util.voronoiRay.rayTrace`.
+      rays_cell_dl (array[float]): third entry from tuple return of :py:func:`util.voronoiRay.rayTrace`.
+      rays_cell_inds (array[int]): fourth entry from tuple return of :py:func:`util.voronoiRay.rayTrace`.
+      cell_dens (array[float]): gas per-cell densities of a given species [linear ions/cm^3]
+      cell_temp (array[float]): gas per-cell temperatures [linear K]
+      cell_vellos (array[float]): gas per-cell line of sight velocities [linear km/s]
+      z_lengths (array[float]): the comoving distance to each z_vals relative to sP.redshift [pMpc]
+      z_vals (array[float]): a sampling of redshifts, starting at sP.redshift
+    """
+    nRays = rays_len.size
+
+    # line properties
+    f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
+
+    # assign sP.redshift to the front intersectiom (beginning) of the box
+    z_vals = np.linspace(sP.redshift, sP.redshift+0.1, 200)
+    z_lengths = sP.units.redshiftToComovingDist(z_vals) - sP.units.redshiftToComovingDist(sP.redshift)
+
+    # sample master grid
+    master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
+
+    # allocate: full spectra return as well as derived EWs
+    tau_allrays = np.zeros( (nRays,tau_master.size), dtype=tau_master.dtype)
+    EW_master = np.zeros( nRays, dtype=np.float32 )
+
+    return _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
+                                            rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
+                                            cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
+                                            master_mid, master_edges, tau_master, tau_allrays, EW_master)
 
 def generate_spectrum_uniform_grid():
     """ Generate an absorption spectrum by ray-tracing through a uniform grid (deposit using sphMap). """
@@ -672,6 +710,7 @@ def generate_spectrum_uniform_grid():
 
 def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1, verify=True):
     """ Generate an absorption spectrum by ray-tracing through the Voronoi mesh.
+
     Args:
       use_precomputed_mesh (bool): if True, use pre-computed Voronoi mesh connectivity from VPPP, 
         otherwise use tree-based, connectivity-free method.
@@ -797,13 +836,13 @@ def generate_spectra_voronoi():
     sP = simParams(run='tng50-1', redshift=0.5)
 
     lineNames = ['MgII 2796','MgII 2803']
-    instrument = '4MOST_LRS' # 'SDSS-BOSS'
-    haloID = 150 # 150 for TNG50-1, 800 for TNG100-1 # if None, then full box
+    instrument = '4MOST_HRS' # 'SDSS-BOSS'
+    haloID = 150 # 150 for TNG50-1, 800 for TNG100-1
 
     nRaysPerDim = 50 # total number of rays is square of this number
     projAxis = 2 # z, to simplify vellos for now
 
-    fof_scope_mesh = True
+    fof_scope_mesh = True # if False then full box load
 
     # caching file
     saveFilename = 'spectra_%s_z%.1f_halo%d-%d_n%d_%s_%s.hdf5' % \
@@ -844,7 +883,7 @@ def generate_spectra_voronoi():
         cell_pos = sP.snapshotSubsetP('gas', 'pos', haloID=haloIDLoad) # code
 
         # ray-trace
-        rays_off, rays_len, rays_dl, rays_inds = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, mode='full',nThreads=1)
+        rays_off, rays_len, rays_dl, rays_inds = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, mode='full',nThreads=4)
 
         # load other cell properties
         velLosField = 'vel_'+['x','y','z'][projAxis]
@@ -873,20 +912,14 @@ def generate_spectra_voronoi():
             cell_dens = sP.snapshotSubset('gas', densField, haloID=haloIDLoad) # ions/cm^3
 
             # create spectra
-            f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
-
-            master_wave, tau_local = \
-              create_spectra_from_traced_rays(sP, f, gamma, wave0, ion_mass, instrument, 
+            master_wave, tau_local, EW_local = \
+              create_spectra_from_traced_rays(sP, line, instrument, 
                                               rays_off, rays_len, rays_dl, rays_inds,
-                                              cell_dens, cell_temp, cell_vellos, reduceToEW=False)
+                                              cell_dens, cell_temp, cell_vellos)
 
             assert np.array_equal(master_wave,master_mid)
+
             tau_master += tau_local
-
-            EW_local = create_spectra_from_traced_rays(sP, f, gamma, wave0, ion_mass, instrument, 
-                                                       rays_off, rays_len, rays_dl, rays_inds,
-                                                       cell_dens, cell_temp, cell_vellos, reduceToEW=True)
-
             EWs[line] = EW_local
 
             with h5py.File(saveFilename,'r+') as f:
@@ -963,17 +996,7 @@ def generate_spectra_voronoi():
     plt.close(fig)
 
 def single_line_test():
-    """ Testing.
-
-    Args:
-      mode (str): 'local' or 'box' or 'lightcone'. If 'local', then we neglect sP.redshift i.e. the 
-      cosmological redshift of the box, as well as the location of the gas within the box, and simply 
-      produce an absorption spectrum around the rest-frame wavelength of the transition (including only 
-      peculiar velocities). If 'box', the transition is cosmologically redshifted to sP.redshift in 
-      addition to the pathlength through the box, which is treated as a periodic cube. If 'lightcone', 
-      then use a pre-existing lightcone geometry (e.g. for a very long pathlength), taking the redshift 
-      of each gas cell as input.
-    """
+    """ Test for Voigt profile deposition of a single absorption line. """
 
     # transition, instrument, and spectrum type
     line = 'LyA'
