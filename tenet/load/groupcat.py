@@ -318,6 +318,9 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
 
                 gc = groupCat(sP, fieldsSubhalos=fields, sq=False)
 
+                w = np.where(gc['mhalo_200_code'] == 0.0) # low mass halos with no central
+                gc['mhalo_200_code'][w] = np.nan
+
                 if 'mstar2_' in quantName:
                     mstar = gc['SubhaloMassInRadType'][:,sP.ptNum('stars')]
                 else:

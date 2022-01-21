@@ -190,6 +190,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
                       'vout_50_10kpc', 'vout_50_all', 'vout_90_20kpc', 'vout_99_20kpc']
     quants_wind =    ['wind_vel','wind_etaM','wind_dEdt','wind_dPdt'] # GFM wind model, derived from SFing gas
 
+    quants_disperse = ['d_minima','d_node','d_skel']
+
     # unused: 'Krot_stars', 'Krot_oriented_stars', 'Arot_stars', 'specAngMom_stars',
     #         'Krot_gas',   'Krot_oriented_gas',   'Arot_gas',   'specAngMom_gas',
     #         'zform_ma5', 'zform_poly7'
@@ -1685,6 +1687,26 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         if quant in ['wind_dEdt','wind_dPdt']: # unit conversion: remove 10^51 factor (both e,p)
             vals = vals.astype('float64') * 1e51
+
+    if quantname in ['d_minima','d_node','d_skel']:
+        # distance to nearest cosmic web structures (minima=void, node=halo, skel=filament) from disperse
+        assert sP.simName in ['TNG100-1','TNG300-1']
+        assert sP.snap in [33,40,50,67,78,84,91,99]
+
+        disperse_type = 'stel' # stel or DM
+        path = sP.postPath + 'disperse/output_upskl/%s_subhalo/subhalo_%s_S%d_M8-5_STEL.hdf5'
+        path = path % (disperse_type, sP.simName.split('-')[0], sP.snap)
+
+        with h5py.File(path,'r') as f:
+            vals = f[quantname][()]
+            sub_ids = f['subhalo_ID'][()]
+
+        assert np.array_equal(sub_ids, np.arange(sP.numSubhalos)) # sanity check
+
+        vals = sP.units.codeLengthToMpc(vals)
+
+        label = 'Distance to Nearest ' + quantname.replace('d_','').capitalize() + ' [ log Mpc ]'
+        minMax = [-2.0, 2.0]
 
     if quantname in ['BH_CumEgy_low','BH_CumEgy_high','BH_CumEgy_ratio','BH_CumEgy_ratioInv',
                      'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio']:

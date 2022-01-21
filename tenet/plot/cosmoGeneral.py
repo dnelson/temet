@@ -1182,24 +1182,23 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQua
 def plots():
     """ Driver (exploration 2D histograms, vary over all known quantities as cQuant). """
     sPs = []
-    sPs.append( simParams(run='tng100-1', redshift=0.0) )
+    sPs.append( simParams(run='tng300-1', redshift=0.0) )
 
-    yQuant = 'frac_halogas_sfcold' #'mstar30pkpc_mhalo200_ratio' #'ssfr'
-    xQuant = 'mstar_30pkpc' # #'mstar_30pkpc'
+    yQuant = 'd_minima' #'mstar30pkpc_mhalo200_ratio' #'ssfr'
+    xQuant = 'mstar_30pkpc'
     cenSatSelects = ['cen'] #['cen','sat','all']
 
-    quants = quantList(wTr=False, wMasses=True)
+    quants = [None, 'mstar30pkpc_mhalo200_ratio'] #quantList(wTr=False, wMasses=True)
     clim = None #[10.0,11.0]
     medianLine = True
-    minCount = 2
-    nBins = 20
+    minCount = 1
+    nBins = 40
     cStatistic = 'median_nan'
-    cRel = [0.6,1.4,False] #None
-    #cRel = [-0.04, 0.04, True]
+    cRel = None # [0.6,1.4,False]
 
-    xlim = [6.0, 9.0]
-    ylim = None# [-2.5, 0.0] # None
-    qRestrictions = [['fdm',0.0,1.0]] #None #[ ['mstar_30pkpc_log',10.0,11.0] ] # SINS-AO rough cut
+    xlim = None # [6.0, 9.0]
+    ylim = None # [-2.5, 0.0] # None
+    qRestrictions = None #[ ['mstar_30pkpc_log',10.0,11.0] ]
 
     for sP in sPs:
         for css in cenSatSelects:
