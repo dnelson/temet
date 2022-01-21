@@ -6,17 +6,24 @@ creating an instance of this class as:
 
 .. code-block:: python
 
-   sP = simParams(run='tng100-1', redshift=0.0)
+   sim = tenet.sim(run='tng100-1', redshift=0.0)
 
-This ``sP`` object can then be passed to many analysis routines, which then automatically 
+To analyze a new or custom simulation which is not defined in this file, you can instead 
+pass its path, and the simulation metadata will be automatically loaded.
+
+.. code-block:: python
+
+   sim = tenet.sim('/virgo/simulations/IllustrisTNG/TNG50-1/', redshift=0.0)
+
+This ``sim`` object can then be passed to many analysis routines, which then automatically 
 know (i) where to find the data files, and (ii) which snapshot to analyze. Furthermore, many 
-of the most common data loading functions are "attached" to this ``sP`` object, such that 
+of the most common data loading functions are "attached" to this ``sim`` object, such that 
 the two follow calls are functionally identical:
 
 .. code-block:: python
 
-   masses = load.snapshot.snapshotSubset(sP, 'gas', 'mass')
-   masses = sP.snapshotSubset('gas', 'mass')
+   masses = load.snapshot.snapshotSubset(sim, 'gas', 'mass')
+   masses = sim.snapshotSubset('gas', 'mass')
 
 The second providing a convenient short-hand. If you were using the public data release scripts 
 alone, these two calls would also be identical to:
@@ -34,8 +41,8 @@ automatically tailored to this simulation and its unit system. For example
 
 .. code-block:: python
 
-   dists = sP.snapshotSubset('gas', 'rad', haloID=1234)
-   dists_kpc = sP.units.codeLengthToKpc(dists)
+   dists = sim.snapshotSubset('gas', 'rad', haloID=1234)
+   dists_kpc = sim.units.codeLengthToKpc(dists)
 
 converts the original ``dists`` array from code units to physical kpc. While "code units" 
 typically implies ``ckpc/h``, this particular simultion could be instead using a Mpc-unit 
@@ -101,11 +108,12 @@ class simParams:
     simPath     = ''    #: root path to simulation snapshots and group catalogs
     arepoPath   = ''    #: root path to Arepo and param.txt for e.g. projections/fof
     savPrefix   = ''    #: save prefix for simulation (make unique, e.g. 'G')
-    simName     = ''    #: label to add to plot legends (e.g. "Illustris-2", "TNG300-1")
-    simNameAlt  = ''    #: alternative label for simulation names (e.g. "L75n1820FP", "L205n1250TNG_DM")
-    plotPath    = ''    #: working path to put plots
+    plotPath    = ''    #: path to output plots and figures
     derivPath   = ''    #: path to put derivative files ("data.files/")
     postPath    = ''    #: path to put postprocessed files ("postprocessing/")
+
+    simName     = ''    #: label to add to plot legends (e.g. "Illustris-2", "TNG300-1")
+    simNameAlt  = ''    #: alternative label for simulation names (e.g. "L75n1820FP", "L205n1250TNG_DM")
 
     # snapshots
     groupOrdered  = None  # False: IDs stored in group catalog, True: snapshot is group ordered (by type) 
@@ -171,9 +179,9 @@ class simParams:
     BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=TNG Model, 3=Auriga model)
     winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=TNG Model, 3=Auriga model)
 
-    def __init__(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None, 
+    def __init__(self, run, res=None, variant=None, redshift=None, snap=None, hInd=None, 
                        haloInd=None, subhaloInd=None, refPos=None, refVel=None, arepoPath=None,
-                       simName = None):
+                       simName=None):
         """ Fill parameters based on inputs. """
 
         self.basePath = path.expanduser("~") + '/'
@@ -186,13 +194,14 @@ class simParams:
         self.redshift = redshift
         self.snap     = snap
 
-        if arepoPath is not None:
-            # Deduce parameters from simulation path
-            self.scan_simulation(arepoPath, simName=simName)
+        if "/" in run or "." in run:
+            # deduce parameters from simulation path
+            self.scan_simulation(run, simName=simName)
         else:
-            # old, hardcoded lookup based on given **kwargs.
+            # old, hardcoded lookup based on given **kwargs
             self.lookup_simulation(res=res, run=run, variant=variant, redshift=redshift, snap=snap, hInd=hInd,
                                    haloInd=haloInd, subhaloInd=subhaloInd, refPos=refPos, refVel=refVel)
+
         # attach various functions pre-specialized to this sP, for convenience
         from ..cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicPairwiseDists, \
             periodicDistsSq, \
@@ -280,22 +289,27 @@ class simParams:
         self.setRedshift(self.redshift)
         self.setSnap(self.snap)
 
-    def scan_simulation(self, arepoPath, simName=None):
-        self.arepoPath = arepoPath
+    def scan_simulation(self, inputPath, simName=None):
+        """ Fill simulation parameters automatically, based on path. """
+        self.arepoPath = inputPath
         self.simPath   = os.path.join(self.arepoPath, 'output/')
+
+        assert os.path.exists(inputPath), 'Error: Simulation path [%s] not found!' % inputPath
+
         derivPath = os.path.join(self.arepoPath, 'data.files/')
         writable = os.access(self.arepoPath, os.W_OK)
+
         if writable or (os.path.isdir(derivPath) and os.access(derivPath, os.W_OK)): 
-            # Either we want to be able to create a cache folder in the arepoPath
+            # either we want to be able to create a cache folder in the arepoPath
             # or at least being able for an existing cache folder
             self.derivPath = derivPath
         else:
             # otherwise we create a new cache folder in the home folder of the user
             hsh = hash_path(self.arepoPath,length=8)
-            self.derivPath = os.path.join(os.path.expanduser("~/tenetdata/"),hsh,"data.files")
+            self.derivPath = os.path.join(os.path.expanduser("~/tenetdata/"),hsh) + "/"
             p = Path(self.derivPath)
             p.mkdir(parents=True, exist_ok=True)
-            with open(os.path.join(p.parent,"simpath.txt"), 'w') as f:
+            with open(os.path.join(p,"simpath.txt"), 'w') as f:
                 f.write(self.arepoPath)
 
         self.postPath  = os.path.join(self.arepoPath, 'postprocessing/')
@@ -303,31 +317,26 @@ class simParams:
 
         self.simName = simName
         if simName is None:
-            self.simName    = arepoPath.rstrip("/").split("/")[-1]
+            self.simName = inputPath.rstrip("/").split("/")[-1]
 
         p = os.path.join(self.simPath,"snap*/snap_*.hdf5")
         hdf5files = glob(p)
         hdf5file = hdf5files[0]
+
         with h5py.File(hdf5file, 'r') as hf:
             header = dict(hf["Header"].attrs)
 
         self.boxSize     = header["BoxSize"]
         self.omega_m     = header["Omega0"]
         self.omega_L     = header["OmegaLambda"]
-        self.omega_b     = header["OmegaBaryon"] 
         self.HubbleParam = header["HubbleParam"]
-
-
+        self.omega_b     = header["OmegaBaryon"] if "OmegaBaryon" in header else None
 
     def lookup_simulation(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None,
-                                   haloInd=None, subhaloInd=None, refPos=None, refVel=None):
+                          haloInd=None, subhaloInd=None, refPos=None, refVel=None):
         """ Fill parameters based on inputs. (hardcoded)"""
 
-
         # general validation
-        if not run:
-            raise Exception("Must specify run.")
-
         if run.lower() in run_abbreviations:
             # is run one of our known abbreviations? then fill in other parameters
             run, res = run_abbreviations[run.lower()]
@@ -1042,14 +1051,10 @@ class simParams:
             except:
                 raise Exception('Input subbox request [%s] not recognized or out of bounds!' % self.variant)
 
-            # are we on a system without subbox data copied?
-
-
             # assign subbox number, update name, prevent group ordered snapshot loading
             self.subbox = sbNum
             self.simName += '_sb' + str(sbNum)
             self.groupOrdered = False
-
 
     def auxCatSplit(self, field, nThreads=1):
         """ Automatically do a pSplit auxCat calculation. """

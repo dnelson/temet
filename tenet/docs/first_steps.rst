@@ -1,7 +1,7 @@
 First Steps Walkthrough
 =======================
 
-Start by importing the library
+First, start a command-line ``ipython`` session, or a Jupyter notebook. Then import the library
 
 .. code-block:: python
 
@@ -10,21 +10,48 @@ Start by importing the library
 Simulation Selection
 --------------------
 
-Most analysis is based around a "simulation parameters" object (typically called ``sP`` or ``sim``), which 
-specifies the simulation and snapshot of interest, among other details.
-
-Loading Data
-------------
-
-For example, to load some data from the group catalog and snapshot of TNG100-2 at z=2, start a 
-command-line ``ipython`` session, or a Jupyter notebook, and
+Most analysis is based around a "simulation parameters" object (typically called ``sP`` or ``sim`` below), 
+which specifies the simulation and snapshot of interest, among other details.  You can then select a simulation and snapshot from a known list, e.g. the TNG100-2 simulation of IllustrisTNG at redshift two:
 
 .. code-block:: python
 
     sP = tenet.sim(res=910, run='tng', redshift=2.0)
 
+Or the TNG50-1 simulation at redshift zero, by its short-hand name
+
+.. code-block:: python
+
+    sP = tenet.sim(run='tng50-1', redshift=0.0)
+
+Note that if you would like to select a simulation which is not in the pre-defined list of known simulations, 
+i.e. a simulation you have run yourself, then you can specify it simply by path
+
+.. code-block:: python
+
+    sP = tenet.sim('/home/user/sims/sim_run/', redshift=0.0)
+
+In all cases, the redshift or snapshot number is optionally used to pre-select the particular snapshot of 
+interest. You can also specify the overall simulation without this, for example
+
+.. code-block:: python
+
+    sim = tenet.sim('tng300-1')
+
+
+Loading Data
+------------
+
+Once a simulation and snapshot is selected you can load the corresponding data. For example, to load one or more 
+particular fields from the group catalogs
+
+.. code-block:: python
+
     subs = sP.groupCat(fieldsSubhalos=['SubhaloMass','SubhaloPos'])
     sub_masses_logmsun = sP.units.codeMassToLogMsun( subs['SubhaloMass'] )
+
+To load particle-level data from the snapshot itself
+
+.. code-block:: python
 
     gas_pos = sP.snapshotSubset('gas', 'pos')
     dm_vel_sub10 = sP.snapshotSubset('dm', 'vel', subhaloID=10)
@@ -34,8 +61,6 @@ at both the particle and group catalog level are defined. Loading data can also 
 for example
 
 .. code-block:: python
-
-    sP = tenet.sim(run='tng50-1', redshift=0.0)
 
     subs = sP.subhalos('mstar_30pkpc')
     x = sP.gas('cellsize_kpc')
