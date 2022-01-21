@@ -56,7 +56,7 @@ def plotRedshiftSpacings():
     # redshift axis
     addRedshiftAxis(ax, sP)
 
-    fig.savefig(sP.plotPath + 'redshift_spacing.pdf')
+    fig.savefig('redshift_spacing.pdf')
     plt.close(fig)
 
 def plotMassFunctions():

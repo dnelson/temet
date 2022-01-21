@@ -312,7 +312,7 @@ def plotEvo2D(ii):
             if sP.haloInd is not None: trSubStr = '_halo-%d' % sP.haloInd
             if sP.subhaloInd is not None: trSubStr = '_subhalo-%d' % sP.subhaloInd
 
-            pdf = PdfPages(sP.plotPath + 'evo2D_%s_%s%s_%s.pdf' % (field,trIndStr,trSubStr,sP.simName))
+            pdf = PdfPages('evo2D_%s_%s%s_%s.pdf' % (field,trIndStr,trSubStr,sP.simName))
 
             # make following plots for each accMode separately
             for modeVal,modeName in modes.items():
@@ -390,7 +390,7 @@ def plotEvo1D():
     #accTime = tracerEvo.accTime(sP)
     accMode = tracerEvo.accMode(sP)
 
-    pdf = PdfPages(sP.plotPath+'evo1D_%s_nF%d.pdf' % (sP.simName,len(fieldNames)))
+    pdf = PdfPages('evo1D_%s_nF%d.pdf' % (sP.simName,len(fieldNames)))
 
     for fieldName in fieldNames:
         ctName, label, valMinMax, _ = plotConfig(fieldName)
@@ -559,7 +559,7 @@ def plotValHistos():
         # load global quantities for this run (can replace with None once all cached)
         accMode = tracerEvo.accMode(sP)
 
-        pdf = PdfPages(sP.plotPath + 'valExtremumHistos_ByAccMode_' + sP.simName + '.pdf')
+        pdf = PdfPages('valExtremumHistos_ByAccMode_' + sP.simName + '.pdf')
 
         # loop over fields
         for field,extTypes in fieldNames.items():
@@ -598,7 +598,7 @@ def plotValHistos():
 
     # PLOT 2: split by resolution/sP, one accMode per plot
     for modeVal,modeName in modes.items():
-        pdf = PdfPages(sP.plotPath + 'valExtremumHistos_ByRes_' + modeName + '.pdf')
+        pdf = PdfPages('valExtremumHistos_ByRes_' + modeName + '.pdf')
 
         # loop over fields
         for field,extTypes in fieldNames.items():
@@ -635,7 +635,7 @@ def plotValHistos():
         pdf.close()
 
     # PLOT 3: split by resolution/sP, all accModes on each plot
-    pdf = PdfPages(sPs[0].plotPath + 'valExtremumHistos_ByRes_nSP' + str(len(sPs)) + '.pdf')
+    pdf = PdfPages('valExtremumHistos_ByRes_nSP' + str(len(sPs)) + '.pdf')
 
     # loop over fields
     for field,extTypes in fieldNames.items():

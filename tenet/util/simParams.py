@@ -105,10 +105,8 @@ run_abbreviations = {'illustris-1':['illustris',1820],
 
 class simParams:
     # paths and names
-    simPath     = ''    #: root path to simulation snapshots and group catalogs
-    arepoPath   = ''    #: root path to Arepo and param.txt for e.g. projections/fof
-    savPrefix   = ''    #: save prefix for simulation (make unique, e.g. 'G')
-    plotPath    = ''    #: path to output plots and figures
+    simPath     = ''    #: path (root) containing 'output' directory with simulation snapshots and group catalogs
+    arepoPath   = ''    #: path to Arepo binary, Config.sh and param.txt files of this run
     derivPath   = ''    #: path to put derivative files ("data.files/")
     postPath    = ''    #: path to put postprocessed files ("postprocessing/")
 
@@ -313,7 +311,6 @@ class simParams:
                 f.write(self.arepoPath)
 
         self.postPath  = os.path.join(self.arepoPath, 'postprocessing/')
-        self.plotPath  = os.path.join(self.basePath, 'plots/')
 
         self.simName = simName
         if simName is None:
@@ -542,7 +539,6 @@ class simParams:
             fof0str = '_alex' if (res == 910 and 'alex' in self.variant) else fof0str
 
             self.arepoPath  = self.basePath + 'sims.'+dirStr+'/L'+bs+'n'+str(res)+runStr+dmStr+fof0str+'/'
-            self.savPrefix  = 'IP'
             self.simName    = 'L' + bs + 'n' + str(res) + runStr + dmStr
             self.simNameAlt = self.simName
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
@@ -653,7 +649,6 @@ class simParams:
                     self.zoomShiftPhys = f['Header'].attrs['GroupCM'] / 1000 # code (mpc) units
 
             self.arepoPath  = self.basePath + 'sims.TNG_zooms/' + dirStr + '/'
-            self.savPrefix  = 'TZ'
             self.simName    = dirStr
 
         # AURIGA
@@ -692,7 +687,6 @@ class simParams:
             dirStr = 'h%d_L%d%s' % (self.hInd,self.res,vStr)
 
             self.arepoPath  = self.basePath + 'sims.auriga/' + dirStr + '/'
-            self.savPrefix  = 'AU'
             self.simName    = dirStr
 
         # ILLUSTRIS
@@ -733,7 +727,6 @@ class simParams:
 
                 self.arepoPath  = self.basePath + 'sims.illustris/L'+bs+'n'+str(res)+'FP/'
                 self.simNameAlt = 'L'+bs+'n'+str(res)+'FP'
-                self.savPrefix  = 'I'
                 self.colors     = ['#e67a22', '#b35f1b', '#804413'] # brown, light to dark
 
                 if res == 455:  self.simName = 'Illustris-3'
@@ -749,7 +742,6 @@ class simParams:
 
                 self.arepoPath  = self.basePath + 'sims.illustris/L'+bs+'n'+str(res)+'NR/'
                 self.simNameAlt = 'L'+bs+'n'+str(res)+'NR'
-                self.savPrefix  = 'I'
 
                 if res == 455:  self.simName = 'Illustris-3-NR'
                 if res == 910:  self.simName = 'Illustris-2-NR'
@@ -757,7 +749,6 @@ class simParams:
             if run == 'illustris_dm': # DM-only
                 self.arepoPath  = self.basePath + 'sims.illustris/L'+bs+'n'+str(res)+'DM/'
                 self.simNameAlt = 'L'+bs+'n'+str(res)+'DM'
-                self.savPrefix  = 'IDM'
                 self.colors     = ['#777777', '#444444', '#111111'] # gray, light to dark
 
                 if res == 455:  self.simName = 'Illustris-3-Dark'
@@ -790,14 +781,12 @@ class simParams:
                 if res == 1504: self.targetGasMass = 1.225e-4
 
                 self.arepoPath  = self.basePath + 'sims.other/Eagle-L'+bs+'n'+str(res)+'FP/'
-                self.savPrefix  = 'E'
                 self.simNameAlt = 'Eagle-L'+bs+'n'+str(res)+'FP'
 
                 if res == 1504: self.simName = 'Eagle100' #'Eagle-L68n1504FP'
 
             if run == 'eagle_dm': # DM-only
                 self.arepoPath  = self.basePath + 'sims.other/Eagle-L'+bs+'n'+str(res)+'DM/'
-                self.savPrefix  = 'EDM'
                 self.simName    = 'Eagle100-1-Dark' #'Eagle-L68n1504DM'
                 self.simNameAlt = 'Eagle-L'+bs+'n'+str(res)+'DM'
 
@@ -837,7 +826,6 @@ class simParams:
             else:
                 self.arepoPath = self.basePath+'sims.zooms/128_'+bs+'Mpc'+ds+'/'
 
-            self.savPrefix  = 'Z'
             self.simName    = 'h' + str(hInd) + 'L' + str(self.levelMax) + ds
 
         # ZOOMS-2
@@ -890,7 +878,6 @@ class simParams:
                 if self.variant == 'FPorig': ls = '%d_FP' % (self.levelMax) # UNBOOSTED
 
             self.arepoPath  = self.basePath+'sims.zooms2/h'+str(hInd)+'_L'+ls+ts+'/'
-            self.savPrefix  = 'Z2'
             self.simName    = 'h' + str(hInd) + 'L' + ls + '_' + 'gen2' + ts
 
             if hInd == 2: # overrides for plots for paper.zooms2
@@ -928,7 +915,6 @@ class simParams:
             self.HubbleParam = 0.73
 
             self.arepoPath  = self.basePath + 'sims.other/Millennium-%s/' % self.res
-            self.savPrefix  = 'MIL'
             self.simName    = 'Millennium-%s' % self.res
             self.colors     = ['#777777'] # gray
 
@@ -966,7 +952,6 @@ class simParams:
             bs = str( round(self.boxSize/1000) )
 
             self.arepoPath  = self.basePath + 'sims.feedback/'+str(res)+'_'+bs+'Mpc/'
-            self.savPrefix  = 'F'
             self.simName    = 'FEEDBACK'
             self.colors     = ['#3e41e8', '#151aac', '#080b74'] # blue, light to dark
 
@@ -1008,7 +993,6 @@ class simParams:
             bs = str( round(self.boxSize/1000) )
 
             self.arepoPath  = self.basePath + 'sims.tracers/'+str(res)+'_'+bs+'Mpc/'
-            self.savPrefix  = 'N'
             self.simName    = 'NO FEEDBACK'
             self.colors     = ['#00ab33', '#007d23', '#009013']  # green, light to dark
 
@@ -1021,7 +1005,6 @@ class simParams:
         self.simPath   = self.arepoPath + 'output/'
         self.derivPath = self.arepoPath + 'data.files/'
         self.postPath  = self.arepoPath + 'postprocessing/'
-        self.plotPath  = self.basePath + 'plots/'
 
         if self.simNameAlt == '':
             self.simNameAlt = self.simName
