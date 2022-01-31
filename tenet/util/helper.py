@@ -1657,10 +1657,11 @@ def curRepoVersion():
     from os import getcwd, chdir
     from os.path import expanduser
     from getpass import getuser
+    from pathlib import Path
 
     oldCwd = getcwd()
     if getuser() != 'wwwrun':
-        chdir(expanduser("~") + '/python/')
+        chdir(Path(__file__).parent.parent.absolute())
     else:
         chdir('/var/www/python/')
     
