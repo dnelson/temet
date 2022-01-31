@@ -2216,6 +2216,8 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
     prop = ptProperty.lower()
     typeStr = ptType.capitalize()
 
+    if typeStr == 'Dm': typeStr = 'DM'
+
     #if '_real' in typeStr: typeStr = 'Actual ' + typeStr.split('_real')[0] # i.e. 'wind_real' -> 'Actual Wind'
 
     # fields:
@@ -2303,8 +2305,8 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
 
     if prop in ['bmag','bfieldmag']:
         label = 'Magnetic Field Strength [ log Gauss ]'
-        lim = [-15.0, -5.0]
-        if haloLims: lim = [-9.0, -4.0]
+        lim = [-15.0, -4.0]
+        if haloLims: lim = [-9.0, -3.0]
         log = True
     if prop in ['bmag_ug','bfieldmag_ug']:
         label = 'Magnetic Field Strength [ log $\mu$G ]'
@@ -2348,7 +2350,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: lim = [-2.0,2.0]
         log = True
 
-    if prop in ['gas_pres','gas_pressure','p_gas']:
+    if prop in ['gas_pres','gas_pressure','p_gas','pres','pressure']:
         assert ptType == 'gas'
         label = 'Gas Pressure [ log K cm$^{-3}$ ]'
         lim = [-1.0,7.0]

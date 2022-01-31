@@ -532,8 +532,8 @@ def quantSlice1D(sPs, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', yRel=
     assert cenSatSelect in ['all', 'cen', 'sat']
 
     if len(yQuants) == 0: return
-    nRows = np.floor(np.sqrt(len(yQuants)))
-    nCols = np.ceil(len(yQuants) / nRows)
+    nRows = int(np.floor(np.sqrt(len(yQuants))))
+    nCols = int(np.ceil(len(yQuants) / nRows))
 
     # just a single sRange? wrap in an outer list
     sRanges = sRange
@@ -689,7 +689,7 @@ def quantSlice1D(sPs, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', yRel=
         if pdf is not None:
             pdf.savefig()
         else:
-            fig.savefig('slice1d_%s_%s_%s_%s_%s.pdf' % (xlabel,cQuant,cStatistic,cenSatSelect,minCount))
+            fig.savefig('slice1d_%s_%s_%s_%s.pdf' % ('-'.join(yQuants),xQuant,sQuant,cenSatSelect))
         plt.close(fig)
 
 def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=None, sLowerPercs=None, sUpperPercs=None, 
@@ -762,6 +762,7 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
     if extraMedians is None: extraMedians = [] # avoid mutable keyword argument
     if lowessSmooth: assert scatterPoints and scatterColor is not None, 'Only LOWESS smooth scattered points.'
     if sQuant is not None: assert sLowerPercs is not None and sUpperPercs is not None
+    if scatterColor is not None: scatterPoints = True
 
     yQuants = iterable(yQuants)
     sPs = iterable(sPs)

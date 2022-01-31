@@ -274,7 +274,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             nBins = nBins
 
     sizefac = 0.9
-    clim_default = [-6.0,0.0]
+    clim_default = [-4.5,-0.5]
 
     # binned_statistic_2d instead of histogram2d?
     binnedStat = False
@@ -338,7 +338,9 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
         if len(weights) == 1: # title
             hStr = 'fullbox' if haloIDs is None else 'halos%s' % '-'.join([str(h) for h in haloIDs])
-            wtStr = partType.capitalize() + ' ' + wtProp.capitalize()
+            ptStr = partType.capitalize()
+            if ptStr == 'Dm': ptStr = 'DM'
+            wtStr = ptStr + ' ' + wtProp.capitalize()
             #ax.set_title('%s z=%.1f %s' % (sP.simName,sP.redshift,hStr))
 
         ax.set_xlabel(xlabel)

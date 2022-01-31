@@ -645,7 +645,7 @@ def snapshotSubset(sP, partType, fields,
             r[field] = 10.0**u_b / 10.0**u_ke
 
         # gas pressure [log K/cm^3]
-        if field in ['gas_pres','gas_pressure','p_gas']:
+        if field in ['gas_pres','gas_pressure','p_gas','pres','pressure']:
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)
             u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
             r[field] = sP.units.calcPressureCGS(u, dens, log=True)

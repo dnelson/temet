@@ -71,12 +71,12 @@ shorthands, for example
     sub_sat1 = sP.subhalo( fof10['GroupFirstSub']+1 ) # all fields
 
 
-Exploratory Plots
------------------
+Exploratory Plots for Galaxies
+------------------------------
 
-The various plotting functions in :py:mod:`plot.general` and :py:mod:`plot.cosmoGeneral` are designed to 
+The various plotting functions in :py:mod:`plot.cosmoGeneral <tenet.plot.cosmoGeneral>` are designed to 
 be as general and automatic as possible. They are idea for a quick look or for exploring trends in the 
-data.
+objects of the group catalogs, i.e. galaxies (subhalos).
 
 Let's examine a classic observed galaxy scaling relation: the correlation between gas-phase metallicity, 
 and stellar mass, the "mass-metallicity relation" (MZR).
@@ -87,7 +87,7 @@ and stellar mass, the "mass-metallicity relation" (MZR).
 
     tenet.plot.cosmoGeneral.quantMedianVsSecondQuant(sP, 'Z_gas', 'mstar_30pkpc')
 
-Produces a PDF figure named ``medianQuants_TNG100-1_Z_gas_mstar_30pkpc_cen.pdf`` in the current working 
+This produces a PDF figure named ``medianQuants_TNG100-1_Z_gas_mstar_30pkpc_cen.pdf`` in the current working 
 directory. It shows the mass-metallicity relation of TNG100 galaxies at :math:`z=0`, and looks like this:
 
 .. image:: _static/first_steps_medianQuants_1.png
@@ -110,22 +110,61 @@ galaxy quenching due to supermassive black hole feedback.
 
 .. image:: _static/first_steps_medianQuants_2.png
 
-Look at crel.
-
-Instead of individual colored markers, switch to quantHisto2D.
-
-.. note:: This is the same plot made by the following API endpoint of the TNG public data release:
-    https://www.tng-project.org/api/TNG100-1/snapshots/99/subhalos/plot.png?xQuant=mstar2&yQuant=Z_gas
-    and this API request is handled using the same plotting function we just called.
+Once you add a custom calculation for a new property of subhalos, i.e. compute a value which isn't available 
+by default, you can use the same plotting routines to understand how it varies across the galaxy population, 
+and correlates with other galaxy properties.
 
 
-Picking an Interesting Object
------------------------------
+Exploratory Plots for Snapshots
+-------------------------------
 
-Let's pick one. Fields of catalog loading commands are the same. "Object" could be either halo or galaxy.
+Similarly, :py:mod:`plot.general <tenet.plot.general>` provides general plotting routines focused on snapshots, 
+i.e. particle-level data. These are also then suitable for non-cosmological simulations.
+
+Functionality includes 1D histograms, 2D distributions, median relations, and radial profiles.
+
+For example, we could plot the traditional 2D "phase diagram" of density versus temperature. However, we can 
+also use any (known) quantity on either axis. Furthermore, while color can represent the distribution of 
+mass, it can also be used to show the value of a third particle/cell property, in each pixel. Let's look at 
+the relationship between gas pressure and magnetic field strength at :math:`z=0`::
+
+    sP = tenet.sim(run='tng100-1', redshift=0.0)
+
+    tenet.plot.general.plotPhaseSpace2D(sP, 'gas', xQuant='pres', yQuant='bmag')
+
+.. image:: _static/first_steps_phase2D_1.png
+
+For cosmological simulations, we can also look at particle/cell properties for one or more (stacked) halos. 
+For example, the relationship between (halocentric) radial velocity and (halocentric) distance, for all dark 
+matter particles within the tenth most massive halo of TNG50-1 at :math:`z=2`::
+
+    sP = tenet.sim(run='tng50-1', redshift=2.0)
+    haloIDs = [9]
+
+    opts = {'xlim':[-0.6,0.3], 'ylim':[-800,600], 'clim':[-4.7,-2.3], 'ctName':'inferno'}
+    tenet.plot.general.plotPhaseSpace2D(sP, 'dm', xQuant='rad_rvir', yQuant='vrad', haloIDs=haloIDs, **opts)
+
+.. image:: _static/first_steps_phase2D_2.png
+
+Here we see individual gravitationally bound substructures (subhalos) within the halo as bright vertical 
+features.
 
 
-Visualizing a Halo or Galaxy
-----------------------------
+Visualizing a Halo and its Galaxy
+---------------------------------
+
+TODO.
+
+
+Computing a Custom Post-processing Catalog
+------------------------------------------
+
+So far we have been exclusively exploring and visualizing existing data -- either properties which are directly 
+available in the catalogs or snapshots (e.g. galaxy stellar mass, gas cell magnetic field strength), or which 
+can be easily derived from them (e.g. dark matter particle radial velocity with respect to its parent halo).
+
+Instead, we may be interested to compute a new physical quantity of interest for each object in the catalog.
+
+We typically refer to such results as "post-processing catalogs", "supplementary catalogs", or "auxiliary catalogs".
 
 TODO.
