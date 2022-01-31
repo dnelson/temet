@@ -80,11 +80,13 @@ def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None,
         # band indices
         acBands = list( np.squeeze(colorData[acKey+'_attrs']['bands']) )
         bandname0 = 'sdss_' + bands[0] if bands[0] in ['u','g','r','i','z'] else bands[0]
-        i0 = acBands.index(bandname0.lower().encode())
+        bandname0 = bandname0.lower()
+        i0 = acBands.index(bandname0) if bandname0 in acBands else acBands.index(bandname0.encode())
 
         if len(bands) == 2:
             bandname1 = 'sdss_' + bands[1] if bands[1] in ['u','g','r','i','z'] else bands[1]
-            i1 = acBands.index(bandname1.lower().encode())
+            bandname1 = bandname1.lower()
+            i1 = acBands.index(bandname1.lower()) if bandname1 in acBands else acBands.index(bandname1.encode())
 
         # multiple projections per subhalo?
         if colorData[acKey].ndim == 3:

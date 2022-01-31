@@ -929,7 +929,7 @@ def paperPlots():
 
         pdf = PdfPages('histo2d_x=%s_y=%s_c=%s_%s_%d.pdf' % (xQuant,yQuant,cQuant,sP.simName,sP.snap))
         fig = plt.figure(figsize=figsize)
-        quantHisto2D(sP, pdf, yQuant=yQuant, fig_subplot=[fig,111], **params)
+        quantHisto2D(sP, yQuant=yQuant, fig_subplot=[fig,111], pdf=pdf, **params)
         pdf.close()
 
     # figure X: explore 5rvir vs 10rvir max radius

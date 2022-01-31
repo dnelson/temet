@@ -13,7 +13,7 @@ from scipy.stats import binned_statistic
 
 from ..vis.halo import renderSingleHalo, subsampleRandomSubhalos
 from ..util.helper import running_median, sampleColorTable, loadColorTable, logZeroNaN, mvbe
-from ..plot.cosmoGeneral import quantMedianVsSecondQuant, quantHisto2D
+from ..plot.cosmoGeneral import quantMedianVsSecondQuant
 from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
 from ..plot.config import *
 from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
@@ -648,11 +648,11 @@ def inclinationPlotDriver(sP, quant='inclination_mg2_lumsize'):
 
     qRestrictions = [ ['mstar_30pkpc_log',8.0,10.0] ]
 
-    quantMedianVsSecondQuant(sPs, pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                              alpha=alpha, cRel=cRel, maxPointsPerDex=maxPointsPerDex, 
-                             qRestrictions=qRestrictions, legendLoc='lower right')
+                             qRestrictions=qRestrictions, legendLoc='lower right', pdf=None)
 
 def cumulativeLumVsVrad(sP):
     """ Driver for plotParticleMedianVsSecondQuant. """
@@ -819,11 +819,11 @@ def mg2lum_vs_mass(sP, redshifts=None):
         label = 'Rupke+19 (z=0.5 KCWI/Makani)'
         ax.errorbar(mstar, lum, xerr=mstar_err, yerr=lum_err, color='#000000', marker='p', label=label)
 
-    quantMedianVsSecondQuant(sPs, pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                              f_pre=_draw_data, alpha=alpha, maxPointsPerDex=maxPointsPerDex, 
-                             colorbarInside=colorbarInside, legendLoc='lower right')
+                             colorbarInside=colorbarInside, legendLoc='lower right', pdf=None)
 
 def _select_haloIDs(sP, mStarBin):
     """ Return all halo IDs of subhalos within the given stellar mass bin. """
@@ -886,10 +886,10 @@ def paperPlots():
             cen_flag = sP.subhalos('cen_flag')
             ww = np.where( (xx>9.8) & (xx < 9.9) & (np.abs(mg2_lumsize-17.5) < 0.2) & cen_flag ) # 2.4,6.0,17.5
 
-        quantMedianVsSecondQuant([sP], pdf=None, yQuants=['mg2_lumsize'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
+        quantMedianVsSecondQuant([sP], yQuants=['mg2_lumsize'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
                                  xlim=[8.0,11.5], ylim=[0,20], clim=[37,42], drawMedian=True, medianLabel='r$_{\\rm 1/2,L(MgII)}$', 
                                  markersize=30, scatterPoints=True, scatterColor='mg2_lum', sizefac=sizefac, markSubhaloIDs=subIDs,
-                                 extraMedians=['size_stars','size_gas'], alpha=0.7, maxPointsPerDex=None, colorbarInside=False)
+                                 extraMedians=['size_stars','size_gas'], alpha=0.7, maxPointsPerDex=None, colorbarInside=False, pdf=None)
 
         for subID in subIDs:
             subh = sP.subhalo(subID)
@@ -907,11 +907,11 @@ def paperPlots():
                          ['mstar_30pkpc_log',8.8,9.2],
                          ['mstar_30pkpc_log',7.9,8.1]]
 
-        quantMedianVsSecondQuant([sP], pdf=None, yQuants=['mg2_lumsize'], xQuant='delta5_mstar_gt7', 
+        quantMedianVsSecondQuant([sP], yQuants=['mg2_lumsize'], xQuant='delta5_mstar_gt7', 
                                  cenSatSelect='cen', xlim=[-1,2], ylim=[1, 12], drawMedian=True, 
                                  scatterPoints=True, nBins=24, ctName=['magma',[0.3,0.7]], 
                                  qRestrictions=qRestrictions, indivRestrictions=True, markersize=30, alpha=0.5,
-                                 sizefac=sizefac, legendLoc='upper left')
+                                 sizefac=sizefac, legendLoc='upper left', pdf=None)
 
     # figure 7: emission morphology: spherically symmetric or not? shape a/b axis ratio of different isophotes
     if 0:
@@ -932,23 +932,23 @@ def paperPlots():
         alpha = 0.5
         maxPointsPerDex = None
 
-        quantMedianVsSecondQuant([sP], pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+        quantMedianVsSecondQuant([sP], yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                                  xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                                  scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                                  alpha=alpha, cRel=cRel, maxPointsPerDex=maxPointsPerDex, lowessSmooth=True, 
-                                 extraMedians=extraMedians, ctName='matter', legendLoc='upper left')
+                                 extraMedians=extraMedians, ctName='matter', legendLoc='upper left', pdf=None)
 
     # figure 8 - L_MgII vs Sigma_SFR, and r_1/2,MgII correlation with sSFR
     if 0:
         for cQuant in ['mg2_lum','mg2_lumsize']:
-            quantMedianVsSecondQuant([sP], pdf=None, yQuants=['sfr2_surfdens'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
+            quantMedianVsSecondQuant([sP], yQuants=['sfr2_surfdens'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
                                      xlim=[8.0,11.5], ylim=[-4.2,-0.4], drawMedian=False, markersize=40,
                                      scatterPoints=True, scatterColor=cQuant, sizefac=sizefac, cRel=[0.5,1.5,False],
-                                     alpha=0.7, maxPointsPerDex=1000, colorbarInside=False, lowessSmooth=True)
-            quantMedianVsSecondQuant([sP], pdf=None, yQuants=['ssfr'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
+                                     alpha=0.7, maxPointsPerDex=1000, colorbarInside=False, lowessSmooth=True, pdf=None)
+            quantMedianVsSecondQuant([sP], yQuants=['ssfr'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
                                      xlim=[8.0,11.5], ylim=[-2.6,0.6], cRel=[0.5,1.5,False], drawMedian=False, markersize=40,
                                      scatterPoints=True, scatterColor=cQuant, sizefac=sizefac, 
-                                     alpha=0.7, maxPointsPerDex=1000, colorbarInside=False, lowessSmooth=True)
+                                     alpha=0.7, maxPointsPerDex=1000, colorbarInside=False, lowessSmooth=True, pdf=None)
 
     # figure 9: area of MgII in [kpc^2] vs M*/z
     if 0:
@@ -975,9 +975,9 @@ def paperPlots():
             ax.text(np.mean(mstar_log), np.mean(area_log_kpc2), label, 
                     color=l.get_color(), va='top', ha='center', fontsize=26, rotation=24)
 
-        quantMedianVsSecondQuant([sP], pdf=None, yQuants=[yQuant], xQuant=xQuant, nBins=nBins, 
+        quantMedianVsSecondQuant([sP], yQuants=[yQuant], xQuant=xQuant, nBins=nBins, 
                                  cenSatSelect=cenSatSelect, xlim=xlim, ylim=ylim, drawMedian=drawMedian, 
-                                 sizefac=sizefac, extraMedians=extraMedians, f_post=f_post, legendLoc='upper left')
+                                 sizefac=sizefac, extraMedians=extraMedians, f_post=f_post, legendLoc='upper left', pdf=None)
 
     # figure 10 - relation of MgII flux and vrad (inflow vs outflow)
     if 0:
@@ -1041,18 +1041,18 @@ def paperPlots():
 
                 cRel = None if 'num_' in envquant else [0.5,1.5,False]
 
-                quantMedianVsSecondQuant([sP], pdf=None, yQuants=[quant], xQuant=xQuant, nBins=35, 
+                quantMedianVsSecondQuant([sP], yQuants=[quant], xQuant=xQuant, nBins=35, 
                                          cenSatSelect='cen', xlim=xlim, ylim=[0,25], drawMedian=True, 
                                          scatterPoints=True, scatterColor=envquant, 
-                                         cRel=cRel, markersize=40)
+                                         cRel=cRel, markersize=40, pdf=None)
 
-                quantMedianVsSecondQuant([sP], pdf=None, yQuants=[quant], xQuant=envquant, nBins=35, 
+                quantMedianVsSecondQuant([sP], yQuants=[quant], xQuant=envquant, nBins=35, 
                                          cenSatSelect='cen', xlim=None, drawMedian=True, 
-                                         scatterPoints=True, scatterColor=xQuant, markersize=40)
+                                         scatterPoints=True, scatterColor=xQuant, markersize=40, pdf=None)
 
-                quantMedianVsSecondQuant([sP], pdf=None, yQuants=[envquant], xQuant=xQuant, nBins=35, 
+                quantMedianVsSecondQuant([sP], yQuants=[envquant], xQuant=xQuant, nBins=35, 
                                          cenSatSelect='cen', xlim=xlim, drawMedian=True, 
-                                         scatterPoints=True, scatterColor=quant, markersize=40)
+                                         scatterPoints=True, scatterColor=quant, markersize=40, pdf=None)
 
     # explore - individual SB profiles
     if 0:
@@ -1077,10 +1077,10 @@ def paperPlots():
         drawMedian = True
         nBins = 30
 
-        quantMedianVsSecondQuant([sP], pdf=None, yQuants=[yQuant], xQuant=xQuant, nBins=nBins, 
+        quantMedianVsSecondQuant([sP], yQuants=[yQuant], xQuant=xQuant, nBins=nBins, 
                                  cenSatSelect=cenSatSelect, xlim=xlim, ylim=ylim, drawMedian=drawMedian, 
                                  scatterPoints=True, scatterColor='delta5_mstar_gt7', markersize=30, cRel=[0.5,2.0,False],
-                                 sizefac=sizefac, extraMedians=extraMedians, legendLoc='upper left')
+                                 sizefac=sizefac, extraMedians=extraMedians, legendLoc='upper left', pdf=None)
 
         qRestrictions = [['mstar_30pkpc_log',9.7,10.3],
                          ['mstar_30pkpc_log',8.8,9.2],
@@ -1088,8 +1088,8 @@ def paperPlots():
                          #['mstar_30pkpc_log',7.9,8.1]]
 
         # 'mg2_gini_-19.0' 'mg2_concentration' 'mg2_m20' 
-        quantMedianVsSecondQuant([sP], pdf=None, yQuants=['mg2_m20'], xQuant='delta5_mstar_gt7', 
+        quantMedianVsSecondQuant([sP], yQuants=['mg2_m20'], xQuant='delta5_mstar_gt7', 
                                  cenSatSelect='cen', xlim=[-1,2], ylim=[-2,0], drawMedian=True, 
                                  scatterPoints=True, nBins=24, ctName=['magma',[0.3,0.7]], 
                                  qRestrictions=qRestrictions, indivRestrictions=True, 
-                                 sizefac=sizefac, legendLoc='upper left')
+                                 sizefac=sizefac, legendLoc='upper left', pdf=None)

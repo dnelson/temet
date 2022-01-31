@@ -2933,7 +2933,7 @@ def paperPlots(sPs=None):
 
         pdf = PdfPages('histo2d_x=%s_y=%s_c=%s_%s_%d.pdf' % (xQuant,yQuant,cQuant,sP.simName,sP.snap))
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, pdf, yQuant=yQuant, fig_subplot=[fig,111], **params)
+        quantHisto2D(sP, yQuant=yQuant, fig_subplot=[fig,111], pdf=pdf, **params)
         pdf.close()
 
         # inset: trend of relative vout with delta_MS for two M* slices
@@ -2947,8 +2947,8 @@ def paperPlots(sPs=None):
         yQuant  = cQuant #'vout_50_20kpc'
 
         pdf = PdfPages('slice_%s_%d_x=%s_y=%s_s=%s_%s.pdf' % (sP.simName,sP.snap,xQuant,yQuant,sQuant,css))
-        quantSlice1D([sP], pdf, xQuant=xQuant, yQuants=[yQuant], sQuant=sQuant, 
-                     sRange=sRange, xlim=xlim, yRel=yRel, sizefac=sizefac, cenSatSelect=css)
+        quantSlice1D([sP], xQuant=xQuant, yQuants=[yQuant], sQuant=sQuant, 
+                     sRange=sRange, xlim=xlim, yRel=yRel, sizefac=sizefac, cenSatSelect=css, pdf=pdf)
         pdf.close()
 
     if 0:
@@ -2967,7 +2967,7 @@ def paperPlots(sPs=None):
 
         pdf = PdfPages('histofrac2d_x=%s_y=%s_c=%s_%s_%d.pdf' % (xQuant,yQuant,cQuant,sP.simName,sP.snap))
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, pdf, xQuant=xQuant, yQuant=yQuant, fig_subplot=[fig,111], **params)
+        quantHisto2D(sP, xQuant=xQuant, yQuant=yQuant, fig_subplot=[fig,111], pdf=pdf, **params)
         pdf.close()
 
     if 0:
@@ -3186,15 +3186,15 @@ def paperPlots(sPs=None):
             # individual plot per y-quantity:
             pdf = PdfPages('medianTrends_%s_x=%s_%s_slice=%s.pdf' % (sPs[0].simName,xQuant,css,priQuant))
             for yQuant in quants:
-                quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
-                                         sQuant=priQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
+                quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
+                                         sQuant=priQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
             pdf.close()
 
             # individual plot per s-quantity:
             pdf = PdfPages('medianTrends_%s_x=%s_%s_y=%s.pdf' % (sPs[0].simName,xQuant,css,priQuant))
             for sQuant in quants:
-                quantMedianVsSecondQuant(sPs, pdf, yQuants=[priQuant], xQuant=xQuant, cenSatSelect=css,
-                                         sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
+                quantMedianVsSecondQuant(sPs, yQuants=[priQuant], xQuant=xQuant, cenSatSelect=css,
+                                         sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
 
             pdf.close()
 
@@ -3218,7 +3218,7 @@ def paperPlots(sPs=None):
         for xQuant in xQuants:
             pdf = PdfPages('histo2d_x=%s_y=%s_c=%s_%s_%d.pdf' % (xQuant,yQuant,cQuant,sP.simName,sP.snap))
             fig = plt.figure(figsize=figsize_loc)
-            quantHisto2D(sP, pdf, xQuant=xQuant, yQuant=yQuant, fig_subplot=[fig,111], **params)
+            quantHisto2D(sP, xQuant=xQuant, yQuant=yQuant, fig_subplot=[fig,111], pdf=pdf, **params)
             pdf.close()
 
     # exploration: 2d histos of everything vs M*, color on e.g. eta/vout
@@ -3242,12 +3242,12 @@ def paperPlots(sPs=None):
 
                     pdf = PdfPages('histo2d_x=%s_c=%s_set-%d_%s_%d%s.pdf' % (xQuant,cQuant,j,sP.simName,sP.snap,'_rel' if cRel is not None else ''))
                     fig = plt.figure(figsize=figsize_loc)
-                    quantHisto2D(sP, pdf, yQuant=yQuants[0], fig_subplot=[fig,321], **params)
-                    quantHisto2D(sP, pdf, yQuant=yQuants[1], fig_subplot=[fig,322], **params)
-                    quantHisto2D(sP, pdf, yQuant=yQuants[2], fig_subplot=[fig,323], **params)
-                    quantHisto2D(sP, pdf, yQuant=yQuants[3], fig_subplot=[fig,324], **params)
-                    quantHisto2D(sP, pdf, yQuant=yQuants[4], fig_subplot=[fig,325], **params)
-                    quantHisto2D(sP, pdf, yQuant=yQuants[5], fig_subplot=[fig,326], **params)
+                    quantHisto2D(sP, yQuant=yQuants[0], fig_subplot=[fig,321], pdf=pdf, **params)
+                    quantHisto2D(sP, yQuant=yQuants[1], fig_subplot=[fig,322], pdf=pdf, **params)
+                    quantHisto2D(sP, yQuant=yQuants[2], fig_subplot=[fig,323], pdf=pdf, **params)
+                    quantHisto2D(sP, yQuant=yQuants[3], fig_subplot=[fig,324], pdf=pdf, **params)
+                    quantHisto2D(sP, yQuant=yQuants[4], fig_subplot=[fig,325], pdf=pdf, **params)
+                    quantHisto2D(sP, yQuant=yQuants[5], fig_subplot=[fig,326], pdf=pdf, **params)
                     pdf.close()
 
     # exploration: 2d histos of new quantities (vout,eta,BH_BolLum,etc) vs M*, colored by everything else
@@ -3271,12 +3271,12 @@ def paperPlots(sPs=None):
 
                     pdf = PdfPages('histo2d_x=%s_y=%s_set-%d_%s_%d%s.pdf' % (xQuant,yQuant,j,sP.simName,sP.snap,'_rel' if cRel is not None else ''))
                     fig = plt.figure(figsize=figsize_loc)
-                    quantHisto2D(sP, pdf, cQuant=cQuants[0], fig_subplot=[fig,321], **params)
-                    quantHisto2D(sP, pdf, cQuant=cQuants[1], fig_subplot=[fig,322], **params)
-                    quantHisto2D(sP, pdf, cQuant=cQuants[2], fig_subplot=[fig,323], **params)
-                    quantHisto2D(sP, pdf, cQuant=cQuants[3], fig_subplot=[fig,324], **params)
-                    quantHisto2D(sP, pdf, cQuant=cQuants[4], fig_subplot=[fig,325], **params)
-                    quantHisto2D(sP, pdf, cQuant=cQuants[5], fig_subplot=[fig,326], **params)
+                    quantHisto2D(sP, cQuant=cQuants[0], fig_subplot=[fig,321], pdf=pdf, **params)
+                    quantHisto2D(sP, cQuant=cQuants[1], fig_subplot=[fig,322], pdf=pdf, **params)
+                    quantHisto2D(sP, cQuant=cQuants[2], fig_subplot=[fig,323], pdf=pdf, **params)
+                    quantHisto2D(sP, cQuant=cQuants[3], fig_subplot=[fig,324], pdf=pdf, **params)
+                    quantHisto2D(sP, cQuant=cQuants[4], fig_subplot=[fig,325], pdf=pdf, **params)
+                    quantHisto2D(sP, cQuant=cQuants[5], fig_subplot=[fig,326], pdf=pdf, **params)
                     pdf.close()
 
     # exploration: outlier check (for Fig 14 discussion/text)
@@ -3299,5 +3299,5 @@ def paperPlots(sPs=None):
                 for cQuant in cQuants:
                     pdf = PdfPages('histo2d_x=%s_y=%s_c=%s_%s_%d.pdf' % (xQuant,yQuant,cQuant,sP.simName,sP.snap))
                     fig = plt.figure(figsize=figsize_loc)
-                    quantHisto2D(sP, pdf, xQuant=xQuant, yQuant=yQuant, cQuant=cQuant, fig_subplot=[fig,111], **params)
+                    quantHisto2D(sP, xQuant=xQuant, yQuant=yQuant, cQuant=cQuant, fig_subplot=[fig,111], pdf=pdf, **params)
                     pdf.close()

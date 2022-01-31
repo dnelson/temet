@@ -54,11 +54,13 @@ To load particle-level data from the snapshot itself
 .. code-block:: python
 
     gas_pos = sP.snapshotSubset('gas', 'pos')
+    star_masses = sP.snapshotSubsetP('stars', 'mass')
     dm_vel_sub10 = sP.snapshotSubset('dm', 'vel', subhaloID=10)
 
 In addition to shorthand names for fields such as "pos" (mapping to "Coordinates"), many custom fields 
-at both the particle and group catalog level are defined. Loading data can also be done with shorthands, 
-for example
+at both the particle and group catalog level are defined. Note that ``snapshotSubsetP()`` is the 
+parallel (multi-threaded) version, and will be significantly faster. Loading data can also be done with 
+shorthands, for example
 
 .. code-block:: python
 
@@ -83,7 +85,7 @@ and stellar mass, the "mass-metallicity relation" (MZR).
 
     sP = tenet.sim(run='tng100-1', redshift=0.0)
 
-    plot.cosmoGeneral.quantMedianVsSecondQuant(sP, 'Z_gas', 'mstar_30pkpc')
+    tenet.plot.cosmoGeneral.quantMedianVsSecondQuant(sP, 'Z_gas', 'mstar_30pkpc')
 
 Produces a PDF figure named ``medianQuants_TNG100-1_Z_gas_mstar_30pkpc_cen.pdf`` in the current working 
 directory. It shows the mass-metallicity relation of TNG100 galaxies at :math:`z=0`, and looks like this:
@@ -96,7 +98,7 @@ include individual subhalos as colored points, coloring based on gas fraction::
 
     sP = tenet.sim(run='tng100-1', redshift=0.0)
 
-    plot.cosmoGeneral.quantMedianVsSecondQuant(sP, 'Z_gas', 'mstar_30pkpc', 
+    tenet.plot.cosmoGeneral.quantMedianVsSecondQuant(sP, 'Z_gas', 'mstar_30pkpc', 
       xlim=[8.0, 11.5], scatterColor='fgas2')
 
 This produces the following figure, which highlights how lower mass galaxies have high gas fractions of 
@@ -112,11 +114,9 @@ Look at crel.
 
 Instead of individual colored markers, switch to quantHisto2D.
 
-.. note:: This is the exact plot made by the following API endpoint of the TNG public data release
-
+.. note:: This is the same plot made by the following API endpoint of the TNG public data release:
     https://www.tng-project.org/api/TNG100-1/snapshots/99/subhalos/plot.png?xQuant=mstar2&yQuant=Z_gas
-
-    and this API request is handled using the exact plotting function we just called.
+    and this API request is handled using the same plotting function we just called.
 
 
 Picking an Interesting Object

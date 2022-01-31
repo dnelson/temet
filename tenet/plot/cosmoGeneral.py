@@ -67,10 +67,10 @@ def addRedshiftAgeAxes(ax, sP, xrange=[-1e-4,8.0], xlog=True):
 
 # ------------------------------------------------------------------------------------------------------
 
-def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, xlim=None, ylim=None, clim=None, 
+def quantHisto2D(sP, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, xlim=None, ylim=None, clim=None, 
                  cStatistic=None, cNaNZeroToMin=False, minCount=None, cRel=None, cFrac=None, nBins=None, qRestrictions=None, 
                  filterFlag=False, medianLine=True, sizeFac=1.0, 
-                 fig_subplot=[None,None], pStyle='white', ctName=None, saveFilename=None, output_fmt=None):
+                 fig_subplot=[None,None], pStyle='white', ctName=None, saveFilename=None, output_fmt=None, pdf=None):
     """ Make a 2D histogram of subhalos with one quantity on the y-axis, another property on the x-axis, 
     and optionally a third property as the colormap per bin. minCount specifies the minimum number of 
     points a bin must contain to show it as non-white. If '_nan' is not in cStatistic, then by default, 
@@ -517,8 +517,8 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
 
     return True
 
-def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', yRel=None, xlim=None, ylim=None, 
-                 filterFlag=False, sizefac=None, fig_subplot=[None,None]):
+def quantSlice1D(sPs, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', yRel=None, xlim=None, ylim=None, 
+                 filterFlag=False, sizefac=None, fig_subplot=[None,None], pdf=None):
     """ Make a 1D slice through the 2D histogram by restricting to some range sRange of some quantity
     sQuant which is typically Mstar (e.g. 10.4<log_Mstar<10.6 to slice in the middle of the bimodality).
     For all subhalos in this slice, optically restricted by cenSatSelect, load a set of quantities 
@@ -692,13 +692,13 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
             fig.savefig('slice1d_%s_%s_%s_%s_%s.pdf' % (xlabel,cQuant,cStatistic,cenSatSelect,minCount))
         plt.close(fig)
 
-def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQuant=None, sLowerPercs=None, sUpperPercs=None, 
+def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=None, sLowerPercs=None, sUpperPercs=None, 
                              sizefac=1.0, alpha=1.0, nBins=50, qRestrictions=None, indivRestrictions=False, 
                              f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
                              scatterPoints=None, markersize=6.0, maxPointsPerDex=None, scatterColor=None, ctName=None, 
                              markSubhaloIDs=None, cRel=None, mark1to1=False, drawMedian=True, medianLabel=None, 
                              extraMedians=None, legendLoc='best', xlim=None, ylim=None, clim=None, cbarticks=None,
-                             filterFlag=False, colorbarInside=False, fig_subplot=[None,None]):
+                             filterFlag=False, colorbarInside=False, fig_subplot=[None,None], pdf=None):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, load a set of quantities 
     yQuants (could be just one) and plot this (y-axis) against the xQuant. Supports multiple sPs 
@@ -1206,9 +1206,9 @@ def plots():
             pdf = PdfPages('galaxy_2dhistos_%s_%d_%s_%s_%s_min=%d.pdf' % (sP.simName,sP.snap,yQuant,xQuant,css,minCount))
 
             for cQuant in quants:
-                quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim, minCount=minCount, 
+                quantHisto2D(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim, minCount=minCount, 
                              nBins=nBins, qRestrictions=qRestrictions, medianLine=medianLine, cenSatSelect=css, 
-                             cQuant=cQuant, cStatistic=cStatistic, cRel=cRel)
+                             cQuant=cQuant, cStatistic=cStatistic, cRel=cRel, pdf=pdf)
 
             pdf.close()
 
@@ -1229,7 +1229,7 @@ def plots_explore(sP):
         pdf = PdfPages('2dhistos_%s_%d_x=%s_y=all_c=%s_%s.pdf' % (sP.simName,sP.snap,xQuant,cQuant,css))
 
         for yQuant in yQuants:
-            quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, xlim=xlim, cenSatSelect=css, cQuant=cQuant)
+            quantHisto2D(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, cenSatSelect=css, cQuant=cQuant, pdf=pdf)
 
         pdf.close()
 
@@ -1252,15 +1252,15 @@ def plots2():
             ('-'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
 
         # all quantities on one multi-panel page:
-        #quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=quants, sQuant=sQuant, 
-        #             sRange=sRange, cenSatSelect=css, )
-        #quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=quantsTr, sQuant=sQuant, 
-        #             sRange=sRange, cenSatSelect=css)
+        #quantSlice1D(sPs, xQuant=xQuant, yQuants=quants, sQuant=sQuant, 
+        #             sRange=sRange, cenSatSelect=css, pdf=pdf)
+        #quantSlice1D(sPs, xQuant=xQuant, yQuants=quantsTr, sQuant=sQuant, 
+        #             sRange=sRange, cenSatSelect=css, pdf=pdf)
 
         # one page per quantity:
         for yQuant in quants + quantsTr:
-            quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[yQuant], sQuant=sQuant, 
-                         sRange=sRange, cenSatSelect=css)
+            quantSlice1D(sPs, xQuant=xQuant, yQuants=[yQuant], sQuant=sQuant, 
+                         sRange=sRange, cenSatSelect=css, pdf=pdf)
 
         pdf.close()
 
@@ -1287,18 +1287,18 @@ def plots3():
             ('-'.join([sP.simName for sP in sPs]),xQuant,css,sQuant))
 
         # all quantities on one multi-panel page:
-        quantMedianVsSecondQuant(sPs, pdf, yQuants=yQuants, xQuant=xQuant, cenSatSelect=css,
-                                 sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
+        quantMedianVsSecondQuant(sPs, yQuants=yQuants, xQuant=xQuant, cenSatSelect=css,
+                                 sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
 
         # individual plot per y-quantity:
         #for yQuant in yQuants:
-        #    quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
-        #                             sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
+        #    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
+        #                             sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
 
         # individual plot per s-quantity:
         #for sQuant in sQuants:
-        #    quantMedianVsSecondQuant(sPs, pdf, yQuants=yQuant, xQuant=xQuant, cenSatSelect=css,
-        #                             sQuant=[sQuant], sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
+        #    quantMedianVsSecondQuant(sPs, yQuants=yQuant, xQuant=xQuant, cenSatSelect=css,
+        #                             sQuant=[sQuant], sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
 
         pdf.close()
 
@@ -1333,12 +1333,12 @@ def plots4():
         (xQuant,yQuant,cenSatSelect,sQuant,sPs[0].simName,sPs[0].redshift))
 
     # one quantity
-    quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              #sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, 
                              qRestrictions=qRestrictions,
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, maxPointsPerDex=maxPointsPerDex, 
-                             markSubhaloIDs=None, filterFlag=filterFlag)
+                             markSubhaloIDs=None, filterFlag=filterFlag, pdf=pdf)
 
     pdf.close()
 
@@ -1377,12 +1377,12 @@ def plots5():
         (xQuant,yQuant,cenSatSelect,sQuant,sPs[0].simName,sPs[0].redshift))
 
     # one quantity
-    quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              #sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, 
                              qRestrictions=qRestrictions,
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, maxPointsPerDex=maxPointsPerDex, 
-                             markSubhaloIDs=None, filterFlag=filterFlag)
+                             markSubhaloIDs=None, filterFlag=filterFlag, pdf=pdf)
 
     pdf.close()
 
@@ -1425,9 +1425,9 @@ def plots_uvj():
             pdf = PdfPages('galaxy_2dhistos_%s_%d_%s_%s_%s_%s_min=%d.pdf' % (sP.simName,sP.snap,yQuant,xQuant,cs,css,minCount))
 
             for cQuant in quants:
-                quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim, cNaNZeroToMin=cNaNZeroToMin, 
+                quantHisto2D(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim, cNaNZeroToMin=cNaNZeroToMin, 
                              minCount=minCount, medianLine=medianLine, cenSatSelect=css, cQuant=cQuant, cStatistic=cs, 
-                             qRestrictions=qRestrictions, pStyle=pStyle)
+                             qRestrictions=qRestrictions, pStyle=pStyle, pdf=pdf)
 
             pdf.close()
 
@@ -1461,8 +1461,8 @@ def plots_tng50_structural(rel=False, sP=None):
         for cQuant in quants_gas + quants_stars + yQuants:
             if cQuant == yQuant: continue
 
-            quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, xlim=xlim, clim=clim, 
-                         cenSatSelect=css, cQuant=cQuant, nBins=nBins, cRel=cRel)
+            quantHisto2D(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, clim=clim, 
+                         cenSatSelect=css, cQuant=cQuant, nBins=nBins, cRel=cRel, pdf=pdf)
         pdf.close()
 
     # return with all cached data, can be passed back in for rapid re-plotting

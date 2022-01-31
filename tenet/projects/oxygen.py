@@ -2448,8 +2448,8 @@ def paperPlots():
 
             pdf = PdfPages('slice_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
                 ('_'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
-            quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[quant], sQuant=sQuant, 
-                         sRange=sRange, cenSatSelect=css)
+            quantSlice1D(sPs, xQuant=xQuant, yQuants=[quant], sQuant=sQuant, 
+                         sRange=sRange, cenSatSelect=css, pdf=pdf)
             pdf.close()
 
     # figure 18, 19, 20: 2d histos
@@ -2473,12 +2473,12 @@ def paperPlots():
 
                 pdf = PdfPages('histo2d_x=%s_set-%d_%sb.pdf' % (xQuant,j,sP.simName))
                 fig = plt.figure(figsize=figsize_loc)
-                quantHisto2D(sP, pdf, yQuant=yQuants[0], fig_subplot=[fig,321], **params)
-                quantHisto2D(sP, pdf, yQuant=yQuants[1], fig_subplot=[fig,322], **params)
-                quantHisto2D(sP, pdf, yQuant=yQuants[2], fig_subplot=[fig,323], **params)
-                quantHisto2D(sP, pdf, yQuant=yQuants[3], fig_subplot=[fig,324], **params)
-                quantHisto2D(sP, pdf, yQuant=yQuants[4], fig_subplot=[fig,325], **params)
-                quantHisto2D(sP, pdf, yQuant=yQuants[5], fig_subplot=[fig,326], **params)
+                quantHisto2D(sP, yQuant=yQuants[0], fig_subplot=[fig,321], pdf=pdf, **params)
+                quantHisto2D(sP, yQuant=yQuants[1], fig_subplot=[fig,322], pdf=pdf, **params)
+                quantHisto2D(sP, yQuant=yQuants[2], fig_subplot=[fig,323], pdf=pdf, **params)
+                quantHisto2D(sP, yQuant=yQuants[3], fig_subplot=[fig,324], pdf=pdf, **params)
+                quantHisto2D(sP, yQuant=yQuants[4], fig_subplot=[fig,325], pdf=pdf, **params)
+                quantHisto2D(sP, yQuant=yQuants[5], fig_subplot=[fig,326], pdf=pdf, **params)
                 pdf.close()
 
     # ------------ appendix ---------------
@@ -2529,8 +2529,8 @@ def paperPlots():
             pdf = PdfPages('slices_%s_x=all_%s-%.1f-%.1f_%s.pdf' % \
                 ('_'.join([sP.simName for sP in sPs]),sQuant,sRange[0],sRange[1],css))
             for xQuant in xQuants:
-                quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[quant], sQuant=sQuant, 
-                             sRange=sRange, cenSatSelect=css)
+                quantSlice1D(sPs, xQuant=xQuant, yQuants=[quant], sQuant=sQuant, 
+                             sRange=sRange, cenSatSelect=css, pdf=pdf)
             pdf.close()
 
     # exploration: median OVI column vs stellar/halo mass, split by everything else
@@ -2548,15 +2548,15 @@ def paperPlots():
             # individual plot per y-quantity:
             pdf = PdfPages('medianTrends_%s_x=%s_%s_slice=%s.pdf' % (simNames,xQuant,css,priQuant))
             for yQuant in quants:
-                quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
-                                         sQuant=priQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
+                quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
+                                         sQuant=priQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
             pdf.close()
 
             # individual plot per s-quantity:
             pdf = PdfPages('medianTrends_%s_x=%s_%s_y=%s.pdf' % (simNames,xQuant,css,priQuant))
             for sQuant in quants:
-                quantMedianVsSecondQuant(sPs, pdf, yQuants=[priQuant], xQuant=xQuant, cenSatSelect=css,
-                                         sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
+                quantMedianVsSecondQuant(sPs, yQuants=[priQuant], xQuant=xQuant, cenSatSelect=css,
+                                         sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
 
             pdf.close()
 
@@ -2576,10 +2576,10 @@ def paperPlots():
         pdf = PdfPages('medianTrends_%s_y=%s_vs-all%d_%s_%s_in_%.1f-%.1f.pdf' % \
             (simNames,yQuant,len(xQuants),css,rQuant,rRange[0],rRange[1]))
         for xQuant in xQuants:
-            quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[yQuant], sQuant=rQuant, 
-                         sRange=rRange, cenSatSelect=css)
+            quantSlice1D(sPs, xQuant=xQuant, yQuants=[yQuant], sQuant=rQuant, 
+                         sRange=rRange, cenSatSelect=css, pdf=pdf)
             # for most quantities, is dominated everywhere by low-mass halos with very small mass_ovi:
-            #quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css)
+            #quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css, pdf=pdf)
         pdf.close()
 
     # exploration: cloudy ionization table

@@ -67,8 +67,8 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
         # panel setup
         if len(stellarMassBins) >= 4:
             iLeg = 5 #2 # lower right (2x3)
-            ax = fig.add_subplot(2,len(stellarMassBins)/2,i+1) #2 rows, N columns
-            #ax = fig.add_subplot(3,len(stellarMassBins)/3,i+1) #3 rows, N columns
+            ax = fig.add_subplot(2,int(len(stellarMassBins)/2),i+1) #2 rows, N columns
+            #ax = fig.add_subplot(3,int(len(stellarMassBins)/3),i+1) #3 rows, N columns
         else: # N rows, 1 column
             iLeg = 0 # top (3x1)
             ax = fig.add_subplot(len(stellarMassBins), 1, i+1)
@@ -394,7 +394,7 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
             print('Color 2D PDFs [%s-%s]: obs' % (bands[0],bands[1]))
 
             # panel setup
-            ax = fig.add_subplot(2,len(bandCombos)/2,i+1)
+            ax = fig.add_subplot(2,int(len(bandCombos)/2),i+1)
             axes.append(ax)
             mag_range = bandMagRange(bands)
             
@@ -2206,12 +2206,12 @@ def paperPlots():
 
         pdf = PdfPages('figure6_%s.pdf' % sP.simName)
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='ssfr', fig_subplot=[fig,321], **params)
-        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Z_gas', fig_subplot=[fig,322], **params)
-        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='fgas2', fig_subplot=[fig,323], **params)
-        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='stellarage', fig_subplot=[fig,324], **params)
-        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='bmag_2rhalf_masswt', fig_subplot=[fig,325], **params)
-        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='pratio_halo_masswt', fig_subplot=[fig,326], **params)
+        quantHisto2D(sP, yQuant=yQuant, cQuant='ssfr', fig_subplot=[fig,321], pdf=pdf, **params)
+        quantHisto2D(sP, yQuant=yQuant, cQuant='Z_gas', fig_subplot=[fig,322], pdf=pdf, **params)
+        quantHisto2D(sP, yQuant=yQuant, cQuant='fgas2', fig_subplot=[fig,323], pdf=pdf, **params)
+        quantHisto2D(sP, yQuant=yQuant, cQuant='stellarage', fig_subplot=[fig,324], pdf=pdf, **params)
+        quantHisto2D(sP, yQuant=yQuant, cQuant='bmag_2rhalf_masswt', fig_subplot=[fig,325], pdf=pdf, **params)
+        quantHisto2D(sP, yQuant=yQuant, cQuant='pratio_halo_masswt', fig_subplot=[fig,326], pdf=pdf, **params)
         pdf.close()
 
     # figure 7: slice through 2d histo (one property)
@@ -2225,8 +2225,8 @@ def paperPlots():
 
         pdf = PdfPages('figure7_%s_slice_%s_%s-%.1f-%.1f_%s.pdf' % \
             ('_'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
-        quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[quant], sQuant=sQuant,
-                     sRange=sRange, cenSatSelect=css)
+        quantSlice1D(sPs, xQuant=xQuant, yQuants=[quant], sQuant=sQuant,
+                     sRange=sRange, cenSatSelect=css, pdf=pdf)
         pdf.close()
 
     # figure 8: BH cumegy vs mstar, model line on top (eddington transition to low-state?)
@@ -2292,8 +2292,8 @@ def paperPlots():
 
         pdf = PdfPages('figure8_medianTrend_%s_%s-%s_%s.pdf' % \
             ('_'.join([sP.simName for sP in sPs]),xQuant,yQuant,css))
-        quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
-            f_post=_add_theory_line)
+        quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
+            f_post=_add_theory_line, pdf=pdf)
         pdf.close()
 
     # figure 9: flux arrows in color-mass plane (9c unused)
@@ -2378,9 +2378,9 @@ def paperPlots():
 
         pdf = PdfPages('appendix4.pdf')
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(L75, pdf, bands, cenSatSelect='all', cQuant=None, fig_subplot=[fig,131])
-        quantHisto2D(L75, pdf, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132])
-        quantHisto2D(L205, pdf, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133])
+        quantHisto2D(L75, bands, cenSatSelect='all', cQuant=None, fig_subplot=[fig,131], pdf=pdf)
+        quantHisto2D(L75, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132], pdf=pdf)
+        quantHisto2D(L205, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133], pdf=pdf)
         pdf.close()
 
     # supplemental figures:
@@ -2394,12 +2394,12 @@ def paperPlots():
 
         pdf = PdfPages('supp1_%s.pdf' % sP.simName)
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='surfdens1_stars', fig_subplot=[fig,321], **params)
-        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Z_stars', fig_subplot=[fig,322], **params)
-        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Krot_oriented_stars2', fig_subplot=[fig,323], **params)
-        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Krot_oriented_gas2', fig_subplot=[fig,324], **params)
-        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='xray_r500', fig_subplot=[fig,325], **params)
-        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='size_stars', fig_subplot=[fig,326], **params)
+        quantHisto2D(sP, yQuant=yQuant, cQuant='surfdens1_stars', fig_subplot=[fig,321], pdf=pdf, **params)
+        quantHisto2D(sP, yQuant=yQuant, cQuant='Z_stars', fig_subplot=[fig,322], pdf=pdf, **params)
+        quantHisto2D(sP, yQuant=yQuant, cQuant='Krot_oriented_stars2', fig_subplot=[fig,323], pdf=pdf, **params)
+        quantHisto2D(sP, yQuant=yQuant, cQuant='Krot_oriented_gas2', fig_subplot=[fig,324], pdf=pdf, **params)
+        quantHisto2D(sP, yQuant=yQuant, cQuant='xray_r500', fig_subplot=[fig,325], pdf=pdf, **params)
+        quantHisto2D(sP, yQuant=yQuant, cQuant='size_stars', fig_subplot=[fig,326], pdf=pdf, **params)
         pdf.close()
 
     if 0:
@@ -2416,8 +2416,8 @@ def paperPlots():
         for quant in quants:
             pdf = PdfPages('supp2_%s_slice_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
                 ('_'.join([sP.simName for sP in sPs]),quant,xQuant,sQuant,sRange[0],sRange[1],css))
-            quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[quant], sQuant=sQuant,
-                         sRange=sRange, cenSatSelect=css)
+            quantSlice1D(sPs, xQuant=xQuant, yQuants=[quant], sQuant=sQuant,
+                         sRange=sRange, cenSatSelect=css, pdf=pdf)
             pdf.close()
 
     if 0:
@@ -2428,8 +2428,8 @@ def paperPlots():
 
         pdf = PdfPages('supp3_%s.pdf' % sP.simName)
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, pdf, yQuant='ssfr', cQuant=None, fig_subplot=[fig,211], **params)
-        quantHisto2D(sP, pdf, yQuant='ssfr', cQuant='color_C_gr', fig_subplot=[fig,212], **params)
+        quantHisto2D(sP, yQuant='ssfr', cQuant=None, fig_subplot=[fig,211], pdf=pdf, **params)
+        quantHisto2D(sP, yQuant='ssfr', cQuant='color_C_gr', fig_subplot=[fig,212], pdf=pdf, **params)
         pdf.close()
 
     if 0:

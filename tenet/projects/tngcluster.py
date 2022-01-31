@@ -837,10 +837,10 @@ def bfield_strength_vs_halomass(sPs, redshifts):
         # |B| = 2.8 +/- 0.1 uG (within 200 kpc)
         # M_500,SZ = 5.91e14 Msun
 
-    quantMedianVsSecondQuant(sPs_in, pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    quantMedianVsSecondQuant(sPs_in, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_pre=_draw_data, f_post=_draw_data2, legendLoc='lower right')
+                             f_pre=_draw_data, f_post=_draw_data2, legendLoc='lower right', pdf=None)
 
 def stellar_mass_vs_halomass(sPs, conf=0):
     """ Plot various stellar mass quantities vs halo mass. """
@@ -930,10 +930,10 @@ def stellar_mass_vs_halomass(sPs, conf=0):
         def _draw_data(ax):
             pass
 
-    quantMedianVsSecondQuant(sPs, pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_post=_draw_data, ylabel=ylabel, legendLoc='lower right')
+                             f_post=_draw_data, ylabel=ylabel, legendLoc='lower right', pdf=None)
 
 def gas_fraction_vs_halomass(sPs):
     """ Plot f_gas vs halo mass. """
@@ -974,10 +974,10 @@ def gas_fraction_vs_halomass(sPs):
         ax.plot( xlim, [OmegaU,OmegaU], '--', lw=1.0, color='#444444', alpha=0.2)
         ax.text( xlim[1]-0.2, OmegaU+0.003, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', size='large', alpha=0.2)
 
-    quantMedianVsSecondQuant(sPs, pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_post=_draw_data, legendLoc='lower right')
+                             f_post=_draw_data, legendLoc='lower right', pdf=None)
 
 def paperPlots():
     """ Plots for TNG-Cluster intro paper. """
@@ -1039,11 +1039,16 @@ def paperPlots():
         pdf.close()
 
     # figure X - BCG stellar sizes
-    if 0:
+    if 1:
         from ..plot.sizes import galaxySizes
         pdf = PdfPages('galaxy_stellar_sizes_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        galaxySizes(sPs, pdf, xlim=[11.0,13.0], ylim=[3,300], onlyRedData=True)
+        galaxySizes(sPs, xlim=[11.0,13.0], ylim=[3,300], onlyRedData=True, scatterPoints=True, pdf=pdf)
         pdf.close()
+
+    # satellite smhm
+    # satellite radial number density
+    # richness
+    # BCG SFR vs M* with quenched fraction indicators
 
     # figure todo - entropy profiles
     # figure todo - cc/ncc fractions vs mass

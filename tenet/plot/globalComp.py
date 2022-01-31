@@ -2412,16 +2412,12 @@ def plots():
     #sPs.append( simParams(res=1820, run='tng', redshift=4.0) )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
-    #for variant in ['','0000','4503','0000_Mpc']:
-    #    sPs.append( simParams(res=455, run='tng', variant=variant) )
+    for variant in ['0000','4503','4504']:
+        sPs.append( simParams(res=512, run='tng', variant=variant) )
     #for variant in ['','0000','4503']:
     #    sPs.append( simParams(res=625, run='tng', variant=variant) )
 
-    #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
-    #sPs.append( simParams(res=910, run='illustris') )
-    #sPs.append( simParams(res=455, run='illustris') )
-
-    sPs.append( simParams(res=2500, run='tng') )
+    #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
@@ -2430,7 +2426,9 @@ def plots():
     #sPs.append( simParams(res=540, run='tng') )  
     #sPs.append( simParams(res=270, run='tng') )
 
+    #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
     #sPs.append( simParams(run='eagle', redshift=0.0) )
+    #sPs.append( simParams(run='tng-cluster') )
 
     # add runs: TNG_methods
     #sPs.append( simParams(res=128, run='tng', variant='6003') )
@@ -2442,18 +2440,19 @@ def plots():
     #sPs.append( simParams(res=512, run='tng', variant='0000') )
     #sPs.append( simParams(res=512, run='tng', variant='5014') )
 
+    # change to plot simulations at z>0 against z=0 observational data
+    zZero = 0.0
+
     if 0:
         # single plot and quit
         pdf = PdfPages('comptest_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        #stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=0.0)
-        #stellarMassFunctionMultiPanel(sPs, pdf, use30kpc=True, highMassEnd=False, redshifts=[0,3])
+        massMetallicityStars(sPs, pdf, simRedshift=zZero)
+        massMetallicityGas(sPs, pdf, simRedshift=zZero)
         pdf.close()
         return
 
     # make multipage PDF
     pdf = PdfPages('globalComps_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-
-    zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
     stellarMassHaloMass(sPs, pdf, ylog=False, use30kpc=True, simRedshift=zZero)
     stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=zZero)
@@ -2468,8 +2467,8 @@ def plots():
     blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
-    galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None)
-    galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=None)
+    galaxySizes(sPs, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None, pdf=pdf)
+    galaxySizes(sPs, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=None, pdf=pdf)
     stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=False, simRedshift=zZero, dataRedshift=None, haloMasses=True)
     stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)
     stellarMassFunction(sPs, pdf, highMassEnd=True, simRedshift=zZero)

@@ -13,11 +13,26 @@ from ..util import simParams
 from ..util.helper import running_median, logZeroNaN
 from ..plot.config import *
 
-def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,None], 
-                addHalfLightRad=None, onlyRedData=False, xlim=None, ylim=None):
-    """ Galaxy sizes (half mass radii) vs stellar mass or halo mass, at redshift zero. 
-    If addHalfLightRad is not None, then addHalfLightRad = [dustModel,band,show3D] e.g.
-    addHalfLightRad = ['p07c_cf00dust_res_conv_efr_rad30pkpc','sdss_r',False]. """
+def galaxySizes(sPs, vsHaloMass=False, simRedshift=0.0, addHalfLightRad=None, onlyRedData=False, 
+                scatterPoints=False, markersize=12.0, xlim=None, ylim=None, fig_subplot=[None,None], pdf=None):
+    """ Galaxy sizes (half mass radii) vs stellar mass or halo mass, compared to data.
+
+    Args:
+
+      sPs (:py:class:`~util.simParams` or list): simulation instance(s).
+      vsHaloMass (bool): 
+      simRedshift (float): 
+      addHalfLightRad (tuple): if not NOne, then a 3-tuple [dustModel,band,show3D] e.g.
+        ['p07c_cf00dust_res_conv_efr_rad30pkpc','sdss_r',False].
+      onlyRedData (bool): 
+      scatterPoints (bool): include all raw points with a scatterplot.
+      markersize (float): if ``scatterPoints`` then override the default marker size.
+      xlim (2-tuple): 
+      ylim (2-tuple): 
+      fig_subplot (2-tuple): 
+      pdf (PdfPages or None): if None, an actual PDF file is written to disk with the figure.
+        If not None, then the figure is added to this existing pdf collection.
+    """
     from ..load.data import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass, mowla2019
 
     # plot setup
@@ -45,9 +60,10 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         xlabel = 'Galaxy Stellar Mass [ log M$_{\\rm sun}$ ]'
         if not clean: xlabel += ' [ < 2r$_{1/2}$ ]'
         ax.set_xlabel(xlabel)
-        #ax.set_xlim( behrooziSMHM(sPs[0], logHaloMass=np.array(ax.get_xlim())) )
-        ax.set_xlim([7,12.0] if xlim is None else xlim)
-        if clean: ax.set_xlim([8.0,12.0] if xlim is None else xlim)
+        ax.set_xlim([7,12.0])
+        if clean: ax.set_xlim([8.0,12.0])
+
+    if xlim is not None: ax.set_xlim(xlim)
 
     # observational points
     if not vsHaloMass:
@@ -215,6 +231,26 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
                     y_up   = np.array(ym_stars[1:-1]) + sm_stars[1:-1]
                     ax.fill_between(xm_stars[1:-1], y_down, y_up, 
                             color=l.get_color(), interpolate=True, alpha=0.3)
+
+        # individual points?
+        if scatterPoints:
+            # reduce PDF weight, skip points outside of visible plot
+            with np.errstate(invalid='ignore'):
+                w = np.where( (xx >= ax.get_xlim()[0]) & (xx <= ax.get_xlim()[1]) )
+
+            xx = xx[w]
+            yy = yy_stars[w]
+
+            if xx.size > 100:
+                ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
+
+            # scatter color and marker
+            opts = {'color':l.get_color(), 'alpha':0.8}
+            #opts['label'] = '%s z=%.1f' % (sP.simName,sP.redshift) if len(sPs) > 1 else ''
+            opts['marker'] = 's' if sP.simName == 'TNG-Cluster' else 'o'
+
+            # plot scatter
+            sc = ax.scatter(xx, yy, s=markersize, **opts, zorder=0)
 
     # second legend
     handles, labels = ax.get_legend_handles_labels()

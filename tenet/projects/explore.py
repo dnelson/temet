@@ -508,9 +508,9 @@ def smitaXMMproposal():
     qRestrictions = None
     pdf = None
 
-    quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim, minCount=minCount, 
+    quantHisto2D(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim, minCount=minCount, 
                  qRestrictions=qRestrictions, medianLine=medianLine, cenSatSelect=cenSatSelect, 
-                 cNaNZeroToMin=cNaNZeroToMin, cQuant=cQuant)
+                 cNaNZeroToMin=cNaNZeroToMin, cQuant=cQuant, pdf=pdf)
 
 
 def nachoAngularQuenchingDens():
