@@ -374,9 +374,16 @@ def sfrdVsRedshift(sPs, pdf, xlog=True, addSubhalosOnly=False):
 
     l2,_,_ = ax.errorbar(bo['redshift'], bo['sfrd'], 
                          xerr=bo['redshiftErr'], yerr=[bo['errorDown'],bo['errorUp']], 
-                         color='#666666', ecolor='#666666', alpha=0.9, capsize=0.0, fmt='D')
+                         color='#333333', ecolor='#333333', alpha=0.9, capsize=0.0, fmt='D')
 
-    legend1 = ax.legend([l1,l2], [be['label'], bo['label']], loc='upper right')
+    en = eniaSFRD2022()
+
+    l3,_,_ = ax.errorbar(en['redshift'], en['sfrd'], 
+                         xerr=[en['redshift_errLeft'],en['redshift_errRight']], 
+                         yerr=[en['sfrd_errDown'],en['sfrd_errUp']], 
+                         color='#666666', ecolor='#666666', alpha=0.9, capsize=0.0, fmt='s')
+
+    legend1 = ax.legend([l1,l2,l3], [be['label'], bo['label'], en['label']], loc='upper right')
     ax.add_artist(legend1)
 
     # loop over each fullbox run
@@ -2406,14 +2413,12 @@ def plots():
 
     # add runs: fullboxes
     #sPs.append( simParams(run='tng100-1', redshift=0.0) )
-    #sPs.append( simParams(res=2160, run='tng', redshift=0.0) )
-    #sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
-    #sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
-    #sPs.append( simParams(res=1820, run='tng', redshift=4.0) )
-    #sPs.append( simParams(res=910, run='tng') )
-    #sPs.append( simParams(res=455, run='tng') )
-    for variant in ['0000','4503','4504']:
-        sPs.append( simParams(res=512, run='tng', variant=variant) )
+    #sPs.append( simParams(run='tng100-1', redshift=1.0) )
+    #sPs.append( simParams(run='tng100-1', redshift=2.0) )
+    #sPs.append( simParams(run='tng100-1', redshift=4.0) )
+
+    #for variant in ['0000','4503','4504']:
+    #    sPs.append( simParams(res=512, run='tng', variant=variant) )
     #for variant in ['','0000','4503']:
     #    sPs.append( simParams(res=625, run='tng', variant=variant) )
 
@@ -2446,8 +2451,8 @@ def plots():
     if 0:
         # single plot and quit
         pdf = PdfPages('comptest_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        massMetallicityStars(sPs, pdf, simRedshift=zZero)
-        massMetallicityGas(sPs, pdf, simRedshift=zZero)
+        sfrdVsRedshift(sPs, pdf, xlog=True)
+        sfrdVsRedshift(sPs, pdf, xlog=False)
         pdf.close()
         return
 

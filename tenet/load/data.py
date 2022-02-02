@@ -124,6 +124,23 @@ def bouwensSFRD2014():
 
     return r
 
+def eniaSFRD2022():
+    """ Load observational data points from Enia+ (2022): arXiv:2202.00019. """
+    path = dataBasePath + 'enia/e22_sfrd.txt'
+    data = np.loadtxt(path, delimiter=',')
+
+    r = {}
+    r['redshift'] = [d[0] for d in data]
+    r['redshift_errRight'] = [d[1]-d[0] for d in data]
+    r['redshift_errLeft'] = [d[0]-d[2] for d in data]
+
+    r['sfrd'] = [10.0**d[3] for d in data]
+    r['sfrd_errUp'] = [10.0**d[4]-10.0**d[3] for d in data]
+    r['sfrd_errDown'] = [10.0**d[3]-10.0**d[5] for d in data]
+    r['label'] = 'Enia+ (2022)'
+
+    return r
+
 def mosterSMHM(sP, redshift=0.0):
     """ Load from data files: Moster+ (2013) abundance matching, stellar mass / halo mass relation. """
     def f2013(mass, ind, redshift):
