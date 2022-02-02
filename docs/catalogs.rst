@@ -243,7 +243,7 @@ The code base currently has the following catalog definitions, as listed in the
 
 .. exec::
 
-    from ..cosmo.auxcatalog import fieldComputeFunctionMapping
+    from tenet.load.auxcat import fieldComputeFunctionMapping
 
     print('.. csv-table::')
     print('    :header: "Catalog Name", "Generator Function", "Arguments"')

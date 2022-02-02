@@ -2,16 +2,18 @@
 Observational data processing, reduction, and analysis (eROSITA).
 
  * aperture photometry on GAMA sources with apetool
+
   - multiple eef and arcsec apertures, could interpolate to fixed pkpc apertures
   - verification against Liu catalog values
   - random positions: assess residual background even after 'background subtraction'
   - could re-do anderson+ L_x vs M* plot
 
  * image stacking on GAMA sources
+
   - pretty clear detection down to M*=10.6
   - could do: Lx vs M* split on galaxy properties (other than SFR)
-              radial profiles
-              angular anisotropy signal (truong) - not clearly there
+  - could do: radial profiles
+  - could do: angular anisotropy signal (truong) - not clearly there
 """
 import numpy as np
 import h5py

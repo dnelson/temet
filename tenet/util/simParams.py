@@ -287,6 +287,10 @@ class simParams:
         self.setRedshift(self.redshift)
         self.setSnap(self.snap)
 
+    def __repr__(self):
+        """ Representation of this simParams object as a string (for debugging). """
+        return "%s (z=%.1f, snapshot %d)" % (self.simName, self.redshift, self.snap)
+
     def scan_simulation(self, inputPath, simName=None):
         """ Fill simulation parameters automatically, based on path. """
         self.arepoPath = inputPath

@@ -12,7 +12,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
-from scipy.stats import binned_statistic_2d, gaussian_kde
+from scipy.stats import gaussian_kde
 
 from ..util import simParams
 from ..util.helper import running_median, contourf, logZeroNaN, closest, loadColorTable, getWhiteBlackColors, leastsq_fit

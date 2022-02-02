@@ -34,10 +34,10 @@ described in the :py:func:`plot.quantities.simParticleQuantity` function, along 
 metadata including a description, units, reasonable bounds, and so on.
 
 .. exec::
-    # code executes in python/ directory, load the source of a file
+    # code executes in tenet/ directory, load the source of a file
     import re
 
-    with open('plot/quantities.py','r') as f:
+    with open('tenet/plot/quantities.py','r') as f:
         lines = f.readlines()
 
     # start output (is then run through the rest/html build parser)
