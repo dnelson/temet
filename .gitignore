@@ -1,6 +1,6 @@
 __pycache__
-tenet/docs/_build/
-tenet/docs/source/
+docs/_build/
+docs/source/
 .pyc
 .so
 .ipynb_checkpoints
