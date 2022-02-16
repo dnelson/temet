@@ -293,6 +293,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
     end_cell_ind, h_guess = _treeSearchNearestSingle(ray_end,cell_pos,boxSize,NextNode,length,center,sibling,nextnode,h_guess)
     end_cell_pos = cell_pos[end_cell_ind]
 
+    # note: by definition end_cell_ind == cur_cell_ind if total_dl = BoxSize
     #if debug: print(f'Starting cell index [{cur_cell_ind}], ending cell index [{end_cell_ind}], {total_dl = :.3f}.')
 
     if verify:
@@ -360,7 +361,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
             # set distance along ray as midpoint between bracketing
             #iter_counter[n_step] = n_iter
 
-            assert n_iter < 100 and (raylength_right - raylength_left) > 1e-10 # otherwise failure
+            assert n_iter < 500 and (raylength_right - raylength_left) > 1e-10 # otherwise failure
 
             # new test position along ray (ray_end_local can be outside box, which is ok for __treeSearchNearestSingle)
             raylength_cen = 0.5 * (raylength_left + raylength_right)
@@ -418,6 +419,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
                 if num_prev_inds == 0 or prev_cell_inds[num_prev_inds-1] != end_cell_local_ind:
                     prev_cell_inds[num_prev_inds] = end_cell_local_ind
                     prev_cell_cen[num_prev_inds] = raylength_cen
+                    prev_cell_cen[num_prev_inds] += abs_tol # avoid roundoff issues
                     #if debug > 1: print(f' -- adding {num_prev_inds = } index {end_cell_local_ind} cen {raylength_cen}')
                     num_prev_inds += 1
 
@@ -531,7 +533,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
 
             # are we finished unexpectedly?
             assert dl < total_dl
-            assert cur_cell_ind != end_cell_ind # dl should exceed total_dl first (note: unless exactly full box total_dl)
+            assert (cur_cell_ind != end_cell_ind) or (total_dl == boxSize)
 
             # update cur_cell_ind (global ending cell always remains the same)
             prev_cell_ind = cur_cell_ind # for verify only
