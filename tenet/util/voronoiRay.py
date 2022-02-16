@@ -332,12 +332,16 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
 
         # bisection acceleration: from the last ray position, we can use the 'closest' failed 
         # distance as a (closer) starting point
-        while num_prev_inds > 0 and prev_cell_inds[num_prev_inds-1] == cur_cell_ind:
-            # avoid self, pop from stack
-            #if debug > 1: print(' -- remove self from prev_cell_inds stack!')
-            prev_cell_cen[num_prev_inds-1] = 0.0 # for safety only
-            prev_cell_inds[num_prev_inds-1] = -1 # for safety only
-            num_prev_inds -= 1
+        i = 0
+        while prev_cell_inds[i] != -1:
+            if prev_cell_inds[i] == cur_cell_ind:
+                # avoid self, overwrite with next entry
+                #if debug > 1: print(f' -- remove self [{i}] [{prev_cell_inds[i]}] from prev_cell_inds stack!')
+                prev_cell_inds[i] = prev_cell_inds[i+1]
+                prev_cell_cen[i] = prev_cell_cen[i+1]
+                num_prev_inds -= 1
+                continue
+            i += 1
 
         if num_prev_inds > 0 and prev_cell_inds[num_prev_inds-1] >= 0:
             # set first ray_end_local to known (shorter) result
@@ -603,7 +607,7 @@ def _rayTraceFull(pos, NextNode, length, center, sibling, nextnode, ray_pos, ray
     #prev_cell_cen = np.zeros(max_steps, dtype=np.float32)
 
     # possibly iterate for allocation
-    i = 0
+    i = -1
     while i != n_rays - 1:
         # allocate for full (dx,ind) lists for each ray, along with per-ray offset/length info
         offset = 0
