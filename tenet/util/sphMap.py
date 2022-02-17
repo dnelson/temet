@@ -1068,6 +1068,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     axes = np.array(axes)
     boxSizeSim = np.array(boxSizeSim)
     boxSizeImg = np.array(boxSizeImg)
+    boxCen = np.array(boxCen)
     nPixels = np.array(nPixels)
 
     # massage mass if single scalar

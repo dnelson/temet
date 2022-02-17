@@ -823,14 +823,17 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         lats = np.linspace(0.0+dlat/2, np.pi-dlat/2, nPixels[1]) # rad, 0 to np.pi from z-axis
         pxAreasByLat = np.sin(lats) * pxArea # infinite at poles, 0 at equator
 
-        for i in range(nPixels[1]): # normalize separately for each latitude
-            grid[i,:] /= pxAreasByLat[i]
+        if projType == 'azimuthalequidistant':
+            print('Note: Skipping area normalization for now (todo).')
+        else:
+            for i in range(nPixels[1]): # normalize separately for each latitude
+                grid[i,:] /= pxAreasByLat[i]
 
         grid = sP.units.codeMassToMsun(grid) # log(msun/ster)
         config['label'] = '%s Column Density [log M$_{\\rm sun}$ ster$^{-1}$]' % ptStr
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens_tng'
-        if sP.isPartType(partType,'gas'):   config['ctName'] = 'gray' #'gasdens_tng4'
+        if sP.isPartType(partType,'gas'):   config['ctName'] = 'magma' #'gasdens_tng4'
         if sP.isPartType(partType,'stars'): config['ctName'] = 'gray'
 
     # hydrogen/metal/ion column densities

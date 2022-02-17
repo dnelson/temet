@@ -145,7 +145,9 @@ def renderBox(panels_in, plotConfig, localVars, skipExisting=True, retInfo=False
             if 'sP' in p:
                 print('Warning: Overriding common sP with specified run,snap,redshift.')
 
-            p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=h, variant=v, refPos=rp, refVel=rv)
+            p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=h, variant=v)
+            p['sP'].refPos = rp
+            p['sP'].refVel = rv
 
         # add imaging config for render of the whole box, if not directly specified
         boxSizeImg, boxCenter, extent = boxImgSpecs(**p)
@@ -263,7 +265,9 @@ def renderBoxFrames(panels_in, plotConfig, localVars, curTask=0, numTasks=1, ski
         rp = p['refPos'] if 'refPos' in p else None
         rv = p['refVel'] if 'refVel' in p else None
 
-        p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=h, variant=v, refPos=rp, refVel=rv)
+        p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=h, variant=v)
+        p['sP'].refPos = rp
+        p['sP'].refVel = rv
 
         # add imaging config for [square render of] whole box
         if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]

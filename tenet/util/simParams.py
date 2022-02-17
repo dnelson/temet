@@ -117,6 +117,7 @@ class simParams:
     groupOrdered  = None  # False: IDs stored in group catalog, True: snapshot is group ordered (by type) 
     snap          = None  # copied/derived from input
     redshift      = None  # copied/derived from input (always matched to snap)
+    time          = None  # copied/derived from input (only for non-cosmological runs)
     run           = ''    # copied from input
     variant       = ''    # copied from input (to pick any sim with variations beyond run/res/hInd)
     
@@ -177,8 +178,8 @@ class simParams:
     BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=TNG Model, 3=Auriga model)
     winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=TNG Model, 3=Auriga model)
 
-    def __init__(self, run, res=None, variant=None, redshift=None, snap=None, hInd=None, 
-                       haloInd=None, subhaloInd=None, refPos=None, refVel=None, arepoPath=None,
+    def __init__(self, run, res=None, variant=None, redshift=None, time=None, snap=None, 
+                       hInd=None, haloInd=None, subhaloInd=None, arepoPath=None,
                        simName=None):
         """ Fill parameters based on inputs. """
 
@@ -190,6 +191,7 @@ class simParams:
         if redshift and snap:
             print("Warning: simParams: both redshift and snap specified.")
         self.redshift = redshift
+        self.time     = time
         self.snap     = snap
 
         if "/" in run or "." in run:
@@ -197,8 +199,8 @@ class simParams:
             self.scan_simulation(run, simName=simName)
         else:
             # old, hardcoded lookup based on given **kwargs
-            self.lookup_simulation(res=res, run=run, variant=variant, redshift=redshift, snap=snap, hInd=hInd,
-                                   haloInd=haloInd, subhaloInd=subhaloInd, refPos=refPos, refVel=refVel)
+            self.lookup_simulation(res=res, run=run, variant=variant, redshift=redshift, time=time, snap=snap, 
+                                   hInd=hInd, haloInd=haloInd, subhaloInd=subhaloInd)
 
         # attach various functions pre-specialized to this sP, for convenience
         from ..cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicPairwiseDists, \
@@ -320,8 +322,12 @@ class simParams:
         if simName is None:
             self.simName = inputPath.rstrip("/").split("/")[-1]
 
+        # find one snapshot file to load a header
         p = os.path.join(self.simPath,"snap*/snap_*.hdf5")
         hdf5files = glob(p)
+        if len(hdf5files) == 0:
+            p = os.path.join(self.simPath,"snap*.hdf5")
+            hdf5files = glob(p)
         hdf5file = hdf5files[0]
 
         with h5py.File(hdf5file, 'r') as hf:
@@ -333,8 +339,8 @@ class simParams:
         self.HubbleParam = header["HubbleParam"]
         self.omega_b     = header["OmegaBaryon"] if "OmegaBaryon" in header else None
 
-    def lookup_simulation(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None,
-                          haloInd=None, subhaloInd=None, refPos=None, refVel=None):
+    def lookup_simulation(self, res=None, run=None, variant=None, redshift=None, time=None, snap=None, hInd=None,
+                          haloInd=None, subhaloInd=None):
         """ Fill parameters based on inputs. (hardcoded)"""
 
         # general validation
@@ -360,8 +366,6 @@ class simParams:
         # pick analysis parameters
         self.haloInd    = haloInd
         self.subhaloInd = subhaloInd
-        self.refPos     = refPos
-        self.refVel     = refVel
 
         self.data = {}
 
@@ -559,6 +563,7 @@ class simParams:
                 if res == 6144: self.simName = 'TNG-Cluster-Old'
                 if res == 8192: self.simName = 'TNG-Cluster'
                 if '_dm' in run: self.simName += '-Dark'
+                if res == 2048: self.simName = 'L680n2048TNG_DM'
                 if 'NR' in self.variant: self.simName = 'TNG%d-%d-%s' % (boxSizeName,resInd,self.variant)
 
             if res in res_L25:
@@ -1306,6 +1311,11 @@ class simParams:
         if self.redshift is not None:
             self.snap = self.redshiftToSnapNum()
             if self.redshift < 1e-10: self.redshift = 0.0
+
+        if self.time is not None:
+            # non-cosmological run
+            self.snap = self.redshiftToSnapNum(times=[self.time])
+
         self.units = units(sP=self)
         self.data = {}
 
@@ -1319,8 +1329,14 @@ class simParams:
             else:
                 self.redshift = self.snapNumToRedshift()
 
-            assert self.redshift >= -1e-15
-            if np.abs(self.redshift) < 1e-10: self.redshift = 0.0
+            if np.isnan(self.redshift):
+                # non-cosmological
+                self.time = self.snapNumToRedshift(time=True)
+            else:
+                # cosmological
+                assert self.redshift >= -1e-15
+                if np.abs(self.redshift) < 1e-10: self.redshift = 0.0
+
         self.units = units(sP=self)
 
         # clear cache

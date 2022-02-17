@@ -156,7 +156,7 @@ class units(object):
         # derived constants / cosmology parameters
         self.mag2cgs = np.log10( self.L_sun / (4.0 * np.pi * (10*self.pc_in_cm)**2))
         self.c_ang_per_sec = self.c_cgs / self.ang_in_cm
-        self.f_b = self._sP.omega_b / self._sP.omega_m
+        self.f_b = self._sP.omega_b / self._sP.omega_m if self._sP.omega_m != 0.0 else np.nan
 
         self.Hubble = self.H0_h1_s * self.UnitTime_in_s
         self.rhoBack = 3 * self._sP.omega_m * self.Hubble**2 / (8 * np.pi * self.G)
@@ -171,6 +171,11 @@ class units(object):
             self.H_of_a    = self.Hubble * np.sqrt(self.H2_z_fact)
             self.rhoCrit_z = self.rhoCrit * self.H2_z_fact
             self.scalefac  = 1.0 / (1+self._sP.redshift)
+
+        # non-cosmological run?
+        if self._sP.redshift is not None and np.isnan(self._sP.redshift):
+            print('Note: Setting units.scalefac = 1 for non-cosmological run.')
+            self.scalefac = 1.0 # nullify all comoving -> physical conversions
 
     # --- unit conversions to/from code units ---
 

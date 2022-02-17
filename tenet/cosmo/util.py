@@ -11,7 +11,7 @@ from ..util.helper import closest
 
 # --- snapshot configuration & spacing ---
 
-def redshiftToSnapNum(redshifts=None, sP=None):
+def redshiftToSnapNum(redshifts=None, times=None, sP=None):
     """ Convert one or more input redshifts to closest matching snapshot numbers for a given sP. """
     from ..util.helper import closest
     from ..load.snapshot import subboxVals
@@ -63,6 +63,10 @@ def redshiftToSnapNum(redshifts=None, sP=None):
                 r['redshifts'][i] = f['Header'].attrs['Redshift']
                 r['times'][i]     = f['Header'].attrs['Time']
 
+            # time is not equal to 1.0, but redshift is zero? non-cosmological run
+            if r['redshifts'][i] == 0.0 and np.abs(r['times'][i]-1.0) > 1e-10:
+                r['redshifts'][i] = np.nan # mark as such
+
             r['nFound'] += 1
 
         # save
@@ -76,14 +80,27 @@ def redshiftToSnapNum(redshifts=None, sP=None):
     # return array of snapshot numbers
     snaps = np.zeros( redshifts.size, dtype='int32' )
 
-    for i,redshift in np.ndenumerate(redshifts):
-        # closest snapshot redshift to requested
-        zFound, w = closest( r['redshifts'], redshift )
+    # time instead of redshift? (non-cosmological run)
+    if times is not None:
+        for i,time in np.ndenumerate(times):
+            # closest snapshot time to requested
+            tFound, w = closest( r['times'], time )
+            tErr = np.abs(tFound-time)
 
-        if np.abs(zFound-redshift) > 0.1:
-            print("Warning! [%s] Snapshot selected with redshift error = %g" % (sP.simName,np.abs(zFound-redshift)))
+            if tErr > 0.1:
+                print("Warning! [%s] Snapshot selected with time error = %g" % (sP.simName,tErr))
 
-        snaps[i] = w
+            snaps[i] = w
+    else:
+        # redshift search
+        for i,redshift in np.ndenumerate(redshifts):
+            # closest snapshot redshift to requested
+            zFound, w = closest( r['redshifts'], redshift )
+
+            if np.abs(zFound-redshift) > 0.1:
+                print("Warning! [%s] Snapshot selected with redshift error = %g" % (sP.simName,np.abs(zFound-redshift)))
+
+            snaps[i] = w
 
     if snaps.size == 1:
         snaps = snaps[0]
@@ -232,7 +249,7 @@ def multiRunMatchedSnapList(runList, method='expand', **kwargs):
     return snapLists
 
 def snapNumToRedshift(sP, snap=None, time=False, all=False):
-    """ Convert snapshot number(s) to redshift or time (scale factor). """
+    """ Convert snapshot number(s) to redshift or time (scale factor or non-cosmological sim time). """
     from ..load.snapshot import subboxVals
 
     if not all and snap is None:

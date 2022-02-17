@@ -61,7 +61,7 @@ def _TNGboxSliceConfig(res):
     gasMM = [4.3,7.3]
     starsMM = [1.0, 7.0]
 
-    gasFullMM = [13.0,16.5] # equirectangular/full depth
+    gasFullMM = [12.0,16.0] # equirectangular/full depth
 
     if res in [455,910,1820]:
         # L75
@@ -191,13 +191,13 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
     run        = 'tng' #'millennium'
     redshift   = 0.0
-    nPixels    = 2000 # 800, 2000, 8000
+    nPixels    = 8000 # 800, 2000, 8000
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = False
     labelSim   = False
     plotHalos  = False
-    method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
+    method     = 'voronoi_slice' #'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
 
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
@@ -325,9 +325,15 @@ def fullBox360(res, conf=34, variant=None, snap=None):
     method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
 
-    projType   = 'equirectangular'
-    projParams = {'fov':360.0}
-    nPixels    = [8000,4000]
+    if 0:
+        projType   = 'equirectangular' # 'azimuthalequidistant'
+        projParams = {'fov':360.0}
+        nPixels    = [4000,2000]
+    if 1:
+        projType   = 'azimuthalequidistant'
+        projParams = {'fov':180.0}
+        nPixels    = [2000,2000]
+
     axesUnits  = 'rad_pi'
 
     sP = simParams(res=res, run=run, snap=snap, variant=variant)
@@ -340,6 +346,49 @@ def fullBox360(res, conf=34, variant=None, snap=None):
 
         saveFilename = './boxImage_%s_%s-%s_%s_%s.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],projType,sP.snap)
+
+    renderBox(panels, plotConfig, locals())
+
+def smuggleMWAndromedaMergerDome(snap=100):
+    """ Create 180 degree dome renders for the smuggle Andromeda-Milky Way merger sim. """
+    from ..util.rotation import rotationMatrixFromVec
+
+    sim_path = '/u/dnelson/data/sims.other/local_group_smuggle/1e3_100IGM/'
+
+    sP = simParams(sim_path, snap=snap)
+
+    # config
+    axes       = [0,1] # x,y
+    labelZ     = False
+    plotHalos  = False
+    method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
+    hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
+
+    # projection
+    projType   = 'azimuthalequidistant'
+    projParams = {'fov':180.0}
+    nPixels    = [2000,2000]
+    axesUnits  = 'rad_pi'
+
+    # view direction is hard-coded, do a 90 deg rotation to center system
+    relCenPos = None
+    absCenPos = [0.55*sP.boxSize, 0.45*sP.boxSize, 0.45*sP.boxSize]
+    rotMatrix = rotationMatrixFromVec([1,0,0])
+    rotCenter = [sP.boxSize/2, sP.boxSize/2, sP.boxSize/2]
+
+    # panel
+    #panels = [{'partType':'gas','partField':'coldens_msun_ster','valMinMax':[5.0,15.0]}]
+    panels = [{'partType':'gas','partField':'coldens_msun_ster','valMinMax':[1.0,6.0]}]
+    #panels = [{'partType':'gas','partField':'temp','valMinMax':[4.5,6.0]}]
+    #panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,10.0]}] # normal box render
+
+    class plotConfig:
+        plotStyle  = 'edged' # open, edged
+        rasterPx   = nPixels if isinstance(nPixels,list) else [nPixels,nPixels]
+        colorbars  = False
+
+        saveFilename = './boxImage_%s_%s-%s_%s.png' % \
+          (sP.simName,panels[0]['partType'],panels[0]['partField'],sP.snap)
 
     renderBox(panels, plotConfig, locals())
 

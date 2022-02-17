@@ -45,6 +45,8 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
                   basePath + sbStr2 + 'snap_' + sbStr1 + ext + '.hdf5',
                   # single file per snapshot (swift convention)
                   basePath + sbStr2 + 'snap_%s.hdf5' % str(snapNum).zfill(4),
+                  # single file per snapshot (smuggle convention)
+                  basePath + 'snapshot_%03d.hdf5' % snapNum,
                   # single file per snapshot, in subdirectory (i.e. Millennium rewrite)
                   basePath + sbStr2 + 'snapdir_' + sbStr1 + ext + '/snap_' + sbStr1 + ext + '.hdf5',
                   # single groupordered file per snapshot

@@ -1655,7 +1655,6 @@ def curRepoVersion():
     """ Return a hash of the current state of the mercurial python repo. """
     import subprocess
     from os import getcwd, chdir
-    from os.path import expanduser
     from getpass import getuser
     from pathlib import Path
 
