@@ -811,9 +811,12 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         if sP.isPartType(partType,'stars'):    config['ctName'] = 'gray' # copper
 
     if partField in ['coldens_msun_ster']:
-        assert projType == 'equirectangular' # otherwise generalize
+        assert projType in ['equirectangular','azimuthalequidistant'] # otherwise generalize
         # grid is (code mass) / pixelArea where pixelArea is incorrectly constant as:
-        pxArea = (2*np.pi/nPixels[0]) * (np.pi/nPixels[1]) # steradian
+        if projType == 'equirectangular':
+            pxArea = (2*np.pi/nPixels[0]) * (np.pi/nPixels[1]) # steradian
+        if projType == 'azimuthalequidistant':
+            pxArea = (np.pi/nPixels[0]) * (np.pi/nPixels[1]) # steradian
         grid *= pxArea # remove normalization
 
         dlat = np.pi/nPixels[1]
@@ -1530,6 +1533,54 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 boxSizeImgMap = [2*np.pi, np.pi]
                 boxCenterMap  = [np.pi, np.pi/2]
                 boxSizeSim    = [2*np.pi, np.pi, 0.0] # periodic on projected coordinate system extent
+
+            if projType in ['azimuthalequidistant']:
+                assert axes == [0,1] # by convention
+                assert projParams['fov'] == 180.0
+                assert nPixels[0] == nPixels[1] # we expect to make a 1:1 aspect ratio image
+
+                hsml_orig = hsml.copy()
+                
+                # shift pos to boxCenter
+                for i in range(3):
+                    pos[:,i] -= boxCenter[i]
+                sP.correctPeriodicDistVecs(pos)
+
+                # cartesian to spherical coordinates
+                s_rad = np.sqrt(pos[:,0]**2 + pos[:,1]**2 + pos[:,2]**2)
+                s_lat = - np.arctan2(pos[:,2], np.sqrt(pos[:,0]**2 + pos[:,1]**2)) + np.pi/2.0 # latitude (phi) in [0,pi], with 0 in viewing direction
+                s_long = np.arctan2(pos[:,1], pos[:,0]) # longitude (lambda) in [-pi,pi]
+
+                # restrict to sphere, instead of cube, to avoid differential ray lengths
+                w = np.where(s_rad > sP.boxSize/2)
+                mass[w] = 0.0
+
+                #remove all particles which are behind the camera
+                w = np.where(s_lat > np.pi/2.0)
+                mass[w] = 0.0
+
+                # hsml: convert from kpc to deg (compute angular diameter)
+                w = np.where(hsml_orig > 2*s_rad)
+                hsml_orig[w] = 1.999*s_rad[w] # otherwise outside arcsin
+
+                hsml = 2 * np.arcsin(hsml_orig / (2*s_rad))
+
+                # TODO: handle differential distortion along x/y directions
+                # I.e. the distortion in s_long is equal to s_lat/sin(s_lat) or approx by the formula below
+                # But at the moment it seems like this is not necessary 
+                #hsml_1 = hsml.astype('float32') # hsml_1 (hsml_r) unmodified
+                #hsml = hsml * (1 + s_lat**2 / 6.0 + 7.0 * s_lat**4 / 360.0) # hsml_0 (i.e. hsml_phi) only
+                hsml = hsml.astype('float32')
+
+                # we will project in this space, periodic on the boundaries
+                pos = np.zeros( (s_rad.size,2), dtype=pos.dtype )
+                            
+                pos[:,0] = + s_lat * np.sin(s_long) + np.pi/2.0 # [0.0, pi]
+                pos[:,1] = - s_lat * np.cos(s_long) + np.pi/2.0 # [0.0, pi]
+                
+                boxSizeImgMap = [np.pi, np.pi]
+                boxCenterMap  = [np.pi/2, np.pi/2]
+                boxSizeSim    = [np.pi, np.pi, 0.0]
 
             # rotation? handle for view dependent quantities (e.g. velLOS) (any 3-vector really...)
             if partField in velLOSFieldNames + velCompFieldNames:
@@ -2691,6 +2742,9 @@ def _getPlotExtent(extent, axesUnits, projType, sP):
     if projType == 'equirectangular':
         assert axesUnits == 'rad_pi'
         pExtent = [0, 2, 0, 1] # in units of pi
+    if projType == 'azimuthalequidistant':
+        assert axesUnits == 'rad_pi'
+        pExtent = [0, 1, 0, 1] # in units of pi
     if projType == 'mollweide':
         assert axesUnits == 'rad_pi'
         pExtent = [0, 2, 0, 1] # in units of pi
