@@ -279,7 +279,7 @@ def _concatSplitFiles(sP, pSplit, field, datasetName, auxCatPath, auxCatPathSpli
             if f[datasetName].ndim == 0: # scalar, i.e. single subhalo
                 allShape = [f[datasetName].size]
 
-            nElemPerSub = np.prod(allShape) / allShape[0]
+            nElemPerSub = np.prod(allShape[1:])
 
             if len(allShape) > 1 and nElemPerSub > condThresh:
                 # high dimensionality auxCat, save condensed
