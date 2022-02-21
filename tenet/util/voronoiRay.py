@@ -333,12 +333,12 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
         # bisection acceleration: from the last ray position, we can use the 'closest' failed 
         # distance as a (closer) starting point
         i = 0
-        while prev_cell_inds[i] != -1:
+        while i < num_prev_inds:
             if prev_cell_inds[i] == cur_cell_ind:
-                # avoid self, overwrite with next entry
+                # avoid self, shift all following entries to overwrite this one
                 #if debug > 1: print(f' -- remove self [{i}] [{prev_cell_inds[i]}] from prev_cell_inds stack!')
-                prev_cell_inds[i] = prev_cell_inds[i+1]
-                prev_cell_cen[i] = prev_cell_cen[i+1]
+                for j in range(i,num_prev_inds):
+                    prev_cell_inds[j] = prev_cell_inds[j+1]
                 num_prev_inds -= 1
                 continue
             i += 1
@@ -389,13 +389,20 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
                 min_index_verify = np.where(dists == dists.min())[0][0]
                 assert min_index_verify == end_cell_local_ind
 
-            # is this parent the same as the current cell? then we have skipped over the neighbor
+            # is this parent the same as the current cell? then we have skipped over the neighbor (from the right)
+            # or, we have yet to exit the current cell (from the left)
             if end_cell_local_ind == cur_cell_ind:
-                # no: modify starting point (bisection), and continue loop
-                raylength_left = (raylength_right + raylength_left) * 0.5
+                if (raylength_right - raylength_left) > 1e-5:
+                    # skipped: modify starting point (bisection), and continue loop
+                    raylength_left = (raylength_right + raylength_left) * 0.5
 
-                #if debug > 1: print(f'  !! neighbor was skipped, set new [L={raylength_left:.4f} R={raylength_right:.4f}] and re-search')
-                continue
+                    #if debug > 1: print(f'  !! still in current cell, move left, new [L={raylength_left:.4f} R={raylength_right:.4f}] and re-search')
+                    continue
+                else:
+                    # yet to exit: we are very close to the face
+                    raylength_right += abs_tol
+                    #if debug > 1: print(f'  !! still in current cell, add abs_tol to R, new [L={raylength_left:.4f} R={raylength_right:.4f}] and re-search')
+                    continue
 
             # edge midpoint, i.e. a point on the Voronoi face plane shared with this neighbor, if the 
             # current and final cells are actually natural neighbors
