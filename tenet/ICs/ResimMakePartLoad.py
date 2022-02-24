@@ -521,7 +521,7 @@ def generate_set():
         # TNG-Cluster
         sP = simParams(res=2048,run='tng_dm',redshift=0.0)
         zoomFac = 4
-        haloIDs = [51,52,53,54,55,56,58]
+        haloIDs = [2011,2023,2037,2054,2056]
         sizeFac = 3.0 #[2.0,3.0,4.0]
 
     if 0:

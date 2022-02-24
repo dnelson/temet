@@ -35,16 +35,15 @@ def loadMDB(sP, id, fields=None, treeName=treeName_default, fieldNamesOnly=False
 
     raise Exception('Unrecognized treeName.')
 
-def loadMPBs(sP, ids, fields=None, treeName=treeName_default, fieldNamesOnly=False):
+def loadMPBs(sP, ids, fields=None, treeName=treeName_default):
     """ Load multiple MPBs at once (e.g. all of them), optimized for speed, with a full tree load (high mem).
     Basically a rewrite of illustris_python/sublink.py under specific conditions (hopefully temporary).
 
     Args:
-      sP:
-      ids:
-      fields:
-      treeName:
-      fieldNamesOnly:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      ids (list[int]): list of subhalo IDs to load.
+      fields (list[str]): list of field names to load, or None for all (not recommended).
+      treeName (str): which merger tree to use? 'SubLink' or 'SubLink_gal'.
 
     Returns: 
       dict: Dictionary of MPBs where keys are subhalo IDs, and the contents of each dict value is another 

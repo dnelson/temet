@@ -3112,6 +3112,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
     # no explicit ID list input, choose subhalos to process now
     pSplitSpatial = None
+    load_inds = None
 
     if scope == 'global_spatial':
         # for spatial subdivision, disable the normal subhalo-based subdivision

@@ -8,11 +8,34 @@ import time
 from os import path, mkdir, rename
 import matplotlib.pyplot as plt
 
-import cosmo
+import tenet.cosmo
 from .plot.config import figsize
 from .util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
+
+def filter_list():
+    """ Check algorithm to remove elements with a given value from a list, keeping rest in order. """
+    # setup
+    cur_ind = 3
+    xx = np.array( [3,0,1,2,5,3,-1,-1,-1,-1])
+
+    # run
+    print(xx)
+    num_inds = len(np.where(xx != -1)[0])
+    print(f'{num_inds = }')
+
+    i = 0
+    while i < num_inds:
+        if xx[i] == cur_ind:
+            for j in range(i,num_inds):
+                xx[j] = xx[j+1]
+            num_inds -= 1
+            continue
+        i += 1
+
+    print(xx)
+    print(f'{num_inds = }')
 
 def reorder_tracer_tracks(name='temp'):
     """ Reshape from (20,nTr) to (Ntr,20). """

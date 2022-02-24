@@ -1606,7 +1606,7 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
                 sm = savgol_filter(sm,sKn,sKo)
 
                 #l, = ax.plot(xm[:-1], ym[:-1], linestyles[i], lw=lw, alpha=1.0, color=c, label=label)
-                l, = ax.plot(xx, yy, linestyles[0], linestyle=linestyles[j], lw=lw, alpha=1.0, color=c, label=label)
+                l, = ax.plot(xx, yy, linestyle=linestyles[j], lw=lw, alpha=1.0, color=c, label=label)
 
                 txt.append( {'vout':xx, 'outflowrate':yy, 'redshift':redshift, 'mstar':mStarMidPoint})
 

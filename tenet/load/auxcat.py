@@ -166,8 +166,16 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                 assert len(readFields) == 1
                 r[field] = _expand_partial(sP, r, field)
 
-            if not expandPartial and r[field].shape[0] != sP.numSubhalos:
-                print('WARNING: Return partial auxCat without expanding to fill subhalo IDs!')
+            # announce warning if return size does not match full subhalo catalog size
+            if not expandPartial:
+                if isinstance(r[field],list):
+                    # RadialMassFlux/special auxCats with multiple datasets
+                    checkSize = r[field][0].shape[0]
+                else:
+                    checkSize = r[field].shape[0]
+
+                if checkSize != sP.numSubhalos:
+                    print('WARNING: Return partial auxCat without expanding to fill subhalo IDs!')
 
             # cache
             sP.data['ac_'+field+epStr] = {}

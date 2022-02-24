@@ -299,7 +299,7 @@ Take the previous plot and use color, size, or symbol to show another property o
 .. image:: _static/cookbook_exercises_0d.png
 
 Here the right panel uses the 
-`binned_statistic_2d <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.binned_statistic_2d.html>` 
+`binned_statistic_2d <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.binned_statistic_2d.html>`_ 
 function to compute some statistic (such as mean, median, or max) on the data points which fall into each 
 pixel (or bin). In contrast to the scatterplot on the left, where it is not clear what the color of many 
 overlapping markers represents, we can precisely control the information content of the right image. Try 
