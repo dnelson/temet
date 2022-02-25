@@ -20,20 +20,41 @@ from ..util.helper import logZeroNaN, closest
 from ..util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
   trace_ray_through_voronoi_mesh_with_connectivity, rayTrace
 
-# line data (Morton+2003)
+# line data (mostly AtomDB)
 # f [dimensionless]
 # gamma [1/s], where tau=1/gamma is the ~lifetime (is the sum of A)
 # wave0 [ang]
-lines = {'LyA'       : {'f':0.4164,   'gamma':4.49e8,  'wave0':1215.670,  'ion':'H I'},
-         'LyB'       : {'f':0.0791,   'gamma':1.897e8, 'wave0':1025.7223, 'ion':'H I'},
-         'LyC'       : {'f':0.0290,   'gamma':1.28e7,  'wave0':972.5367,  'ion':'H I'},
-         'LyD'       : {'f':1.395e-2, 'gamma':4.12e6,  'wave0':949.7430,  'ion':'H I'},
-         'LyE'       : {'f':7.803e-3, 'gamma':2.45e6,  'wave0':937.8034,  'ion':'H I'},
-         'OVI 1033'  : {'f':1.983e-1, 'gamma':0.0,     'wave0':1033.8160, 'ion':'O VI'}, # (this is placeholder for doublet?)
-         'OVI 1037'  : {'f':6.580e-2, 'gamma':4.076e8, 'wave0':1037.6167, 'ion':'O VI'},
-         'OVI 1031'  : {'f':1.325e-1, 'gamma':4.149e8, 'wave0':1031.9261, 'ion':'O VI'},
-         'MgII 2803' : {'f':0.6155,   'gamma':2.592e8, 'wave0':2803.5315, 'ion':'Mg II'},
-         'MgII 2796' : {'f':0.3058,   'gamma':.2612e8, 'wave0':2796.3543, 'ion':'Mg II'}}
+lines = {'LyA'        : {'f':0.4164,   'gamma':4.49e8,  'wave0':1215.670,  'ion':'H I'},
+         'HI 1024'    : {'f':0.0791,   'gamma':1.897e8, 'wave0':1025.7223, 'ion':'H I'},
+         'HI 973'     : {'f':0.0290,   'gamma':1.28e7,  'wave0':972.5367,  'ion':'H I'},
+         'HI 950'     : {'f':1.395e-2, 'gamma':4.12e6,  'wave0':949.7430,  'ion':'H I'},
+         'HI 938'     : {'f':7.803e-3, 'gamma':2.45e6,  'wave0':937.8034,  'ion':'H I'},
+         'HI 931'     : {'f':4.814e-3, 'gamma':7.56e5,  'wave0':930.7482,  'ion':'H I'},
+         'HI 926'     : {'f':3.183e-3, 'gamma':3.87e5,  'wave0':926.22564, 'ion':'H I'},
+         'HI 923'     : {'f':2.216e-3, 'gamma':2.14e5,  'wave0':923.1503,  'ion':'H I'},
+         'HI 921'     : {'f':1.605e-3, 'gamma':1.26e5,  'wave0':920.9630,  'ion':'H I'},
+         'HI 919'     : {'f':1.20e-3,  'gamma':7.83e4,  'wave0':919.3514,  'ion':'H I'},
+         'HI 918'     : {'f':9.21e-4,  'gamma':5.06e4,  'wave0':918.1293,  'ion':'H I'},
+         'HI 917'     : {'f':7.226e-4, 'gamma':3.39e4,  'wave0':917.1805,  'ion':'H I'},
+         'HI 916a'    : {'f':5.77e-4,  'gamma':2.34e4,  'wave0':916.4291,  'ion':'H I'},
+         'HI 916b'    : {'f':4.69e-4,  'gamma':1.66e4,  'wave0':915.8238,  'ion':'H I'},
+         'CIV 1548'   : {'f':1.908e-1, 'gamma':2.654e8, 'wave0':1548.195,  'ion':'C IV'},
+         'CIV 1551'   : {'f':9.522e-2, 'gamma':2.641e8, 'wave0':1550.770,  'ion':'C IV'},
+         'OVI 1038'   : {'f':6.580e-2, 'gamma':4.076e8, 'wave0':1037.6167, 'ion':'O VI'},
+         'OVI 1032'   : {'f':1.325e-1, 'gamma':4.149e8, 'wave0':1031.9261, 'ion':'O VI'},
+         'MgII 1239'  : {'f':2.675e-4, 'gamma':5.802e5, 'wave0':1239.9253, 'ion':'Mg II'},
+         'MgII 1240'  : {'f':1.337e-4, 'gamma':5.796e5, 'wave0':1240.3947, 'ion':'Mg II'},
+         'MgII 2796'  : {'f':0.5909,   'gamma':2.52e8,  'wave0':2796.3543, 'ion':'Mg II'},
+         'MgII 2803'  : {'f':0.2958,   'gamma':2.51e8,  'wave0':2803.5315, 'ion':'Mg II'},
+         'AlII 1671'  : {'f':1.880,    'gamma':1.46e9,  'wave0':1670.787,  'ion':'Al II'},
+         'AlIII 1855' : {'f':0.539,    'gamma':2.00e8,  'wave0':1854.716,  'ion':'Al III'},
+         'AlIII 1863' : {'f':0.268,    'gamma':2.00e8,  'wave0':1862.790,  'ion':'Al III'},
+         'SiIV 1394'  : {'f':0.528,    'gamma':9.200e8, 'wave0':1393.755,  'ion':'Si IV'},
+         'SiIV 1403'  : {'f':0.262,    'gamma':9.030e8, 'wave0':1402.770,  'ion':'Si IV'},
+         'FeII 2587'  : {'f':6.457e-2, 'gamma':2.720e8, 'wave0':2586.650,  'ion':'Fe II'},
+         'FeII 2600'  : {'f':2.239e-1, 'gamma':2.700e8, 'wave0':2600.1729, 'ion':'Fe II'},
+         'FeII 2374'  : {'f':2.818e-2, 'gamma':2.990e8, 'wave0':2374.4612, 'ion':'Fe II'},
+         'FeII 2383'  : {'f':3.006e-1, 'gamma':3.100e8, 'wave0':2382.765,  'ion':'Fe II'}}
 
 # instrument characteristics (in Ang)
 # R = lambda/dlambda = c/dv
@@ -1067,6 +1088,13 @@ def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None):
 
     path = pathStr2 if pSplit is not None else pathStr1
 
+    # total requested pathlength (equal to box length)
+    total_dl = sP.boxSize
+
+    # ray direction
+    ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
+    ray_dir[projAxis] = 1.0    
+
     # check existence
     if isfile(path):
         print('Loading [%s].' % path)
@@ -1135,13 +1163,6 @@ def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None):
         ray_pos_new = np.zeros( (1,3), dtype='float64' )
         ray_pos_new[0,:] = ray_pos[4,:] # 4 62500 [    0. 17640.     0.]
         ray_pos = ray_pos_new
-
-    # total requested pathlength (equal to box length)
-    total_dl = sP.boxSize
-
-    # ray direction
-    ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
-    ray_dir[projAxis] = 1.0
 
     # determine spatial mask (cuboid with long side equal to boxlength in line-of-sight direction)
     cell_inds = None
@@ -1430,19 +1451,19 @@ def plot_concat_spectra():
     """ Debug plots for concatenated spectra. """
 
     # config
-    filename = "spectra_TNG50-1_z0.5_2_4MOST_HRS_MgII-2796-MgII-2803.hdf5"
+    filename = "spectra_TNG50-1_z0.7_2_4MOST_HRS_MgII-2796-MgII-2803.hdf5"
     path = "/u/dnelson/sims.TNG/TNG50-1/data.files/rays/"
 
     EW_min = 0.4
     EW_max = 0.5
     num = 10
 
-    wave_minmax = [4180,4250]
+    wave_minmax = [4750,4800] # z=0.5: [4180,4250]
 
     # load
     with h5py.File(path + filename,'r') as f:
         flux = f['flux'][()]
-        EW = f['EW'][()]
+        EW = f['EW_total'][()]
         wave = f['master_wave'][()]
 
     # select
