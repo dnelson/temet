@@ -1376,3 +1376,107 @@ def check_particle_property():
     ax.legend(loc='best')
     fig.savefig('check_%s_%s.pdf' % (pt,prop))
     plt.close(fig)
+
+def plot_timeevo():
+    """ Diagnostic plots: group catalog properties for one halo vs time (no merger trees). """
+    # config simulations and field
+    sims = []
+    sims.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3'))
+    sims.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3_s'))
+    sims.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3'))
+    sims.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3_s'))
+
+    # SubhaloSFR, SubhaloBHMass, SubhaloMassInRadType, SubhaloHalfmassRadType
+    # SubhaloGasMetallicity, SubhaloVelDisp, SubaloVmaxRad
+    field = 'SubhaloVmaxRad' 
+    fieldIndex = -1 # -1 for scalar fields, otherwise >=0 index to use
+    subhaloID = 0
+
+    # quick check
+    for sim in sims:
+        sim.setSnap(99)
+        subhalo = sim.subhalo(subhaloID)
+        bhmass = sim.units.codeMassToLogMsun(subhalo['SubhaloBHMass'])[0]
+        mstar = sim.units.codeMassToLogMsun(subhalo['SubhaloMassInRadType'][4])[0]
+
+        print(f'{sim = } {bhmass = :.3f} {mstar = :.3f}')
+    return
+
+    # load
+    data = []
+
+    for sim in sims:
+        cache_file = 'cache_%s_%s_%d.hdf5' % (sim.simName,field,fieldIndex)
+
+        if path.isfile(cache_file):
+            with h5py.File(cache_file,'r') as f:
+                data.append( {'sim':sim, 'result':f['result'][()], 'z':f['z'][()]} )
+            print('Loaded: [%s]' % cache_file)
+            continue
+
+        # load
+        snaps = sim.validSnapList()
+        z = sim.snapNumToRedshift(snaps)
+
+        result = np.zeros(snaps.size, dtype='float32')
+        result.fill(np.nan)
+
+        for i, snap in enumerate(snaps):
+            print(sim.simName, snap)
+            # set snap and load single subhalo from group catalog
+            sim.setSnap(snap)
+            subhalo = sim.subhalo(subhaloID)
+
+            if field not in subhalo:
+                print(' skip')
+                continue
+
+            # store result
+            if subhalo[field].size > 1: assert fieldIndex >= 0
+            if subhalo[field].size == 1: assert fieldIndex == -1
+
+            result[i] = subhalo[field] if subhalo[field].size == 1 else subhalo[field][fieldIndex]
+
+        assert len(result) == z.size
+
+        # save cache
+        with h5py.File(cache_file,'w') as f:
+            f['result'] = result
+            f['z'] = z
+        print('Saved: [%s]' % cache_file)
+
+        data.append( {'sim':sim, 'result':result, 'z':z} )
+
+    # plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ylabel = field if fieldIndex == -1 else field + '-%d' % fieldIndex
+    if 'Mass' in field: ylabel += ' [ log M$_{\\rm sun}$ ]'
+    if 'SFR' in field: ylabel += ' [ M$_{\\rm sun}$/yr ]'
+    if 'HalfmassRad' in field: ylabel += ' [ log ckpc/h ]'
+
+    ax.set_xscale('symlog')
+    ax.set_xlabel('Redshift')
+    ax.set_xticks([0,1,2,4,6,10])
+    ax.set_ylabel(ylabel)
+    #ax.set_yscale('log')
+
+    # loop over runs
+    for i, sim in enumerate(sims):
+        # load
+        x = data[i]['z']
+        y = data[i]['result']
+
+        # unit conversions?
+        if 'Mass' in field:
+            y = sim.units.codeMassToLogMsun(y)
+        if 'HalfmassRad' in field:
+            y = np.log10(y)
+
+        ax.plot(x, y, label=sim.simName)
+
+    # finish plot
+    ax.legend(loc='best')
+    fig.savefig('time_evo_sh%d_%s_%d.pdf' % (subhaloID,field,fieldIndex))
+    plt.close(fig)

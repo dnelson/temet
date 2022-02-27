@@ -907,8 +907,8 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
     minStellarMass = 7.4 # log msun (30pkpc values)
     cenSatSelect = 'cen' # cen, sat, all
 
-    if sP.boxSize == 75000.0: minStellarMass = 7.9
-    if sP.boxSize == 205000.0: minStellarMass = 8.4
+    if sP.boxSize > 65000: minStellarMass = 7.9
+    if sP.boxSize > 200000: minStellarMass = 8.4
 
     assert ptType in ['gas','wind']
     assert scope in ['subhalo','subhalo_wfuzz','global']
@@ -1474,6 +1474,8 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
     if isinstance(ac[acField],list):
         dset = ac[acField][selNum] # Gas
     else:
+        # NOTE: bug! will hit this assert if pSplit was used to construct e.g. 'Subhalo_RadialMassFlux*'
+        # because the concatenation of the partial files does not correctly preserve the multiple datasets
         dset = ac[acField]
         assert selNum == 0 # Wind, only 1 histogram and so not returned as a list
 

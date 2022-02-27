@@ -427,7 +427,6 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
             if cand_cell_ind not in [cur_cell_ind,end_cell_local_ind] and \
                 ((raylength_right - raylength_left) > abs_tol):
                 # update stack (avoid duplicates)
-                # TODO DISABLE?
                 if num_prev_inds == 0 or prev_cell_inds[num_prev_inds-1] != end_cell_local_ind:
                     prev_cell_inds[num_prev_inds] = end_cell_local_ind
                     prev_cell_cen[num_prev_inds] = raylength_cen
@@ -516,7 +515,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
                     # move right, such that new 0.5*(L+R) is at this point
                     raylength_right = 2*ray_search_length - raylength_left
                 else:
-                    # move left (todo, should this ever actually happen?)
+                    # move left (should this ever actually happen?)
                     assert 0
 
                 #if debug > 1: print(f'  !! neighbor is incorrect, set new [L={raylength_left:.4f} R={raylength_right:.4f}] and re-search')
@@ -837,11 +836,10 @@ def trace_ray_through_voronoi_mesh_treebased_v2(cell_pos, NextNode, length, cent
                     # move right, such that new 0.5*(L+R) is at this point
                     raylength_right = 2*ray_search_length - raylength_left
                 else:
-                    # move left (todo, should this ever actually happen?)
+                    # move left (should this ever actually happen?)
                     assert 0
 
                 # update stack (avoid duplicates)
-                # TODO DISABLE?
                 if num_prev_inds == 0 or prev_cell_inds[num_prev_inds-1] != cand_index:
                     prev_cell_inds[num_prev_inds] = cand_index
                     prev_cell_cen[num_prev_inds] = raylength_cen

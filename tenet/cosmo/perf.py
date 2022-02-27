@@ -430,35 +430,25 @@ def plotCpuTimes():
     #sPs.append( simParams(res=270, run='tng') )
     #sPs.append( simParams(res=540, run='tng') )
     #sPs.append( simParams(res=1080, run='tng') )
-    sPs.append( simParams(res=2160, run='tng') )
+    #sPs.append( simParams(res=2160, run='tng') )
     #sPs.append( simParams(res=2160, run='tng_dm') )
     #sPs.append( simParams(res=2160, run='tng', variant='halted') )
 
     #sPs.append( simParams(res=1024, run='tng', variant=0000) )
     #sPs.append( simParams(res=1024, run='tng', variant=4503) )
 
-    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2')) # n80
-    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2_n80s'))
-    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2_n160'))
-    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2_n160s'))
-    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2_n160s_mpc'))
-    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2_n320s'))
-    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2_n320'))
-    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2_n640s'))
+    sPs.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3'))
+    sPs.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3_s'))
+    sPs.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3'))
+    sPs.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3_s'))
 
-    # L75n1820TNG cpu.txt error: there is a line:
-    # fluxes 0.00 9.3% Step 6362063, Time: 0.26454, CPUs: 10752, MultiDomains: 8, HighestActiveTimeBin: 35
-    # after Step 6495017
     plotKeys = ['total','total_log','treegrav','pm_grav','voronoi','blackholes','hydro',
                 'gradients','enrich','domain','i_o','restart','subfind']
     #plotKeys = ['total']
-    lw = 2.0
 
     # multipage pdf: one plot per value
-    #pdf = PdfPages('cpu_k' + str(len((plotKeys))) + '_n' + str(len(sPs)) + '.pdf')
-    fName1 = expanduser('~') + '/plots/cpu_tng_new.pdf'
-    fName2 = expanduser('~') + '/plots/cpu_tng.pdf'
-    fName3 = expanduser('~') + '/plots/cpu_tng_b.pdf'
+    fName1 = 'cpu_times.pdf'
+    fName2 = 'cpu_times_all.pdf'
 
     pdf = PdfPages(fName1)
     print(' -- run: %s --' % datetime.now().strftime('%d %B, %Y'))
@@ -513,7 +503,8 @@ def plotCpuTimes():
             if ind in [0,2]:
                 yy = yy / (1e6*60.0*60.0) * cpu['numCPUs']
 
-            l, = ax.plot(xx,yy,lw=lw,label=sP.simName)
+            label = sP.simName if 'total' not in plotKey else sP.simName + ' (%.2f Mh)' % yy[-1]
+            l, = ax.plot(xx,yy,lw=lw,label=label)
 
             # total time predictions for runs which aren't yet done
             if plotKey in ['total'] and xx.max() < 0.99 and not sP.isZoom: 
@@ -609,26 +600,20 @@ def plotCpuTimes():
 
     pdf.close()
 
-    # if we don't make it here successfully the old pdf will not be corrupted
-    if isfile(fName2): remove(fName2)
-    rename(fName1,fName2)
-
     # singlepage pdf: all values on one panel
-    pdf = PdfPages(fName3)
+    pdf = PdfPages(fName2)
 
     for sP in sPs:
         fig = plt.figure(figsize=(12.5,9))
 
         ax = fig.add_subplot(111)
         ax.set_xlim([0.0,1.0])
-        if sP.simName != 'TNG50-1':
-            ax.set_xlim([0.0,1.3])
 
         ax.set_title('')
         ax.set_xlabel('Scale Factor')
 
         ind = 3 # 1=diff perc (missing in 3col format), 3=cum perc
-        ax.set_ylabel('CPU Percentage [' + plotKey + ']')
+        ax.set_ylabel('CPU Percentage')
         keys = ['time','hatb'] + plotKeys
 
         # load select datasets from cpu.hdf5

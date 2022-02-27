@@ -2717,6 +2717,7 @@ def paperPlots(sPs=None):
     TNG50_2 = simParams(res=1080,run='tng',redshift=redshift)
     TNG50_3 = simParams(res=540,run='tng',redshift=redshift)
     TNG50_4 = simParams(res=270,run='tng',redshift=redshift)
+    Eagle   = simParams(run='eagle',redshift=redshift)
 
     TNG50_z1 = simParams(res=2160,run='tng',redshift=1.0)
 
