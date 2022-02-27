@@ -5,6 +5,7 @@ Inspired by SpecWizard (Schaye), pygad (Rottgers), Trident (Hummels).
 import numpy as np
 import h5py
 import glob
+import threading
 from os.path import isfile, isdir, expanduser
 from os import mkdir
 import matplotlib.pyplot as plt
@@ -16,7 +17,7 @@ import ctypes
 
 from ..plot.config import *
 from ..util import units
-from ..util.helper import logZeroNaN, closest
+from ..util.helper import logZeroNaN, closest, pSplitRange
 from ..util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
   trace_ray_through_voronoi_mesh_with_connectivity, rayTrace
 
@@ -60,16 +61,16 @@ lines = {'LyA'        : {'f':0.4164,   'gamma':4.49e8,  'wave0':1215.670,  'ion'
 # R = lambda/dlambda = c/dv
 # EW_restframe = W_obs / (1+z_abs)
 instruments = {'idealized'  : {'wave_min':1000, 'wave_max':12000, 'dwave':0.1}, # used for EW map vis
-               'COS-G130M'  : {'wave_min':1150, 'wave_max':1450, 'dwave':0.01},
-               'COS-G140L'  : {'wave_min':1130, 'wave_max':2330, 'dwave':0.08},
-               'COS-G160M'  : {'wave_min':1405, 'wave_max':1777, 'dwave':0.012},
-               'test_EUV'   : {'wave_min':800,  'wave_max':1300, 'dwave':0.1}, # to see LySeries at rest
-               'test_EUV2'  : {'wave_min':1200, 'wave_max':2000, 'dwave':0.1}, # testing redshift shifts
-               'SDSS-BOSS'  : {'wave_min':3600, 'wave_max':10400, 'dwave':1.0}, # dwave approx, constant in log(dwave) only
-               '4MOST_LRS'  : {'wave_min':4000, 'wave_max':8860, 'dwave':0.8},  # assume R=5000 = lambda/dlambda
-               '4MOST_HRS'  : {'wave_min':3926, 'wave_max':6790, 'R':20000}, # but gaps!
-               'MIKE'       : {'wave_min':3350, 'wave_max':9500, 'dwave':0.07}, # approximate only
-               'KECK-HIRES' : {'wave_min':3000, 'wave_max':9250, 'dwave':0.04}} # approximate only
+               'COS-G130M'  : {'wave_min':1150, 'wave_max':1450,  'dwave':0.01},
+               'COS-G140L'  : {'wave_min':1130, 'wave_max':2330,  'dwave':0.08},
+               'COS-G160M'  : {'wave_min':1405, 'wave_max':1777,  'dwave':0.012},
+               'test_EUV'   : {'wave_min':800,  'wave_max':1300,  'dwave':0.1}, # to see LySeries at rest
+               'test_EUV2'  : {'wave_min':1200, 'wave_max':2000,  'dwave':0.1}, # testing redshift shifts
+               'SDSS-BOSS'  : {'wave_min':3543, 'wave_max':10400, 'dlogwave':1e-4}, # constant log10(dwave)=1e-4
+               '4MOST_LRS'  : {'wave_min':4000, 'wave_max':8860,  'dwave':0.8},  # assume R=5000 = lambda/dlambda
+               '4MOST_HRS'  : {'wave_min':3926, 'wave_max':6790,  'R':20000},    # but gaps!
+               'MIKE'       : {'wave_min':3350, 'wave_max':9500,  'dwave':0.07}, # approximate only
+               'KECK-HIRES' : {'wave_min':3000, 'wave_max':9250,  'dwave':0.04}} # approximate only
 
 # pull out some units for JITed functions
 sP_units_Mpc_in_cm = 3.08568e24
@@ -273,6 +274,9 @@ def create_master_grid(line=None, instrument=None):
         f, gamma, wave0_restframe, _, _ = _line_params(line)
 
     # master wavelength grid, observed-frame [ang]
+    dwave = None
+    dlogwave = None
+
     if line is not None:
         wave_min = np.floor(wave0_restframe - 15.0)
         wave_max = np.ceil(wave0_restframe + 15.0)
@@ -281,7 +285,10 @@ def create_master_grid(line=None, instrument=None):
     if instrument is not None:
         wave_min = instruments[instrument]['wave_min']
         wave_max = instruments[instrument]['wave_max']
-        dwave = instruments[instrument]['dwave'] if 'dwave' in instruments[instrument] else None
+        if 'dwave' in instruments[instrument]:
+            dwave = instruments[instrument]['dwave']
+        if 'dlogwave' in instruments[instrument]:
+            dlogwave = instruments[instrument]['dlogwave']
 
     # if dwave is specified, use linear wavelength spacing
     if dwave is not None:
@@ -290,8 +297,17 @@ def create_master_grid(line=None, instrument=None):
         wave_edges = np.linspace(wave_min, wave_max, num_edges)
         wave_mid = (wave_edges[1:] + wave_edges[:-1]) / 2
 
+    # if dlogwave is specified, use log10-linear wavelength spacing
+    if dlogwave is not None:
+        log_wavemin = np.log10(wave_min)
+        log_wavemax = np.log10(wave_max)
+        log_wave_mid = np.arange(log_wavemin,log_wavemax+dlogwave,dlogwave)
+        wave_mid = 10.0**log_wave_mid
+        log_wave_edges = np.arange(log_wavemin-dlogwave/2,log_wavemax+dlogwave+dlogwave/2,dlogwave)
+        wave_edges = 10.0**log_wave_edges
+
     # else, use spectral resolution R, and create linear in log(wave) grid
-    if dwave is None:
+    if dwave is None and dlogwave is None:
         R = instruments[instrument]['R']
         print(f'Creating loglinear wavelength grid with {R = }')
         log_wavemin = np.log(wave_min)
@@ -556,28 +572,33 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
                                      rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
                                      cell_dens, cell_temp, cell_vellos, 
                                      z_vals, z_lengths,
-                                     master_mid, master_edges, tau_master, tau_allrays, EW_master):
+                                     master_mid, master_edges, ind0, ind1):
     """ JITed helper (see below). """
+    n_rays = ind1 - ind0 + 1
+
+    # allocate: full spectra return as well as derived EWs
+    tau_master = np.zeros(master_mid.size, dtype=np.float32)
+    tau_allrays = np.zeros((n_rays,tau_master.size), dtype=np.float32)
+    EW_master = np.zeros(n_rays, dtype=np.float32)
 
     # loop over rays
-    for i in range(rays_len.size):
+    for i in range(n_rays):
         # get local properties
-        nCells = rays_len[i]
+        offset = rays_off[ind0+i] # start of intersected cells (in rays_cell*)
+        length = rays_len[ind0+i] # number of intersected gas cells
 
-        master_dx = rays_cell_dl[rays_off[i]:rays_off[i]+rays_len[i]]
-        master_inds = rays_cell_inds[rays_off[i]:rays_off[i]+rays_len[i]]
+        master_dx = rays_cell_dl[offset:offset+length]
+        master_inds = rays_cell_inds[offset:offset+length]
 
         master_dens = cell_dens[master_inds]
         master_temp = cell_temp[master_inds]
         master_vellos = cell_vellos[master_inds]
 
-        #if i % 100 == 0: print(f'[{i:4d}] {nCells = }')
-
         # reset tau_master for each ray
         tau_master *= 0.0
 
         # cumulative pathlength, Mpc from start of box i.e. start of ray (at sP.redshift)
-        cum_pathlength = np.zeros(nCells, dtype=np.float32) 
+        cum_pathlength = np.zeros(length, dtype=np.float32) 
         cum_pathlength[1:] = np.cumsum(master_dx)[:-1] # Mpc
 
         # cosmological redshift of each intersected cell
@@ -597,7 +618,7 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
         b /= 1e5 # km/s
 
         # deposit each intersected cell as an absorption profile onto spectrum
-        for j in range(nCells):
+        for j in range(length):
             #print(f' [{j:3d}] N = {logZeroNaN(N[j]):6.3f} {b[j] = :7.2f} {z_eff[j] = :.6f}')
             deposit_single_line(master_edges, tau_master, f, gamma, wave0, N[j], b[j], z_eff[j])
 
@@ -612,7 +633,7 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
 
 def create_spectra_from_traced_rays(sP, line, instrument,
                                     rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
-                                    cell_dens, cell_temp, cell_vellos):
+                                    cell_dens, cell_temp, cell_vellos, nThreads=20):
     """ Given many completed rays traced through a volume, in the form of a composite list of 
     intersected cell pathlengths and indices, extract the physical properties needed (dens, temp, vellos) 
     and create the final absorption spectrum, depositing a Voigt absorption profile for each cell.
@@ -630,8 +651,9 @@ def create_spectra_from_traced_rays(sP, line, instrument,
       cell_vellos (array[float]): gas per-cell line of sight velocities [linear km/s]
       z_lengths (array[float]): the comoving distance to each z_vals relative to sP.redshift [pMpc]
       z_vals (array[float]): a sampling of redshifts, starting at sP.redshift
+      nThreads (int): parallelize calculation using this threads (serial computation if one)
     """
-    nRays = rays_len.size
+    n_rays = rays_len.size
 
     # line properties
     f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
@@ -641,16 +663,57 @@ def create_spectra_from_traced_rays(sP, line, instrument,
     z_lengths = sP.units.redshiftToComovingDist(z_vals) - sP.units.redshiftToComovingDist(sP.redshift)
 
     # sample master grid
-    master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
+    master_mid, master_edges, _ = create_master_grid(instrument=instrument)
 
-    # allocate: full spectra return as well as derived EWs
-    tau_allrays = np.zeros( (nRays,tau_master.size), dtype=tau_master.dtype)
-    EW_master = np.zeros( nRays, dtype=np.float32 )
+    # single-threaded
+    if nThreads == 1 or n_rays < nThreads:
+        ind0 = 0
+        ind1 = n_rays - 1
 
-    return _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
-                                            rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
-                                            cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
-                                            master_mid, master_edges, tau_master, tau_allrays, EW_master)
+        return _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
+                                                rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
+                                                cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
+                                                master_mid, master_edges, ind0, ind1)
+
+    # multi-threaded
+    class specThread(threading.Thread):
+        """ Subclass Thread() to provide local storage which can be retrieved after 
+            this thread terminates and added to the global return. """
+        def __init__(self, threadNum, nThreads):
+            super(specThread, self).__init__()
+
+            # determine local slice
+            self.ind0, self.ind1 = pSplitRange([0, n_rays-1], nThreads, threadNum, inclusive=True)
+
+        def run(self):
+            # call JIT compiled kernel
+            self.result = _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
+                                                rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
+                                                cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
+                                                master_mid, master_edges, self.ind0, self.ind1)
+
+    # create threads
+    threads = [specThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
+
+    # launch each thread, detach, and then wait for each to finish
+    for thread in threads:
+        thread.start()
+        
+    for thread in threads:
+        thread.join()
+
+    # all threads are done, determine return size and allocate
+    tau_allrays = np.zeros((n_rays,master_mid.size), dtype='float32')
+    EW_master = np.zeros(n_rays, dtype='float32')
+
+    # add the result array from each thread to the global
+    for thread in threads:
+        wave_loc, tau_loc, EW_loc = thread.result
+
+        tau_allrays[thread.ind0 : thread.ind1 + 1,:] = tau_loc
+        EW_master[thread.ind0 : thread.ind1 + 1] = EW_loc
+
+    return master_mid, tau_allrays, EW_master
 
 def generate_spectrum_uniform_grid():
     """ Generate an absorption spectrum by ray-tracing through a uniform grid (deposit using sphMap). """
@@ -661,7 +724,7 @@ def generate_spectrum_uniform_grid():
     # config
     sP = simParams(run='tng50-4', redshift=0.5)
 
-    line = 'OVI 1031' #'LyA'
+    line = 'OVI 1032' #'LyA'
     instrument = 'test_EUV2' # 'SDSS-BOSS' #
     nCells = 64
     haloID = 150 # if None, then full box
@@ -795,7 +858,7 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
     # config
     sP = simParams(run='tng50-4', redshift=0.5)
 
-    line = 'OVI 1031' #'LyA'
+    line = 'OVI 1032' #'LyA'
     instrument = 'test_EUV2' # 'SDSS-BOSS'
     haloID = 150 # if None, then full box
 
@@ -1279,11 +1342,15 @@ def generate_spectra_from_saved_rays(sP, pSplit=None):
       pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
         that we follow a spatial subdivision, so the total job number should be an integer squared.
     """
-
     # config
     projAxis = 2
     lineNames = ['MgII 2796','MgII 2803']
     instrument = '4MOST_HRS' # 'SDSS-BOSS'
+
+    # save file
+    linesStr = '-'.join([line.replace(' ','_') for line in lineNames])
+    saveFilename = sP.derivPath + 'rays/spectra_%s_z%.1f_%d_%s_%s_%d-of-%d.hdf5' % \
+      (sP.simName,sP.redshift,projAxis,instrument,linesStr,pSplit[0],pSplit[1])
 
     # load rays
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
@@ -1307,11 +1374,13 @@ def generate_spectra_from_saved_rays(sP, pSplit=None):
     EWs = {}
 
     # start output
-    saveFilename = sP.derivPath + 'rays/spectra_%s_z%.1f_%d_%s_%s_%d-of-%d.hdf5' % \
-      (sP.simName,sP.redshift,projAxis,instrument,'-'.join(lineNames),pSplit[0],pSplit[1])
-
     with h5py.File(saveFilename,'w') as f:
         f['master_wave'] = master_mid
+
+        # attach ray configuration for reference
+        f['ray_pos'] = ray_pos
+        f['ray_dir'] = ray_dir
+        f['ray_total_dl'] = total_dl
 
     # loop over requested line(s)
     for line in lineNames:
@@ -1341,11 +1410,6 @@ def generate_spectra_from_saved_rays(sP, pSplit=None):
     with h5py.File(saveFilename,'r+') as f:
         f['flux'] = flux
 
-        # attach ray configuration for reference
-        f['ray_pos'] = ray_pos
-        f['ray_dir'] = ray_dir
-        f['ray_total_dl'] = total_dl
-
     print(f'Saved: [{saveFilename}]')
 
 def concat_and_filter_spectra(sP):
@@ -1359,8 +1423,9 @@ def concat_and_filter_spectra(sP):
     EW_threshold = 0.001 # applied to sum of lines [ang]
 
     # search for chunks
+    linesStr = '-'.join([line.replace(' ','_') for line in lineNames])
     loadFilename = sP.derivPath + 'rays/spectra_%s_z%.1f_%d_%s_%s_*.hdf5' % \
-      (sP.simName,sP.redshift,projAxis,instrument,'-'.join(lineNames))
+      (sP.simName,sP.redshift,projAxis,instrument,linesStr)
 
     saveFilename = loadFilename.replace('_*','').replace(' ','-')
 
@@ -1454,8 +1519,9 @@ def plot_concat_spectra():
     filename = "spectra_TNG50-1_z0.7_2_4MOST_HRS_MgII-2796-MgII-2803.hdf5"
     path = "/u/dnelson/sims.TNG/TNG50-1/data.files/rays/"
 
-    EW_min = 0.4
-    EW_max = 0.5
+    EW_min = 0.9
+    EW_max = 1.0
+    SNR = None #30.0 # if not None, add Gaussian noise for the given signal-to-noise ratio
     num = 10
 
     wave_minmax = [4750,4800] # z=0.5: [4180,4250]
@@ -1470,11 +1536,18 @@ def plot_concat_spectra():
     inds = np.where( (EW>EW_min) & (EW<=EW_max) )[0]
     print(f'Found [{len(inds)}] of [{EW.size}] spectra within EW range [{EW_min}-{EW_max}] Ang.')
 
-    rng = np.random.default_rng(424242)
+    rng = np.random.default_rng(4242+inds[0]+inds[-1])
     rng.shuffle(inds)
 
     flux = flux[inds,:]
     EW = EW[inds]
+
+    # add noise?
+    if SNR is not None:
+        noise = rng.normal(loc=0.0, scale=1/SNR, size=flux.shape)
+        flux += noise
+        # achieved SNR = 1/stddev(noise)
+        flux = np.clip(flux, 0, np.inf) # clip negative values at zero
 
     # plot
     fig = plt.figure(figsize=(16,8))
@@ -1485,7 +1558,7 @@ def plot_concat_spectra():
     ax.set_ylabel('Relative Flux')
 
     for i in range(num):
-        ax.plot(wave, flux[i,:], '-', lw=lw, label='EW = %.1f$\AA$' % EW[i])
+        ax.step(wave, flux[i,:], '-', where='mid', lw=lw, label='EW = %.1f$\AA$' % EW[i])
 
     ax.legend(loc='best')
     fig.savefig('spectra_%.1f-%.1f.pdf' % (EW_min,EW_max))
