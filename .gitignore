@@ -10,3 +10,4 @@ illustris_python
 illustris_idl
 misc
 tenet.egg-info
+tenet/util/*.so

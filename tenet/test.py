@@ -1694,18 +1694,19 @@ def _numba_argsort(x):
 def benchmark_sort():
     """ Testing sort speed. """
     import time
+    from .util import parallelSort
     from .tracer.tracerMC import match3, _match3
 
-    N = 20000000
+    N = 80000000
     N2 = 10000
     maxNum = 6000000000 # 6 billion
     dtype = np.int64
 
-    np.random.seed(424242)
-    x = np.random.randint(1, maxNum, size=N, dtype=dtype)
+    rng = np.random.default_rng(424242)
+    x = rng.integers(1, maxNum, size=N, dtype=dtype)
 
     y = x.copy()
-    np.random.shuffle(y)
+    rng.shuffle(y)
     y = y[0:N2] # random subset of these
 
     # sort
@@ -1716,12 +1717,12 @@ def benchmark_sort():
     for i in np.arange(nLoops):
         print(i)
         #q = np.argsort(x, kind='mergesort')
-        #q = _numba_argsort(x)
-        q = _match3(x, y)
+        q2 = parallelSort.argsort(x)
+        #assert np.array_equal(q,q2)
+        #q3 = _numba_argsort(x)
+        #q3 = match3(x, y)
 
-    print('%d mergesorts or match3 took [%g] sec on avg' % (nLoops,(time.time()-start_time)/nLoops))
-
-    import pdb; pdb.set_trace()
+    print('[%d] loops took [%g] sec on avg' % (nLoops,(time.time()-start_time)/nLoops))
 
 def vis_cholla_snapshot():
     """ Testing. """

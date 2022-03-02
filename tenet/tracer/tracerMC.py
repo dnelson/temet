@@ -8,6 +8,7 @@ import time
 from os.path import isfile, isdir
 from os import mkdir
 
+from ..util import parallelSort
 from ..util.helper import iterable, nUnique, bincount, reportMemory
 from ..cosmo.mergertree import mpbSmoothedProperties, loadTreeFieldnames
 from ..cosmo.util import inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
@@ -137,7 +138,7 @@ def match2(ar1, ar2):
 
     return inds1, inds2
 
-def match3(ar1, ar2, firstSorted=False):
+def match3(ar1, ar2, firstSorted=False, parallel=True):
     """ Returns index arrays i1,i2 of the matching elements between ar1 and ar2. While the elements of ar1 
         must be unique, the elements of ar2 need not be. For every matched element of ar2, the return i1 
         gives the index in ar1 where it can be found. For every matched element of ar1, the return i2 gives 
@@ -156,7 +157,11 @@ def match3(ar1, ar2, firstSorted=False):
 
     if not firstSorted:
         # need a sorted copy of ar1 to run bisection against
-        index = np.argsort(ar1)
+        if parallel:
+            print('match3: running parallelSort.argsort()!')
+            index = parallelSort.argsort(ar1)
+        else:
+            index = np.argsort(ar1)
         ar1_sorted = ar1[index]
         ar1_sorted_index = np.searchsorted(ar1_sorted, ar2)
         ar1_sorted = None
