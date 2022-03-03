@@ -19,7 +19,7 @@ from ..plot.config import *
 from ..util import units
 from ..util.helper import logZeroNaN, closest, pSplitRange
 from ..util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
-  trace_ray_through_voronoi_mesh_with_connectivity, rayTrace
+                              trace_ray_through_voronoi_mesh_with_connectivity, rayTrace
 
 # line data (mostly AtomDB)
 # f [dimensionless]
@@ -50,6 +50,9 @@ lines = {'LyA'        : {'f':0.4164,   'gamma':4.49e8,  'wave0':1215.670,  'ion'
          'AlII 1671'  : {'f':1.880,    'gamma':1.46e9,  'wave0':1670.787,  'ion':'Al II'},
          'AlIII 1855' : {'f':0.539,    'gamma':2.00e8,  'wave0':1854.716,  'ion':'Al III'},
          'AlIII 1863' : {'f':0.268,    'gamma':2.00e8,  'wave0':1862.790,  'ion':'Al III'},
+         'SiII 1193'  : {'f':0.575,    'gamma':2.69e9,  'wave0':1193.290,  'ion':'Si II'},
+         'SiII 1260'  : {'f':1.82e-2,  'gamma':5.10e7,  'wave0':1259.519,  'ion':'Si II'},
+         'SiII 1254'  : {'f':1.21e-2,  'gamma':5.12e7,  'wave0':1253.811,  'ion':'Si II'},
          'SiIV 1394'  : {'f':0.528,    'gamma':9.200e8, 'wave0':1393.755,  'ion':'Si IV'},
          'SiIV 1403'  : {'f':0.262,    'gamma':9.030e8, 'wave0':1402.770,  'ion':'Si IV'},
          'FeII 2587'  : {'f':6.457e-2, 'gamma':2.720e8, 'wave0':2586.650,  'ion':'Fe II'},
@@ -60,17 +63,18 @@ lines = {'LyA'        : {'f':0.4164,   'gamma':4.49e8,  'wave0':1215.670,  'ion'
 # instrument characteristics (in Ang)
 # R = lambda/dlambda = c/dv
 # EW_restframe = W_obs / (1+z_abs)
-instruments = {'idealized'  : {'wave_min':1000, 'wave_max':12000, 'dwave':0.1}, # used for EW map vis
-               'COS-G130M'  : {'wave_min':1150, 'wave_max':1450,  'dwave':0.01},
-               'COS-G140L'  : {'wave_min':1130, 'wave_max':2330,  'dwave':0.08},
-               'COS-G160M'  : {'wave_min':1405, 'wave_max':1777,  'dwave':0.012},
-               'test_EUV'   : {'wave_min':800,  'wave_max':1300,  'dwave':0.1}, # to see LySeries at rest
-               'test_EUV2'  : {'wave_min':1200, 'wave_max':2000,  'dwave':0.1}, # testing redshift shifts
+instruments = {'idealized'  : {'wave_min':1000, 'wave_max':12000, 'dwave':0.1},     # used for EW map vis
+               'COS-G130M'  : {'wave_min':1150, 'wave_max':1450,  'dwave':0.01},    # approximate
+               'COS-G140L'  : {'wave_min':1130, 'wave_max':2330,  'dwave':0.08},    # approximate
+               'COS-G160M'  : {'wave_min':1405, 'wave_max':1777,  'dwave':0.012},   # approximate
+               'test_EUV'   : {'wave_min':800,  'wave_max':1300,  'dwave':0.1},     # to see LySeries at rest
                'SDSS-BOSS'  : {'wave_min':3543, 'wave_max':10400, 'dlogwave':1e-4}, # constant log10(dwave)=1e-4
-               '4MOST_LRS'  : {'wave_min':4000, 'wave_max':8860,  'dwave':0.8},  # assume R=5000 = lambda/dlambda
-               '4MOST_HRS'  : {'wave_min':3926, 'wave_max':6790,  'R':20000},    # but gaps!
-               'MIKE'       : {'wave_min':3350, 'wave_max':9500,  'dwave':0.07}, # approximate only
-               'KECK-HIRES' : {'wave_min':3000, 'wave_max':9250,  'dwave':0.04}} # approximate only
+               '4MOST_LRS'  : {'wave_min':4000, 'wave_max':8860,  'dwave':0.8},     # assume R=5000 = lambda/dlambda
+               '4MOST_HRS'  : {'wave_min':3926, 'wave_max':6790,  'R':20000},       # but gaps!
+               'MIKE-B'     : {'wave_min':3350, 'wave_max':5000,  'R':83000},       # blue arm (on Magellan 2/Clay)
+               'MIKE-R'     : {'wave_min':4900, 'wave_max':9500,  'R':65000},       # red arm (used simultaneously)
+               'KECK-HIRES' : {'wave_min':3000, 'wave_max':9250,  'R':45000},       # different plates: R=60k, 45k, 34k, 23k
+               'KECK-LRIS'  : {'wave_min':2940, 'wave_max':9200,  'R':1200}}        # different grisms/gratings: from R=300 to R=1200
 
 # pull out some units for JITed functions
 sP_units_Mpc_in_cm = 3.08568e24
@@ -1127,7 +1131,7 @@ def generate_spectra_voronoi_halo():
     fig.savefig('spectra_%s_%s_%s.pdf' % (sP.simName,instrument,'-'.join(lineNames)))
     plt.close(fig)
 
-def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None):
+def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None, search=False):
     """ Generate a large grid of (fullbox) rays by ray-tracing through the Voronoi mesh.
 
     Args:
@@ -1135,6 +1139,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None):
       projAxis (int): either 0, 1, or 2. only axis-aligned allowed for now.
       pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
         that we follow a spatial subdivision, so the total job number should be an integer squared.
+      search (bool): if True, return existing data only, do not calculate new files.
     """
 
     # config
@@ -1178,6 +1183,10 @@ def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None):
                 attrs[attr] = f.attrs[attr]
 
         return rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, attrs['total_dl']
+
+    if search:
+        # file does not exist, but we are only searching for existing files, so empty return
+        return
 
     pSplitStr = ' (split %d of %d)' % (pSplit[0],pSplit[1]) if pSplit is not None else ''
     print('Compute and save: [%s z=%.1f] [%s]%s' % (sP.simName,sP.redshift,raysType,pSplitStr))
@@ -1563,6 +1572,81 @@ def plot_concat_spectra():
     ax.legend(loc='best')
     fig.savefig('spectra_%.1f-%.1f.pdf' % (EW_min,EW_max))
     plt.close(fig)
+
+def calc_statistics_from_saved_rays(sP):
+    """ Generate a large number of spectra, based on already computed and saved rays.
+
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
+        that we follow a spatial subdivision, so the total job number should be an integer squared.
+    """
+    # config
+    projAxis = 2
+    ionName = 'Mg II'
+    dens_threshold = 1e-12 # ions/cm^3
+
+    pSplitNum = 16
+
+    # save file
+    saveFilename = sP.derivPath + 'rays/stats_%s_z%.1f_%d_%s.hdf5' % \
+      (sP.simName,sP.redshift,projAxis,ionName.replace(' ','_'))
+
+    # (global) load required gas cell properties
+    densField = '%s numdens' % ionName
+    cell_dens = sP.snapshotSubset('gas', densField) # ions/cm^3
+
+    # loop over splits
+    w_offset = 0
+
+    for i in range(pSplitNum):
+        pSplit = [i, pSplitNum]
+
+        # load rays
+        result = generate_rays_voronoi_fullbox(sP, projAxis=projAxis, pSplit=pSplit, search=True)
+        if result is None:
+            continue
+
+        rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = result
+
+        # convert indices local to this subset of the snapshot into global snapshot indices
+        ray_cell_inds = cell_inds[rays_inds]
+
+        # allocate (equal number of rays per split file)
+        if i == 0:
+            n_clouds = np.zeros(rays_len.size * pSplitNum, dtype='int32')
+
+        # loop over each ray
+        print_fac = int(rays_len.size/10)
+        for j in range(rays_len.size):
+            if j % print_fac == 0: print('[%2d of %2d] %.2f%%' % (i,pSplitNum,j/rays_len.size*100), flush=True)
+            # get skewers of density, pathlength
+            local_inds = ray_cell_inds[rays_off[j]:rays_off[j]+rays_len[j]]
+            local_dens = cell_dens[local_inds]
+
+            local_dl = rays_dl[rays_off[j]:rays_off[j]+rays_len[j]]
+
+            # identify all intersected cells above ion density threshold
+            w = np.where(local_dens > dens_threshold)[0]
+
+            if len(w) == 0:
+                # no cells above threshold == no clouds
+                continue
+
+            # find contiguous index ranges, identify breakpoints between contiguous ranges
+            diff = np.diff(w)
+            breaks = np.where(diff != 1)[0]
+
+            # count number of discrete clouds
+            n_clouds[w_offset+j] = len(breaks) + 1
+
+        w_offset += rays_len.size
+
+    # save output
+    with h5py.File(saveFilename,'w') as f:
+        f['n_clouds'] = n_clouds
+
+    print(f'Saved: [{saveFilename}]')
 
 def single_line_test():
     """ Test for Voigt profile deposition of a single absorption line. """

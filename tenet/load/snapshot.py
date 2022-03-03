@@ -46,7 +46,7 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
                   # single file per snapshot (swift convention)
                   basePath + sbStr2 + 'snap_%s.hdf5' % str(snapNum).zfill(4),
                   # single file per snapshot (smuggle convention)
-                  basePath + 'snapshot_%03d.hdf5' % snapNum,
+                  basePath + 'snapshot_' + str(snapNum).zfill(3) + '.hdf5',
                   # single file per snapshot, in subdirectory (i.e. Millennium rewrite)
                   basePath + sbStr2 + 'snapdir_' + sbStr1 + ext + '/snap_' + sbStr1 + ext + '.hdf5',
                   # single groupordered file per snapshot
@@ -274,8 +274,8 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
     # full snapshot-level caching, create during normal usage but not web (always use if exists)
     useCache = True
-    createCache = False
-    #createCache = True if getuser() != 'wwwrun' else False # can enable
+    #createCache = False
+    createCache = True if getuser() != 'wwwrun' else False # can enable
 
     cachePath = sP.derivPath + 'cache/'
     sbStr = 'sb%d_' % sP.subbox if sP.subbox is not None else ''
@@ -340,8 +340,8 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
         # load from existing cache if it exists
         if isfile(cacheFile):
-            if getuser() != 'wwwrun':
-                print('Loading [%s] [%s] from [%s].' % (partType,field,cacheFile.split(sP.derivPath)[1]))
+            #if getuser() != 'wwwrun':
+            #    print('Loading [%s] [%s] from [%s].' % (partType,field,cacheFile.split(sP.derivPath)[1]))
 
             with h5py.File(cacheFile, 'r') as f:
                 assert f['field'].size == indRangeAll[1]
