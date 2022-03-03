@@ -1230,94 +1230,43 @@ def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None, search=False):
     ray_pos[:,1] = ypts.ravel()
     ray_pos[:,2] = 0.0
 
-    if 0:
-        # DEBUG only
-        ray_pos_new = np.zeros( (1,3), dtype='float64' )
-        ray_pos_new[0,:] = ray_pos[4,:] # 4 62500 [    0. 17640.     0.]
-        ray_pos = ray_pos_new
-
     # determine spatial mask (cuboid with long side equal to boxlength in line-of-sight direction)
     cell_inds = None
 
-    if 1:
-        if pSplit is not None:
-            mask = np.zeros(sP.numPart[sP.ptNum('gas')], dtype='int8')
-            mask += 1 # all required
+    if pSplit is not None:
+        mask = np.zeros(sP.numPart[sP.ptNum('gas')], dtype='int8')
+        mask += 1 # all required
 
-            print(' pSplitSpatial:', end='')
-            for ind, axis in enumerate(['x','y']):
-                print(' slice[%s]...' % axis, end='')
-                dists = sP.snapshotSubsetP('gas', 'pos_'+axis, float32=True)
+        print(' pSplitSpatial:', end='')
+        for ind, axis in enumerate(['x','y']):
+            print(' slice[%s]...' % axis, end='')
+            dists = sP.snapshotSubsetP('gas', 'pos_'+axis, float32=True)
 
-                dists = (ij[ind] + 0.5) * extent - dists # 1D, along axis, from center of subregion
-                sP.correctPeriodicDistVecs(dists)
+            dists = (ij[ind] + 0.5) * extent - dists # 1D, along axis, from center of subregion
+            sP.correctPeriodicDistVecs(dists)
 
-                # compute maxdist heuristic (in code units): the largest 1d distance we need for the calculation
-                # second term: comfortably exceed size of largest (IGM) cells (~200 kpc for TNG100-1)
-                maxdist = extent / 2 + sP.gravSoft*1000
+            # compute maxdist heuristic (in code units): the largest 1d distance we need for the calculation
+            # second term: comfortably exceed size of largest (IGM) cells (~200 kpc for TNG100-1)
+            maxdist = extent / 2 + sP.gravSoft*1000
 
-                w_spatial = np.where(np.abs(dists) > maxdist)
-                mask[w_spatial] = 0 # outside bounding box along this axis
+            w_spatial = np.where(np.abs(dists) > maxdist)
+            mask[w_spatial] = 0 # outside bounding box along this axis
 
-            cell_inds = np.nonzero(mask)[0]
-            print('\n pSplitSpatial: particle load fraction = %.2f%% vs. uniform expectation = %.2f%%' % \
-                (cell_inds.size/mask.size*100, 1/pSplit[1]*100))
+        cell_inds = np.nonzero(mask)[0]
+        print('\n pSplitSpatial: particle load fraction = %.2f%% vs. uniform expectation = %.2f%%' % \
+            (cell_inds.size/mask.size*100, 1/pSplit[1]*100))
 
-            dists = None
-            w_spatial = None
-            mask = None
+        dists = None
+        w_spatial = None
+        mask = None
 
-        # load (reduced) cell spatial positions
-        cell_pos = sP.snapshotSubsetC('gas', 'pos', inds=cell_inds, verbose=True)
+    # load (reduced) cell spatial positions
+    cell_pos = sP.snapshotSubsetC('gas', 'pos', inds=cell_inds, verbose=True)
 
-        # DEBUG only: save pos and tree cache
-        if 0:
-            with h5py.File('pos_cache.hdf5','w') as f:
-                f['cell_pos'] = cell_pos
-            print('Saved: [pos_cache.hdf5]')
+    # ray-trace
+    print('Load done, tracing...', flush=True)
 
-            from ..util.treeSearch import buildFullTree
-            NextNode, length, center, sibling, nextnode = buildFullTree(cell_pos,sP.boxSize,cell_pos.dtype)
-            with h5py.File('tree_cache.hdf5','w') as f:
-                f['NextNode'] = NextNode
-                f['length'] = length
-                f['center'] = center
-                f['sibling'] = sibling
-                f['nextnode'] = nextnode
-            print('Saved: [tree_cache.hdf5]')
-            # immediate exit
-            return
-
-        # ray-trace
-        print('Load done, tracing...', flush=True)
-
-        rays_off, rays_len, rays_dl, rays_inds = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, mode='full')
-
-    if 0:
-        # DEBUG only: load caches
-        print('Loading pos_cache.')
-        with h5py.File('pos_cache.hdf5','r') as f:
-            cell_pos = f['cell_pos'][()]
-
-        print('Loading tree cache.')
-        with h5py.File('tree_cache.hdf5','r') as f:
-            NextNode = f['NextNode'][()]
-            length = f['length'][()]
-            center = f['center'][()]
-            sibling = f['sibling'][()]
-            nextnode = f['nextnode'][()]
-        tree = NextNode, length, center, sibling, nextnode
-
-        # ray-trace
-        print('Load done, tracing...')
-        import time
-        start_time = time.time()
-
-        rays_off, rays_len, rays_dl, rays_inds = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, 
-              mode='full', tree=tree, nThreads=1)
-
-        print(f'Time: [{time.time()-start_time}] sec.')
-        return
+    rays_off, rays_len, rays_dl, rays_inds = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, mode='full')
 
     # save
     with h5py.File(path, 'w') as f:
