@@ -1,6 +1,5 @@
 """
 Synthetic absorption spectra generation.
-Inspired by SpecWizard (Schaye), pygad (Rottgers), Trident (Hummels).
 """
 import numpy as np
 import h5py
@@ -8,16 +7,13 @@ import glob
 import threading
 from os.path import isfile, isdir, expanduser
 from os import mkdir
-import matplotlib.pyplot as plt
 from scipy.special import wofz
 
 from numba import jit
 from numba.extending import get_cython_function_address
 import ctypes
 
-from ..plot.config import *
-from ..util import units
-from ..util.helper import logZeroNaN, closest, pSplitRange
+from ..util.helper import logZeroNaN, pSplitRange
 from ..util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
                               trace_ray_through_voronoi_mesh_with_connectivity, rayTrace
 
@@ -193,78 +189,6 @@ def _equiv_width_flux(flux,wave_mid_ang):
     res = np.sum(dang * (integrand[1:] + integrand[:-1])/2)
 
     return res
-
-def curveOfGrowth(line='MgII 2803'):
-    """ Plot relationship between EW and N for a given transition (e.g. HI, MgII line). """
-    f, gamma, wave0_ang, _, _ = _line_params(line)
-
-    # run config
-    nPts = 201
-    wave_ang = np.linspace(wave0_ang-5, wave0_ang+5, nPts)
-    dvel = (wave_ang/wave0_ang - 1) * units.c_cgs / 1e5 # cm/s -> km/s
-
-    #dwave_ang = wave_ang[1] - wave_ang[0]
-    #wave_edges_ang = np.hstack(((wave_ang - dwave_ang/2),(wave_ang[-1] + dwave_ang/2)))
-    
-    # run test
-    #N = 21.0 # log 1/cm^2
-    #b = 30.0 # km/s
-    #tau = _voigt_tau(wave_ang/1e8, N, b, wave0_ang, f, gamma)
-    #flux = np.exp(-1*tau)
-
-    # plot flux
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
-
-    ax.set_xlabel('Velocity Offset [ km/s ]')
-    ax.set_ylabel('Relative Flux')
-
-    for N in [12,15,18,21]:
-        for j, sigma in enumerate([30]):
-            b = sigma * np.sqrt(2)
-            tau = _voigt_tau(wave_ang, 10.0**N, b, wave0_ang, f, gamma)
-            flux = np.exp(-1*tau)
-            EW = _equiv_width(tau,wave_ang)
-            print(N,b,EW)
-
-            ax.plot(dvel, flux, lw=lw, linestyle=linestyles[j], label='N = %f b = %d' % (N,b))
-
-    ax.legend()
-    fig.savefig('flux_%s.pdf' % line)
-    plt.close(fig)
-
-    # plot cog
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
-
-    ax.set_xlabel('Column Density [ log cm$^{-2}$ ]')
-    ax.set_ylabel('Equivalent Width [ $\AA$ ]')
-    ax.set_yscale('log')
-    #ax.set_ylim([0.01,10])
-
-    cols = np.linspace(12.0, 18.5, 100)
-    bvals = [3,5,10,15]
-
-    for b in bvals: # doppler parameter, km/s
-        # draw EW targets
-        xx = [cols.min(), cols.max()]
-        ax.plot(xx, [0.4,0.4], '-', color='#444444', alpha=0.4)
-        ax.plot(xx, [1.0,1.0], '-', color='#444444', alpha=0.4)
-
-        ax.fill_between(xx, [0.3,0.3], [0.5,0.5], color='#444444', alpha=0.05)
-        ax.fill_between(xx, [0.9,0.9], [1.1,1.1], color='#444444', alpha=0.05)
-
-        # derive EWs as a function of column density
-        EW = np.zeros( cols.size, dtype='float32')
-        for i, col in enumerate(cols):
-            tau = _voigt_tau(wave_ang, 10.0**col, b, wave0_ang, f, gamma)
-            EW[i] = _equiv_width(tau,wave_ang)
-
-        ax.plot(cols, EW, lw=lw, label='b = %d km/s' % b)
-
-    ax.legend()
-    fig.savefig('cog_%s.pdf' % line)
-    plt.close(fig)
 
 def create_master_grid(line=None, instrument=None):
     """ Create a master grid (i.e. spectrum) to receieve absorption line depositions.
@@ -475,59 +399,6 @@ def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_
 
     return
 
-def _spectrum_debug_plot(sP, line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos):
-    """ Plot some quick diagnostic panels for spectra. """
-
-    # calculate derivative quantities
-    flux_master = np.exp(-1*tau_master)
-    master_dl = np.cumsum(master_dx)
-
-    # start
-    fig = plt.figure(figsize=(26,14))
-
-    ax = fig.add_subplot(321) # upper left
-    w = np.where(tau_master > 0)[0]
-    xminmax = master_mid[ [w[0]-5, w[-1]+5] ]
-    xcen = np.mean(xminmax)
-
-    ax.set_xlabel('Wavelength [ Ang ]')
-    ax.set_xlim([xminmax[0], xminmax[1]]) # [xcen-25,xcen+25]
-    ax.set_ylabel('Relative Flux')
-    ax.plot(master_mid, flux_master, '-', lw=lw, label=line)
-    ax.legend(loc='best')
-
-    ax = fig.add_subplot(322) # upper right
-    ax.set_xlabel('Distance Along Ray [ Mpc ]')
-    ax.set_ylabel('Density [log cm$^{-3}$]')
-    ax.plot(master_dl, logZeroNaN(master_dens), '-', lw=lw)
-
-    ax = fig.add_subplot(323) # center left
-    ax.set_xlabel('$\Delta$ v [ km/s ]')
-    ax.set_xlim([-300, 300])
-    ax.set_ylabel('Relative Flux')
-    dv = (master_mid-xcen)/xcen * sP.units.c_km_s
-    ax.plot(dv, flux_master, '-', lw=lw, label=line)
-
-    ax = fig.add_subplot(324) # center right
-    ax.set_xlabel('Distance Along Ray [ Mpc ]')
-    ax.set_ylabel('Column Density [log cm$^{-2}$]')
-    ax.plot(master_dl, logZeroNaN(master_dens*master_dx*sP.units.Mpc_in_cm), '-', lw=lw)
-
-    ax = fig.add_subplot(325) # lower left
-    ax.set_xlabel('Distance Along Ray [ Mpc ]')
-    ax.set_ylabel('Line-of-sight Velocity [ km/s ]')
-    ax.plot(master_dl, master_vellos, '-', lw=lw)
-    #ax.set_ylabel('Wavelength Deposited [ Ang ]')
-    #ax.plot(master_dl, master_towave, '-', lw=lw)
-
-    ax = fig.add_subplot(326) # lower right
-    ax.set_xlabel('Distance Along Ray [ Mpc ]')
-    ax.set_ylabel('Temperature [ log K ]')
-    ax.plot(master_dl, logZeroNaN(master_temp), '-', lw=lw)
-
-    fig.savefig(plotName)
-    plt.close(fig)
-
 def create_spectrum_from_traced_ray(sP, f, gamma, wave0, ion_mass, instrument, 
     master_dens, master_dx, master_temp, master_vellos):
     """ Given a completed (single) ray traced through a volume, and the properties of all the intersected 
@@ -552,7 +423,7 @@ def create_spectrum_from_traced_ray(sP, f, gamma, wave0, ion_mass, instrument,
     z_cosmo = np.interp(cum_pathlength, lengths, z_vals)
 
     # doppler shift
-    z_doppler = master_vellos / units.c_km_s
+    z_doppler = master_vellos / sP.units.c_km_s
 
     # effective redshift
     z_eff = (1+z_doppler)*(1+z_cosmo) - 1
@@ -724,6 +595,7 @@ def generate_spectrum_uniform_grid():
     from ..util.simParams import simParams
     from ..util.sphMap import sphGridWholeBox, sphMap
     from ..cosmo.cloudy import cloudyIon
+    from ..plot.spectrum import _spectrum_debug_plot
 
     # config
     sP = simParams(run='tng50-4', redshift=0.5)
@@ -842,10 +714,10 @@ def generate_spectrum_uniform_grid():
     # plot
     plotName = f"spectrum_box_{sP.simName}_{line}_{nCells}_h{haloID}_{posInds[0]}-{posInds[1]}_z{sP.redshift:.0f}.pdf"
 
-    _spectrum_debug_plot(sP, line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos)
+    _spectrum_debug_plot(line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos)
 
 def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1, verify=True):
-    """ Generate an absorption spectrum by ray-tracing through the Voronoi mesh.
+    """ Generate a single absorption spectrum by ray-tracing through the Voronoi mesh.
 
     Args:
       use_precomputed_mesh (bool): if True, use pre-computed Voronoi mesh connectivity from VPPP, 
@@ -858,6 +730,7 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
     from ..util.voronoi import loadSingleHaloVPPP, loadGlobalVPPP
     from ..cosmo.cloudy import cloudyIon
     from ..util.treeSearch import buildFullTree
+    from ..plot.spectrum import _spectrum_debug_plot
 
     # config
     sP = simParams(run='tng50-4', redshift=0.5)
@@ -961,7 +834,7 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
     meshStr = 'vppp' if use_precomputed_mesh else 'treebased'
     plotName = f"spectrum_voronoi_{sP.simName}_{line}_{meshStr}_h{haloID}_z{sP.redshift:.0f}.pdf"
 
-    _spectrum_debug_plot(sP, line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos)
+    _spectrum_debug_plot(line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos)
 
 def generate_spectra_voronoi_halo():
     """ Generate a large grid of (halocentric) absorption spectra by ray-tracing through the Voronoi mesh. """
@@ -984,94 +857,7 @@ def generate_spectra_voronoi_halo():
     saveFilename = 'spectra_%s_z%.1f_halo%d-%d_n%d_%s_%s.hdf5' % \
       (sP.simName,sP.redshift,haloID,projAxis,nRaysPerDim,instrument,'-'.join(lineNames))
 
-    if not isfile(saveFilename):
-        # load halo
-        halo = sP.halo(haloID)
-        cen = halo['GroupPos']
-        mass = sP.units.codeMassToLogMsun(halo['Group_M_Crit200'])[0]
-        size = 2 * halo['Group_R_Crit200']
-
-        print(f"Halo [{haloID}] mass = {mass:.2f} and Rvir = {halo['Group_R_Crit200']:.2f}")
-
-        # ray starting positions, and total requested pathlength
-        xpts = np.linspace(cen[0]-size/2, cen[0]+size/2, nRaysPerDim)
-        ypts = np.linspace(cen[1]-size/2, cen[1]+size/2, nRaysPerDim)
-
-        xpts, ypts = np.meshgrid(xpts, ypts, indexing='ij')
-
-        # construct [N,3] list of search positions
-        ray_pos = np.zeros( (nRaysPerDim**2,3), dtype='float64')
-        
-        ray_pos[:,0] = xpts.ravel()
-        ray_pos[:,1] = ypts.ravel()
-        ray_pos[:,2] = cen[2] - size/2
-
-        # total requested pathlength (twice distance to halo center)
-        total_dl = size
-
-        # ray direction
-        ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
-        ray_dir[projAxis] = 1.0
-
-        # load cell properties (pos,vel,species dens,temp)
-        haloIDLoad = haloID if fof_scope_mesh else None # if global mesh, then global gas load
-
-        cell_pos = sP.snapshotSubsetP('gas', 'pos', haloID=haloIDLoad) # code
-
-        # ray-trace
-        rays_off, rays_len, rays_dl, rays_inds = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, mode='full',nThreads=4)
-
-        # load other cell properties
-        velLosField = 'vel_'+['x','y','z'][projAxis]
-
-        cell_vellos = sP.snapshotSubsetP('gas', velLosField, haloID=haloIDLoad) # code
-        cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', haloID=haloIDLoad) # K
-        
-        cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
-
-        # convert length units, all other units already appropriate
-        rays_dl = sP.units.codeLengthToMpc(rays_dl)
-
-        # sample master grid
-        master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
-        tau_master = np.zeros( (nRaysPerDim**2,tau_master.size), dtype=tau_master.dtype )
-
-        EWs = {}
-
-        # start cache
-        with h5py.File(saveFilename,'w') as f:
-            f['master_wave'] = master_mid
-
-        # loop over requested line(s)
-        for line in lineNames:
-            densField = '%s numdens' % lines[line]['ion']
-            cell_dens = sP.snapshotSubset('gas', densField, haloID=haloIDLoad) # ions/cm^3
-
-            # create spectra
-            master_wave, tau_local, EW_local = \
-              create_spectra_from_traced_rays(sP, line, instrument, 
-                                              rays_off, rays_len, rays_dl, rays_inds,
-                                              cell_dens, cell_temp, cell_vellos)
-
-            assert np.array_equal(master_wave,master_mid)
-
-            tau_master += tau_local
-            EWs[line] = EW_local
-
-            with h5py.File(saveFilename,'r+') as f:
-                # save tau per line
-                f['tau_%s' % line.replace(' ','_')] = tau_local
-                # save EWs per line
-                f['EW_%s' % line.replace(' ','_')] = EW_local
-
-        # calculate flux and total EW
-        flux = np.exp(-1*tau_master)
-
-        with h5py.File(saveFilename,'r+') as f:
-            f['flux'] = flux
-
-        print(f'Saved: [{saveFilename}]')
-    else:
+    if isfile(saveFilename):
         # load cache
         EWs = {}
         with h5py.File(saveFilename,'r') as f:
@@ -1079,57 +865,99 @@ def generate_spectra_voronoi_halo():
             flux = f['flux'][()]
             for line in lineNames:
                 EWs[line] = f['EW_%s' % line.replace(' ','_')][()]
+
         print(f'Loaded: [{saveFilename}]')
 
-    # plot config
-    EW_targets = [0.1, 0.2, 0.4, 1.0, 2.0, 8.0] # Ang
-    xlim = [4200,4230] # Ang
+        return master_wave, flux, EWs        
 
-    # total EW
-    EW_total = np.zeros(flux.shape[0], dtype='float32')
+    # load halo
+    halo = sP.halo(haloID)
+    cen = halo['GroupPos']
+    mass = sP.units.codeMassToLogMsun(halo['Group_M_Crit200'])[0]
+    size = 2 * halo['Group_R_Crit200']
+
+    print(f"Halo [{haloID}] mass = {mass:.2f} and Rvir = {halo['Group_R_Crit200']:.2f}")
+
+    # ray starting positions, and total requested pathlength
+    xpts = np.linspace(cen[0]-size/2, cen[0]+size/2, nRaysPerDim)
+    ypts = np.linspace(cen[1]-size/2, cen[1]+size/2, nRaysPerDim)
+
+    xpts, ypts = np.meshgrid(xpts, ypts, indexing='ij')
+
+    # construct [N,3] list of search positions
+    ray_pos = np.zeros( (nRaysPerDim**2,3), dtype='float64')
+    
+    ray_pos[:,0] = xpts.ravel()
+    ray_pos[:,1] = ypts.ravel()
+    ray_pos[:,2] = cen[2] - size/2
+
+    # total requested pathlength (twice distance to halo center)
+    total_dl = size
+
+    # ray direction
+    ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
+    ray_dir[projAxis] = 1.0
+
+    # load cell properties (pos,vel,species dens,temp)
+    haloIDLoad = haloID if fof_scope_mesh else None # if global mesh, then global gas load
+
+    cell_pos = sP.snapshotSubsetP('gas', 'pos', haloID=haloIDLoad) # code
+
+    # ray-trace
+    rays_off, rays_len, rays_dl, rays_inds = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, mode='full',nThreads=4)
+
+    # load other cell properties
+    velLosField = 'vel_'+['x','y','z'][projAxis]
+
+    cell_vellos = sP.snapshotSubsetP('gas', velLosField, haloID=haloIDLoad) # code
+    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', haloID=haloIDLoad) # K
+    
+    cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
+
+    # convert length units, all other units already appropriate
+    rays_dl = sP.units.codeLengthToMpc(rays_dl)
+
+    # sample master grid
+    master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
+    tau_master = np.zeros( (nRaysPerDim**2,tau_master.size), dtype=tau_master.dtype )
+
+    EWs = {}
+
+    # start cache
+    with h5py.File(saveFilename,'w') as f:
+        f['master_wave'] = master_mid
+
+    # loop over requested line(s)
     for line in lineNames:
-        EW_total += EWs[line]
+        densField = '%s numdens' % lines[line]['ion']
+        cell_dens = sP.snapshotSubset('gas', densField, haloID=haloIDLoad) # ions/cm^3
 
-    # plot hist of EW
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
+        # create spectra
+        master_wave, tau_local, EW_local = \
+          create_spectra_from_traced_rays(sP, line, instrument, 
+                                          rays_off, rays_len, rays_dl, rays_inds,
+                                          cell_dens, cell_temp, cell_vellos)
 
-    ax.set_xlabel('Equivalent Width [ Ang ]')
-    ax.set_ylabel('Fraction')
-    ax.set_yscale('log')
+        assert np.array_equal(master_wave,master_mid)
 
-    valMinMax = [-2.0,1.0]
-    nBins = 30
+        tau_master += tau_local
+        EWs[line] = EW_local
 
-    for line in lineNames:
-        yy, xx = np.histogram(logZeroNaN(EWs[line]), bins=nBins, density=True, range=valMinMax)
-        xx = xx[:-1] + 0.5*(valMinMax[1]-valMinMax[0])/nBins
+        with h5py.File(saveFilename,'r+') as f:
+            # save tau per line
+            f['tau_%s' % line.replace(' ','_')] = tau_local
+            # save EWs per line
+            f['EW_%s' % line.replace(' ','_')] = EW_local
 
-        ax.plot(xx, yy, label=line)
+    # calculate flux and total EW
+    flux = np.exp(-1*tau_master)
 
-    fig.savefig('spectra_EW_hist_%s_%s_%s.pdf' % (sP.simName,instrument,'-'.join(lineNames)))
-    plt.close(fig)
+    with h5py.File(saveFilename,'r+') as f:
+        f['flux'] = flux
 
-    # plot some sample spectra
-    ray_inds = []
-    for EW_target in EW_targets:
-        _, ind = closest(EW_total, EW_target)
-        ray_inds.append(ind)
+    print(f'Saved: [{saveFilename}]')
 
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
-
-    ax.set_xlabel('Wavelength [ Ang ]')
-    ax.set_ylabel('Relative Flux')
-    ax.set_xlim(xlim)
-
-    for ray_ind in ray_inds:
-        label = f'EW = {EW_total[ray_ind]:.2f} Ang' #'EW = %.2f Ang [#%d]' % (EW_total[ray_ind],ray_ind)
-        ax.plot(master_wave, flux[ray_ind,:], '-', lw=lw, label=label)
-
-    ax.legend(loc='lower left')
-    fig.savefig('spectra_%s_%s_%s.pdf' % (sP.simName,instrument,'-'.join(lineNames)))
-    plt.close(fig)
+    return master_wave, flux, EWs
 
 def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None, search=False):
     """ Generate a large grid of (fullbox) rays by ray-tracing through the Voronoi mesh.
@@ -1292,6 +1120,25 @@ def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None, search=False):
 
     return rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl
 
+def _spectra_filepath(sim, projAxis, instrument, lineNames, pSplit=None):
+    """ Return the path to a file of saved spectra. """
+    linesStr = '-'.join([line.replace(' ','_') for line in lineNames])
+
+    path = sim.derivPath + "rays/"
+    filebase = 'spectra_%s_z%.1f_%d_%s_%s' % (sim.simName,sim.redshift,projAxis,instrument,linesStr)
+
+    filename = filebase + '.hdf5'
+
+    if isinstance(pSplit,list):
+        # a specific chunk
+        filename = filebase + '_%d-of-%d.hdf5' % (pSplit[0],pSplit[1])
+
+    if str(pSplit) == '*':
+        # leave wildcard for glob search
+        filename = filebase + '_*.hdf5'
+
+    return path + filename
+
 def generate_spectra_from_saved_rays(sP, pSplit=None):
     """ Generate a large number of spectra, based on already computed and saved rays.
 
@@ -1306,9 +1153,7 @@ def generate_spectra_from_saved_rays(sP, pSplit=None):
     instrument = '4MOST_HRS' # 'SDSS-BOSS'
 
     # save file
-    linesStr = '-'.join([line.replace(' ','_') for line in lineNames])
-    saveFilename = sP.derivPath + 'rays/spectra_%s_z%.1f_%d_%s_%s_%d-of-%d.hdf5' % \
-      (sP.simName,sP.redshift,projAxis,instrument,linesStr,pSplit[0],pSplit[1])
+    saveFilename = _spectra_filepath(sP, projAxis, instrument, lineNames, pSplit)
 
     # load rays
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
@@ -1381,13 +1226,10 @@ def concat_and_filter_spectra(sP):
     EW_threshold = 0.001 # applied to sum of lines [ang]
 
     # search for chunks
-    linesStr = '-'.join([line.replace(' ','_') for line in lineNames])
-    loadFilename = sP.derivPath + 'rays/spectra_%s_z%.1f_%d_%s_%s_*.hdf5' % \
-      (sP.simName,sP.redshift,projAxis,instrument,linesStr)
+    loadFilename = _spectra_filepath(sP, projAxis, instrument, lineNames, pSplit='*')
+    saveFilename = _spectra_filepath(sP, projAxis, instrument, lineNames, pSplit=None)
 
-    saveFilename = loadFilename.replace('_*','').replace(' ','-')
-
-    files = glob.glob(loadFilename)
+    pSplitNum = len(glob.glob(loadFilename))
 
     # load all for count
     inds = []
@@ -1395,8 +1237,8 @@ def concat_and_filter_spectra(sP):
 
     count = 0
 
-    for file in files:
-        print(file)
+    for i in range(pSplitNum):
+        file = _spectra_filepath(sP, projAxis, instrument, lineNames, pSplit=[i,pSplitNum])
         with h5py.File(file,'r') as f:
             if 'flux' not in f:
                 print(' skip')
@@ -1423,23 +1265,31 @@ def concat_and_filter_spectra(sP):
         inds.append(w)
         EW_total.append(EW_local[w])
 
-    print(f'In total [{count}] spectra of [{n_spec*len(files)}] above {EW_threshold = }')
+    print(f'In total [{count}] spectra of [{n_spec*pSplitNum}] above {EW_threshold = }')
+
+    assert count > 0, 'Error: All EWs are zero. Observed frame wavelengths outside instrument coverage?'
 
     # allocate
     flux = np.zeros((count,n_wave), dtype='float32')
     ray_pos = np.zeros((count,3), dtype='float32')
+    global_inds = np.zeros(count, dtype='int32')
 
     EWs = []
     for line in lineNames:
         EWs.append( np.zeros(count, dtype='float32') )
 
-    # load
+    # load and keep specific spectra passing EW threshold
     offset = 0
 
-    for i, file in enumerate(files):
+    for i in range(pSplitNum):
+        # skip if not existing
         if len(inds[i]) == 0:
             continue
+
+        file = _spectra_filepath(sP, projAxis, instrument, lineNames, pSplit=[i,pSplitNum])
         print(file, offset)
+
+        # load
         with h5py.File(file,'r') as f:
             flux[offset:offset+len(inds[i])] = f['flux'][inds[i]]
             ray_pos[offset:offset+len(inds[i])] = f['ray_pos'][inds[i]]
@@ -1447,6 +1297,10 @@ def concat_and_filter_spectra(sP):
 
             for j, line in enumerate(lineNames):
                 EWs[j][offset:offset+len(inds[i])] = f['EW_%s' % line.replace(' ','_')][inds[i]]
+
+        # construct global indices, giving for each saved spectra in this concat file, the corresponding 
+        # index in any analysis array saved one value per ray
+        global_inds[offset:offset+len(inds[i])] = inds[i]
 
         offset += len(inds[i])
 
@@ -1460,6 +1314,10 @@ def concat_and_filter_spectra(sP):
         for i, line in enumerate(lineNames):
             f['EW_%s' % line.replace(' ','_')] = EWs[i]
 
+        for i in range(pSplitNum):
+            f['inds/%d' % i] = inds[i]
+        f['inds/global'] = global_inds
+
         f.attrs['projAxis'] = projAxis
         f.attrs['simName'] = sP.simName
         f.attrs['redshift'] = sP.redshift
@@ -1470,69 +1328,15 @@ def concat_and_filter_spectra(sP):
 
     print('Saved: [%s]' % saveFilename)
 
-def plot_concat_spectra():
-    """ Debug plots for concatenated spectra. """
-
-    # config
-    filename = "spectra_TNG50-1_z0.7_2_4MOST_HRS_MgII-2796-MgII-2803.hdf5"
-    path = "/u/dnelson/sims.TNG/TNG50-1/data.files/rays/"
-
-    EW_min = 0.9
-    EW_max = 1.0
-    SNR = None #30.0 # if not None, add Gaussian noise for the given signal-to-noise ratio
-    num = 10
-
-    wave_minmax = [4750,4800] # z=0.5: [4180,4250]
-
-    # load
-    with h5py.File(path + filename,'r') as f:
-        flux = f['flux'][()]
-        EW = f['EW_total'][()]
-        wave = f['master_wave'][()]
-
-    # select
-    inds = np.where( (EW>EW_min) & (EW<=EW_max) )[0]
-    print(f'Found [{len(inds)}] of [{EW.size}] spectra within EW range [{EW_min}-{EW_max}] Ang.')
-
-    rng = np.random.default_rng(4242+inds[0]+inds[-1])
-    rng.shuffle(inds)
-
-    flux = flux[inds,:]
-    EW = EW[inds]
-
-    # add noise?
-    if SNR is not None:
-        noise = rng.normal(loc=0.0, scale=1/SNR, size=flux.shape)
-        flux += noise
-        # achieved SNR = 1/stddev(noise)
-        flux = np.clip(flux, 0, np.inf) # clip negative values at zero
-
-    # plot
-    fig = plt.figure(figsize=(16,8))
-    ax = fig.add_subplot(111)
-
-    ax.set_xlim(wave_minmax)
-    ax.set_xlabel('Wavelength [ Ang ]')
-    ax.set_ylabel('Relative Flux')
-
-    for i in range(num):
-        ax.step(wave, flux[i,:], '-', where='mid', lw=lw, label='EW = %.1f$\AA$' % EW[i])
-
-    ax.legend(loc='best')
-    fig.savefig('spectra_%.1f-%.1f.pdf' % (EW_min,EW_max))
-    plt.close(fig)
-
 def calc_statistics_from_saved_rays(sP):
-    """ Generate a large number of spectra, based on already computed and saved rays.
+    """ Calculate useful statistics based on already computed and saved rays.
 
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
-      pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
-        that we follow a spatial subdivision, so the total job number should be an integer squared.
     """
     # config
     projAxis = 2
-    ionName = 'Mg II'
+    ionName = 'Mg II' # results depend on ion, independent of actual transition
     dens_threshold = 1e-12 # ions/cm^3
 
     pSplitNum = 16
@@ -1597,168 +1401,6 @@ def calc_statistics_from_saved_rays(sP):
 
     print(f'Saved: [{saveFilename}]')
 
-def single_line_test():
-    """ Test for Voigt profile deposition of a single absorption line. """
-
-    # transition, instrument, and spectrum type
-    line = 'LyA'
-    instrument = None
-    
-    # config for 'this cell'
-    N = 15.0 # log 1/cm^2
-    b = 40.0 # km/s
-
-    vel_los = 0.0 #1000.0 # km/s
-    z_cosmo = 0.0
-
-    # create master grid
-    master_mid, master_edges, tau_master = create_master_grid(line=line, instrument=None)
-
-    # deposit
-    f, gamma, wave0, _, _ = _line_params(line)
-
-    z_doppler = vel_los / units.c_km_s
-    z_eff = (1+z_doppler)*(1+z_cosmo) - 1 # effective redshift
-
-    wave_local, tau_local, flux_local = deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff, debug=True)
-
-    # compute flux
-    flux_master = np.exp(-1*tau_master)
-
-    # plot
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(211)
-
-    ax.set_xlabel('Wavelength [ Ang ]')
-    ax.set_ylabel('Relative Flux')
-    ax.plot(master_mid, flux_master, 'o-', lw=lw, label='method A')
-    ax.plot(wave_local, flux_local, '-', lw=lw, label='local')
-
-    ax.legend(loc='best')
-    ax = fig.add_subplot(212)
-
-    ax.set_xlabel('Wavelength [ Ang ]')
-    ax.set_ylabel('Optical Depth $\\tau$')
-    ax.plot(master_mid, tau_master, 'o-', lw=lw, label='method A')
-    ax.plot(wave_local, tau_local, '-', lw=lw, label='local')
-
-    ax.legend(loc='best')
-    fig.savefig('spectrum_single_%s.pdf' % line)
-    plt.close(fig)
-
-def test_LyA_vs_coldens():
-    """ Reproduce Hummels+17 Figure 10 of LyA absorption profiles for various N_HI values. """
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-    from matplotlib.cm import ScalarMappable
-    from matplotlib.colors import BoundaryNorm
-    from ..util.helper import sampleColorTable, loadColorTable
-
-    line = 'LyA'
-    
-    # config for 'this cell'
-    N_vals = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20] # log 1/cm^2
-    b = 22.0 # km/s
-
-    vel_los = 0.0
-    z_cosmo = 0.0
-
-    # create master grid
-    master_mid, master_edges, tau_master = create_master_grid(line=line)
-
-    # setup
-    z_doppler = vel_los / units.c_km_s
-    z_eff = (1+z_doppler)*(1+z_cosmo) - 1 # effective redshift
-
-    f, gamma, wave0, _, _ = _line_params(line)
-
-    # start plot
-    fig = plt.figure(figsize=(13,6))
-    ax = fig.add_subplot()
-
-    ax.set_ylabel('Relative Flux')
-    ax.set_xlabel('Wavelength [ Ang ]')
-    ax.set_ylim([0.0, 1.05])
-    ax.set_xlim([wave0-1.0, wave0+1.0])
-
-    # top x-axis (v/c = dwave/wave)
-    ax2 = ax.twiny()
-    ax2.set_xlabel('$\Delta$v [ km/s ]')
-
-    dwave = np.array(ax.get_xlim()) - wave0 # ang
-    dv = units.c_km_s * (dwave / wave0)
-
-    ax2.set_xlim(dv)
-
-    # colors
-    cmap = loadColorTable('viridis')
-    bounds = [N-0.5 for N in N_vals] + [N_vals[-1] + 0.5]
-    norm = BoundaryNorm(bounds, cmap.N)
-    sm = ScalarMappable(norm=norm, cmap=cmap)
-
-    # loop over N values, compute a local spectrum for each and plot
-    for i, N in enumerate(N_vals):
-        wave, tau, flux = deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff, debug=True)
-
-        # plot
-        ax.plot(wave, flux, '-', lw=lw, color=sm.to_rgba(N))
-
-    # finish plot
-    cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.1)
-    cb = plt.colorbar(sm, cax=cax, ticks=N_vals)
-    cb.ax.set_ylabel('log N$_{\\rm HI}$ [ cm$^{-2}$ ]')
-
-    fig.savefig('LyA_absflux_vs_coldens.pdf')
-    plt.close(fig)
-
-def multi_line_test():
-    """ Testing. """
-
-    # transition, instrument, and spectrum type
-    lines = ['LyA', 'LyB', 'LyC', 'LyD', 'LyE']
-    instrument = 'test_EUV'
-    
-    # config for 'this cell'
-    N = 15.0 # log 1/cm^2
-    b = 40.0 # km/s
-
-    vel_los = 0.0 #1000.0 # km/s
-    z_cosmo = 0.0
-
-    # create master grid
-    master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
-
-    # deposit
-    z_doppler = vel_los / units.c_km_s
-    z_eff = (1+z_doppler)*(1+z_cosmo) - 1 # effective redshift
-
-    for line in lines:
-        f, gamma, wave0, _, _ = _line_params(line)
-
-        deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff)
-
-    # compute flux
-    flux_master = np.exp(-1*tau_master)
-
-    # plot
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(211)
-
-    ax.set_xlabel('Wavelength [ Ang ]')
-    ax.set_ylabel('Relative Flux')
-    label = f'{N = :.1f} cm$^{{-2}}$, {b = :.1f} km/s'
-    ax.plot(master_mid, flux_master, '-', lw=lw, label=label)
-
-    ax.legend(loc='best')
-    ax = fig.add_subplot(212)
-
-    ax.set_xlabel('Wavelength [ Ang ]')
-    ax.set_ylabel('Optical Depth $\\tau$')
-    ax.plot(master_mid, tau_master, '-', lw=lw, label=label)
-
-    ax.legend(loc='best')
-    fig.savefig('spectrum_multi_%s.pdf' % ('-'.join(lines)))
-    plt.close(fig)
-
 def benchmark_line():
     """ Deposit many random lines. """
     import time
@@ -1786,7 +1428,7 @@ def benchmark_line():
     # deposit
     for i in range(n):
         # effective redshift
-        z_doppler = vel_los[i] / units.c_km_s
+        z_doppler = vel_los[i] / sP_units_c_km_s
         z_eff = (1+z_doppler)*(1+z_cosmo) - 1 
 
         if i % (n/10) == 0:
