@@ -154,11 +154,11 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
 
 def check_contamination():
     """ Check level of low-resolution contamination (DM particles) in zoom run. """
-    hInd = 23 #8
-    zoomRes = 11 #13
-    variant = None #'sf2'
+    hInd = 50
+    zoomRes = 14
+    variant = 'sf3'
 
-    zoomRun = 'tng50_zoom_dm' #'tng_zoom_dm'
+    zoomRun = 'tng_zoom' #'tng50_zoom_dm'
     redshift = 0.5 # 0.0
     #sP = simParams(res=2048,run='tng_dm',redshift=redshift) # parent box
     sP = simParams(run='tng50-1', redshift=redshift)
@@ -210,9 +210,10 @@ def check_contamination():
 
 def compare_contamination():
     """ Compare contamination radial profiles between runs. """
-    zoomRes = 13
-    hInds = [8,50,51,90]
-    variants = ['sf2','sf3','sf4']
+    zoomRes = 14
+    hInds = [50,79,84,102,107,136,155,156,179,202,205,210,217,224,239,280,282,361,390,1335,1919,3232,3693]
+    variants = ['sf3'] #['sf2','sf3','sf4']
+    run = 'tng_zoom'
 
     # start plot
     fig = plt.figure(figsize=figsize)
@@ -231,8 +232,7 @@ def compare_contamination():
 
         for j, variant in enumerate(variants):
             # load zoom: group catalog
-            print(hInd,variant)
-            sPz = simParams(res=zoomRes, run='tng_zoom_dm', hInd=hInd, redshift=0.0, variant=variant)
+            sPz = simParams(res=zoomRes, run=run, hInd=hInd, redshift=0.0, variant=variant)
 
             halo_zoom = sPz.groupCatSingle(haloID=0)
             halos_zoom = sPz.groupCat(fieldsHalos=['GroupMass','GroupPos','Group_M_Crit200'])
@@ -247,6 +247,7 @@ def compare_contamination():
             #l, = ax.plot(rr, logZeroNaN(r_massfrac), '--', lw=lw, color=c)
 
             ax.plot([min_dist_lr,min_dist_lr], [ylim[0],ylim[0]+0.5], linestyles[j], color=c, lw=lw, alpha=0.5)
+            print(hInd,variant,min_dist_lr)
 
     ax.plot([0,rr[-1]], [-1.0, -1.0], '-', color='#888888', lw=lw-1.0, alpha=0.4, label='10%')
     ax.plot([0,rr[-1]], [-2.0, -2.0], '-', color='#bbbbbb', lw=lw-1.0, alpha=0.4, label='1%')
@@ -759,7 +760,8 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
             data['Group']['GroupPrimaryZoomTarget'][0] = 1
 
             # make index adjustments
-            data['Group']['GroupFirstSub'] += offsets['Subhalo'][hCount]
+            w = np.where(data['Group']['GroupFirstSub'] != -1)
+            data['Group']['GroupFirstSub'][w] += offsets['Subhalo'][hCount]
 
             # spatial offset adjustments: un-shift zoom center and periodic shift
             for field in ['GroupCM','GroupPos']:
@@ -1383,8 +1385,10 @@ def plot_timeevo():
     sims = []
     sims.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3'))
     sims.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3_s'))
+    sims.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3_kpc'))
     sims.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3'))
     sims.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3_s'))
+    sims.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3_kpc'))
 
     # SubhaloSFR, SubhaloBHMass, SubhaloMassInRadType, SubhaloHalfmassRadType
     # SubhaloGasMetallicity, SubhaloVelDisp, SubaloVmaxRad
