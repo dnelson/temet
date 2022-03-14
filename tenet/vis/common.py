@@ -2062,10 +2062,11 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 def addBoxMarkers(p, conf, ax, pExtent):
     """ Factor out common annotation/markers to overlay. """
 
+    color = '#ffffff'
+
     def _addCirclesHelper(p, ax, pos, radii, numToAdd, labelVals=None, lw=1.5, alpha=0.3, marker='o'):
         """ Helper function to add a number of circle markers for halos/subhalos, within the panel. """
-        color     = '#ffffff'
-        fontsize  = 16 # for text only
+        fontsize = 16 # for text only
 
         circOpts = {'color':color, 'alpha':alpha, 'linewidth':lw, 'fill':False}
         textOpts = {'color':color, 'alpha':alpha, 'fontsize':fontsize, 
@@ -2249,6 +2250,40 @@ def addBoxMarkers(p, conf, ax, pExtent):
         # plotting custom list of (x,y,z) inputs as crosses, inputs in simdata coordinates
         nPoints = p['customCrosses']['pos'].shape[0]
         _addCirclesHelper(p, ax, p['customCrosses']['pos'], np.ones(nPoints), nPoints, lw=1.0, alpha=0.8, marker='x')
+
+    if 'drawFOV' in p:
+        # draw a square 'field of view' in the center of the image, input in arcseconds
+        arcsec = p['drawFOV']
+        fov_arcmin = arcsec / 60
+
+        if p['axesUnits'] == 'code':
+            size_kpc = p['sP'].units.arcsecToAngSizeKpcAtRedshift(arcsec)
+            size = p['sP'].units.physicalKpcToCodeLength(size_kpc)
+        elif p['axesUnits'] == 'kpc':
+            size = p['sP'].units.arcsecToAngSizeKpcAtRedshift(arcsec)
+        elif p['axesUnits'] == 'mpc':
+            size = p['sP'].units.arcsecToAngSizeKpcAtRedshift(arcsec) / 1e3
+        elif p['axesUnits'] == 'arcsec':
+            size = arcsec
+        elif p['axesUnits'] == 'arcmin':
+            size = arcsec / 60
+        elif p['axesUnits'] == 'deg':
+            size = arcsec / 60**2
+        else:
+            assert 0, 'Unhandled.'
+
+        cen = [(pExtent[0]+pExtent[1])/2, (pExtent[2]+pExtent[3])/2]
+        xmin = cen[0] - size/2
+        xmax = cen[0] + size/2
+        ymin = cen[1] - size/2
+        ymax = cen[1] + size/2
+
+        # draw with label
+        ax.plot([xmin,xmax,xmax,xmin,xmin],[ymin,ymin,ymax,ymax,ymin],'-',color=color)
+
+        textOpts = {'color':color, 'alpha':1.0, 'fontsize':16, 
+                    'horizontalalignment':'center', 'verticalalignment':'bottom'}
+        ax.text((xmin+xmax)/2, ymax, "%d' FoV" % fov_arcmin, **textOpts)
 
     if 'rVirFracs' in p and p['rVirFracs']:
         # plot circles for N fractions of the virial radius

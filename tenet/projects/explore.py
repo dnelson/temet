@@ -486,6 +486,44 @@ def auroraVoyage2050WhitePaper():
                                   haloMassBins=haloMassBins, combine2Halo=combine2Halo, fieldTypes=fieldTypes, 
                                   emFlux=emFlux, median=median)
 
+def lemIGM():
+    """ Create plots for LEM proposal/STM. """
+    redshift = 0.1 # z=0.08 or z=0.035 good
+
+    # Q: what can we learn from imaging the lines of the WHIM/IGM?
+    # Will not measure continuum (--> cannot constrain density).
+    # Measure multiple lines at the same time.
+    # Options:
+    #  (i) 32x32 arcmin FoV with 2ev resolution
+    #  (ii) 16x16 arcmin FoV with 0.9ev resolution
+
+    sP = simParams(run='tng100-1', redshift=redshift)
+
+    # config
+    nPixels    = 2000
+    axes       = [0,1] # x,y
+    labelZ     = True
+    labelScale = 'physical'
+    labelSim   = True
+    plotHalos  = 50
+    method     = 'sphMap'
+    hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
+    drawFOV    = 32 * 60 # arcsec
+
+    partType = 'gas'
+    #panels = [{'partField':'sb_OVIII', 'valMinMax':[-18,-10]}]
+    panels = [{'partField':'sb_OVII', 'valMinMax':[-18,-10]}]
+    #panels = [{'partField':'sb_Ne10 12.1375A', 'valMinMax':[-18,-10]}] # also: Fe XVII (neither in elInfo)
+
+    class plotConfig:
+        plotStyle  = 'edged' # open, edged
+        rasterPx   = nPixels #if isinstance(nPixels,list) else [nPixels,nPixels]
+        colorbars  = True
+
+        saveFilename = './boxImage_%s-%s_z%.1f.pdf' % (sP.simName,panels[0]['partField'],redshift)
+
+    renderBox(panels, plotConfig, locals())
+
 def smitaXMMproposal():
     """ Dependence of OVII on sSFR at fixed mass. """
     from ..plot.cosmoGeneral import quantHisto2D
