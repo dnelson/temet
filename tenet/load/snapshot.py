@@ -253,24 +253,28 @@ def _ionLoadHelper(sP, partType, field, kwargs):
     assert sP.isPartType(partType, 'gas')
     assert prop in ['mass','frac','flux','lum','numdens']
 
-    # indRange subset
+    # indRange subset herein (do not change kwargs dict, could be used on other fields)
     indRangeOrig = kwargs['indRange']
 
     # haloID or subhaloID subset
     if kwargs['haloID'] is not None or kwargs['subhaloID'] is not None:
-        assert indRangeOrig is None
+        assert indRangeOrig is None and kwargs['inds'] is None
         subset = haloOrSubhaloSubset(sP, haloID=kwargs['haloID'], subhaloID=kwargs['subhaloID'])
         offset = subset['offsetType'][sP.ptNum(partType)]
         length = subset['lenType'][sP.ptNum(partType)]
         indRangeOrig = [offset, offset+length-1] # inclusive below
 
     # check memory cache (only simplest support at present, for indRange returns of global cache)
-    if indRangeOrig is not None:
+    if indRangeOrig is not None or kwargs['inds'] is not None:
         cache_key = 'snap%d_%s_%s' % (sP.snap,partType,field.replace(" ","_"))
         if cache_key in sP.data:
-            print('NOTE: Returning [%s] from cache, indRange [%d - %d]!' % \
-                (cache_key,indRangeOrig[0],indRangeOrig[1]))
-            return sP.data[cache_key][indRangeOrig[0]:indRangeOrig[1]+1]
+            if indRangeOrig is not None:
+                print('NOTE: Returning [%s] from cache, indRange [%d - %d]!' % \
+                    (cache_key,indRangeOrig[0],indRangeOrig[1]))
+                return sP.data[cache_key][indRangeOrig[0]:indRangeOrig[1]+1]
+            if kwargs['inds'] is not None:
+                print('NOTE: Returning [%s] from cache, inds of size [%d]!' % (cache_key,inds.size))
+                return sP.data[cache_key][inds]
 
     # full snapshot-level caching, create during normal usage but not web (always use if exists)
     useCache = True
@@ -310,7 +314,6 @@ def _ionLoadHelper(sP, partType, field, kwargs):
                 # indRange is inclusive for snapshotSubset(), so skip saving the very last 
                 # element, which is included in the next return of pSplitRange()
                 indRangeLocal[1] -= 1
-                kwargs['indRange'] = indRangeLocal
 
                 if indRangeLocal[0] == indRangeLocal[1]:
                     continue # we are done
@@ -336,7 +339,6 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
                 print(' [%2d] saved %d - %d' % (i,indRangeLocal[0],indRangeLocal[1]))
             print('Saved: [%s].' % cacheFile.split(sP.derivPath)[1])
-            kwargs['indRange'] = indRangeOrig # restore
 
         # load from existing cache if it exists
         if isfile(cacheFile):
@@ -345,10 +347,14 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
             with h5py.File(cacheFile, 'r') as f:
                 assert f['field'].size == indRangeAll[1]
-                if indRangeOrig is None:
+                if indRangeOrig is None and kwargs['inds'] is None:
                     values = f['field'][()]
-                else:
+                elif indRangeOrig is not None:
                     values = f['field'][indRangeOrig[0] : indRangeOrig[1]+1]
+                elif kwargs['inds'] is not None:
+                    indRange = [np.min(kwargs['inds']), np.max(kwargs['inds'])]
+                    values = f['field'][indRange[0]:indRange[1]+1]
+                    return values[kwargs['inds']-np.min(kwargs['inds'])]
     
     if not useCache or not isfile(cacheFile):
         # don't use cache, or tried to use and it doesn't exist yet, so run computation now
