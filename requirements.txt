@@ -20,3 +20,6 @@ astro-prospector
 reproject
 scikit-image
 illustris_python @ git+https://github.com/illustristng/illustris_python@master
+#buildbot
+#sphinx, breathe, exhale
+#pytorch

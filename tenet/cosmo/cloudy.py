@@ -1027,7 +1027,9 @@ class cloudyEmission():
                           'H-beta'      : 'H  1 4861.33A',
                           '[OII]3729'   : 'O  2 3728.81A',
                           'OVII'        : 'O  7 22.1012A',
-                          'OVIII'       : 'O  8 18.9709A'}
+                          'OVIII'       : 'O  8 18.9709A',
+                          'CVI'         : 'C  6 33.7372A',
+                          'NVII'        : 'N  7 24.7807A'}
 
     def __init__(self, sP, line=None, res='lg', redshiftInterp=False, order=3):
         """ Load the table, optionally only for a given line(s). """

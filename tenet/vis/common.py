@@ -550,6 +550,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
 
     # metal ion mass (do column densities) [e.g. "O VI", "O VI mass", "O VI frac", "O VI fracmass"]
     if ' ' in partField and 'EW_' not in partField:
+        assert 'sb_' not in partField
         element = partField.split()[0]
         ionNum  = partField.split()[1]
         field   = 'mass'
@@ -575,7 +576,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         mass = sP.snapshotSubsetP(partType, partField, indRange=indRange)
 
     # flux/surface brightness (replace mass)
-    if 'sb_' in partField: # e.g. ['sb_H-alpha','sb_Lyman-alpha','sb_OVIII']
+    if 'sb_' in partField: # e.g. ['sb_H-alpha','sb_Lyman-alpha','sb_OVIII','sb_O--8-16.0067A'], no spaces!
         # zero contribution from SFing gas cells?
         zeroSfr = False
         lumUnits = False
@@ -2646,11 +2647,18 @@ def addContourOverlay(p, conf, ax):
         boxSizeImg[3-p['axes'][0]-p['axes'][1]] = p['sP'].units.physicalKpcToCodeLength(contourSliceDepth)
 
     # load grid of contour quantity
-    smoothFWHM = p['smoothFWHM'] if 'smoothFWHM' in p else None
-    hsmlFac = p['hsmlFac'] if p['partType'] == field_pt else defaultHsmlFac(field_pt)
-    grid_c, conf_c, _ = gridBox(p['sP'], p['method'], field_pt, field_name, nPixels, p['axes'], p['projType'], p['projParams'], 
-                                p['boxCenter'], boxSizeImg, hsmlFac, p['rotMatrix'], p['rotCenter'], p['remapRatio'],
-                                smoothFWHM=smoothFWHM)
+    if field_name == p['partField']:
+        # use current field
+        grid_c = p['grid']
+    else:
+        smoothFWHM = p['smoothFWHM'] if 'smoothFWHM' in p else None
+        hsmlFac = p['hsmlFac'] if p['partType'] == field_pt else defaultHsmlFac(field_pt)
+        grid_c, conf_c, _ = gridBox(p['sP'], p['method'], field_pt, field_name, nPixels, p['axes'], p['projType'], p['projParams'], 
+                                    p['boxCenter'], boxSizeImg, hsmlFac, p['rotMatrix'], p['rotCenter'], p['remapRatio'],
+                                    smoothFWHM=smoothFWHM)
+
+    if 'contourSmooth' in p: # px
+        grid_c = gaussian_filter(grid_c, p['contourSmooth'], mode='reflect', truncate=5.0)
 
     # make pixel grid
     XX = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], grid_c.shape[0])
@@ -2864,6 +2872,9 @@ def renderMultiPanel(panels, conf):
                 if sP.redshift != int(sP.redshift): ax.set_title('%s z=%3.1f%s' % (sP.simName,sP.redshift,idStr))
                 if sP.redshift/0.1 != int(sP.redshift/0.1): ax.set_title('%s z=%4.2f%s' % (sP.simName,sP.redshift,idStr))
 
+            if 'title' in p and p['title'] is not None:
+                ax.set_title(p['title'])
+
             axStrs = {'code':'[ ckpc/h ]', 'kpc':'[ pkpc ]', 'mpc':'[ Mpc ]', 
                       'arcsec' : '[ arcsec ]', 'arcmin':'[ arcmin ]', 'deg':'[ degrees ]', 'rad_pi':' [ radians / $\pi$ ]'}
             if p['sP'].mpcUnits: axStrs['code'] = '[ cMpc/h ]'
@@ -3017,7 +3028,6 @@ def renderMultiPanel(panels, conf):
         if nRows > 2:
             # should verify that each column contains the same field and valMinMax
             barAreaBottom *= 0.7
-            pass
 
         # colorbar has its own space, or is on top of the plot?
         barTop = barAreaTop # used to draw bars

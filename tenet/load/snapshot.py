@@ -265,16 +265,20 @@ def _ionLoadHelper(sP, partType, field, kwargs):
         indRangeOrig = [offset, offset+length-1] # inclusive below
 
     # check memory cache (only simplest support at present, for indRange returns of global cache)
-    if indRangeOrig is not None or kwargs['inds'] is not None:
-        cache_key = 'snap%d_%s_%s' % (sP.snap,partType,field.replace(" ","_"))
-        if cache_key in sP.data:
-            if indRangeOrig is not None:
-                print('NOTE: Returning [%s] from cache, indRange [%d - %d]!' % \
-                    (cache_key,indRangeOrig[0],indRangeOrig[1]))
-                return sP.data[cache_key][indRangeOrig[0]:indRangeOrig[1]+1]
-            if kwargs['inds'] is not None:
-                print('NOTE: Returning [%s] from cache, inds of size [%d]!' % (cache_key,inds.size))
-                return sP.data[cache_key][inds]
+    cache_key = 'snap%d_%s_%s' % (sP.snap,partType,field.replace(" ","_"))
+
+    if cache_key in sP.data:
+        if indRangeOrig is not None:
+            print('NOTE: Returning [%s] from cache, indRange [%d - %d]!' % \
+                (cache_key,indRangeOrig[0],indRangeOrig[1]))
+            return sP.data[cache_key][indRangeOrig[0]:indRangeOrig[1]+1]
+        if kwargs['inds'] is not None:
+            print('NOTE: Returning [%s] from cache, inds of size [%d]!' % (cache_key,inds.size))
+            return sP.data[cache_key][inds]
+
+        # if key exists but neither indRange or inds specified, we return this (possibly custom subset)
+        print('CAUTION: Cached return [%s], and indRange is None, returning all of sP.data field.' % cache_key)
+        return sP.data[cache_key]
 
     # full snapshot-level caching, create during normal usage but not web (always use if exists)
     useCache = True
@@ -1623,7 +1627,7 @@ def snapshotSubset(sP, partType, fields,
         if cache_key in sP.data:
             # global? (or rather, whatever is in sP.data... be careful)
             if indRange is None:
-                print('CAUTION: Cached return, and indRange is None, returning all of sP.data field.')
+                print('CAUTION: Cached return [%s], and indRange is None, returning all of sP.data field.' % cache_key)
                 if sq: return sP.data[cache_key]
                 else: return {fields[0]:sP.data[cache_key]}
 

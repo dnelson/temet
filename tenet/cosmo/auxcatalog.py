@@ -1312,8 +1312,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         #bands += ['wfcam_y','wfcam_j','wfcam_h','wfcam_k'] # UKIRT IR wide
         #bands += ['wfc_acs_f606w','wfc3_ir_f125w','wfc3_ir_f140w','wfc3_ir_f160w'] # HST IR wide
         #bands += ['jwst_f070w','jwst_f090w','jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR (NIRCAM) wide
-
-        if indivStarMags: bands = ['sdss_r','jwst_f150w']
+        #if indivStarMags: bands = ['sdss_r']
 
     if str(bands) == 'all':
         bands = pop.bands
@@ -1414,7 +1413,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
     # task parallelism (pSplit): determine subhalo and particle index range coverage of this task
     subhaloIDsTodo, indRange, nSubsSelected = pSplitBounds(sP, pSplit, minStellarMass=minStellarMass, 
-        minHaloMass=minHaloMass, equalSubSplit=False, indivStarMags=True)
+        minHaloMass=minHaloMass, equalSubSplit=False, indivStarMags=indivStarMags)
 
     nSubsDo = len(subhaloIDsTodo)
     partInds = None
@@ -1598,7 +1597,9 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         loadFields = ['pos','metal','mass']
         if sP.snapHasField('gas', 'NeutralHydrogenAbundance'):
             loadFields.append('NeutralHydrogenAbundance')
+
         gas = sP.snapshotSubsetP('gas', fields=loadFields, indRange=indRange['gas'])
+
         if sP.snapHasField('gas', 'GFM_Metals'):
             gas['metals_H'] = sP.snapshotSubsetP('gas', 'metals_H', indRange=indRange['gas']) # H only
 

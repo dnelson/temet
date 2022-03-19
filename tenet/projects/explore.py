@@ -512,7 +512,9 @@ def lemIGM():
 
     partType = 'gas'
     #panels = [{'partField':'sb_OVIII', 'valMinMax':[-18,-10]}]
-    panels = [{'partField':'sb_OVII', 'valMinMax':[-18,-10]}]
+    #panels = [{'partField':'sb_OVII', 'valMinMax':[-18,-10]}]
+    panels = [{'partField':'sb_CVI', 'valMinMax':[-18,-10]}]
+    panels = [{'partField':'sb_NVII', 'valMinMax':[-18,-10]}]
     #panels = [{'partField':'sb_Ne10 12.1375A', 'valMinMax':[-18,-10]}] # also: Fe XVII (neither in elInfo)
 
     class plotConfig:

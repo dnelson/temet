@@ -285,7 +285,7 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
             dataCache['snap%d_gas_Coordinates' % sP.snap] = pos
             for key in ['Masses','GFM_Metallicity','Density','NeutralHydrogenAbundance']:
                 print('Caching [%s] now...' % key, flush=True)
-                dataCache['snap%d_gas_%s' % (sP.snap,key)] = sP.snapshotSubsetP('gas', key, inds=pInds)
+                dataCache['snap%d_gas_%s' % (sP.snap,key.replace(' ','_'))] = sP.snapshotSubsetP('gas', key, inds=pInds)
 
             print('All caching done.', flush=True)
 
@@ -456,6 +456,155 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
     nhiStr = '' if (len(min_NHI)==1 and min_NHI[0] is None) else '_NHI=%dvals' % len(min_NHI)
     fig.savefig('%s_vs_theta_%s_%s_%s%s.pdf' % (dataField.replace(" ",""),sPstr,mstarStr,distStr,nhiStr))
     plt.close(fig)
+
+def stackedImageProjection():
+    """ Testing. """
+    sP = simParams(run='tng50-1',redshift=0.5)
+
+    dataField = 'Mg II'
+    label = 'Median Mg II Column Density [log cm$^{-2}$]'
+
+    massBins = [ [8.48,8.52], [8.97,9.03], [9.45,9.55], [9.95, 10.05], [10.4,10.6], [10.7,10.9] ]
+    distRvir = True
+
+    # grid config (must recompute grids)
+    method    = 'sphMap_global'
+    nPixels   = [800,800]
+    axes      = [0,1] # random rotation
+    size      = 3.0
+    sizeType  = 'rVirial'
+    weightField = 'mass' #'MHIGK_popping' #'hi mass' # 'mass' is the default
+    partType  = 'gas'
+    partField = dataField
+
+    panels = []
+
+    # load
+    gc = sP.subhalos(['mstar_30pkpc_log','central_flag','rhalo_200_code','SubhaloPos'])
+
+    # global pre-cache of selected fields into memory
+    if 0:
+        # restrict to sub-volumes around targets
+        print('Caching [Coordinates] now...', flush=True)
+        pos = sP.snapshotSubsetP('gas', 'pos', float32=True)
+
+        # mask
+        mask = np.zeros(pos.shape[0], dtype='bool')
+
+        with np.errstate(invalid='ignore'):
+            for massBin in massBins:
+                subInds = np.where( (gc['mstar_30pkpc_log']>massBin[0]) & \
+                              (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )[0]
+                for i, subInd in enumerate(subInds):
+                    print(' mask [%3d of %3d] ind = %d' % (i,len(subInds),subInd), flush=True)
+                    dists = sP.periodicDistsN(gc['SubhaloPos'][subInd,:],pos,squared=True)
+                    size_loc = size * gc['rhalo_200_code'][subInd] # rvir -> code units
+                    w = np.where(dists <= size_loc**2) # confortable padding, only need d<sqrt(2)*size/2
+                    mask[w] = 1
+
+        pInds = np.nonzero(mask)[0]
+        mask = None
+        dists = None
+        print(' masked particle fraction = %.3f%%' % (pInds.size/pos.shape[0]*100))
+
+        pos = pos[pInds,:]
+
+        # insert into cache, load other fields
+        dataCache = {}
+        dataCache['snap%d_gas_Coordinates' % sP.snap] = pos
+        for key in ['Masses','Density',dataField+' mass']: # Density for Volume -> cellrad
+            print('Caching [%s] now...' % key, flush=True)
+            dataCache['snap%d_gas_%s' % (sP.snap,key.replace(' ','_'))] = sP.snapshotSubsetP('gas', key, inds=pInds)
+
+        print('All caching done.', flush=True)
+
+    # loop over mass bins
+    stacks = []
+
+    for i, massBin in enumerate(massBins):
+
+        # select subhalos
+        with np.errstate(invalid='ignore'):
+            w = np.where( (gc['mstar_30pkpc_log']>massBin[0]) & (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )
+        sub_inds = w[0]
+
+        print('%s z = %.1f [%.2f - %.2f] Processing [%d] halos...' % (sP.simName,sP.redshift,massBin[0],massBin[1],len(w[0])))
+
+        # check for existence of cache
+        hashStr = "%s-%s-%s-%s-%s-%s-%s" % (method,nPixels,axes,size,sizeType,sP.snap,sub_inds)
+        m = hashlib.sha256(hashStr.encode('utf-8')).hexdigest()[::4]
+        cacheFile = sP.derivPath + 'cache/stacked_proj_grids_%s_%s.hdf5' % (dataField,m)
+
+        # plot config
+        class plotConfig:
+            plotStyle    = 'edged'
+            rasterPx     = nPixels[0] 
+            colorbars    = True
+            #fontsize     = 24
+            saveFilename = './stacked_%s_%d.pdf' % (dataField,i)
+
+        
+
+        if path.isfile(cacheFile):
+            # load cached result
+            with h5py.File(cacheFile,'r') as f:
+                grid_global = f['grid_global'][()]
+                sub_inds = f['sub_inds'][()]
+            print('Loaded: [%s]' % cacheFile)
+        else:
+            # allocate for full stack
+            grid_global  = np.zeros( (nPixels[0],nPixels[1],len(sub_inds)), dtype='float32' )
+
+            for j, subhaloInd in enumerate(sub_inds):
+                # render
+                grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+
+                # stamp
+                grid_global[:,:,j] = grid
+
+            # save cache
+            with h5py.File(cacheFile,'w') as f:
+                f['grid_global'] = grid_global
+                f['sub_inds'] = sub_inds
+
+            print('Saved: [%s]' % cacheFile)
+
+        # create stack
+        grid_stacked = np.nanmedian(grid_global, axis=2)
+        stacks.append({'grid':grid_stacked,'sub_inds':sub_inds})
+
+        # make plot of this mass bin
+        #panels[0]['grid'] = grid_stacked # override
+        #panels[0]['subhaloInd'] = sub_inds[int(len(sub_inds)/2)] # dummy
+        #renderSingleHalo(panels, plotConfig, locals())
+
+    # make final plot
+    labelScale = 'physical'
+    valMinMax = [8.0, 14.5]
+
+    contour = ['gas',dataField]
+    contourLevels = [11.0] # 1/cm^2
+    contourOpts = {'colors':'white', 'alpha':0.8}
+    contourSmooth = 3.0
+
+    class plotConfig:
+        plotStyle    = 'open'
+        rasterPx     = nPixels[0]*2
+        colorbars    = True
+        #fontsize     = 24
+        saveFilename = './stack_%s_z%.1f_%s.pdf' % (sP.simName,sP.redshift,dataField)
+
+    for i, massBin in enumerate(massBins):
+        if i % 2 == 0: continue # only every other
+
+        p = {'grid':stacks[i]['grid'],
+             'labelZ':True if i == len(massBins)-1 else False,
+             'subhaloInd':stacks[i]['sub_inds'][int(len(stacks[i]['sub_inds'])/2)],
+             'title':'log M$_{\\rm \star}$ = %.1f M$_\odot$' % np.mean(massBin)}
+
+        panels.append(p)
+
+    renderSingleHalo(panels, plotConfig, locals())
 
 def paperPlots():
     """ Driver. """
