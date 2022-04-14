@@ -8,7 +8,11 @@ import time
 from os.path import isfile, isdir
 from os import mkdir
 
-from ..util import parallelSort
+try:
+    from ..util.parallelSort import argsort as p_argsort
+except:
+    from numpy import argsort as p_argsort # fallback
+
 from ..util.helper import iterable, nUnique, bincount, reportMemory
 from ..cosmo.mergertree import mpbSmoothedProperties, loadTreeFieldnames
 from ..cosmo.util import inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
@@ -158,8 +162,7 @@ def match3(ar1, ar2, firstSorted=False, parallel=True):
     if not firstSorted:
         # need a sorted copy of ar1 to run bisection against
         if parallel:
-            print('match3: running parallelSort.argsort()!')
-            index = parallelSort.argsort(ar1)
+            index = p_argsort(ar1)
         else:
             index = np.argsort(ar1)
         ar1_sorted = ar1[index]

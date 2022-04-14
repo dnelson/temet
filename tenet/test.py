@@ -1314,24 +1314,6 @@ def convert_annalisa_infinite_images2():
 
     print('Done.')
 
-def move_sunrise_fits_into_subfolders():
-    """ Move all *_{id}.fits files into subfolders which are named based on the last digit of {id}. """
-    files = glob.glob('*.fits')
-
-    for i in range(10):
-        mkdir(str(i))
-
-    for i, file in enumerate(files):
-        if i % 1000 == 0:
-            print(i)
-
-        num = file.split('.fits')[0].split('_')[-1]
-        last_digit = num[-1]
-
-        dest = '%s/%s' % (last_digit,file)
-        #print(file,dest)
-        rename(file,dest)
-
 def try_hsc_gri_composite():
     """ Try to recreate HSC composite image based on (g,r,i) bands. """
     from astropy.io import fits

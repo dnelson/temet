@@ -7,13 +7,13 @@ If the automatic (pip based) install doesn't work below, you may need to follow 
 Python Environment
 ------------------
 
-If you don't yet have a working python installation/environment, then e.g. on the MPCDF machines (vera, freya, isaac, raven, virgo, and so on) you can:
+If you don't yet have a working python installation/environment, then e.g. on the MPCDF machines (vera, freya, raven, virgo, and so on) you can:
 
 1. Set up a clean anaconda environment:
 
 .. code-block:: bash
 
-    module load anaconda/3/2019.03
+    module load anaconda/3/2021.11
     mkdir -p ~/.local/envs
     conda create --prefix=~/.local/envs/myenv python=3.9
     source activate ~/.local/envs/myenv
@@ -22,13 +22,13 @@ If you don't yet have a working python installation/environment, then e.g. on th
 
 .. code-block:: bash
 
-    module load intel/19.0.5
-    module load impi/2019.5
-    module load fftw/3.3.8
-    module load hdf5-serial/1.8.21
+    module load intel/21.5.0
+    module load impi/2021.5
+    module load fftw-serial/3.3.10
+    module load hdf5-serial/1.12.1
     module load gsl/2.4
 
-    module load anaconda/3/2019.03
+    module load anaconda/3/2021.11
     source activate ~/.local/envs/myenv
     export PATH=$HOME/.local/envs/myenv/bin/:$PATH
 
@@ -36,17 +36,18 @@ If you don't yet have a working python installation/environment, then e.g. on th
 Automatic Installation
 ----------------------
 
-1. Clone the repository into your home directory, here into a ``tenet`` directory
+1. If you do not plan on editing this package and hope to simply use it as is (not a common use case), you can simply install it
+
+.. code-block:: bash
+
+    pip install git+ssh://git@github.com/dnelson86/tenet.git
+
+2. Or, if you plan on editing, making changes, and adding functionality to this package (this is expected to be the most common choice), then first clone the repository into your home directory, here into a ``tenet`` directory, then install the package in 'editable' mode. This means that the files in this directory are not copied anywhere, but are used as is. Any changes you make are reflected (i.e. usable) in your python environment.
 
 .. code-block:: bash
 
     cd ~
     git clone git@github.com:dnelson86/tenet.git
-
-2. Install the package in 'editable' mode, meaning that the files in this directory are not copied anywhere, but are used as is. Any changes you make here are reflected (i.e. usable) in your python environment.
-
-.. code-block:: bash
-
     pip install -e tenet
 
 

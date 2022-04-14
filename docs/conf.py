@@ -3,7 +3,7 @@
 # to build:
 #
 # sphinx-apidoc -t docs/_templates/ -o docs/source .
-# rm docs/source/.rst docs/source/test.rst
+# rm docs/source/.rst docs/source/tenet.rst docs/source/modules.rst
 # sphinx-build -b html docs/ docs/_build/
 
 import sys
@@ -28,7 +28,7 @@ def git_version():
 # -- Project information -----------------------------------------------------
 
 project = 'tenet'
-copyright = '2021, Dylan Nelson'
+copyright = '2022, Dylan Nelson'
 author = 'Dylan Nelson'
 
 version = git_version()
