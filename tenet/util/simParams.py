@@ -581,7 +581,7 @@ class simParams:
                 # TNG1
                 parentRes = 2048
                 self.zoomLevel = self.res # L11 (L680n2048 or ~TNG300-3) to L13 (~TNG300-1.3) to L14 (~TNG300-1)
-                self.sP_parent = simParams(res=parentRes, run='tng_dm', redshift=self.redshift, snap=self.snap)
+                #self.sP_parent = simParams(res=parentRes, run='tng_dm', redshift=self.redshift, snap=self.snap)
 
                 if res == 11: self.gravSoft = 8.0 # L680n2048
                 if res == 12: self.gravSoft = 4.0
@@ -654,8 +654,8 @@ class simParams:
                 self.icsPath = self.basePath + 'sims.TNG_zooms/ICs/output/'
                 if self.res in [13,14]: self.icsPath += 'done/'
                 self.icsPath += ics_filename
-                with h5py.File(self.icsPath, 'r') as f:
-                    self.zoomShiftPhys = f['Header'].attrs['GroupCM'] / 1000 # code (mpc) units
+                #with h5py.File(self.icsPath, 'r') as f:
+                #    self.zoomShiftPhys = f['Header'].attrs['GroupCM'] / 1000 # code (mpc) units
 
             self.arepoPath  = self.basePath + 'sims.TNG_zooms/' + dirStr + '/'
             self.simName    = dirStr

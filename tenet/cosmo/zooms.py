@@ -1388,23 +1388,23 @@ def plot_timeevo():
     sims.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3_kpc'))
     sims.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3'))
     sims.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3_s'))
-    sims.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3_kpc'))
+    sims.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3_kpc'))
 
     # SubhaloSFR, SubhaloBHMass, SubhaloMassInRadType, SubhaloHalfmassRadType
     # SubhaloGasMetallicity, SubhaloVelDisp, SubaloVmaxRad
-    field = 'SubhaloVmaxRad' 
-    fieldIndex = -1 # -1 for scalar fields, otherwise >=0 index to use
+    field = 'SubhaloMassInRadType' #VmaxRad' 
+    fieldIndex = 4 #-1 # -1 for scalar fields, otherwise >=0 index to use
     subhaloID = 0
 
     # quick check
     for sim in sims:
-        sim.setSnap(99)
+        sim.setSnap(33)
         subhalo = sim.subhalo(subhaloID)
         bhmass = sim.units.codeMassToLogMsun(subhalo['SubhaloBHMass'])[0]
         mstar = sim.units.codeMassToLogMsun(subhalo['SubhaloMassInRadType'][4])[0]
 
         print(f'{sim = } {bhmass = :.3f} {mstar = :.3f}')
-    return
+    #return
 
     # load
     data = []
@@ -1412,7 +1412,7 @@ def plot_timeevo():
     for sim in sims:
         cache_file = 'cache_%s_%s_%d.hdf5' % (sim.simName,field,fieldIndex)
 
-        if path.isfile(cache_file):
+        if isfile(cache_file):
             with h5py.File(cache_file,'r') as f:
                 data.append( {'sim':sim, 'result':f['result'][()], 'z':f['z'][()]} )
             print('Loaded: [%s]' % cache_file)
@@ -1484,3 +1484,4 @@ def plot_timeevo():
     ax.legend(loc='best')
     fig.savefig('time_evo_sh%d_%s_%d.pdf' % (subhaloID,field,fieldIndex))
     plt.close(fig)
+
