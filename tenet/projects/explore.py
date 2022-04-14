@@ -126,6 +126,45 @@ def celineH2GalaxyImage():
     # render
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
+def celineGalaxyImage():
+    """ MgII emission image for Celine proposal 2022. """
+    run        = 'tng'
+    res        = 2160
+    redshift   = 0.5
+    rVirFracs  = None
+    method     = 'sphMap'
+    axes       = [0,1]
+    labelSim   = False
+    labelScale = 'physical'
+    labelZ     = True
+    relCoords  = True
+    #rotation   = 'edge-on'
+    rVirFracs  = None
+
+    sizeType   = 'arcsec'
+    size = 7.5
+
+    subhaloInd = 564218 # for Klitsch+ (2019) paper
+
+    nPixels = [800,800]
+
+    # which halo?
+    sP = simParams(res=res, run=run, redshift=redshift)
+    #haloID = sP.groupCatSingle(subhaloID=subhaloInd)['SubhaloGrNr']
+
+    panels = []
+    panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.5,22.0]} )
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = nPixels[0]
+        colorbars    = True
+        #fontsize     = 24
+        saveFilename = './%s.%d.%d.%dkpc.pdf' % (sP.simName,sP.snap,subhaloInd,size)
+
+    # render
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
 def celineHIH2RadialProfiles():
     """ Compute stacked radial profiles of N_HI(b) and N_H2(b). """
     from ..util.simParams import simParams

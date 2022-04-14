@@ -57,6 +57,8 @@ lines = {'LyA'        : {'f':0.4164,   'gamma':4.49e8,  'wave0':1215.670,  'ion'
          'FeII 2383'  : {'f':3.006e-1, 'gamma':3.100e8, 'wave0':2382.765,  'ion':'Fe II'}}
 
 # instrument characteristics (in Ang)
+# TODO: add LSF characteristics and LSF smoothing + S/N effects
+#   4MOST-HRS LSF: Gaussian with FWHMs: 0.216Ang, 0.28Ang, 0.33Ang (blue, green, red arms, respectively)
 # R = lambda/dlambda = c/dv
 # EW_restframe = W_obs / (1+z_abs)
 instruments = {'idealized'  : {'wave_min':1000, 'wave_max':12000, 'dwave':0.1},     # used for EW map vis
