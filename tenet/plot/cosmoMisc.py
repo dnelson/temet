@@ -209,6 +209,307 @@ def haloMassesVsDMOMatched():
     fig.savefig('haloMassRatioVsDMO_L75.pdf')
     plt.close(fig)
 
+def simClustersComparison():
+    """ Meta plot: place TNG-Cluster into its context of (N_clusters,resolution) for similar projects. """
+    from matplotlib.patches import FancyArrowPatch
+
+    msize = 10.0 # marker size
+    fs1 = 14 # diagonal lines, cost labels
+    fs2 = 17 # sim name labels, upper right arrow label
+    fs3 = 11  # legend
+    lw = 1.5 # connecting lines
+    alpha1 = 0.05 # connecting lines
+    alpha2 = 0.2  # secondary markers
+
+    def _volumeToNcluster(Lbox_cMpch):
+        """ Convert a box side-length [cMpc/h] into N_cluster (z=0,M_halo>10^14 Msun) using 
+        TNG300 as the scaling reference. """
+        tng300_size, tng300_nobj = 205, 280
+        vol_ratio = (np.array(Lbox_cMpch) / tng300_size)**3
+        return tng300_nobj * vol_ratio
+
+    # plot setup
+    fig = plt.figure(figsize=[figsize[0]*0.8, figsize[1]])
+    ax = fig.add_subplot(111)
+    
+    ax.set_xlim([0.6,3e4])
+    ax.set_ylim([1e10,1e4])
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+
+    ax.set_ylabel('Baryon Mass Resolution [ M$_{\odot}$ ]')
+    ax.set_xlabel('Number of Clusters ($M_{\\rm halo} \geq 10^{14}$ M$_{\odot}$)')
+
+    if 0:
+        # TODO: add "num massive clusters" as second (top) x-axis?
+        volVals = [1e2,1e4,1e6,1e8] # cMpc^3
+        HubbleParam = 0.6774
+        volValsLbox = np.array(volVals)**(1.0/3.0) * HubbleParam # cMpc^3 -> cMpc/h
+        volValsStr  = ['$10^{%d}$' % np.log10(val) for val in volVals]
+
+        axTop = ax.twiny()
+        axTickVals = _volumeToNcluster(np.array(volValsLbox)) # cMpc/h -> N_cluster (bottom x-axis vals)
+        axTop.set_xlim(ax.get_xlim())
+        axTop.set_xscale('log')
+        axTop.set_xticks(axTickVals)
+        axTop.set_xticklabels(volValsStr)
+        axTop.set_xlabel("Simulation Volume [ cMpc$^3$ ]", labelpad=12)
+
+    # set simulation data (N_cl criterion: Mhalo > 1e14 at z=0)
+    boxes = [{'name':'TNG50',                  'N_cl':1,   'm_gas':8.0e4, 'Lbox_cMpch':35},
+             {'name':'TNG100$\,/\,$Illustris', 'N_cl':14,  'm_gas':1.4e6, 'Lbox_cMpch':75},
+             {'name':'TNG300',                 'N_cl':280, 'm_gas':1.1e7, 'Lbox_cMpch':205},
+             {'name':'Eagle',                  'N_cl':7,   'm_gas':1.8e6, 'Lbox_cMpch':67.8},
+             {'name':'SIMBA',                  'N_cl':38,  'm_gas':1.8e7, 'Lbox_cMpch':100},
+             {'name':'Magneticum-2hr',         'N_cl':-1,  'm_gas':2.0e8, 'Lbox_cMpch':352},
+             {'name':'Magneticum-1mr',         'N_cl':-1,  'm_gas':3.7e9, 'Lbox_cMpch':896}, # (off the bottom edge)
+             {'name':'Bahamas',                'N_cl':-1,  'm_gas':1.2e9, 'Lbox_cMpch':400}, # off the bottom edge)
+             {'name':'Horizon-AGN',            'N_cl':-1,  'm_gas':2.0e6, 'Lbox_cMpch':100}] # 'initial' m_gas=1e7, m_star=2e6
+
+    # for all zoom suites at MW mass and below: MW-mass halos have zero satellites above 10^9 M* (e.g. Wetzel+16), so N_gal = N_cen
+    zooms = [{'name':'TNG-Cluster',            'N_cl':356,   'm_gas':1.2e7},
+             {'name':'MACSIS',                 'N_cl':390,   'm_gas':1.1e9},
+             {'name':'Hydrangea/C-Eagle',      'N_cl':30,    'm_gas':1.8e6},
+             {'name':'Rhapsody-G',             'N_cl':10,    'm_gas':250000000},
+             {'name':'FABLE',                  'N_cl':19,    'm_gas':1.5e7},
+             {'name':'300 Project',            'N_cl':324*2, 'm_gas':3.5e8}, # Gadget-X + Gizmo-Simba suites
+             {'name':'Romulus-C',              'N_cl':1,     'm_gas':2.1e5},
+             {'name':'Dianoga HR',             'N_cl':12,    'm_gas':2.2e7},
+             {'name':'MUSIC',                  'N_cl':617,   'm_gas':2.7e8}]
+
+    # for boxes we don't have access to, estimate N_cl based on volume
+    for box in boxes:
+        if box['N_cl'] == -1:
+            box['N_cl'] = _volumeToNcluster(box['Lbox_cMpch'])
+
+    # plot arrow towards upper right
+    if 0:
+        color = '#555555'
+        arrowstyle = 'fancy, head_width=12, head_length=12, tail_width=8'
+        p = FancyArrowPatch(posA=[5e3,3e5], posB=[7e4, 1.5e4], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        ax.add_artist(p)
+
+        textOpts = {'color':color, 'fontsize':fs1, 'rotation':44.0, 'va':'top', 'ha':'left', 'multialignment':'center'}
+        ax.text(6e3, 5e4, 'Next-generation\nhigh resolution\ncosmological\nvolumes', **textOpts)
+
+    # plot arrows of computational work
+    if 1:
+        color = '#aaaaaa' 
+        arrowstyle ='simple, head_width=8, head_length=8, tail_width=2'
+        textOpts = {'color':color, 'fontsize':fs1, 'va':'top', 'ha':'left', 'multialignment':'center'}
+        p1 = FancyArrowPatch(posA=[7e2,1.0e5], posB=[7e2, 1.0e5/8], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        p2 = FancyArrowPatch(posA=[7e2,1.0e5], posB=[7e2*8, 1.0e5], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        ax.add_artist(p1)
+        ax.text(6.7e2, 4.9e4, 'x20 cost', color=color, rotation=90.0, fontsize=fs1, horizontalalignment='right', verticalalignment='center')
+        ax.add_artist(p2)
+        ax.text(1.5e3, 1.2e5, 'x10 cost', color=color, rotation=0.0, fontsize=fs1, horizontalalignment='center', verticalalignment='top')
+
+    # plot boxes
+    for sim in boxes:
+        l, = ax.plot(sim['N_cl'], sim['m_gas'], linestyle='None', marker='o', markersize=msize, label=sim['name'])
+
+        if 'TNG-Cluster' in sim['name']: # enlarge marker
+            fac = 1.7 if sim['name'] == 'TNG-Cluster' else 1.3
+            ax.plot(sim['N_cl'], sim['m_gas'], linestyle='None', marker='o', markersize=msize*fac, color=l.get_color())
+
+        if 'TNG' in sim['name'] and sim['name'] not in ['TNG50']: # label certain runs only
+            fontsize = fs2 * 1.4 if sim['name'] == 'TNG-Cluster' else fs2
+            fontoff = 2.5 if sim['name'] == 'TNG300' else 0.8
+            textOpts = {'color':l.get_color(), 'fontsize':fs2, 'ha':'center', 'va':'bottom'}
+            ax.text(sim['N_cl'], sim['m_gas']*fontoff, sim['name'], **textOpts)
+
+    # plot zooms
+    ax.set_prop_cycle(None) # reset color cycle
+    for sim in zooms:
+        l, = ax.plot(sim['N_cl'], sim['m_gas'], linestyle='None', marker='D', markersize=msize, label=sim['name'])
+
+        if 'TNG' in sim['name'] : # label certain runs only
+            textOpts = {'color':l.get_color(), 'fontsize':fs2*1.4, 'ha':'center', 'va':'bottom'}
+            ax.text(sim['N_cl'], sim['m_gas']*0.7, sim['name'], **textOpts)
+
+    # legend and finish
+    legParams = {'ncol':2, 'columnspacing':1.0, 'fontsize':fs3, 'markerscale':0.6} #, 'frameon':1, 'framealpha':0.9, 'fancybox':False}
+    legend = ax.legend(loc='lower left', **legParams)
+
+    fig.savefig('sim_comparison_meta.pdf')
+    plt.close(fig)
+
+def simResolutionVolumeComparison():
+    """ Meta plot: place TNG50 into its context of (volume,resolution) for cosmological simulations. """
+    from matplotlib.patches import FancyArrowPatch
+    sP = simParams(res=1820,run='tng',redshift=0.0) # for units
+
+    msize = 10.0 # marker size
+    fs1 = 14 # diagonal lines, cost labels
+    fs2 = 17 # sim name labels, upper right arrow label
+    fs3 = 11  # legend
+    lw = 1.5 # connecting lines
+    alpha1 = 0.05 # connecting lines
+    alpha2 = 0.2  # secondary markers
+
+    def _volumeToNgal(Lbox_cMpch):
+        """ Convert a box side-length [cMpc/h] into N_gal (z=0,M*>10^9 Msun) using TNG100 as the scaling reference. """
+        tng100_size, tng100_ngal = 75, 2.0e4
+        vol_ratio = (np.array(Lbox_cMpch) / tng100_size)**3
+        return tng100_ngal * vol_ratio
+
+    # plot setup
+    fig = plt.figure(figsize=[figsize[0]*0.8, figsize[1]])
+    ax = fig.add_subplot(111)
+    
+    ax.set_xlim([0.6,1e6])
+    ax.set_ylim([1e9,1e3])
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+
+    ax.set_ylabel('Baryon Mass Resolution [ M$_{\odot}$ ]')
+    ax.set_xlabel('Number of Galaxies (resolved $M_\star \geq 10^9$ M$_{\odot}$)')
+
+    # add cMpc^3 volume axis as a second x-axis on the top
+    volVals = [1e2,1e4,1e6,1e8] # cMpc^3
+    volValsLbox = np.array(volVals)**(1.0/3.0) * sP.HubbleParam # cMpc^3 -> cMpc/h
+    volValsStr  = ['$10^{%d}$' % np.log10(val) for val in volVals]
+
+    axTop = ax.twiny()
+    axTickVals = _volumeToNgal(np.array(volValsLbox)) # cMpc/h -> N_gal (bottom x-axis vals)
+
+    axTop.set_xlim(ax.get_xlim())
+    axTop.set_xscale('log')
+    axTop.set_xticks(axTickVals)
+    axTop.set_xticklabels(volValsStr)
+    axTop.set_xlabel("Simulation Volume [ cMpc$^3$ ]", labelpad=12)
+
+    # set simulation data (N_gal criterion: M* > 1e9 at z=0), N_gal is total (cen+sat)
+    boxes = [{'name':'TNG50',                  'N_gal':2.6e3, 'm_gas':8.0e4, 'Lbox_cMpch':35},
+             {'name':'TNG100$\,/\,$Illustris', 'N_gal':2.0e4, 'm_gas':1.4e6, 'Lbox_cMpch':75},
+             {'name':'TNG300',                 'N_gal':4.1e5, 'm_gas':1.1e7, 'Lbox_cMpch':205},
+             {'name':'Eagle',                  'N_gal':1.2e4, 'm_gas':1.8e6, 'Lbox_cMpch':67.8},
+             {'name':'OWLS',                   'N_gal':-1.0,  'm_gas':[1.9e6,1.5e7,1.2e8], 'Lbox_cMpch':[25,50,100]},
+             {'name':'Mufasa',                 'N_gal':-1.0,  'm_gas':1.8e7, 'Lbox_cMpch':50},
+             {'name':'25 Mpc/h 512$^3$',       'N_gal':7.4e2, 'm_gas':2.3e6, 'Lbox_cMpch':25}, # canonical box, TNG variants (113) added below
+             {'name':'25 Mpc/h 1024$^3$',      'N_gal':9.0e2, 'm_gas':3.0e5, 'Lbox_cMpch':25},
+             {'name':'Magneticum-2hr',         'N_gal':8.6e4, 'm_gas':2.0e8, 'Lbox_cMpch':352}, # N_gal derived by enforcing M*>100 (10.3) stars in TNG300
+             #{'name':'Magneticum-1mr',         'N_gal':-1.0,  'm_gas':3.7e9, 'Lbox_cMpch':896}, # (off the bottom edge)
+             {'name':'Magneticum-4uhr',        'N_gal':-1.0,  'm_gas':7.3e6, 'Lbox_cMpch':48},
+             #{'name':'Bahamas',                'N_gal':5.5e4, 'm_gas':1.2e9, 'Lbox_cMpch':400}, # N_gal derived by enforcing M*>100 (11.0) stars in TNG300 (off the bottom edge)
+             {'name':'Romulus25',              'N_gal':-1.0,  'm_gas':2.1e5, 'Lbox_cMpch':25},
+             {'name':'MassiveBlack-II',        'N_gal':-1.0,  'm_gas':3.1e6, 'Lbox_cMpch':100},
+             {'name':'Fable',                  'N_gal':-1.0,  'm_gas':9.4e6, 'Lbox_cMpch':40},
+             {'name':'Horizon-AGN',            'N_gal':-1.0,  'm_gas':2.0e6, 'Lbox_cMpch':100}] # 'initial' m_gas=1e7, m_star=2e6
+
+    # for all zoom suites at MW mass and below: MW-mass halos have zero satellites above 10^9 M* (e.g. Wetzel+16), so N_gal = N_cen
+    zooms = [{'name':'Eris',                    'N_cen':1,       'N_gal':1,     'm_gas':2e4},
+             {'name':'Auriga L4',               'N_cen':30,      'N_gal':30,    'm_gas':5e4},
+             {'name':'Auriga L3',               'N_cen':3,       'N_gal':3,     'm_gas':6e3},
+             {'name':'Apostle L3',              'N_cen':24,      'N_gal':24,    'm_gas':1.5e6},
+             #{'name':'Apostle L2',              'N_cen':2,       'N_gal':2,     'm_gas':1.2e5},
+             {'name':'Apostle L1',              'N_cen':2,       'N_gal':2,     'm_gas':1.0e4},
+             {'name':'FIRE-1',                  'N_cen':[1,2,1], 'N_gal':-1,    'm_gas':[5e3,2.35e4,1.5e5]}, # see Hopkins+14 Table 1 + Fig 4
+             {'name':'FIRE-2',                  'N_cen':[7,7,9], 'N_gal':-1,    'm_gas':[5.6e4,7e3,4e3]}, # see Hopkins+17 Table 1, GK+18 (first = *_LowRes, third = romeo,juliet,thelma,louise,m12z, second = m11v,m11f,m12i,m12f,m12b,m12c,m12m)
+             {'name':'Latte',                   'N_cen':1,       'N_gal':1,     'm_gas':7.1e3},
+             {'name':'Hydrangea$\,+\,$C-Eagle', 'N_cen':30,      'N_gal':2.4e4, 'm_gas':1.8e6}, # 24,442 galaxies within 10rvir, M* > 10^9, z=0 (Hy only)
+             {'name':'RomulusC',                'N_cen':1,       'N_gal':227,   'm_gas':2.1e5}, # 227 = 'within virial radius, M* > 10^8, z=0'
+             {'name':'300 Clusters',            'N_cen':324,     'N_gal':8.5e4, 'm_gas':3.5e8}, # see Wang+18 Table 1, total M* > 10^9.7 (~80 stars) for GX (w/ AGN), adjusted to 10^10.3 (as for 2hr using TNG300 SMF ref)
+             #{'name':'Rhapsody-G',              'N_cen':10,      'N_gal':8e3,   'm_gas':1e8}, # see Hahn+16, don't know N_gal nor refined m_gas (this is initial)
+             {'name':'NIHAO',                   'N_cen':[12,20], 'N_gal':-1,    'm_gas':[3.2e5,4.0e4]}, # see Wang+15 Table 2 and Table 1
+             {'name':'Choi+16',                 'N_cen':30,      'N_gal':-1,    'm_gas':5.8e6},
+             #{'name':'Buck+18',                 'N_cen':1,       'N_gal':-1,    'm_gas':9.4e4},
+             {'name':'Semenov+17',              'N_cen':3,       'N_gal':-1,    'm_gas':8.3e3}]
+
+    # for boxes we don't have access to, estimate N_gal based on volume
+    for box in boxes:
+        if box['N_gal'] == -1:
+            box['N_gal'] = _volumeToNgal(box['Lbox_cMpch'])
+
+    # plot lines of constant number of particles
+    for i, N in enumerate([512,1024,2048,4096]):
+        xx = []
+        yy = []
+        for Lbox in [1e0, 1e4]: # cMpc/h
+            m_gas = sP.units.particleCountToMass(N, boxLength=Lbox)
+            vol = (Lbox / sP.HubbleParam)**3
+            n_gal = _volumeToNgal(Lbox)
+
+            xx.append(n_gal)
+            yy.append(m_gas)
+
+        color = '#aaaaaa'
+        ax.plot(xx, yy, lw=lw, linestyle=':', alpha=alpha2, color=color)
+        m = (yy[1] - yy[0]) / (xx[1] - xx[0])
+        y_target = 6.5e7 / 2.9**i
+        x_target = (y_target - yy[1]) / m + xx[1]
+        ax.text(x_target, y_target, '$%d^3$' % N, color=color, rotation=-45.0, fontsize=fs1, va='center', ha='right')
+
+    # plot arrow towards upper right
+    if 1:
+        color = '#555555'
+        arrowstyle = 'fancy, head_width=12, head_length=12, tail_width=8'
+        p = FancyArrowPatch(posA=[5e4,3e4], posB=[7e5, 1.5e3], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        ax.add_artist(p)
+
+        textOpts = {'color':color, 'fontsize':fs1, 'rotation':44.0, 'va':'top', 'ha':'left', 'multialignment':'center'}
+        ax.text(6e4, 5e3, 'Next-generation\nhigh resolution\ncosmological\nvolumes', **textOpts)
+
+    # plot arrows of computational work
+    if 1:
+        color = '#aaaaaa' 
+        arrowstyle ='simple, head_width=8, head_length=8, tail_width=2'
+        textOpts = {'color':color, 'fontsize':fs1, 'va':'top', 'ha':'left', 'multialignment':'center'}
+        p1 = FancyArrowPatch(posA=[7e3,1.0e4], posB=[7e3, 1.0e4/8], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        p2 = FancyArrowPatch(posA=[7e3,1.0e4], posB=[7e3*8, 1.0e4], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        ax.add_artist(p1)
+        ax.text(6.7e3, 4.9e3, 'x20 cost', color=color, rotation=90.0, fontsize=fs1, horizontalalignment='right', verticalalignment='center')
+        ax.add_artist(p2)
+        ax.text(1.5e4, 1.2e4, 'x10 cost', color=color, rotation=0.0, fontsize=fs1, horizontalalignment='center', verticalalignment='top')
+
+    # plot boxes
+    for sim in boxes:
+        l, = ax.plot(sim['N_gal'], sim['m_gas'], linestyle='None', marker='o', markersize=msize, label=sim['name'])
+
+        if 'TNG' in sim['name']: # enlarge marker
+            fac = 1.7 if sim['name'] == 'TNG50' else 1.3
+            ax.plot(sim['N_gal'], sim['m_gas'], linestyle='None', marker='o', markersize=msize*fac, color=l.get_color())
+
+        if 'TNG50' in sim['name']: # mark 10^8 and 10^7 M* thresholds
+            N_gal = [7.3e3,1.7e4]
+            ax.plot([sim['N_gal'],N_gal[1]], [sim['m_gas'],sim['m_gas']], linestyle='-', lw=lw, color=l.get_color(), alpha=alpha2*2)
+            ax.plot([N_gal[1]], [sim['m_gas']], linestyle='None', marker='o', markersize=msize*fac, color=l.get_color(), alpha=alpha2*4)
+            textOpts = {'fontsize':fs1+2, 'ha':'center', 'va':'top', 'alpha':alpha2*4}
+            ax.text(N_gal[1]*1.5, sim['m_gas']*1.35, '$M_\star \geq 10^7 \\rm{M}_\odot$', color=l.get_color(), **textOpts)
+
+        if '512' in sim['name']: # draw marker at N_variants*N_gal, and connect
+            N = 113
+            ax.plot(sim['N_gal']*N, sim['m_gas'], linestyle='None', marker='o', markersize=msize, color=l.get_color(), alpha=alpha2)
+            ax.plot([sim['N_gal'],sim['N_gal']*N], [sim['m_gas'],sim['m_gas']], linestyle='-', lw=lw, color=l.get_color(), alpha=alpha1)
+
+        if 'TNG' in sim['name']: # label certain runs only
+            fontsize = fs2 * 1.4 if sim['name'] == 'TNG50' else fs2
+            fontoff = 0.7 if sim['name'] == 'TNG50' else 0.8
+            textOpts = {'color':l.get_color(), 'fontsize':fontsize, 'ha':'center', 'va':'bottom'}
+            ax.text(sim['N_gal'], sim['m_gas']*fontoff, sim['name'], **textOpts)
+
+    # plot zooms
+    ax.set_prop_cycle(None) # reset color cycle
+    for sim in zooms:
+        l, = ax.plot(sim['N_cen'], sim['m_gas'], linestyle='None', marker='D', markersize=msize, label=sim['name'])
+
+        # for zoom suites with variable resolution on centrals:
+        if sim['name'] in ['NIHAO','FIRE-1','FIRE-2']:
+            # connect the two markers, representing the two different res levels
+            ax.plot(sim['N_cen'], sim['m_gas'], linestyle='-', lw=lw, color=l.get_color(), alpha=0.05)
+
+        # connect zoom suites with significant satellite populations to a second marker at N_gal, connected by a line
+        if 'Hydrangea' in sim['name'] or 'RomulusC' in sim['name'] or '300 Clusters' in sim['name'] or 'Rhapsody' in sim['name']:
+            ax.plot(sim['N_gal'], sim['m_gas'], linestyle='None', marker='D', markersize=msize, color=l.get_color(), alpha=alpha2)
+            ax.plot([sim['N_cen'],sim['N_gal']], [sim['m_gas'],sim['m_gas']], linestyle='-', lw=lw, color=l.get_color(), alpha=alpha1)
+
+    # legend and finish
+    legParams = {'ncol':2, 'columnspacing':1.0, 'fontsize':fs3, 'markerscale':0.6} #, 'frameon':1, 'framealpha':0.9, 'fancybox':False}
+    legend = ax.legend(loc='lower left', **legParams)
+
+    fig.savefig('sim_comparison_meta.pdf')
+    plt.close(fig)
+
 def simHydroResolutionComparison():
     """ Meta plot: compare total volume at a given spatial hydro discretization (cell size) between simulations. """
     from matplotlib.patches import FancyArrowPatch
