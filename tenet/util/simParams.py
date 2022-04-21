@@ -299,6 +299,7 @@ class simParams:
         self.simPath   = os.path.join(self.arepoPath, 'output/')
 
         assert os.path.exists(inputPath), 'Error: Simulation path [%s] not found!' % inputPath
+        assert os.path.exists(self.simPath), 'Error: Simulation path [%s] not found!' % self.simPath
 
         derivPath = os.path.join(self.arepoPath, 'data.files/')
         writable = os.access(self.arepoPath, os.W_OK)
@@ -321,6 +322,10 @@ class simParams:
         self.simName = simName
         if simName is None:
             self.simName = inputPath.rstrip("/").split("/")[-1]
+
+        # find number of snapshots (single files, or snapdirs)
+        p = os.path.join(self.simPath,"snap*")
+        self.numSnaps = len(glob(p))
 
         # find one snapshot file to load a header
         p = os.path.join(self.simPath,"snap*/snap_*.hdf5")

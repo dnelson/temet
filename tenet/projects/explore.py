@@ -912,3 +912,41 @@ def abhijeetMgIISurfDens():
                           radRelToR500=True, massDensityMsun=True, haloMassBins=haloMassBins, xlim=[1.0,4.0],
                           stellarMassBins=None, fieldTypes=fieldTypes, combine2Halo=True, median=False)
 
+def xenoSNevo():
+    """ Test for Xeno idealized SN explosion run. """
+    from glob import glob
+
+    run = '15_0_density_1'
+    sim = simParams('sims.idealized/sims.xeno/%s/' % run)
+
+    # start plot
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_xlabel('Distance [pc]')
+    ax.set_ylabel('Density [cm$^{-3}$]')
+
+    # loop over snaps
+    for i in range(sim.numSnaps):
+        sim.setSnap(i)
+
+        # load
+        pos = sim.gas('pos')
+        dens = sim.gas('dens')
+
+        # convert
+        boxCen = np.array([0.5*sim.boxSize, 0.5*sim.boxSize, 0.5*sim.boxSize])
+        dist = sim.periodicDists(boxCen, pos)
+        dens_phys = sim.units.codeDensToPhys(dens, numDens=True, cgs=True) # 1/cm^3
+
+        # plot
+        rr, yy, std, percs = running_median(dist, dens_phys, nBins=80, percs=[15,50,84])
+
+        cur_time = sim.time * (sim.units.UnitTime_in_s / sim.units.s_in_Myr)
+        ax.plot(rr, yy, '-', lw=lw, label='t = %.3f Myr' % cur_time)
+
+    # finish plot
+    ax.plot([sim.boxSize/2,sim.boxSize/2],ax.get_ylim(),':',color='#cccccc', label='Box Boundary')
+
+    ax.legend(loc='best')
+    fig.savefig('dens_profiles_vs_time-%s.png' % run)
+    plt.close(fig)
+    import pdb; pdb.set_trace()

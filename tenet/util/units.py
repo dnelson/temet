@@ -122,6 +122,24 @@ class units(object):
         if self._sP is not None and self._sP.mpcUnits:
             self.UnitLength_in_cm = 3.085678e24 # 1000.0 kpc
 
+        # non-cosmological run?
+        if self._sP.redshift is not None and np.isnan(self._sP.redshift):
+            print('Note: Setting units.scalefac = 1 for non-cosmological run.')
+            self.scalefac = 1.0 # nullify all comoving -> physical conversions
+
+        # custom (non-stard) unit system in header? only for non-cosmological runs
+        # TESTING. Very incomplete support!
+        if self._sP.redshift is not None and np.isnan(self._sP.redshift):
+            keys = ['UnitMass_in_g','UnitLength_in_cm','UnitVelocity_in_cm_per_s']
+            header = self._sP.snapshotHeader()
+
+            for key in keys:
+                if key in header:
+                    if header[key] != getattr(self,key):
+                        print('Note: Setting units.%s = %g from header!' % (key,header[key]))
+                        setattr(self,key,header[key])
+                        import pdb; pdb.set_trace() # remove only for certain supported conversions
+
         # derived units
         self.UnitTime_in_s       = self.UnitLength_in_cm / self.UnitVelocity_in_cm_per_s
         self.UnitDensity_in_cgs  = self.UnitMass_in_g / self.UnitLength_in_cm**3.0
@@ -162,7 +180,7 @@ class units(object):
         self.rhoBack = 3 * self._sP.omega_m * self.Hubble**2 / (8 * np.pi * self.G)
 
         # redshift dependent values (code units)
-        if self._sP.redshift is not None:
+        if self._sP.redshift is not None and not np.isnan(self._sP.redshift):
             self.H2_z_fact = self._sP.omega_m*(1+self._sP.redshift)**3.0 + \
                               self._sP.omega_L + \
                               self._sP.omega_k*(1+self._sP.redshift)**2.0
@@ -171,11 +189,6 @@ class units(object):
             self.H_of_a    = self.Hubble * np.sqrt(self.H2_z_fact)
             self.rhoCrit_z = self.rhoCrit * self.H2_z_fact
             self.scalefac  = 1.0 / (1+self._sP.redshift)
-
-        # non-cosmological run?
-        if self._sP.redshift is not None and np.isnan(self._sP.redshift):
-            print('Note: Setting units.scalefac = 1 for non-cosmological run.')
-            self.scalefac = 1.0 # nullify all comoving -> physical conversions
 
     # --- unit conversions to/from code units ---
 
@@ -695,13 +708,18 @@ class units(object):
         if msunpc3 and (cgs or numDens or totKpc3):
             raise Exception('Invalid combination.')
 
+        # remove cosmological factors -> [UnitDensity]
         dens_phys = dens.astype('float32') * self._sP.HubbleParam**2 / self.scalefac**3
-        dens_phys *= (self.kpc_in_cm/self.UnitLength_in_cm)**2.0 # account for non-kpc units
 
         if cgs:
-            dens_phys *= self.UnitDensity_in_cgs
+            dens_phys *= self.UnitDensity_in_cgs # e.g. [1e10 msun/kpc^3] -> [g/cm^3]
         if numDens:
-            dens_phys /= self.mass_proton
+            dens_phys /= self.mass_proton # e.g. [g/cm^3] -> [1/cm^3]
+
+        # otherwise, we are not converting to g/cm^3 or 1/cm^3
+        if not cgs:
+            dens_phys *= (self.kpc_in_cm/self.UnitLength_in_cm)**3.0 # account for non-kpc units -> [UnitMass/kpc^3]
+
         if msunpc3:
             dens_phys *= 10 # 1e10 msun/kpc^3 -> msun/pc^3
         if totKpc3:
@@ -719,17 +737,18 @@ class units(object):
         if numDens and not cgs:
             raise Exception('Odd choice.')
 
-        # cosmological factors
+        # add cosmological factors
         dens_code = dens.astype('float32') * self.scalefac**3 / self._sP.HubbleParam**2
-        dens_code *= (self.UnitLength_in_cm/self.kpc_in_cm)**2.0 # account for non-kpc units
 
-        # unit system
-        if cgs:
-            dens_code /= self.UnitDensity_in_cgs # [msun/kpc^3] -> [g/cm^3]
-        else:
-            dens_code /= self.UnitMass_in_Msun # [msun/kpc^3] -> [10^10 msun/kpc^3]
+        # convert into unit system
         if numDens:
-            dens_code *= self.mass_proton # [g/cm^3] -> [1/cm^3]
+            dens_code *= self.mass_proton # [1/cm^3] -> [g/cm^3]
+
+        if cgs:
+            dens_code /= self.UnitDensity_in_cgs # [g/cm^3] -> e.g. [1e10 msun/kpc^3]
+        else:
+            dens_code *= (self.UnitLength_in_cm/self.kpc_in_cm)**3.0 # account for non-kpc units, e.g. -> [msun/kpc^3]
+            dens_code /= self.UnitMass_in_Msun # [msun/kpc^3] -> [10^10 msun/kpc^3]
 
         return dens_code
 

@@ -97,7 +97,7 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None):
             # closest snapshot redshift to requested
             zFound, w = closest( r['redshifts'], redshift )
 
-            if np.abs(zFound-redshift) > 0.1:
+            if np.abs(zFound-redshift) > 0.1 and redshift != 2.22:
                 print("Warning! [%s] Snapshot selected with redshift error = %g" % (sP.simName,np.abs(zFound-redshift)))
 
             snaps[i] = w
@@ -264,7 +264,7 @@ def snapNumToRedshift(sP, snap=None, time=False, all=False):
 
     if not isfile(saveFilename):
         # redshiftToSnapNum() not yet run, do it now
-        _ = redshiftToSnapNum(2.0, sP=sP)
+        _ = redshiftToSnapNum(2.22, sP=sP)
 
     with h5py.File(saveFilename, 'r') as f:
         for key in f.keys():
