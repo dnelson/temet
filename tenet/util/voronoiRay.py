@@ -821,7 +821,7 @@ def benchmark_test_raytracing():
     from ..util.simParams import simParams
 
     # config
-    sP = simParams(run='tng50-3', redshift=0.5)
+    sP = simParams(run='tng100-3', redshift=0.5)
     ray_dir = [0.0, 0.0, 1.0]
     n_rays = 10000
 
@@ -845,8 +845,8 @@ def benchmark_test_raytracing():
     tree = buildFullTree(pos,sP.boxSize,pos.dtype,verbose=True)
 
     # start scaling plot
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
+    #fig = plt.figure(figsize=figsize)
+    #ax = fig.add_subplot(111)
 
     # loop over requested path lengths
     for total_dl in total_dls:
@@ -869,17 +869,17 @@ def benchmark_test_raytracing():
                 assert lengths.sum() == r_dx.size
 
         # add to plot
-        ax.set_xlabel('Number of Threads')
-        ax.set_ylabel('Time [sec]')
-        ax.plot(nThreads[1:], times[1:], 'o-', lw=lw, label='dl = %d' % total_dl)
+        #ax.set_xlabel('Number of Threads')
+        #ax.set_ylabel('Time [sec]')
+        #ax.plot(nThreads[1:], times[1:], 'o-', lw=lw, label='dl = %d' % total_dl)
 
     # finish scaling plot
-    ax.legend(loc='upper right')
-    fig.savefig('benchmark_test_raytracing_%s.pdf' % mode)
+    #ax.legend(loc='upper right')
+    #fig.savefig('benchmark_test_raytracing_%s.pdf' % mode)
 
-    ax.set_yscale('log')
-    fig.savefig('benchmark_test_raytracing_%s_log.pdf' % mode)
-    plt.close(fig)
+    #ax.set_yscale('log')
+    #fig.savefig('benchmark_test_raytracing_%s_log.pdf' % mode)
+    #plt.close(fig)
 
 def benchmark_test_voronoi(compare=True):
     """ Run a large number of rays through the (fullbox) Voronoi mesh, in each case comparing the 

@@ -1,6 +1,7 @@
 """ Utilities, units, numba-accelerated algorithms, and other algorithmic implementations. """
 from . import boxRemap
 from . import dataConvert
+from . import dataConvertSim
 from . import gfmExternalFiles
 from . import helper
 from . import metaPlots
