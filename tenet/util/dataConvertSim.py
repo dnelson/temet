@@ -3,10 +3,12 @@ Conversion of data (snapshots/catalogs) between different cosmological simulatio
 """
 import numpy as np
 import h5py
-from os import path, mkdir
 import glob
 import time
 import struct
+from os import path, mkdir
+from scipy.ndimage.interpolation import map_coordinates
+from os.path import isdir, expanduser
 
 def convertGadgetICsToHDF5(aip=False):
     """ Convert a Gadget-1/2 binary format ICs (dm-only, only pos/vel/IDs) into HDF5 format (keep original ordering). """
@@ -1294,14 +1296,10 @@ def convertMillennium2Snapshot(snap=67):
     fOut.close()
     print('All done.')
 
-
 def convertEagleSnapshot(snap=20):
     """ Convert an EAGLE simulation snapshot (HDF5) to a TNG-like snapshot (field names, units, etc). """
     from ..util.simParams import simParams
     from ..cosmo.hydrogen import neutral_fraction
-    from scipy.ndimage.interpolation import map_coordinates
-    from os.path import isdir, expanduser
-    from os import mkdir
 
     loadPath = '/virgo/simulations/Eagle/L0100N1504/REFERENCE/data/'
     #loadPath = '/virgo/simulations/EagleDM/L0100N1504/DMONLY/data/'
@@ -1529,5 +1527,183 @@ def convertEagleSnapshot(snap=20):
 
                 for key in data[gName]:
                     g[key] = data[gName][key]
+
+    print('Done.')
+
+def convertSimbaSnapshot(snap=151):
+    """ Convert an SIMBA simulation snapshot (HDF5) to a TNG-like snapshot (field names, units, etc). """
+    from ..util.simParams import simParams
+
+    run = 'm50n512' # m100n1024
+
+    # derived paths
+    basePath = '/virgotng/universe/Illustris/'
+    loadPath = basePath + 'Simba-%s/orig-snapshots/' % (run.replace('m','L') + 'FP')
+    savePath = '/u/dnelson/data/'
+
+    gfmPhotoPath = expanduser("~") + '/data/Arepo_GFM_Tables_TNG/Photometrics/stellar_photometrics.hdf5'
+
+    #sP = simParams(run='simba') # for units only
+
+    metalNames_TNG = ['Hydrogen','Helium','Carbon','Nitrogen','Oxygen','Neon','Magnesium','Silicon','Iron'] # 9
+    metalNames_Simba = ['H','He','C','N','O','Ne','Mg','Si','S','Ca','Fe'] # 11 (order assumed based on Dave+2019 Sec 2.1)
+    metalInds = [0,1,2,3,4,5,6,7,10] # skip sulphur and calcium
+    photoBands_TNG = ['U','B','V','K','g','r','i','z']
+
+    fieldRenames = {'InitialMass':'GFM_InitialMass',
+                    'StellarFormationTime':'GFM_StellarFormationTime',
+                    'BH_NProgs':'BH_Progs',
+                    'BH_AccretionLength':'BH_Hsml'}
+
+    snapPath = loadPath + '/snap_%s_%03d.hdf5' % (run,snap)
+    writePath = savePath + 'snapdir_%03d/snap_%03d.0.hdf5' % (snap,snap)
+
+    # load the photometrics table first
+    gfm_photo = {}
+    with h5py.File(gfmPhotoPath,'r') as f:
+        for key in f:
+            gfm_photo[key] = f[key][()]
+
+    # output directory
+    if not isdir(savePath + 'snapdir_%03d' % snap):
+        mkdir(savePath + 'snapdir_%03d' % snap)
+
+    # load full file
+    data = {}
+
+    gNames = ['PartType0','PartType1','PartType4','PartType5']
+    for gName in gNames:
+        data[gName] = {}
+
+    with h5py.File(snapPath, 'r') as f:
+        header = dict(f['Header'].attrs)
+
+        # dm
+        print(' dm')
+        if 'PartType1' in f:
+            # skipped: AGS-Softening, HaloID, ID_Generations, Potential
+            for key in ['Coordinates','ParticleIDs','Masses','Velocities']:
+                data['PartType1'][key] = f['PartType1'][key][()]
+
+        # gas
+        print(' gas')
+        if 'PartType0' in f:
+            # skipped: AGS-Softening, DelayTime, Dust_Metallicity, 
+            #          GrackleHI, GrackleHII, GrackleHM, GrackleHeI, GrackleHeII, GrackleHeIII,
+            #          HaloID, ID_Generations, NWindLaunches, Potential, Sigma, SmoothingLength
+            for key in ['Coordinates','Density','InternalEnergy','Masses','ParticleIDs',
+                        'StarFormationRate','Velocities']:
+                data['PartType0'][key] = f['PartType0'][key][()]
+
+            # add Simba_FractionH2
+            data['PartType0']['Simba_FractionH2'] = f['PartType0']['FractionH2'][()]
+
+        # stars
+        print(' stars')
+        if 'PartType4' in f:
+            # skipped: AGS-Softening, Dust_Metallicity, HaloID, ID_Generations, Potential
+            # NEEDED TODO: InitialMass
+            for key in ['Coordinates','Masses','ParticleIDs','StellarFormationTime','Velocities']:
+                data['PartType4'][key] = f['PartType4'][key][()]
+
+        # gas + stars
+        print(' gas+stars')
+        for pt in ['PartType0','PartType4']:
+            # handle GFM_Metals (note: omit GFM_MetalsTagged, no equivalent)
+            if pt not in f:
+                continue
+            data[pt]['GFM_Metals'] = np.zeros( (data[pt]['ParticleIDs'].size,10), dtype='float32' )
+
+            for i, src_ind in enumerate(metalInds):
+                data[pt]['GFM_Metals'][:,i] = f[pt]['Metallicity'][:,src_ind]
+            # instead of 'total' we have S+Ca
+            data[pt]['GFM_Metals'][:,9] = f[pt]['Metallicity'][:,8] + f[pt]['Metallicity'][:,9]
+
+            # add Simba_DustMass
+            data[pt]['Simba_DustMass'] = f[pt]['Dust_Masses'][()]
+
+        # BHs
+        print(' bhs')
+        if 'PartType5' in f:
+            # skipped: AGS-Softening, HaloID, ID_Generations, Potential
+            # TODO: StellarFormationTime?
+            for key in ['BH_AccretionLength','BH_Mass','BH_Mass_AlphaDisk','BH_Mdot','BH_NProgs',
+                        'Coordinates','Masses','ParticleIDs','Velocities']:
+                data['PartType5'][key] = f['PartType5'][key][()]
+
+            # missing keys (leave blank)
+            m_keys = ['BH_BPressure','BH_CumEgyInjection_QM','BH_CumMassGrowth_QM',
+                      'BH_CumEgyInjection_RM','BH_CumMassGrowth_RM','BH_Density',
+                      'BH_HostHaloMass','BH_Pressure','BH_U']
+            for key in m_keys:
+                data['PartType5'][key] = np.zeros( data['PartType5']['BH_Mass'].size, dtype='float32' )
+
+    # cleanup header
+    header['UnitLength_in_cm'] = 3.08568e+21
+    header['UnitMass_in_g'] = 1.989e+43
+    header['UnitVelocity_in_cm_per_s'] = 100000
+
+    # field renames
+    for pt in data.keys():
+        for from_name, to_name in fieldRenames.items():
+            if from_name in data[pt]:
+                data[pt][to_name] = data[pt].pop(from_name)
+
+    if 'PartType0' in data:
+        data['PartType0']['CenterOfMass'] = data['PartType0']['Coordinates']
+
+    # dark matter mass (constant)
+    if 'PartType1' in data:
+        assert data['PartType1']['Masses'].min() == data['PartType1']['Masses'].max() == data['PartType1']['Masses'][0]
+        header['MassTable'][1] = data['PartType1']['Masses'][0]
+        del data['PartType1']['Masses']
+
+    # unit conversions
+    for pt in data.keys():
+        #if 'Velocities' in data[pt]: #no! already in sqrt(a) units, like TNG
+        #    data[pt]['Velocities'] /= np.sqrt(header['Time']) # peculiar -> sqrt(a) units
+        if 'GFM_Metallicity' in data[pt]:
+            w = np.where(data[pt]['GFM_Metallicity'] < 1e-20)
+            data[pt]['GFM_Metallicity'][w] = 1e-20 # GFM_MIN_METAL   
+
+    # stars: photometrics
+    if 'PartType4' in data and 'Masses' in data['PartType4']:
+        data['PartType4']['GFM_StellarPhotometrics'] = np.zeros( (data['PartType4']['Masses'].size,8), dtype='float32' )
+
+        import pdb; pdb.set_trace() # TODO have no InitialMass!
+
+        stars_formz = 1/data['PartType4']['GFM_StellarFormationTime'] - 1
+        stars_logagegyr = np.log10( sP.units.redshiftToAgeFlat(header['Redshift']) - sP.units.redshiftToAgeFlat(stars_formz) )
+        stars_logz = np.log10( data['PartType4']['GFM_Metallicity'] )
+        stars_masslogmsun = sP.units.codeMassToLogMsun( data['PartType4']['GFM_InitialMass'])
+
+        i1 = np.interp( stars_logz, gfm_photo['LogMetallicity_bins'], np.arange(gfm_photo['LogMetallicity_bins'].size) )
+        i2 = np.interp( stars_logagegyr,  gfm_photo['LogAgeInGyr_bins'],  np.arange(gfm_photo['LogAgeInGyr_bins'].size) )
+        iND = np.vstack( (i1,i2) )
+
+        for i, band in enumerate(photoBandsOrdered):
+            mags_1msun = map_coordinates( gfm_photo['Magnitude_%s' % band], iND, order=1, mode='nearest')
+            data['PartType4']['GFM_StellarPhotometrics'][:,i] = mags_1msun - 2.5 * stars_masslogmsun
+    
+    # BHs: bondi and eddington mdot (should be checked more carefully)
+    if 'PartType5' in data:
+        UnitMass_over_UnitTime = 10.22
+
+        mdot_edd = sP.units.codeBHMassToMdotEdd(data['PartType5']['BH_Mass'], eps_r=0.1) # msun/yr
+        data['PartType5']['BH_MdotEddington'] = mdot_edd / UnitMass_over_UnitTime # put into TNG units
+
+    # write
+    with h5py.File(writePath, 'w') as f:
+        # headers
+        h = f.create_group('Header')
+        for key in header:
+            h.attrs[key] = header[key]
+
+        # particle groups
+        for gName in data:
+            g = f.create_group(gName)
+
+            for key in data[gName]:
+                g[key] = data[gName][key]
 
     print('Done.')
