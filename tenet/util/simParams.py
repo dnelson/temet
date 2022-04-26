@@ -100,6 +100,9 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      'eagle':['eagle',1504],
                      'eagle-dark':['eagle_dm',1504],
                      'eagle100-1':['eagle',1504],
+                     'simba':['simba',1024],
+                     'simba100-1':['simba',1024],
+                     'simba50':['simba',512],
                      'millennium-1':['millennium',1],
                      'millennium-2':['millennium',2]}
 
@@ -803,6 +806,36 @@ class simParams:
                 self.arepoPath  = self.basePath + 'sims.other/Eagle-L'+bs+'n'+str(res)+'DM/'
                 self.simName    = 'Eagle100-1-Dark' #'Eagle-L68n1504DM'
                 self.simNameAlt = 'Eagle-L'+bs+'n'+str(res)+'DM'
+
+        # SIMBA
+        if run in ['simba']:
+            self.validResLevels = [512,1024]
+            if self.res == 512:  self.boxSize = 50000.0
+            if self.res == 1024: self.boxSize = 100000.0
+            self.groupOrdered   = True
+            self.numSnaps       = 152
+
+            self.omega_m     = 0.3
+            self.omega_L     = 0.7
+            self.omega_b     = 0.048
+            self.HubbleParam = 0.68
+
+            self.gravSoft = 0.5 # 'minimum', ckpc/h (same for L50n512 and L100n1024)
+
+            bs = str( round(self.boxSize/1000) )
+
+            self.trMCPerCell = 0
+            self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
+            self.metals      = ['H','He','C','N','O','Ne','Mg','Si','Fe']
+            self.winds       = 1
+            self.BHs         = 1
+
+            self.targetGasMass = 1.24e-3 # (same for L50n512 and L100n1024)
+
+            self.arepoPath  = self.basePath + 'sims.other/Simba-L'+bs+'n'+str(res)+'FP/'
+            self.simNameAlt = 'Simba-L'+bs+'n'+str(res)+'FP'
+
+            if res == 1024: self.simName = 'Simba100'
 
         # ZOOMS-1 (paper.zoomsI, suite of 10 zooms, 8 published, numbering permuted)
         if run in ['zooms','zooms_dm']:

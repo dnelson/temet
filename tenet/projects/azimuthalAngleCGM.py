@@ -543,8 +543,6 @@ def stackedImageProjection():
             #fontsize     = 24
             saveFilename = './stacked_%s_%d.pdf' % (dataField,i)
 
-        
-
         if path.isfile(cacheFile):
             # load cached result
             with h5py.File(cacheFile,'r') as f:
@@ -583,7 +581,7 @@ def stackedImageProjection():
     valMinMax = [8.0, 14.5]
 
     contour = ['gas',dataField]
-    contourLevels = [11.0] # 1/cm^2
+    contourLevels = [11.0, 14.0] # 1/cm^2, corresponding to EW~0.002 Ang and EW~1 Ang (from COG)
     contourOpts = {'colors':'white', 'alpha':0.8}
     contourSmooth = 3.0
 
