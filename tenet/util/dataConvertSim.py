@@ -1462,7 +1462,9 @@ def convertEagleSnapshot(snap=20):
             frac_nH0 = neutral_fraction(nH, sP=None, redshift=header['Redshift'])
             data['PartType0']['NeutralHydrogenAbundance'] = frac_nH0
 
-            print("NOTE TODO: In the currently written Eagle-L68n1504FP, {ne,nh,sfr} were overwritten by io_func_* recalculations.")
+            # NOTE: In the currently written Eagle-L68n1504FP, {ne,nh,sfr} were overwritten by io_func_* recalculations, 
+            # but this has no actual impact, as StarFormationRate is OK (for RestartFlag==3), while Ne and Nh didn't 
+            # anyways exist in the original Eagle snapshots
 
         # stars: photometrics
         if 'PartType4' in data and 'Masses' in data['PartType4']:
@@ -1579,6 +1581,7 @@ def convertSimbaSnapshot(snap=151):
 
     with h5py.File(snapPath, 'r') as f:
         header = dict(f['Header'].attrs)
+        print(snap, ' z = ', header['Redshift'])
 
         # dm
         print(' dm')
@@ -1609,32 +1612,53 @@ def convertSimbaSnapshot(snap=151):
         # gas + stars
         print(' gas+stars')
         for pt in ['PartType0','PartType4']:
-            # handle GFM_Metals (note: omit GFM_MetalsTagged, no equivalent)
+            # handle GFM_Metals, GFM_Metallicity, and Simba analogous-dust fields
             if pt not in f:
                 continue
             data[pt]['GFM_Metals'] = np.zeros( (data[pt]['ParticleIDs'].size,10), dtype='float32' )
-            data[pt]['Simba_MetalsDust'] = np.zeros( (data[pt]['ParticleIDs'].size,10), dtype='float32' )
+            data[pt]['Simba_DustMetals'] = np.zeros( (data[pt]['ParticleIDs'].size,10), dtype='float32' )
 
             for i, src_ind in enumerate(metalInds):
                 data[pt]['GFM_Metals'][:,i] = f[pt]['Metallicity'][:,src_ind]
-                data[pt]['Simba_MetalsDust'][:,i] = f[pt]['Dust_Metallicity'][:,src_ind]
+                data[pt]['Simba_DustMetals'][:,i] = f[pt]['Dust_Metallicity'][:,src_ind]
 
             # store total metallicity separately
             data[pt]['GFM_Metallicity'] = data[pt]['GFM_Metals'][:,0].copy()
-            data[pt]['Simba_DustMetallicity'] = data[pt]['Simba_MetalsDust'][:,0].copy()
+            data[pt]['Simba_DustMetallicity'] = data[pt]['Simba_DustMetals'][:,0].copy()
 
             # compute H and store (H = 1 - Z - He)
             data[pt]['GFM_Metals'][:,0] = 1.0 - data[pt]['GFM_Metallicity'] - data[pt]['GFM_Metals'][:,1]
-            data[pt]['Simba_MetalsDust'][:,0] = 1.0 - data[pt]['Simba_DustMetallicity'] - data[pt]['Simba_MetalsDust'][:,1]
+            data[pt]['Simba_DustMetals'][:,0] = 1.0 - data[pt]['Simba_DustMetallicity'] - data[pt]['Simba_DustMetals'][:,1]
 
             # compute 'total of all other i.e. untracked metals' and store
             data[pt]['GFM_Metals'][:,-1] = data[pt]['GFM_Metallicity'] - np.sum(data[pt]['GFM_Metals'][:,2:],axis=1)
-            data[pt]['Simba_MetalsDust'][:,-1] = data[pt]['Simba_DustMetallicity'] - np.sum(data[pt]['Simba_MetalsDust'][:,2:],axis=1)
+            data[pt]['Simba_DustMetals'][:,-1] = data[pt]['Simba_DustMetallicity'] - np.sum(data[pt]['Simba_DustMetals'][:,2:],axis=1)
 
-            # add Simba_DustMass
+            # add Simba_DustMass, clip to zero
             data[pt]['Simba_DustMass'] = f[pt]['Dust_Masses'][()]
             w = np.where(data[pt]['Simba_DustMass'] < 0)
             data[pt]['Simba_DustMass'][w] = 0.0
+
+            # fix Simba_DustMetallicity: should be either 0 (no dust) or 1 (dust)
+            w = np.where(data[pt]['Simba_DustMetallicity'] < 0.5)
+            data[pt]['Simba_DustMetallicity'][w] = 0.0
+            w = np.where(data[pt]['Simba_DustMetallicity'] >= 0.5)
+            data[pt]['Simba_DustMetallicity'][w] = 1.0
+
+            w = np.where(data[pt]['Simba_DustMetals'] > 1.0)
+            data[pt]['Simba_DustMetals'][w] = 1.0 # clip few erronous outliers
+            w = np.where(data[pt]['Simba_DustMetals'] < 0.0)
+            data[pt]['Simba_DustMetals'][w] = 0.0
+
+            # convert Simba_DustMetals and Simba_DustMetallicity from mass ratio relative to total dust mass, 
+            # to mass ratio relative to total gas mass (for consistency with GFM_Metallicity and GFM_Metals)
+            dust_mass_ratio = data[pt]['Simba_DustMass'] / data[pt]['Masses']
+            data[pt]['Simba_DustMetallicity'] *= dust_mass_ratio
+
+            for i in range(data[pt]['Simba_DustMetals'].shape[1]):
+                data[pt]['Simba_DustMetals'][:,i] *= dust_mass_ratio
+
+            del data[pt]['Simba_DustMass'] # redundant
 
         # BHs
         print(' bhs')
@@ -1674,22 +1698,34 @@ def convertSimbaSnapshot(snap=151):
     # move wind particles from PT0 to PT4
     if 'PartType0' in data:
         # DelayTime: non-zero for currently decoupled wind particles, in which case it gives the maximum 
-        # time (in coe units) that the particle can remain decoupled (could also re-couple first with 
+        # time (in code units) that the particle can remain decoupled (could also re-couple first with 
         # the density criterion)
         w_wind = np.where(data['PartType0']['DelayTime'] != 0)[0]
         w_gas = np.where(data['PartType0']['DelayTime'] == 0)[0]
 
         # move wind to PT4, set properties (all PT4 datasets also exist for PT0)
-        for key in data['PartType4'].keys():
+        copy_keys = data['PartType4'].keys()
+        if header['NumPart_Total'][4] == 0:
+            # no stars exist yet: everything except GFM_InitialMass, StellarPhotometrics
+            copy_keys = ['Coordinates','GFM_Metallicity','GFM_Metals','GFM_StellarFormationTime','Masses',
+                         'ParticleIDs','Potential','Simba_DustMetallicity','Simba_DustMetals','Velocities']
+
+        for key in copy_keys:
             if key == 'GFM_StellarFormationTime':
                 # turn negative to meet TNG definition
                 wind_data = -1.0 * data['PartType0']['DelayTime'][w_wind]
             else:
                 # all other fields
                 wind_data = data['PartType0'][key][w_wind]
-                        
-            axis = 0 if wind_data.ndim > 1 else None
-            new_data = np.concatenate((data['PartType4'][key],wind_data),axis=axis)
+                
+            if key in data['PartType4']:
+                # normal case, adding to existing stars
+                axis = 0 if wind_data.ndim > 1 else None
+                new_data = np.concatenate((data['PartType4'][key],wind_data),axis=axis)
+            else:
+                # high redshift, wind exists before the first star particle
+                new_data = wind_data
+
             data['PartType4'][key] = new_data
 
         # subset gas to only real gas (we lose gas-only fields for wind, e.g. Density, InternalEnergy, and so on)
@@ -1715,11 +1751,23 @@ def convertSimbaSnapshot(snap=151):
         #if 'Velocities' in data[pt]: #no! already in sqrt(a) units, like TNG
         #    data[pt]['Velocities'] /= np.sqrt(header['Time']) # peculiar -> sqrt(a) units
         if 'GFM_Metallicity' in data[pt]:
-            w = np.where(data[pt]['GFM_Metallicity'] < 1e-20)
-            data[pt]['GFM_Metallicity'][w] = 1e-20 # GFM_MIN_METAL   
+            w = np.where(data[pt]['GFM_Metallicity'] < 8e-10)
+            data[pt]['GFM_Metallicity'][w] = 8e-10 # InitialAbundances > GFM_MIN_METAL
+
+        if 'GFM_Metals' in data[pt]:
+            w = np.where(data[pt]['GFM_Metals'] < 1e-10)
+            data[pt]['GFM_Metals'][w] = 1e-10 # InitialAbundances > GFM_MIN_METAL
+
+        if 'Simba_DustMetals' in data[pt]:
+            w = np.where(data[pt]['Simba_DustMetals'] < 1e-20)
+            data[pt]['Simba_DustMetals'][w] = 1e-20 # GFM_MIN_METAL
+
+        if 'Simba_DustMetallicity' in data[pt]:
+            w = np.where(data[pt]['Simba_DustMetallicity'] < 1e-20)
+            data[pt]['Simba_DustMetallicity'][w] = 1e-20 # GFM_MIN_METAL
 
     # stars: photometrics
-    if 'PartType4' in data:
+    if header['NumPart_Total'][4] > 0:
         # construct PT4/GFM_InitialMass via BC03 interpolation (most consistent with Simba mass loss/yields)
         stars_formz = 1/data['PartType4']['GFM_StellarFormationTime'] - 1
         stars_logagegyr = np.log10( sP.units.redshiftToAgeFlat(header['Redshift']) - sP.units.redshiftToAgeFlat(stars_formz) )
@@ -1748,7 +1796,7 @@ def convertSimbaSnapshot(snap=151):
             data['PartType4']['GFM_StellarPhotometrics'][w,i] = mags_1msun[w] - 2.5 * stars_masslogmsun
     
     # BHs: eddington mdot
-    if 'PartType5' in data:
+    if header['NumPart_Total'][5] > 0:
         UnitMass_over_UnitTime = 10.22
 
         mdot_edd = sP.units.codeBHMassToMdotEdd(data['PartType5']['BH_Mass'], eps_r=0.1) # msun/yr
@@ -1769,3 +1817,114 @@ def convertSimbaSnapshot(snap=151):
                 g[key] = data[gName][key]
 
     print('Done.')
+
+def testSimba(redshift=0.0):
+    """ Compare all snapshot fields (1d histograms) vs TNG to check unit conversions, etc. """
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_pdf import PdfPages
+    from ..util.helper import closest
+    from ..plot.config import figsize
+    from ..util.simParams import simParams
+
+    # config (z=0,2,5)
+    sP1 = simParams(run='tng50-3', redshift=redshift)
+    sP2 = simParams(run='simba50', redshift=redshift)
+
+    nBins = 50
+
+    # loop over part types
+    for ptNum in [0,1,4,5]:
+        gName = 'PartType%d' % ptNum
+
+        # get list of particle datasets
+        with h5py.File(sP1.snapPath(sP1.snap,0),'r') as f:
+            fields1 = list(f[gName].keys())
+        with h5py.File(sP2.snapPath(sP2.snap,0),'r') as f:
+            fields2 = list(f[gName].keys())
+
+        for field in fields1:
+            if field not in fields2:
+                print('Note: %s/%s in TNG but not Simba!' % (gName,field))
+        for field in fields2:
+            if field not in fields1:
+                print('Note: %s/%s in Simba but not TNG!' % (gName,field))
+
+        # start pdf book
+        pdf = PdfPages('compare_%s_%s_%s_%d_%d.pdf' % (gName,sP1.simName,sP2.simName,sP1.snap,sP2.snap))
+
+        for field in set(fields1+fields2):
+            # start plot
+            print(gName, field)
+
+            fig = plt.figure(figsize=figsize)
+            ax = fig.add_subplot(111)
+
+            ax.set_xlabel(field + ' [log]')
+            ax.set_ylabel('N')
+            ax.set_yscale('log')
+
+            # load and histogram
+            for i, sP in enumerate([sP1,sP2]):
+                if (field not in fields1 and i == 0) or (field not in fields2 and i == 1):
+                    print(' skip ', sP.simName)
+                    continue
+
+                vals = sP.snapshotSubsetP(ptNum, field)
+
+                if field in ['Potential','GFM_StellarPhotometrics']: vals *= -1
+
+                num_zero = np.count_nonzero(np.where(vals == 0))
+                num_neg = np.count_nonzero(np.where(vals < 0))
+                num_inf = np.count_nonzero(np.where(~np.isfinite(vals)))
+
+                if num_zero > 0 or num_neg > 0 or num_inf > 0:
+                    print(' %s # zero = %d, negative = %d, inf = %d' % (sP.simName,num_zero,num_neg,num_inf))
+
+                vals = vals[np.isfinite(vals) & (vals > 0)]
+                vals = vals.ravel() # 1D for all multi-D
+
+                if field not in []:
+                    vals = np.log10(vals)
+
+                ax.hist(vals, bins=nBins, alpha=0.6, label=sP.simName)
+
+            # finish plot
+            ax.legend(loc='best')
+            pdf.savefig()
+            plt.close(fig)
+
+        # some explicit multi-dimensional datasets, by dim
+        if ptNum in [0,4]:
+            for field in ['GFM_Metals']:
+                print(gName, field)
+                # load
+                data1 = sP1.snapshotSubsetP(ptNum, field)
+                data2 = sP2.snapshotSubsetP(ptNum, field)
+
+                # loop over size of second dimension
+                for i in range(data1.shape[1]):
+                    print(i)
+                    vals1 = data1[:,i]
+                    vals2 = data2[:,i]
+            
+                    # histogram
+                    fig = plt.figure(figsize=figsize)
+                    ax = fig.add_subplot(111)
+
+                    ax.set_xlabel(field + ' [%d] [log]' % i)
+                    ax.set_ylabel('N')
+                    ax.set_yscale('log')
+
+                    vals1 = np.log10(vals1)
+                    vals2 = np.log10(vals2)
+
+                    ax.hist(vals1, bins=nBins, alpha=0.6, label=sP1.simName)
+                    ax.hist(vals2, bins=nBins, alpha=0.6, label=sP2.simName)
+
+                    # finish plot
+                    ax.legend(loc='best')
+                    pdf.savefig()
+                    plt.close(fig)
+
+        # finish
+        pdf.close()

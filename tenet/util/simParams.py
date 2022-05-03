@@ -833,6 +833,7 @@ class simParams:
             self.targetGasMass = 1.24e-3 # (same for L50n512 and L100n1024)
 
             self.arepoPath  = self.basePath + 'sims.other/Simba-L'+bs+'n'+str(res)+'FP/'
+            self.simName    = 'Simba-L'+bs+'n'+str(res)
             self.simNameAlt = 'Simba-L'+bs+'n'+str(res)+'FP'
 
             if res == 1024: self.simName = 'Simba100'
