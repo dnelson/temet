@@ -1311,3 +1311,146 @@ def erica_tng50_sfrmaps():
             panels.append( {'subhaloInd':ind, 'partField':'sfr_halpha', 'valMinMax':[35.5,40.5]} )
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+
+def gjoshi_clustermaps(conf=0, haloID=0):
+    """ Joshi et al. 2020 (Figs. 1 and 2): stellar maps of two TNG50 Virgo-mass clusters at z=0 """
+    """ In a single panel centered on a halo, show one field from the box. """
+    """ To run for HaloID = 0,1 at snap = 099. """
+
+    panels = []
+
+    run        = 'tng' #'tng_zoom_dm'
+    res        = 2160 #1820
+    variant    = None #'sf2' # None
+    redshift   = 0.0
+    #redshift   = simParams(res=2160,run='tng',snap=snap).redshift
+    rVirFracs  = [0.5, 1.0] # None
+    method     = 'sphMap'
+    nPixels    = [1200,1200] #[800,800] #[1920,1920]
+    axes       = [0,1]
+    labelZ     = True
+    labelScale = True
+    labelSim   = True
+    labelHalo  = True
+    relCoords  = True
+    rotation   = None
+    mpb        = None
+
+    #excludeSubhaloFlag = True
+
+    sP = simParams(res=res, run=run, redshift=redshift, hInd=haloID, variant=variant)
+    
+    if not sP.isZoom:
+        # periodic box, FoF/Halo ID
+        subhaloInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
+    else:
+        # zoom, assume input haloID specifies the zoom simulation
+        subhaloInd = haloID
+
+    if conf == 0:
+        # stellar mass column density
+        panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2', 'valMinMax':[3.0,10.0]} )
+        size = 2.0
+        sizeType = 'rVirial'
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = 1200
+        colorbars    = True
+        saveFilename = './gjoshi_clustermaps_%d_%s_%d_%d_ID-%d_%s.png' % \
+          (conf,run,res,sP.snap,haloID,method)
+
+#    plotSubhaloIDs = [15, 26, 29, 38, 39, 44, 48, 54, 63, 67, 73] #fof0 of TNG50: disks at accretion, not disks at z=0
+#    plotSubhaloIDs = [10, 24] #fof0 of TNG50: disks at accretion, still disks at z=0
+#    plotSubhaloIDs = [63877, 63878, 63884, 63893, 63898, 63899, 63902, 63917]
+#    plotSubhaloIDs = [ 63869, 63872, 63879,63882, 63883, 63894]
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+
+def mwbubbles_tng50_top30(setType='top30', partType='gas', partField='P_gas', input_rotation='edge-on'):
+    """ Pillepich et al. 2021 (): mostly edge-on views of MW/M31 analogs """
+    """ 6x5 posters of random 30 bubbles, P_gas and X-ray """
+    """ Interesting options for partType='gas': xray_lum, coldens_msunkpc2, machnum, P_gas, P_B, entropy, temperature, metal_solar, vrad, bmag_uG, HI_segmented, OVI_OVII_ionmassratio, SN_IaII_ratio_Fe """
+    """ Interesting options for  partType='stars': coldens_msunkpc2 """
+
+    panels = []
+
+    # imaging options
+    plotOptions = {'rotation'   : input_rotation,
+                   'labelSim'   : True,
+                   'labelZ'     : False,
+                   'labelScale' : True,
+                   'labelHalo'  : 'mstar,redshift',
+                   'nPixels'    : [400,400]}
+
+    # set font
+    #import matplotlib as mpl
+    #mpl.rcParams['font.family'] = 'serif'
+    #mpl.rcParams['font.serif'] = ['Times New Roman']
+
+    class plotConfig:
+        plotStyle = 'edged'
+        rasterPx  = plotOptions['nPixels'][0] * 4
+        colorbars = True
+        fontsize = 70.0
+
+    # select sample
+    res        = 2160
+    redshift   = 0.0
+    snap       = 99
+    run        = 'tng'
+    rVirFracs  = [1.0]
+    method     = 'sphMap'
+    axes       = [0,1]
+    sizeType   = 'kpc'
+    size       = 200.0
+    depthFac   = 0.1
+    setNum     = 0
+
+    if setType == 'top30':
+        ids        = np.loadtxt('/u/apillepi/sims.TNG/L35n2160TNG/appostprocessing/bubbles/Bubbles_P_gas_VisuallyIdentified_099_SubfindIDs_Top30.txt', dtype='int')
+        numPerSet = 30
+        shIDs = ids[setNum*numPerSet:(setNum+1)*numPerSet]
+        print(shIDs)
+        nCols = 5
+        plotConfig.nRows = 6
+    elif setType == 'lowSFRs':
+        ids        = np.loadtxt('/u/apillepi/sims.TNG/L35n2160TNG/appostprocessing/bubbles/Bubbles_P_gas_VisuallyIdentified_099_SubfindIDs_logSFRlowerMinus1.txt', dtype='int')
+        numPerSet = 16
+        shIDs = ids[setNum*numPerSet:(setNum+1)*numPerSet]
+        print(shIDs)
+        nCols = 4
+        plotConfig.nRows = 4
+    elif setType == 'MWs':
+        ids        = np.loadtxt('/u/apillepi/sims.TNG/L35n2160TNG/appostprocessing/bubbles/Bubbles_P_gas_VisuallyIdentified_099_SubfindIDs_MWAnalogs_SFR_Mstars.txt', dtype='int')
+        numPerSet = 21
+        shIDs = ids[setNum*numPerSet:(setNum+1)*numPerSet]
+        print(shIDs)
+        nCols = 7
+        plotConfig.nRows = 3
+    elif setType == 'M31s':
+        ids        = np.loadtxt('/u/apillepi/sims.TNG/L35n2160TNG/appostprocessing/bubbles/Bubbles_P_gas_VisuallyIdentified_099_SubfindIDs_M31Analogs_SFR_Mstars.txt', dtype='int')
+        numPerSet = 9
+        shIDs = ids[setNum*numPerSet:(setNum+1)*numPerSet]
+        print(shIDs)
+        nCols = 3
+        plotConfig.nRows = 3
+
+    # custom options
+    # To reproduce paper plots, leave auto ranges of all fields but 'xray_lum' and 'xray_lum_05-2kev'
+    #if partField == 'P_gas':
+    #    valMinMax = [1.0, 2.5]
+    if partField == 'xray_lum':
+        valMinMax = [33.0, 36.0]
+    if partField == 'xray_lum_05-2kev':
+        valMinMax = [33.0, 36.0]
+    
+    # configure panels: only edge-on 
+    for i in range(int(plotConfig.nRows)):
+        for j in range(nCols):
+            panels.append( {'subhaloInd':shIDs[i*nCols+j], **plotOptions} )
+
+    plotConfig.saveFilename = savePathDefault + 'apillepich_%s_bubbles_%s_%s_%d_%s_Lkpc_%d_DepthPercentage_%d_%s_%s.pdf' % (setType,run,res,snap,rotation,size,depthFac*100,partType,partField)
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)

@@ -885,16 +885,19 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
         if 'xray_lum_05-2kev' == partField:
             xray_label = 'L$_{\\rm X, 0.5-2 keV}$'
+            config['ctName'] = 'cubehelix'
         elif '05-2kev_nomet' in partField:
             xray_label = 'L$_{\\rm X, 0.5-2 keV, no-Z}$'
+            config['ctName'] = 'cubehelix'
         elif '0.5-2.0kev' in partField:
             xray_label = 'L$_{\\rm X, 0.5-2 keV, APEC}$'
+            config['ctName'] = 'cubehelix'
         else:
             xray_label = 'Bolometric L$_{\\rm X}$'
+            config['ctName'] = 'inferno'
 
         config['label']  = 'Gas %s [log erg s$^{-1}$ kpc$^{-2}$]' % xray_label
-        config['ctName'] = 'inferno'
-
+        
     if partField in ['sfr_halpha','halpha']:
         grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
         gridOffset = 30.0 # add 1e30 factor
@@ -973,12 +976,12 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     if partField in ['ent','entr','entropy']:
         grid = grid
         config['label']  = 'Entropy [log K cm$^2$]'
-        config['ctName'] = 'jet'
+        config['ctName'] = 'thermal' #'jet'
 
     if partField in ['bmag']:
         grid = grid
         config['label']  = 'Magnetic Field Magnitude [log G]'
-        config['ctName'] = 'Spectral_r'
+        config['ctName'] = 'Spectral_r' #'deep'
 
     if partField in ['bmag_uG']:
         grid = grid
@@ -1168,7 +1171,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     if 'stellarComp' in partField:
         print('Warning! gridOutputProcess() on stellarComp*, should only occur for empty frames.')
-        config['label'] = 'dummy'
+        config['label'] = 'Stellar Composite' #'dummy'
         config['ctName'] = 'gray'
         logMin = False
 
