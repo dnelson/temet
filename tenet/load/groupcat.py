@@ -826,7 +826,7 @@ def groupCatOffsetListIntoSnap(sP):
             return r
 
     # calculate now: allocate
-    with h5py.File( gcPath(sP.simPath,sP.snap), 'r' ) as f:
+    with h5py.File( gcPath(sP.simPath,sP.snap,noLocal=True), 'r' ) as f:
         totGroups    = f['Header'].attrs['Ngroups_Total']
         totSubGroups = f['Header'].attrs['Nsubgroups_Total']
 
@@ -846,7 +846,7 @@ def groupCatOffsetListIntoSnap(sP):
 
     for i in range(1,nChunks+1):
         # load header, get number of groups/subgroups in this file, and lengths
-        f = h5py.File( gcPath(sP.simPath,sP.snap,chunkNum=i-1), 'r' )
+        f = h5py.File( gcPath(sP.simPath,sP.snap,chunkNum=i-1,noLocal=True), 'r' )
         header = dict( f['Header'].attrs.items() )
         
         if header['Ngroups_ThisFile'] > 0:
