@@ -1238,6 +1238,7 @@ def concat_and_filter_spectra(sP):
     EW_total = []
 
     count = 0
+    count_tot = 0
 
     for i in range(pSplitNum):
         file = _spectra_filepath(sP, projAxis, instrument, lineNames, pSplit=[i,pSplitNum])
@@ -1259,6 +1260,7 @@ def concat_and_filter_spectra(sP):
         #EW_local = np.zeros(flux.shape[0], dtype='float32')
         #for i in range(flux.shape[0]):
         #    EW_local[i] = _equiv_width_flux(flux[i,:],master_mid)
+        count_tot += n_spec
 
         # select
         w = np.where(EW_local >= EW_threshold)[0]
@@ -1267,7 +1269,7 @@ def concat_and_filter_spectra(sP):
         inds.append(w)
         EW_total.append(EW_local[w])
 
-    print(f'In total [{count}] spectra of [{n_spec*pSplitNum}] above {EW_threshold = }')
+    print(f'In total [{count}] spectra of [{count_tot}] above {EW_threshold = }')
 
     assert count > 0, 'Error: All EWs are zero. Observed frame wavelengths outside instrument coverage?'
 
@@ -1327,6 +1329,7 @@ def concat_and_filter_spectra(sP):
         f.attrs['instrument'] = instrument
         f.attrs['lineNames'] = lineNames
         f.attrs['EW_threshold'] = EW_threshold
+        f.attrs['count_tot'] = count_tot
 
     print('Saved: [%s]' % saveFilename)
 

@@ -1484,7 +1484,21 @@ class simParams:
     @property
     def boxSizeCubicComovingMpc(self):
         return (self.units.codeLengthToComovingKpc(self.boxSize)/1000.0)**3
-    
+   
+    @property
+    def boxLengthDeltaRedshift(self):
+        """ The redshift interval dz corresponding to traversing one box size-length. """
+        z_start = self.redshift
+        z_vals = np.linspace(z_start, z_start+0.1, 200)
+
+        # compute distance as a function of delta redshift after z_start
+        lengths = self.units.redshiftToComovingDist(z_vals) - self.units.redshiftToComovingDist(z_start)
+
+        # interpolate to find redshift for a distance of one box length
+        box_length_mpc = self.units.codeLengthToMpc(self.boxSize)
+        z_final = np.interp(box_length_mpc, lengths, z_vals)
+        return z_final - z_start
+
     @property
     def zoomSubhaloID(self):
         #print('Warning: zoomSubhaloID hard-coded to always be the first! ['+self.simName+'].')

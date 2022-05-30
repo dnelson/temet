@@ -30,7 +30,6 @@ If you don't yet have a working python installation/environment, then e.g. on th
 
     module load anaconda/3/2021.11
     source activate ~/.local/envs/myenv
-    export PATH=$HOME/.local/envs/myenv/bin/:$PATH
 
 
 Automatic Installation

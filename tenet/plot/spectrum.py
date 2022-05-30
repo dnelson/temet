@@ -317,10 +317,10 @@ def concat_spectra_gallery(sim):
     # config plot
     EW_min = 0.6
     EW_max = 0.7
-    SNR = None #30.0 # if not None, add Gaussian noise for the given signal-to-noise ratio
+    SNR = 5.0 # if not None, add Gaussian noise for the given signal-to-noise ratio
     num = 10
 
-    wave_minmax = [4750,4800] # z=0.5: [4180,4250]
+    wave_minmax = [4180,4250] # z=0.5
 
     # load
     filepath = _spectra_filepath(sim, projAxis, instrument, lineNames)
@@ -340,7 +340,7 @@ def concat_spectra_gallery(sim):
     flux = flux[inds,:]
     EW = EW[inds]
 
-    # add noise?
+    # add noise? ("signal" is now 1.0)
     if SNR is not None:
         noise = rng.normal(loc=0.0, scale=1/SNR, size=flux.shape)
         flux += noise
@@ -376,44 +376,94 @@ def EW_distribution(sim_in, redshifts=[0.5,0.7,1.0], log=False):
     projAxis = 2
     instrument = '4MOST_HRS'
     lineNames = ['MgII 2796','MgII 2803']
+    line = lineNames[0] # which to use
 
-    xlim = [0, 12] # ang
+    xlim = [0, 8] # ang
     if log: xlim = [-1.0, 1.4] # log[ang]
     nBins = 40
 
-    # start plot
+    EW_z_thresh = [0.3,1.0] # thresholds for EW for vs. redshift plot
+
+    # load: loop over requested redshifts
+    EWs = {}
+
+    for redshift in redshifts:
+        sim.setRedshift(redshift)
+        filepath = _spectra_filepath(sim, projAxis, instrument, lineNames)
+
+        with h5py.File(filepath,'r') as f:
+            count_tot = f.attrs['count_tot']
+            data = f['EW_%s' % line.replace(' ','_')][()]
+
+        # convert to rest-frame
+        data /= (1+sim.redshift)
+
+        EWs[redshift] = data
+
+    # (A) - EW distribution functions (dN/dzdW)
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
     ax.set_xlim(xlim)
-    ax.set_xlabel('Equivalent Width [ %sAng ]' % ('Log ' if log else ''))
-    ax.set_ylabel('PDF')
+    ax.set_xlabel('Rest-frame Equivalent Width [ %s$\AA$ ]' % ('Log ' if log else ''))
+    ax.set_ylabel('d$^2 N$/d$z$d$W$ (%s)' % line)
     ax.set_yscale('log')
 
     # loop over requested redshifts
     for redshift in redshifts:
         # load
         sim.setRedshift(redshift)
-        filepath = _spectra_filepath(sim, projAxis, instrument, lineNames)
+        x = EWs[redshift]
 
-        EWs = {}
-
-        with h5py.File(filepath,'r') as f:
-            for key in f:
-                if 'EW_' in key:
-                    EWs[key] = f[key][()]
+        if log: x = np.log10(x)
 
         # histogram
-        x = EWs['EW_total']
-        if log: x = np.log10(x)
         hh, bin_edges = np.histogram(x, bins=nBins, range=xlim)
+
+        # normalize by dz = total redshift path length = N_sightlines * boxSizeInDeltaRedshift
+        hh = hh.astype('float32') / (count_tot * sim.boxLengthDeltaRedshift)
+
+        # normalize by dW = equivalent width bin sizes [Ang]
+        dW_norm = bin_edges[1:] - bin_edges[:-1] # constant (linear)
+        if log: dW_norm = 10.0**bin_edges[1:] - 10.0**bin_edges[:-1] # variable (log)
+
+        hh /= dW_norm
 
         ax.stairs(hh, edges=bin_edges, lw=lw, label='z = %.1f' % sim.redshift)
 
+    # plot obs data (Matejek+13 Table 3)
+    m13_x = [0.42, 0.94, 1.52, 2.11, 2.70, 4.34]
+    m13_x_lower = [0.05, 0.64, 1.23, 1.82, 2.41, 3.00]
+    m13_x_upper = [0.64, 1.23, 1.82, 2.41, 3.00, 5.68]
+    m13_y = [1.570, 0.594, 0.291, 0.187, 0.083, 0.027]
+    m13_yerr = [0.272, 0.119, 0.080, 0.064, 0.042, 0.011]
+    m13_label = 'Matejek+13 (1.9 < z < 6.3)'
+
+    xerr = np.vstack( (np.array(m13_x) - m13_x_lower,np.array(m13_x_upper) - m13_x) )
+
+    opts = {'color':'#333333', 'ecolor':'#333333', 'alpha':0.9, 'capsize':0.0, 'fmt':'s'}
+    ax.errorbar(m13_x, m13_y, yerr=m13_yerr, xerr=xerr, label=m13_label, **opts)
+
     # finish plot
     ax.legend(loc='best')
-    fig.savefig('EW_histogram_%s%s.pdf' % \
-        ('-'.join([line.replace(' ','_') for line in lineNames]),'_log' if log else ''))
+    fig.savefig('EW_histogram_%s%s.pdf' % (line,'_log' if log else ''))
+    plt.close(fig)
+
+    # (b) - evolution versus redshift above some threshold EW (dN/dz)
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlim([0.0, np.max(redshifts)+1])
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel('d$N$/d$z$')
+    ax.set_yscale('log')
+
+    # todo
+    # also todo: check if we are combining multiple absorbers per spectra for EW calculation
+
+    # finish plot
+    ax.legend(loc='best')
+    fig.savefig('EW_zevo_%s.pdf' % line)
     plt.close(fig)
 
 def n_cloud_distribution(sim, redshifts=[0.5,0.7]):
