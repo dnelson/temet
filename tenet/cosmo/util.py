@@ -610,7 +610,7 @@ def periodicPairwiseDists(pts, sP):
 
     dists = np.sqrt( xDist*xDist + yDist*yDist + zDist*zDist )
 
-    return dists
+    return dists, index1, index2
 
 # --- other ---
 

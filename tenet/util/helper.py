@@ -163,8 +163,8 @@ def running_median(X, Y, nBins=100, binSize=None, binSizeLg=None, skipZeros=Fals
         assert mean
         assert weights.size == Y.size
 
-    minVal = np.nanmin(X)
-    maxVal = np.nanmax(X)
+    minVal = np.nanmin(X[np.isfinite(X)])
+    maxVal = np.nanmax(X[np.isfinite(X)])
     if skipZeros:
         minVal = np.nanmin( X[X != 0.0] )
 
@@ -293,10 +293,10 @@ def running_median_sub(X, Y, S, nBins=100, binSize=None, skipZeros=False, sPercs
     more percentile thresholds is used. """
     minVal = np.nanmin(X)
     if skipZeros:
-        minVal = np.nanmin( X[X != 0.0] )
+        minVal = np.nanmin(X[X != 0.0])
 
     if binSize is not None:
-        nBins = round( (np.nanmax(X)-minVal) / binSize )
+        nBins = round((np.nanmax(X)-minVal) / binSize)
 
     if nBins <= 0: nBins = 1
     bins = np.linspace(minVal,np.nanmax(X), nBins)
@@ -370,14 +370,15 @@ def running_sigmawindow(X, Y, windowSize=None):
 
 def running_histogram(X, nBins=100, binSize=None, normFac=None, skipZeros=False):
     """ Create a adaptive histogram of a (x) point set using some number of bins. """
-    minVal = np.nanmin(X)
+    minVal = np.nanmin(X[np.isfinite(X)])
+    maxVal = np.nanmax(X[np.isfinite(X)])
     if skipZeros:
-        minVal = np.nanmin( X[X != 0.0] )
+        minVal = np.nanmin(X[np.isfinite(X) & (X != 0.0)])
 
     if binSize is not None:
-        nBins = round( (np.nanmax(X)-minVal) / binSize )
+        nBins = round((maxVal-minVal) / binSize)
 
-    bins = np.linspace(minVal,np.nanmax(X), nBins)
+    bins = np.linspace(minVal, maxVal, nBins)
     delta = bins[1]-bins[0]
 
     running_h   = []

@@ -1183,13 +1183,13 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
 def plots():
     """ Driver (exploration 2D histograms, vary over all known quantities as cQuant). """
     sPs = []
-    sPs.append( simParams(run='tng300-1', redshift=0.0) )
+    sPs.append( simParams(run='tng100-1', redshift=0.0) )
 
-    yQuant = 'd_minima' #'mstar30pkpc_mhalo200_ratio' #'ssfr'
-    xQuant = 'mstar_30pkpc'
+    yQuant = 'mstar_r500' #'mstar30pkpc_mhalo200_ratio' #'ssfr'
+    xQuant = 'mgas_r500'
     cenSatSelects = ['cen'] #['cen','sat','all']
 
-    quants = [None, 'mstar30pkpc_mhalo200_ratio'] #quantList(wTr=False, wMasses=True)
+    quants = [None] #[None, 'mstar30pkpc_mhalo200_ratio'] #quantList(wTr=False, wMasses=True)
     clim = None #[10.0,11.0]
     medianLine = True
     minCount = 1

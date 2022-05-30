@@ -1172,11 +1172,11 @@ def makeCohnVsuiteCatalog(redshift=0.0):
         for i in range(mstar.size):
             f.write('%7.3f %7.3f 1.0 1.0 %.1f %d %7.3f\n' % (mstar[i],sfr[i],redshift,sat[i],mhalo[i]))
 
-def splitSingleHDF5IntoChunks():
+def splitSingleHDF5IntoChunks(snap=151):
     """ Split a single-file snapshot/catalog/etc HDF5 into a number of roughly equally sized chunks. """
     from ..util.helper import pSplitRange
-    basePath = path.expanduser("~") + '/sims.other/Millennium-1/output/snapdir_063/'
-    fileName = 'milli_063.hdf5'
+    basePath = path.expanduser("~") + '/sims.other/Simba-L100n1024FP/output/snapdir_%03d/' % snap
+    fileName = 'snap_%03d.hdf5' % snap
     numChunksSave = 16
 
     # load header, dtypes, ndims, and data
@@ -1194,9 +1194,10 @@ def splitSingleHDF5IntoChunks():
             dtypes[gName] = {}
             ndims[gName] = {}
             data[gName] = {}
-            fGroups[gName] = f[gName].keys()
+            fGroups[gName] = list(f[gName].keys())
 
             for field in fGroups[gName]:
+                print(gName,field)
                 dtypes[gName][field] = f[gName][field].dtype
                 ndims[gName][field] = f[gName][field].ndim
                 if ndims[gName][field] > 1:
@@ -1220,8 +1221,12 @@ def splitSingleHDF5IntoChunks():
                 continue
 
             start[gName], stop[gName] = pSplitRange([0,header['NumPart_Total'][ptNum]], numChunksSave, i)
+            if start[gName] == 0 and stop[gName] == 0:
+                # e.g. just a few stars or BHs, these are assigned to the last chunk
+                assert header['NumPart_Total'][ptNum] < numChunksSave
+            else:
+                assert stop[gName] > start[gName]
 
-            assert stop[gName] > start[gName]
             header['NumPart_ThisFile'][ptNum] = stop[gName] - start[gName]
             print(i,gName,start[gName],stop[gName])
 

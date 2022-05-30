@@ -1696,12 +1696,12 @@ def clumpTracerTracksLoad(sP, haloID, clumpID, sbNum=None, posOnly=False):
                                     data['pos_rel'][i,:,2]**2 )
 
         # maximum pairwise distance between clump members
-        data['size_maxseparation'][i] = sP.periodicPairwiseDists(data['pos'][i,:,:]).max()
+        data['size_maxseparation'][i], _, _ = sP.periodicPairwiseDists(data['pos'][i,:,:]).max()
 
         if not posOnly:
             for j, maxTempCold in enumerate(maxTempsCold):
                 w_cold = np.where(data['temp'][i,:] < maxTempsCold[j])
-                data['size_maxsep_cold'][i,j] = sP.periodicPairwiseDists(np.squeeze(data['pos'][i,w_cold,:])).max()
+                data['size_maxsep_cold'][i,j], _, _ = sP.periodicPairwiseDists(np.squeeze(data['pos'][i,w_cold,:])).max()
 
     data['size_halfmassrad'] = np.median(data['rad'], axis=1)
     data['dist_rvir'] = data['dist'] / sP.halo(haloID)['Group_R_Crit200'] # take constant

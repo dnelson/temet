@@ -1539,7 +1539,7 @@ def convertSimbaSnapshot(snap=151):
     from ..util.simParams import simParams
     from ..util.helper import rootPath
 
-    run = 'm50n512' # m100n1024
+    run = 'm100n1024' # 'm50n512'
 
     # derived paths
     basePath = '/virgotng/universe/Illustris/'
@@ -1746,6 +1746,27 @@ def convertSimbaSnapshot(snap=151):
         header['MassTable'][1] = data['PartType1']['Masses'][0]
         del data['PartType1']['Masses']
 
+    # fix any smbhs at exactly the same coordinate (breaks subfind)
+    if 0 and snap >= 112:
+       # find and fix
+        dists, i1, i2 = sP.periodicPairwiseDists(data['PartType5']['Coordinates'])
+
+        w1 = i1[np.where(dists == 0)]
+        w2 = i1[np.where(dists <= 1e-4)]
+
+        assert np.array_equal(w1,w2)
+
+        # take unique subset
+        w1 = np.unique(w1)
+        print('Found [%d] SMBHs at zero distance from some other SMBH.' % len(w1)) 
+
+        if len(w):
+            # randomize positions within the softening length
+            rng = np.random.default_rng(424242)
+            pos_random = rng.uniform(0.0, 0.1, (len(w1),3))
+
+            data['PartType5']['Coordinates'][w1,:] += pos_random
+
     # unit conversions
     for pt in data.keys():
         #if 'Velocities' in data[pt]: #no! already in sqrt(a) units, like TNG
@@ -1817,6 +1838,52 @@ def convertSimbaSnapshot(snap=151):
                 g[key] = data[gName][key]
 
     print('Done.')
+
+def fixSimbaSMBHs(snap=112):
+    from ..util.simParams import simParams
+    sP = simParams("simba100-1", snap=snap)
+
+    # global load
+    ids = sP.bhs('ids')
+    pos = sP.bhs('pos')
+
+    # find and fix
+    dists, i1, i2 = sP.periodicPairwiseDists(pos)
+
+    w2 = i1[np.where(dists == 0)]
+    w1 = i1[np.where(dists <= 1e-4)]
+    
+    #assert np.array_equal(w1,w2)
+
+    # take unique subset
+    w1 = np.unique(w1)
+    print('[snap=%03d] Found [%d] SMBHs at zero distance from some other SMBH.' % (snap,len(w1)))
+
+    # randomize positions within the softening length
+    rng = np.random.default_rng(424242)
+    pos_random = rng.uniform(0.0, 0.01, (len(w1),3))
+
+    pos[w1,:] += pos_random
+
+    # write
+    nfiles = 16
+    path = '/virgotng/universe/Illustris/Simba/L100n1024FP/output/snapdir_%03d/' % snap
+
+    offset = 0
+
+    for i in range(nfiles):
+        filepath = path + 'snap_%03d.%d.hdf5' % (snap,i)
+
+        with h5py.File(filepath,'r+') as f:
+            count = f['Header'].attrs['NumPart_ThisFile'][5]
+
+            f['PartType5']['Coordinates'][:] = pos[offset:offset+count,:]
+
+        print(' ',filepath,offset,count)
+        offset += count
+
+    assert offset == ids.size
+
 
 def testSimba(redshift=0.0):
     """ Compare all snapshot fields (1d histograms) vs TNG to check unit conversions, etc. """
@@ -1925,6 +1992,69 @@ def testSimba(redshift=0.0):
                     ax.legend(loc='best')
                     pdf.savefig()
                     plt.close(fig)
+
+        # finish
+        pdf.close()
+
+def testSimbaCat(redshift=0.0):
+    """ Compare all group cat fields (1d histograms) to check unit conversions, etc. """
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_pdf import PdfPages
+    from ..plot.config import figsize
+    from ..util.simParams import simParams
+
+    # config
+    nBins = 50
+
+    sP1 = simParams(run='tng50-3', redshift=redshift)
+    sP2 = simParams(run='simba50', redshift=redshift)
+
+    for gName in ['Group','Subhalo']:
+        # get list of halo/subhalo properties
+        with h5py.File(sP2.gcPath(sP2.snap,0),'r') as f:
+            fields = list(f[gName].keys())
+
+        # start pdf book
+        pdf = PdfPages('compare_%s_%s_%s_%d_%d.pdf' % (gName,sP1.simName,sP2.simName,sP1.snap,sP2.snap))
+
+        for field in fields:
+            # start plot
+            print(field)
+            if field in ['SubhaloFlag','SubhaloBfldDisk','SubhaloBfldHalo']: continue
+
+            fig = plt.figure(figsize=figsize)
+            ax = fig.add_subplot(111)
+
+            ax.set_xlabel(field + ' [log]')
+            ax.set_ylabel('log N')
+
+            # load and histogram
+            for i, sP in enumerate([sP1,sP2]):
+                if gName == 'Group':
+                    vals = sP.halos(field)
+
+                if gName == 'Subhalo':
+                    vals = sP.subhalos(field)
+
+                num_zero = np.count_nonzero(np.where(vals == 0))
+                num_neg = np.count_nonzero(np.where(vals < 0))
+                num_inf = np.count_nonzero(np.where(~np.isfinite(vals)))
+
+                if num_zero > 0 or num_neg > 0 or num_inf > 0:
+                    print(' %s # zero = %d, negative = %d, inf = %d' % (sP.simName,num_zero,num_neg,num_inf))
+
+                vals = vals[np.isfinite(vals) & (vals > 0)]
+                vals = vals.ravel() # 1D for all multi-D
+
+                if field not in ['GroupCM','GroupPos','SubhaloCM','SubhaloGrNr','SubhaloIDMostbound']:
+                    vals = np.log10(vals)
+
+                ax.hist(vals, bins=nBins, alpha=0.6, density=True, label=sP.simName)
+
+            # finish plot
+            ax.legend(loc='best')
+            pdf.savefig()
+            plt.close(fig)
 
         # finish
         pdf.close()

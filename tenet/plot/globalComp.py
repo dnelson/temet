@@ -1835,7 +1835,7 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
                 yy = logZeroNaN(fN_species*n_species)
 
             label = '%s z=%.1f' % (sP.simName,sP.redshift) if i == 0 else ''
-            ax.plot(xx, yy, '-', lw=3.0, linestyle=linestyles[i], color=c, label=label)
+            ax.plot(xx, yy, lw=3.0, linestyle=linestyles[i], color=c, label=label)
 
         # custom test
         from ..cosmo.hydrogen import calculateCDDF
@@ -1927,7 +1927,7 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
                 xx = xx[:-1] + 0.5*(log_Z_range[1]-log_Z_range[0])/log_Z_nBins
 
                 label = sP.simName+' z=%3.1f' % sP.redshift if i == 0 else ''
-                ax.plot(xx, yy, '-', lw=3.0, linestyle=linestyles[i], color=c, label=label)
+                ax.plot(xx, yy, lw=3.0, linestyle=linestyles[i], color=c, label=label)
 
     # second legend
     sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
@@ -2412,7 +2412,7 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    #sPs.append( simParams(run='tng100-1', redshift=0.0) )
+    sPs.append( simParams(run='tng100-1', redshift=0.0) )
     #sPs.append( simParams(run='tng100-1', redshift=1.0) )
     #sPs.append( simParams(run='tng100-1', redshift=2.0) )
     #sPs.append( simParams(run='tng100-1', redshift=4.0) )
@@ -2433,6 +2433,8 @@ def plots():
 
     #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
     #sPs.append( simParams(run='eagle', redshift=0.0) )
+    sPs.append( simParams(run='simba50', redshift=0.0) )
+    sPs.append( simParams(run='simba100-1', redshift=0.0) )
     #sPs.append( simParams(run='tng-cluster') )
 
     # add runs: TNG_methods
@@ -2467,8 +2469,8 @@ def plots():
     stellarMassHaloMassMultiPanel(sPs, pdf, ylog=True, use30kpc=True, redshifts=[1,2,3,4]) #1,2,3,6
 
     sfrAvgVsRedshift(sPs, pdf)
-    sfrdVsRedshift(sPs, pdf, xlog=True)
-    sfrdVsRedshift(sPs, pdf, xlog=False)
+    #sfrdVsRedshift(sPs, pdf, xlog=True)
+    #sfrdVsRedshift(sPs, pdf, xlog=False)
     blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
@@ -2484,7 +2486,7 @@ def plots():
     massMetallicityGas(sPs, pdf, simRedshift=0.7)
     baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
 
-    if 0:
+    if 1:
         nHIcddf(sPs, pdf) # z=3
         nHIcddf(sPs, pdf, moment=1)
         nOVIcddf(sPs, pdf) # z=0.2

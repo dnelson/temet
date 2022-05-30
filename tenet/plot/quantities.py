@@ -302,8 +302,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         if '_30pkpc' in quantname: selStr = '<30pkpc'
         if '_r500' in quantname: selStr = '<r500'
-        label = 'M$_{\\rm \star}(%s)$ [ log M$_{\\rm sun}$ ]' % selStr
-        if clean: label = 'M$_{\\rm \star}$ [ log M$_{\\rm sun}$ ]'
+        partLabel = '\star' if 'mstar' in quantname else 'gas'
+        label = 'M$_{\\rm %s}(%s)$ [ log M$_{\\rm sun}$ ]' % (partLabel,selStr)
+        if clean: label = 'M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % partLabel
 
     if quantname in ['mhi','mhi_30pkpc','mhi2']:
         # HI (atomic hydrogen) mass, either in 30pkpc or 2rhalfstars apertures (auxcat calculations)
