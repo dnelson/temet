@@ -617,8 +617,14 @@ def periodic_slurm_status(machine='vera',nosave=False):
             load = 0.0
             if nodes[name]['cpu_load'] is not None:
                 load = float(nodes[name]['cpu_load']) / (nodes[name]['cpus']/nHyper)
+
+            if name in [n['name'] for n in nodes_down]:
+                load = 0.0 # if down, we don't get an updated value for this
+
+            # color load
             color = '#59a14f' if load > 90.0 else '#e15759' # green = good (high) usage, red = bad usage
             if load < 1.0 or name in ['vera01','vera02']: color = '#333333' # idle
+            if name in [n['name'] for n in nodes_down]: color = 'red'
             ax.text(xmax+padx*10, j, '%.1f%%' % load, color=color, **textOpts)
 
             # node name
@@ -628,6 +634,8 @@ def periodic_slurm_status(machine='vera',nosave=False):
                 real_name = nodes[name]['cur_job_owner']
                 real_name = real_name[:maxname]+'...' if len(real_name) > maxname else real_name # truncate
                 ax.text(xmax+0.14+padx*10, j, real_name, color='#333333', **textOpts)
+            elif name in [n['name'] for n in nodes_down]:
+                ax.text(xmax+0.14+padx*10, j, "down!", color='#333333', **textOpts)
 
     fig.subplots_adjust(left=0.005, right=0.995, bottom=0.005, top=0.88, wspace=0.05)
 
@@ -696,9 +704,7 @@ def periodic_slurm_status(machine='vera',nosave=False):
             item.set_fontsize(fontsize)
 
     # text
-    timeStr = 'Last Updated'
-    timeStr2 = '%s' % curTime.strftime('%a %d %b')
-    timeStr3 = '%s' % curTime.strftime('%H:%M')
+    timeStr = 'Last Updated: %s' % curTime.strftime('%a %d %b %H:%M')
     nodesStr = 'nodes: [%d] total, of which [%d] are idle, [%d] are allocated, and [%d] are down.' % \
         (len(nodes_main), len(nodes_idle), len(nodes_alloc), len(nodes_down))
     coresStr = 'cores: [%d] total, of which [%d] are allocated, [%d] are idle/unavailable.' % (nCores,nCores_alloc,nCores_idle)
@@ -715,9 +721,7 @@ def periodic_slurm_status(machine='vera',nosave=False):
     title_fs = 48.0 if machine == 'freya' else 56.0
 
     ax.annotate('%s Status' % machine.upper(), [0.99,0.952], xycoords='figure fraction', fontsize=title_fs, ha='right', va='center')
-    ax.annotate(timeStr, [updated_pos, 0.08], xycoords='figure fraction', fontsize=12.0, horizontalalignment='right', verticalalignment='center', color='green')
-    ax.annotate(timeStr2, [updated_pos, 0.055], xycoords='figure fraction', fontsize=12.0, horizontalalignment='right', verticalalignment='center', color='green')
-    ax.annotate(timeStr3, [updated_pos, 0.03], xycoords='figure fraction', fontsize=12.0, horizontalalignment='right', verticalalignment='center', color='green')
+    ax.annotate(timeStr, [0.99, 0.908], xycoords='figure fraction', fontsize=12.0, ha='right', va='center', color='green')
     ax.annotate(nodesStr, [0.006, 0.98], xycoords='figure fraction', fontsize=20.0, horizontalalignment='left', verticalalignment='center')
     ax.annotate(coresStr, [0.006, 0.943], xycoords='figure fraction', fontsize=20.0, horizontalalignment='left', verticalalignment='center')
     ax.annotate(loadStr, [0.006, 0.906], xycoords='figure fraction', fontsize=20.0, horizontalalignment='left', verticalalignment='center')

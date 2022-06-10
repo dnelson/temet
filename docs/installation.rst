@@ -70,7 +70,7 @@ If the above didn't work or gave errors, you may need to go through a manual ins
     cd ~/illustris_release
     git clone git@github.com:illustristng/illustris_python.git
 
-3. Make sure both are set in the ``$PYTHONPATH`` environment variable, and set the ``$PYTHONSTARTUP``.
+3. Make sure both are set in the ``$PYTHONPATH`` environment variable.
 For example, add the following lines to your ``~/.bashrc`` file
 
 .. code-block:: bash
@@ -114,8 +114,8 @@ and install the Roboto font used by default
     mkdir ~/sims.TNG/L75n1820TNG
     mkdir ~/sims.TNG/L75n1820TNG/data.files
     cd ~/sims.TNG/L75n1820TNG/
-    ln -s /virgo/simulations/IllustrisTNG/L75n1820TNG/output .
-    ln -s /virgo/simulations/IllustrisTNG/L75n1820TNG/postprocessing .
+    ln -s /virgotng/universe/IllustrisTNG/L75n1820TNG/output .
+    ln -s /virgotng/universe/IllustrisTNG/L75n1820TNG/postprocessing .
 
 note that the last two lines create symlinks to the actual output directory where the simulation data files 
 (``groupcat_*`` and ``snapdir_*``) reside, as well as to the postprocessing directory (containing ``trees``, etc).

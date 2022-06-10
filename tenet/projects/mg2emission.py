@@ -1,6 +1,6 @@
 """
 TNG50: MgII CGM emission paper.
-(in prep)
+https://arxiv.org/abs/2106.09023
 """
 import numpy as np
 import h5py

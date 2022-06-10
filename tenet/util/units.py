@@ -174,7 +174,7 @@ class units(object):
         # derived constants / cosmology parameters
         self.mag2cgs = np.log10( self.L_sun / (4.0 * np.pi * (10*self.pc_in_cm)**2))
         self.c_ang_per_sec = self.c_cgs / self.ang_in_cm
-        self.f_b = self._sP.omega_b / self._sP.omega_m if self._sP.omega_m != 0.0 else np.nan
+        self.f_b = self._sP.omega_b / self._sP.omega_m if (self._sP.omega_m != 0.0 and self._sP.omega_b is not None) else np.nan
 
         self.Hubble = self.H0_h1_s * self.UnitTime_in_s
         self.rhoBack = 3 * self._sP.omega_m * self.Hubble**2 / (8 * np.pi * self.G)

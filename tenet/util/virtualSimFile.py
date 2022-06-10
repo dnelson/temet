@@ -86,8 +86,8 @@ def createVirtualSimHDF5():
     at least one of every particle type! Note: run in simulation root dir, since we make relative path links. """
     from ..util.simParams import simParams
 
-    sP = simParams(run='eagle')
-    assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
+    sP = simParams(run='simba')
+    assert sP.simName in getcwd() or sP.simNameAlt in getcwd() or sP.simName.replace('-','/') in getcwd() # careful
 
     global_attr_skip = ['Ngroups_ThisFile','Ngroups_Total','Nids_ThisFile','Nids_Total','Nsubgroups_ThisFile','Nsubgroups_Total',
                         'NumFiles','Redshift','Time','Composition_vector_length','Flag_Cooling','Flag_DoublePrecision',
@@ -157,7 +157,10 @@ def createVirtualSimHDF5():
 
             if sP.simName == 'Illustris-1' and mode == 'snaps' and snap in [53,55]:
                 print(' SKIPPING, corrupt...')
-                continue 
+                continue
+            if sP.simName == 'Simba-L50n512' and mode == 'snaps' and snap in [126]:
+                print(' SKIPPING, corrupt...')
+                continue
             
             if mode == 'snaps': header = sP.snapshotHeader()
             if mode == 'groups': header = sP.groupCatHeader()

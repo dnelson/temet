@@ -23,7 +23,7 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None):
     else:
         redshifts = np.array(redshifts)
 
-    nSnaps = 400 # maximum
+    nSnaps = 800 # maximum
 
     sbNum, sbStr1, sbStr2 = subboxVals(sP.subbox)
     if sP.subbox is not None:

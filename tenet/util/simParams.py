@@ -331,11 +331,14 @@ class simParams:
         self.numSnaps = len(glob(p))
 
         # find one snapshot file to load a header
-        p = os.path.join(self.simPath,"snap*/snap_*.hdf5")
+        p = os.path.join(self.simPath,"snap*/snap*.hdf5")
         hdf5files = glob(p)
         if len(hdf5files) == 0:
             p = os.path.join(self.simPath,"snap*.hdf5")
             hdf5files = glob(p)
+        if len(hdf5files) == 0:
+            raise Exception(f'For run [{self.simPath}] found no snapshots!')
+
         hdf5file = hdf5files[0]
 
         with h5py.File(hdf5file, 'r') as hf:
@@ -1487,7 +1490,7 @@ class simParams:
    
     @property
     def boxLengthDeltaRedshift(self):
-        """ The redshift interval dz corresponding to traversing one box size-length. """
+        """ The redshift interval dz corresponding to traversing one box side-length. """
         z_start = self.redshift
         z_vals = np.linspace(z_start, z_start+0.1, 200)
 

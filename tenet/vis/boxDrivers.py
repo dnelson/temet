@@ -942,3 +942,39 @@ def box_slices(curSlice=7, conf=0):
 def box_slices_loop():
     for i in range(10):
         box_slices(curSlice=i)
+
+def fire2_publicdata(fire_run='core_FIRE-2_runs/m12i_res7100/'):
+    """ Test full-box visualization of one of the publicly released FIRE-2 Milky Way runs. """
+    basePath = '/virgotng/mpia/FIRE-2/'
+
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = True
+    labelSim   = False
+    plotHalos  = False
+    method     = 'sphMap'
+    nPixels    = 1200
+
+    partType   = 'gas'
+    partField  = 'coldens_msunkpc2'
+    valMinMax  = [3.2,6.8]
+
+    # note: only high-res gas exists (in the center of the 60 Mpc/h box)
+    zoomFac = 0.1
+
+    # one panel
+    panels = [{}]
+
+    # redshift
+    redshift = 0.0
+
+    sP = simParams(basePath + fire_run, redshift=redshift)
+
+    class plotConfig:
+        plotStyle  = 'open' # open, edged
+        rasterPx   = nPixels
+        colorbars  = True
+        
+        saveFilename = './boxImage_%s_z%0.1f_%s-%s.png' % (sP.simName,sP.redshift,partType,partField)
+    
+    renderBox(panels, plotConfig, locals())

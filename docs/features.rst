@@ -175,6 +175,9 @@ by name. In this case metadata and other important attributes are hardcoded in
 * EAGLE
     * Eagle100, Eagle100-Dark (rewritten versions)
 
+* SIMBA
+    * Simba100, Simba50 (rewritten versions)
+
 * Millennium
     * Millennium-1, Millennium-2 (rewritten versions)
 
