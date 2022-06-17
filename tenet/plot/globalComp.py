@@ -2431,7 +2431,7 @@ def plots():
     #sPs.append( simParams(res=540, run='tng') )  
     #sPs.append( simParams(res=270, run='tng') )
 
-    #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
+    sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
     sPs.append( simParams(run='eagle', redshift=0.0) )
     #sPs.append( simParams(run='simba50', redshift=0.0) )
     sPs.append( simParams(run='simba', redshift=0.0) )
@@ -2469,8 +2469,8 @@ def plots():
     stellarMassHaloMassMultiPanel(sPs, pdf, ylog=True, use30kpc=True, redshifts=[1,2,3,4]) #1,2,3,6
 
     sfrAvgVsRedshift(sPs, pdf)
-    #sfrdVsRedshift(sPs, pdf, xlog=True)
-    #sfrdVsRedshift(sPs, pdf, xlog=False)
+    sfrdVsRedshift(sPs, pdf, xlog=True)
+    sfrdVsRedshift(sPs, pdf, xlog=False)
     blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
@@ -2511,8 +2511,8 @@ def plots():
     HIvsHaloMass(sPs, pdf, simRedshift=zZero)
     galaxyHISizeMass(sPs, pdf, simRedshift=zZero)
 
-    #for sP in sPs:
-    #    plotPhaseSpace2D(sP, xQuant='numdens', yQuant='temp', pdf=pdf) #xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, 
+    for sP in sPs:
+        plotPhaseSpace2D(sP, xQuant='numdens', yQuant='temp', pdf=pdf) #xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, 
 
     # todo: Vmax vs Mstar (tully-fisher) (Torrey Fig 9) (Vog 14b Fig 23) (Schaye Fig 12)
     # todo: Mbaryon vs Mstar (baryonic tully-fisher) (Vog 14b Fig 23)

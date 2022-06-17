@@ -584,7 +584,7 @@ def findHalfLightRadius(rad, vals, frac=0.5, mags=True):
         r1 = lums_cum[w1]
         halfLightRad = (frac*totalLum - r0)/(r1-r0) * (radii[w1]-radii[w0]) + radii[w0]
 
-        assert halfLightRad >= radii[w0] and (halfLightRad-radii[w1]) < 1e-6
+        assert halfLightRad >= radii[w0] and (halfLightRad-radii[w1]) < 1e-4
 
     return halfLightRad
 
@@ -693,14 +693,20 @@ def _process_custom_func(sP,op,ptProperty,gc,subhaloID,particles,rr,i0,i1,wValid
 
         return [q,s]
 
-    # ufunc: 'half radius' of the quantity
+    # ufunc: 'half radius' (enclosing 50%) of the quantity, or 80%, etc
     if op == 'halfrad':
         loc_val = particles[ptProperty][i0:i1][wValid]
         loc_rad = np.sqrt( rr[wValid] )
 
         rhalf = findHalfLightRadius(loc_rad, loc_val, mags=False)
-
         return rhalf
+
+    if op == 'rad80':
+        loc_val = particles[ptProperty][i0:i1][wValid]
+        loc_rad = np.sqrt( rr[wValid] )
+
+        r80 = findHalfLightRadius(loc_rad, loc_val, frac=0.8, mags=False)
+        return r80
 
     # ufunc: '3D concentration' C = 5*log(r80/r20), e.g. Rodriguez-Gomez+2019 Eqn 16
     if op == 'concentration':
@@ -908,7 +914,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
       - **attrs** (dict): metadata.
     """
     ops_basic = ['sum','mean','max']
-    ops_custom = ['ufunc','halfrad','dist256','concentration',
+    ops_custom = ['ufunc','halfrad','rad80','dist256','concentration',
       'grid2d_isophot_shape','grid2d_isophot_area','grid2d_isophot_gini','grid2d_m20']
     assert op in ops_basic + ops_custom
     assert scope in ['subfind','fof','global']
@@ -988,7 +994,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     # global load of all particles of [ptType] in snapshot
     fieldsLoad = []
 
-    if rad is not None or op in ['halfrad','dist256','concentration']:
+    if rad is not None or op in ['halfrad','rad80','dist256','concentration']:
         fieldsLoad.append('pos')
 
     if ptRestrictions is not None:

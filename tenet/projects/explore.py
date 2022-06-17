@@ -5,6 +5,7 @@ import numpy as np
 import h5py
 
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 from scipy.signal import savgol_filter
 
 from ..util import simParams
@@ -527,7 +528,8 @@ def auroraVoyage2050WhitePaper():
 
 def lemIGM():
     """ Create plots for LEM proposal/STM. """
-    redshift = 0.1 # z=0.08 or z=0.035 good
+    #redshift = 0.1 # z=0.08 or z=0.035 good
+    redshift = 0.03
 
     # Q: what can we learn from imaging the lines of the WHIM/IGM?
     # Will not measure continuum (--> cannot constrain density).
@@ -549,15 +551,17 @@ def lemIGM():
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
     drawFOV    = 32 * 60 # arcsec
 
+    sliceFac = 0.15
+
     partType = 'gas'
     #panels = [{'partField':'sb_OVIII', 'valMinMax':[-18,-10]}]
-    #panels = [{'partField':'sb_OVII', 'valMinMax':[-18,-10]}]
-    panels = [{'partField':'sb_CVI', 'valMinMax':[-18,-10]}]
-    panels = [{'partField':'sb_NVII', 'valMinMax':[-18,-10]}]
+    panels = [{'partField':'sb_OVII', 'valMinMax':[-18,-10]}]
+    #panels = [{'partField':'sb_CVI', 'valMinMax':[-18,-10]}]
+    #panels = [{'partField':'sb_NVII', 'valMinMax':[-18,-10]}]
     #panels = [{'partField':'sb_Ne10 12.1375A', 'valMinMax':[-18,-10]}] # also: Fe XVII (neither in elInfo)
 
     class plotConfig:
-        plotStyle  = 'edged' # open, edged
+        plotStyle  = 'open' # open, edged
         rasterPx   = nPixels #if isinstance(nPixels,list) else [nPixels,nPixels]
         colorbars  = True
 
@@ -950,3 +954,41 @@ def xenoSNevo():
     fig.savefig('dens_profiles_vs_time-%s.png' % run)
     plt.close(fig)
     import pdb; pdb.set_trace()
+
+def arjenMasses5kpc():
+    """ Explore Mtot_5kpc vs M*_5kpc. """
+    from tenet.plot.cosmoGeneral import quantMedianVsSecondQuant
+
+    # config
+    redshift = 0.0 #0.8
+    runs = ['tng100-1','eagle','simba','illustris-1']
+
+    yQuants = ['r80_stars','mstar_5pkpc','mgas_5pkpc','mdm_5pkpc','mstar_mtot_ratio_5pkpc','mstar_mtot_ratio_5pkpc_log']
+    xQuant = 'mhalo_200' #'mtot_5pkpc'
+    css = 'cen' #['cen','sat','all']
+
+    scatterColor = None #[None, 'mstar30pkpc_mhalo200_ratio'] #quantList(wTr=False, wMasses=True)
+    clim = None #[10.0,11.0]
+
+    xlim = [11.0, 13.5] #[9.5, 12.0]
+    ylim = None #[8.0, 12.0] # None
+    qRestrictions = [ ['mstar_30pkpc_log',10.5,12.0] ]
+
+    scatterPoints = True
+    drawMedian = True
+    markersize = 20.0
+    maxPointsPerDex = 500
+
+    # plot
+    sPs = [ simParams(run=run, redshift=redshift) for run in runs ]
+
+    pdf = PdfPages('galaxy_%s_z%.1f_x=%s_%s.pdf' % ('-'.join(runs),redshift,xQuant,css))
+
+    for yQuant in yQuants:
+        quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css, 
+                                 qRestrictions=qRestrictions,
+                                 xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                                 scatterPoints=scatterPoints, scatterColor=scatterColor, maxPointsPerDex=maxPointsPerDex, 
+                                 pdf=pdf)
+
+    pdf.close()

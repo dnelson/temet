@@ -297,11 +297,25 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
 
             # --- auxcat ---
 
-            # subhalo stellar mass (<30 pkpc definition, with auxCat) [msun or log msun]
-            if quantName in ['mstar_30pkpc']:
-                acField = 'Subhalo_Mass_30pkpc_Stars'
+            # subhalo stellar mass (<30 pkpc or <5 pkpc definitions, with auxCat) [msun or log msun]
+            if quantName in ['mstar_30pkpc','mstar_5pkpc','mgas_5pkpc','mdm_5pkpc']:
+                if 'mstar_' in quantName: pt = 'Stars'
+                if 'mgas_' in quantName: pt = 'Gas'
+                if 'mdm_' in quantName: pt = 'DM'
+
+                acField = 'Subhalo_Mass_%s_%s' % (quantName.split('_')[1],pt)
                 ac = auxCat(sP, fields=[acField])
                 r[field] = sP.units.codeMassToMsun( ac[acField] )
+
+            # subhalo total mass (in spatial aperture) [msun or log msun]
+            if quantName in ['mtot_5pkpc']:
+                ptTypesLoad = ['Gas','Stars','DM','BH']
+                r[field] = np.zeros(sP.numSubhalos, dtype='float32')
+
+                for pt in ptTypesLoad:
+                    acField = 'Subhalo_Mass_5pkpc_%s' % pt
+                    ac = auxCat(sP, fields=[acField])
+                    r[field] += sP.units.codeMassToMsun( ac[acField] )
 
             # subhalo stellar or gas mass (<r500c definition, with auxCat, fof-scope) [msun or log msun]
             if quantName in ['mstar_r500','mgas_r500']:

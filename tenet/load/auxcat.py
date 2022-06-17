@@ -431,6 +431,15 @@ fieldComputeFunctionMapping = \
      partial(fofRadialSumType,ptProperty='xray_lum_0.5-2.0kev',ptType='gas',rad='Group_R_Crit500'),
 
    # subhalo: masses
+   'Subhalo_Mass_5pkpc_Stars' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=5.0),
+   'Subhalo_Mass_5pkpc_Gas' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad=5.0),
+   'Subhalo_Mass_5pkpc_DM' : \
+     partial(subhaloRadialReduction,ptType='dm',ptProperty='Masses',op='sum',rad=5.0),
+   'Subhalo_Mass_5pkpc_BH' : \
+     partial(subhaloRadialReduction,ptType='bhs',ptProperty='Masses',op='sum',rad=5.0),
+
    'Subhalo_Mass_25pkpc_Stars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=25.0),
    'Subhalo_Mass_30pkpc_Stars' : \
@@ -596,6 +605,10 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='halfrad',rad=None),
    'Subhalo_Gas_Dist256': \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='dist256',scope='fof',cenSatSelect='cen',minStellarMass=9.0,rad=None),
+   'Subhalo_Stars_R50': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='mass',op='halfrad',rad=None),
+   'Subhalo_Stars_R80': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='mass',op='rad80',rad=None),
 
    'Subhalo_XrayBolLum' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad=None),

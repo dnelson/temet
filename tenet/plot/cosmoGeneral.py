@@ -872,6 +872,9 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
                 else:
                     subsets = [qRestrictions] # all at once (one output)
 
+                #qStr = ', '.join(['%g < %s < %g' % (q[1],q[0],q[2]) for q in qRestrictions])
+                #ax.set_title(qStr)
+
             for k, locRestrictions in enumerate(subsets):
 
                 sim_yy = sim_yvals.view()

@@ -146,7 +146,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
                 'mergers_mean_z','mergers_mean_mu'] # mergers_mean_fgas
 
     # generally available (masses)
-    quants_mass = ['mstar1','mstar2','mstar_30pkpc','mstar_r500',
+    quants_mass = ['mstar1','mstar2','mstar_30pkpc','mstar_r500','mstar_5pkpc','mtot_5pkpc',
                    'mgas1','mgas2','mhi_30pkpc','mhi2','mgas_r500','fgas_r500',
                    'mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent','mhalo_vir','halo_numsubs',
                    'mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio']
@@ -293,19 +293,43 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'M$_{\star,%s}$ / $M_{\\rm halo,200crit}$ [ log ]' % distStr
         if clean: label = 'M$_{\star}$ / $M_{\\rm halo}$ [ log ]'
 
-    if quantname in ['mstar_30pkpc','mstar_r500','mgas_r500']:
+    if quantname in ['mstar_30pkpc','mstar_r500','mgas_r500','mstar_5pkpc','mgas_5pkpc','mdm_5pkpc','mtot_5pkpc']:
         # stellar or gas mass in different apertures (auxcat based calculations)
         vals = sP.groupCat(sub=quantname)
 
         minMax = [9.0, 12.0]
         if sP.boxSize < 50000: minMax = [8.0, 11.0]
+        if quantname == 'mstar_5pkpc': minMax = [8.0, 12.0]
+        if quantname == 'mgas_5pkpc': minMax = [7.5, 10.5]
 
         if '_30pkpc' in quantname: selStr = '<30pkpc'
+        if '_5pkpc' in quantname: selStr = '<5pkpc'
         if '_r500' in quantname: selStr = '<r500'
-        partLabel = '\star' if 'mstar' in quantname else 'gas'
-        label = 'M$_{\\rm %s}(%s)$ [ log M$_{\\rm sun}$ ]' % (partLabel,selStr)
-        if clean: label = 'M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % partLabel
 
+        if 'mstar_' in quantname: partLabel = '\star'
+        if 'mgas_' in quantname: partLabel = 'gas'
+        if 'mdm_' in quantname: partLabel = 'DM'
+        if 'mtot_' in quantname: partLabel = 'total'
+
+        label = 'M$_{\\rm %s}$(%s) [ log M$_{\\rm sun}$ ]' % (partLabel,selStr)
+        #if clean: label = 'M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % partLabel
+
+    if quantname in ['mstar_mtot_ratio_5pkpc']:
+        # M*/Mtot (<5 pkpc)
+        mstar = sP.subhalos('mstar_5pkpc')
+        mtot = sP.subhalos('mtot_5pkpc')
+
+        vals = mstar / mtot
+
+        label = 'M$_{\\rm \star}$ / M$_{\\rm total}$ (<5pkpc)'
+
+        if '_log' in quant:
+            minMax = [-2.5, 0.0]
+            label += ' [log]'
+        else:
+            takeLog = False # show linear by default
+            minMax = [0.0, 0.8]
+        
     if quantname in ['mhi','mhi_30pkpc','mhi2']:
         # HI (atomic hydrogen) mass, either in 30pkpc or 2rhalfstars apertures (auxcat calculations)
         vals = sP.groupCat(sub=quantname)
@@ -838,6 +862,19 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if sP.redshift >= 2.0:
             minMax[0] -= 0.4
             minMax[1] -= 0.4
+
+    if quantname == 'r80_stars':
+        # auxcat derived sizes (non-standard)
+        acField = 'Subhalo_Stars_R80'
+        ac = sP.auxCat(acField)
+
+        vals = sP.units.codeLengthToKpc(ac[acField])
+
+        label = 'R$_{\\rm 80,\star}$ [ log pkpc ]'
+        minMax = [0.0, 1.5]
+        if sP.redshift >= 0.5:
+          minMax[0] += 0.6
+          minMax[1] += 0.7
 
     if quantname in ['surfdens1_stars','surfdens2_stars','surfdens1_dm']:
         if '1_' in quant:
