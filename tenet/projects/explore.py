@@ -529,7 +529,7 @@ def auroraVoyage2050WhitePaper():
 def lemIGM():
     """ Create plots for LEM proposal/STM. """
     #redshift = 0.1 # z=0.08 or z=0.035 good
-    redshift = 0.03
+    redshift = 0.07
 
     # Q: what can we learn from imaging the lines of the WHIM/IGM?
     # Will not measure continuum (--> cannot constrain density).
@@ -555,7 +555,8 @@ def lemIGM():
 
     partType = 'gas'
     #panels = [{'partField':'sb_OVIII', 'valMinMax':[-18,-10]}]
-    panels = [{'partField':'sb_OVII', 'valMinMax':[-18,-10]}]
+    #panels = [{'partField':'sb_OVII', 'valMinMax':[-18,-10]}]
+    panels = [{'partField':'O VII', 'valMinMax':[11,16]}]
     #panels = [{'partField':'sb_CVI', 'valMinMax':[-18,-10]}]
     #panels = [{'partField':'sb_NVII', 'valMinMax':[-18,-10]}]
     #panels = [{'partField':'sb_Ne10 12.1375A', 'valMinMax':[-18,-10]}] # also: Fe XVII (neither in elInfo)

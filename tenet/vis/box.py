@@ -3,7 +3,7 @@ Visualizations for whole (cosmological) boxes.
 """
 import numpy as np
 from datetime import datetime
-from os.path import isfile
+from os.path import isfile, isdir
 from copy import deepcopy
 
 from ..vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac, gridBox
@@ -239,6 +239,9 @@ def renderBoxFrames(panels_in, plotConfig, localVars, curTask=0, numTasks=1, ski
 
     if not isinstance(plotConfig.rasterPx,list): plotConfig.rasterPx = [plotConfig.rasterPx,plotConfig.rasterPx]
 
+    if not isdir(plotConfig.savePath):
+        plotConfig.savePath = savePathDefault
+
     # finalize panels list (do not modify below)
     for p in panels:
         # add all local variables to each (assumed to be common for all panels)
@@ -275,6 +278,7 @@ def renderBoxFrames(panels_in, plotConfig, localVars, curTask=0, numTasks=1, ski
     # determine frame sequence
     snapNumLists = multiRunMatchedSnapList(panels, plotConfig.matchUse, maxNum=plotConfig.maxNSnaps, 
                                            minRedshift=plotConfig.minZ, maxRedshift=plotConfig.maxZ)
+
     numFramesTot = snapNumLists[0].size
 
     # optionally parallelize over multiple tasks

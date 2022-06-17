@@ -619,6 +619,21 @@ def snapshotSubset(sP, partType, fields,
             hsml = snapshotSubset(sP, partType, 'SubfindHsml', **kwargs)
             r[field] = (4.0/3.0) * np.pi * hsml**3.0
 
+        # baryon fraction (gas cell density / local dm density), normalized to cosmic baryon fraction [linear]
+        if field in ["f_b","baryon_frac"]:
+            if snapHasField(sP, partType, 'SubfindDMDensity'):
+                SubfindDMDensity = snapshotSubset(sP, partType, 'SubfindDMDensity', **kwargs)
+            else:
+                # derive if not stored (global load)
+                from tenet.util.treeSearch import calcHsml
+                pt_pos = snapshotSubset(sP, partType, 'pos')
+                dm_pos = snapshotSubset(sP, 'dm', 'pos')
+                SubfindHsml = calcHsml(dm_pos, sP.boxSize, posSearch=pt_pos, nNGB=64, treePrec=dm_pos.dtype)
+                SubfindDMDensity = 64 * sP.dmParticleMass / (4/3*np.pi*SubfindHsml**3) # code mass / code volume
+
+            dens = snapshotSubset(sP, partType, 'Density')
+            r[field] = (dens / SubfindDMDensity) / sP.units.f_b # linear unitless
+
         # metallicity in linear(solar) units
         if field in ["metal_solar","z_solar"]:
             metal = snapshotSubset(sP, partType, 'metal', **kwargs) # metal mass / total mass ratio
@@ -1744,6 +1759,13 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
         serial = (mp.current_process().name != 'MainProcess')
         if serial and getuser() != 'wwwrun':
             print('NOTE: Detected parallel-load request inside daemonic child, making serial.')
+
+    if not serial:
+        # detect if we are requesting any field which, by default, spawns a highly threaded computation
+        for field in fields:
+            if field in ['baryon_frac','f_b']:
+                print('NOTE: Detected parallel-load request for threaded calculation, making serial.')
+                serial = False
 
     if serial:
         return snapshotSubset(sP, partType, fields, inds=inds, indRange=indRange, haloID=haloID, 

@@ -752,6 +752,11 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['label']  = 'Mean %s Volume Density [log cm$^{-3}$]' % ptStr
         config['ctName'] = 'jet'
 
+    if partField in ['f_b','baryon_frac']:
+        grid = grid
+        config['label'] = 'f$_{\\rm b}$ / f$_{\\rm b,cosmic}$'
+        config['ctName'] = 'seismic' #'RdGy_r' # diverging, should center at one
+
     # total sum fields (also of sub-components e.g. "O VI mass")
     if partField == 'mass' or ' mass' in partField:
         grid  = sP.units.codeMassToMsun(grid)

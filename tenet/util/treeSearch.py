@@ -684,7 +684,7 @@ def buildFullTree(pos, boxSizeSim, treePrec=None, verbose=False):
     # tree allocation and construction (iterate in case we need to re-allocate for larger number of nodes)
     for num_iter in range(10):
         # allocate
-        MaxNodes = np.int( (num_iter+0.7)*NumPart ) + 1
+        MaxNodes = np.int( (num_iter**2+0.7)*NumPart ) + 1
         if MaxNodes < 1000: MaxNodes = 1000
 
         assert MaxNodes < np.iinfo(intType).max, 'Too many points to make tree with int32 dtype.'
@@ -715,7 +715,7 @@ def buildFullTree(pos, boxSizeSim, treePrec=None, verbose=False):
     return NextNode, length, center, sibling, nextnode
 
 def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, nDims=3, weighted_num=False, 
-             treePrec='single', tree=None, nThreads=20, nearest=False, verbose=False):
+             treePrec='single', tree=None, nThreads=32, nearest=False, verbose=False):
     """ Calculate a characteristic 'size' ('smoothing length') given a set of input particle coordinates, 
     where the size is defined as the radius of the sphere (or circle in 2D) enclosing the nNGB nearest 
     neighbors. If posSearch==None, then pos defines both the neighbor and search point sets, otherwise 
@@ -729,7 +729,7 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
       nNGB (int): number of nearest neighbors to search for in order to define HSML.
       nNGBDev (int): allowed deviation (+/-) from the requested number of neighbors.
       nDims (int): number of dimensions of simulation (1,2,3), to set SPH kernel coefficients.
-      weighted_num (bool): if True, return SPH kernel weighted number of neighbors, instead of real number.
+      weighted_num (bool): if True, use the SPH kernel weighted number of neighbors, instead of real number.
       treePrec (str): construct the tree using 'single' or 'double' precision for coordinates.
       tree (list or None): if not None, should be a list of all the needed tree arrays (pre-computed), 
         i.e the exact return of :py:func`~util.treeSearch.buildFullTree`.
