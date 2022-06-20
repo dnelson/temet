@@ -624,14 +624,14 @@ def snapshotSubset(sP, partType, fields,
             if snapHasField(sP, partType, 'SubfindDMDensity'):
                 SubfindDMDensity = snapshotSubset(sP, partType, 'SubfindDMDensity', **kwargs)
             else:
-                # derive if not stored (global load)
+                # derive if not stored
                 from tenet.util.treeSearch import calcHsml
-                pt_pos = snapshotSubset(sP, partType, 'pos')
-                dm_pos = snapshotSubset(sP, 'dm', 'pos')
+                pt_pos = snapshotSubset(sP, partType, 'pos', **kwargs)
+                dm_pos = snapshotSubset(sP, 'dm', 'pos') # global load and tree
                 SubfindHsml = calcHsml(dm_pos, sP.boxSize, posSearch=pt_pos, nNGB=64, treePrec=dm_pos.dtype)
                 SubfindDMDensity = 64 * sP.dmParticleMass / (4/3*np.pi*SubfindHsml**3) # code mass / code volume
 
-            dens = snapshotSubset(sP, partType, 'Density')
+            dens = snapshotSubset(sP, partType, 'Density', **kwargs)
             r[field] = (dens / SubfindDMDensity) / sP.units.f_b # linear unitless
 
         # metallicity in linear(solar) units
