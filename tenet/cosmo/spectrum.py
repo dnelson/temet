@@ -17,44 +17,174 @@ from ..util.helper import logZeroNaN, pSplitRange
 from ..util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
                               trace_ray_through_voronoi_mesh_with_connectivity, rayTrace
 
-# line data (mostly AtomDB)
-# f [dimensionless]
-# gamma [1/s], where tau=1/gamma is the ~lifetime (is the sum of A)
-# wave0 [ang]
-lines = {'LyA'        : {'f':0.4164,   'gamma':4.49e8,  'wave0':1215.670,  'ion':'H I'},
-         'HI 1024'    : {'f':0.0791,   'gamma':1.897e8, 'wave0':1025.7223, 'ion':'H I'},
-         'HI 973'     : {'f':0.0290,   'gamma':1.28e7,  'wave0':972.5367,  'ion':'H I'},
-         'HI 950'     : {'f':1.395e-2, 'gamma':4.12e6,  'wave0':949.7430,  'ion':'H I'},
-         'HI 938'     : {'f':7.803e-3, 'gamma':2.45e6,  'wave0':937.8034,  'ion':'H I'},
-         'HI 931'     : {'f':4.814e-3, 'gamma':7.56e5,  'wave0':930.7482,  'ion':'H I'},
-         'HI 926'     : {'f':3.183e-3, 'gamma':3.87e5,  'wave0':926.22564, 'ion':'H I'},
-         'HI 923'     : {'f':2.216e-3, 'gamma':2.14e5,  'wave0':923.1503,  'ion':'H I'},
-         'HI 921'     : {'f':1.605e-3, 'gamma':1.26e5,  'wave0':920.9630,  'ion':'H I'},
+# line data (e.g. AtomDB), name is ion plus wavelength in ang rounded down
+# (and Verner+96 https://www.pa.uky.edu/~verner/lines.html)
+#   note: first entries of each transition represent combined multiplets
+# (and Morton+03 https://iopscience.iop.org/article/10.1086/377639/fulltext/)
+# f - oscillator strength [dimensionless]
+# gamma - damping constant [1/s], where tau=1/gamma is the ~lifetime (is the sum of A)
+# wave0 - transition wavelength [ang]
+lines = {'LyA'        : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion':'H I'},
+         'HI 1025'    : {'f':0.0791,   'gamma':1.67e8,  'wave0':1025.7223, 'ion':'H I'},
+         'HI 972'     : {'f':0.0290,   'gamma':6.82e7,  'wave0':972.5367,  'ion':'H I'},
+         'HI 949'     : {'f':1.395e-2, 'gamma':3.43e7,  'wave0':949.7430,  'ion':'H I'},
+         'HI 937'     : {'f':7.803e-3, 'gamma':1.97e7,  'wave0':937.8034,  'ion':'H I'},
+         'HI 930'     : {'f':4.814e-3, 'gamma':1.24e7,  'wave0':930.7482,  'ion':'H I'},
+         'HI 926'     : {'f':3.183e-3, 'gamma':8.27e6,  'wave0':926.22564, 'ion':'H I'},
+         'HI 923'     : {'f':2.216e-3, 'gamma':5.79e6,  'wave0':923.1503,  'ion':'H I'},
+         'HI 920'     : {'f':1.605e-3, 'gamma':4.19e6,  'wave0':920.9630,  'ion':'H I'},
          'HI 919'     : {'f':1.20e-3,  'gamma':7.83e4,  'wave0':919.3514,  'ion':'H I'},
          'HI 918'     : {'f':9.21e-4,  'gamma':5.06e4,  'wave0':918.1293,  'ion':'H I'},
          'HI 917'     : {'f':7.226e-4, 'gamma':3.39e4,  'wave0':917.1805,  'ion':'H I'},
-         'HI 916a'    : {'f':5.77e-4,  'gamma':2.34e4,  'wave0':916.4291,  'ion':'H I'},
-         'HI 916b'    : {'f':4.69e-4,  'gamma':1.66e4,  'wave0':915.8238,  'ion':'H I'},
+         'HI 916'     : {'f':5.77e-4,  'gamma':2.34e4,  'wave0':916.4291,  'ion':'H I'},
+         'HI 915'     : {'f':4.69e-4,  'gamma':1.66e4,  'wave0':915.8238,  'ion':'H I'},
+         'CI 1561'    : {'f':7.14e-2,  'gamma':1.17e8,  'wave0':1561.054,  'ion':'C I'}, # 6 subcomponents combined
+        #'CI 1560a'   : {'f':7.14e-2,  'gamma':6.52e7,  'wave0':1560.309,  'ion':'C I'}, # test: 'a' of above
+        #'CI 1560b'   : {'f':5.36e-2,  'gamma':8.81e7,  'wave0':1560.682,  'ion':'C I'}, # test: 'b' of above
+        #'CI 1560c'   : {'f':1.79e-2,  'gamma':4.90e7,  'wave0':1560.709,  'ion':'C I'}, # test: 'c' of above
+         'CI 1329'    : {'f':6.09e-2,  'gamma':2.30e8,  'wave0':1329.339,  'ion':'C I'}, # 6 subcomponents combined
+         'CI 1280'    : {'f':2.12e-2,  'gamma':8.63e7,  'wave0':1280.356,  'ion':'C I'}, # 6 subcomponents combined
+         'CI 1277'    : {'f':1.07e-1,  'gamma':2.62e8,  'wave0':1277.463,  'ion':'C I'}, # 6 subcomponents combined
+         'CI 1261'    : {'f':3.87e-2,  'gamma':1.62e8,  'wave0':1261.268,  'ion':'C I'}, # 6 subcomponents combined
+         'CI 1194'    : {'f':1.05e-2 , 'gamma':4.91e7,  'wave0':1194.131,  'ion':'C I'}, # 6 subcomponents combined
+         'CI 1193'    : {'f':4.75e-2,  'gamma':1.34e8,  'wave0':1193.176,  'ion':'C I'}, # 6 subcomponents combined
+         'CI 1189'    : {'f':1.29e-2,  'gamma':6.08e7,  'wave0':1189.345,  'ion':'C I'}, # 6 subcomponents combined
+         'CII 1334'   : {'f':1.27e-1,  'gamma':2.38e8,  'wave0':1334.532,  'ion':'C II'},
+         'CII 1335a'  : {'f':1.27e-2,  'gamma':4.75e7,  'wave0':1335.663,  'ion':'C II'},
+         'CII 1335b'  : {'f':1.14e-1,  'gamma':2.84e8,  'wave0':1335.708,  'ion':'C II'},
+         'CII 1037'   : {'f':1.23e-1,  'gamma':1.53e9,  'wave0':1037.018,  'ion':'C II'},
+         'CII 1036'   : {'f':1.22e-1,  'gamma':7.58e8,  'wave0':1036.337,  'ion':'C II'},
+         'CIII 977'   : {'f':7.67e-1,  'gamma':1.79e9,  'wave0':977.0201,  'ion':'C III'},
          'CIV 1548'   : {'f':1.908e-1, 'gamma':2.654e8, 'wave0':1548.195,  'ion':'C IV'},
-         'CIV 1551'   : {'f':9.522e-2, 'gamma':2.641e8, 'wave0':1550.770,  'ion':'C IV'},
-         'OVI 1038'   : {'f':6.580e-2, 'gamma':4.076e8, 'wave0':1037.6167, 'ion':'O VI'},
-         'OVI 1032'   : {'f':1.325e-1, 'gamma':4.149e8, 'wave0':1031.9261, 'ion':'O VI'},
+         'CIV 1550'   : {'f':9.522e-2, 'gamma':2.641e8, 'wave0':1550.770,  'ion':'C IV'},
+         'CaII 3969'  : {'f':0.322,    'gamma':1.36e8,  'wave0':3969.591,  'ion':'Ca II'},
+         'CaII 3934'  : {'f':0.650,    'gamma':1.40e8,  'wave0':3934.777,  'ion':'Ca II'},
+         'MgI 2852'   : {'f':1.73,     'gamma':4.73e8,  'wave0':2852.9642, 'ion':'Mg I'},
+         'MgI 2026'   : {'f':0.122,    'gamma':6.61e7,  'wave0':2026.4768, 'ion':'Mg I'},
+         'MgI 1827'   : {'f':0.0283,   'gamma':1.88e7,  'wave0':1827.9351, 'ion':'Mg I'},
+         'MgI 1747'   : {'f':0.0102,   'gamma':7.42e6,  'wave0':1747.7937, 'ion':'Mg I'},
          'MgII 1239'  : {'f':2.675e-4, 'gamma':5.802e5, 'wave0':1239.9253, 'ion':'Mg II'},
          'MgII 1240'  : {'f':1.337e-4, 'gamma':5.796e5, 'wave0':1240.3947, 'ion':'Mg II'},
          'MgII 2796'  : {'f':0.5909,   'gamma':2.52e8,  'wave0':2796.3543, 'ion':'Mg II'},
          'MgII 2803'  : {'f':0.2958,   'gamma':2.51e8,  'wave0':2803.5315, 'ion':'Mg II'},
-         'AlII 1671'  : {'f':1.880,    'gamma':1.46e9,  'wave0':1670.787,  'ion':'Al II'},
-         'AlIII 1855' : {'f':0.539,    'gamma':2.00e8,  'wave0':1854.716,  'ion':'Al III'},
-         'AlIII 1863' : {'f':0.268,    'gamma':2.00e8,  'wave0':1862.790,  'ion':'Al III'},
-         'SiII 1193'  : {'f':0.575,    'gamma':2.69e9,  'wave0':1193.290,  'ion':'Si II'},
-         'SiII 1260'  : {'f':1.82e-2,  'gamma':5.10e7,  'wave0':1259.519,  'ion':'Si II'},
-         'SiII 1254'  : {'f':1.21e-2,  'gamma':5.12e7,  'wave0':1253.811,  'ion':'Si II'},
-         'SiIV 1394'  : {'f':0.528,    'gamma':9.200e8, 'wave0':1393.755,  'ion':'Si IV'},
-         'SiIV 1403'  : {'f':0.262,    'gamma':9.030e8, 'wave0':1402.770,  'ion':'Si IV'},
-         'FeII 2587'  : {'f':6.457e-2, 'gamma':2.720e8, 'wave0':2586.650,  'ion':'Fe II'},
-         'FeII 2600'  : {'f':2.239e-1, 'gamma':2.700e8, 'wave0':2600.1729, 'ion':'Fe II'},
-         'FeII 2374'  : {'f':2.818e-2, 'gamma':2.990e8, 'wave0':2374.4612, 'ion':'Fe II'},
-         'FeII 2383'  : {'f':3.006e-1, 'gamma':3.100e8, 'wave0':2382.765,  'ion':'Fe II'}}
+         'MnII 2606'  : {'f':1.98e-1,  'gamma':2.72e8,  'wave0':2605.684,  'ion':'Mn II'},
+         'MnII 2593'  : {'f':2.80e-1,  'gamma':2.77e8,  'wave0':2593.724,  'ion':'Mn II'},
+         'MnII 2576'  : {'f':3.61e-1,  'gamma':2.82e8,  'wave0':2576.105,  'ion':'Mn II'},
+         'MnII 1201'  : {'f':1.21e-1,  'gamma':7.85e8,  'wave0':1201.118,  'ion':'Mn II'},
+         'MnII 1199'  : {'f':1.69e-1,  'gamma':7.85e8,  'wave0':1199.391,  'ion':'Mn II'},
+         'MnII 1197'  : {'f':2.17e-1,  'gamma':7.84e8,  'wave0':1197.184,  'ion':'Mn II'},
+         'NI 1199'    : {'f':3.25e-1,  'gamma':5.02e8,  'wave0':1199.9674, 'ion':'N I'}, # 3 subcomponents combined
+         'NI 1134'    : {'f':2.31e-2,  'gamma':3.99e7,  'wave0':1134.6559, 'ion':'N I'}, # 3 subcomponents combined
+         'NV 1238'    : {'f':1.56e-1,  'gamma':3.40e8,  'wave0':1238.821,  'ion':'N V'},
+         'NV 1242'    : {'f':7.80e-2,  'gamma':3.37e8,  'wave0':1242.804,  'ion':'N V'},
+         'NaI 5897'   : {'f':3.35e-1,  'gamma':6.42e7,  'wave0':5897.5575, 'ion':'Na I'},
+         'NaI 5891'   : {'f':6.70e-1,  'gamma':6.44e7,  'wave0':5891.5826, 'ion':'Na I'},
+         'NaI 3303'   : {'f':1.35e-2,  'gamma':2.75e6,  'wave0':3303.523,  'ion':'Na I'}, # 2 subcomponents combined
+         'NiII 1754'  : {'f':1.59e-2,  'gamma':2.30e7,  'wave0':1754.8129  'ion':'Ni II'},
+         'NiII 1751'  : {'f':2.77e-2,  'gamma':4.52e7,  'wave0':1751.9157, 'ion':'Ni II'},
+         'NiII 1709'  : {'f':3.24e-2,  'gamma':7.39e7,  'wave0':1709.6042, 'ion':'Ni II'},
+         'NiII 1788'  : {'f':2.52e-2,  'gamma':3.50e7,  'wave0':1788.4905, 'ion':'Ni II'},
+         'NiII 1741'  : {'f':4.27e-2,  'gamma':9.39e7,  'wave0':1741.5531, 'ion':'Ni II'},
+         'NiII 1454'  : {'f':3.23e-2,  'gamma':1.02e8,  'wave0':1454.842,  'ion':'Ni II'},
+         'NiII 1393'  : {'f':1.01e-2,  'gamma':3.47e7,  'wave0':1393.324,  'ion':'Ni II'},
+         'OI 1306'    : {'f':5.02e-2,  'gamma':6.54e7,  'wave0':1306.0317, 'ion':'O I'},
+         'OI 1304'    : {'f':5.03e-2,  'gamma':1.97e8,  'wave0':1304.8607, 'ion':'O I'},
+         'OI 1302'    : {'f':5.04e-2,  'gamma':3.30e8,  'wave0':1302.1715, 'ion':'O I'},
+         'OI 1039'    : {'f':9.04e-3,  'gamma':9.31e7,  'wave0':1039.2304, 'ion':'O I'}, # 3 subcomponents combined
+         'OI 1025'    : {'f':1.88e-2,  'gamma':7.14e7,  'wave0':1025.762,  'ion':'O I'}, # 6 subcomponents combined
+         'OVI 1037'   : {'f':6.580e-2, 'gamma':4.076e8, 'wave0':1037.6167, 'ion':'O VI'},
+         'OVI 1031'   : {'f':1.325e-1, 'gamma':4.149e8, 'wave0':1031.9261, 'ion':'O VI'},
+         'OVII 21'    : {'f':6.96e-1,  'gamma':3.32e12, 'wave0':21.6019,   'ion':'O VII'}, # x-ray
+         'OVII 18'    : {'f':1.46e-1,  'gamma':9.35e11, 'wave0':18.6288,   'ion':'O VII'}, # x-ray
+         'OVII 17a'   : {'f':5.52e-2,  'gamma':3.89e11, 'wave0':17.7680,   'ion':'O VII'}, # x-ray
+         'OVIII 18a'  : {'f':1.39e-1,  'gamma':2.58e12, 'wave0':18.9725,   'ion':'O VIII'}, # x-ray
+         'OVIII 18b'  : {'f':2.77e-1,  'gamma':2.57e12, 'wave0':18.9671,   'ion':'O VIII'}, # x-ray
+         'AlI 3962'   : {'f':1.23e-1,  'gamma':1.04e8,  'wave0':3962.6410, 'ion':'Al I'},
+         'AlI 3945'   : {'f':1.23e-1,  'gamma':5.27e7,  'wave0':3945.1224, 'ion':'Al I'},
+         'AlI 3093a'  : {'f':1.45e-1,  'gamma':6.74e7,  'wave0':3093.6062, 'ion':'Al I'},
+         'AlI 3093b'  : {'f':1.61e-2,  'gamma':1.12e7,  'wave0':3093.7347, 'ion':'Al I'},
+         'AlI 3083'   : {'f':1.62e-1,  'gamma':5.68e7,  'wave0':3083.0462, 'ion':'Al I'},
+         'AlI 2661'   : {'f':1.46e-2,  'gamma':2.75e7,  'wave0':2661.1778, 'ion':'Al I'},
+         'AlI 2653'   : {'f':1.47e-2,  'gamma':1.39e7,  'wave0':2653.2654, 'ion':'Al I'},
+         'AlII 1670'  : {'f':1.880,    'gamma':1.46e9,  'wave0':1670.787,  'ion':'Al II'},
+         'AlIII 1854' : {'f':0.539,    'gamma':2.00e8,  'wave0':1854.716,  'ion':'Al III'},
+         'AlIII 1862' : {'f':0.268,    'gamma':2.00e8,  'wave0':1862.790,  'ion':'Al III'},
+         'ArI 1066'   : {'f':6.65e-2,  'gamma':1.30e8,  'wave0':1066.6599, 'ion':'Ar I'},
+         'ArI 1048'   : {'f':2.44e-1,  'gamma':4.94e8,  'wave0':1048.2199, 'ion':'Ar I'},
+         'CrII 2065'  : {'f':5.12e-2,  'gamma':1.20e8,  'wave0':2065.5041, 'ion':'Cr II'},
+         'CrII 2061'  : {'f':7.59e-2,  'gamma':1.19e8,  'wave0':2061.5769, 'ion':'Cr II'},
+         'CrII 2055'  : {'f':1.03e-1,  'gamma':1.22e8,  'wave0':2056.2569, 'ion':'Cr II'},
+         'SiI 2515'   : {'f':2.36e-1,  'gamma':8.29e7,  'wave0':2515.0725, 'ion':'Si I'}, # 2 of 6 subcomponents
+         'SiI 2516'   : {'f':1.77e-1,  'gamma':1.86e8,  'wave0':2516.8696, 'ion':'Si I'}, # (see above)
+         'SiI 1845'   : {'f':2.71e-1,  'gamma':1.77e8,  'wave0':1845.5202, 'ion':'Si I'}, # 3 of 6 subcomponents
+         'SiI 1847'   : {'f':2.03e-1,  'gamma':2.38e8,  'wave0':1847.4735, 'ion':'Si I'}, # (see above)
+         'SiI 1850'   : {'f':2.27e-1,  'gamma':3.16e8,  'wave0':1850.6720, 'ion':'Si I'}, # (see above)
+         'SiI 1693'   : {'f':1.56e-1,  'gamma':1.21e8,  'wave0':1693.2935, 'ion':'Si I'}, # 3 of 6 subcomponents
+         'SiI 1696'   : {'f':1.17e-1,  'gamma':1.63e8,  'wave0':1696.207,  'ion':'Si I'}, # (see above)
+         'SiI 1697'   : {'f':1.31e-1,  'gamma':2.16e8,  'wave0':1697.941,  'ion':'Si I'}, # (see above)
+         'SiII 1533'  : {'f':1.31e-1,  'gamma':7.43e8,  'wave0':1533.431,  'ion':'Si II'},
+         'SiII 1526'  : {'f':1.32e-1,  'gamma':3.78e8,  'wave0':1526.707,  'ion':'Si II'},
+         'SiII 1309'  : {'f':8.67e-2,  'gamma':6.75e8,  'wave0':1309.276,  'ion':'Si II'},
+         'SiII 1304'  : {'f':8.71e-2,  'gamma':3.41e8,  'wave0':1304.370,  'ion':'Si II'},
+         'SiII 1265'  : {'f':0.118,    'gamma':4.92e8,  'wave0':1265.002,  'ion':'Si II'},
+         'SiII 1264'  : {'f':1.06,     'gamma':2.95e9,  'wave0':1264.738,  'ion':'Si II'},
+         'SiII 1260'  : {'f':1.18,     'gamma':2.48e9,  'wave0':1260.422,  'ion':'Si II'},
+         'SiII 1197'  : {'f':0.146,    'gamma':1.36e9,  'wave0':1197.394,  'ion':'Si II'},
+         'SiII 1194'  : {'f':0.729,    'gamma':3.41e9,  'wave0':1194.500,  'ion':'Si II'},
+         'SiII 1193'  : {'f':0.584,    'gamma':2.74e9,  'wave0':1193.290,  'ion':'Si II'},
+         'SiII 1190'  : {'f':0.293,    'gamma':6.90e8,  'wave0':1190.416,  'ion':'Si II'},
+         'SiIII 1206' : {'f':1.68,     'gamma':2.58e9,  'wave0':1206.500,  'ion':'Si III'},
+         'SiIV 1393'  : {'f':0.528,    'gamma':9.200e8, 'wave0':1393.755,  'ion':'Si IV'},
+         'SiIV 1402'  : {'f':0.262,    'gamma':9.030e8, 'wave0':1402.770,  'ion':'Si IV'},
+         'SII 1259'   : {'f':1.55e-2,  'gamma':4.34e7,  'wave0':1259.519,  'ion':'S II'},
+         'SII 1253'   : {'f':1.03e-2,  'gamma':4.37e7,  'wave0':1253.811,  'ion':'S II'},
+         'SII 1250'   : {'f':5.20e-3,  'gamma':4.44e7,  'wave0':1250.584,  'ion':'S II'},
+         # only some TiII with f>0.1 (lots more missing)
+         'TiII 3383'  : {'f':3.58e-1,  'gamma':1.39e8,  'wave0':3383.7588, 'ion':'Ti II'}, # 4 of 9 subcomponents
+         'TiII 3372'  : {'f':3.21e-1,  'gamma':1.41e8,  'wave0':3372.7926, 'ion':'Ti II'}, # (see above)
+         'TiII 3361'  : {'f':3.35e-1,  'gamma':1.58e8,  'wave0':3361.2120, 'ion':'Ti II'}, # (see above)
+         'TiII 3349'  : {'f':3.39e-1,  'gamma':1.79e8,  'wave0':3349.4022, 'ion':'Ti II'}, # (see above)
+         'TiII 3088'  : {'f':1.72e-1,  'gamma':1.50e8,  'wave0':3088.0257, 'ion':'Ti II'}, # 4 or 9 subcomponents
+         'TiII 3078'  : {'f':1.43e-1,  'gamma':1.34e-8, 'wave0':3078.6441, 'ion':'Ti II'}, # (see above)
+         'TiII 3075'  : {'f':1.27e-1,  'gamma':1.34e8,  'wave0':3075.2239, 'ion':'Ti II'}, # (see above)
+         'TiII 3072'  : {'f':1.21e-1,  'gamma':1.71e8,  'wave0':3072.9704, 'ion':'Ti II'}, # (see above)
+         'TiII 1910'  : {'f':1.04e-1,  'gamma':2.80e8,  'wave0':1910.6123, 'ion':'Ti II'}, # 1 of several unknown subcomponents
+         'TiIII 1298' : {'f':1.06e-1,  'gamma':5.90e8,  'wave0':1298.497,  'ion':'Ti III'}, # 6 subcomponents combined
+         'TiIII 1288' : {'f':6.68e-2,  'gamma':2.68e8,  'wave0':1288.593,  'ion':'Ti III'}, # 7 subcomponents combined
+         # only some FeI with f>0.1 (lots more missing)
+         'FeI 3026'   : {'f':1.45e-1,  'gamma':3.51e7,  'wave0':3026.7235, 'ion':'Fe I'},
+         'FeI 3021'   : {'f':1.04e-1,  'gamma':7.58e7,  'wave0':3021.5187, 'ion':'Fe I'},
+         'FeI 2744'   : {'f':1.20e-1,  'gamma':3.55e7,  'wave0':2744.7890, 'ion':'Fe I'},
+         'FeI 2719'   : {'f':1.19e-1,  'gamma':1.38e8,  'wave0':2719.8329, 'ion':'Fe I'},
+         'FeI 2541'   : {'f':1.49e-1,  'gamma':9.22e7,  'wave0':2541.7352, 'ion':'Fe I'},
+         'FeI 2536'   : {'f':2.82e-1,  'gamma':9.74e7,  'wave0':2536.3689, 'ion':'Fe I'},
+         'FeI 2528'   : {'f':1.80e-1,  'gamma':1.88e8,  'wave0':2528.1946, 'ion':'Fe I'},
+         'FeI 2525'   : {'f':1.08e-1,  'gamma':3.39e8,  'wave0':2525.0517, 'ion':'Fe I'},
+         'FeI 2523'   : {'f':2.79e-1,  'gamma':2.92e8,  'wave0':2523.6083, 'ion':'Fe I'},
+         'FeI 2518'   : {'f':1.07e-1,  'gamma':1.88e8,  'wave0':2518.8595, 'ion':'Fe I'},
+         'FeI 2490'   : {'f':6.46e-1,  'gamma':2.31e8,  'wave0':2490.5036, 'ion':'Fe I'},
+         'FeI 2167'   : {'f':1.50e-1,  'gamma':2.74e8,  'wave0':2167.4534, 'ion':'Fe I'},
+         # only some FeII with f>0.1 (lots more missing)
+         'FeII 2632'  : {'f':1.25e-1,  'gamma':9.01e7,  'wave0':2632.1081, 'ion':'Fe II'},
+         'FeII 2631'  : {'f':1.75e-1,  'gamma':1.12e8,  'wave0':2631.8321, 'ion':'Fe II'},
+         'FeII 2629'  : {'f':1.75e-1,  'gamma':1.12e8,  'wave0':2629.0777, 'ion':'Fe II'},
+         'FeII 2614'  : {'f':1.14e-1,  'gamma':2.23e8,  'wave0':2614.6051, 'ion':'Fe II'},
+         'FeII 2612'  : {'f':1.31e-1,  'gamma':1.28e8,  'wave0':2612.6542, 'ion':'Fe II'},
+         'FeII 2607'  : {'f':1.18e-1,  'gamma':1.73e8,  'wave0':2607.8664, 'ion':'Fe II'},
+         'FeII 2600'  : {'f':2.40e-1,  'gamma':2.37e8,  'wave0':2600.1729, 'ion':'Fe II'},
+         'FeII 2414'  : {'f':1.75e-1,  'gamma':1.00e8,  'wave0':2414.0450, 'ion':'Fe II'},
+         'FeII 2382'  : {'f':3.43e-1,  'gamma':3.35e8,  'wave0':2382.7652, 'ion':'Fe II'},
+         'FeII 2345'  : {'f':1.26e-1,  'gamma':7.66e7,  'wave0':2345.0011, 'ion':'Fe II'},
+         'FeII 2344'  : {'f':1.26e-1,  'gamma':1.92e8,  'wave0':2344.2139, 'ion':'Fe II'},
+         'FeII 1148'  : {'f':1.13e-1,  'gamma':4.56e8,  'wave0':1148.2773, 'ion':'Fe II'},
+         'FeII 1144'  : {'f':1.33e-1,  'gamma':5.65e8,  'wave0':1144.9390, 'ion':'Fe II'},
+         'FeXVII 15'  : {'f':2.95,     'gamma':2.91e13, 'wave0':15.015,    'ion':'Fe XVII'}, # x-ray
+         'FeXVII 13'  : {'f':0.331,    'gamma':3.85e12, 'wave0':13.823,    'ion':'Fe XVII'}, # x-ray
+         'FeXVII 12'  : {'f':0.742,    'gamma':1.12e13, 'wave0':12.12,     'ion':'Fe XVII'}, # x-ray
+         'FeXVII 11'  : {'f':0.346,    'gamma':6.21e12, 'wave0':11.13,     'ion':'Fe XVII'}, # x-ray
+         'ZnI 2138'   : {'f':1.47,     'gamma':7.14e8,  'wave0':2138.5735, 'ion':'Zn I'},
+         'ZnII 2062'  : {'f':2.46e-1,  'gamma':3.86e8,  'wave0':2062.0012, 'ion':'Zn II'},
+         'ZnII 2025'  : {'f':5.01e-1,  'gamma':4.07e8,  'wave0':2025.4845, 'ion':'Zn II'}}
 
 # instrument characteristics (in Ang)
 # TODO: add LSF characteristics and LSF smoothing + S/N effects
@@ -510,7 +640,7 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
 
 def create_spectra_from_traced_rays(sP, line, instrument,
                                     rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
-                                    cell_dens, cell_temp, cell_vellos, nThreads=20):
+                                    cell_dens, cell_temp, cell_vellos, nThreads=36):
     """ Given many completed rays traced through a volume, in the form of a composite list of 
     intersected cell pathlengths and indices, extract the physical properties needed (dens, temp, vellos) 
     and create the final absorption spectrum, depositing a Voigt absorption profile for each cell.
@@ -1151,7 +1281,8 @@ def generate_spectra_from_saved_rays(sP, pSplit=None):
     """
     # config
     projAxis = 2
-    lineNames = ['MgII 2796','MgII 2803']
+    lineNames = ['CIV 1548','CIV 1550']
+    #lineNames = ['MgII 2796','MgII 2803']
     instrument = '4MOST_HRS' # 'SDSS-BOSS'
 
     # save file
@@ -1164,8 +1295,8 @@ def generate_spectra_from_saved_rays(sP, pSplit=None):
     # load required gas cell properties
     velLosField = 'vel_'+['x','y','z'][projAxis]
 
-    cell_vellos = sP.snapshotSubsetC('gas', velLosField, inds=cell_inds, verbose=True) # code
-    cell_temp   = sP.snapshotSubsetC('gas', 'temp_sfcold_linear', inds=cell_inds, verbose=True) # K
+    cell_vellos = sP.snapshotSubsetP('gas', velLosField, inds=cell_inds) # code # , verbose=True
+    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', inds=cell_inds) # K # , verbose=True
     
     cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
 
@@ -1188,9 +1319,11 @@ def generate_spectra_from_saved_rays(sP, pSplit=None):
         f['ray_total_dl'] = total_dl
 
     # loop over requested line(s)
-    for line in lineNames:
-        densField = '%s numdens' % lines[line]['ion']
-        cell_dens = sP.snapshotSubsetC('gas', densField, inds=cell_inds, verbose=True) # ions/cm^3
+    for i, line in enumerate(lineNames):
+        # load ion abundances per cell, unless we already have
+        if i == 0 or lines[line]['ion'] != lines[lineNames[0]]['ion']:
+            densField = '%s numdens' % lines[line]['ion']
+            cell_dens = sP.snapshotSubsetP('gas', densField, inds=cell_inds) # ions/cm^3 # , verbose=True
 
         # create spectra
         master_wave, tau_local, EW_local = \
@@ -1222,7 +1355,8 @@ def concat_and_filter_spectra(sP):
 
     # config
     projAxis = 2
-    lineNames = ['MgII 2796','MgII 2803']
+    #lineNames = ['MgII 2796','MgII 2803']
+    lineNames = ['CIV 1548','CIV 1550']
     instrument = '4MOST_HRS' # 'SDSS-BOSS'
 
     EW_threshold = 0.001 # applied to sum of lines [ang]
