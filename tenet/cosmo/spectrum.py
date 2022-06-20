@@ -80,7 +80,7 @@ lines = {'LyA'        : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion'
          'NaI 5897'   : {'f':3.35e-1,  'gamma':6.42e7,  'wave0':5897.5575, 'ion':'Na I'},
          'NaI 5891'   : {'f':6.70e-1,  'gamma':6.44e7,  'wave0':5891.5826, 'ion':'Na I'},
          'NaI 3303'   : {'f':1.35e-2,  'gamma':2.75e6,  'wave0':3303.523,  'ion':'Na I'}, # 2 subcomponents combined
-         'NiII 1754'  : {'f':1.59e-2,  'gamma':2.30e7,  'wave0':1754.8129  'ion':'Ni II'},
+         'NiII 1754'  : {'f':1.59e-2,  'gamma':2.30e7,  'wave0':1754.8129, 'ion':'Ni II'},
          'NiII 1751'  : {'f':2.77e-2,  'gamma':4.52e7,  'wave0':1751.9157, 'ion':'Ni II'},
          'NiII 1709'  : {'f':3.24e-2,  'gamma':7.39e7,  'wave0':1709.6042, 'ion':'Ni II'},
          'NiII 1788'  : {'f':2.52e-2,  'gamma':3.50e7,  'wave0':1788.4905, 'ion':'Ni II'},
@@ -1254,10 +1254,12 @@ def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None, search=False):
 
 def _spectra_filepath(sim, projAxis, instrument, lineNames, pSplit=None):
     """ Return the path to a file of saved spectra. """
-    linesStr = '-'.join([line.replace(' ','_') for line in lineNames])
+    ions = [lines[line]['ion'] for line in lineNames]
+    ionStr = ions[0].replace(' ','')
+    assert len(set(ions)) == 1, 'Process sets of lines for one ion at a time.'
 
     path = sim.derivPath + "rays/"
-    filebase = 'spectra_%s_z%.1f_%d_%s_%s' % (sim.simName,sim.redshift,projAxis,instrument,linesStr)
+    filebase = 'spectra_%s_z%.1f_%d_%s_%s' % (sim.simName,sim.redshift,projAxis,instrument,ionStr)
 
     filename = filebase + '.hdf5'
 
@@ -1271,7 +1273,7 @@ def _spectra_filepath(sim, projAxis, instrument, lineNames, pSplit=None):
 
     return path + filename
 
-def generate_spectra_from_saved_rays(sP, pSplit=None):
+def generate_spectra_from_saved_rays(sP, ion='C IV', pSplit=None):
     """ Generate a large number of spectra, based on already computed and saved rays.
 
     Args:
@@ -1281,11 +1283,11 @@ def generate_spectra_from_saved_rays(sP, pSplit=None):
     """
     # config
     projAxis = 2
-    lineNames = ['CIV 1548','CIV 1550']
-    #lineNames = ['MgII 2796','MgII 2803']
     instrument = '4MOST_HRS' # 'SDSS-BOSS'
 
     # save file
+    lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
+
     saveFilename = _spectra_filepath(sP, projAxis, instrument, lineNames, pSplit)
 
     # load rays
@@ -1350,18 +1352,18 @@ def generate_spectra_from_saved_rays(sP, pSplit=None):
 
     print(f'Saved: [{saveFilename}]')
 
-def concat_and_filter_spectra(sP):
+def concat_and_filter_spectra(sP, ion='C IV'):
     """ Combine split files for spectra, and filter, keeping only those above an EW threshold. """
 
     # config
     projAxis = 2
-    #lineNames = ['MgII 2796','MgII 2803']
-    lineNames = ['CIV 1548','CIV 1550']
     instrument = '4MOST_HRS' # 'SDSS-BOSS'
 
     EW_threshold = 0.001 # applied to sum of lines [ang]
 
     # search for chunks
+    lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
+
     loadFilename = _spectra_filepath(sP, projAxis, instrument, lineNames, pSplit='*')
     saveFilename = _spectra_filepath(sP, projAxis, instrument, lineNames, pSplit=None)
 
