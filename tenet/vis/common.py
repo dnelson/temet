@@ -2876,9 +2876,15 @@ def renderMultiPanel(panels, conf):
 
             if conf.title:
                 idStr = ' (id=' + str(sP.subhaloInd) + ')' if not sP.isZoom and sP.subhaloInd is not None else ''
-                ax.set_title('%s z=%d%s' % (sP.simName,sP.redshift,idStr))
-                if sP.redshift != int(sP.redshift): ax.set_title('%s z=%3.1f%s' % (sP.simName,sP.redshift,idStr))
-                if sP.redshift/0.1 != int(sP.redshift/0.1): ax.set_title('%s z=%4.2f%s' % (sP.simName,sP.redshift,idStr))
+
+                if np.isfinite(sP.redshift):
+                    # cosmological
+                    ax.set_title('%s z=%d%s' % (sP.simName,sP.redshift,idStr))
+                    if sP.redshift != int(sP.redshift): ax.set_title('%s z=%3.1f%s' % (sP.simName,sP.redshift,idStr))
+                    if sP.redshift/0.1 != int(sP.redshift/0.1): ax.set_title('%s z=%4.2f%s' % (sP.simName,sP.redshift,idStr))
+                elif np.isfinite(sP.time):
+                    # non-cosmological
+                    ax.set_title('%s t=%6.3f' % (sP.simName,sP.time))
 
             if 'title' in p and p['title'] is not None:
                 ax.set_title(p['title'])

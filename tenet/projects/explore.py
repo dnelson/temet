@@ -921,40 +921,69 @@ def xenoSNevo():
     """ Test for Xeno idealized SN explosion run. """
     from glob import glob
 
-    run = '15_0_density_1'
-    sim = simParams('sims.idealized/sims.xeno/%s/' % run)
+    runName = '17_1_800_snaps_numberdensity_4'
+    sim = simParams('~/sims.idealized/sims.xeno/%s/' % runName)
 
-    # start plot
-    fig, ax = plt.subplots(figsize=figsize)
-    ax.set_xlabel('Distance [pc]')
-    ax.set_ylabel('Density [cm$^{-3}$]')
+    skip = 1 #int(sim.numSnaps/20) if sim.numSnaps > 100 else 1
 
-    # loop over snaps
-    for i in range(sim.numSnaps):
-        sim.setSnap(i)
+    # (A): density profiles vs time: start plot
+    if 0:
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.set_xlabel('Distance [pc]')
+        ax.set_ylabel('Density [cm$^{-3}$]')
 
-        # load
-        pos = sim.gas('pos')
-        dens = sim.gas('dens')
+        # loop over snaps
+        for i in range(sim.numSnaps)[::skip]:
+            sim.setSnap(i)
 
-        # convert
-        boxCen = np.array([0.5*sim.boxSize, 0.5*sim.boxSize, 0.5*sim.boxSize])
-        dist = sim.periodicDists(boxCen, pos)
-        dens_phys = sim.units.codeDensToPhys(dens, numDens=True, cgs=True) # 1/cm^3
+            # load
+            pos = sim.gas('pos')
+            dens = sim.gas('dens')
 
-        # plot
-        rr, yy, std, percs = running_median(dist, dens_phys, nBins=80, percs=[15,50,84])
+            # convert
+            boxCen = np.array([0.5*sim.boxSize, 0.5*sim.boxSize, 0.5*sim.boxSize])
+            dist = sim.periodicDists(boxCen, pos)
+            dens_phys = sim.units.codeDensToPhys(dens, numDens=True, cgs=True) # 1/cm^3
 
-        cur_time = sim.time * (sim.units.UnitTime_in_s / sim.units.s_in_Myr)
-        ax.plot(rr, yy, '-', lw=lw, label='t = %.3f Myr' % cur_time)
+            # plot
+            rr, yy, std, percs = running_median(dist, dens_phys, nBins=80, percs=[15,50,84])
 
-    # finish plot
-    ax.plot([sim.boxSize/2,sim.boxSize/2],ax.get_ylim(),':',color='#cccccc', label='Box Boundary')
+            cur_time = sim.time * (sim.units.UnitTime_in_s / sim.units.s_in_Myr)
+            ax.plot(rr, yy, '-', lw=lw, label='t = %.3f Myr' % cur_time)
 
-    ax.legend(loc='best')
-    fig.savefig('dens_profiles_vs_time-%s.png' % run)
-    plt.close(fig)
-    import pdb; pdb.set_trace()
+        # finish plot
+        ax.plot([sim.boxSize/2,sim.boxSize/2],ax.get_ylim(),':',color='#cccccc', label='Box Boundary')
+
+        ax.legend(loc='best')
+        fig.savefig('dens_profiles_vs_time-%s.png' % runName)
+        plt.close(fig)
+
+    # (B) movie visualization
+    for i, snapNum in enumerate(range(sim.numSnaps)[::skip]):
+        sim.setSnap(snapNum)
+
+        sP = sim # pass in
+
+        nPixels    = 800
+        axes       = [0,1] # x,y
+        labelZ     = False
+        labelScale = False
+        labelSim   = False
+        plotHalos  = False
+
+        partType   = 'gas'
+        partField  = 'coldens'
+        valMinMax  = [20, 22]
+
+        # render config (global)
+        class plotConfig:
+            plotStyle  = 'open'
+            rasterPx   = 800
+            colorbars  = True
+
+            saveFilename = 'frame_%03d.png' % i
+
+        renderBox([{}], plotConfig, locals())
 
 def arjenMasses5kpc():
     """ Explore Mtot_5kpc vs M*_5kpc. """

@@ -298,10 +298,10 @@ class simParams:
 
     def scan_simulation(self, inputPath, simName=None):
         """ Fill simulation parameters automatically, based on path. """
-        self.arepoPath = inputPath
+        self.arepoPath = os.path.expanduser(inputPath)
         self.simPath   = os.path.join(self.arepoPath, 'output/')
 
-        assert os.path.exists(inputPath), 'Error: Simulation path [%s] not found!' % inputPath
+        assert os.path.exists(self.arepoPath), 'Error: Simulation path [%s] not found!' % self.arepoPath
         assert os.path.exists(self.simPath), 'Error: Simulation path [%s] not found!' % self.simPath
 
         derivPath = os.path.join(self.arepoPath, 'data.files/')
@@ -1366,18 +1366,20 @@ class simParams:
         self.snap = snap
         if self.snap is not None:
             if str(self.snap) == 'ics':
+                # initial conditions
                 self.redshift = 127.0
                 assert self.run in ['tng','tng_dm','tng_zoom','tng_zoom_dm'] # otherwise generalize
             else:
-                self.redshift = self.snapNumToRedshift()
-
-            if np.isnan(self.redshift):
-                # non-cosmological
-                self.time = self.snapNumToRedshift(time=True)
-            else:
-                # cosmological
-                assert self.redshift >= -1e-15
-                if np.abs(self.redshift) < 1e-10: self.redshift = 0.0
+                # actual snapshot
+                if self.redshift is None or np.isnan(self.redshift):
+                    # non-cosmological
+                    self.time = self.snapNumToRedshift(time=True)
+                    self.redshift = np.nan
+                else:
+                    # cosmological
+                    self.redshift = self.snapNumToRedshift()
+                    assert self.redshift >= -1e-15
+                    if np.abs(self.redshift) < 1e-10: self.redshift = 0.0
 
         self.units = units(sP=self)
 

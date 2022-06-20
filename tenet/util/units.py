@@ -124,7 +124,7 @@ class units(object):
 
         # non-cosmological run?
         if self._sP.redshift is not None and np.isnan(self._sP.redshift):
-            print('Note: Setting units.scalefac = 1 for non-cosmological run.')
+            print('NOTE: Setting units.scalefac = 1 for non-cosmological run.')
             self.scalefac = 1.0 # nullify all comoving -> physical conversions
 
         # custom (non-stard) unit system in header? only for non-cosmological runs
@@ -136,9 +136,8 @@ class units(object):
             for key in keys:
                 if key in header:
                     if header[key] != getattr(self,key):
-                        print('Note: Setting units.%s = %g from header!' % (key,header[key]))
+                        print('NOTE: Setting units.%s = %g from header! EXPERIMENTAL!' % (key,header[key]))
                         setattr(self,key,header[key])
-                        import pdb; pdb.set_trace() # remove only for certain supported conversions
 
         # derived units
         self.UnitTime_in_s       = self.UnitLength_in_cm / self.UnitVelocity_in_cm_per_s

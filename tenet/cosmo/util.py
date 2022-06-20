@@ -23,7 +23,7 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None):
     else:
         redshifts = np.array(redshifts)
 
-    nSnaps = 800 # maximum
+    nSnaps = 1000 # maximum
 
     sbNum, sbStr1, sbStr2 = subboxVals(sP.subbox)
     if sP.subbox is not None:
@@ -264,7 +264,9 @@ def snapNumToRedshift(sP, snap=None, time=False, all=False):
 
     if not isfile(saveFilename):
         # redshiftToSnapNum() not yet run, do it now
-        _ = redshiftToSnapNum(2.22, sP=sP)
+        redshifts = [2.22] if time is False else None
+        times = [0.5] if time is True else None
+        _ = redshiftToSnapNum(redshifts=redshifts, times=times, sP=sP)
 
     with h5py.File(saveFilename, 'r') as f:
         for key in f.keys():
