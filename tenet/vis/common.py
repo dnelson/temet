@@ -2013,6 +2013,26 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         grid_master = logZeroMin( 10.0**grid_master / 10.0**grid_totmass )
         data_grid = logZeroMin( 10.0**data_grid / 10.0**data_grid_totmass )
 
+    # temporary: ayromlou baryon fraction map by summing gas+stars coldens, then normalizing by gas+stars+DM
+    if 0 and partField == 'coldens' and partType == 'gas':
+        print('NOTE: Converting gas coldens map to baryon fraction map!')
+
+        grid_stars, _, data_grid_stars = gridBox(sP, method, 'stars', 'coldens', nPixels, axes, projType, projParams, 
+                                                 boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio)
+        grid_dm, _, data_grid_dm = gridBox(sP, method, 'dm', 'coldens', nPixels, axes, projType, projParams, 
+                                           boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio)
+
+        grid_gas = 10.0**grid_master
+        grid_stars = 10.0**grid_stars
+        grid_dm = 10.0**grid_dm
+
+        data_grid_gas = 10.0**data_grid
+        data_grid_stars = 10.0**data_grid_stars
+        data_grid_dm = 10.0**data_grid_dm
+
+        grid_master = (grid_gas + grid_stars) / (grid_gas + grid_stars + grid_dm) / sP.units.f_b # linear
+        data_grid = (data_grid_gas + data_grid_stars) / (data_grid_gas + data_grid_stars + data_grid_dm) / sP.units.f_b
+
     # temporary: line integral convolution test
     if 'licMethod' in kwargs and kwargs['licMethod'] is not None:
         from ..vis.lic import line_integral_convolution

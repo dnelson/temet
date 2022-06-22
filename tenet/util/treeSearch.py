@@ -864,7 +864,7 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
         return dists, indices
     return hsml
 
-def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePrec='single', tree=None, nThreads=16):
+def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePrec='single', tree=None, nThreads=32):
     """ Calculate a reduction of a given quantity reduction on all the particles within a fixed search 
     distance hsml around each pos. If posSearch==None, then pos defines both the neighbor and search point 
     sets, otherwise a reduction at the location of each posSearch is calculated by searching for nearby points in pos.

@@ -172,12 +172,14 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one', render8k=False):
     if conf == 'four':
         # x-ray emission (0.5-2.0 keV SB [erg/s/kpc^2] based on APEC redshift-dependent tables)
         saveStr = 'xray'
-        panels.append( {'partType':'gas', 'partField':'xray_lum_0.5-2.0kev', 'valMinMax':[30,36]})
+        panels.append( {'partType':'gas', 'partField':'xray_lum_0.5-2.0kev', 'valMinMax':[30,37]})
 
     if conf == 'five':
         # baryon fraction (ayromlou+22 movie)
         saveStr = 'fb'
         panels.append( {'partType':'gas', 'partField':'baryon_frac', 'valMinMax':[0.0,2.0]} )
+        #saveStr = 'fb_gridmethod'
+        #panels.append( {'partType':'gas', 'partField':'coldens', 'valMinMax':[0.0,2.0], 'ctName':'seismic'} )
 
     if render8k:
         nPixels = [7680, 7680]
@@ -190,6 +192,7 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one', render8k=False):
         plotStyle = 'edged_black'
         rasterPx  = nPixels
         colorbars = False
+        saveFilename = 'out.png'
 
         # movie config
         minZ      = 0.0
@@ -202,6 +205,12 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one', render8k=False):
         plotConfig.maxNSnaps = 4500
         plotConfig.colorbars = True
         plotConfig.colorbarOverlay = True
+
+    if 0:
+        # render single z=0.0 frame for testing
+        redshift = 0.0
+        renderBox(panels, plotConfig, locals())
+        return
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 

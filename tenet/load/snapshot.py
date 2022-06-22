@@ -619,20 +619,38 @@ def snapshotSubset(sP, partType, fields,
             hsml = snapshotSubset(sP, partType, 'SubfindHsml', **kwargs)
             r[field] = (4.0/3.0) * np.pi * hsml**3.0
 
-        # baryon fraction (gas cell density / local dm density), normalized to cosmic baryon fraction [linear]
+        # baryon fraction (gas+stellar density / (gas+stellar+dm density)), all estimated locally, and 
+        # normalized to the cosmic baryon fraction [linear]
         if field in ["f_b","baryon_frac"]:
+            assert sP.isPartType(partType,'gas') # otherwise generalize
+            from tenet.util.treeSearch import calcHsml, calcQuantReduction
+
+            pt_pos = snapshotSubset(sP, partType, 'pos', **kwargs)
+
+            # DM
             if snapHasField(sP, partType, 'SubfindDMDensity'):
                 SubfindDMDensity = snapshotSubset(sP, partType, 'SubfindDMDensity', **kwargs)
             else:
                 # derive if not stored
-                from tenet.util.treeSearch import calcHsml
-                pt_pos = snapshotSubset(sP, partType, 'pos', **kwargs)
                 dm_pos = snapshotSubset(sP, 'dm', 'pos') # global load and tree
                 SubfindHsml = calcHsml(dm_pos, sP.boxSize, posSearch=pt_pos, nNGB=64, treePrec=dm_pos.dtype)
-                SubfindDMDensity = 64 * sP.dmParticleMass / (4/3*np.pi*SubfindHsml**3) # code mass / code volume
+                dens_dm = 64 * sP.dmParticleMass / (4/3*np.pi*SubfindHsml**3) # code mass / code volume
 
-            dens = snapshotSubset(sP, partType, 'Density', **kwargs)
-            r[field] = (dens / SubfindDMDensity) / sP.units.f_b # linear unitless
+            # stars
+            stars_pos = snapshotSubset(sP, 'stars', 'pos') # global load and tree
+            stars_mass = snapshotSubset(sP, 'stars', 'mass')
+            StellarHsml = calcHsml(stars_pos, sP.boxSize, posSearch=pt_pos, nNGB=32, treePrec=stars_pos.dtype)
+            totmass_stars = calcQuantReduction(stars_pos, stars_mass, StellarHsml, op='sum', boxSizeSim=sP.boxSize, 
+                                               posSearch=pt_pos, treePrec=stars_pos.dtype)
+            dens_stars = totmass_stars / (4/3*np.pi*StellarHsml**3) # code mass / code volume
+
+            # gas
+            dens_gas = snapshotSubset(sP, partType, 'Density', **kwargs)
+
+            # f_b
+            dens_b = dens_gas + dens_stars
+            dens_tot = dens_gas + dens_stars + dens_dm
+            r[field] = (dens_b / dens_tot) / sP.units.f_b # linear unitless
 
         # metallicity in linear(solar) units
         if field in ["metal_solar","z_solar"]:
