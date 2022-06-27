@@ -101,8 +101,8 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      'eagle-dark':['eagle_dm',1504],
                      'eagle100-1':['eagle',1504],
                      'simba':['simba',1024],
-                     'simba100-1':['simba',1024],
-                     'simba50':['simba',512],
+                     'simba100':['simba',1024],
+                     'simba25':['simba',512],
                      'millennium-1':['millennium',1],
                      'millennium-2':['millennium',2]}
 
@@ -811,10 +811,11 @@ class simParams:
                 self.simNameAlt = 'Eagle-L'+bs+'n'+str(res)+'DM'
 
         # SIMBA
-        if run in ['simba']:
+        if run in ['simba','simba50']:
             self.validResLevels = [512,1024]
-            if self.res == 512:  self.boxSize = 50000.0
-            if self.res == 1024: self.boxSize = 100000.0
+            if self.res == 512:  self.boxSize = 25000.0 # 'simba25' or 'simba',512
+            if self.res == 512 and run == 'simba50': self.boxSize = 50000.0 # 'simba50','512
+            if self.res == 1024: self.boxSize = 100000.0 # 'simba', 'simba100', or 'simba',1024
             self.groupOrdered   = True
             self.numSnaps       = 152
 
@@ -1371,7 +1372,7 @@ class simParams:
                 assert self.run in ['tng','tng_dm','tng_zoom','tng_zoom_dm'] # otherwise generalize
             else:
                 # actual snapshot
-                if self.redshift is None or np.isnan(self.redshift):
+                if 0: #self.redshift is None or np.isnan(self.redshift): # todo generalize
                     # non-cosmological
                     self.time = self.snapNumToRedshift(time=True)
                     self.redshift = np.nan

@@ -2431,10 +2431,11 @@ def plots():
     #sPs.append( simParams(res=540, run='tng') )  
     #sPs.append( simParams(res=270, run='tng') )
 
-    sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
-    sPs.append( simParams(run='eagle', redshift=0.0) )
+    #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
+    #sPs.append( simParams(run='eagle', redshift=0.0) )
     #sPs.append( simParams(run='simba50', redshift=0.0) )
-    sPs.append( simParams(run='simba', redshift=0.0) )
+    sPs.append( simParams(run='simba100', redshift=0.0) )
+    sPs.append( simParams(run='simba25', redshift=0.0) )
     #sPs.append( simParams(run='tng-cluster') )
 
     # add runs: TNG_methods

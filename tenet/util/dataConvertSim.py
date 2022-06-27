@@ -1539,12 +1539,12 @@ def convertSimbaSnapshot(snap=151):
     from ..util.simParams import simParams
     from ..util.helper import rootPath
 
-    run = 'm100n1024' # 'm50n512'
+    run = 'm25n512' # 'm50n512', 'm100n1024'
 
     # derived paths
-    basePath = '/virgotng/universe/Illustris/'
-    loadPath = basePath + 'Simba/%s/orig-snapshots/' % (run.replace('m','L') + 'FP')
-    savePath = basePath + 'Simba/%s/output/' % (run.replace('m','L') + 'FP')
+    basePath = '/u/dnelson/data/sims.other/Simba-' #'/virgotng/universe/Simba/'
+    loadPath = basePath + '%s/orig-snapshots/' % (run.replace('m','L') + 'FP')
+    savePath = basePath + '%s/output/' % (run.replace('m','L') + 'FP')
 
     gfmPhotoPath = rootPath + '/tables/bc03/stellar_photometrics.hdf5'
 
@@ -1841,7 +1841,7 @@ def convertSimbaSnapshot(snap=151):
 
 def fixSimbaSMBHs(snap=112):
     from ..util.simParams import simParams
-    sP = simParams("simba100-1", snap=snap)
+    sP = simParams("simba100", snap=snap)
 
     # global load
     ids = sP.bhs('ids')

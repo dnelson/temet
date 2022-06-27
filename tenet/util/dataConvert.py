@@ -1175,7 +1175,7 @@ def makeCohnVsuiteCatalog(redshift=0.0):
 def splitSingleHDF5IntoChunks(snap=151):
     """ Split a single-file snapshot/catalog/etc HDF5 into a number of roughly equally sized chunks. """
     from ..util.helper import pSplitRange
-    basePath = path.expanduser("~") + '/sims.other/Simba-L100n1024FP/output/snapdir_%03d/' % snap
+    basePath = path.expanduser("~") + '/sims.other/Simba-L25n512FP/output/snapdir_%03d/' % snap
     fileName = 'snap_%03d.hdf5' % snap
     numChunksSave = 16
 

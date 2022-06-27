@@ -2967,24 +2967,40 @@ def sfrTxt(sP):
                 r[key] = f[key][()]
         return r
 
-    # Illustris txt-files directories and Illustris-1 curie/supermuc split
+    # check possible locations for 'sfr.txt' file
     path = sP.simPath + 'sfr.txt'
     if not isfile(path):
         path = sP.simPath + 'txt-files/sfr.txt'
     if not isfile(path):
         path = sP.derivPath + 'sfr.txt'
+
+    # does not exist? create similar, but snapshot time-spaced, data
     if not isfile(path):
-        raise Exception('Cannot find sfr.txt file.')
+        print('WARNING: Cannot find [sfr.txt] file, deriving data from snapshots.')
+        keys = ['scaleFac','totSfrRate'] #['totalSm','sfrMsunPerYr','totalSumMassStars']
+        r = {k:[] for k in keys}
 
-    # columns: All.Time, total_sm, totsfrrate, rate_in_msunperyear, total_sum_mass_stars, cum_mass_stars
-    data = np.loadtxt(path)
+        sim = sP.copy()
+        for snap in sim.validSnapList():
+            sim.setSnap(snap)
+            print(f'[{snap = :3d}] at z = {sim.redshift:5.2f}')
 
-    r = { 'scaleFac'          : evenlySample(data[:,0],nPts,logSpace=True),
-          'totalSm'           : evenlySample(data[:,1],nPts,logSpace=True),
-          'totSfrRate'        : evenlySample(data[:,2],nPts,logSpace=True),
-          'sfrMsunPerYr'      : evenlySample(data[:,3],nPts,logSpace=True),
-          'totalSumMassStars' : evenlySample(data[:,4],nPts,logSpace=True),
-          'cumMassStars'      : evenlySample(data[:,5],nPts,logSpace=True) }
+            r['scaleFac'].append(sim.units.scalefac)
+            r['totSfrRate'] = np.sum(sim.gas('sfr')) # msun/yr
+
+        r['scaleFac'] = np.array(r['scaleFac'])
+        r['totSfrRate'] = np.array(r['totSfrRate'])
+
+    else:
+        # columns: All.Time, total_sm, totsfrrate, rate_in_msunperyear, total_sum_mass_stars, cum_mass_stars
+        data = np.loadtxt(path)
+
+        r = { 'scaleFac'          : evenlySample(data[:,0],nPts,logSpace=True),
+              'totalSm'           : evenlySample(data[:,1],nPts,logSpace=True), # from probabilistic formula
+              'totSfrRate'        : evenlySample(data[:,2],nPts,logSpace=True), # sum of TimeBinSfr (i.e. gas cells)
+              'sfrMsunPerYr'      : evenlySample(data[:,3],nPts,logSpace=True), # totalSm divided by timestep
+              'totalSumMassStars' : evenlySample(data[:,4],nPts,logSpace=True), # actual star particle mass formed
+              'cumMassStars'      : evenlySample(data[:,5],nPts,logSpace=True) } # sum of above (somehow strange)
 
     r['redshift'] = 1.0/r['scaleFac'] - 1.0
     r['sfrd']     = r['totSfrRate'] / sP.boxSizeCubicComovingMpc # a constant cMpc^3 (equals pMpc^3 at z=0)
