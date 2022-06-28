@@ -2240,436 +2240,106 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     # return
     return vals, label, minMax, takeLog
 
-def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
-    """ Return meta-data for a given particle tuple (ptType,ptProperty), i.e. an appropriate 
-    label and range. If clean is True, label is cleaned up for presentation. Expectation is that this 
-    tuple passed unchanged to snapshotSubset() will succeed and return values consistent with the 
-    label, modulo the need for log. If haloLims is true, then adjust limits for the typical values of 
-    a halo instead of typical values for a fullbox. """
-    label = None
-    lim = [] # first guess reasonable lower/upper limits for plotting vals
-    log = True # does caller need to take log10() of vals to obtain the units indicated in the label?
+def simParticleQuantity(sP, ptType, ptProperty, haloLims=False, u=False):
+    """ Return meta-data for a given particle/cell property, as specified by the tuple 
+    (ptType,ptProperty). Our current unit system is built around the idea that this 
+    same tuple passed unchanged to snapshotSubset() will succeed and return values consistent 
+    with the label and units.
 
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      ptType (str): e.g. [0,1,2,4] or ('gas','dm','tracer','stars').
+      ptProperty (str): the name of the particle-level field.
+      haloLims (bool): if True, adjust limits for the typical values of a halo instead 
+        of typical values for a fullbox.
+      u (bool): if True, return the units string only.
+
+    Returns:
+      tuple: label, lim, log
+    """
+    from ..load.snapshot import snapshot_fields, custom_fields, custom_multi_fields
+
+    label = None
     ptType = ptType.lower()
     prop = ptProperty.lower()
-    typeStr = ptType.capitalize()
 
-    if typeStr == 'Dm': typeStr = 'DM'
+    # property name is complex / contains a free-form parameter?
+    for search_key in custom_multi_fields:
+        if search_key in prop:
+            # prop is e.g. 'delta_temp', convert to 'delta_'
+            prop = search_key
 
-    #if '_real' in typeStr: typeStr = 'Actual ' + typeStr.split('_real')[0] # i.e. 'wind_real' -> 'Actual Wind'
+            # prop is e.g. 'delta_temp', convert to 'temp' to get associated metadata
+            #prop = prop.replace(search_key,'')
 
-    # fields:
-    if prop in ['temp', 'temp_sfcold']:
-        label = 'Gas Temperature [ log K ]'
-        lim = [2.0, 8.0]
-        if haloLims: lim = [3.5, 8.0]
-        log = False
+    # extract metadata from field registry
+    if prop in snapshot_fields:
+        units = snapshot_field[prop].get('units', None)
 
-    if prop in ['temp_old']:
-        label = 'Gas Temperature (Uncorrected) [ log K ]'
-        lim = [2.0, 8.0]
-        if haloLims: lim = [3.5, 8.0]
-        log = False
+        label = snapshot_field[prop].get('label', '')
 
-    if prop in ['temp_sfcold_linear', 'temp_linear']:
-        assert ptType == 'gas'
-        label = 'Gas Temperature [ log K ]'
-        lim = [3.5, 7.2]
-        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
-        log = True
+        lim = snapshot_field[prop].get('limits', None)
 
-    if prop in ['nh','hdens']:
-        assert ptType == 'gas'
-        label = 'Gas Hydrogen Density n$_{\\rm H}$ [ log cm$^{-3}$ ]'
-        lim = [-9.0,3.0]
-        if haloLims: lim = [-5.0, 0.0]
-        log = True
+        if haloLims or lim is None:
+            lim = snapshot_field[prop].get('limits_halo', None)
 
-    if prop in ['numdens']:
-        assert ptType == 'gas'
-        label = 'Gas Number Density [ log cm$^{-3}$ ]'
-        lim = [-9.0,3.0]
-        if haloLims: lim = [-5.0, 3.0]
-        log = True
+        log = snapshot_field[prop].get('log', True)
 
-    if prop in ['dens_critratio']:
-        label = '$\\rho_{\\rm gas} / \\rho_{\\rm crit}$ [ log ]'
-        lim = [-6.0, 5.0]
-        if haloLims: lim = [-1.0, 6.0]
-        log = True
+    elif prop in custom_fields:
+        units = getattr(custom_fields[prop], 'units', None)
 
-    if prop in ['dens_critb']:
-        label = '$\\rho_{\\rm gas} / \\rho_{\\rm crit,b}$ [ log ]'
-        lim = [-2.0, 9.0]
-        if haloLims: lim = [-1.0, 6.0]
-        log = True
+        label = getattr(custom_fields[prop], 'label', '')
 
-    if prop in ['density']:
-        label = '$\\rho_{\\rm gas}$ [ log 10$^{10}$ M$_{\\rm sun}$ h$^2$ ckpc$^{-3}$ ]'
-        lim = [-12.0, 0.0]
-        if haloLims: lim = [-4.0, 2.0]
-        log = True
+        lim = getattr(custom_fields[prop], 'limits', None)
 
-    if prop in ['mass']:
-        label = '%s Mass [ 10$^{10}$ M$_{\\rm sun}$ h$^{-1}$ ]' % typeStr
-        lim = [-3.0, 0.0]
-        if haloLims: lim = [-6.0, -2.0]
-        log = True
+        if haloLims or lim is None:
+            lim = getattr(custom_fields[prop], 'limits_halo', None)
 
-    if prop in ['mass_msun']:
-        label = '%s Mass [ log M$_{\\rm sun}$ ]' % typeStr
-        lim = [5.0, 7.0]
-        if haloLims: lim = [3.0, 5.0]
-        log = True
+        log = getattr(custom_fields[prop], 'log', True)
 
-    if prop in ['ent','entr','entropy']:
-        label = 'Gas Entropy [ log K cm$^{2}$ ]'
-        lim = [8.0, 11.0]
-        if haloLims: [9.0, 11.0]
-        log = False
+    # any of these fields could be functions, in which case our convention is to call with 
+    # (sP,pt,field) as the arguments, i.e. in order to make redshift-dependent decisions
+    if callable(label):
+        label = label(sP, ptType, ptProperty)
 
-    if prop in ['vol_kpc3','volume_kpc3']:
-        assert ptType == 'gas'
-        label = 'Gas Cell Volume [ log kpc$^{3}$ ]'
-        lim = [-6.0, 6.0]
-        if haloLims: lim = [-6.0, 2.0]
-        log = True
-    if prop in ['vol_cm3','volume_cm3']:
-        assert ptType == 'gas'
-        label = 'Gas Cell Volume [ log cm$^{3}$ ]'
-        lim = [55.0, 65.0]
-        if haloLims: lim = [55.0, 62.0]
-        log = True
+    if callable(lim):
+        lim = lim(sP, ptType, ptProperty)
 
-    if prop in ['bmag','bfieldmag']:
-        label = 'Magnetic Field Strength [ log Gauss ]'
-        lim = [-15.0, -4.0]
-        if haloLims: lim = [-9.0, -3.0]
-        log = True
-    if prop in ['bmag_ug','bfieldmag_ug']:
-        label = 'Magnetic Field Strength [ log $\mu$G ]'
-        lim = [-9.0, 3.0]
-        if haloLims: lim = [-3.0, 2.0]
-        log = True
+    if callable(units):
+        units = units(sP, ptType, ptProperty)
 
-    if prop in ['vmag','velmag']:
-        label = 'Velocity Magnitude [ km/s ]'
-        lim = [0, 1000]
-        if haloLims: lim = [0, 400]
-        log = False
+    if callable(log):
+        log = log(sP, ptType, ptProperty)
 
-    if prop in ['cellsize_kpc','cellrad_kpc']:
-        assert ptType == 'gas'
-        label = 'Gas Cell Size [ log kpc ]'
-        lim = [-2.0, 3.0]
-        if haloLims: lim = [-2.0, 1.0]
-        log = True
+    # if '[pt]' sub-string occurs in label, replace with an appropriate string
+    typeStr = ptType.capitalize() if ptType != 'dm' else 'DM'
 
-    if prop in ["f_b","baryon_frac"]:
-        assert ptType == 'gas'
-        label = 'f$_{\\rm b}$ / f$_{\\rm b,cosmic}$ [ log ]'
-        lim = [0.0, 2.0]
-        log = True
+    #if '_real' in typeStr:
+    #    typeStr = 'Actual ' + typeStr.split('_real')[0] # i.e. 'wind_real' -> 'Actual Wind'
+    label = label.replace('[pt]', typeStr)
 
-    if prop in ['z_solar','metal_solar']:
-        label = '%s Metallicity [ log Z$_{\\rm sun}$ ]' % typeStr
-        lim = [-3.5, 1.0]
-        if haloLims: lim = [-2.0, 1.0]
-        log = True
+    # does units refer to a base code unit (code_mass, code_length, or code_velocity)
+    units = units.replace('code_length', sP.units.UnitLength_str)
+    units = units.replace('code_mass', sP.units.UnitMass_str)
+    units = units.replace('code_velocity', sP.units.UnitVelocity_str)
 
-    # todo: csnd, ub_ke_ratio
-    if prop in ['xray','xray_lum']:
-        assert ptType == 'gas'
-        label = 'L$_{\\rm X,bolometric}$ [ log 10$^{30}$ erg/s ]'
-        lim = [1.0, 15.0] # todo
-        if haloLims: lim = [5.0, 10.0]
-        log = True
-    
-    if prop in ['pres_ratio','pressure_ratio','beta']:
-        assert ptType == 'gas'
-        label = '$\\beta^{-1}$ = P$_{\\rm B}$ / P$_{\\rm gas}$ [ log ]'
-        if prop == 'beta':
-            label = '$\\beta$ = P$_{\\rm gas}$ / P$_{\\rm B}$ [ log ]'
-        lim = [-2.5,2.5]
-        if haloLims: lim = [-2.0,2.0]
-        log = True
+    # does units refer to a derived code unit? (could be improved if we move to symbolic manipulation)
+    units = units.replace('code_density', '%s/(%s)$^3$' % (sP.units.UnitMass_str,sP.units.UnitLength_str))
+    units = units.replace('code_volume', '(%s)^3' % sP.units.UnitLength_str)
 
-    if prop in ['gas_pres','gas_pressure','p_gas','pres','pressure']:
-        assert ptType == 'gas'
-        label = 'Gas Pressure [ log K cm$^{-3}$ ]'
-        lim = [-1.0,7.0]
-        if haloLims: lim = [0.0, 5.0]
-        log = False
+    # append units to label
+    if units is not None:
+        logUnitStr = ('%s%s' % ('log ' if log else '',units)).strip()
 
-    if prop in ['p_gas_linear']:
-        assert ptType == 'gas'
-        label = 'Gas Pressure [ log K cm$^{-3}$ ]'
-        lim = [-1.0,7.0]
-        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
-        log = True
+        # if we have a dimensional unit, or a logarithmic dimensionless unit
+        if logUnitStr != '':
+            label += ' [ %s ]' % logUnitStr
 
-    if prop in ['p_b_linear']:
-        label = 'Gas Magnetic Pressure [ log K cm$^{-3}$ ]'
-        lim = [-15.0, 16.0]
-        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
-        log = True
-
-    if prop in ['p_tot','pres_tot','pres_total','pressure_tot','pressure_total']:
-        label = 'Gas Total Pressure [ log K cm$^{-3}$ ]'
-        lim = [-15.0, 16.0]
-        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
-        log = True
-
-    if prop in ['yparam','sz_y','sz_yparam']:
-        label = 'Sunyaev-Zeldovich y-parameter [ kpc$^2$ ]'
-        lim = [-5.0, -10.0]
-        log = True
-
-    if prop in ['vesc','escapevel']:
-        label = 'Escape Velocity [ km/s ]'
-        lim = [1.0, 4.0]
-        log = True
-
-    # todo: u_ke, p_tot, p_sync
-
-    if ('MHI' in ptProperty or 'MH2' in ptProperty) and '_popping' in ptProperty:
-        if '_numdens' in ptProperty:
-            label = 'n$_{\\rm %s} [ log cm$^{-3}$ ]' % ptProperty[1:3]
-            lim = [-10, 0]
-            log = True
-        else:
-            label = ptProperty + ' [code]'
-            lim = [5.0,12.0]
-            log = True
-
-    if ' ' in ptProperty: # cloudy based ionic mass (or emission flux), if field name has a space in it
-        if 'flux' in ptProperty:
-            lineName, prop = ptProperty.rsplit(" ",1) # e.g. "H alpha flux"
-            lineName = lineName.replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
-            label = '%s Line Flux [log photon/s/cm$^2$]' % lineName
-            lim = [-30.0, -15.0] # todo
-            if haloLims: pass
-            log = True
-        elif 'mass' in ptProperty:
-            element, ionNum, _ = ptProperty.split() # e.g. "O VI mass"
-            label = '%s %s Ionic Mass [log M$_{\\rm sun}$]' % (element, ionNum)
-            lim = [1.0, 7.0]
-            if haloLims: [2.0, 6.0]
-            log = True
-        elif 'frac' in ptProperty:
-            element, ionNum, _ = ptProperty.split() # e.g. "Mg II frac"
-            label = '%s %s Ionization Fraction [log]' % (element, ionNum)
-            lim = [-10.0, -2.0]
-            if haloLims: [-10.0, -4.0]
-            log = True
-        elif 'numdens' in ptProperty:
-            element, ionNum, _ = ptProperty.split() # e.g. "Mg II numdens"
-            label = 'n$_{\\rm %s%s}$ [ log cm$^{-3}$ ]' % (element, ionNum)
-            lim = [-14.0, -4.0]
-            if haloLims: [-12.0, -6.0]
-            log = True
-        elif 'lum' in ptProperty:
-            lineName, prop = ptProperty.rsplit(" ",1) # e.g. "H alpha lum", "MgII lum", "MgII lum_dustdepleted"
-            lineName = lineName.replace("_dustdepleted","")
-            label = '%s Luminosity [log 10$^{30}$ erg/s]' % lineName
-            lim = [-15.0, 10.0]
-            if haloLims: pass
-            log = True
-
-    if '_ionmassratio' in ptProperty: # e.g. 'O6_O8_ionmassratio', ionic mass ratio
-        ion = cloudyIon(sP=None)
-        ion1, ion2, _ = ptProperty.split('_')
-
-        label = '(%s / %s) Mass Ratio [log]' % (ion.formatWithSpace(ion1),ion.formatWithSpace(ion2))
-        lim = [-2.0, 2.0]
-        if haloLims: pass
-        log = True
-
-    if '_numratio' in ptProperty: # e.g. 'Si_H_numratio', species number density ratio
-        el1, el2, _ = ptProperty.split('_')
-
-        label = '[%s/%s]$_{\\rm %s}$' % (el1,el2,typeStr) # = log(n_1/n_2)_gas - log(n_1/n_2)_solar
-        if not clean: label += ' = log(n$_{%s}$/n$_{%s}$)$_{\\rm %s} - log(n$_{%s}$/n$_{%s}$)$_{\\rm solar}' % (el1,el2,typeStr,el1,el2)
-        lim = [-4.0, 4.0]
-        if haloLims: [-3.0, 1.0] # more depends on which species, todo
-        log = False
-
-    if '_massratio' in ptProperty: # e.g. 'Si_H_numratio', species mass density ratio
-        el1, el2, _ = ptProperty.split('_')
-
-        label = 'log ( %s/%s )$_{\\rm %s}$' % (el1,el2,typeStr)
-        lim = [-5.0, 0.0]
-        if haloLims: [-3.0, 1.0] # more depends on which species, todo
-        log = True
-
-    if 'metalmass' in ptProperty: # e.g. 'metalmass_msun', 'metalmass_He_msun'
-        assert '_msun' in ptProperty
-        field = ptProperty.split('_msun')[0]
-        metalStr = 'Metal' if '_' not in field else field.split('_')[1]
-
-        label = '%s %s Mass Density [ log M$_{\\rm sun}$ ]' % (typeStr, metalStr)
-        lim = [1.0, 8.0] # todo
-        if haloLims: print('todo, no haloLims for [%d] yet' % ptProperty)
-        log = True
-
-    if 'metaldens' in ptProperty: # e.g. 'metaldens_msun', 'metaldens_He_msun'
-        assert ptType == 'gas' #and '_msun' in ptProperty
-        field = ptProperty.split('_msun')[0]
-        metalStr = 'Metal' if '_' not in field else field.split('_')[1]
-
-        label = 'Gas %s Mass Density [ log g cm$^{-3}$ ]' % metalStr
-        lim = [-32.0,-25.5]
-        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
-        log = True
-
-    if prop in ['gravpot','gravpotential']:
-        label = '%s Gravitational Potential [ (km/s)$^2$ ]' % typeStr
-        lim = [-1e4, 1e5] # todo
-        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
-        log = False
-
-    if prop in ['tcool','cooltime']:
-        assert ptType == 'gas'
-        label = 'Gas Cooling Time [ log Gyr ]'
-        lim = [-3.0,2.0]
-        if haloLims: lim = [-3.0, 2.5]
-        log = True
-
-    if prop in ['coolrate','coolingrate']:
-        assert ptType == 'gas'
-        label = 'Gas Cooling Rate [ log erg/s/g ]'
-        lim = [-8.0, -2.0]
-        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
-        log = True
-
-    if prop in ['heatrate','heatingrate']:
-        assert ptType == 'gas'
-        label = 'Gas Heating Rate [ log erg/s/g ]'
-        lim = [-8.0, -2.0]
-        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
-        log = True
-
-    if prop in ['coolrate_powell']:
-        assert ptType == 'gas'
-        label = 'PowellSourceTerm Cooling Rate [ log erg/s/g ]'
-        lim = [-8.0, -2.0]
-        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
-        log = True
-
-    if prop in ['coolrate_ratio']:
-        assert ptType == 'gas'
-        label = 'PowellCoolingTerm / Heating Rate [ log ]'
-        lim = [-3.0, 3.0]
-        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
-        log = True
-
-    if prop in ['mass_sfr_dt']:
-        assert ptType == 'gas'
-        label = 'Gas Mass / SFR / Timestep [ log ]'
-        lim = [-2.0,5.0]
-        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
-        log = True
-
-    if prop in ['mass_sfr_dt_hydro']:
-        assert ptType == 'gas'
-        label = 'Gas Mass / SFR / HydroTimestep [ log ]'
-        lim = [-2.0,5.0]
-        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
-        log = True
-
-    if prop in ['dt_yr']:
-        label = '%s Timestep [ log yr ]' % typeStr
-        lim = [1.0, 6.0]
-        if haloLims: lim = [1.0, 5.0]
-        log = True
-
-    # halo-centric analysis fields, always relative to SubhaloPos/SubhaloVel
-    if prop in ['rad','halo_rad','rad_kpc','halo_rad_kpc']:
-        unitsStr = 'pkpc' if '_kpc' in prop else 'ckpc/h'
-        label = 'Radius [ log %s ]' % unitsStr #'%s Radial Distance [ log %s ]' % (typeStr,unitsStr)
-        lim = [0.0, 5.0]
-        if haloLims: lim = [0.0, 3.0]
-        log = True
-    if prop in ['rad_kpc_linear']:
-        label = 'Radius [ pkpc ]'
-        lim = [0.0, 5000]
-        if haloLims: lim = [0, 800]
-        log = False
-    if prop in ['rad_rvir','halo_rad_rvir']:
-        label = '%s Radial Distance / Halo R$_{\\rm vir}$ [ log ]' % typeStr
-        lim = [-2.0, 3.0]
-        if haloLims: lim = [-2.5, 0.5]
-        log = True
-    if prop in ['rad_r500','halo_rad_r500']:
-        label = '%s Radial Distance / Halo R$_{\\rm 500}$ [ log ]' % typeStr
-        lim = [-2.0, 3.0]
-        if haloLims: lim = [-2.5, 0.5]
-        log = True
-
-    if prop in ['vrad','halo_vrad','radvel','halo_radvel']:
-        label = '%s Radial Velocity [ km/s ]' % typeStr
-        lim = [-1000, 1000]
-        if haloLims: lim = [-300, 300]
-        log = False
-
-    if prop in ['vrad_vvir','halo_vrad_vvir']:
-        label = '%s Radial Velocity / V$_{\\rm 200}$' % typeStr
-        lim = [-2, 2]
-        if haloLims: lim = [-1, 1]
-        log = False
-
-    if prop in ['vrel','halo_vrel','relvel','halo_relvel','relative_vel']:
-        label = '%s Halo-Relative Velocity [ km/s ]' % typeStr
-        lim = [-1000, 1000]
-        if haloLims: lim = [-300, 300]
-        log = False
-    if prop in ['vrelmag','halo_vrelmag','relvelmag','relative_vmag']:
-        label = '%s Halo-Relative Velocity Magnitude [ km/s ]' % typeStr
-        lim = [0, 1000]
-        if haloLims: lim = [0, 400]
-        log = False
-
-    if prop in ['specangmom_mag','specj_mag']:
-        label = '%s Specific Angular Momentum [log kpc km/s]' % typeStr
-        lim = [2.0, 6.0]
-        if haloLims: pass
-        log = True
-
-    if prop in ['menc','enclosedmass']:
-        label = 'Enclosed Mass [ log 10$^{10}$ M$_{\\rm sun}$ / h ]'
-        lim = [-3.0, 2.0]
-        if haloLims: pass
-        log = True
-
-    if prop in ['tff','tfreefall','freefalltime']:
-        label = 'Gravitational Free-Fall Time [ log Gyr ]'
-        lim = [-2.0, 1.0]
-        if haloLims: pass
-        log = True
-
-    if prop in ['tcool_tff']:
-        label = 'log ( t$_{\\rm cool}$ / t$_{\\rm ff}$ )'
-        lim = [-1.0, 2.0]
-        if haloLims: pass
-        log = True
-
-    if prop in ['delta_rho']:
-      label = 'log ( $\\delta \\rho / </rho>$ )'
-      lim = [-1.0, 1.0]
-      if haloLims: pass
-      log = True
-
-    # non-custom fields (units are correct out of snapshot / code units, i.e. no processing)
-    if prop in ['sfr']:
-        assert ptType == 'gas'
-        label = 'Star Formation Rate [ log M$_{\\rm sun}$/yr ]'
-        lim = [-4.0, 2.0]
-        if haloLims: pass
-        log = True
-
-    # did we recognize a field?
     if label is None:
         raise Exception('Unrecognized particle field [%s].' % ptProperty)
 
     # return
+    if u:
+        return units
+
     return label, lim, log

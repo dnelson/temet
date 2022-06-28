@@ -45,7 +45,7 @@ def singleHaloImage(sP, conf=0):
     if conf == 2:
         panels.append( {'partType':'gas', 'partField':'Mg II', 'valMinMax':[10.0,16.0]} )
     if conf == 3:
-        panels.append( {'partType':'gas', 'partField':'MHIGK_popping', 'valMinMax':[16.0,22.0]} )
+        panels.append( {'partType':'gas', 'partField':'MHI_GK', 'valMinMax':[16.0,22.0]} )
     if conf == 4:
         panels.append( {'partType':'gas', 'partField':'vrad', 'valMinMax':[-180,180]} )
 
@@ -216,7 +216,7 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
     rotation  = 'edge-on'
     size      = 250.0
     sizeType  = 'kpc'
-    weightField = 'mass' #'MHIGK_popping' #'hi mass' # 'mass' is the default
+    weightField = 'mass' #'MHI_GK' #'hi mass' # 'mass' is the default
 
     if fullbox:
         method = 'sphMap_global'
@@ -473,7 +473,7 @@ def stackedImageProjection():
     axes      = [0,1] # random rotation
     size      = 3.0
     sizeType  = 'rVirial'
-    weightField = 'mass' #'MHIGK_popping' #'hi mass' # 'mass' is the default
+    weightField = 'mass' #'MHI_GK' #'hi mass' # 'mass' is the default
     partType  = 'gas'
     partField = dataField
 

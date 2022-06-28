@@ -965,8 +965,8 @@ def compareEOSFiles(doTempNotPres=False):
             ax.plot(xm1[:-1], ym1[:-1], '-', alpha=0.9, label=sP.simName+' median T$_{\\rm gas}$')
         else:
             # pressures
-            sim_pres_gas = sP.snapshotSubset('gas', 'P_gas')
-            sim_pres_B   = sP.snapshotSubset('gas', 'P_B')
+            sim_pres_gas = sP.snapshotSubset('gas', 'P_gas_log')
+            sim_pres_B   = sP.snapshotSubset('gas', 'P_B_log')
 
             xm1, ym1, sm1 = running_median(sim_dens,sim_pres_gas,binSize=binSize)
             xm2, ym2, sm2 = running_median(sim_dens,sim_pres_B,binSize=binSize)

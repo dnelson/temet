@@ -1351,7 +1351,6 @@ def compareRuns_PhaseDiagram():
         if sP.simName == 'DM only': continue
         print(variant,sP.simName)
         plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, pdf=pdf)
-        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, meancolors=['coolrate_ratio'], weights=None, pdf=pdf)
 
     pdf.close()
 
@@ -1548,7 +1547,7 @@ def singleHaloProperties():
 
     partType = 'gas'
     xQuant = 'coolrate'
-    yQuant = 'coolrate_ratio'
+    yQuant = 'dens'
 
     # pick a MW
     #gc = sP.groupCat(fieldsHalos=['Group_M_Crit200','GroupPos'])
@@ -1593,7 +1592,7 @@ def coolingPhase():
     # config
     yQuant = 'temp'
     xQuant = 'numdens'
-    cQuants = ['coolrate','heatrate','coolrate_powell','coolrate_ratio']
+    cQuants = ['coolrate','heatrate','coolrate_powell']
     xlim   = [-9.0, 2.0]
     ylim   = [2.0, 8.0]
 

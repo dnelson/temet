@@ -160,7 +160,7 @@ def clusterEntropyCores():
 
             # load entropy, note: xray version: K(r) = k * T_x(r) * n_e(r)^{-2/3}
             yvals = sP.snapshotSubset('gas', 'entr', haloID=haloID)
-            yvals = 10.0**yvals / sP.units.boltzmann_keV # [K cm^2] -> [keV cm^2]
+            yvals = yvals / sP.units.boltzmann_keV # [K cm^2] -> [keV cm^2]
 
             # exclude sfr>0 and log(T)<5.8 gas
             sfr = sP.snapshotSubset('gas', 'sfr', haloID=haloID)

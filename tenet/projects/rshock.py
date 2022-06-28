@@ -403,7 +403,7 @@ def local_gas_subset(sP, haloID=0, maxRadR200=5.2, useTree=True):
     gas_local['ShocksMachNum'] = sP.snapshotSubsetC('gas', 'shocks_machnum', inds=loc_inds)
 
     gas_local['Temp'] = sP.snapshotSubsetC('gas', 'temp_linear', inds=loc_inds)
-    gas_local['Entropy'] = sP.snapshotSubsetC('gas', 'entr_linear', inds=loc_inds)
+    gas_local['Entropy'] = sP.snapshotSubsetC('gas', 'entr', inds=loc_inds)
 
     # vrad
     sub = sP.subhalo(halo['GroupFirstSub'])

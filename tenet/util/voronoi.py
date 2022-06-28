@@ -274,7 +274,7 @@ def voronoiThresholdSegmentation(sP, haloID, propName, propThresh, propThreshCom
     beta  = sP.snapshotSubset('gas', 'beta', haloID=haloID)
 
     mg2_mass = sP.snapshotSubset('gas', 'Mg II mass', haloID=haloID)
-    hi_mass  = sP.snapshotSubset('gas', 'MHIGK_popping', haloID=haloID)
+    hi_mass  = sP.snapshotSubset('gas', 'MHI_GK', haloID=haloID)
     if hi_mass is None:
         hi_mass = sP.snapshotSubset('gas', 'hi mass', haloID=haloID) # simpler model
 

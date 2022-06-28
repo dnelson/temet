@@ -11,10 +11,14 @@ class units(object):
         Can also be instantiated with a redshift/sP, in which case contains the relevant unit 
         system and redshift-dependent constants.
     """
-    # units (from parameter file, currently same for all runs)
+    # units (default unit system)
     UnitLength_in_cm         = 3.085678e21   # 1.0 kpc
     UnitMass_in_g            = 1.989e43      # 1.0e10 solar masses
     UnitVelocity_in_cm_per_s = 1.0e5         # 1 km/sec
+
+    UnitLength_str   = 'ckpc/h'
+    UnitMass_str     = '10$^{10}$ M$_{\\rm sun}$/h'
+    UnitVelocity_str = 'km/s'
 
     # derived units
     UnitTime_in_s       = None
@@ -121,23 +125,46 @@ class units(object):
         # Mpc for lengths instead of the usual kpc?
         if self._sP is not None and self._sP.mpcUnits:
             self.UnitLength_in_cm = 3.085678e24 # 1000.0 kpc
+            self.UnitLength_str = 'cMpc/h'
 
-        # non-cosmological run?
-        if self._sP.redshift is not None and np.isnan(self._sP.redshift):
-            print('NOTE: Setting units.scalefac = 1 for non-cosmological run.')
-            self.scalefac = 1.0 # nullify all comoving -> physical conversions
-
-        # custom (non-stard) unit system in header? only for non-cosmological runs
+        # custom (non-standard) unit system in header? only for non-cosmological runs
         # TESTING. Very incomplete support!
         if self._sP.redshift is not None and np.isnan(self._sP.redshift):
             keys = ['UnitMass_in_g','UnitLength_in_cm','UnitVelocity_in_cm_per_s']
             header = self._sP.snapshotHeader()
 
             for key in keys:
-                if key in header:
-                    if header[key] != getattr(self,key):
-                        print('NOTE: Setting units.%s = %g from header! EXPERIMENTAL!' % (key,header[key]))
-                        setattr(self,key,header[key])
+                if key not in header:
+                    continue # not present
+                if header[key] == getattr(self,key):
+                    continue # unchanged
+
+                print('NOTE: Setting units.%s = %g from header! EXPERIMENTAL!' % (key,header[key]))
+
+                # update numeric value, and clear string representation
+                skey = key.split('_')[0]+'_str'
+
+                setattr(self,key,header[key])
+                setattr(self,skey,'')
+
+                # try to create new string representation (can be generalized)
+                if key == 'UnitMass_in_g' and header[key] == 1.989e31:
+                    setattr(self,skey,'M$_{\\rm sun}$/h')
+                if key == 'UnitLength_in_cm' and header[key] == 3.08568e+18:
+                    setattr(self,skey,'cpc/h')
+
+        # non-cosmological run?
+        if self._sP.redshift is not None and np.isnan(self._sP.redshift):
+            print('NOTE: Setting units.scalefac = 1 for non-cosmological run.')
+            self.scalefac = 1.0 # nullify all comoving -> physical conversions
+
+            # update unit string representations (remove 'c' for comoving, and '/h')
+            if self.UnitLength_str[0] == 'c':
+                setattr(self,'UnitLength_str',self.UnitLength_str[1:])
+            if self.UnitLength_str[-2:] == '/h':
+                setattr(self,'UnitLength_str',self.UnitLength_str[0:-2])
+            if self.UnitMass_str[-2:] == '/h':
+                setattr(self,'UnitMass_str',self.UnitMass_str[0:-2])
 
         # derived units
         self.UnitTime_in_s       = self.UnitLength_in_cm / self.UnitVelocity_in_cm_per_s
@@ -790,13 +817,13 @@ class units(object):
 
         return colDensPhys.astype('float32')
 
-    def UToTemp(self, u, nelec, log=False):
-        """ Convert (U,Ne) pair in code units to temperature in Kelvin. """ 
+    def UToTemp(self, u, xe, log=False):
+        """ Convert (U,xe) pair in code units to temperature in Kelvin. """ 
         # hydrogen mass fraction default
         hmassfrac = self.hydrogen_massfrac
 
         # calculate mean molecular weight
-        meanmolwt = 4.0/(1.0 + 3.0 * hmassfrac + 4.0* hmassfrac * nelec.astype('float32'))
+        meanmolwt = 4.0/(1.0 + 3.0 * hmassfrac + 4.0* hmassfrac * xe.astype('float32'))
         meanmolwt *= self.mass_proton
 
         # calculate temperature (K)
@@ -808,13 +835,13 @@ class units(object):
             temp = logZeroSafe(temp)
         return temp
 
-    def TempToU(self, temp, nelec, log=False):
+    def TempToU(self, temp, xe, log=False):
         """ Convert temperature in Kelvin to InternalEnergy (u) in code units. """
         if np.max(temp) <= 10.0:
             raise Exception("Error: input temp probably in log, check.")
 
         # calculate mean molecular weight
-        meanmolwt = 4.0/(1.0 + 3.0 * self.hydrogen_massfrac + 4.0* self.hydrogen_massfrac * nelec) 
+        meanmolwt = 4.0/(1.0 + 3.0 * self.hydrogen_massfrac + 4.0* self.hydrogen_massfrac * xe) 
         meanmolwt *= self.mass_proton
 
         # temp = (gamma-1.0) * u / units.boltzmann * units.UnitEnergy_in_cgs / units.UnitMass_in_g * meanmolwt
@@ -892,7 +919,7 @@ class units(object):
             ent_cgs = logZeroSafe(ent_cgs)
         return ent_cgs
 
-    def calcXrayLumBolometric(self, sfr, u, nelec, mass, dens, temp=None, log=False):
+    def calcXrayLumBolometric(self, sfr, u, xe, mass, dens, temp=None, log=False):
         """ Following Navarro+ (1995) Eqn. 6 the most basic estimator of bolometric X-ray luminosity 
         in [10^30 erg/s] for individual gas cells, based only on their density and temperature. Assumes 
         simplified (primordial) high-temp cooling function, and only free-free (bremsstrahlung) 
@@ -900,7 +927,7 @@ class units(object):
         hmassfrac = self.hydrogen_massfrac
 
         # calculate mean molecular weight
-        meanmolwt = 4.0/(1.0 + 3.0 * hmassfrac + 4.0* hmassfrac * nelec.astype('float64')) 
+        meanmolwt = 4.0/(1.0 + 3.0 * hmassfrac + 4.0* hmassfrac * xe.astype('float64')) 
         meanmolwt *= self.mass_proton
 
         # calculate temperature (K)

@@ -1372,7 +1372,7 @@ def gjoshi_clustermaps(conf=0, haloID=0):
 def mwbubbles_tng50_top30(setType='top30', partType='gas', partField='P_gas', input_rotation='edge-on'):
     """ Pillepich et al. 2021 (): mostly edge-on views of MW/M31 analogs """
     """ 6x5 posters of random 30 bubbles, P_gas and X-ray """
-    """ Interesting options for partType='gas': xray_lum, coldens_msunkpc2, machnum, P_gas, P_B, entropy, temperature, metal_solar, vrad, bmag_uG, HI_segmented, OVI_OVII_ionmassratio, SN_IaII_ratio_Fe """
+    """ Interesting options for partType='gas': xray_lum, coldens_msunkpc2, machnum, P_gas, P_B, entropy, temperature, metal_solar, vrad, bmag_uG, HI_segmented, ionmassratio_OVII_OVIII, SN_IaII_ratio_Fe """
     """ Interesting options for  partType='stars': coldens_msunkpc2 """
 
     panels = []

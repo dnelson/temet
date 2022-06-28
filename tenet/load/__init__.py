@@ -6,3 +6,5 @@ from . import auxcat
 from . import data
 from . import groupcat
 from . import snapshot
+from . import snap_fields
+from . import snap_fields_custom

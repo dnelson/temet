@@ -2152,7 +2152,7 @@ def tracerTracksQuant(sP, pSplit, quant, op, time, norm=None):
 
     assert pSplit is None # not implemented
     assert op in ['mean'] #,'sample']
-    assert quant in ['angmom','entr','temp','acc_time_1rvir','acc_time_015rvir','dt_halo']
+    assert quant in ['angmom','entr_log','temp','acc_time_1rvir','acc_time_015rvir','dt_halo']
     assert time is None or time in ['acc_time_1rvir','acc_time_015rvir']
     assert norm is None or norm in ['tvir_tacc','tvir_cur']
 
@@ -2704,9 +2704,9 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSF
 
     # check
     hDensSpecies   = ['HI','HI_noH2']
-    preCompSpecies = ['MH2BR_popping', 'MH2GK_popping', 'MH2KMT_popping', 'MHIBR_popping', 'MHIGK_popping', 'MHIKMT_popping',
-                      'MH2_GD14_diemer', 'MH2_GK11_diemer', 'MH2_K13_diemer', 'MH2_S14_diemer',
-                      'MHI_GD14_diemer', 'MHI_GK11_diemer', 'MHI_K13_diemer', 'MHI_S14_diemer']
+    preCompSpecies = ['MH2_BR', 'MH2_GK', 'MH2_KMT', 'MHI_BR', 'MHI_GK', 'MHI_KMT',
+                      'MH2_GD14', 'MH2_GK11', 'MH2_K13', 'MH2_S14',
+                      'MHI_GD14', 'MHI_GK11', 'MHI_K13', 'MHI_S14']
     zDensSpecies   = ['O VI','O VI 10','O VI 25','O VI solar','O VII','O VIII','O VII solarz','O VII 10 solarz']
 
     if species not in hDensSpecies + zDensSpecies + preCompSpecies + ['Z']:

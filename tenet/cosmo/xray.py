@@ -314,6 +314,9 @@ class xrayEmission():
                 assert instrument in f
                 self.data[instrument] = f[instrument][()]
 
+        if instrument is not None and 'Count_' in instrument:
+            raise Exception('Count datasets [XSPEC] are the same (?!) as fluxes. Needs careful update.')
+
     def slice(self, instrument, metal=None, norm=None, temp=None, redshift=None):
         """ Return a 1D slice of the table specified by a value in all other dimensions (only one 
           input can, and must, remain None). """
@@ -464,7 +467,7 @@ class xrayEmission():
         assert np.count_nonzero(np.isnan(vals)) == 0
 
         w = np.where(vals == 0)
-        vals[w] = 1e10 # extremely small
+        vals[w] = vals[vals > 0].min()
 
         return vals # note: float64
 

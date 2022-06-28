@@ -330,7 +330,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
 
     binSize = 0.1 # log mass
     renames = {'AllGas':'Total Gas / 100','AllGas_Metal':'Total Metals','AllGas_Oxygen':'Total Oxygen',
-               'AllGas_Mg':'Total Mg','HIGK_popping':'Neutral HI'}
+               'AllGas_Mg':'Total Mg','HI_GK':'Neutral HI'}
     ionColors = {'AllGas':'#444444','AllGas_Metal':'#777777','AllGas_Oxygen':'#cccccc'}
 
     runToyModel = False # testing Lars' idea

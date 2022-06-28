@@ -1,0 +1,2167 @@
+"""
+Definitions of custom snapshot fields.
+"""
+import h5py
+import numpy as np
+from functools import partial
+from getpass import getuser
+from os.path import isfile, isdir
+from os import mkdir
+
+from .snapshot import snap_field, _haloOrSubhaloIndRange
+from ..plot.quantities import simParticleQuantity
+
+# -------------------- general/all particle types -------------------------------------------------
+
+@snap_field
+def mass_msun(sim, partType, field, args):
+    """ Particle/cell mass in solar masses. """
+    mass = sim.snapshotSubset(partType, 'mass', **args)
+
+    return sim.units.codeMassToMsun(mass)
+
+mass_msun.label = '[pt] Mass'
+mass_msun.units = 'M$_{\\rm sun}$'
+mass_msun.limits = [5.0, 7.0]
+mass_msun.limits_halo = [3.0, 5.0]
+mass_msun.log = True
+
+@snap_field(alias='masses')
+def mass(sim, partType, field, args):
+    """ Particle/cell mass in code units, supporting constant-mass DM particles. """
+    if sim.isPartType(partType, 'dm'):
+        mass = sim.snapshotSubset(partType, 'pos_x', **args) # make sure size is correct
+        mass[:] = sim.dmParticleMass
+
+        return mass
+
+    # otherwise, normal load
+    return None
+
+mass.label = '[pt] Mass'
+mass.units = 'code_mass'
+mass.limits = [-3.0, 0.0]
+mass.limits_halo = [-6.0, -2.0]
+mass.log = True
+
+@snap_field(alias='vmag')
+def velmag(sim, partType, field, args):
+    """ Magnitude of the gas velocity 3-vector. """
+    vel = sim.snapshotSubset(partType, 'vel', **args)
+    vel = sim.units.particleCodeVelocityToKms(vel)
+
+    vmag = np.sqrt( vel[:,0]*vel[:,0] + vel[:,1]*vel[:,1] + vel[:,2]*vel[:,2] )
+    
+    return vmag
+
+velmag.label = 'Velocity Magnitude'
+velmag.units = 'km/s'
+velmag.limits = [0, 1000]
+velmag.limits_halo = [0, 400]
+velmag.log = False
+
+@snap_field(alias='subfind_volume')
+def subfind_vol(sim, partType, field, args):
+    """ Particle 'volume' based on SubfindHsml of the N=64 nearest DM particles. """
+    hsml = sim.snapshotSubset(partType, 'SubfindHsml', **args)
+    vol = (4.0/3.0) * np.pi * hsml**3.0
+
+    return vol
+
+subfind_vol.label = 'Subfind Volume'
+subfind_vol.units = 'code_volume'
+subfind_vol.limits = [-6.0, 6.0]
+subfind_vol.limits_halo = [-4.0, 6.0]
+subfind_vol.log = True
+
+@snap_field(alias='gravpotential')
+def gravpot(sim, partType, field, args):
+    """ Gravitational potential (from stored value in snapshot). """
+    pot = sim.snapshotSubset(partType, 'Potential', **args)
+
+    return pot * sim.units.scalefac
+
+gravpot.label = 'Gravitational Potential'
+gravpot.units = '(km/s)$^2$'
+gravpot.limits = [-1e6, 1e5]
+gravpot.limits_halo = [-1e6, -1e2]
+gravpot.log = False
+
+@snap_field(alias='escapevel')
+def vesc(sim, partType, field, args):
+    """ Escape velocity, based on the stored gravitational Potential. """
+    pot = sim.snapshotSubset(partType, 'Potential', **args)
+
+    return sim.units.codePotentialToEscapeVelKms(pot)
+
+vesc.label = 'Escape Velocity'
+vesc.units = 'km/s'
+vesc.limits = [0, 2000]
+vesc.limits_halo = [200, 1000]
+vesc.log = False
+
+@snap_field(alias='dt_yr')
+def dt(sim, partType, field, args):
+    """ Particle/cell total actual/effective timestep, from stored snapshot value. """
+    dt = sim.snapshotSubset(partType, 'TimeStep', **args)
+
+    return sim.units.codeTimeStepToYears(dt)
+
+dt.label = '[pt] Timestep'
+dt.units = 'yr'
+dt.limits = [1.0, 6.0]
+dt.limits_halo = [1.0, 5.0]
+dt.log = True
+
+# -------------------- gas ------------------------------------------------------------------------
+
+@snap_field(alias='temperature')
+def temp(sim, partType, field, args):
+    """ Gas temperature. """
+    u  = sim.snapshotSubset(partType, 'u', **args)
+    ne = sim.snapshotSubset(partType, 'ne', **args)
+
+    return sim.units.UToTemp(u,ne,log=True)
+
+temp.label = 'Gas Temperature'
+temp.units = 'log K'
+temp.limits = [2.0, 8.0]
+temp.limits_halo = [3.5, 8.0]
+temp.log = False
+
+@snap_field
+def temp_old(sim, partType, field, args):
+    """ Gas temperature (uncorrected values for TNG runs). """
+    u  = sim.snapshotSubset(partType, 'InternalEnergyOld', **args)
+    ne = sim.snapshotSubset(partType, 'ne', **args)
+
+    return sim.units.UToTemp(u,ne,log=True)
+
+temp_old.label = 'Gas Temperature (Uncorrected)'
+temp_old.units = 'log K'
+temp_old.limits = [2.0, 8.0]
+temp_old.limits_halo = [3.5, 8.0]
+temp_old.log = False
+
+@snap_field(alias='temp_sfcold_linear')
+def temp_sfcold(sim, partType, field, args):
+    """ Gas temperature, where star-forming gas is set to the sub-grid (constant)
+    cold-phase temperature instead of eEOS temperature. """
+    temp = sim.snapshotSubset(partType, 'temp', **args)
+    sfr = sim.snapshotSubset(partType, 'sfr', **args)
+
+    w = np.where(sfr > 0.0)
+    temp[w] = 3.0 # fiducial Illustris/TNG model: T_clouds = 1000 K, T_SN = 5.73e7 K
+
+    if '_linear' in field:
+        temp = 10.0**temp
+
+    return temp
+
+temp_sfcold.label = 'Gas Temperature'
+temp_sfcold.units = 'log K' # todo: inconsistent for temp_sfcold_linear
+temp_sfcold.limits = [3.5, 7.2]
+temp_sfcold.limits_halo = [3.5, 8.0]
+temp_sfcold.log = False
+
+@snap_field
+def temp_linear(sim, partType, field, args):
+    """ Gas temperature (linear). """
+    u  = sim.snapshotSubset(partType, 'u', **args)
+    ne = sim.snapshotSubset(partType, 'ne', **args)
+
+    return sim.units.UToTemp(u,ne,log=False)
+
+temp_linear.label = 'Gas Temperature'
+temp_linear.units = 'K'
+temp_linear.limits = [1e2, 1e8]
+temp_linear.limits_halo = [5e3, 1e7]
+temp_linear.log = False
+
+@snap_field(alias='nelec')
+def ne(sim, partType, field, args):
+    """ Electron number density, derived from ElectronAbundance, which is the fractional 
+    abundance with respect to the total hydrogen number density. Also handle runs without cooling. """
+    assert sim.isPartType(partType, 'gas')
+
+    if sim.snapHasField(partType, 'ElectronAbundance'):
+        # normal run
+        xe = sim.snapshotSubset(partType, 'ElectronAbundance', **args)
+    else:
+        # no cooling run: assume fully ionized primordial composition
+        xe = sim.snapshotSubset(partType, 'u', **args) # make sure size is correct
+        xe[:] = 1.0 / (1+2*sim.units.helium_massfrac)
+
+    nelec = xe * sim.snapshotSubset(partType, 'nh', **args)
+
+    return nelec
+
+temp_linear.label = 'Electron Number Density n$_{\\rm e}$'
+temp_linear.units = 'cm$^{-3}$'
+temp_linear.limits = [-9.0, -3.0]
+temp_linear.limits_halo = [-6.0, 0.0]
+temp_linear.log = True
+
+@snap_field(alias='hdens')
+def nh(sim, partType, field, args):
+    """ Hydrogen number density, derived from total Density. """
+    dens = sim.snapshotSubset(partType, 'dens', **args)
+    dens = sim.units.codeDensToPhys(dens,cgs=True,numDens=True) # 1/cm^3
+
+    nh = dens * sim.units.hydrogen_massfrac # constant 0.76 assumed
+
+    return nh
+
+nh.label = 'Gas Hydrogen Density n$_{\\rm H}$'
+nh.units = 'cm$^{-3}$'
+nh.limits = [-9.0, 3.0]
+nh.limits_halo = [-5.0, 0.0]
+nh.log = True
+
+@snap_field
+def numdens(sim, partType, field, args):
+    """ Total gas number density, derived from total Density. """
+    dens = sim.snapshotSubset(partType, 'dens', **args)
+
+    return sim.units.codeDensToPhys(dens,cgs=True,numDens=True)
+
+numdens.label = 'Gas Number Density'
+numdens.units = 'cm$^{-3}$'
+numdens.limits = [-9.0, 3.0]
+numdens.limits_halo = [-5.0, 0.0]
+numdens.log = True
+
+@snap_field
+def dens_critratio(sim, partType, field, args):
+    """ Mass density to critical density. """
+    dens = sim.snapshotSubset(partType, 'dens', **args)
+
+    return sim.units.codeDensToCritRatio(dens, baryon=False, log=False)
+
+dens_critratio.label = '$\\rho_{\\rm gas} / \\rho_{\\rm crit}$'
+dens_critratio.units = '' # dimensionless
+dens_critratio.limits = [-6.0, 5.0]
+dens_critratio.limits_halo = [-1.0, 6.0]
+dens_critratio.log = True
+
+@snap_field
+def dens_critb(sim, partType, field, args):
+    """ Mass density to critical baryon density. """
+    dens = sim.snapshotSubset(partType, 'dens', **args)
+
+    return sim.units.codeDensToCritRatio(dens, baryon=True, log=False)
+
+dens_critratio.label = '$\\rho_{\\rm gas} / \\rho_{\\rm crit,b}$'
+dens_critratio.units = '' # dimensionless
+dens_critratio.limits = [-2.0, 9.0]
+dens_critratio.limits_halo = [3.0, 9.0]
+dens_critratio.log = True
+
+@snap_field(aliases=['ent','entr'])
+def entropy(sim, partType, field, args):
+    """ Gas entropy, derived from (u,dens). """
+    u    = sim.snapshotSubset(partType, 'u', **args)
+    dens = sim.snapshotSubset(partType, 'dens', **args)
+
+    return sim.units.calcEntropyCGS(u,dens,log=False)
+
+entropy.label = 'Gas Entropy'
+entropy.units = 'K cm$^{2}$'
+entropy.limits = [8.0, 11.0]
+entropy.limits_halo = [9.0, 11.0]
+entropy.log = True
+
+@snap_field(alias='bfieldmag')
+def bmag(sim, partType, field, args):
+    """ Magnitude of the gas magnetic field 3-vector in Gauss. """
+    b = sim.snapshotSubset(partType, 'MagneticField', **args)
+    b = sim.units.particleCodeBFieldToGauss(b)
+
+    bmag = np.sqrt( b[:,0]*b[:,0] + b[:,1]*b[:,1] + b[:,2]*b[:,2] )
+    
+    return bmag
+
+bmag.label = 'Magnetic Field Strength'
+bmag.units = 'Gauss'
+bmag.limits = [-15.0, -4.0]
+bmag.limits_halo = [-9.0, -3.0]
+bmag.log = True
+
+@snap_field(alias='bfieldmag_ug')
+def bmag_ug(sim, partType, field, args):
+    """ Magnitude of the gas magnetic field 3-vector in micro-Gauss. """
+    return sim.snapshotSubset(partType, 'bmag', **args) * 1e6
+
+bmag.label = 'Magnetic Field Strength'
+bmag.units = '$\mu$G'
+bmag.limits = [-9.0, 3.0]
+bmag.limits_halo = [-3.0, 2.0]
+bmag.log = True
+
+@snap_field(alias='vel_alfven')
+def va(sim, partType, field, args):
+    """ Magnetic Alfven-wave velocity. """
+    bmag = sim.snapshotSubset(partType, 'bmag', **args) # G
+
+    # note: density should be the sum of all charged particle species, not just electrons
+    rho = sim.snapshotSubset(partType, 'ne', **args) * sim.units.mass_electron # g/cm^3
+
+    va = bmag / np.sqrt(4 * np.pi * rho) * 1e-5 # cgs -> km/s
+
+    return va
+
+va.label = 'Alfv$\'{e}$n Velocity'
+va.units = 'km/s'
+va.limits = [-9.0, 3.0]
+va.limits_halo = [-3.0, 2.0]
+va.log = True
+
+@snap_field(aliases=['vel_sound','csound'])
+def cs(sim, partType, field, args):
+    """ Gas sound speed (hydro only version). """
+    u    = sim.snapshotSubset(partType, 'u', **args)
+    dens = sim.snapshotSubset(partType, 'dens', **args)
+
+    return sim.calcSoundSpeedKmS(u, dens)
+
+cs.label = 'Sound Speed'
+cs.units = 'km/s'
+cs.limits = [-9.0, 3.0]
+cs.limits_halo = [-3.0, 2.0]
+cs.log = False
+
+@snap_field(alias='vol')
+def volume(sim, partType, field, args):
+    """ Gas cell volume. """
+    if not sim.snapHasField(partType, 'Volume'):
+        # PartType0/Volume eliminated in newer outputs, calculate if necessary
+        mass = sim.snapshotSubset(partType, 'mass', **args)
+        dens = sim.snapshotSubset(partType, 'dens', **args)
+        vol = mass / dens
+        return vol
+
+    # otherwise, normal load
+    return None
+
+volume.label = 'Gas Cell Volume'
+volume.units = '(code_length)$^3$'
+volume.limits = [-6.0, 6.0]
+volume.log = True
+
+@snap_field(alias='vol_cm3')
+def volume_cm3(sim, partType, field, args):
+    """ Gas cell volume [cm^3]. """
+    return sim.units.codeVolumeToCm3(sim.snapshotSubset(partType,'volume',**args))
+
+volume_cm3.label = 'Gas Cell Volume'
+volume_cm3.units = 'cm$^{3}$'
+volume_cm3.limits = [55.0, 65.0]
+volume_cm3.limits_halo = [55.0, 62.0]
+volume_cm3.log = True
+
+@snap_field(alias='vol_kpc3')
+def volume_kpc3(sim, partType, field, args):
+    """ Gas cell volume [kpc^3]. """
+    return sim.units.codeVolumeToKpc3(sim.snapshotSubset(partType,'volume',**args))
+
+volume_kpc3.label = 'Gas Cell Volume'
+volume_kpc3.units = 'kpc$^{3}$'
+volume_kpc3.limits = [-6.0, 6.0]
+volume_kpc3.limits_halo = [-6.0, 2.0]
+volume_kpc3.log = True
+
+@snap_field(alias='cellrad')
+def cellsize(sim, partType, field, args):
+    """ Gas cell 'size' i.e. 'cell radius', defined as the radius of the volume equivalent sphere. """
+    vol = sim.snapshotSubset(partType, 'volume', **args) 
+    rcell = (vol * 3.0 / (4*np.pi))**(1.0/3.0)
+
+    return rcell
+
+cellsize.label = 'Gas Cell Size'
+cellsize.units = 'code_length'
+cellsize.limits = [-2.0, 3.0]
+cellsize.limits_halo = [-2.0, 1.0]
+cellsize.log = True
+
+@snap_field(alias='cellrad_kpc')
+def cellsize_kpc(sim, partType, field, args):
+    """ Gas cell size [kpc]. """
+    rcell = sim.snapshotSubset(partType, 'cellsize', **args)
+
+    return sim.units.codeLengthToKpc(rcell)
+
+cellsize_kpc.label = 'Gas Cell Size'
+cellsize_kpc.units = 'kpc'
+cellsize_kpc.limits = [-2.0, 3.0]
+cellsize_kpc.limits_halo = [-2.0, 1.0]
+cellsize_kpc.log = True
+
+@snap_field
+def hsml(sim, partType, field, args):
+    """ Smoothing length i.e. characteristic size, possibly for visualization purposes. """
+    assert args['inds'] is None # otherwise generalize
+    from ..vis.common import getHsmlForPartType, defaultHsmlFac
+
+    indRange = args['indRange']
+    if args['haloID'] is not None or args['subhaloID'] is not None:
+        indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
+
+    useSnapHsml = sim.isPartType(partType, 'stars')
+    hsml = getHsmlForPartType(sim, partType, indRange=indRange, useSnapHsml=useSnapHsml)
+    hsml *= defaultHsmlFac(partType)
+
+    return hsml
+
+hsml.label = 'Smoothing Length'
+hsml.units = 'code_length'
+hsml.limits = [-1.0, 4.0]
+hsml.limits_halo = [-1.0, 2.0]
+hsml.log = True
+
+@snap_field(alias='baryon_frac')
+def f_b(sim, partType, field, args):
+    """ Baryon fraction, defined as (gas+stars)/(gas+stars+DM), all estimated locally, then 
+    normalized to the cosmic baryon fraction. """
+    assert sim.isPartType(partType,'gas') # otherwise generalize
+    from ..util.treeSearch import calcHsml, calcQuantReduction
+
+    pt_pos = sim.snapshotSubset(partType, 'pos', **args)
+
+    # DM
+    if sim.snapHasField(partType, 'SubfindDMDensity'):
+        SubfindDMDensity = sim.snapshotSubset(partType, 'SubfindDMDensity', **args)
+    else:
+        # derive if not stored
+        dm_pos = sim.snapshotSubset('dm', 'pos') # global load and tree
+        SubfindHsml = calcHsml(dm_pos, sim.boxSize, posSearch=pt_pos, nNGB=64, treePrec=dm_pos.dtype)
+        dens_dm = 64 * sim.dmParticleMass / (4/3*np.pi*SubfindHsml**3) # code mass / code volume
+
+    # stars
+    stars_pos = sim.snapshotSubset('stars', 'pos') # global load and tree
+    stars_mass = sim.snapshotSubset('stars', 'mass')
+    StellarHsml = calcHsml(stars_pos, sim.boxSize, posSearch=pt_pos, nNGB=32, treePrec=stars_pos.dtype)
+    totmass_stars = calcQuantReduction(stars_pos, stars_mass, StellarHsml, op='sum', boxSizeSim=sim.boxSize, 
+                                       posSearch=pt_pos, treePrec=stars_pos.dtype)
+    dens_stars = totmass_stars / (4/3*np.pi*StellarHsml**3) # code mass / code volume
+
+    # gas
+    dens_gas = sim.snapshotSubset(partType, 'Density', **args)
+
+    # f_b
+    dens_b = dens_gas + dens_stars
+    dens_tot = dens_gas + dens_stars + dens_dm
+
+    return (dens_b / dens_tot / sim.units.f_b)
+
+f_b.label = 'f$_{\\rm b}$ / f$_{\\rm b,cosmic}$'
+f_b.units = '' # dimensionless
+f_b.limits = [0.0, 2.0]
+f_b.log = False
+
+@snap_field(aliases=['gas_pres','gas_pressure','pres','p_gas','p_thermal'])
+def pressure(sim, partType, field, args):
+    """ Gas *thermal* pressure. """
+    u    = sim.snapshotSubset(partType, 'u', **args)
+    dens = sim.snapshotSubset(partType, 'dens', **args)
+
+    return units.calcPressureCGS(u,dens)
+
+pressure.label = 'Gas Pressure'
+pressure.units = 'K cm$^{-3}$'
+pressure.limits = [-1.0, 7.0]
+pressure.limits_halo = [0.0, 5.0]
+pressure.log = True
+
+@snap_field(aliases=['mag_pres','magnetic_pressure','p_magnetic','p_b'])
+def pressure_mag(sim, partType, field, args):
+    """ Gas *magnetic* pressure. """
+    b = sim.snapshotSubset(partType, 'MagneticField', **args)
+
+    return sim.units.calcMagneticPressureCGS(b)
+
+pressure_mag.label = 'Gas Magnetic Pressure'
+pressure_mag.units = 'K cm$^{-3}$'
+pressure_mag.limits = [-1.0, 7.0]
+pressure_mag.limits_halo = [0.0, 5.0]
+pressure_mag.log = True
+
+@snap_field(aliases=['pres_ratio'])
+def pressure_ratio(sim, partType, field, args):
+    """ Ratio of gas magnetic to thermal pressure (beta^-1). """
+    P_gas = sim.snapshotSubset(partType, 'p_gas', **args)
+    P_mag = sim.snapshotSubset(partType, 'p_magnetic', **args)
+
+    return (P_mag/P_gas)
+
+pressure_ratio.label = '$\\beta^{-1}$ = P$_{\\rm B}$ / P$_{\\rm gas}$'
+pressure_ratio.units = '' # dimensionless
+pressure_ratio.limits = [-2.5, 2.5]
+pressure_ratio.limits_halo = [-2.0, 2.0]
+pressure_ratio.log = True
+
+@snap_field
+def beta(sim, partType, field, args):
+    """ Ratio of gas thermal to magnetic pressure (plasma beta). """
+    P_gas = sim.snapshotSubset(partType, 'p_gas', **args)
+    P_mag = sim.snapshotSubset(partType, 'p_magnetic', **args)
+
+    return (P_gas/P_mag)
+
+beta.label = '$\\beta$ = P$_{\\rm gas}$ / P$_{\\rm B}$'
+beta.units = '' # dimensionless
+beta.limits = [-2.5, 2.5]
+beta.limits_halo = [-2.0, 2.0]
+beta.log = True
+
+@snap_field(aliases=['p_tot','pres_tot','pres_total','pressure_total'])
+def pressure_tot(sim, partType, field, args):
+    """ Total (thermal+magnetic) gas pressure. """
+    P_gas = sim.snapshotSubset(partType, 'p_gas', **args)
+    P_mag = sim.snapshotSubset(partType, 'p_magnetic', **args)
+
+    return (P_gas + P_mag)
+
+pressure_tot.label = 'Gas Total Pressure = P$_{\\rm gas}$ + P$_{\\rm B}$'
+pressure_tot.units = 'K cm$^{-3}$'
+pressure_tot.limits = [-6.0, 8.0]
+pressure_tot.limits_halo = [-2.0, 7.0]
+pressure_tot.log = True
+
+@snap_field(aliases=['u_ke','kinetic_edens','kinetic_energydens'])
+def u_kinetic(sim, partType, field, args):
+    """ Kinetic, as opposed to thermal, energy density. """
+    dens_code = sim.snapshotSubset(partType, 'Density', **args)
+    vel_kms   = sim.snapshotSubset(partType, 'velmag', **args)
+
+    return sim.units.calcKineticEnergyDensityCGS(dens_code, vel_kms)
+
+u_kinetic.label = 'Gas Kinetic Energy Density'
+u_kinetic.units = 'erg cm$^{-3}$'
+u_kinetic.limits = [-6.0, 8.0]
+u_kinetic.limits_halo = [-2.0, 7.0]
+u_kinetic.log = True
+
+@snap_field(aliases=['uratio_b_ke','u_b_ke_ratio','b_ke_edens_ratio'])
+def uratio_mag_ke(sim, partType, field, args):
+    """ Ratio of gas magnetic to kinetic energy density. """
+    u_kinetic  = sim.snapshotSubset(partType, 'u_kinetic', **args)
+    u_magnetic = sim.snapshotSubset(partType, 'p_b', **args)
+
+    return (u_magnetic / u_kinetic)
+
+uratio_mag_ke.label = 'Gas (u$_{\\rm mag}$ / u$_{\\rm ke}$) Ratio'
+uratio_mag_ke.units = '' # dimensionless
+uratio_mag_ke.limits = [-4.0, 4.0]
+uratio_mag_ke.limits_halo = [-3.0, 3.0]
+uratio_mag_ke.log = True
+
+@snap_field(alias='cooltime')
+def tcool(sim, partType, field, args):
+    """ Gas cooling time (computed from saved GFM_CoolingRate), is np.nan if cell has net heating. """
+    dens = sim.snapshotSubset(partType, 'Density', **args)
+    u = sim.snapshotSubset(partType, 'InternalEnergy', **args)
+    coolrate = sim.snapshotSubset(partType, 'GFM_CoolingRate', **args)
+
+    cooltime = sim.units.coolingTimeGyr(dens, coolrate, u)
+
+    # also set eEOS gas to np.nan
+    sfr = sim.snapshotSubset(partType, 'sfr', **args)
+    w = np.where(sfr > 0.0)
+    cooltime[w] = np.nan
+
+    return cooltime
+
+tcool.label = 'Gas Cooling Time'
+tcool.units = 'Gyr'
+tcool.limits = [-8.0, 2.0]
+tcool.limits_halo = [-8.0, 2.5]
+tcool.log = True
+
+@snap_field(alias='coolingrate')
+def coolrate(sim, partType, field, args):
+    """ Gas specific cooling rate (computed from saved GFM_CoolingRate), is np.nan if cell has net heating. """
+    dens = sim.snapshotSubset(partType, 'Density', **args)
+    coolrate = sim.snapshotSubset(partType, 'GFM_CoolingRate', **args)
+
+    coolheat = sim.units.coolingRateToCGS(dens, coolrate)
+
+    w = np.where(coolheat >= 0.0)
+    coolheat[w] = np.nan # cell is heating, so cooling rate is undefined
+
+    return (-1.0 * coolheat) # convention: positive
+
+coolrate.label = 'Gas Cooling Rate'
+coolrate.units = 'erg/s/g'
+coolrate.limits = [-12.0, 2.0]
+coolrate.limits_halo = [-8.0, 3.0]
+coolrate.log = True
+
+@snap_field(alias='heatingrate')
+def heatrate(sim, partType, field, args):
+    """ Gas specific heating rate (computed from saved GFM_CoolingRate), is np.nan if cell has net cooling. """
+    dens = sim.snapshotSubset(partType, 'Density', **args)
+    coolrate = sim.snapshotSubset(partType, 'GFM_CoolingRate', **args)
+
+    coolheat = sim.units.coolingRateToCGS(dens, coolrate)
+
+    w = np.where(coolheat <= 0.0)
+    coolheat[w] = np.nan # cell is cooling, so heating rate is undefined
+
+    return coolheat # convention: positive
+
+heatrate.label = 'Gas Heating Rate'
+heatrate.units = 'erg/s/g'
+heatrate.limits = [-14.0, 0.0]
+heatrate.limits_halo = [-10.0, -1.0]
+heatrate.log = True
+
+@snap_field
+def netcoolrate(sim, partType, field, args):
+    """ Gas net specific cooling rate (computed from saved GFM_CoolingRate). """
+    dens = sim.snapshotSubset(partType, 'Density', **args)
+    coolrate = sim.snapshotSubset(partType, 'GFM_CoolingRate', **args)
+
+    coolheat = sim.units.coolingRateToCGS(dens, coolrate)
+
+    return coolheat # convention: negative is cooling, positive is heating
+
+netcoolrate.label = 'Gas Net Cooling Rate'
+netcoolrate.units = 'erg/s/g'
+netcoolrate.limits = [-1e3, 1e1]
+netcoolrate.limits_halo = [-1e3, 1e1]
+netcoolrate.log = False
+
+@snap_field
+def coolrate_powell(sim, partType, field, args):
+    """ Gas 'cooling rate' of Powell source term, specific (computed from saved DivB, GFM_CoolingRate). """
+    dens = sim.snapshotSubset(partType, 'Density', **args)
+    divb = sim.snapshotSubset(partType, 'MagneticFieldDivergence', **args)
+    bfield = sim.snapshotSubset(partType, 'MagneticField', **args)
+    vel = sim.snapshotSubset(partType, 'Velocities', **args)
+    vol = sim.snapshotSubset(partType, 'Volume', **args)
+
+    coolheat = sim.units.powellEnergyTermCGS(dens, divb, bfield, vel, vol)
+
+    w = np.where(coolheat >= 0.0)
+    coolheat[w] = np.nan # cooling only
+
+    return (-1.0 * coolheat) # convention: positive
+
+coolrate_powell.label = 'Powell Cooling Rate'
+coolrate_powell.units = 'erg/s/g'
+coolrate_powell.limits = [-16.0, 2.0]
+coolrate_powell.limits_halo = [-12.0, 1.5]
+coolrate_powell.log = True
+
+@snap_field(alias='dt_hydro_yr')
+def dt_hydro(sim, partType, field, args):
+    """ Gas cell hydrodynamical (Courant) timestep. """
+    soundspeed = sim.snapshotSubset('gas', 'soundspeed', **args)
+    cellrad = sim.snapshotSubset('gas', 'cellrad', **args)
+    cellrad_kpc = sim.units.codeLengthToKpc(cellrad)
+    cellrad_km  = cellrad_kpc * sim.units.kpc_in_km
+
+    dt_hydro_s = sim.units.CourantFac * cellrad_km / soundspeed
+    dt_yr = dt_hydro_s / sim.units.s_in_yr
+
+    return dt_yr
+
+dt_hydro.label = 'Gas Courant Timestep'
+dt_hydro.units = 'yr'
+dt_hydro.limits = [1.0, 6.0]
+dt_hydro.limits_halo = [1.0, 5.0]
+dt_hydro.log = True
+
+@snap_field(aliases=['depletion_time','tau_dep'])
+def tdep(sim, partType, field, args):
+    """ Gas cell depletion time: cells with zero sfr given nan."""
+    mass = sim.units.codeMassToMsun(sim.snapshotSubset('gas', 'mass', **args))
+    sfr = sim.snapshotSubset('gas', 'sfr', **args)
+
+    t = np.zeros(mass.size, dtype='float32')
+    t.fill(np.nan)
+
+    w = np.where(sfr > 0)
+    t[w] = mass[w] / sfr[w] / 1e9
+
+    return t
+
+tdep.label = 'Gas Depletion Time'
+tdep.units = 'Gyr'
+tdep.limits = [0.0, 12.0]
+tdep.limits_halo = [0.0, 10.0]
+tdep.log = False
+
+@snap_field(multi=True)
+def tau0_(sim, partType, field, args):
+    """ Optical depth to a certain line, at line center. """
+    transition = field.split("_")[1] # e.g. "tau0_mgii2796", "tau0_mgii2803", "tau0_lya"
+    print(field, transition)
+    if 'mgii' in transition:
+        baseSpecies = 'Mg II'
+    elif 'ly' in transition:
+        baseSpecies = 'H I' # note: uses internal hydrogen model, could use e.g. 'nhi_gk' (popping)
+    else:
+        raise Exception('Not handled.')
+
+    temp = sim.snapshotSubset(partType, 'temp_sfcold_linear', **args) # K
+    dens = sim.snapshotSubset(partType, '%s numdens' % baseSpecies, **args) # linear 1/cm^3
+    cellsize = sim.snapshotSubset(partType, 'cellsize', **args) # code
+
+    return sim.units.opticalDepthLineCenter(transition, dens, temp, cellsize)
+
+tau0_.label = 'Optical Depth $\\tau_0$'
+tau0_.units = '' # dimensionless
+tau0_.limits = [-2.0, 3.0]
+tau0_.limits_halo = [-2.0, 6.0]
+tau0_.log = True
+
+@snap_field(aliases=['dens_z','dens_metal'])
+def metaldens(sim, partType, field, args):
+    """ Total metal mass density. """
+    dens = sim.snapshotSubset(partType, 'dens', **args)
+    dens *= sim.snapshotSubset(partType, 'metallicity', **args)
+
+    dens = sim.units.codeDensToPhys(dens, cgs=True)
+
+    return dens
+
+metaldens.label = 'Metal Density'
+metaldens.units = 'g cm$^{-3}$'
+metaldens.limits = [-36.0, -24.0]
+metaldens.limits_halo = [-32.0, -24.0]
+metaldens.log = True
+
+@snap_field(multi=True)
+def metaldens_(sim, partType, field, args):
+    """ Metal mass density for a given species, e.g. 'metaldens_O'. """
+    species = field.replace('metaldens_','').capitalize()
+
+    dens = sim.snapshotSubset(partType, 'dens', **args)
+    dens *= sim.snapshotSubset(partType, 'metals_'+species, **args)
+
+    dens = sim.units.codeDensToPhys(dens, cgs=True)
+
+    return dens
+
+metaldens_.label = lambda sim,pt,f: '%s Metal Density' % f.replace('metaldens_','')
+metaldens_.units = 'g cm$^{-3}$'
+metaldens_.limits = [-40.0, -26.0]
+metaldens_.limits_halo = [-36.0, -26.0]
+metaldens_.log = True
+
+# -------------------- gas observables ------------------------------------------------------------
+
+@snap_field(aliases=['sz_yparam','yparam'])
+def sz_y(sim, partType, field, args):
+    """ Sunyaev-Zeldovich y-parameter (per gas cell). """
+    temp = sim.snapshotSubset(partType, 'temp_sfcold_linear', **args)
+    xe   = sim.snapshotSubset(partType, 'ElectronAbundance', **args)
+    mass = sim.snapshotSubset(partType, 'Masses', **args)
+
+    return sim.units.calcSunyaevZeldovichYparam(mass, xe, temp)
+
+sz_y.label = 'Sunyaev-Zeldovich y-parameter'
+sz_y.units = 'kpc$^2$'
+sz_y.limits = [-12.0, -4.0]
+sz_y.limits_halo = [-10.0, -4.0]
+sz_y.log = True
+
+@snap_field(aliases=['p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla'])
+def p_sync(sim, partType, field, args):
+    """ Radio synchrotron power (simple model). """
+    b = sim.snapshotSubset(partType, 'MagneticField', **args)
+    vol = sim.snapshotSubset(partType, 'Volume', **args)
+
+    modelArgs = {}
+    if '_ska' in field: modelArgs['telescope'] = 'SKA'
+    if '_vla' in field: modelArgs['telescope'] = 'VLA'
+    if '_eta43' in field: modelArgs['eta'] = (4.0/3.0)
+    if '_alpha15' in field: modelArgs['alpha'] = 1.5
+
+    return sim.units.synchrotronPowerPerFreq(b, vol, watts_per_hz=True, log=False, **modelArgs)
+
+p_sync.label = 'Synchrotron Power'
+p_sync.units = 'W/Hz'
+p_sync.limits = [7.0, 26.0]
+p_sync.limits_halo = [8.0, 26.0]
+p_sync.log = True
+
+@snap_field(aliases=['halpha','sfr_halpha'])
+def halpha_lum(sim, partType, field, args):
+    """ H-alpha line luminosity, simple model: linear conversion from SFR. """
+    sfr  = sim.snapshotSubset(partType, 'sfr', **args)
+
+    return sim.units.sfrToHalphaLuminosity(sfr)
+
+halpha_lum.label = 'L$_{\\rm H\alpha}$'
+halpha_lum.units = '10$^{30}$ erg/s' # 1e30 unit system to avoid overflow
+halpha_lum.limits = [5.0, 12.0]
+halpha_lum.limits_halo = [8.0, 12.0]
+halpha_lum.log = True
+
+@snap_field(aliases=['submm_flux','s850um_flux_ismcut','submm_flux_ismcut'])
+def s850um_flux(sim, partType, field, args):
+    """ 850 micron (sub-mm) flux (simple model). """
+    sfr  = sim.snapshotSubset(partType, 'sfr', **args)
+    metalmass = sim.snapshotSubset(partType, 'metalmass_msun', **args)
+
+    if '_ismcut' in field:
+        temp = sim.snapshotSubset(partType, 'temp', **args)
+        dens = sim.snapshotSubset(partType, 'Density', **args)
+        ismCut = True
+    else:
+        temp = None
+        dens = None
+        ismCut = False
+
+    return sim.units.gasSfrMetalMassToS850Flux(sfr, metalmass, temp, dens, ismCut=ismCut)
+
+s850um_flux.label = 'S$_{\\rm 850\mu m}$'
+s850um_flux.units = 'mJy'
+s850um_flux.limits = [-8.0, -2.0]
+s850um_flux.limits_halo = [-5.0, -2.0]
+s850um_flux.log = True
+
+@snap_field(alias='xray')
+def xray_lum(sim, partType, field, args):
+    """ Bolometric x-ray luminosity, simple bremsstrahlung (free-free) emission model only. """
+    sfr  = sim.snapshotSubset(partType, 'sfr', **args)
+    dens = sim.snapshotSubset(partType, 'dens', **args)
+    mass = sim.snapshotSubset(partType, 'mass', **args)
+    u    = sim.snapshotSubset(partType, 'u', **args)
+    xe   = sim.snapshotSubset(partType, 'xe', **args)
+
+    return sim.units.calcXrayLumBolometric(sfr, u, xe, mass, dens)
+
+xray_lum.label = 'L$_{\\rm X,bolometric}$'
+xray_lum.units = '10$^{30}$ erg/s' # 1e30 unit system to avoid overflow
+xray_lum.limits = [2.0, 10.0]
+xray_lum.limits_halo = [5.0, 10.0]
+xray_lum.log = True
+
+@snap_field(aliases=['xray_lum_05-2kev','xray_flux_05-2kev','xray_lum_05-2kev_nomet','xray_flux_05-2kev_nomet',
+                     'xray_counts_erosita','xray_counts_chandra',
+                     'xray_lum_0.5-2.0kev','xray_lum_0.3-7.0kev','xray_lum_0.5-8.0kev','xray_lum_2.0-10.0kev'])
+def xray_lum_apec(sim, partType, field, args):
+    """ X-ray luminosity/flux/counts (the latter for a given instrumental configuration).
+    If a decimal point '.' in field, using my APEC-based tables, otherwise using XSPEC-based tables (from Nhut). """
+    from ..cosmo.xray import xrayEmission
+
+    instrument = field.replace('xray_','')
+    if '.' not in instrument:
+        # XSPEC-based table conventions
+        instrument = instrument.replace('-','_').replace('kev','')
+        instrument = instrument.replace('lum_','Luminosity_')
+        instrument = instrument.replace('flux_','Flux_')
+        instrument = instrument.replace('_nomet','_NoMet')
+        instrument = instrument.replace('counts_erosita','Count_Erosita_05_2_2ks') # only available config
+        instrument = instrument.replace('counts_chandra','Count_Chandra_03_5_100ks') # as above
+    else:
+        # APEC-based table conventions
+        instrument = instrument.replace('lum_','emis_')
+
+    xray = xrayEmission(sim, instrument, use_apec=('.' in field))
+
+    indRange = args['indRange']
+    if args['haloID'] is not None or args['subhaloID'] is not None:
+        indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
+
+    xray = xray.calcGasEmission(sim, instrument, indRange=indRange)
+
+    if 'lum_' in field:
+        xray = (xray / 1e30).astype('float32') # 10^30 erg/s unit system to avoid overflow
+
+    return xray
+
+def xray_lum_apec_metadata(sim, pt, f, ret):
+    """ Helper to determine 'cloudy_' field metadata. """
+    if '05-2kev' in f:
+        label = '$_{\\rm X, 0.5-2 keV}$'
+    if '05-2kev_nomet' in f:
+        label = '$_{\\rm X, 0.5-2 keV, no-Z}$'
+    if '0.5-2.0kev' in f:
+        label = '$_{\\rm X, 0.5-2 keV, APEC}$'
+    if '0.3-7.0kev' in f:
+        label = '$_{\\rm X, 0.5-8 keV, APEC}$'
+    if '0.5-8.0kev' in f:
+        label = '$_{\\rm X, 0.5-8 keV, APEC}$'
+    if '2.0-10.0kev' in f:
+        label = '$_{\\rm X, 2-10 keV, APEC}$'
+
+    if 'lum_' in f:
+        label = 'L' + label
+        units = '10$^{30}$ erg/s'
+        limits = [2.0, 10.0]
+        limits_halo = [5.0, 11.0]
+
+    elif 'flux_' in f:
+        label = 'F' + label
+        units = 'erg/s/cm$^{2}'
+        limits = [-30.0, -14.0]
+        limits_halo = [-20.0, -12.0]
+
+    elif 'counts_' in f:
+        label = '%s X-ray Count Rate' % f.replace('xray_counts_','')
+        units = 's$^{-1}$' # dimensionless
+        limits = [-6.0, 2.0]
+        limits_halo = [-6.0, 2.0]
+
+    if ret == 'label': return label
+    if ret == 'units': return units
+    if ret == 'limits' : return limits
+    if ret == 'limits_halo': return limits_halo
+
+xray_lum_apec.label = partial(xray_lum_apec_metadata, ret='label')
+xray_lum_apec.units = partial(xray_lum_apec_metadata, ret='units')
+xray_lum_apec.limits = partial(xray_lum_apec_metadata, ret='limits')
+xray_lum_apec.limits_halo = partial(xray_lum_apec_metadata, ret='limits_halo')
+xray_lum_apec.log = True
+
+@snap_field(alias='hi_column')
+def n_hi(sim, partType, field, args):
+    """ Experimental: assign a N_HI (column density) to every cell based on a (xy) grid projection. """
+    for k in ['inds','indRange','haloID','subhaloID']:
+        assert args[k] is None # otherwise generalize
+
+    # cache
+    savePath = sim.derivPath + 'cache/hi_column_%s_%03d.hdf5' % (partType,sim.snap)
+
+    if isfile(savePath):
+        with h5py.File(savepath,'r') as f:
+            data = f['hi_column'][()]
+        print('Loaded: [%s]' % savepath)
+    else:
+        # config
+        acFieldName = 'Box_Grid_nHI_GK_depth10'
+        boxWidth = 10000.0 # only those in slice, columns don't apply to others
+        z_bounds = [sim.boxSize*0.5 - boxWidth/2, sim.boxSize*0.5 + boxWidth/2]
+
+        # load z coords
+        pos_z = sim.snapshotSubset(partType, 'pos_z', **args)
+
+        data = np.zeros( pos_z.shape[0], dtype='float32' ) # allocate
+        data.fill(np.nan)
+
+        w = np.where( (pos_z > z_bounds[0]) & (pos_z < z_bounds[1]) )
+        pos_z = None
+
+        # load x,y coords and find grid indices
+        pos_x = sim.snapshotSubset(partType, 'pos_x', **args)[w]
+        pos_y = sim.snapshotSubset(partType, 'pos_y', **args)[w]
+
+        grid = sim.auxCat(acFieldName)[acFieldName]
+        grid = 10.0**grid # log -> linear
+        pxSize = sim.boxSize / grid.shape[0]
+
+        x_ind = np.floor(pos_x / pxSize).astype('int64')
+        y_ind = np.floor(pos_y / pxSize).astype('int64')
+
+        data[w] = grid[y_ind,x_ind]
+
+        # save
+        with h5py.File(savePath,'w') as f:
+            f['hi_column'] = data
+        print('Saved: [%s]' % savePath)
+
+    return data
+
+n_hi.label = 'N$_{\\rm HI}$'
+n_hi.units = 'cm$^{-2}$'
+n_hi.limits = [15.0, 22.0]
+n_hi.log = True
+
+@snap_field(aliases=['mass_hi','h i mass','h i numdens'])
+def hi_mass(sim, partType, field, args):
+    """ Hydrogen model: atomic H (neutral subtracting molecular) mass calculation. """
+    from ..cosmo.hydrogen import hydrogenMass
+
+    indRange = None
+    if args['haloID'] is not None or args['subhaloID'] is not None:
+        indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
+
+    # hydrogen model mass calculation (todo: generalize to different molecular models)
+    data = hydrogenMass(None, sim, atomic=True, indRange=indRange)
+
+    if 'numdens' in field:
+        data /= sim.snapshotSubset(partType, 'volume', **args)
+        data = sim.units.codeDensToPhys(data,cgs=True,numDens=True) # linear [H atoms/cm^3]
+
+    return data
+
+hi_mass.label = 'M$_{\\rm HI}$'
+hi_mass.units = 'code_mass'
+hi_mass.limits = [-2.0, 6.0]
+hi_mass.limits_halo = [1.0, 6.0]
+hi_mass.log = True
+
+@snap_field(aliases=['mass_h2','h2mass'], multi='h2mass_')
+def h2_mass(sim, partType, field, args):
+    """ Hydrogen model: molecular H (neutral subtracting atomic) mass calculation. """
+    from ..cosmo.hydrogen import hydrogenMass
+
+    indRange = None
+    if args['haloID'] is not None or args['subhaloID'] is not None:
+        indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
+
+    if 'h2mass_' in field:
+        molecularModel = field.split('_')[1]
+    else:
+        molecularModel = 'BL06'
+        print('Warning: using [%s] model for H2 by default since unspecified.' % molecularModel)
+
+    data = hydrogenMass(None, sim, molecular=molecularModel, indRange=indRange)
+
+    return data
+
+h2_mass.label = 'M$_{\\rm H2}$'
+h2_mass.units = 'code_mass'
+h2_mass.limits = [-3.0, 5.0]
+h2_mass.limits_halo = [0.0, 5.0]
+h2_mass.log = True
+
+@snap_field(aliases=['mhi_br','mhi_gk','mhi_kmt','mh2_br','mh2_gk','mh2_kmt'])
+def mass_h_popping(sim, partType, field, args):
+    """ Pre-computed atomic (HI) and molecular (H2) gas cell masses (from Popping+2019). """
+    if field == 'mass_h_popping': raise Exception('Specify HI or H2, and molecular model.')
+
+    indRange = None
+    if args['haloID'] is not None or args['subhaloID'] is not None:
+        indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
+
+    path = sim.postPath + 'hydrogen/gas_%03d.hdf5' % sim.snap
+    model = field.split('_')[1].upper() # BR, GK, or KMT
+
+    if not isfile(path):
+        print('Warning: [%s] from [%s] does not exist, empty return.' % (field,path))
+        return None
+
+    with h5py.File(path,'r') as f:
+        # dataset naming convention
+        key = field.replace('_','').upper()
+
+        if key in f:
+            # old storage: MH, MH2*, and MHI* all explicitly
+            if indRange is None:
+                masses = f[key][()]
+            else:
+                masses = f[key][indRange[0]:indRange[1]+1]
+        else:
+            # more compact storage: only MH and MH2*, where MHI must be derived
+            assert 'MHI' in key
+            if indRange is None:
+                MH = f['MH'][()]
+                masses = MH - f[key.replace('HI','H2')][()]
+            else:
+                MH = f['MH'][indRange[0]:indRange[1]+1]
+                masses = MH - f[key.replace('HI','H2')][indRange[0]:indRange[1]+1]
+
+    return masses
+
+mass_h_popping.label = lambda sim,pt,f: 'M$_{\\rm HI,%s}$' % f.split('_')[1].upper()
+mass_h_popping.units = 'code_mass'
+mass_h_popping.limits = [-16.0, -4.0]
+mass_h_popping.limits_halo = [-12.0, -4.0]
+mass_h_popping.log = True
+
+@snap_field(aliases=['nhi_br','nhi_gk','nhi_kmt','nh2_br','nh2_gk','nh2_kmt'])
+def numdens_h_popping(sim, partType, field, args):
+    """ Pre-computed atomic (HI) and molecular (H2) gas cell number densities (from Popping+2019). """
+    if field == 'numdens_h_popping': raise Exception('Specify HI or H2, and molecular model.')
+
+    mass_field = field.replace('nhi_','mhi_').replace('nh2_','mh2_')
+    masses = sim.snapshotSubset(partType, mass_field, **args)
+
+    dens = masses / sim.snapshotSubset(partType, 'volume', **args)
+    dens = sim.units.codeDensToPhys(dens, cgs=True, numDens=True) # [H atoms/cm^3]
+
+    return dens
+
+numdens_h_popping.label = lambda sim,pt,f: 'n$_{\\rm HI,%s}$' % f.split('_')[1].upper()
+numdens_h_popping.units = 'cm$^{-3}$'
+numdens_h_popping.limits = [-14.0, -1.0]
+numdens_h_popping.limits_halo = [-12.0, 0.0]
+numdens_h_popping.log = True
+
+@snap_field(aliases=['mhi_gd14','mhi_gk11','mhi_k13','mhi_s14','mh2_gd14','mh2_gk11','mh2_k13','mh2_s14'])
+def mass_h_diemer(sim, partType, field, args):
+    """ Pre-computed atomic (HI) and molecular (H2) gas cell masses (from Diemer+2019). """
+    if field == 'mass_h_diemer': raise Exception('Specify HI or H2, and molecular model.')
+
+    indRange = None
+    if args['haloID'] is not None or args['subhaloID'] is not None:
+        indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
+
+    path = sim.postPath + 'hydrogen/diemer_%03d.hdf5' % sim.snap
+    key = 'f_mol_' + field.split('_')[1].upper()
+
+    with h5py.File(path,'r') as f:
+        if indRange is None:
+            f_mol = f[key][()]
+            f_neutral_H = f['f_neutral_H'][()]
+        else:
+            f_mol = f[key][indRange[0]:indRange[1]+1]
+            f_neutral_H = f['f_neutral_H'][indRange[0]:indRange[1]+1]
+
+    # file contains f_mol, for M_H2 = Mass_gas * f_neutral_H * f_mol, 
+    # while for M_HI = MasS_gas * f_neutral_H * (1-f_mol)
+    mass = sim.snapshotSubset(partType, 'mass', **args)
+
+    if 'mh2_' in field:
+        mass = mass * f_neutral_H * f_mol
+    if 'mhi_' in field:
+        mass = mass * f_neutral_H * (1.0 - f_mol)
+
+    return mass
+
+mass_h_diemer.label = lambda sim,pt,f: 'M$_{\\rm HI,%s}$' % f.split('_')[1].upper()
+mass_h_diemer.units = 'code_mass'
+mass_h_diemer.limits = [-16.0, -4.0]
+mass_h_diemer.limits_halo = [-12.0, -4.0]
+mass_h_diemer.log = True
+
+@snap_field(aliases=['nhi_gd14','nhi_gk11','nhi_k13','nhi_s14','nh2_gd14','nh2_gk11','nh2_k13','nh2_s14'])
+def numdens_h_diemer(sim, partType, field, args):
+    """ Pre-computed atomic (HI) and molecular (H2) gas cell number densities (from Diemer+2019). """
+    if field == 'numdens_h_diemer': raise Exception('Specify HI or H2, and molecular model.')
+
+    mass_field = field.replace('nhi_','mhi_').replace('nh2_','mh2_')
+    masses = sim.snapshotSubset(partType, mass_field, **args)
+
+    dens = masses / sim.snapshotSubset(partType, 'volume', **args)
+    dens = sim.units.codeDensToPhys(dens, cgs=True, numDens=True) # [H atoms/cm^3]
+
+    return dens
+
+numdens_h_diemer.label = lambda sim,pt,f: 'n$_{\\rm HI,%s}$' % f.split('_')[1].upper()
+numdens_h_diemer.units = 'cm$^{-3}$'
+numdens_h_diemer.limits = [-14.0, -1.0]
+numdens_h_diemer.limits_halo = [-12.0, 0.0]
+numdens_h_diemer.log = True
+
+@snap_field(multi=' ')
+def cloudy_(sim, partType, field, args):
+    """ CLOUDY based ionic fraction, mass, number density, or lines emission. 
+    (e.g. "O VI mass", "Mg II frac", "C IV numdens", "OVII lum", "CVI flux", O  8 16.0067A")
+    Note: uses a wildcard space! Will match any requested field load containing a space. """
+    from ..cosmo.cloudy import cloudyIon, cloudyEmission
+
+    if 'flux' in field or 'lum' in field:
+        lineName, prop = field.rsplit(" ",1)
+        lineName = lineName.replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
+        dustDepletion = False
+        if '_dustdepleted' in prop: # e.g. "MgII lum_dustdepleted"
+            dustDepletion = True
+            prop = prop.replace('_dustdepleted', '')
+    else:
+        element, ionNum, prop = field.split() # e.g. "O VI mass" or "Mg II frac" or "C IV numdens"
+
+    assert sim.isPartType(partType, 'gas')
+    assert prop in ['mass','frac','flux','lum','numdens']
+
+    # indRange subset herein (do not change args dict, could be used on other fields)
+    indRangeOrig = args['indRange']
+
+    # haloID or subhaloID subset
+    if args['haloID'] is not None or args['subhaloID'] is not None:
+        assert indRangeOrig is None and args['inds'] is None
+        subset = sim.haloOrSubhaloSubset(haloID=args['haloID'], subhaloID=args['subhaloID'])
+        offset = subset['offsetType'][sim.ptNum(partType)]
+        length = subset['lenType'][sim.ptNum(partType)]
+        indRangeOrig = [offset, offset+length-1] # inclusive below
+
+    # check memory cache (only simplest support at present, for indRange returns of global cache)
+    cache_key = 'snap%d_%s_%s' % (sim.snap,partType,field.replace(" ","_"))
+
+    if cache_key in sim.data:
+        if indRangeOrig is not None:
+            print('NOTE: Returning [%s] from cache, indRange [%d - %d]!' % \
+                (cache_key,indRangeOrig[0],indRangeOrig[1]))
+            return sim.data[cache_key][indRangeOrig[0]:indRangeOrig[1]+1]
+        if args['inds'] is not None:
+            print('NOTE: Returning [%s] from cache, inds of size [%d]!' % (cache_key,inds.size))
+            return sim.data[cache_key][inds]
+
+        # if key exists but neither indRange or inds specified, we return this (possibly custom subset)
+        print('CAUTION: Cached return [%s], and indRange is None, returning all of sim.data field.' % cache_key)
+        return sim.data[cache_key]
+
+    # full snapshot-level caching, create during normal usage but not web (always use if exists)
+    useCache = True
+    createCache = True
+
+    if getuser() == 'wwwrun':
+        createCache = False
+    if args['haloID'] is not None or args['subhaloID'] is not None:
+        createCache = False
+
+    cachePath = sim.derivPath + 'cache/'
+    sbStr = 'sb%d_' % sim.subbox if sim.subbox is not None else ''
+    cacheFile = cachePath + 'cached_%s_%s_%s%d.hdf5' % (partType,field.replace(" ","-"),sbStr,sim.snap)
+    indRangeAll = [0, sim.numPart[sim.ptNum(partType)]]
+
+    if useCache:
+        # does not exist yet, and should create?
+        if createCache and not isfile(cacheFile):
+            if not isdir(cachePath):
+                mkdir(cachePath)
+            # compute for indRange == None (whole snapshot) with a reasonable pSplit
+            nChunks = numPartToChunkLoadSize(indRangeAll[1])
+            print('Creating [%s] for [%d] particles in [%d] chunks.' % \
+                (cacheFile.split(sim.derivPath)[1], indRangeAll[1], nChunks) )
+
+            # create file and init ionization calculator
+            with h5py.File(cacheFile, 'w') as f:
+                dset = f.create_dataset('field', (indRangeAll[1],), dtype='float32')
+
+            if prop in ['mass','frac','numdens']:
+                ion = cloudyIon(sim, el=element, redshiftInterp=True)
+            else:
+                emis = cloudyEmission(sim, line=lineName, redshiftInterp=True)
+                wavelength = emis.lineWavelength(lineName)
+
+            # process chunked
+            for i in range(nChunks):
+                indRangeLocal = pSplitRange(indRangeAll, nChunks, i)
+
+                # indRange is inclusive for snapshotSubset(), so skip saving the very last 
+                # element, which is included in the next return of pSplitRange()
+                indRangeLocal[1] -= 1
+
+                if indRangeLocal[0] == indRangeLocal[1]:
+                    continue # we are done
+
+                if prop in ['mass','frac','numdens']:
+                    # either ionization fractions, or total mass in the ion
+                    values = ion.calcGasMetalAbundances(sim, element, ionNum, indRange=indRangeLocal)
+                    if prop == 'mass':
+                        values *= sim.snapshotSubset(partType, 'Masses', indRange=indRangeLocal)
+                    if prop == 'numdens':
+                        values *= sim.snapshotSubset(partType, 'numdens', indRange=indRangeLocal)
+                        values /= ion.atomicMass(element) # [H atoms/cm^3] to [ions/cm^3]
+                elif prop == 'lum':
+                    values = emis.calcGasLineLuminosity(sim, lineName, indRange=indRangeLocal, dustDepletion=dustDepletion)
+                    values /= 1e30 # 10^30 erg/s unit system to avoid overflow
+                elif prop == 'flux':
+                    # emission flux
+                    lum = emis.calcGasLineLuminosity(sim, lineName, indRange=indRangeLocal, dustDepletion=dustDepletion)
+                    values = sim.units.luminosityToFlux(lum, wavelength=wavelength) # [photon/s/cm^2] @ sim.redshift
+
+                with h5py.File(cacheFile,'a') as f:
+                    f['field'][indRangeLocal[0]:indRangeLocal[1]+1] = values
+
+                print(' [%2d] saved %d - %d' % (i,indRangeLocal[0],indRangeLocal[1]))
+            print('Saved: [%s].' % cacheFile.split(sim.derivPath)[1])
+
+        # load from existing cache if it exists
+        if isfile(cacheFile):
+            #if getuser() != 'wwwrun':
+            #    print('Loading [%s] [%s] from [%s].' % (partType,field,cacheFile.split(sim.derivPath)[1]))
+
+            with h5py.File(cacheFile, 'r') as f:
+                assert f['field'].size == indRangeAll[1]
+                if indRangeOrig is None and args['inds'] is None:
+                    values = f['field'][()]
+                elif indRangeOrig is not None:
+                    values = f['field'][indRangeOrig[0] : indRangeOrig[1]+1]
+                elif args['inds'] is not None:
+                    indRange = [np.min(args['inds']), np.max(args['inds'])]
+                    values = f['field'][indRange[0]:indRange[1]+1]
+                    return values[args['inds']-np.min(args['inds'])]
+    
+    if not useCache or not isfile(cacheFile):
+        # don't use cache, or tried to use and it doesn't exist yet, so run computation now
+        if prop in ['mass','frac','numdens']:
+            ion = cloudyIon(sim, el=element, redshiftInterp=True)
+        else:
+            emis = cloudyEmission(sim, line=lineName, redshiftInterp=True)
+            wavelength = emis.lineWavelength(lineName)
+
+        if prop in ['mass','frac','numdens']:
+            # either ionization fractions, or total mass in the ion
+            values = ion.calcGasMetalAbundances(sim, element, ionNum, indRange=indRangeOrig)
+            if prop == 'mass':
+                values *= sim.snapshotSubset(partType, 'Masses', indRange=indRangeOrig)
+            if prop == 'numdens':
+                values *= sim.snapshotSubset(partType, 'numdens', indRange=indRangeOrig)
+                values /= ion.atomicMass(element) # [H atoms/cm^3] to [ions/cm^3]
+        elif prop == 'lum':
+            values = emis.calcGasLineLuminosity(sim, lineName, indRange=indRangeOrig, dustDepletion=dustDepletion)
+            values /= 1e30 # 10^30 erg/s unit system to avoid overflow
+        elif prop == 'flux':
+            # emission flux
+            lum = emis.calcGasLineLuminosity(sim, lineName, indRange=indRangeOrig, dustDepletion=dustDepletion)
+            values = sim.units.luminosityToFlux(lum, wavelength=wavelength) # [photon/s/cm^2]
+
+    return values
+
+def cloudy_metadata(sim, pt, f, ret=None):
+    """ Helper to determine 'cloudy_' field metadata. """
+    if 'flux' in f:
+        # e.g. "H alpha flux"
+        lineName, prop = f.rsplit(" ",1)
+        lineName = lineName.replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
+        label = f'{lineName} Line Flux'
+        units = 'photon/s/cm$^2$'
+        limits = [-30.0, -15.0]
+        limits_halo = [-25.0, -15.0]
+        log = True
+    elif 'mass' in f:
+        # e.g. "O VI mass"
+        element, ionNum, _ = f.split()
+        label = '%s %s Ionic Mass' % (element, ionNum)
+        units = 'M$_{\\rm sun}$'
+        limits = [1.0, 7.0]
+        limits_halo = [2.0, 6.0]
+        log = True
+    elif 'frac' in f:
+        # e.g. "Mg II frac"
+        element, ionNum, _ = f.split()
+        label = '%s %s Ionization Fraction' % (element, ionNum)
+        units = '' # dimensionless
+        limits = [-10.0, -2.0]
+        limits_halo = [-10.0, -4.0]
+        log = True
+    elif 'numdens' in f:
+        # e.g. "Mg II numdens"
+        element, ionNum, _ = f.split()
+        label = 'n$_{\\rm %s%s}$' % (element, ionNum)
+        units = 'cm$^{-3}$'
+        limits = [-14.0, -4.0]
+        limits_halo = [-12.0, -6.0]
+        log = True
+    elif 'lum' in f:
+        # e.g. "H alpha lum", "MgII lum", "MgII lum_dustdepleted"
+        lineName, prop = f.rsplit(" ",1)
+        lineName = lineName.replace("_dustdepleted","")
+        label = '%s Luminosity' % lineName
+        units = '10$^{30}$ erg/s'
+        limits = [-15.0, 10.0]
+        limits_halo = [-5.0, 10.0]
+        log = True
+
+    if ret == 'label': return label
+    if ret == 'units': return units
+    if ret == 'limits' : return limits
+    if ret == 'limits_halo': return limits_halo
+    if ret == 'log': return log
+
+cloudy_.label = partial(cloudy_metadata, ret='label')
+cloudy_.units = partial(cloudy_metadata, ret='units')
+cloudy_.limits = partial(cloudy_metadata, ret='limits')
+cloudy_.limits_halo = partial(cloudy_metadata, ret='limits_halo')
+cloudy_.log = partial(cloudy_metadata, ret='log')
+
+@snap_field(multi=True)
+def ionmassratio_(sim, partType, field, args):
+    """ Ratio between two ionic masses, e.g. "ionmassratio_O6_O8". """
+    from ..cosmo.cloudy import cloudyIon
+
+    ion = cloudyIon(sP=None)
+    ion1, ion2, _ = field.split('_')
+
+    mass1 = sim.snapshotSubset(partType, '%s mass' % ion.formatWithSpace(ion1), **args)
+    mass2 = sim.snapshotSubset(partType, '%s mass' % ion.formatWithSpace(ion2), **args)
+    return ( mass1 / mass2 )
+
+ionmassratio_.label = lambda sim,pt,f: '(%s / %s) Mass Ratio' % (f.split('_')[1],f.split('_')[2])
+ionmassratio_.units = '' # dimensionless
+ionmassratio_.limits = [-3.0, 3.0]
+ionmassratio_.limits_halo = [-2.0, 2.0]
+ionmassratio_.log = True
+
+# -------------------- gas (wind model) -----------------------------------------------------------
+
+@snap_field(aliases=['wind_edot','sn_dedt','sn_edot','sf_dedt','sf_edot'])
+def wind_dedt(sim, partType, field, args):
+    """ TNG/SH03 wind model: feedback energy injection rate. """
+    sfr = sim.snapshotSubset(partType, 'sfr', **args)
+    metal = sim.snapshotSubset(partType, 'metal', **args)
+
+    return sim.units.codeSfrZToWindEnergyRate(sfr, metal)
+
+wind_dedt.label = 'Wind Energy Injection Rate'
+wind_dedt.units = '10$^{51}$ erg/s' # 1e51 unit system to avoid overflow
+wind_dedt.limits = [-16.0, -10.0]
+wind_dedt.limits_halo = [-15.0, -10.0]
+wind_dedt.log = True
+
+@snap_field(aliases=['wind_pdot','sn_dpdt','sn_pdot','sf_dpdt','sf_pdot'])
+def wind_dpdt(sim, partType, field, args):
+    """ TNG/SH03 wind model: feedback momentum injection rate. """
+    sfr = sim.snapshotSubset(partType, 'sfr', **args)
+    metal = sim.snapshotSubset(partType, 'metal', **args)
+    dm_sigma = sim.snapshotSubset(partType, 'SubfindVelDisp', **args)
+
+    return sim.units.codeSfrZToWindMomentumRate(sfr, metal, dm_sigma)
+
+wind_dedt.label = 'Wind Momentum Injection Rate'
+wind_dedt.units = '10$^{51}$ g$\,$cm$\,$s$^{-2}$' # 1e51 unit system to avoid overflow
+wind_dedt.limits = [-24.0, -18.0]
+wind_dedt.limits_halo = [-23.0, -18.0]
+wind_dedt.log = True
+
+@snap_field(alias='wind_launchvel')
+def wind_vel(sim, partType, field, args):
+    """ TNG/SH03 wind model: launch velocity. """
+    dm_sigma = sim.snapshotSubset(partType, 'SubfindVelDisp', **args)
+
+    return sim.units.sigmaDMToWindVel(dm_sigma)
+
+wind_vel.label = 'Wind Launch Velocity'
+wind_vel.units = 'km/s'
+wind_vel.limits = [300, 2000]
+wind_vel.limits_halo = [300, 5000]
+wind_vel.log = True
+
+@snap_field(aliases=['wind_massloading','wind_etam'])
+def wind_eta(sim, partType, field, args):
+    """ TNG/SH03 wind model: mass loading factor (at launch). """
+    sfr = sim.snapshotSubset(partType, 'sfr', **args)
+    metal = sim.snapshotSubset(partType, 'metal', **args)
+    dm_sigma = sim.snapshotSubset(partType, 'SubfindVelDisp', **args)
+
+    return sim.units.codeSfrZSigmaDMToWindMassLoading(sfr, metal, dm_sigma)
+
+wind_eta.label = 'Wind Mass Loading $\eta_{\\rm m}$'
+wind_eta.units = '' # dimensionless
+wind_eta.limits = [-2.0, 2.0]
+wind_eta.limits_halo = [-1.0, 1.5]
+wind_eta.log = True
+
+# -------------------- gas/stars ------------------------------------------------------------------
+
+@snap_field(alias='metal_solar')
+def z_solar(sim, partType, field, args):
+    """ Metallicity in solar units. """
+    metal = sim.snapshotSubset(partType, 'metal', **args) # (metal mass / total mass) ratio
+
+    return sim.units.metallicityInSolar(metal)
+
+z_solar.label = '[pt] Metallicity'
+z_solar.units = 'Z$_{\\rm sun}$'
+z_solar.limits = [-3.5, 1.0]
+z_solar.limits_halo = [-2.0, 1.0]
+z_solar.log = True
+
+@snap_field
+def sn_iaii_ratio_fe(sim, partType, field, args):
+    """ GFM_MetalsTagged: ratio of iron mass [linear] produced in SNIa versus SNII. """
+    metals_FeSNIa = sim.snapshotSubset(partType, 'metals_FeSNIa', **args)
+    metals_FeSNII = sim.snapshotSubset(partType, 'metals_FeSNII', **args)
+    return (metals_FeSNIa / metals_FeSNII)
+
+sn_iaii_ratio_fe.label = '[pt] Mass Ratio Fe$_{\\rm SNIa}$ / Fe$_{\\rm SNII}$'
+sn_iaii_ratio_fe.units = '' # dimensionless
+sn_iaii_ratio_fe.limits = [-4.0, 6.0]
+sn_iaii_ratio_fe.limits_halo = [-3.0, 5.5]
+sn_iaii_ratio_fe.log = True
+
+@snap_field
+def sn_iaii_ratio_metals(sim, partType, field, args):
+    """ GFM_MetalsTagged: ratio of total metal mass [linear] produced in SNIa versus SNII. """
+    metals_SNIa = sim.snapshotSubset(partType, 'metals_SNIa', **args)
+    metals_SNII = sim.snapshotSubset(partType, 'metals_SNII', **args)
+    return (metals_SNIa / metals_SNII)
+
+sn_iaii_ratio_metals.label = '[pt] Mass Ratio Z$_{\\rm SNIa}$ / Z$_{\\rm SNII}$'
+sn_iaii_ratio_metals.units = '' # dimensionless
+sn_iaii_ratio_metals.limits = [-5.0, 6.0]
+sn_iaii_ratio_metals.limits_halo = [-4.0, 5.0]
+sn_iaii_ratio_metals.log = True
+
+@snap_field
+def sn_ia_agb_ratio_metals(sim, partType, field, args):
+    """ GFM_MetalsTagged: ratio of total metal mass [linear] produced in SNIa versus AGB. """
+    metals_SNIa = sim.snapshotSubset(partType, 'metals_SNIa', **args)
+    metals_AGB = sim.snapshotSubset(partType, 'metals_AGB', **args)
+    return (metals_SNIa / metals_AGB)
+
+sn_ia_agb_ratio_metals.label = '[pt] Mass Ratio Z$_{\\rm SNIa}$ / Z$_{\\rm AGB}$'
+sn_ia_agb_ratio_metals.units = '' # dimensionless
+sn_ia_agb_ratio_metals.limits = [-2.0, 2.0]
+sn_ia_agb_ratio_metals.limits_halo = [-1.5, 1.5]
+sn_ia_agb_ratio_metals.log = True
+
+@snap_field(multi=True)
+def numratio_(sim, partType, field, args):
+    """ Metal abundance number density ratio e.g. "numratio_Si_H", relative to solar, e.g. 
+    [Si/H] = log(n_Si/n_H)_cell - log(n_Si/n_H)_solar """
+    from ..cosmo.cloudy import cloudyIon
+
+    el1, el2, _ = field.split('_')
+
+    ion = cloudyIon(sP=None)
+    el1_massratio = sim.snapshotSubset(partType, 'metals_'+el1, **args)
+    el2_massratio = sim.snapshotSubset(partType, 'metals_'+el2, **args)
+    el_ratio = el1_massratio / el2_massratio
+
+    return ion._massRatioToRelSolarNumDensRatio(el_ratio, el1, el2)
+
+numratio_.label = lambda sim,pt,f: '[%s/%s]$_{\\rm [pt]}$' % (f.split('_')[1],f.split('_')[2])
+numratio_.units = '' # dimensionless
+numratio_.limits = [-4.0, 4.0]
+numratio_.limits_halo = [-3.0, 1.0]
+numratio_.log = True
+
+@snap_field(multi=True)
+def massratio_(sim, partType, field, args):
+    """ Metal abundance mass ratio e.g. "massratio_Si_H", absolute (not relative to solar). """
+    el1, el2, _ = field.split('_')
+
+    el1_massratio = sim.snapshotSubset(partType, 'metals_'+el1, **args)
+    el2_massratio = sim.snapshotSubset(partType, 'metals_'+el2, **args)
+
+    return (el1_massratio / el2_massratio)
+
+massratio_.label = lambda sim,pt,f: 'Mass Ratio (%s/%s)$_{\\rm [pt]}$' % (f.split('_')[1],f.split('_')[2])
+massratio_.units = '' # dimensionless
+massratio_.limits = [-5.0, 0.0]
+massratio_.limits_halo = [-4.0, 1.0]
+massratio_.log = True
+
+@snap_field(aliases=['mass_z','mass_metal','metalmass_msun'])
+def metalmass(sim, partType, field, args):
+    """ Total metal mass (convert GFM_Metals from fraction to mass). """
+    masses = sim.snapshotSubset(partType, 'Masses', **args)
+    masses *= sim.snapshotSubset(partType, 'metallicity', **args)
+
+    if '_msun' in field:
+        masses = sim.units.codeMassToMsun(masses)
+
+    return masses
+
+metalmass.label = 'Metal Mass'
+metalmass.units = lambda sim,pt,f: 'M$_{\\rm sun}$' if '_msun' in f else 'code_mass'
+metalmass.limits = [3.0, 7.0]
+metalmass.limits_halo = [4.0, 7.0]
+metalmass.log = True
+
+@snap_field(multi=True)
+def metalmass_(sim, partType, field, args):
+    """ Metal mass for a given species (convert GFM_Metals from fraction to mass), 
+    e.g. 'metalmass_O' or 'metalmass_Mg' or 'metalmass_Fe_msun'. """
+    species = field.replace('metalmass_','').replace('_msun','').capitalize()
+
+    masses = sim.snapshotSubset(partType, 'Masses', **args)
+    masses *= sim.snapshotSubset(partType, 'metals_'+species, **args)
+
+    if '_msun' in field:
+        masses = sim.units.codeMassToMsun(masses)
+
+    return masses
+
+metalmass_.label = lambda sim,pt,f: '[pt] %s Metal Mass' % f.replace('metalmass_','').replace('_msun','')
+metalmass_.units = lambda sim,pt,f: 'M$_{\\rm sun}$' if '_msun' in f else 'code_mass'
+metalmass_.limits = [2.0, 6.0]
+metalmass_.limits_halo = [3.0, 6.0]
+metalmass_.log = True
+
+# -------------------- stars ----------------------------------------------------------------------
+
+@snap_field(alias='stellar_age')
+def star_age(sim, partType, field, args):
+    """ Age of stellar population (conversion of GFM_StellarFormationTime). """
+    birthTime = sim.snapshotSubset(partType, 'birthtime', **args)
+    birthRedshift = 1.0/birthTime - 1.0
+
+    age = sim.tage - sim.units.redshiftToAgeFlat(birthRedshift)
+
+    return age
+
+star_age.label = 'Stellar Age'
+star_age.units = 'Gyr'
+star_age.limits = lambda sim,pt,f: [0.0, np.clip(np.floor(sim.tage),1,12)]
+star_age.log = False
+
+@snap_field(alias='z_formation')
+def z_form(sim, partType, field, args):
+    """ Formation redshift of stellar population (conversion of GFM_StellarFormationTime). """
+    birthTime = sim.snapshotSubset(partType, 'birthtime', **args)
+
+    z = 1.0/birthTime - 1.0
+
+    return z
+
+z_form.label = 'Stellar Formation Redshift'
+z_form.units = '' # dimensionless
+z_form.limits = lambda sim,pt,f: [np.clip(np.floor(sim.redshift),0,5), 6.0]
+z_form.log = False
+
+# -------------------- black holes ----------------------------------------------------------------
+
+@snap_field(aliases=['bh_bollum','bh_bollum_obscured'])
+def bh_lbol(sim, partType, field, args):
+    """ Black hole bolometric luminosity (optionally with obscuration). """
+    bh_mass = sim.snapshotSubset(partType, 'BH_Mass', **args)
+    bh_mdot = sim.snapshotSubset(partType, 'BH_Mdot', **args)
+
+    return sim.units.codeBHMassMdotToBolLum(bh_mass, bh_mdot, obscuration=('_obscured' in field))
+
+bh_lbol.label = 'L$_{\\rm bol}$'
+bh_lbol.units = 'erg/s'
+bh_lbol.limits = [38.0, 46.0]
+bh_lbol.limits_halo = [39.0, 46.0]
+bh_lbol.log = True
+
+@snap_field(aliases=['bh_bollum_basic','bh_bollum_basic_obscured'])
+def bh_lbol_basic(sim, partType, field, args):
+    """ Black hole bolometric luminosity (simple model, optionally with obscuration). """
+    bh_mass = sim.snapshotSubset(partType, 'BH_Mass', **args)
+    bh_mdot = sim.snapshotSubset(partType, 'BH_Mdot', **args)
+
+    return sim.units.codeBHMassMdotToBolLum(bh_mass, bh_mdot, basic_model=True, 
+                                            obscuration=('_obscured' in field))
+
+bh_lbol_basic.label = 'L$_{\\rm bol}$'
+bh_lbol_basic.units = 'erg/s'
+bh_lbol_basic.limits = [38.0, 46.0]
+bh_lbol_basic.limits_halo = [39.0, 46.0]
+bh_lbol_basic.log = True
+
+@snap_field(aliases=['ledd','lumedd','edd_ratio','bh_ledd','eddington_lum'])
+def bh_lumedd(sim, partType, field, args):
+    """ Black hole Eddington luminosity. """
+    bh_mass = sim.snapshotSubset(partType, 'BH_Mass', **args)
+
+    return sim.units.codeBHMassToLumEdd(bh_mass)
+
+bh_lumedd.label = 'L$_{\\rm edd}$'
+bh_lumedd.units = 'erg/s' # dimensionless
+bh_lumedd.limits = [38.0, 46.0]
+bh_lumedd.limits_halo = [40.0, 46.0]
+bh_lumedd.log = True
+
+@snap_field(aliases=['eddington_ratio','lambda_edd','edd_ratio'])
+def bh_eddratio(sim, partType, field, args):
+    """ Black hole bolometric luminosity (optionally with obscuration). """
+    bh_mdot = sim.snapshotSubset(partType, 'BH_Mdot', **args)
+    bh_mdot_edd = sim.snapshotSubset(partType, 'BH_MdotEddington', **args)
+
+    return (bh_mdot / bh_mdot_edd) # = (lum_bol / lum_edd)
+
+bh_eddratio.label = '$\lambda_{\\rm edd} = L_{\\rm bol} / L_{\\rm edd}'
+bh_eddratio.units = '' # dimensionless
+bh_eddratio.limits = [-10.0, 0.0]
+bh_eddratio.limits_halo = [-8.0, 0.0]
+bh_eddratio.log = True
+
+@snap_field
+def bh_mode(sim, partType, field, args):
+    """ Black hole accretion/feedback mode (0=low/kinetic, 1=high/quasar). """
+    bh_mass = sim.snapshotSubset(partType, 'BH_Mass', **args)
+    bh_mdot = sim.snapshotSubset(partType, 'BH_Mdot', **args)
+    bh_mdot_edd = sim.snapshotSubset(partType, 'BH_MdotEddington', **args)
+    bh_mdot_bondi = sim.snapshotSubset(partType, 'BH_MdotBondi', **args)
+
+    return sim.units.codeBHValsToFeedbackMode(bh_mass, bh_mdot, bh_mdot_bondi, bh_mdot_edd)
+
+bh_mode.label = 'BH mode (0=low, 1=high)'
+bh_mode.units = '' # dimensionless
+bh_mode.limits = [0, 1]
+bh_mode.limits_halo = [0, 1]
+bh_mode.log = False
+
+@snap_field(alias='bh_edot')
+def bh_dedt(sim, partType, field, args):
+    """ Black hole feedback energy injection rate. """
+    bh_mass = sim.snapshotSubset(partType, 'BH_Mass', **args)
+    bh_mdot = sim.snapshotSubset(partType, 'BH_Mdot', **args)
+    bh_mdot_edd = sim.snapshotSubset(partType, 'BH_MdotEddington', **args)
+    bh_mdot_bondi = sim.snapshotSubset(partType, 'BH_MdotBondi', **args)
+    bh_dens = sim.snapshotSubset(partType, 'BH_Density', **args)
+
+    return sim.units.codeBHMassMdotToInstantaneousEnergy(bh_mass, bh_mdot, bh_dens, bh_mdot_bondi, bh_mdot_edd)
+
+bh_dedt.label = 'BH Energy Injection Rate'
+bh_dedt.units = 'erg/s'
+bh_dedt.limits = [30.0, 46.0]
+bh_dedt.limits_halo = [36.0, 46.0]
+bh_dedt.log = True
+
+# -------------------- halo-centric fields (all particle types) -----------------------------------
+# note: such fields currently require an explicit haloID or subhaloID. in the future, could 
+#       generalize to full snapshots, with an inverse mapping of indRange to subhaloIDs, 
+#       checking the case of indRange==None correctly mapping to all, then replacing
+#       single halo/subhalo loads with full catalog loads, then looping over each ID, and 
+#       for each calling the appropriate unit function with the [sub]halo particle subset
+#       and [sub]halo position. would require a decision for satellite subhalos, i.e. are 
+#       the properties relative to themselves, or their host halo.
+
+@snap_field(aliases=['pos_rel_kpc','pos_rel_rvir'])
+def pos_rel(sim, partType, field, args):
+    """ 3D (xyz) position, relative to the halo/subhalo center. """
+    assert not sim.isZoom # otherwise need to generalize as below for 'rad'
+    assert args['haloID'] is not None or args['subhaloID'] is not None
+
+    pos = sim.snapshotSubset(partType, 'pos', **args)
+
+    if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
+
+    # get haloID and load halo regardless, even for non-centrals
+    # take center position as subhalo center (same as group center for centrals)
+    if args['subhaloID'] is None:
+        halo = sim.halo(args['haloID'])
+        haloPos = halo['GroupPos']
+    if args['subhaloID'] is not None:
+        sub = sim.subhalo(args['subhaloID'])
+        halo = sim.halo(sub['SubhaloGrNr'])
+        haloID = sub['SubhaloGrNr']
+        haloPos = sub['SubhaloPos']
+
+    if sim.refPos is not None:
+        haloPos = sim.refPos # allow override
+
+    for j in range(3):
+        pos[:,j] -= haloPos[j]
+
+    sim.correctPeriodicDistVecs(pos)
+
+    # units: pkpc, code lengths, or in terms of r200
+    if '_kpc' in field: pos = sim.units.codeLengthToKpc(pos)
+    if '_rvir' in field: pos /= halo['Group_R_Crit200']
+
+    return pos
+
+pos_rel.label = lambda sim,pt,f: 'Halocentric Position' if '_rvir' not in f else 'Halocentric Position / R$_{\\rm vir}$'
+pos_rel.units = lambda sim,pt,f: 'kpc' if '_kpc' in f else '' if '_rvir' in f else 'code_length'
+pos_rel.limits = [-1e3, 1e3]
+pos_rel.limits_halo = [-1e3, 1e3]
+pos_rel.log = False
+
+@snap_field(aliases=['vrel','halo_vrel','halo_relvel','relative_vel'])
+def vel_rel(sim, partType, field, args):
+    """ 3D (xyz) velocity, relative to the halo/subhalo motion. """
+    if sim.isZoom:
+        subhaloID = sim.zoomSubhaloID
+        print(f'WARNING: Using {zoomSubhaloID =} for zoom run to compute [{field}]!')
+
+    # get reference velocity
+    if args['haloID'] is None and args['subhaloID'] is None:
+        assert sim.refVel is not None
+        print(f'WARNING: Using refVel in non-zoom run to compute [{field}]!')
+        refVel = sim.refVel
+    else:
+        # take central subhalo velocity of (host) halo
+        shID = sim.halo(args['haloID'])['GroupFirstSub'] if args['subhaloID'] is None else args['subhaloID']
+        firstSub = sim.subhalo(shID)
+        refVel = firstSub['SubhaloVel']
+
+    if sim.refVel is not None:
+        refVel = sim.refVel # allow override
+
+    vel = sim.snapshotSubset(partType, 'vel', **args)
+
+    if isinstance(vel, dict) and vel['count'] == 0: return vel # no particles of type, empty return
+
+    return sim.units.particleRelativeVelInKmS(vel, refVel)
+
+vel_rel.label = '[pt] Halo-Relative Velocity'
+vel_rel.units = 'km/s'
+vel_rel.limits = [-1000, 1000]
+vel_rel.limits_halo = [-300, 300]
+vel_rel.log = False
+
+@snap_field(aliases=['vrelmag','halo_vrelmag','relative_vmag'])
+def vel_rel_mag(sim, partType, field, args):
+    """ Magnitude of velocity, relative to the halo/subhalo motion. """
+    vel = sim.snapshotSubset(partType, 'vel_rel', **args)
+    return np.sqrt(vel[:,0]**2 + vel[:,1]**2 + vel[:,2]**2)
+
+vel_rel_mag.label = '[pt] Halo-Relative Velocity'
+vel_rel_mag.units = 'km/s'
+vel_rel_mag.limits = [0, 1000]
+vel_rel_mag.limits_halo = [0, 300]
+vel_rel_mag.log = False
+
+@snap_field(aliases=['halo_rad','rad_r500','rad_rvir','halo_rad_r500','halo_rad_rvir'])
+def rad(sim, partType, field, args):
+    """ 3D radial distance from (parent) halo center. """
+    assert args['haloID'] is not None or args['subhaloID'] is not None
+
+    if sim.isZoom:
+        subhaloID = sim.zoomSubhaloID
+        print(f'WARNING: Using {zoomSubhaloID = } for zoom run to compute [{field}]!')
+
+    pos = sim.snapshotSubset(partType, 'pos', **args)
+
+    if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
+    
+    # get (host) halo center position
+    haloID = args['haloID']
+    if args['subhaloID'] is not None:
+        haloID = sim.subhalo(args['subhaloID'])['SubhaloGrNr']
+
+    halo = sim.halo(haloID)
+    haloPos = halo['GroupPos'] # note: is identical to SubhaloPos of GroupFirstSub
+
+    rr = sim.periodicDists(haloPos, pos)
+    
+    # what kind of distance?
+    if '_rvir' in field: rr /= halo['Group_R_Crit200']
+    if '_r500' in field: rr /= halo['Group_R_Crit500']
+
+    return rr
+
+def rad_label(sim,pt,f):
+    if '_rvir' in f: return '[pt] Radial Distance / R$_{\\rm vir}$'
+    if '_r500' in f: return '[pt] Radial Distance / R$_{\\rm 500}$'
+    return '[pt] Radial Distance'
+
+def rad_units(sim,pt,f):
+    if '_rvir' in f: return ''
+    if '_r500' in f: return ''
+    return 'code_length'
+
+rad.label = rad_label
+rad.units = rad_units
+rad.limits = lambda sim,pt,f: [-2.5, 3.0] if ('_rvir' in f or '_r500' in f) else [0, 5.0]
+rad.limits_halo = lambda sim,pt,f: [-2.5, 0.5] if ('_rvir' in f or '_r500' in f) else [0, 3.0]
+rad.log = True
+
+@snap_field(aliases=['halo_rad_kpc','rad_kpc_linear'])
+def rad_kpc(sim, partType, field, args):
+    """ 3D radial distance from (parent) halo center in [kpc]. """
+    rr = sim.snapshotSubset(partType, 'halo_rad', **args)
+    return sim.units.codeLengthToKpc(rr)
+
+rad_kpc.label = '[pt] Radial Distance'
+rad_kpc.units = 'kpc'
+rad_kpc.limits = lambda sim,pt,f: [0.0, 5.0] if '_linear' not in f else [0.0, 5000]
+rad_kpc.limits_halo = lambda sim,pt,f: [0.0, 3.0] if '_linear' not in f else [0.0, 800]
+rad_kpc.log = lambda sim,pt,f: True if '_linear' not in f else False
+
+@snap_field(aliases=['halo_vrad','radvel','halo_radvel','vrad_vvir','halo_vrad_vvir','halo_radvel_vvir'])
+def vrad(sim, partType, field, args):
+    """ Radial velocity, relative to the central subhalo and its motion, including hubble correction.
+    Optionally normalized by the halo virial velocity. Convention: negative = in, positive = out. """
+    if sim.isZoom:
+        subhaloID = sim.zoomSubhaloID
+        print(f'WARNING: Using {zoomSubhaloID = } for zoom run to compute [{field}]!')
+
+    # get position and velocity of reference
+    if args['haloID'] is None and args['subhaloID'] is None:
+        assert sim.refPos is not None and sim.refVel is not None
+        print(f'WARNING: Using refPos and refVel in non-zoom run to compute [{field}]!')
+        refPos = sim.refPos
+        refVel = sim.refVel
+    else:
+        haloID = args['haloID']
+        if args['subhaloID'] is not None: # for subhalos, take host halo
+            haloID = sim.subhalo(args['subhaloID'])['SubhaloGrNr']
+
+        # need velocity of subhalo, take central of this halo
+        shID = args['subhaloID']
+        if shID is None:
+            shID = sim.halo(haloID)['GroupFirstSub']
+
+        firstSub = sim.subhalo(shID)
+        refPos = firstSub['SubhaloPos']
+        refVel = firstSub['SubhaloVel']
+
+    pos = sim.snapshotSubset(partType, 'pos', **args)
+    vel = sim.snapshotSubset(partType, 'vel', **args)
+
+    if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
+
+    vv = sim.units.particleRadialVelInKmS(pos, vel, refPos, refVel)
+
+    if '_vvir' in field:
+        # normalize by halo v200
+        mhalo = sim.halo(haloID)['Group_M_Crit200']
+        vv /= sP.units.codeMassToVirVel(mhalo)
+
+    return vv
+
+vrad.label = lambda sim,pt,f: '[pt] Radial Velocity' if '_vvir' not in f else '[pt] Radial Velocity / V$_{\\rm 200}$'
+vrad.units = lambda sim,pt,f: 'km/s' if '_vvir' not in f else ''
+vrad.limits = lambda sim,pt,f: [-1000, 1000] if '_vvir' not in f else [-2.0, 2.0]
+vrad.limits_halo = lambda sim,pt,f: [-300, 300] if '_vvir' not in f else [-1.0, 1.0]
+vrad.log = False
+
+@snap_field(aliases=['j','specj','specangmom','angmom_mag','specj_mag','specangmom_mag'])
+def angmom(sim, partType, field, args):
+    """ Angular momentum, relative to the central subhalo and its motion, including hubble correction, 
+    either the 3-vector or the specific magnitude (if field contains '_mag'). """
+    assert args['haloID'] is not None or args['subhaloID'] is not None
+
+    if sim.isZoom:
+        subhaloID = sim.zoomSubhaloID
+        print(f'WARNING: Using {zoomSubhaloID = } for zoom run to compute [{field}]!')
+
+    pos = sim.snapshotSubset(partType, 'pos', **args)
+    vel = sim.snapshotSubset(partType, 'vel', **args)
+    mass = sim.snapshotSubset(partType, 'mass', **args)
+
+    if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
+
+    # reference position and velocity
+    shID = args['subhaloID']
+    if shID is None:
+        shID = sim.halo(args['haloID'])['GroupFirstSub']
+    firstSub = sim.subhalo(shID)
+
+    refPos = firstSub['SubhaloPos']
+    refVel = firstSub['SubhaloVel']
+
+    if '_mag' in field:
+        return sim.units.particleSpecAngMomMagInKpcKmS(pos, vel, mass, refPos, refVel)
+
+    return sim.units.particleAngMomVecInKpcKmS(pos, vel, mass, refPos, refVel)
+
+angmom.label = lambda sim,pt,f: '[pt] Angular Momentum' if '_mag' in f else '[pt] Specific Angular Momentum' 
+angmom.units = lambda sim,pt,f: 'kpc km/s' if '_mag' in f else 'M$_{\\rm sun}$ kpc km/s'
+angmom.limits_halo = lambda sim,pt,f: [2.0, 6.0] if '_mag' in f else [-1e12,1e12]
+angmom.log = lambda sim,pt,f: True if '_mag' in f else False
+
+@snap_field(alias='enclosedmass')
+def menc(sim, partType, field, args):
+    """ Enclosed mass, i.e. total halo mass within the radial distance of each particle/cell. """
+    assert args['haloID'] is not None or args['subhaloID'] is not None
+
+    # allocate for radii and masses of all particle types
+    if args['haloID'] is not None:
+        lenType = sim.halo(args['haloID'])['GroupLenType']
+    else:
+        lenType = sim.subhalo(args['subhaloID'])['SubhaloLenType']
+
+    numPartTot = np.sum( lenType[sim.ptNum(pt)] for pt in sim.partTypes )
+
+    rad = np.zeros( numPartTot, dtype='float32' )
+    mass = np.zeros( numPartTot, dtype='float32' )
+    mask = np.zeros( numPartTot, dtype='int16' )
+
+    # load
+    offset = 0
+    for pt in sim.partTypes:
+        numPartType = lenType[sim.ptNum(pt)]
+        rad[offset : offset+numPartType] = sim.snapshotSubset(pt, 'rad', **args)
+        mass[offset : offset+numPartType] = sim.snapshotSubset(pt, 'mass', **args)
+
+        if sim.isPartType(pt, partType):
+            mask[offset : offset+numPartType] = 1
+        offset += numPartType
+
+    # sort and cumulative sum
+    inds = np.argsort(rad)
+    radtype = rad[np.where(mask == 1)]
+    indstype = np.argsort(rad[np.where(mask == 1)])
+    mass = mass[inds]
+    mask = mask[inds]
+    cum_mass = np.cumsum(mass, dtype='float64')
+
+    # extract enclosed mass for our particle type, shuffle back into original order
+    mass_enc = np.zeros( indstype.size, dtype='float32' )
+    mass_enc[indstype] = cum_mass[np.where(mask == 1)]
+
+    return mass_enc
+
+menc.label = 'Enclosed Mass'
+menc.units = 'code_mass'
+menc.limits_halo = [-1.0, 4.0]
+menc.log = True
+
+@snap_field(alias='enclosedmass_msun')
+def menc_msun(sim, partType, field, args):
+    """ Enclosed mass, in solar masses. """
+    menc = sim.snapshotSubset(partType, 'menc', **args)
+
+    return sim.units.codeMassToMsun(menc)
+
+menc_msun.label = 'Enclosed Mass'
+menc_msun.units = 'M$_{\\rm sun}$'
+menc_msun.limits_halo = [9.0, 14.0]
+menc_msun.log = True
+
+@snap_field(aliases=['tfreefall','freefalltime'])
+def tff(sim, partType, field, args):
+    """ Gravitational free-fall time. """
+    menc = sim.snapshotSubset(partType, 'menc', **args)
+    rad = sim.snapshotSubset(partType, 'rad', **args)
+
+    enclosed_vol = 4 * np.pi * rad**3 / 3 # code units
+    enclosed_meandens = menc / enclosed_vol
+
+    return sim.units.avgEnclosedDensityToFreeFallTime(enclosed_meandens)
+
+tff.label = 'Gravitational Free-Fall Time'
+tff.units = 'Gyr'
+tff.limits_halo = [-2.0, 1.0]
+tff.log = True
+
+@snap_field
+def tcool_tff(sim, partType, field, args):
+    """ Ratio of gas cooling time to gravitational free-fall time. """
+    tcool = sim.snapshotSubset(partType, 'tcool', **args)
+    tff = sim.snapshotSubset(partType, 'tff', **args)
+
+    return (tcool / tff)
+
+tff.label = 't$_{\\rm cool}$ / t$_{\\rm ff}$'
+tff.units = '' # dimensionless
+tff.limits_halo = [-1.0, 2.0]
+tff.log = True
+
+@snap_field
+def delta_rho(sim, partType, field, args):
+    """ Ratio of density to local mean density, delta_rho/<rho>, based on a spherically symmetric, 
+    halo-centric mass density profile. This is a special case of the below 'delta_rho_'. """
+    from ..util.helper import logZeroNaN
+    from scipy.stats import binned_statistic
+
+    mass = sim.snapshotSubset(partType, 'mass', **args)
+    rad = sim.snapshotSubset(partType, 'rad', **args)
+    rad = logZeroNaN(rad)
+
+    bins = np.linspace(0.0, 3.6, 19) # log code dist, 0.2 dex bins, ~1 kpc - 3 Mpc
+    totvol_bins = 4/3 * np.pi * ((10.0**bins[1:])**3 - (10.0**bins[:-1])**3) # (ckpc/h)^3
+    bin_cens = (bins[1:] + bins[:-1])/2
+
+    totmass_bins, _, _ = binned_statistic(rad, mass, 'sum', bins=bins)
+
+    # interpolate mass-density to the distance of each particle/cell
+    avg_rho = np.interp(rad, bin_cens, totmass_bins/totvol_bins)
+
+    avg_rho[avg_rho == 0] = np.min(avg_rho[avg_rho > 0]) # clip to nonzero as we divide
+
+    # return ratio
+    dens = sim.snapshotSubset(partType, 'dens', **args) # will fail for stars/DM, can generalize
+    ratio = (dens / avg_rho).astype('float32')
+
+    return ratio
+
+delta_rho.label = '$\\delta \\rho / </rho>$'
+delta_rho.units = '' # dimensionless
+delta_rho.limits_halo = [-1.0, 1.0]
+delta_rho.log = True
+
+@snap_field(multi=True)
+def delta_(sim, partType, field, args):
+    """ Ratio of any particle/cell property to its local average, based on a spherically symmetric, 
+    halo-centric radial profile. """
+    from ..util.helper import logZeroNaN
+    from scipy.stats import binned_statistic
+    from scipy.interpolate import interp1d
+
+    propName = field[len('delta_'):]
+
+    prop = sim.snapshotSubset(partType, propName, **args)
+    rad = sim.snapshotSubset(partType, 'rad', **args)
+    rad = logZeroNaN(rad)
+
+    bins = np.linspace(0.0, 3.6, 19) # log code dist, 0.2 dex bins, ~1 kpc - 3 Mpc
+    bin_cens = (bins[1:] + bins[:-1])/2
+
+    avg_prop_binned, _, _ = binned_statistic(rad, prop, 'mean', bins=bins)
+
+    # if any bins were empty, avg_prop_binned has nan entries
+    w_nan = np.where(np.isnan(avg_prop_binned))
+    if len(w_nan[0]):
+        # linear extrapolate/interpolate (in log quantity) to fill them
+        w_finite = np.where(~np.isnan(avg_prop_binned))
+        f_interp = interp1d(bin_cens[w_finite], np.log10(avg_prop_binned[w_finite]), 
+                     kind='linear', bounds_error=False, fill_value='extrapolate')
+        avg_prop_binned[w_nan] = 10.0**f_interp(bin_cens[w_nan])
+
+    # interpolate mass-density to the distance of each particle/cell
+    avg_prop = np.interp(rad, bin_cens, avg_prop_binned)
+
+    avg_prop[avg_prop == 0] = np.min(avg_prop[avg_prop > 0]) # clip to nonzero as we divide
+
+    w = np.where(avg_prop < 0)
+    if len(np.where(avg_prop < 0)[0]):
+        print('WARNING: avg_prop has negative entries, unexpected.')
+
+    ratio = (prop / avg_prop).astype('float32')
+
+    return ratio
+
+delta_.label = lambda sim,pt,f: '$\\delta %s / <%s>$' % (f.replace('delta_',''),f.replace('delta_',''))
+delta_.units = '' # dimensionless
+delta_.limits = [-1.0, 1.0]
+delta_.log = True
+
+# -------------------- halo-centric metadata ------------------------------------------------------
+
+@snap_field(aliases=['subid','subhaloid'])
+def subhalo_id(sim, partType, field, args):
+    """ Parent subhalo ID, per particle/cell. """
+    indRange = None
+    if args['haloID'] is not None or args['subhaloID'] is not None:
+        indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
+
+    # make explicit list of indices
+    if indRange is not None:
+        inds = np.arange(indRange[0], indRange[1]+1)
+    else:
+        inds = np.arange(0, sim.numPart[sim.ptNum(partType)]+1)
+
+    # inverse map back to parent [sub]halo ID
+    return sim.inverseMapPartIndicesToSubhaloIDs(inds, partType)
+
+subhalo_id.label = 'Subhalo ID'
+subhalo_id.units = '' # dimensionless
+subhalo_id.limits = [0, 1e7]
+subhalo_id.log = True
+
+@snap_field(alias='haloid')
+def halo_id(sim, partType, field, args):
+    """ Parent halo ID, per particle/cell. """
+    indRange = None
+    if args['haloID'] is not None or args['subhaloID'] is not None:
+        indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
+
+    # make explicit list of indices
+    if indRange is not None:
+        inds = np.arange(indRange[0], indRange[1]+1)
+    else:
+        inds = np.arange(0, sim.numPart[sim.ptNum(partType)]+1)
+
+    # inverse map back to parent [sub]halo ID
+    return sim.inverseMapPartIndicesToHaloIDs(inds, partType)
+
+halo_id.label = 'Halo ID'
+halo_id.units = '' # dimensionless
+halo_id.limits = [0, 1e7]
+halo_id.log = True
+
+@snap_field(multi=True)
+def parent_subhalo_(sim, partType, field, args):
+    """ Any property of the parent subhalo, per particle/cell. """
+    parentField = field.replace('parent_subhalo_','')
+    parentIDs = sim.snapshotSubset(partType, 'subhalo_id', **args)
+    parentProp = sim.subhalos(parentField)
+
+    data = parentProp[parentIDs].astype('float32')
+
+    # set nan for any particles/cells not in a parent
+    w = np.where(parentIDs == -1)
+    data[w] = np.nan
+
+    return data
+
+parent_subhalo_.label = lambda sim,pt,f: 'Parent Subhalo [%s]' % f.replace('parent_subhalo_','')
+parent_subhalo_.units = '' # TODO: call simSubhaloQuantity in lambda and retrieve
+parent_subhalo_.limits = [0, 1e7] # TODO: as above
+parent_subhalo_.log = True
+
+@snap_field(multi=True)
+def parent_halo_(sim, partType, field, args):
+    """ Any property of the parent halo, per particle/cell. """
+    parentField = field.replace('parent_halo_','')
+    parentIDs = sim.snapshotSubset(partType, 'halo_id', **args)
+    parentProp = sim.halos(parentField)
+
+    data = parentProp[parentIDs].astype('float32')
+
+    # set nan for any particles/cells not in a parent
+    w = np.where(parentIDs == -1)
+    data[w] = np.nan
+
+    return data
+
+parent_halo_.label = lambda sim,pt,f: 'Parent Halo [%s]' % f.replace('parent_halo_','')
+parent_halo_.units = '' # TODO: call simSubhaloQuantity in lambda and retrieve
+parent_halo_.limits = [0, 1e7] # TODO: as above
+parent_halo_.log = True

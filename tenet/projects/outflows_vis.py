@@ -697,10 +697,10 @@ def singleHaloDemonstrationImage(conf=1, overlay='lic_stream'):
             panels.append( {'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.4,0.2]} )
 
         if conf == 5:
-            panels.append( {'partType':'gas', 'partField':'MHIGK_popping', 'valMinMax':[16.0,22.0]} )
+            panels.append( {'partType':'gas', 'partField':'MHI_GK', 'valMinMax':[16.0,22.0]} )
 
         if conf == 6:
-            panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[16.0,22.0]} )
+            panels.append( {'partType':'gas', 'partField':'MH2_GK', 'valMinMax':[16.0,22.0]} )
 
         class plotConfig:
             plotStyle    = 'edged'

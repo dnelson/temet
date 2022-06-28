@@ -18,14 +18,14 @@ def celineWriteH2CDDFBand():
     """ Use H2 CDDFs with many variations (TNG100) to derive an envelope band, f(N_H2) vs. N_H2, and write a text file. """
     sP = simParams(res=1820, run='tng', redshift=0.2) # z=0.2, z=0.8
 
-    vars_sfr = ['nH2_popping_GK_depth10','nH2_popping_GK_depth10_allSFRgt0','nH2_popping_GK_depth10_onlySFRgt0']
-    vars_model = ['nH2_popping_BR_depth10','nH2_popping_KMT_depth10']
-    vars_diemer = ['nH2_diemer_GD14_depth10','nH2_diemer_GK11_depth10','nH2_diemer_K13_depth10','nH2_diemer_S14_depth10']
-    vars_cellsize = ['nH2_popping_GK_depth10_cell3','nH2_popping_GK_depth10_cell1']
-    vars_depth = ['nH2_popping_GK_depth5','nH2_popping_GK_depth20','nH2_popping_GK_depth1']
+    vars_sfr = ['nH2_GK_depth10','nH2_GK_depth10_allSFRgt0','nH2_GK_depth10_onlySFRgt0']
+    vars_model = ['nH2_BR_depth10','nH2_KMT_depth10']
+    vars_diemer = ['nH2_GD14_depth10','nH2_GK11_depth10','nH2_K13_depth10','nH2_S14_depth10']
+    vars_cellsize = ['nH2_GK_depth10_cell3','nH2_GK_depth10_cell1']
+    vars_depth = ['nH2_GK_depth5','nH2_GK_depth20','nH2_GK_depth1']
 
     speciesList = vars_sfr + vars_model + vars_cellsize + vars_depth
-    speciesList = ['nH2_popping_GK_depth10'] # TNG300 test
+    speciesList = ['nH2_GK_depth10'] # TNG300 test
 
     # load
     for i, species in enumerate(speciesList):
@@ -112,8 +112,8 @@ def celineH2GalaxyImage():
     haloID = sP.groupCatSingle(subhaloID=subhaloInd)['SubhaloGrNr']
 
     panels = []
-    panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.5,22.0], **faceOnOptions} )
-    panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.5,22.0], **edgeOnOptions} )
+    panels.append( {'partType':'gas', 'partField':'MH2_GK', 'valMinMax':[17.5,22.0], **faceOnOptions} )
+    panels.append( {'partType':'gas', 'partField':'MH2_GK', 'valMinMax':[17.5,22.0], **edgeOnOptions} )
 
     class plotConfig:
         plotStyle    = 'edged'
@@ -154,7 +154,7 @@ def celineGalaxyImage():
     #haloID = sP.groupCatSingle(subhaloID=subhaloInd)['SubhaloGrNr']
 
     panels = []
-    panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.5,22.0]} )
+    panels.append( {'partType':'gas', 'partField':'MH2_GK', 'valMinMax':[17.5,22.0]} )
 
     class plotConfig:
         plotStyle    = 'edged'
@@ -183,7 +183,7 @@ def celineHIH2RadialProfiles():
     subhaloIDs = [{'11.8 < M$_{\\rm halo}$ < 11.9':ww[0]}]
 
     # select properties
-    fields    = ['MHIGK_popping','MH2GK_popping']
+    fields    = ['MHI_GK','MH2_GK']
     weighting = None
     op        = 'sum'
     proj2D    = [2, None] # z-axis, no depth restriction
@@ -198,9 +198,9 @@ def celineHIDensityVsColumn():
     sP = simParams(run='tng100-1', redshift=3.0)
 
     N_HI = sP.snapshotSubset('gas', 'hi_column')
-    M_HI = sP.snapshotSubset('gas', 'MHIGK_popping')
-    M_H2 = sP.snapshotSubset('gas', 'MH2GK_popping')
-    M_H  = sP.snapshotSubset('gas', 'MH_popping')
+    M_HI = sP.snapshotSubset('gas', 'MHI_GK')
+    M_H2 = sP.snapshotSubset('gas', 'MH2_GK')
+    M_H  = sP.snapshotSubset('gas', 'mass') * sP.units.hydrogen_massfrac
 
     w = np.where( np.isfinite(N_HI) ) # in grid slice
 
@@ -748,10 +748,10 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, hot=F
             # HI and H2 (Fig 3)
             assert not metal_mass # makes no sense here
 
-            mass = sP.gas('MHIGK_popping') # 10^10/h msun
+            mass = sP.gas('MHI_GK') # 10^10/h msun
             rho_z_HI[i] = np.sum(mass, dtype='float64') / sP.HubbleParam # 10^10 msun
 
-            mass = sP.gas('MH2GK_popping') # 10^10/h msun
+            mass = sP.gas('MH2_GK') # 10^10/h msun
             rho_z_H2[i] = np.sum(mass, dtype='float64') / sP.HubbleParam # 10^10 msun
 
         elif mstar:
@@ -812,9 +812,9 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, hot=F
 
         elif higal:
             # fraction of total HI mass in the box container within (i) galaxies (<2rhalfstars) and (ii) FoFs
-            galField = 'Subhalo_Mass_2rstars_MHIGK_popping' # 'Subhalo_Mass_2rstars_HI'
-            gal70Field = 'Subhalo_Mass_70pkpc_MHIGK_popping'
-            fofField = 'Subhalo_Mass_FoF_MHIGK_popping' # 'Subhalo_Mass_FoF_HI'
+            galField = 'Subhalo_Mass_2rstars_MHI_GK' # 'Subhalo_Mass_2rstars_HI'
+            gal70Field = 'Subhalo_Mass_70pkpc_MHI_GK'
+            fofField = 'Subhalo_Mass_FoF_MHI_GK' # 'Subhalo_Mass_FoF_HI'
 
             HI_mass_gal = sP.auxCatSplit(galField)[galField]
             HI_mass_70kpc = sP.auxCatSplit(gal70Field)[gal70Field]

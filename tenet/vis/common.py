@@ -36,7 +36,7 @@ totSumFields      = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','ta
 velLOSFieldNames  = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','vel_z','bfield_x','bfield_y','bfield_z']
 haloCentricFields = ['tff','tcool_tff','menc','specangmom_mag','vrad','vrel','delta_rho']
-loggedFields      = ['temp','temperature','temp_sfcold','ent','entr','entropy','P_gas','P_B']
+loggedFields      = ['temp','temperature','temp_sfcold']
 
 def validPartFields(ions=True, emlines=True, bands=True):
     """ Helper, return a list of all field names we can handle. """
@@ -45,7 +45,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
     fields = ['dens','density','mass',
               'masspart','particle_mass','sfr','sfr_msunyrkpc2',
               'coldens','coldens_msunkpc2','coldens_msun_ster',
-              'OVI_OVII_ionmassratio',# (generalize),
+              'ionmassratio_OVI_OVII',# (generalize),
               'HI','HI_segmented','H2_BR','H2_GK','H2_KMT','HI_BR','HI_GK','HI_KMT',
               'xray','xray_lum','sz_yparam','sfr_halpha','halpha','p_sync_ska',
               'temp','temperature','temp_sfcold',
@@ -540,8 +540,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
     # molecular hydrogen (Popping pre-computed files, here with abbreviated names)
     if partField in ['H2_BR','H2_GK','H2_KMT','HI_BR','HI_GK','HI_KMT']:
         # should generalize to colDens fields
-        partFieldLoad = 'M%s_popping' % partField.replace('_','') # e.g. H2_BR -> MH2BR_popping
-        mass = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange).astype('float32')
+        mass = sP.snapshotSubsetP(partType, 'M'+partField, indRange=indRange).astype('float32')
 
     # elemental mass fraction (do column densities)
     if 'metals_' in partField:
@@ -855,7 +854,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         if partField == 'O VII': config['ctName'] = 'magma_gray' #'magma'
         if partField == 'O VIII': config['ctName'] = 'magma_gray' #'plasma'
 
-    if '_ionmassratio' in partField:
+    if 'ionmassratio_' in partField:
         ion = cloudyIon(sP=None)
         ion1, ion2, _ = partField.split('_')
 

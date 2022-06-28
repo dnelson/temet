@@ -466,12 +466,12 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_HI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None),
 
-   'Subhalo_Mass_2rstars_MHIGK_popping' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='MHIGK_popping',op='sum',rad='2rhalfstars'),
-   'Subhalo_Mass_70pkpc_MHIGK_popping' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='MHIGK_popping',op='sum',rad=70.0),
-   'Subhalo_Mass_FoF_MHIGK_popping' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='MHIGK_popping',op='sum',rad=None,scope='fof',cenSatSelect='cen'),
+   'Subhalo_Mass_2rstars_MHI_GK' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='MHI_GK',op='sum',rad='2rhalfstars'),
+   'Subhalo_Mass_70pkpc_MHI_GK' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='MHI_GK',op='sum',rad=70.0),
+   'Subhalo_Mass_FoF_MHI_GK' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='MHI_GK',op='sum',rad=None,scope='fof',cenSatSelect='cen'),
 
    'Subhalo_Mass_10pkpc_Stars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=10.0),
@@ -488,8 +488,8 @@ fieldComputeFunctionMapping = \
    'Subhalo_Potential_rvir_Gas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='Potential',op='mean',rad='rvir_shell'),
 
-   'Subhalo_Mass_HIGK_popping' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='MHIGK_popping',op='sum',rad=None),
+   'Subhalo_Mass_HI_GK' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='MHI_GK',op='sum',rad=None),
    'Subhalo_Mass_MgII' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='Mg II mass',op='sum',rad=None),
    'Subhalo_Mass_OV' : \
@@ -749,11 +749,6 @@ fieldComputeFunctionMapping = \
    'Subhalo_Bmag_fof_halfr500_volWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='0.5r500crit',weighting='volume',scope='fof',cenSatSelect='cen',minHaloMass='10000dm'),
 
-   'Subhalo_B2_2rhalfstars_volWt' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='b2',op='mean',rad='2rhalfstars',weighting='volume'),
-   'Subhalo_B2_volWt' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='b2',op='mean',rad=None, weighting='volume'),
-
    'Subhalo_Temp_halo_massWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='temp_linear',op='mean',rad='r015_1rvir_halo',weighting='mass'),
    'Subhalo_Temp_halo_volWt' : \
@@ -783,9 +778,9 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='B_KE_edens_ratio',op='mean',rad='r015_1rvir_halo',weighting='volume'),
 
    'Subhalo_Ptot_gas_halo' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_gas_linear',op='sum',rad='r015_1rvir_halo'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_gas',op='sum',rad='r015_1rvir_halo'),
    'Subhalo_Ptot_B_halo' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_b_linear',op='sum',rad='r015_1rvir_halo'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_b',op='sum',rad='r015_1rvir_halo'),
 
    # light: rest-frame/absolute
    'Subhalo_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
@@ -944,15 +939,15 @@ fieldComputeFunctionMapping = \
    'Box_Grid_nOVII'          : partial(wholeBoxColDensGrid,species='O VII'),
    'Box_Grid_nOVIII'         : partial(wholeBoxColDensGrid,species='O VIII'),
 
-   'Box_Grid_nH2_popping_BR_depth10'  : partial(wholeBoxColDensGrid,species='MH2BR_popping_depth10'),
-   'Box_Grid_nH2_popping_GK_depth10'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10'),
-   'Box_Grid_nH2_popping_KMT_depth10' : partial(wholeBoxColDensGrid,species='MH2KMT_popping_depth10'),
-   'Box_Grid_nHI_popping_GK_depth10'  : partial(wholeBoxColDensGrid,species='MHIGK_popping_depth10'),
+   'Box_Grid_nH2_BR_depth10'  : partial(wholeBoxColDensGrid,species='MH2_BR_depth10'),
+   'Box_Grid_nH2_GK_depth10'  : partial(wholeBoxColDensGrid,species='MH2_GK_depth10'),
+   'Box_Grid_nH2_KMT_depth10' : partial(wholeBoxColDensGrid,species='MH2_KMT_depth10'),
+   'Box_Grid_nHI_GK_depth10'  : partial(wholeBoxColDensGrid,species='MHI_GK_depth10'),
 
-   'Box_Grid_nH2_popping_GK'         : partial(wholeBoxColDensGrid,species='MH2GK_popping'),
-   'Box_Grid_nH2_popping_GK_depth20' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth20'),
-   'Box_Grid_nH2_popping_GK_depth5'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth5'),
-   'Box_Grid_nH2_popping_GK_depth1'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth1'),
+   'Box_Grid_nH2_GK'         : partial(wholeBoxColDensGrid,species='MH2_GK'),
+   'Box_Grid_nH2_GK_depth20' : partial(wholeBoxColDensGrid,species='MH2_GK_depth20'),
+   'Box_Grid_nH2_GK_depth5'  : partial(wholeBoxColDensGrid,species='MH2_GK_depth5'),
+   'Box_Grid_nH2_GK_depth1'  : partial(wholeBoxColDensGrid,species='MH2_GK_depth1'),
 
    'Box_CDDF_nHI'            : partial(wholeBoxCDDF,species='HI'),
    'Box_CDDF_nHI_noH2'       : partial(wholeBoxCDDF,species='HI_noH2'),
@@ -962,37 +957,37 @@ fieldComputeFunctionMapping = \
    'Box_CDDF_nOVII'          : partial(wholeBoxCDDF,species='OVII'),
    'Box_CDDF_nOVIII'         : partial(wholeBoxCDDF,species='OVIII'),
 
-   'Box_CDDF_nH2_popping_BR_depth10'  : partial(wholeBoxCDDF,species='H2_popping_BR_depth10'),
-   'Box_CDDF_nH2_popping_GK_depth10'  : partial(wholeBoxCDDF,species='H2_popping_GK_depth10'),
-   'Box_CDDF_nH2_popping_KMT_depth10' : partial(wholeBoxCDDF,species='H2_popping_KMT_depth10'),
-   'Box_CDDF_nHI_popping_GK_depth10'  : partial(wholeBoxCDDF,species='HI_popping_GK_depth10'),
+   'Box_CDDF_nH2_BR_depth10'  : partial(wholeBoxCDDF,species='H2_BR_depth10'),
+   'Box_CDDF_nH2_GK_depth10'  : partial(wholeBoxCDDF,species='H2_GK_depth10'),
+   'Box_CDDF_nH2_KMT_depth10' : partial(wholeBoxCDDF,species='H2_KMT_depth10'),
+   'Box_CDDF_nHI_GK_depth10'  : partial(wholeBoxCDDF,species='HI_GK_depth10'),
 
-   'Box_CDDF_nH2_popping_GK'         : partial(wholeBoxCDDF,species='H2_popping_GK'), # fullbox depth
-   'Box_CDDF_nH2_popping_GK_depth20' : partial(wholeBoxCDDF,species='H2_popping_GK_depth20'),
-   'Box_CDDF_nH2_popping_GK_depth5'  : partial(wholeBoxCDDF,species='H2_popping_GK_depth5'),
-   'Box_CDDF_nH2_popping_GK_depth1'  : partial(wholeBoxCDDF,species='H2_popping_GK_depth1'),
+   'Box_CDDF_nH2_GK'         : partial(wholeBoxCDDF,species='H2_GK'), # fullbox depth
+   'Box_CDDF_nH2_GK_depth20' : partial(wholeBoxCDDF,species='H2_GK_depth20'),
+   'Box_CDDF_nH2_GK_depth5'  : partial(wholeBoxCDDF,species='H2_GK_depth5'),
+   'Box_CDDF_nH2_GK_depth1'  : partial(wholeBoxCDDF,species='H2_GK_depth1'),
 
-   'Box_Grid_nH2_diemer_GD14_depth10' : partial(wholeBoxColDensGrid,species='MH2_GD14_diemer_depth10'),
-   'Box_Grid_nH2_diemer_GK11_depth10' : partial(wholeBoxColDensGrid,species='MH2_GK11_diemer_depth10'),
-   'Box_Grid_nH2_diemer_K13_depth10'  : partial(wholeBoxColDensGrid,species='MH2_K13_diemer_depth10'),
-   'Box_Grid_nH2_diemer_S14_depth10'  : partial(wholeBoxColDensGrid,species='MH2_S14_diemer_depth10'),
-   'Box_CDDF_nH2_diemer_GD14_depth10' : partial(wholeBoxCDDF,species='H2_diemer_GD14_depth10'),
-   'Box_CDDF_nH2_diemer_GK11_depth10' : partial(wholeBoxCDDF,species='H2_diemer_GK11_depth10'),
-   'Box_CDDF_nH2_diemer_K13_depth10'  : partial(wholeBoxCDDF,species='H2_diemer_K13_depth10'),
-   'Box_CDDF_nH2_diemer_S14_depth10'  : partial(wholeBoxCDDF,species='H2_diemer_S14_depth10'),
+   'Box_Grid_nH2_GD14_depth10' : partial(wholeBoxColDensGrid,species='MH2_GD14_depth10'),
+   'Box_Grid_nH2_GK11_depth10' : partial(wholeBoxColDensGrid,species='MH2_GK11_depth10'),
+   'Box_Grid_nH2_K13_depth10'  : partial(wholeBoxColDensGrid,species='MH2_K13_depth10'),
+   'Box_Grid_nH2_S14_depth10'  : partial(wholeBoxColDensGrid,species='MH2_S14_depth10'),
+   'Box_CDDF_nH2_GD14_depth10' : partial(wholeBoxCDDF,species='H2_GD14_depth10'),
+   'Box_CDDF_nH2_GK11_depth10' : partial(wholeBoxCDDF,species='H2_GK11_depth10'),
+   'Box_CDDF_nH2_K13_depth10'  : partial(wholeBoxCDDF,species='H2_K13_depth10'),
+   'Box_CDDF_nH2_S14_depth10'  : partial(wholeBoxCDDF,species='H2_S14_depth10'),
 
-   'Box_Grid_nH2_popping_GK_depth10_onlySFRgt0' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10',onlySFR=True),
-   'Box_Grid_nH2_popping_GK_depth10_allSFRgt0' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10',allSFR=True),
-   'Box_CDDF_nH2_popping_GK_depth10_onlySFRgt0' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10_onlySFRgt0'),
-   'Box_CDDF_nH2_popping_GK_depth10_allSFRgt0' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10_allSFRgt0'),
+   'Box_Grid_nH2_GK_depth10_onlySFRgt0' : partial(wholeBoxColDensGrid,species='MH2_GK_depth10',onlySFR=True),
+   'Box_Grid_nH2_GK_depth10_allSFRgt0' : partial(wholeBoxColDensGrid,species='MH2_GK_depth10',allSFR=True),
+   'Box_CDDF_nH2_GK_depth10_onlySFRgt0' : partial(wholeBoxCDDF,species='H2_GK_depth10_onlySFRgt0'),
+   'Box_CDDF_nH2_GK_depth10_allSFRgt0' : partial(wholeBoxCDDF,species='H2_GK_depth10_allSFRgt0'),
 
-   'Box_Grid_nH2_popping_GK_depth10_gridSize=3.0' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10',gridSize=3.0),
-   'Box_Grid_nH2_popping_GK_depth10_gridSize=1.0' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10',gridSize=1.0),
-   'Box_Grid_nH2_popping_GK_depth10_gridSize=0.5' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10',gridSize=0.5),
+   'Box_Grid_nH2_GK_depth10_gridSize=3.0' : partial(wholeBoxColDensGrid,species='MH2_GK_depth10',gridSize=3.0),
+   'Box_Grid_nH2_GK_depth10_gridSize=1.0' : partial(wholeBoxColDensGrid,species='MH2_GK_depth10',gridSize=1.0),
+   'Box_Grid_nH2_GK_depth10_gridSize=0.5' : partial(wholeBoxColDensGrid,species='MH2_GK_depth10',gridSize=0.5),
 
-   'Box_CDDF_nH2_popping_GK_depth10_cell3' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10',gridSize=3.0),
-   'Box_CDDF_nH2_popping_GK_depth10_cell1' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10',gridSize=1.0),
-   'Box_CDDF_nH2_popping_GK_depth10_cell05' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10',gridSize=0.5),
+   'Box_CDDF_nH2_GK_depth10_cell3' : partial(wholeBoxCDDF,species='H2_GK_depth10',gridSize=3.0),
+   'Box_CDDF_nH2_GK_depth10_cell1' : partial(wholeBoxCDDF,species='H2_GK_depth10',gridSize=1.0),
+   'Box_CDDF_nH2_GK_depth10_cell05' : partial(wholeBoxCDDF,species='H2_GK_depth10',gridSize=0.5),
 
    'Box_Grid_nOVI_depth10'           : partial(wholeBoxColDensGrid,species='O VI_depth10'),
    'Box_Grid_nOVI_10_depth10'        : partial(wholeBoxColDensGrid,species='O VI 10_depth10'),
@@ -1037,7 +1032,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_Tracers_zAcc_mean'   : partial(tracerTracksQuant,quant='acc_time_1rvir',op='mean',time=None),
    'Subhalo_Tracers_dtHalo_mean' : partial(tracerTracksQuant,quant='dt_halo',op='mean',time=None),
    'Subhalo_Tracers_angmom_tAcc' : partial(tracerTracksQuant,quant='angmom',op='mean',time='acc_time_1rvir'),
-   'Subhalo_Tracers_entr_tAcc'   : partial(tracerTracksQuant,quant='entr',op='mean',time='acc_time_1rvir'),
+   'Subhalo_Tracers_entr_tAcc'   : partial(tracerTracksQuant,quant='entr_log',op='mean',time='acc_time_1rvir'),
    'Subhalo_Tracers_temp_tAcc'   : partial(tracerTracksQuant,quant='temp',op='mean',time='acc_time_1rvir'),
    'Subhalo_Tracers_tempTviracc_tAcc' : partial(tracerTracksQuant,quant='temp',op='mean',time='acc_time_1rvir',norm='tvir_tacc'),
    'Subhalo_Tracers_tempTvircur_tAcc' : partial(tracerTracksQuant,quant='temp',op='mean',time='acc_time_1rvir',norm='tvir_cur'),
@@ -1143,10 +1138,10 @@ fieldComputeFunctionMapping = \
    'Subhalo_RadProfile2Dz_30Mpc_GlobalFoF_MgII_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='Mg II mass',op='sum',scope='global_fof',minHaloMass=12.5,proj2D=[2,30500]),
 
-   'Subhalo_RadProfile3D_GlobalFoF_HIGK_popping_Mass' : \
-     partial(subhaloRadialProfile,ptType='gas',ptProperty='MHIGK_popping',op='sum',scope='global_fof'),
-   'Subhalo_RadProfile2Dz_2Mpc_GlobalFoF_HIGK_popping_Mass' : \
-     partial(subhaloRadialProfile,ptType='gas',ptProperty='MHIGK_popping',op='sum',scope='global_fof',proj2D=[2,2000]),
+   'Subhalo_RadProfile3D_GlobalFoF_HI_GK_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='MHI_GK',op='sum',scope='global_fof'),
+   'Subhalo_RadProfile2Dz_2Mpc_GlobalFoF_HIGK_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='MHI_GK',op='sum',scope='global_fof',proj2D=[2,2000]),
 
    'Subhalo_RadProfile3D_Global_Stars_Mass' : \
      partial(subhaloRadialProfile,ptType='stars',ptProperty='mass',op='sum',scope='global'),
@@ -1222,7 +1217,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_SphericalSamples_Global_Gas_Temp_5rvir_400rad_16ns' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='temp_linear',minHaloMass='10000dm',**sphericalSamplesOpts),
    'Subhalo_SphericalSamples_Global_Gas_Entropy_5rvir_400rad_16ns' : \
-     partial(subhaloRadialProfile,ptType='gas',ptProperty='entropy_linear',minHaloMass='10000dm',**sphericalSamplesOpts),
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='entropy',minHaloMass='10000dm',**sphericalSamplesOpts),
    'Subhalo_SphericalSamples_Global_Gas_ShocksMachNum_5rvir_400rad_16ns' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='shocks_machnum',minHaloMass='10000dm',**sphericalSamplesOpts),
    'Subhalo_SphericalSamples_Global_Gas_ShocksEnergyDiss_5rvir_400rad_16ns' : \

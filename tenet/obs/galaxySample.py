@@ -370,7 +370,7 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
     if config == 'LRG-RDR':
         # grid parameters (Berg+ 2019)
         partType  = 'gas'
-        ionName   = 'H I' #'MHIGK_popping' # 'H I' with H2 removed following G&K model
+        ionName   = 'H I' #'MHI_GK' # 'H I' with H2 removed following G&K model
         projDepth = 11190.0 # +/- 1000 km/s (i.e. dv/(sP.units.H_z*1000) is pMpc at this redshift, assumed z=0.5)
         gridSize  = 1200.0 # pkpc, need out to b = 500kpc
         gridRes   = 2.0

@@ -157,7 +157,7 @@ def _TNGboxFieldConfig(res, conf, thinSlice, remap=False):
     if conf == 30: panels.append( {'partType':'gas', 'partField':'sb_O--8-16.0067A', 'valMinMax':[-15.0, -10.0]} )
     if conf == 31: panels.append( {'partType':'gas', 'partField':'sb_Lyman-alpha', 'valMinMax':[-13.0, -8.0]} )
     if conf == 32: panels.append( {'partType':'gas', 'partField':'sb_O--6-1031.91A_ster', 'valMinMax':[-4.0, 2.0]} )
-    if conf == 33: panels.append( {'partType':'gas', 'partField':'O6_O8_ionmassratio', 'valMinMax':[-2.0, 3.0]} )
+    if conf == 33: panels.append( {'partType':'gas', 'partField':'ionmassratio_O6_O8', 'valMinMax':[-2.0, 3.0]} )
 
     # testing equirectangular projections:
     if conf == 34:  panels.append( {'partType':'gas', 'partField':'coldens_msun_ster', 'valMinMax':gasFullMM} )
@@ -545,7 +545,7 @@ def TNG_oxygenPaperImages(part=0):
         if part == 0:
             panels.append( {'partType':'gas', 'partField':'O VII', 'valMinMax':[11, 16]} ) # O VII
         if part == 3:
-            panels.append( {'partType':'gas', 'partField':'O6_O8_ionmassratio', 'valMinMax':[-2.0, 2.0]} )
+            panels.append( {'partType':'gas', 'partField':'ionmassratio_O6_O8', 'valMinMax':[-2.0, 2.0]} )
         if part == 4:
             panels.append( {'partType':'gas', 'partField':'sb_OVIII', 'valMinMax':[-22, -10], 'ctName':'magma_gray'} )
 

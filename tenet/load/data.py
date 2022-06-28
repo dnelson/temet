@@ -2986,7 +2986,7 @@ def sfrTxt(sP):
             print(f'[{snap = :3d}] at z = {sim.redshift:5.2f}')
 
             r['scaleFac'].append(sim.units.scalefac)
-            r['totSfrRate'] = np.sum(sim.gas('sfr')) # msun/yr
+            r['totSfrRate'].append(np.sum(sim.gas('sfr'))) # msun/yr
 
         r['scaleFac'] = np.array(r['scaleFac'])
         r['totSfrRate'] = np.array(r['totSfrRate'])

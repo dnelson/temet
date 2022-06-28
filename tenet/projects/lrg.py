@@ -318,7 +318,7 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
     colorMed   = 'white'
 
     ionName = ion
-    if ionName == 'MHIGK_popping': ionName = 'HI'
+    if ionName == 'MHI_GK': ionName = 'HI'
 
     if ycum:
         cMinMax = [-2.0, 0.0] # log fraction
@@ -717,7 +717,7 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
     if conf == 1:
         panel = {'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.4,0.2]}
     if conf == 2:
-        panel = {'partType':'gas', 'partField':'MHIGK_popping', 'valMinMax':[15.0,21.0]}
+        panel = {'partType':'gas', 'partField':'MHI_GK', 'valMinMax':[15.0,21.0]}
         if sP.isZoom: panel['partField'] = 'HI'
     if conf == 3:
         panel = {'partType':'gas', 'partField':'Mg II', 'valMinMax':[12.0,16.5]}
@@ -934,7 +934,7 @@ def cloudEvoVis(sP, haloID, clumpID, sbNum, sizeParam=False):
     # subboxes: use snap-based HI since no subboxes are mini and no popping exists
     # full snaps: use popping catalog which is snap-complete, since many snaps are mini and missing NeutralHydrogenAbundance
     partType   = 'gas'
-    partField  = 'HI' if sbNum is not None else 'MHIGK_popping'
+    partField  = 'HI' if sbNum is not None else 'MHI_GK'
     valMinMax  = [16.0, 21.0]
 
     if sizeParam == 0:
@@ -1050,7 +1050,7 @@ def cloudEvoVisFigure(sP, haloID, clumpID, sbNum, constSize=False):
     # subboxes: use snap-based HI since no subboxes are mini and no popping exists
     # full snaps: use popping catalog which is snap-complete, since many snaps are mini and missing NeutralHydrogenAbundance
     partType   = 'gas'
-    partField  = 'HI' if sbNum is not None else 'MHIGK_popping'
+    partField  = 'HI' if sbNum is not None else 'MHI_GK'
     valMinMax  = [16.0, 21.0]
     ctName     = 'thermal'
 
@@ -2071,7 +2071,7 @@ def clumpRadialProfiles(sP, haloID, selections, norm=False):
 
     partType = 'gas'
     props = ['temp_sfcold_linear','hdens','vrel','sfr','entropy','bmag_ug','beta','z_solar','Mg II numdens','cellsize_kpc',
-             'pres_ratio','p_b_linear','p_gas_linear','p_tot','tcool','tcool_tff','MHIGK_popping_numdens','H I numdens']
+             'pres_ratio','p_b','p_gas','p_tot','tcool','tcool_tff','nHI_GK','H I numdens']
     nBins = 50
     stat = 'mean'
     cenfield = 'cen_propwt' # 'cen', 'cen_denswt', 'cen_propwt' (MgII weighted CoM)
@@ -2398,7 +2398,7 @@ def paperPlots():
         TNG50_z1 = simParams(run='tng50-1', redshift=1.0)
         sPs = [TNG50,TNG50_z0,TNG50_z1]
         cenSatSelect = 'cen'
-        ions = ['HIGK_popping','AllGas_Metal','AllGas_Mg','MgII']
+        ions = ['HI_GK','AllGas_Metal','AllGas_Mg','MgII']
 
         for vsHaloMass in [True]: #[True,False]:
             massStr = '%smass' % ['stellar','halo'][vsHaloMass]
@@ -2411,7 +2411,7 @@ def paperPlots():
     # fig 5b: radial profiles
     if 0:
         sPs = [TNG50]
-        ions = ['MgII']#,'HIGK_popping']
+        ions = ['MgII']#,'HI_GK']
         cenSatSelect = 'cen'
         haloMassBins = [[11.4,11.6], [11.9,12.1], [12.4,12.6], [12.8, 13.2], [13.2, 13.8]]
         projSpecs = ['2Dz_6Mpc','3D']
@@ -2687,7 +2687,7 @@ def paperPlots():
         haloMassBin = [13.2, 13.8]
         radRelToVirRad = False
 
-        for ion in ['Mg II','MHIGK_popping']:
+        for ion in ['Mg II','MHI_GK']:
             ionColumnsVsImpact2D(sP, haloMassBin, ion=ion, radRelToVirRad=radRelToVirRad, ycum=True, fullDepth=True)
 
             for ycum in [True,False]:
