@@ -13,7 +13,7 @@ from os import makedirs
 from getpass import getuser
 
 import illustris_python as il
-from ..util.helper import iterable, logZeroNaN, pSplitRange, numPartToChunkLoadSize
+from ..util.helper import iterable, logZeroNaN, pSplitRange
 from ..load.groupcat import groupCatOffsetList, groupCatOffsetListIntoSnap
 
 # registry for snapshot field metadata (in snap_fields.py)
@@ -21,6 +21,7 @@ snapshot_fields = {}
 
 # and custom-derived snapshot fields (in snap_fields_custom.py)
 custom_fields = {}
+custom_fields_aliases = {}
 custom_multi_fields = {}
 
 def snap_field(arg=None, **kwargs):
@@ -76,6 +77,9 @@ def snap_field(arg=None, **kwargs):
             else:
                 # otherwise, name of the decorated function is the search key
                 custom_multi_fields[f.__name__] = f # wrapper
+        else:
+            # for non-multi fields, keep track of primary name, and its list of aliases (for docs)
+            custom_fields_aliases[f.__name__] = aliases
 
         return f
         #return wrapper

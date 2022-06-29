@@ -62,7 +62,7 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
 
     # load
     haloLims = (subhaloIDs is not None or haloIDs is not None)
-    xlabel, xlim_quant, xlog = simParticleQuantity(sPs[0], ptType, ptProperty, clean=clean, haloLims=haloLims)
+    xlabel, xlim_quant, xlog = simParticleQuantity(sPs[0], ptType, ptProperty, haloLims=haloLims)
     if xlim is None: xlim = xlim_quant
 
     # start plot
@@ -289,14 +289,14 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     contoursColor = 'k' # black
 
     # load: x-axis
-    xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloIDs is not None))
+    xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, haloLims=(haloIDs is not None))
     if xlim is None: xlim = xlim_quant
     xvals = _load_all_halos(sP, partType, xQuant, haloIDs)
 
     if xlog: xvals = logZeroNaN(xvals)
 
     # load: y-axis
-    ylabel, ylim_quant, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloIDs is not None))
+    ylabel, ylim_quant, ylog = simParticleQuantity(sP, partType, yQuant, haloLims=(haloIDs is not None))
     if ylim is None: ylim = ylim_quant
     yvals = _load_all_halos(sP, partType, yQuant, haloIDs)
 
@@ -362,7 +362,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             weight = weight[w_fin]
                 
             # plot 2D image, each pixel colored by the mean value of a third quantity
-            clabel, clim_quant, clog = simParticleQuantity(sP, partType, wtProp, clean=clean, haloLims=(haloIDs is not None))
+            clabel, clim_quant, clog = simParticleQuantity(sP, partType, wtProp, haloLims=(haloIDs is not None))
             wtStr = clabel # 'Mean ' + clabel
             zz, _, _, _ = binned_statistic_2d(xvals, yvals, weight, 'mean', # median unfortunately too slow
                                               bins=nBins2D, range=[xlim,ylim])
@@ -664,12 +664,12 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
                 haloIDsLoc = haloIDs[i][list(haloIDs[i].keys())[j]]
 
             # load
-            xlabel, xlim2, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=haloLims)
+            xlabel, xlim2, xlog = simParticleQuantity(sP, partType, xQuant, haloLims=haloLims)
             #sim_xvals = sP.snapshotSubset(partType, xQuant, haloID=haloID)
             sim_xvals = _load_all_halos(sP, partType, xQuant, haloIDsLoc)
             if xlog: sim_xvals = logZeroNaN(sim_xvals)
 
-            ylabel, ylim2, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=haloLims)
+            ylabel, ylim2, ylog = simParticleQuantity(sP, partType, yQuant, haloLims=haloLims)
             #sim_yvals = sP.snapshotSubset(partType, yQuant, haloID=haloID)
             sim_yvals = _load_all_halos(sP, partType, yQuant, haloIDsLoc)
             #if ylog: sim_yvals = logZeroNaN(sim_yvals) # apply after statistics
@@ -871,7 +871,7 @@ def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas'
     if isinstance(subhaloIDs,int) and len(sPs) == 1: subhaloIDs = [subhaloIDs] # single number to list (one sP case)
     assert (len(subhaloIDs) == len(sPs)) # one subhalo ID list per sP
 
-    ylabel, ylim2, ylog = simParticleQuantity(sPs[0], ptType, ptProperty, clean=clean)
+    ylabel, ylim2, ylog = simParticleQuantity(sPs[0], ptType, ptProperty)
     if ylim is None: ylim = ylim2
 
     # start plot
@@ -1040,7 +1040,7 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhalo
     if subhaloIDs is not None: assert (len(subhaloIDs) == len(sPs)) # one subhalo ID per sP
     if haloIDs is not None: assert (len(haloIDs) == len(sPs)) # one subhalo ID per sP
 
-    ylabel, ylim_q, ylog_q = simParticleQuantity(sPs[0], ptType, ptProperty, clean=clean, haloLims=True)
+    ylabel, ylim_q, ylog_q = simParticleQuantity(sPs[0], ptType, ptProperty, haloLims=True)
     if ylim is None: ylim = ylim_q
     if ylog is None: ylog = ylog_q
 

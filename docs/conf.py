@@ -62,6 +62,7 @@ class ExecDirective(Directive):
         finally:
             sys.stdout = oldStdout
 
+
 # -- General configuration ---------------------------------------------------
 
 extensions = ['sphinx.ext.mathjax',
@@ -109,3 +110,75 @@ html_logo = '_static/logo_sm.png'
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+# -- create custom rst files --
+
+def math_latex(label):
+    """ Convert $-based latex into rest :math: syntax. """
+    label_math = ''
+    state = 0
+
+    for s in label:
+        if s == '$':
+            if state % 2 == 0:
+                label_math += " :math:`"
+            else:
+                label_math += "` "
+            state += 1
+        else:
+            label_math += s
+
+    return label_math.strip()
+
+def quant_rowtext(custom_fields, custom_fields_aliases, key):
+    """ Write a given quantity out, given its key and the registry dict to use. """
+    # get properties
+    func = custom_fields[key]
+    f_name = key.replace('_','\_') # avoid rest linking
+    f_link = ":py:func:`~%s.%s`" % (func.__module__, func.__name__)
+    f_desc = func.__doc__.replace('\n','').strip()
+
+    f_aliases = ', '.join(custom_fields_aliases[key])
+
+    # label
+    f_label = getattr(func, 'label', '')
+
+    if callable(f_label):
+        f_label = f_label('','',key) # sim,pt are blank
+
+    f_label = math_latex(f_label.replace('[pt]',''))
+
+    # units
+    f_units = getattr(func, 'units', '')
+
+    if callable(f_units):
+        f_units = f_units('','',key) # sim,pt are blank
+
+    f_units = math_latex(f_units)
+    if f_units == '': f_units = '--' # dimensionless
+
+    # print table row
+    s = '    "%s", "%s", "%s", "%s", "%s"\n' % (f_name,f_label,f_units,f_aliases,f_desc)
+
+    return s
+
+with open('quants_custom.rst','w') as f:
+    from tenet.load.snapshot import custom_fields, custom_multi_fields
+    from tenet.load.snapshot import custom_fields_aliases
+
+    # write header
+    f.write('.. csv-table::\n')
+    f.write('    :header: "Field Name", "Label", "Units", "Aliases", "Description"\n')
+    f.write('    :widths: 10, 25, 15, 20, 30\n')
+    f.write('\n')
+
+    for key in custom_fields_aliases.keys():
+        # skip multi fields here
+        #if key in custom_multi_fields.keys():
+        #    continue
+
+        s = quant_rowtext(custom_fields,custom_fields_aliases,key)
+        f.write(s)
+
+    f.write('\n')
+

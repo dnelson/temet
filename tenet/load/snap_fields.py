@@ -15,10 +15,10 @@ masses = {'label':'Mass',
 # --- gas ---
 
 density = {'label':'$\\rho_{\\rm gas}$',
-          'units':'code_density',
-          'limits':[-12.0, 0.0], 
-          'limits_halo':[-4.0, 2.0], 
-          'log':True}
+           'units':'code_density',
+           'limits':[-12.0, 0.0], 
+           'limits_halo':[-4.0, 2.0], 
+           'log':True}
 
 starformationrate = {'label':'Star Formation Rate',
                      'units':'M$_{\\rm sun}$ yr$^{-1}$',

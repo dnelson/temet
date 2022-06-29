@@ -5,11 +5,12 @@ import h5py
 import numpy as np
 from functools import partial
 from getpass import getuser
-from os.path import isfile, isdir
+from os.path import isfile, isdir, getsize
 from os import mkdir
 
 from .snapshot import snap_field, _haloOrSubhaloIndRange
 from ..plot.quantities import simParticleQuantity
+from ..util.helper import numPartToChunkLoadSize, pSplitRange
 
 # -------------------- general/all particle types -------------------------------------------------
 
@@ -21,7 +22,7 @@ def mass_msun(sim, partType, field, args):
     return sim.units.codeMassToMsun(mass)
 
 mass_msun.label = '[pt] Mass'
-mass_msun.units = 'M$_{\\rm sun}$'
+mass_msun.units = r'$\rm{M_{sun}}$'
 mass_msun.limits = [5.0, 7.0]
 mass_msun.limits_halo = [3.0, 5.0]
 mass_msun.log = True
@@ -55,7 +56,7 @@ def velmag(sim, partType, field, args):
     return vmag
 
 velmag.label = 'Velocity Magnitude'
-velmag.units = 'km/s'
+velmag.units = r'$\rm{km/s}$'
 velmag.limits = [0, 1000]
 velmag.limits_halo = [0, 400]
 velmag.log = False
@@ -82,7 +83,7 @@ def gravpot(sim, partType, field, args):
     return pot * sim.units.scalefac
 
 gravpot.label = 'Gravitational Potential'
-gravpot.units = '(km/s)$^2$'
+gravpot.units = r'$\rm{(km/s)^2}$'
 gravpot.limits = [-1e6, 1e5]
 gravpot.limits_halo = [-1e6, -1e2]
 gravpot.log = False
@@ -95,7 +96,7 @@ def vesc(sim, partType, field, args):
     return sim.units.codePotentialToEscapeVelKms(pot)
 
 vesc.label = 'Escape Velocity'
-vesc.units = 'km/s'
+vesc.units = r'$\rm{km/s}$'
 vesc.limits = [0, 2000]
 vesc.limits_halo = [200, 1000]
 vesc.log = False
@@ -108,7 +109,7 @@ def dt(sim, partType, field, args):
     return sim.units.codeTimeStepToYears(dt)
 
 dt.label = '[pt] Timestep'
-dt.units = 'yr'
+dt.units = r'$\rm{yr}$'
 dt.limits = [1.0, 6.0]
 dt.limits_halo = [1.0, 5.0]
 dt.log = True
@@ -124,7 +125,7 @@ def temp(sim, partType, field, args):
     return sim.units.UToTemp(u,ne,log=True)
 
 temp.label = 'Gas Temperature'
-temp.units = 'log K'
+temp.units = r'$\rm{log\ K}$'
 temp.limits = [2.0, 8.0]
 temp.limits_halo = [3.5, 8.0]
 temp.log = False
@@ -138,7 +139,7 @@ def temp_old(sim, partType, field, args):
     return sim.units.UToTemp(u,ne,log=True)
 
 temp_old.label = 'Gas Temperature (Uncorrected)'
-temp_old.units = 'log K'
+temp_old.units = r'$\rm{log\ K}$'
 temp_old.limits = [2.0, 8.0]
 temp_old.limits_halo = [3.5, 8.0]
 temp_old.log = False
@@ -159,7 +160,7 @@ def temp_sfcold(sim, partType, field, args):
     return temp
 
 temp_sfcold.label = 'Gas Temperature'
-temp_sfcold.units = 'log K' # todo: inconsistent for temp_sfcold_linear
+temp_sfcold.units = r'$\rm{log\ K}$' # todo: inconsistent for temp_sfcold_linear
 temp_sfcold.limits = [3.5, 7.2]
 temp_sfcold.limits_halo = [3.5, 8.0]
 temp_sfcold.log = False
@@ -173,15 +174,14 @@ def temp_linear(sim, partType, field, args):
     return sim.units.UToTemp(u,ne,log=False)
 
 temp_linear.label = 'Gas Temperature'
-temp_linear.units = 'K'
+temp_linear.units = r'$\rm{K}$'
 temp_linear.limits = [1e2, 1e8]
 temp_linear.limits_halo = [5e3, 1e7]
 temp_linear.log = False
 
 @snap_field(alias='nelec')
 def ne(sim, partType, field, args):
-    """ Electron number density, derived from ElectronAbundance, which is the fractional 
-    abundance with respect to the total hydrogen number density. Also handle runs without cooling. """
+    """ Electron number density, derived from (fractional) ElectronAbundance, handling runs without cooling. """
     assert sim.isPartType(partType, 'gas')
 
     if sim.snapHasField(partType, 'ElectronAbundance'):
@@ -196,11 +196,11 @@ def ne(sim, partType, field, args):
 
     return nelec
 
-temp_linear.label = 'Electron Number Density n$_{\\rm e}$'
-temp_linear.units = 'cm$^{-3}$'
-temp_linear.limits = [-9.0, -3.0]
-temp_linear.limits_halo = [-6.0, 0.0]
-temp_linear.log = True
+ne.label = r'Electron Number Density $\rm{n_e}$'
+ne.units = r'$\rm{cm^{-3}}$'
+ne.limits = [-9.0, -3.0]
+ne.limits_halo = [-6.0, 0.0]
+ne.log = True
 
 @snap_field(alias='hdens')
 def nh(sim, partType, field, args):
@@ -212,8 +212,8 @@ def nh(sim, partType, field, args):
 
     return nh
 
-nh.label = 'Gas Hydrogen Density n$_{\\rm H}$'
-nh.units = 'cm$^{-3}$'
+nh.label = r'Gas Hydrogen Density $\rm{n_H}$'
+nh.units = r'$\rm{cm^{-3}}$'
 nh.limits = [-9.0, 3.0]
 nh.limits_halo = [-5.0, 0.0]
 nh.log = True
@@ -226,7 +226,7 @@ def numdens(sim, partType, field, args):
     return sim.units.codeDensToPhys(dens,cgs=True,numDens=True)
 
 numdens.label = 'Gas Number Density'
-numdens.units = 'cm$^{-3}$'
+numdens.units = r'$\rm{cm^{-3}}$'
 numdens.limits = [-9.0, 3.0]
 numdens.limits_halo = [-5.0, 0.0]
 numdens.log = True
@@ -238,7 +238,7 @@ def dens_critratio(sim, partType, field, args):
 
     return sim.units.codeDensToCritRatio(dens, baryon=False, log=False)
 
-dens_critratio.label = '$\\rho_{\\rm gas} / \\rho_{\\rm crit}$'
+dens_critratio.label = r'$\rm{\rho_{gas} / \rho_{crit}}$'
 dens_critratio.units = '' # dimensionless
 dens_critratio.limits = [-6.0, 5.0]
 dens_critratio.limits_halo = [-1.0, 6.0]
@@ -251,11 +251,11 @@ def dens_critb(sim, partType, field, args):
 
     return sim.units.codeDensToCritRatio(dens, baryon=True, log=False)
 
-dens_critratio.label = '$\\rho_{\\rm gas} / \\rho_{\\rm crit,b}$'
-dens_critratio.units = '' # dimensionless
-dens_critratio.limits = [-2.0, 9.0]
-dens_critratio.limits_halo = [3.0, 9.0]
-dens_critratio.log = True
+dens_critb.label = r'$\rm{\rho_{gas} / \rho_{crit,b}}$'
+dens_critb.units = '' # dimensionless
+dens_critb.limits = [-2.0, 9.0]
+dens_critb.limits_halo = [3.0, 9.0]
+dens_critb.log = True
 
 @snap_field(aliases=['ent','entr'])
 def entropy(sim, partType, field, args):
@@ -266,7 +266,7 @@ def entropy(sim, partType, field, args):
     return sim.units.calcEntropyCGS(u,dens,log=False)
 
 entropy.label = 'Gas Entropy'
-entropy.units = 'K cm$^{2}$'
+entropy.units = r'$\rm{K\ cm^2}$'
 entropy.limits = [8.0, 11.0]
 entropy.limits_halo = [9.0, 11.0]
 entropy.log = True
@@ -282,7 +282,7 @@ def bmag(sim, partType, field, args):
     return bmag
 
 bmag.label = 'Magnetic Field Strength'
-bmag.units = 'Gauss'
+bmag.units = r'$\rm{Gauss}$'
 bmag.limits = [-15.0, -4.0]
 bmag.limits_halo = [-9.0, -3.0]
 bmag.log = True
@@ -292,11 +292,11 @@ def bmag_ug(sim, partType, field, args):
     """ Magnitude of the gas magnetic field 3-vector in micro-Gauss. """
     return sim.snapshotSubset(partType, 'bmag', **args) * 1e6
 
-bmag.label = 'Magnetic Field Strength'
-bmag.units = '$\mu$G'
-bmag.limits = [-9.0, 3.0]
-bmag.limits_halo = [-3.0, 2.0]
-bmag.log = True
+bmag_ug.label = 'Magnetic Field Strength'
+bmag_ug.units = r'$\rm{\mu G}$'
+bmag_ug.limits = [-9.0, 3.0]
+bmag_ug.limits_halo = [-3.0, 2.0]
+bmag_ug.log = True
 
 @snap_field(alias='vel_alfven')
 def va(sim, partType, field, args):
@@ -310,8 +310,8 @@ def va(sim, partType, field, args):
 
     return va
 
-va.label = 'Alfv$\'{e}$n Velocity'
-va.units = 'km/s'
+va.label = 'Alfven Velocity'
+va.units = r'$\rm{km/s}$'
 va.limits = [-9.0, 3.0]
 va.limits_halo = [-3.0, 2.0]
 va.log = True
@@ -325,7 +325,7 @@ def cs(sim, partType, field, args):
     return sim.calcSoundSpeedKmS(u, dens)
 
 cs.label = 'Sound Speed'
-cs.units = 'km/s'
+cs.units = r'$\rm{km/s}$'
 cs.limits = [-9.0, 3.0]
 cs.limits_halo = [-3.0, 2.0]
 cs.log = False
@@ -354,7 +354,7 @@ def volume_cm3(sim, partType, field, args):
     return sim.units.codeVolumeToCm3(sim.snapshotSubset(partType,'volume',**args))
 
 volume_cm3.label = 'Gas Cell Volume'
-volume_cm3.units = 'cm$^{3}$'
+volume_cm3.units = r'$\rm{cm^3}$'
 volume_cm3.limits = [55.0, 65.0]
 volume_cm3.limits_halo = [55.0, 62.0]
 volume_cm3.log = True
@@ -365,7 +365,7 @@ def volume_kpc3(sim, partType, field, args):
     return sim.units.codeVolumeToKpc3(sim.snapshotSubset(partType,'volume',**args))
 
 volume_kpc3.label = 'Gas Cell Volume'
-volume_kpc3.units = 'kpc$^{3}$'
+volume_kpc3.units = r'$\rm{kpc^3}$'
 volume_kpc3.limits = [-6.0, 6.0]
 volume_kpc3.limits_halo = [-6.0, 2.0]
 volume_kpc3.log = True
@@ -392,7 +392,7 @@ def cellsize_kpc(sim, partType, field, args):
     return sim.units.codeLengthToKpc(rcell)
 
 cellsize_kpc.label = 'Gas Cell Size'
-cellsize_kpc.units = 'kpc'
+cellsize_kpc.units = r'$\rm{kpc}$'
 cellsize_kpc.limits = [-2.0, 3.0]
 cellsize_kpc.limits_halo = [-2.0, 1.0]
 cellsize_kpc.log = True
@@ -454,7 +454,7 @@ def f_b(sim, partType, field, args):
 
     return (dens_b / dens_tot / sim.units.f_b)
 
-f_b.label = 'f$_{\\rm b}$ / f$_{\\rm b,cosmic}$'
+f_b.label = r'$\rm{f_{b} / f_{b,cosmic}}$'
 f_b.units = '' # dimensionless
 f_b.limits = [0.0, 2.0]
 f_b.log = False
@@ -468,7 +468,7 @@ def pressure(sim, partType, field, args):
     return units.calcPressureCGS(u,dens)
 
 pressure.label = 'Gas Pressure'
-pressure.units = 'K cm$^{-3}$'
+pressure.units = r'$\rm{K\ cm^{-3}}$'
 pressure.limits = [-1.0, 7.0]
 pressure.limits_halo = [0.0, 5.0]
 pressure.log = True
@@ -481,20 +481,20 @@ def pressure_mag(sim, partType, field, args):
     return sim.units.calcMagneticPressureCGS(b)
 
 pressure_mag.label = 'Gas Magnetic Pressure'
-pressure_mag.units = 'K cm$^{-3}$'
+pressure_mag.units = r'$\rm{K\ cm^{-3}}$'
 pressure_mag.limits = [-1.0, 7.0]
 pressure_mag.limits_halo = [0.0, 5.0]
 pressure_mag.log = True
 
 @snap_field(aliases=['pres_ratio'])
 def pressure_ratio(sim, partType, field, args):
-    """ Ratio of gas magnetic to thermal pressure (beta^-1). """
+    """ Ratio of gas magnetic to thermal pressure (:math:`\\beta^{-1}`). """
     P_gas = sim.snapshotSubset(partType, 'p_gas', **args)
     P_mag = sim.snapshotSubset(partType, 'p_magnetic', **args)
 
     return (P_mag/P_gas)
 
-pressure_ratio.label = '$\\beta^{-1}$ = P$_{\\rm B}$ / P$_{\\rm gas}$'
+pressure_ratio.label = r'$\rm{\beta^{-1} = P_{B} / P_{gas}}$'
 pressure_ratio.units = '' # dimensionless
 pressure_ratio.limits = [-2.5, 2.5]
 pressure_ratio.limits_halo = [-2.0, 2.0]
@@ -502,13 +502,13 @@ pressure_ratio.log = True
 
 @snap_field
 def beta(sim, partType, field, args):
-    """ Ratio of gas thermal to magnetic pressure (plasma beta). """
+    """ Ratio of gas thermal to magnetic pressure (plasma :math:`\\beta`). """
     P_gas = sim.snapshotSubset(partType, 'p_gas', **args)
     P_mag = sim.snapshotSubset(partType, 'p_magnetic', **args)
 
     return (P_gas/P_mag)
 
-beta.label = '$\\beta$ = P$_{\\rm gas}$ / P$_{\\rm B}$'
+beta.label = r'$\rm{\beta = P_{gas} / P_{B}}$'
 beta.units = '' # dimensionless
 beta.limits = [-2.5, 2.5]
 beta.limits_halo = [-2.0, 2.0]
@@ -522,8 +522,8 @@ def pressure_tot(sim, partType, field, args):
 
     return (P_gas + P_mag)
 
-pressure_tot.label = 'Gas Total Pressure = P$_{\\rm gas}$ + P$_{\\rm B}$'
-pressure_tot.units = 'K cm$^{-3}$'
+pressure_tot.label = r'Gas Total Pressure = $\rm{P_{gas} + P_{B}}$'
+pressure_tot.units = r'$\rm{K\ cm^{-3}}$'
 pressure_tot.limits = [-6.0, 8.0]
 pressure_tot.limits_halo = [-2.0, 7.0]
 pressure_tot.log = True
@@ -537,7 +537,7 @@ def u_kinetic(sim, partType, field, args):
     return sim.units.calcKineticEnergyDensityCGS(dens_code, vel_kms)
 
 u_kinetic.label = 'Gas Kinetic Energy Density'
-u_kinetic.units = 'erg cm$^{-3}$'
+u_kinetic.units = r'$\rm{erg\ cm^{-3}}$'
 u_kinetic.limits = [-6.0, 8.0]
 u_kinetic.limits_halo = [-2.0, 7.0]
 u_kinetic.log = True
@@ -550,7 +550,7 @@ def uratio_mag_ke(sim, partType, field, args):
 
     return (u_magnetic / u_kinetic)
 
-uratio_mag_ke.label = 'Gas (u$_{\\rm mag}$ / u$_{\\rm ke}$) Ratio'
+uratio_mag_ke.label = r'Gas ($\rm{u_{mag} / u_{ke}}$) Ratio'
 uratio_mag_ke.units = '' # dimensionless
 uratio_mag_ke.limits = [-4.0, 4.0]
 uratio_mag_ke.limits_halo = [-3.0, 3.0]
@@ -573,7 +573,7 @@ def tcool(sim, partType, field, args):
     return cooltime
 
 tcool.label = 'Gas Cooling Time'
-tcool.units = 'Gyr'
+tcool.units = r'$\rm{Gyr}$'
 tcool.limits = [-8.0, 2.0]
 tcool.limits_halo = [-8.0, 2.5]
 tcool.log = True
@@ -592,7 +592,7 @@ def coolrate(sim, partType, field, args):
     return (-1.0 * coolheat) # convention: positive
 
 coolrate.label = 'Gas Cooling Rate'
-coolrate.units = 'erg/s/g'
+coolrate.units = r'$\rm{erg/s/g}$'
 coolrate.limits = [-12.0, 2.0]
 coolrate.limits_halo = [-8.0, 3.0]
 coolrate.log = True
@@ -611,7 +611,7 @@ def heatrate(sim, partType, field, args):
     return coolheat # convention: positive
 
 heatrate.label = 'Gas Heating Rate'
-heatrate.units = 'erg/s/g'
+heatrate.units = r'$\rm{erg/s/g}$'
 heatrate.limits = [-14.0, 0.0]
 heatrate.limits_halo = [-10.0, -1.0]
 heatrate.log = True
@@ -627,7 +627,7 @@ def netcoolrate(sim, partType, field, args):
     return coolheat # convention: negative is cooling, positive is heating
 
 netcoolrate.label = 'Gas Net Cooling Rate'
-netcoolrate.units = 'erg/s/g'
+netcoolrate.units = r'$\rm{erg/s/g}$'
 netcoolrate.limits = [-1e3, 1e1]
 netcoolrate.limits_halo = [-1e3, 1e1]
 netcoolrate.log = False
@@ -649,7 +649,7 @@ def coolrate_powell(sim, partType, field, args):
     return (-1.0 * coolheat) # convention: positive
 
 coolrate_powell.label = 'Powell Cooling Rate'
-coolrate_powell.units = 'erg/s/g'
+coolrate_powell.units = r'$\rm{erg/s/g}$'
 coolrate_powell.limits = [-16.0, 2.0]
 coolrate_powell.limits_halo = [-12.0, 1.5]
 coolrate_powell.log = True
@@ -668,7 +668,7 @@ def dt_hydro(sim, partType, field, args):
     return dt_yr
 
 dt_hydro.label = 'Gas Courant Timestep'
-dt_hydro.units = 'yr'
+dt_hydro.units = r'$\rm{yr}$'
 dt_hydro.limits = [1.0, 6.0]
 dt_hydro.limits_halo = [1.0, 5.0]
 dt_hydro.log = True
@@ -688,7 +688,7 @@ def tdep(sim, partType, field, args):
     return t
 
 tdep.label = 'Gas Depletion Time'
-tdep.units = 'Gyr'
+tdep.units = r'$\rm{Gyr}$'
 tdep.limits = [0.0, 12.0]
 tdep.limits_halo = [0.0, 10.0]
 tdep.log = False
@@ -711,7 +711,7 @@ def tau0_(sim, partType, field, args):
 
     return sim.units.opticalDepthLineCenter(transition, dens, temp, cellsize)
 
-tau0_.label = 'Optical Depth $\\tau_0$'
+tau0_.label = r'Optical Depth $\rm{\tau_0}$'
 tau0_.units = '' # dimensionless
 tau0_.limits = [-2.0, 3.0]
 tau0_.limits_halo = [-2.0, 6.0]
@@ -728,7 +728,7 @@ def metaldens(sim, partType, field, args):
     return dens
 
 metaldens.label = 'Metal Density'
-metaldens.units = 'g cm$^{-3}$'
+metaldens.units = r'$\rm{g\ cm^{-3}}$'
 metaldens.limits = [-36.0, -24.0]
 metaldens.limits_halo = [-32.0, -24.0]
 metaldens.log = True
@@ -746,7 +746,7 @@ def metaldens_(sim, partType, field, args):
     return dens
 
 metaldens_.label = lambda sim,pt,f: '%s Metal Density' % f.replace('metaldens_','')
-metaldens_.units = 'g cm$^{-3}$'
+metaldens_.units = r'$\rm{g\ cm^{-3}}$'
 metaldens_.limits = [-40.0, -26.0]
 metaldens_.limits_halo = [-36.0, -26.0]
 metaldens_.log = True
@@ -763,7 +763,7 @@ def sz_y(sim, partType, field, args):
     return sim.units.calcSunyaevZeldovichYparam(mass, xe, temp)
 
 sz_y.label = 'Sunyaev-Zeldovich y-parameter'
-sz_y.units = 'kpc$^2$'
+sz_y.units = r'$\rm{kpc^2}$'
 sz_y.limits = [-12.0, -4.0]
 sz_y.limits_halo = [-10.0, -4.0]
 sz_y.log = True
@@ -783,7 +783,7 @@ def p_sync(sim, partType, field, args):
     return sim.units.synchrotronPowerPerFreq(b, vol, watts_per_hz=True, log=False, **modelArgs)
 
 p_sync.label = 'Synchrotron Power'
-p_sync.units = 'W/Hz'
+p_sync.units = r'$\rm{W/Hz}$'
 p_sync.limits = [7.0, 26.0]
 p_sync.limits_halo = [8.0, 26.0]
 p_sync.log = True
@@ -795,8 +795,8 @@ def halpha_lum(sim, partType, field, args):
 
     return sim.units.sfrToHalphaLuminosity(sfr)
 
-halpha_lum.label = 'L$_{\\rm H\alpha}$'
-halpha_lum.units = '10$^{30}$ erg/s' # 1e30 unit system to avoid overflow
+halpha_lum.label = r'$\rm{L_{H\alpha}}$'
+halpha_lum.units = r'$\rm{10^{30}\ erg/s}$' # 1e30 unit system to avoid overflow
 halpha_lum.limits = [5.0, 12.0]
 halpha_lum.limits_halo = [8.0, 12.0]
 halpha_lum.log = True
@@ -818,8 +818,8 @@ def s850um_flux(sim, partType, field, args):
 
     return sim.units.gasSfrMetalMassToS850Flux(sfr, metalmass, temp, dens, ismCut=ismCut)
 
-s850um_flux.label = 'S$_{\\rm 850\mu m}$'
-s850um_flux.units = 'mJy'
+s850um_flux.label = r'$\rm{S_{850\mu m}}$'
+s850um_flux.units = r'$\rm{mJy}$'
 s850um_flux.limits = [-8.0, -2.0]
 s850um_flux.limits_halo = [-5.0, -2.0]
 s850um_flux.log = True
@@ -835,8 +835,8 @@ def xray_lum(sim, partType, field, args):
 
     return sim.units.calcXrayLumBolometric(sfr, u, xe, mass, dens)
 
-xray_lum.label = 'L$_{\\rm X,bolometric}$'
-xray_lum.units = '10$^{30}$ erg/s' # 1e30 unit system to avoid overflow
+xray_lum.label = r'$\rm{L_{X,bolometric}}$'
+xray_lum.units = r'$\rm{10^{30}\ erg/s}$' # 1e30 unit system to avoid overflow
 xray_lum.limits = [2.0, 10.0]
 xray_lum.limits_halo = [5.0, 10.0]
 xray_lum.log = True
@@ -877,34 +877,36 @@ def xray_lum_apec(sim, partType, field, args):
 
 def xray_lum_apec_metadata(sim, pt, f, ret):
     """ Helper to determine 'cloudy_' field metadata. """
+    label = 'X'
+
     if '05-2kev' in f:
-        label = '$_{\\rm X, 0.5-2 keV}$'
+        label = 'X, 0.5-2 keV'
     if '05-2kev_nomet' in f:
-        label = '$_{\\rm X, 0.5-2 keV, no-Z}$'
+        label = 'X, 0.5-2 keV, no-Z'
     if '0.5-2.0kev' in f:
-        label = '$_{\\rm X, 0.5-2 keV, APEC}$'
+        label = 'X, 0.5-2 keV, APEC'
     if '0.3-7.0kev' in f:
-        label = '$_{\\rm X, 0.5-8 keV, APEC}$'
+        label = 'X, 0.5-8 keV, APEC'
     if '0.5-8.0kev' in f:
-        label = '$_{\\rm X, 0.5-8 keV, APEC}$'
+        label = 'X, 0.5-8 keV, APEC'
     if '2.0-10.0kev' in f:
-        label = '$_{\\rm X, 2-10 keV, APEC}$'
+        label = 'X, 2-10 keV, APEC'
 
     if 'lum_' in f:
-        label = 'L' + label
-        units = '10$^{30}$ erg/s'
+        label = r'$\rm{L_{' + label + '}}$'
+        units = r'$\rm{10^{30}\ erg/s}$'
         limits = [2.0, 10.0]
         limits_halo = [5.0, 11.0]
 
     elif 'flux_' in f:
-        label = 'F' + label
-        units = 'erg/s/cm$^{2}'
+        label = r'$\rm{F_{' + label + '}}$'
+        units = r'$\rm{erg/s/cm^{2}}$'
         limits = [-30.0, -14.0]
         limits_halo = [-20.0, -12.0]
 
     elif 'counts_' in f:
         label = '%s X-ray Count Rate' % f.replace('xray_counts_','')
-        units = 's$^{-1}$' # dimensionless
+        units = r'$\rm{s^{-1}}$' # dimensionless
         limits = [-6.0, 2.0]
         limits_halo = [-6.0, 2.0]
 
@@ -967,8 +969,8 @@ def n_hi(sim, partType, field, args):
 
     return data
 
-n_hi.label = 'N$_{\\rm HI}$'
-n_hi.units = 'cm$^{-2}$'
+n_hi.label = r'$\rm{N_{HI}}$'
+n_hi.units = r'$\rm{cm^{-2}}$'
 n_hi.limits = [15.0, 22.0]
 n_hi.log = True
 
@@ -990,7 +992,7 @@ def hi_mass(sim, partType, field, args):
 
     return data
 
-hi_mass.label = 'M$_{\\rm HI}$'
+hi_mass.label = r'$\rm{M_{HI}}$'
 hi_mass.units = 'code_mass'
 hi_mass.limits = [-2.0, 6.0]
 hi_mass.limits_halo = [1.0, 6.0]
@@ -1015,7 +1017,7 @@ def h2_mass(sim, partType, field, args):
 
     return data
 
-h2_mass.label = 'M$_{\\rm H2}$'
+h2_mass.label = r'$\rm{M_{H2}}$'
 h2_mass.units = 'code_mass'
 h2_mass.limits = [-3.0, 5.0]
 h2_mass.limits_halo = [0.0, 5.0]
@@ -1059,7 +1061,7 @@ def mass_h_popping(sim, partType, field, args):
 
     return masses
 
-mass_h_popping.label = lambda sim,pt,f: 'M$_{\\rm HI,%s}$' % f.split('_')[1].upper()
+mass_h_popping.label = lambda sim,pt,f: r'$\rm{M_{HI,%s}}$' % f.split('_')[1].upper()
 mass_h_popping.units = 'code_mass'
 mass_h_popping.limits = [-16.0, -4.0]
 mass_h_popping.limits_halo = [-12.0, -4.0]
@@ -1078,8 +1080,8 @@ def numdens_h_popping(sim, partType, field, args):
 
     return dens
 
-numdens_h_popping.label = lambda sim,pt,f: 'n$_{\\rm HI,%s}$' % f.split('_')[1].upper()
-numdens_h_popping.units = 'cm$^{-3}$'
+numdens_h_popping.label = lambda sim,pt,f: r'$\rm{n_{HI,%s}}$' % f.split('_')[1].upper()
+numdens_h_popping.units = r'$\rm{cm^{-3}}$'
 numdens_h_popping.limits = [-14.0, -1.0]
 numdens_h_popping.limits_halo = [-12.0, 0.0]
 numdens_h_popping.log = True
@@ -1115,7 +1117,7 @@ def mass_h_diemer(sim, partType, field, args):
 
     return mass
 
-mass_h_diemer.label = lambda sim,pt,f: 'M$_{\\rm HI,%s}$' % f.split('_')[1].upper()
+mass_h_diemer.label = lambda sim,pt,f: r'$\rm{M_{HI,%s}}$' % f.split('_')[1].upper()
 mass_h_diemer.units = 'code_mass'
 mass_h_diemer.limits = [-16.0, -4.0]
 mass_h_diemer.limits_halo = [-12.0, -4.0]
@@ -1134,8 +1136,8 @@ def numdens_h_diemer(sim, partType, field, args):
 
     return dens
 
-numdens_h_diemer.label = lambda sim,pt,f: 'n$_{\\rm HI,%s}$' % f.split('_')[1].upper()
-numdens_h_diemer.units = 'cm$^{-3}$'
+numdens_h_diemer.label = lambda sim,pt,f: r'$\rm{n_{HI,%s}}$' % f.split('_')[1].upper()
+numdens_h_diemer.units = r'$\rm{cm^{-3}}$'
 numdens_h_diemer.limits = [-14.0, -1.0]
 numdens_h_diemer.limits_halo = [-12.0, 0.0]
 numdens_h_diemer.log = True
@@ -1143,7 +1145,7 @@ numdens_h_diemer.log = True
 @snap_field(multi=' ')
 def cloudy_(sim, partType, field, args):
     """ CLOUDY based ionic fraction, mass, number density, or lines emission. 
-    (e.g. "O VI mass", "Mg II frac", "C IV numdens", "OVII lum", "CVI flux", O  8 16.0067A")
+    (e.g. 'O VI mass', 'Mg II frac', 'C IV numdens', 'OVII lum', 'CVI flux', 'O  8 16.0067A')
     Note: uses a wildcard space! Will match any requested field load containing a space. """
     from ..cosmo.cloudy import cloudyIon, cloudyEmission
 
@@ -1203,7 +1205,7 @@ def cloudy_(sim, partType, field, args):
 
     if useCache:
         # does not exist yet, and should create?
-        if createCache and not isfile(cacheFile):
+        if createCache and (not isfile(cacheFile) or getsize(cacheFile) < 2000):
             if not isdir(cachePath):
                 mkdir(cachePath)
             # compute for indRange == None (whole snapshot) with a reasonable pSplit
@@ -1251,7 +1253,7 @@ def cloudy_(sim, partType, field, args):
                 with h5py.File(cacheFile,'a') as f:
                     f['field'][indRangeLocal[0]:indRangeLocal[1]+1] = values
 
-                print(' [%2d] saved %d - %d' % (i,indRangeLocal[0],indRangeLocal[1]))
+                print(' [%2d] saved %d - %d' % (i,indRangeLocal[0],indRangeLocal[1]), flush=True)
             print('Saved: [%s].' % cacheFile.split(sim.derivPath)[1])
 
         # load from existing cache if it exists
@@ -1298,12 +1300,15 @@ def cloudy_(sim, partType, field, args):
 
 def cloudy_metadata(sim, pt, f, ret=None):
     """ Helper to determine 'cloudy_' field metadata. """
+    label = '(varies)'
+    units = '(varies)'
+
     if 'flux' in f:
         # e.g. "H alpha flux"
         lineName, prop = f.rsplit(" ",1)
         lineName = lineName.replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
         label = f'{lineName} Line Flux'
-        units = 'photon/s/cm$^2$'
+        units = r'$\rm{photon/s/cm^2}$'
         limits = [-30.0, -15.0]
         limits_halo = [-25.0, -15.0]
         log = True
@@ -1311,7 +1316,7 @@ def cloudy_metadata(sim, pt, f, ret=None):
         # e.g. "O VI mass"
         element, ionNum, _ = f.split()
         label = '%s %s Ionic Mass' % (element, ionNum)
-        units = 'M$_{\\rm sun}$'
+        units = r'\rm{M_{sun}}$'
         limits = [1.0, 7.0]
         limits_halo = [2.0, 6.0]
         log = True
@@ -1326,8 +1331,8 @@ def cloudy_metadata(sim, pt, f, ret=None):
     elif 'numdens' in f:
         # e.g. "Mg II numdens"
         element, ionNum, _ = f.split()
-        label = 'n$_{\\rm %s%s}$' % (element, ionNum)
-        units = 'cm$^{-3}$'
+        label = '$n_{\\rm %s%s}$' % (element, ionNum)
+        units = r'$\rm{cm^{-3}}$'
         limits = [-14.0, -4.0]
         limits_halo = [-12.0, -6.0]
         log = True
@@ -1336,7 +1341,7 @@ def cloudy_metadata(sim, pt, f, ret=None):
         lineName, prop = f.rsplit(" ",1)
         lineName = lineName.replace("_dustdepleted","")
         label = '%s Luminosity' % lineName
-        units = '10$^{30}$ erg/s'
+        units = r'$\rm{10^{30}\ erg/s}$'
         limits = [-15.0, 10.0]
         limits_halo = [-5.0, 10.0]
         log = True
@@ -1355,7 +1360,7 @@ cloudy_.log = partial(cloudy_metadata, ret='log')
 
 @snap_field(multi=True)
 def ionmassratio_(sim, partType, field, args):
-    """ Ratio between two ionic masses, e.g. "ionmassratio_O6_O8". """
+    """ Ratio between two ionic masses, e.g. 'ionmassratio_O6_O8'. """
     from ..cosmo.cloudy import cloudyIon
 
     ion = cloudyIon(sP=None)
@@ -1382,7 +1387,7 @@ def wind_dedt(sim, partType, field, args):
     return sim.units.codeSfrZToWindEnergyRate(sfr, metal)
 
 wind_dedt.label = 'Wind Energy Injection Rate'
-wind_dedt.units = '10$^{51}$ erg/s' # 1e51 unit system to avoid overflow
+wind_dedt.units = r'$\rm{10^{51}\ erg/s}$' # 1e51 unit system to avoid overflow
 wind_dedt.limits = [-16.0, -10.0]
 wind_dedt.limits_halo = [-15.0, -10.0]
 wind_dedt.log = True
@@ -1397,7 +1402,7 @@ def wind_dpdt(sim, partType, field, args):
     return sim.units.codeSfrZToWindMomentumRate(sfr, metal, dm_sigma)
 
 wind_dedt.label = 'Wind Momentum Injection Rate'
-wind_dedt.units = '10$^{51}$ g$\,$cm$\,$s$^{-2}$' # 1e51 unit system to avoid overflow
+wind_dedt.units = r'$\rm{10^{51}\ g\,cm\,s^{-2}}$' # 1e51 unit system to avoid overflow
 wind_dedt.limits = [-24.0, -18.0]
 wind_dedt.limits_halo = [-23.0, -18.0]
 wind_dedt.log = True
@@ -1410,7 +1415,7 @@ def wind_vel(sim, partType, field, args):
     return sim.units.sigmaDMToWindVel(dm_sigma)
 
 wind_vel.label = 'Wind Launch Velocity'
-wind_vel.units = 'km/s'
+wind_vel.units = r'$\rm{km/s}$'
 wind_vel.limits = [300, 2000]
 wind_vel.limits_halo = [300, 5000]
 wind_vel.log = True
@@ -1424,7 +1429,7 @@ def wind_eta(sim, partType, field, args):
 
     return sim.units.codeSfrZSigmaDMToWindMassLoading(sfr, metal, dm_sigma)
 
-wind_eta.label = 'Wind Mass Loading $\eta_{\\rm m}$'
+wind_eta.label = r'Wind Mass Loading $\rm{\eta_m}$'
 wind_eta.units = '' # dimensionless
 wind_eta.limits = [-2.0, 2.0]
 wind_eta.limits_halo = [-1.0, 1.5]
@@ -1440,7 +1445,7 @@ def z_solar(sim, partType, field, args):
     return sim.units.metallicityInSolar(metal)
 
 z_solar.label = '[pt] Metallicity'
-z_solar.units = 'Z$_{\\rm sun}$'
+z_solar.units = r'$\rm{Z_{sun}}$'
 z_solar.limits = [-3.5, 1.0]
 z_solar.limits_halo = [-2.0, 1.0]
 z_solar.log = True
@@ -1452,7 +1457,7 @@ def sn_iaii_ratio_fe(sim, partType, field, args):
     metals_FeSNII = sim.snapshotSubset(partType, 'metals_FeSNII', **args)
     return (metals_FeSNIa / metals_FeSNII)
 
-sn_iaii_ratio_fe.label = '[pt] Mass Ratio Fe$_{\\rm SNIa}$ / Fe$_{\\rm SNII}$'
+sn_iaii_ratio_fe.label = r'[pt] Mass Ratio $\rm{Fe_{SNIa} / {Fe}_{SNII}}$'
 sn_iaii_ratio_fe.units = '' # dimensionless
 sn_iaii_ratio_fe.limits = [-4.0, 6.0]
 sn_iaii_ratio_fe.limits_halo = [-3.0, 5.5]
@@ -1465,7 +1470,7 @@ def sn_iaii_ratio_metals(sim, partType, field, args):
     metals_SNII = sim.snapshotSubset(partType, 'metals_SNII', **args)
     return (metals_SNIa / metals_SNII)
 
-sn_iaii_ratio_metals.label = '[pt] Mass Ratio Z$_{\\rm SNIa}$ / Z$_{\\rm SNII}$'
+sn_iaii_ratio_metals.label = r'[pt] Mass Ratio $\rm{Z_{SNIa} / Z_{SNII}}$'
 sn_iaii_ratio_metals.units = '' # dimensionless
 sn_iaii_ratio_metals.limits = [-5.0, 6.0]
 sn_iaii_ratio_metals.limits_halo = [-4.0, 5.0]
@@ -1478,7 +1483,7 @@ def sn_ia_agb_ratio_metals(sim, partType, field, args):
     metals_AGB = sim.snapshotSubset(partType, 'metals_AGB', **args)
     return (metals_SNIa / metals_AGB)
 
-sn_ia_agb_ratio_metals.label = '[pt] Mass Ratio Z$_{\\rm SNIa}$ / Z$_{\\rm AGB}$'
+sn_ia_agb_ratio_metals.label = r'[pt] Mass Ratio $\rm{Z_{SNIa} / Z_{AGB}}$'
 sn_ia_agb_ratio_metals.units = '' # dimensionless
 sn_ia_agb_ratio_metals.limits = [-2.0, 2.0]
 sn_ia_agb_ratio_metals.limits_halo = [-1.5, 1.5]
@@ -1486,7 +1491,7 @@ sn_ia_agb_ratio_metals.log = True
 
 @snap_field(multi=True)
 def numratio_(sim, partType, field, args):
-    """ Metal abundance number density ratio e.g. "numratio_Si_H", relative to solar, e.g. 
+    """ Metal abundance number density ratio e.g. 'numratio_Si_H', relative to solar, e.g. 
     [Si/H] = log(n_Si/n_H)_cell - log(n_Si/n_H)_solar """
     from ..cosmo.cloudy import cloudyIon
 
@@ -1499,7 +1504,7 @@ def numratio_(sim, partType, field, args):
 
     return ion._massRatioToRelSolarNumDensRatio(el_ratio, el1, el2)
 
-numratio_.label = lambda sim,pt,f: '[%s/%s]$_{\\rm [pt]}$' % (f.split('_')[1],f.split('_')[2])
+numratio_.label = lambda sim,pt,f: r'$\rm{[%s/%s]_{[pt]}}$' % (f.split('_')[1],f.split('_')[2])
 numratio_.units = '' # dimensionless
 numratio_.limits = [-4.0, 4.0]
 numratio_.limits_halo = [-3.0, 1.0]
@@ -1507,7 +1512,7 @@ numratio_.log = True
 
 @snap_field(multi=True)
 def massratio_(sim, partType, field, args):
-    """ Metal abundance mass ratio e.g. "massratio_Si_H", absolute (not relative to solar). """
+    """ Metal abundance mass ratio e.g. 'massratio_Si_H', absolute (not relative to solar). """
     el1, el2, _ = field.split('_')
 
     el1_massratio = sim.snapshotSubset(partType, 'metals_'+el1, **args)
@@ -1515,7 +1520,7 @@ def massratio_(sim, partType, field, args):
 
     return (el1_massratio / el2_massratio)
 
-massratio_.label = lambda sim,pt,f: 'Mass Ratio (%s/%s)$_{\\rm [pt]}$' % (f.split('_')[1],f.split('_')[2])
+massratio_.label = lambda sim,pt,f: r'Mass Ratio $\rm{(%s/%s)_{[pt]}}$' % (f.split('_')[1],f.split('_')[2])
 massratio_.units = '' # dimensionless
 massratio_.limits = [-5.0, 0.0]
 massratio_.limits_halo = [-4.0, 1.0]
@@ -1533,7 +1538,7 @@ def metalmass(sim, partType, field, args):
     return masses
 
 metalmass.label = 'Metal Mass'
-metalmass.units = lambda sim,pt,f: 'M$_{\\rm sun}$' if '_msun' in f else 'code_mass'
+metalmass.units = lambda sim,pt,f: r'$\rm{M_{sun}}$' if '_msun' in f else 'code_mass'
 metalmass.limits = [3.0, 7.0]
 metalmass.limits_halo = [4.0, 7.0]
 metalmass.log = True
@@ -1553,7 +1558,7 @@ def metalmass_(sim, partType, field, args):
     return masses
 
 metalmass_.label = lambda sim,pt,f: '[pt] %s Metal Mass' % f.replace('metalmass_','').replace('_msun','')
-metalmass_.units = lambda sim,pt,f: 'M$_{\\rm sun}$' if '_msun' in f else 'code_mass'
+metalmass_.units = lambda sim,pt,f: r'$\rm{M_{\rm sun}}$' if '_msun' in f else 'code_mass'
 metalmass_.limits = [2.0, 6.0]
 metalmass_.limits_halo = [3.0, 6.0]
 metalmass_.log = True
@@ -1571,7 +1576,7 @@ def star_age(sim, partType, field, args):
     return age
 
 star_age.label = 'Stellar Age'
-star_age.units = 'Gyr'
+star_age.units = r'$\rm{Gyr}$'
 star_age.limits = lambda sim,pt,f: [0.0, np.clip(np.floor(sim.tage),1,12)]
 star_age.log = False
 
@@ -1599,8 +1604,8 @@ def bh_lbol(sim, partType, field, args):
 
     return sim.units.codeBHMassMdotToBolLum(bh_mass, bh_mdot, obscuration=('_obscured' in field))
 
-bh_lbol.label = 'L$_{\\rm bol}$'
-bh_lbol.units = 'erg/s'
+bh_lbol.label = r'$\rm{L_{bol}}$'
+bh_lbol.units = r'$\rm{erg/s}$'
 bh_lbol.limits = [38.0, 46.0]
 bh_lbol.limits_halo = [39.0, 46.0]
 bh_lbol.log = True
@@ -1614,8 +1619,8 @@ def bh_lbol_basic(sim, partType, field, args):
     return sim.units.codeBHMassMdotToBolLum(bh_mass, bh_mdot, basic_model=True, 
                                             obscuration=('_obscured' in field))
 
-bh_lbol_basic.label = 'L$_{\\rm bol}$'
-bh_lbol_basic.units = 'erg/s'
+bh_lbol_basic.label = r'$\rm{L_{bol}}$'
+bh_lbol_basic.units = r'$\rm{erg/s}$'
 bh_lbol_basic.limits = [38.0, 46.0]
 bh_lbol_basic.limits_halo = [39.0, 46.0]
 bh_lbol_basic.log = True
@@ -1627,8 +1632,8 @@ def bh_lumedd(sim, partType, field, args):
 
     return sim.units.codeBHMassToLumEdd(bh_mass)
 
-bh_lumedd.label = 'L$_{\\rm edd}$'
-bh_lumedd.units = 'erg/s' # dimensionless
+bh_lumedd.label = r'$\rm{L_{edd}}$'
+bh_lumedd.units = r'$\rm{erg/s}$'
 bh_lumedd.limits = [38.0, 46.0]
 bh_lumedd.limits_halo = [40.0, 46.0]
 bh_lumedd.log = True
@@ -1641,7 +1646,7 @@ def bh_eddratio(sim, partType, field, args):
 
     return (bh_mdot / bh_mdot_edd) # = (lum_bol / lum_edd)
 
-bh_eddratio.label = '$\lambda_{\\rm edd} = L_{\\rm bol} / L_{\\rm edd}'
+bh_eddratio.label = r'$\rm{\lambda_{edd} = L_{bol} / L_{edd}}$'
 bh_eddratio.units = '' # dimensionless
 bh_eddratio.limits = [-10.0, 0.0]
 bh_eddratio.limits_halo = [-8.0, 0.0]
@@ -1675,7 +1680,7 @@ def bh_dedt(sim, partType, field, args):
     return sim.units.codeBHMassMdotToInstantaneousEnergy(bh_mass, bh_mdot, bh_dens, bh_mdot_bondi, bh_mdot_edd)
 
 bh_dedt.label = 'BH Energy Injection Rate'
-bh_dedt.units = 'erg/s'
+bh_dedt.units = r'$\rm{erg/s}$'
 bh_dedt.limits = [30.0, 46.0]
 bh_dedt.limits_halo = [36.0, 46.0]
 bh_dedt.log = True
@@ -1725,7 +1730,7 @@ def pos_rel(sim, partType, field, args):
     return pos
 
 pos_rel.label = lambda sim,pt,f: 'Halocentric Position' if '_rvir' not in f else 'Halocentric Position / R$_{\\rm vir}$'
-pos_rel.units = lambda sim,pt,f: 'kpc' if '_kpc' in f else '' if '_rvir' in f else 'code_length'
+pos_rel.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_kpc' in f else '' if '_rvir' in f else 'code_length'
 pos_rel.limits = [-1e3, 1e3]
 pos_rel.limits_halo = [-1e3, 1e3]
 pos_rel.log = False
@@ -1758,7 +1763,7 @@ def vel_rel(sim, partType, field, args):
     return sim.units.particleRelativeVelInKmS(vel, refVel)
 
 vel_rel.label = '[pt] Halo-Relative Velocity'
-vel_rel.units = 'km/s'
+vel_rel.units = r'$\rm{km/s}$'
 vel_rel.limits = [-1000, 1000]
 vel_rel.limits_halo = [-300, 300]
 vel_rel.log = False
@@ -1770,7 +1775,7 @@ def vel_rel_mag(sim, partType, field, args):
     return np.sqrt(vel[:,0]**2 + vel[:,1]**2 + vel[:,2]**2)
 
 vel_rel_mag.label = '[pt] Halo-Relative Velocity'
-vel_rel_mag.units = 'km/s'
+vel_rel_mag.units = r'$\rm{km/s}$'
 vel_rel_mag.limits = [0, 1000]
 vel_rel_mag.limits_halo = [0, 300]
 vel_rel_mag.log = False
@@ -1805,8 +1810,8 @@ def rad(sim, partType, field, args):
     return rr
 
 def rad_label(sim,pt,f):
-    if '_rvir' in f: return '[pt] Radial Distance / R$_{\\rm vir}$'
-    if '_r500' in f: return '[pt] Radial Distance / R$_{\\rm 500}$'
+    if '_rvir' in f: return r'[pt] Radial Distance / $\rm{R_{vir}}$'
+    if '_r500' in f: return r'[pt] Radial Distance / $\rm{R_{500}}$'
     return '[pt] Radial Distance'
 
 def rad_units(sim,pt,f):
@@ -1827,7 +1832,7 @@ def rad_kpc(sim, partType, field, args):
     return sim.units.codeLengthToKpc(rr)
 
 rad_kpc.label = '[pt] Radial Distance'
-rad_kpc.units = 'kpc'
+rad_kpc.units = r'$\rm{kpc}$'
 rad_kpc.limits = lambda sim,pt,f: [0.0, 5.0] if '_linear' not in f else [0.0, 5000]
 rad_kpc.limits_halo = lambda sim,pt,f: [0.0, 3.0] if '_linear' not in f else [0.0, 800]
 rad_kpc.log = lambda sim,pt,f: True if '_linear' not in f else False
@@ -1874,8 +1879,8 @@ def vrad(sim, partType, field, args):
 
     return vv
 
-vrad.label = lambda sim,pt,f: '[pt] Radial Velocity' if '_vvir' not in f else '[pt] Radial Velocity / V$_{\\rm 200}$'
-vrad.units = lambda sim,pt,f: 'km/s' if '_vvir' not in f else ''
+vrad.label = lambda sim,pt,f: '[pt] Radial Velocity' if '_vvir' not in f else r'[pt] Radial Velocity / $\rm{V_{200}}$'
+vrad.units = lambda sim,pt,f: r'$\rm{km/s}$' if '_vvir' not in f else ''
 vrad.limits = lambda sim,pt,f: [-1000, 1000] if '_vvir' not in f else [-2.0, 2.0]
 vrad.limits_halo = lambda sim,pt,f: [-300, 300] if '_vvir' not in f else [-1.0, 1.0]
 vrad.log = False
@@ -1911,7 +1916,7 @@ def angmom(sim, partType, field, args):
     return sim.units.particleAngMomVecInKpcKmS(pos, vel, mass, refPos, refVel)
 
 angmom.label = lambda sim,pt,f: '[pt] Angular Momentum' if '_mag' in f else '[pt] Specific Angular Momentum' 
-angmom.units = lambda sim,pt,f: 'kpc km/s' if '_mag' in f else 'M$_{\\rm sun}$ kpc km/s'
+angmom.units = lambda sim,pt,f: r'$\rm{kpc\ km/s}$' if '_mag' in f else r'$\rm{M_{sun}\ kpc\ km/s}$'
 angmom.limits_halo = lambda sim,pt,f: [2.0, 6.0] if '_mag' in f else [-1e12,1e12]
 angmom.log = lambda sim,pt,f: True if '_mag' in f else False
 
@@ -1970,7 +1975,7 @@ def menc_msun(sim, partType, field, args):
     return sim.units.codeMassToMsun(menc)
 
 menc_msun.label = 'Enclosed Mass'
-menc_msun.units = 'M$_{\\rm sun}$'
+menc_msun.units = r'$\rm{M_{sun}}$'
 menc_msun.limits_halo = [9.0, 14.0]
 menc_msun.log = True
 
@@ -1986,7 +1991,7 @@ def tff(sim, partType, field, args):
     return sim.units.avgEnclosedDensityToFreeFallTime(enclosed_meandens)
 
 tff.label = 'Gravitational Free-Fall Time'
-tff.units = 'Gyr'
+tff.units = r'$\rm{Gyr}$'
 tff.limits_halo = [-2.0, 1.0]
 tff.log = True
 
@@ -1998,15 +2003,15 @@ def tcool_tff(sim, partType, field, args):
 
     return (tcool / tff)
 
-tff.label = 't$_{\\rm cool}$ / t$_{\\rm ff}$'
-tff.units = '' # dimensionless
-tff.limits_halo = [-1.0, 2.0]
-tff.log = True
+tcool_tff.label = r'$\rm{t_{cool} / t_{ff}}$'
+tcool_tff.units = '' # dimensionless
+tcool_tff.limits_halo = [-1.0, 2.0]
+tcool_tff.log = True
 
 @snap_field
 def delta_rho(sim, partType, field, args):
     """ Ratio of density to local mean density, delta_rho/<rho>, based on a spherically symmetric, 
-    halo-centric mass density profile. This is a special case of the below 'delta_rho_'. """
+    halo-centric mass density profile. This is a special case of the below. """
     from ..util.helper import logZeroNaN
     from scipy.stats import binned_statistic
 
@@ -2031,7 +2036,7 @@ def delta_rho(sim, partType, field, args):
 
     return ratio
 
-delta_rho.label = '$\\delta \\rho / </rho>$'
+delta_rho.label = r'$\delta \rho / <\rho>$'
 delta_rho.units = '' # dimensionless
 delta_rho.limits_halo = [-1.0, 1.0]
 delta_rho.log = True
@@ -2077,7 +2082,7 @@ def delta_(sim, partType, field, args):
 
     return ratio
 
-delta_.label = lambda sim,pt,f: '$\\delta %s / <%s>$' % (f.replace('delta_',''),f.replace('delta_',''))
+delta_.label = lambda sim,pt,f: r'$\rm{\delta %s / <%s>}$' % (f.replace('delta_',''),f.replace('delta_',''))
 delta_.units = '' # dimensionless
 delta_.limits = [-1.0, 1.0]
 delta_.log = True
