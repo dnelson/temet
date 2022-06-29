@@ -148,10 +148,16 @@ class units(object):
                 setattr(self,skey,'')
 
                 # try to create new string representation (can be generalized)
-                if key == 'UnitMass_in_g' and header[key] == 1.989e31:
-                    setattr(self,skey,'M$_{\\rm sun}$/h')
-                if key == 'UnitLength_in_cm' and header[key] == 3.08568e+18:
-                    setattr(self,skey,'cpc/h')
+                if key == 'UnitMass_in_g':
+                    diff = np.abs(np.log10(header[key]) - np.log10(self.Msun_in_g))
+                    if diff < 1e-4:
+                        setattr(self,skey,'M$_{\\rm sun}$/h')
+                    if np.abs(diff - 2.0) < 1e-4:
+                        setattr(self,skey,'0.01 M$_{\\rm sun}$/h')
+                if key == 'UnitLength_in_cm':
+                    diff = np.abs(np.log10(header[key]) - np.log10(self.pc_in_cm))
+                    if diff < 1e-4:
+                        setattr(self,skey,'cpc/h')
 
         # non-cosmological run?
         if self._sP.redshift is not None and np.isnan(self._sP.redshift):
@@ -680,12 +686,18 @@ class units(object):
 
         # correct velocities for hubble flow (neglect mass growth term)
         np.clip(rad, self._sP.gravSoft, None) # avoid division by zero
-        vrad_noH = ( gas_vel[:,0] * xyz[:,0] + \
-                     gas_vel[:,1] * xyz[:,1] + \
-                     gas_vel[:,2] * xyz[:,2] ) / rad # radial velocity (km/s), negative=inwards
+        vrad = ( gas_vel[:,0] * xyz[:,0] + \
+                 gas_vel[:,1] * xyz[:,1] + \
+                 gas_vel[:,2] * xyz[:,2] ) / rad # radial velocity (km/s), negative=inwards
 
-        v_H = self.H_z * rad # Hubble expansion velocity magnitude (km/s) at each position
-        vrad = vrad_noH + v_H # radial velocity (km/s) with hubble expansion subtracted
+        if self.H_z is None:
+            # non-cosmological (idealized) simulation
+            print('Note: skipping Hubble flow term in vrad for non-cosmological run.')
+        else:
+            # cosmological integration
+            v_H = self.H_z * rad # Hubble expansion velocity magnitude (km/s) at each position
+
+            vrad += v_H # radial velocity (km/s) with hubble expansion subtracted
 
         return vrad
 

@@ -917,49 +917,75 @@ def abhijeetMgIISurfDens():
                           radRelToR500=True, massDensityMsun=True, haloMassBins=haloMassBins, xlim=[1.0,4.0],
                           stellarMassBins=None, fieldTypes=fieldTypes, combine2Halo=True, median=False)
 
-def xenoSNevo():
-    """ Test for Xeno idealized SN explosion run. """
-    from glob import glob
+def xenoSNevo_profiles():
+    """ Xeno idealized SNe runs: density profiles vs time. """
 
-    runName = '17_1_800_snaps_numberdensity_4'
+    # config
+    runName = '1_1_cluster_dt_0_cRad_0pc_density_1_nstar_1_E_1e51erg_boxSize_48_res_128'
     sim = simParams('~/sims.idealized/sims.xeno/%s/' % runName)
 
-    skip = 1 #int(sim.numSnaps/20) if sim.numSnaps > 100 else 1
+    skip = int(sim.numSnaps/15) if sim.numSnaps > 100 else 1
 
-    # (A): density profiles vs time: start plot
-    if 0:
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.set_xlabel('Distance [pc]')
-        ax.set_ylabel('Density [cm$^{-3}$]')
+    # start plot
+    fig, (ax1,ax2,ax3) = plt.subplots(figsize=(figsize[0]*3,figsize[1]), ncols=3)
+    ax1.set_xlabel('Distance [pc]')
+    ax1.set_ylabel('Density [cm$^{-3}$]')
 
-        # loop over snaps
-        for i in range(sim.numSnaps)[::skip]:
-            sim.setSnap(i)
+    ax2.set_xlabel('Distance [pc]')
+    ax2.set_ylabel('Temperature [log K]')
 
-            # load
-            pos = sim.gas('pos')
-            dens = sim.gas('dens')
+    ax3.set_xlabel('Distance [pc]')
+    ax3.set_ylabel('Radial Velocity [km/s]')
 
-            # convert
-            boxCen = np.array([0.5*sim.boxSize, 0.5*sim.boxSize, 0.5*sim.boxSize])
-            dist = sim.periodicDists(boxCen, pos)
-            dens_phys = sim.units.codeDensToPhys(dens, numDens=True, cgs=True) # 1/cm^3
+    # loop over snaps
+    for i in range(sim.numSnaps)[::skip]:
+        sim.setSnap(i)
+        sim.refPos = np.array([sim.boxSize/2, sim.boxSize/2, sim.boxSize/2]) # for vrad
+        sim.refVel = np.array([0,0,0]) # for vrad
 
-            # plot
-            rr, yy, std, percs = running_median(dist, dens_phys, nBins=80, percs=[15,50,84])
+        cur_time = sim.time * (sim.units.UnitTime_in_s / sim.units.s_in_Myr)
 
-            cur_time = sim.time * (sim.units.UnitTime_in_s / sim.units.s_in_Myr)
-            ax.plot(rr, yy, '-', lw=lw, label='t = %.3f Myr' % cur_time)
+        # load
+        pos = sim.gas('pos')
+        dens = sim.gas('dens')
+        temp = sim.gas('temp')
+        vrad = sim.gas('vrad')
 
-        # finish plot
-        ax.plot([sim.boxSize/2,sim.boxSize/2],ax.get_ylim(),':',color='#cccccc', label='Box Boundary')
+        # convert
+        boxCen = np.array([0.5*sim.boxSize, 0.5*sim.boxSize, 0.5*sim.boxSize])
+        dist = sim.periodicDists(boxCen, pos)
+        dens_phys = sim.units.codeDensToPhys(dens, numDens=True, cgs=True) # 1/cm^3
 
-        ax.legend(loc='best')
-        fig.savefig('dens_profiles_vs_time-%s.png' % runName)
-        plt.close(fig)
+        # plot: dens
+        rr, yy, std, percs = running_median(dist, dens_phys, nBins=80, percs=[15,50,84])
+        ax1.plot(rr, yy, '-', lw=lw, label='t = %.3f Myr' % cur_time)
 
-    # (B) movie visualization
-    for i, snapNum in enumerate(range(sim.numSnaps)[::skip]):
+        # plot: temp
+        rr, yy, std, percs = running_median(dist, temp, nBins=80, percs=[15,50,84])
+        ax2.plot(rr, yy, '-', lw=lw)
+
+        # plot: radial velocity
+        rr, yy, std, percs = running_median(dist, vrad, nBins=80, percs=[15,50,84])
+        ax3.plot(rr, yy, '-', lw=lw)
+
+    # finish plot
+    ax1.plot([sim.boxSize/2,sim.boxSize/2],ax1.get_ylim(),':',color='#cccccc', label='Box Boundary')
+    ax2.plot([sim.boxSize/2,sim.boxSize/2],ax2.get_ylim(),':',color='#cccccc')
+    ax3.plot([sim.boxSize/2,sim.boxSize/2],ax3.get_ylim(),':',color='#cccccc')
+
+    ax1.legend(loc='best')
+    fig.savefig('dens_profiles_vs_time-%s.png' % runName)
+    plt.close(fig)
+
+def xenoSNevo_movie(conf=1):
+    """ Xeno idealized SNe runs: render visualization frames for movie. """
+
+    # config
+    runName = '1_1_cluster_dt_0_cRad_0pc_density_1_nstar_1_E_1e51erg_boxSize_48_res_128'
+    sim = simParams('~/sims.idealized/sims.xeno/%s/' % runName)
+
+    # movie visualization
+    for i, snapNum in enumerate(range(sim.numSnaps)):
         sim.setSnap(snapNum)
 
         sP = sim # pass in
@@ -972,8 +998,12 @@ def xenoSNevo():
         plotHalos  = False
 
         partType   = 'gas'
-        partField  = 'coldens'
-        valMinMax  = [20, 22]
+        if conf == 1:
+            partField  = 'coldens'
+            valMinMax  = [20.8, 22.0]
+        if conf == 2:
+            partField = 'temp'
+            valMinMax = [1.0, 7.0]
 
         # render config (global)
         class plotConfig:
@@ -981,7 +1011,7 @@ def xenoSNevo():
             rasterPx   = 800
             colorbars  = True
 
-            saveFilename = 'frame_%03d.png' % i
+            saveFilename = 'frame_%s_%03d.png' % (partField,i)
 
         renderBox([{}], plotConfig, locals())
 
