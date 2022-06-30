@@ -30,7 +30,6 @@ d_int_fields     = {'subhalo_id':'int32',       # use int dtype to store, otherw
                     'halo_id':'int32',
                     'tracer_windcounter':'int16',
                     'parent_indextype':'int64'}
-fields_in_log    = ['temp','angmom']
 
 # require MPB(s) as fields are relative to halo properties (mapping gives the snapshot quantities needed)
 halo_rel_fields = {'rad'        : ['pos'],
@@ -1000,7 +999,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 if field in ['angmom']:
                     # magnitude of specific angular momentum in [kpc km/s]
                     val = sP.units.particleSpecAngMomMagInKpcKmS(data['pos'], data['vel'], data['mass'], 
-                                                                 haloCenter, haloVel, log=True)
+                                                                 haloCenter, haloVel)
 
                 if val.ndim != 1:
                     raise Exception('Unexpected.')

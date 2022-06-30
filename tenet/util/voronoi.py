@@ -312,7 +312,7 @@ def voronoiThresholdSegmentation(sP, haloID, propName, propThresh, propThreshCom
         props['vol'][i]        = vol[loc_inds].sum()
         props['mass'][i]       = mass[loc_inds].sum()
         props['dens_mean'][i]  = dens[loc_inds].mean()
-        props['temp_mean'][i]  = 10.0**temp[loc_inds].mean()
+        props['temp_mean'][i]  = temp[loc_inds].mean()
         props['bmag_mean'][i]  = bmag[loc_inds].mean()
         props['rcell_mean'][i] = rcell[loc_inds].mean()
         props['rcell_min'][i]  = rcell[loc_inds].min()

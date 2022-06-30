@@ -164,7 +164,7 @@ def clusterEntropyCores():
 
             # exclude sfr>0 and log(T)<5.8 gas
             sfr = sP.snapshotSubset('gas', 'sfr', haloID=haloID)
-            temp = sP.snapshotSubset('gas', 'temp', haloID=haloID)
+            temp = sP.snapshotSubset('gas', 'temp_log', haloID=haloID)
 
             w = np.where( (sfr == 0.0) & (temp >= 5.8) )
             rr = rr[w]

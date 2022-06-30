@@ -544,9 +544,9 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_HaloGas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad='r015_1rvir_halo'),
    'Subhalo_Mass_HaloGas_Cold' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad='r015_1rvir_halo',ptRestrictions={'temp':['lt',4.5]}),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad='r015_1rvir_halo',ptRestrictions={'temp_log':['lt',4.5]}),
    'Subhalo_Mass_HaloGas_SFCold' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad='r015_1rvir_halo',ptRestrictions={'temp_sfcold':['lt',4.5]}),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad='r015_1rvir_halo',ptRestrictions={'temp_sfcold_log':['lt',4.5]}),
    'Subhalo_Mass_HaloStars_Metal' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='metalmass',op='sum',rad='r015_1rvir_halo'),
    'Subhalo_Mass_HaloStars' : \
@@ -555,7 +555,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_HaloGasFoF' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',scope='fof',cenSatSelect='cen',rad='r015_1rvir_halo'),
    'Subhalo_Mass_HaloGasFoF_SFCold' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',scope='fof',cenSatSelect='cen',rad='r015_1rvir_halo',ptRestrictions={'temp_sfcold':['lt',4.5]}),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',scope='fof',cenSatSelect='cen',rad='r015_1rvir_halo',ptRestrictions={'temp_sfcold_log':['lt',4.5]}),
 
    'Subhalo_Mass_50pkpc_Gas': \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad=50.0),
@@ -750,9 +750,9 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='0.5r500crit',weighting='volume',scope='fof',cenSatSelect='cen',minHaloMass='10000dm'),
 
    'Subhalo_Temp_halo_massWt' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='temp_linear',op='mean',rad='r015_1rvir_halo',weighting='mass'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='temp',op='mean',rad='r015_1rvir_halo',weighting='mass'),
    'Subhalo_Temp_halo_volWt' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='temp_linear',op='mean',rad='r015_1rvir_halo',weighting='volume'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='temp',op='mean',rad='r015_1rvir_halo',weighting='volume'),
    'Subhalo_nH_halo_massWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='nh',op='mean',rad='r015_1rvir_halo',weighting='mass'),
    'Subhalo_nH_halo_volWt' : \
@@ -1032,7 +1032,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_Tracers_zAcc_mean'   : partial(tracerTracksQuant,quant='acc_time_1rvir',op='mean',time=None),
    'Subhalo_Tracers_dtHalo_mean' : partial(tracerTracksQuant,quant='dt_halo',op='mean',time=None),
    'Subhalo_Tracers_angmom_tAcc' : partial(tracerTracksQuant,quant='angmom',op='mean',time='acc_time_1rvir'),
-   'Subhalo_Tracers_entr_tAcc'   : partial(tracerTracksQuant,quant='entr_log',op='mean',time='acc_time_1rvir'),
+   'Subhalo_Tracers_entr_tAcc'   : partial(tracerTracksQuant,quant='entr',op='mean',time='acc_time_1rvir'),
    'Subhalo_Tracers_temp_tAcc'   : partial(tracerTracksQuant,quant='temp',op='mean',time='acc_time_1rvir'),
    'Subhalo_Tracers_tempTviracc_tAcc' : partial(tracerTracksQuant,quant='temp',op='mean',time='acc_time_1rvir',norm='tvir_tacc'),
    'Subhalo_Tracers_tempTvircur_tAcc' : partial(tracerTracksQuant,quant='temp',op='mean',time='acc_time_1rvir',norm='tvir_cur'),
@@ -1209,13 +1209,13 @@ fieldComputeFunctionMapping = \
 
    # radial profiles: 
    'Subhalo_RadProfile3D_Global_Gas_Temp' : \
-     partial(subhaloRadialProfile,ptType='gas',ptProperty='temp_sfcold_linear',op='mean',weighting='mass',scope='global_spatial',radMin=0.0,radMax=2.0,radNumBins=100,radRvirUnits=True,minHaloMass='1000dm'),
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='temp_sfcold',op='mean',weighting='mass',scope='global_spatial',radMin=0.0,radMax=2.0,radNumBins=100,radRvirUnits=True,minHaloMass='1000dm'),
    'Subhalo_RadProfile3D_Global_Gas_Tcool' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='tcool',op='mean',weighting='mass',scope='global_spatial',radMin=0.0,radMax=2.0,radNumBins=100,radRvirUnits=True,minHaloMass='1000dm'),
 
    # spherical sampling/healpix sightlines
    'Subhalo_SphericalSamples_Global_Gas_Temp_5rvir_400rad_16ns' : \
-     partial(subhaloRadialProfile,ptType='gas',ptProperty='temp_linear',minHaloMass='10000dm',**sphericalSamplesOpts),
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='temp',minHaloMass='10000dm',**sphericalSamplesOpts),
    'Subhalo_SphericalSamples_Global_Gas_Entropy_5rvir_400rad_16ns' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='entropy',minHaloMass='10000dm',**sphericalSamplesOpts),
    'Subhalo_SphericalSamples_Global_Gas_ShocksMachNum_5rvir_400rad_16ns' : \
@@ -1231,7 +1231,7 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='dm',ptProperty='radvel',minHaloMass='10000dm',**sphericalSamplesOpts),
 
    'Subhalo_SphericalSamples_Global_Gas_Temp_5rvir_400rad_8ns' : \
-     partial(subhaloRadialProfile,ptType='gas',ptProperty='temp_linear',minHaloMass='10000dm',**{**sphericalSamplesOpts,'Nside':8}),
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='temp',minHaloMass='10000dm',**{**sphericalSamplesOpts,'Nside':8}),
    'Subhalo_SphericalSamples_Global_Gas_ShocksMachNum_10rvir_800rad_16ns' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='shocks_machnum',minHaloMass='10000dm',**{**sphericalSamplesOpts,'radMax':10.0,'radNumBins':800}),
 

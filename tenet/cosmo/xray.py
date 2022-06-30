@@ -449,8 +449,8 @@ class xrayEmission():
 
         # load gas temperatures
         tempField = 'temp_sfcold' if tempSfCold else 'temp' # use cold phase temperature for eEOS gas (by default)
-        temp = sP.snapshotSubset('gas', tempField, subhaloID=subhaloID, indRange=indRange) # log K
-        temp_keV = np.log10(10.0**temp / sP.units.boltzmann_keV) # log keV
+        temp = sP.snapshotSubset('gas', tempField, subhaloID=subhaloID, indRange=indRange) # K
+        temp_keV = np.log10(temp / sP.units.boltzmann_keV) # log keV
         
         # interpolate for flux, luminosity, or counts
         vals = self.emis(instrument, metal_logSolar, temp_keV, norm=norm, redshift=sP.redshift)

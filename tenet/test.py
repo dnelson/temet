@@ -1401,7 +1401,7 @@ def check_tracer_tmax_vs_curtemp():
 
     gas_id   = sP.snapshotSubset('gas', 'id', haloID=haloID)
     gas_sfr  = sP.snapshotSubset('gas', 'sfr', haloID=haloID)
-    gas_temp = sP.snapshotSubset('gas', 'temp', haloID=haloID)
+    gas_temp = sP.snapshotSubset('gas', 'temp_log', haloID=haloID)
     star_id  = sP.snapshotSubset('star', 'id', haloID=haloID)
 
     # cross-match
@@ -1444,7 +1444,7 @@ def check_tracer_tmax_vs_curtemp():
     par_id_prev   = sP.snapshotSubset('tracer', 'ParentID')
     gas_id_prev   = sP.snapshotSubset('gas','id')
     gas_sfr_prev  = sP.snapshotSubset('gas', 'sfr')
-    gas_temp_prev = sP.snapshotSubset('gas', 'temp')
+    gas_temp_prev = sP.snapshotSubset('gas', 'temp_log')
 
     # match tracers between snaps
     print('match tr...')
@@ -1512,7 +1512,7 @@ def check_tracer_tmax_vs_curtemp2():
         gas_ind = np.where(gas_ids == par_id)[0][0]
         inds = np.array( [gas_ind] )
 
-        temp = sP.snapshotSubset('gas', 'temp', inds=inds)
+        temp = sP.snapshotSubset('gas', 'temp_log', inds=inds)
         sfr  = sP.snapshotSubset('gas', 'sfr',  inds=inds)
 
         print('gas temp: ', temp, ' sfr: ', sfr, ' id:', gas_ids[gas_ind])

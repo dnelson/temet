@@ -170,7 +170,7 @@ def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='
     assert dust_model in ['const04','var_dtm_z']
     assert params['simMode'] in ['ExtinctionOnly', 'DustEmission', 'DustEmissionWithSelfAbsorption']
 
-    fields_gas   = ['pos_rel','vel_rel','Density','GFM_Metallicity','temp_sfcold']
+    fields_gas   = ['pos_rel','vel_rel','Density','GFM_Metallicity','temp_sfcold_log']
     fields_stars = ['pos_rel','vel_rel','GFM_InitialMass','GFM_Metallicity','star_age','StellarHsml']
 
     filename_ski = 'sh%d.ski' % subhaloID
@@ -243,7 +243,7 @@ def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='
     if 1:
         # dust sputtering assumption: none if T > 10^4 K, note all SFR>0 gas passes this check
         # note: Vogelsberger+18 uses 8000K, Schulz+20 uses 75000K, Rodriguez-Gomez+19 requires SFR>0
-        w = np.where(gas['temp_sfcold'] > 4.0)
+        w = np.where(gas['temp_sfcold_log'] > 4.0)
         dust_dens[w] = 0.0
 
     # write gas

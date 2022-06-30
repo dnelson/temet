@@ -597,8 +597,8 @@ def _getHaloEvoDataOneSnap(snap, sP, haloInds, minSnap, maxSnap, centerPos, scal
 
             if ptType == 'gas':
                 vals['numdens'] = np.log10( x_local['numdens'] )
-                vals['temp'] = np.log10( x_local['temp_linear'] )
-                vals['templinear'] = x_local['temp_linear']
+                vals['temp'] = np.log10( x_local['temp'] )
+                vals['templinear'] = x_local['temp']
 
             # 2D histograms: compute and save
             for histoName in histoNames2D[ptType]:
@@ -679,7 +679,7 @@ def haloTimeEvoData(sP, haloInds, haloIndsSnap, centerPos, minSnap, maxSnap, lar
                              'radlog_vrad_massfrac','radlog_vrel_massfrac','radlog_vrad_templinear'],
                     'stars':['rad_vrad_massfrac','radlog_vrad_massfrac'],
                     'bhs'  :[]}
-    loadFields =   {'gas'  :['mass','vel','temp_linear','numdens'],
+    loadFields =   {'gas'  :['mass','vel','temp','numdens'],
                     'stars':['mass','vel'],
                     'bhs'  :[]} # everything needed to achieve histograms
 
@@ -1127,14 +1127,10 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
     if massField != 'Masses': fieldsLoad += [massField]
 
     if ptType == 'gas':
-        fieldsLoad += ['temp','temp_sfcold','z_solar','numdens']
+        fieldsLoad += ['temp_log','temp_sfcold_log','z_solar_log','numdens_log']
         fieldsLoad += ['StarFormationRate'] # for rotation
 
     particles = sP.snapshotSubset(partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange[ptType])
-
-    if ptType == 'gas':
-        particles['z_solar'] = np.log10(particles['z_solar']) # linear -> log
-        particles['numdens'] = np.log10(particles['numdens']) # linear -> log
 
     if ptType == 'wind':
         # processing wind mass fluxes: zero mass of all real stars

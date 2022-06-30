@@ -800,7 +800,7 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, hot=F
             mass = sP.gas('mass') # 10^10/h msun, total mass
             if metal_mass: mass *= sP.gas('metallicity') # metal mass
 
-            temp = sP.gas('temp')
+            temp = sP.gas('temp_log')
             parent_mhalo = sP.gas('parent_subhalo_mhalo_subfind_log') # SubhaloMass [log msun]
 
             for j, mhalo_bin in enumerate(mhalo_bins):
@@ -948,7 +948,7 @@ def xenoSNevo_profiles():
         # load
         pos = sim.gas('pos')
         dens = sim.gas('dens')
-        temp = sim.gas('temp')
+        temp = sim.gas('temp_log')
         vrad = sim.gas('vrad')
 
         # convert

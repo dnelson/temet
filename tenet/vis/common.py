@@ -36,7 +36,6 @@ totSumFields      = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','ta
 velLOSFieldNames  = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','vel_z','bfield_x','bfield_y','bfield_z']
 haloCentricFields = ['tff','tcool_tff','menc','specangmom_mag','vrad','vrel','delta_rho']
-loggedFields      = ['temp','temperature','temp_sfcold']
 
 def validPartFields(ions=True, emlines=True, bands=True):
     """ Helper, return a list of all field names we can handle. """
@@ -708,10 +707,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         vol = sP.snapshotSubsetP(partType, 'volume', indRange=indRange)
         mass /= vol # [code mass / code volume]
 
-    # quantity pre-processing (need to remove log for means)
-    if partField in loggedFields:
-        quant = 10.0**quant
-
+    # quantity pre-processing
     if partField in ['coldens_sq_msunkpc2']:
         # DM annihilation radiation (see Schaller 2015, Eqn 2 for real units)
         # load density estimate, square, convert back to effective mass (still col dens like)
@@ -972,7 +968,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['ctName'] = 'cividis'
 
     # gas: mass-weighted quantities
-    if partField in ['temp','temperature','temp_sfcold','temp_linear']:
+    if partField in ['temp','temperature','temp_sfcold']:
         grid = grid
         config['label']  = 'Temperature [log K]'
         config['ctName'] = 'thermal' #'jet'
@@ -1026,7 +1022,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['label'] = '$L_{\\rm X} / <L_{\\rm X}>$ [log]'
         config['ctName'] = 'curl0'
 
-    if partField in ['delta_temp_linear']:
+    if partField in ['delta_temp']:
         config['label'] = '$T / <T>$ [log]'
         config['ctName'] = 'jet' #'CMRmap' #'coolwarm' #'balance'
         config['plawScale'] = 1.5
@@ -1840,7 +1836,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     assert nChunks == 1
                     lineName = partField.replace('EW_','')
 
-                    cell_temp = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', indRange=indRange) # K
+                    cell_temp = sP.snapshotSubsetP('gas', 'temp_sfcold', indRange=indRange) # K
                     
                     velLosField = 'vel_' + ['x','y','z'][3-axes[0]-axes[1]]
                     cell_vellos = sP.snapshotSubsetP('gas', velLosField, indRange=indRange) # code

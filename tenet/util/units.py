@@ -443,12 +443,6 @@ class units(object):
         """ Convert halo mass (in log msun, no little h) to virial temperature at specified redshift. """
         return self.codeMassToVirTemp( self.logMsunToCodeMass(mass), meanmolwt=meanmolwt, log=log)
 
-    def codeTempToLogK(self, temp):
-        """ Convert temperature in code units (e.g. tracer temp output) to log Kelvin. """
-        temp_k = temp.astype('float32') * self.UnitTemp_in_cgs
-
-        return logZeroSafe(temp_k)
-
     def codeLengthToComovingKpc(self, x):
         """ Convert length/distance in code units to comoving kpc. """
         x_phys = np.array(x, dtype='float32') / self._sP.HubbleParam # remove little h factor

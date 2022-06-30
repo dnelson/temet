@@ -16,7 +16,7 @@ from ..util.helper import loadColorTable, sampleColorTable, getWhiteBlackColors,
 from ..plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
 from ..plot.config import *
 
-def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, subhaloIDs=None, haloIDs=None, 
+def plotHistogram1D(sPs, ptType='gas', ptProperty='temp', ptWeight=None, subhaloIDs=None, haloIDs=None, 
       ylog=True, ylim=None, xlim=None, qRestrictions=None, nBins=400, medianPDF=False, 
       legend=True, ctName=None, ctProp=None, colorbar=False, pdf=None):
     """ Simple 1D histogram/PDF of some quantity ptProperty of ptType, either of the whole box (subhaloIDs and haloIDs 
@@ -838,7 +838,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
     fig.savefig('particle%s_%s_%s-vs-%s_%s_%s.pdf' % (plotType,partType,xQuant,yQuant,sStr,hStr))
     plt.close(fig)
 
-def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas', ptProperty='temp_linear', op='mean', weighting=None, 
+def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas', ptProperty='temp', op='mean', weighting=None, 
                                 ptRestrictions=None, proj2D=None, xlim=None, ylim=None, plotMedian=True, plotIndiv=False, 
                                 ctName=None, ctProp=None, colorbar=False, figsize=figsize):
     """ Radial profile(s) of some quantity ptProperty of ptType vs. radius from halo centers 
@@ -1017,7 +1017,7 @@ def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas'
         (sPstr,ptType,ptProperty,nSamples,len(objIDs),scope,wtStr))
     plt.close(fig)
 
-def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhaloIDs=None, haloIDs=None, 
+def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp', subhaloIDs=None, haloIDs=None, 
     xlog=True, xlim=None, ylog=None, ylim=None, sfreq0=False, colorOffs=None, scope='fof'):
     """ Radial profile of some quantity ptProperty of ptType vs. radius from halo center,
     where subhaloIDs (or haloIDs) is an ID list with one entry per sPs entry. 
@@ -1466,7 +1466,7 @@ def compareRuns_RadProfiles():
 
         subhaloIDs.append( w[0] )
 
-    for field in ['temp_linear']: #,'dens','temp_linear','P_gas_linear','z_solar']:
+    for field in ['temp']: #,'dens','P_gas','z_solar']:
         plotStackedRadialProfiles1D(sPs, subhaloIDs=subhaloIDs, ptType='gas', ptProperty=field, weighting='O VI mass')
 
 def compareHaloSets_RadProfiles():
@@ -1507,7 +1507,7 @@ def compareHaloSets_RadProfiles():
 
     # select properties
     ptType = 'dm' # 'gas'
-    #fields = ['tcool'] #['metaldens','dens','temp_linear','P_gas_linear','z_solar']
+    #fields = ['tcool'] #['metaldens','dens','temp','P_gas','z_solar']
     fields = ['mass']
     weighting = None #'O VI mass'
     op = 'sum'
@@ -1563,7 +1563,7 @@ def singleHaloProperties():
     plotParticleMedianVsSecondQuant([sP], partType=partType, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs, 
                                    radMinKpc=rMin, radMaxKpc=rMax)
 
-    #for prop in ['hdens','temp_linear','cellsize_kpc','radvel','temp']:
+    #for prop in ['hdens','cellsize_kpc','radvel','temp']:
     #    plotStackedRadialProfiles1D([sP], haloIDs=haloID, ptType='gas', ptProperty=prop)
     #    plotPhaseSpace2D(sP, partType='gas', xQuant='hdens', yQuant=prop, haloIDs=[haloID])
 

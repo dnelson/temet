@@ -2148,11 +2148,11 @@ def tracerTracksQuant(sP, pSplit, quant, op, time, norm=None):
     """
     from ..tracer.tracerEvo import tracersTimeEvo, tracersMetaOffsets, trValsAtAccTimes, \
       accTime, accMode, ACCMODES, mpbValsAtRedshifts, mpbValsAtAccTimes
-    from ..tracer.tracerMC import defParPartTypes, fields_in_log
+    from ..tracer.tracerMC import defParPartTypes
 
     assert pSplit is None # not implemented
     assert op in ['mean'] #,'sample']
-    assert quant in ['angmom','entr_log','temp','acc_time_1rvir','acc_time_015rvir','dt_halo']
+    assert quant in ['angmom','entr','temp','acc_time_1rvir','acc_time_015rvir','dt_halo']
     assert time is None or time in ['acc_time_1rvir','acc_time_015rvir']
     assert norm is None or norm in ['tvir_tacc','tvir_cur']
 
@@ -2222,10 +2222,6 @@ def tracerTracksQuant(sP, pSplit, quant, op, time, norm=None):
             tracks = trValsAtAccTimes(sP, quant, rVirFac=0.15)
 
     assert tracks.ndim == 1
-
-    # remove log if needed
-    if quant in fields_in_log:
-        tracks = 10.0**tracks
 
     # normalization?
     if norm is not None:
@@ -2318,10 +2314,6 @@ def tracerTracksQuant(sP, pSplit, quant, op, time, norm=None):
     assert len( np.where(np.isnan(r[w]))[0] ) == 0 # all nonzero counts should have finite value
 
     r[w] /= N[w]
-
-    # restore log for consistency
-    if quant in fields_in_log:
-        r = logZeroNaN(r)
 
     attrs = {'Description'  : desc.encode('ascii'), 
              'Selection'    : select.encode('ascii')}

@@ -16,7 +16,7 @@ from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
 
 valMinMaxQuant = {'coldens' : [18.5, 20.0], # in case we render actual quantities instead of deltas
                   'xray_lum_05-2kev' : [33, 37],
-                  'temp_linear': [6.2, 6.6],
+                  'temp': [6.2, 6.6],
                   'xray_lum': [33, 37],
                   'metal_solar':[-0.5, 0.0],
                   'xray_lum_05-2kev_nomet':[33, 37]}
@@ -47,7 +47,7 @@ def _get():
 
     #if 'xray' not in panels[0]['partField']:
     #    # temperature cut, except for x-ray where it isn't needed
-    #    ptRestrictions = {'temp_sfcold':['gt',6.0]}
+    #    ptRestrictions = {'temp_sfcold_log':['gt',6.0]}
 
     class plotConfig:
         plotStyle    = 'edged'
@@ -104,7 +104,7 @@ def _get_panels(conf, stack2Dmaps, median, renderIndiv):
         panels = [{'partType':'gas', 'partField':'delta_xray_lum_05-2kev', 'valMinMax':[-0.3,0.3]}]
         if median: panels[0]['valMinMax'][1] = 0.1
     if conf == 2:
-        panels = [{'partType':'gas', 'partField':'delta_temp_linear', 'valMinMax':[0.05,0.5]}]
+        panels = [{'partType':'gas', 'partField':'delta_temp', 'valMinMax':[0.05,0.5]}]
         if stack2Dmaps: panels[0]['valMinMax'] = [-0.1, 0.1]
     if conf == 3:
         panels = [{'partType':'gas', 'partField':'delta_xray_lum', 'valMinMax':[-0.3, 0.1]}]
@@ -156,7 +156,7 @@ def stackedHaloImage(sP, mStarBin, conf=0, renderIndiv=False, median=True, rvirU
 
     if 'xray' not in panels[0]['partField']:
         # temperature cut, except for x-ray where it isn't needed
-        ptRestrictions = {'temp_sfcold':['gt',6.0]}
+        ptRestrictions = {'temp_sfcold_log':['gt',6.0]}
 
     if rvirUnits:
         size = 3.0
@@ -318,11 +318,11 @@ def stackedPropVsTheta(sP, mStarBin, distBins, conf=0, depthFac=1.0, stack2Dmaps
     ptRestrictions = None
     if 'xray' not in panels[0]['partField']:
         # temperature cut, except for x-ray where it isn't needed
-        ptRestrictions = {'temp_sfcold':['gt',6.0]}
+        ptRestrictions = {'temp_sfcold_log':['gt',6.0]}
 
     dist, theta = _get_dist_theta_grid(size, nPixels)
 
-    labels = {'temp_linear': 'Relative Temperature [linear]',
+    labels = {'temp': 'Relative Temperature [linear]',
               'coldens' : 'Relative Gas Column Density [linear]',
               'xray_lum_05-2kev' : 'Relative L$_{\\rm X,0.5-2 keV,XSPEC}$ [linear]',
               'metal_solar' : 'Relative Gas Metallicity [linear]'}

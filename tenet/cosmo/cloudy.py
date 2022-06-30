@@ -985,7 +985,8 @@ class cloudyIon():
         metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
 
         tempField = 'temp_sfcold' if tempSfCold else 'temp' # use cold phase temperature for eEOS gas (by default)
-        temp = sP.snapshotSubset('gas', tempField, indRange=indRange) # log K
+        temp = sP.snapshotSubset('gas', tempField, indRange=indRange) # K
+        temp = np.log10(temp) # log K
         
         # interpolate for log(abundance) and convert to linear
         # note: doesn't matter if "ionziation fraction" is mass ratio, mass density ratio, or 
@@ -1231,7 +1232,8 @@ class cloudyEmission():
         metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
 
         tempField = 'temp_sfcold' if tempSfCold else 'temp' # use cold phase temperature for eEOS gas (by default)
-        temp = sP.snapshotSubset('gas', tempField, indRange=indRange) # log K
+        temp = sP.snapshotSubset('gas', tempField, indRange=indRange) # K
+        temp = np.log10(temp) # log K
         
         # interpolate for log(emissivity) and convert to linear [erg/cm^3/s]
         emissivity = 10.0**self.emis(line, dens, metal_logSolar, temp, sP.redshift)

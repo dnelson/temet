@@ -411,7 +411,7 @@ def gas_components_time_evo():
         for i, snap in enumerate(snaps):
             sP.setSnap(snap)
             print(i)
-            gas = sP.snapshotSubset('gas', ['Masses','temp','StarFormationRate','nh','rad_rvir'], haloID=0)
+            gas = sP.snapshotSubset('gas', ['Masses','temp_log','StarFormationRate','nh','rad_rvir'], haloID=0)
 
             subhalo = sP.groupCatSingle(subhaloID=0)
             halo    = sP.groupCatSingle(haloID=0)
@@ -513,7 +513,7 @@ def gas_components_radial_profiles():
 
     for sP in sPs:
         # load
-        gas = sP.snapshotSubset('gas', ['pos','Masses','temp','StarFormationRate','nh','rad_rvir'], haloID=0)
+        gas = sP.snapshotSubset('gas', ['pos','Masses','temp_log','StarFormationRate','nh','rad_rvir'], haloID=0)
         rvir = sP.groupCatSingle(haloID=0)['Group_R_Crit200']
 
         # apply satellite exclusion technique

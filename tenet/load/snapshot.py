@@ -145,6 +145,7 @@ def snapNumChunks(basePath, snapNum, subbox=None):
 def snapshotHeader(sP, fileName=None):
     """ Load complete snapshot header. """
     if fileName is None:
+        assert sP.snap is not None, 'Must specify snapshot number to load header.'
         fileName = snapPath(sP.simPath, sP.snap, subbox=sP.subbox)
 
     with h5py.File(fileName,'r') as f:

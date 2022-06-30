@@ -1272,7 +1272,7 @@ def clumpDemographics(sPs, haloID, stackHaloIDs=None, trAnalysis=False):
 
         gasIDs = sP.snapshotSubset('gas', 'ids', haloID=haloID)
         gasRad = sP.snapshotSubset('gas', 'rad_rvir', haloID=haloID)
-        gasTemp = sP.snapshotSubset('gas', 'temp', haloID=haloID)
+        gasTemp = sP.snapshotSubset('gas', 'temp_log', haloID=haloID)
         
         clumpIDs = [1592,3416,3851,430,797,2165,2438,4087]
 
@@ -1621,8 +1621,8 @@ def clumpTracerTracksLoad(sP, haloID, clumpID, sbNum=None, posOnly=False):
                 data['redshifts'] = np.hstack( (data['redshifts'], data_loc['redshifts']) )
                 data['snaps'] = np.hstack( (data['snaps'], data_loc['snaps']) )
 
-        if prop == 'temp':
-            data[prop] = 10.0**data[prop] # remove log
+        #if prop == 'temp': # old: 'temp' now linear, but may need for any old stored datafiles
+        #    data[prop] = 10.0**data[prop] # remove log
 
     # data manipulation
     for prop in trProps:
@@ -2070,7 +2070,7 @@ def clumpRadialProfiles(sP, haloID, selections, norm=False):
     xlabel = "Cloud-centric Distance [ pkpc ]"
 
     partType = 'gas'
-    props = ['temp_sfcold_linear','hdens','vrel','sfr','entropy','bmag_ug','beta','z_solar','Mg II numdens','cellsize_kpc',
+    props = ['temp_sfcold','hdens','vrel','sfr','entropy','bmag_ug','beta','z_solar','Mg II numdens','cellsize_kpc',
              'pres_ratio','p_b','p_gas','p_tot','tcool','tcool_tff','nHI_GK','H I numdens']
     nBins = 50
     stat = 'mean'
@@ -2136,7 +2136,7 @@ def clumpRadialProfiles(sP, haloID, selections, norm=False):
             offset = 0
         else:
             prop = sP.snapshotSubset(partType, props[0], haloID=haloID)
-            temp = sP.snapshotSubset(partType, 'temp', haloID=haloID)
+            temp = sP.snapshotSubset(partType, 'temp_log', haloID=haloID)
 
             profs = np.zeros( (nBins-1,nClouds), dtype='float32' )
             profs.fill(np.nan)
@@ -2489,11 +2489,11 @@ def paperPlots():
         subIDs = _get_halo_ids(sP, bin_inds=[2,1], subhaloIDs=True)
 
         plotStackedRadialProfiles1D([sP], ptType='gas', ptProperty='tcool_tff', op='median', subhaloIDs=[subIDs], 
-            xlim=[1.0,3.0], ylim=[-0.3,2.5], plotIndiv=True, ptRestrictions={'temp':['gt',5.5]},
+            xlim=[1.0,3.0], ylim=[-0.3,2.5], plotIndiv=True, ptRestrictions={'temp_log':['gt',5.5]},
             ctName='plasma', ctProp='mhalo_200_log', colorbar=True)
 
         plotStackedRadialProfiles1D([sP], ptType='gas', ptProperty='entr', op='median', subhaloIDs=[subIDs], 
-            xlim=[1.0,3.0], ylim=[7.2,9.05], plotIndiv=True, ptRestrictions={'temp':['gt',5.5]},
+            xlim=[1.0,3.0], ylim=[7.2,9.05], plotIndiv=True, ptRestrictions={'temp_log':['gt',5.5]},
             ctName='plasma', ctProp='mhalo_200_log', figsize=[7,5]) # inset
 
     # fig 11b - 'radial profile' of tcool (2D)

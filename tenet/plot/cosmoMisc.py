@@ -954,19 +954,17 @@ def compareEOSFiles(doTempNotPres=False):
     for sP in sPs:
         print(sP.simName)
         
-        sim_dens = sP.snapshotSubsetP('gas', 'dens')
-        sim_dens = sP.units.codeDensToPhys(sim_dens, cgs=True, numDens=True) * sP.units.hydrogen_massfrac
-        sim_dens = np.log10(sim_dens)
+        sim_dens = sP.gas('nh_log')
 
         if doTempNotPres:
-            sim_temp = sP.snapshotSubsetP('gas', 'temp')
+            sim_temp = sP.gas('temp_log')
             xm1, ym1, sm1 = running_median(sim_dens,sim_temp,binSize=binSize)
 
             ax.plot(xm1[:-1], ym1[:-1], '-', alpha=0.9, label=sP.simName+' median T$_{\\rm gas}$')
         else:
             # pressures
-            sim_pres_gas = sP.snapshotSubset('gas', 'P_gas_log')
-            sim_pres_B   = sP.snapshotSubset('gas', 'P_B_log')
+            sim_pres_gas = sP.gas('P_gas_log')
+            sim_pres_B   = sP.gas('P_B_log')
 
             xm1, ym1, sm1 = running_median(sim_dens,sim_pres_gas,binSize=binSize)
             xm2, ym2, sm2 = running_median(sim_dens,sim_pres_B,binSize=binSize)

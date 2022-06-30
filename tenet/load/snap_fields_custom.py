@@ -121,10 +121,10 @@ def temp(sim, partType, field, args):
     u  = sim.snapshotSubset(partType, 'u', **args)
     ne = sim.snapshotSubset(partType, 'ne', **args)
 
-    return sim.units.UToTemp(u,ne,log=True)
+    return sim.units.UToTemp(u,ne,log=False)
 
 temp.label = 'Gas Temperature'
-temp.units = r'$\rm{log\ K}$'
+temp.units = r'$\rm{K}$'
 temp.limits = [2.0, 8.0]
 temp.limits_halo = [3.5, 8.0]
 temp.log = False
@@ -135,15 +135,15 @@ def temp_old(sim, partType, field, args):
     u  = sim.snapshotSubset(partType, 'InternalEnergyOld', **args)
     ne = sim.snapshotSubset(partType, 'ne', **args)
 
-    return sim.units.UToTemp(u,ne,log=True)
+    return sim.units.UToTemp(u,ne,log=False)
 
 temp_old.label = 'Gas Temperature (Uncorrected)'
-temp_old.units = r'$\rm{log\ K}$'
+temp_old.units = r'$\rm{K}$'
 temp_old.limits = [2.0, 8.0]
 temp_old.limits_halo = [3.5, 8.0]
 temp_old.log = False
 
-@snap_field(alias='temp_sfcold_linear')
+@snap_field
 def temp_sfcold(sim, partType, field, args):
     """ Gas temperature, where star-forming gas is set to the sub-grid (constant)
     cold-phase temperature instead of eEOS temperature. """
@@ -151,32 +151,15 @@ def temp_sfcold(sim, partType, field, args):
     sfr = sim.snapshotSubset(partType, 'sfr', **args)
 
     w = np.where(sfr > 0.0)
-    temp[w] = 3.0 # fiducial Illustris/TNG model: T_clouds = 1000 K, T_SN = 5.73e7 K
-
-    if '_linear' in field:
-        temp = 10.0**temp
+    temp[w] = 1000 # fiducial Illustris/TNG model: T_clouds = 1000 K, T_SN = 5.73e7 K
 
     return temp
 
 temp_sfcold.label = 'Gas Temperature'
-temp_sfcold.units = r'$\rm{log\ K}$' # todo: inconsistent for temp_sfcold_linear
+temp_sfcold.units = r'$\rm{K}$'
 temp_sfcold.limits = [3.5, 7.2]
 temp_sfcold.limits_halo = [3.5, 8.0]
 temp_sfcold.log = False
-
-@snap_field
-def temp_linear(sim, partType, field, args):
-    """ Gas temperature (linear). """
-    u  = sim.snapshotSubset(partType, 'u', **args)
-    ne = sim.snapshotSubset(partType, 'ne', **args)
-
-    return sim.units.UToTemp(u,ne,log=False)
-
-temp_linear.label = 'Gas Temperature'
-temp_linear.units = r'$\rm{K}$'
-temp_linear.limits = [1e2, 1e8]
-temp_linear.limits_halo = [5e3, 1e7]
-temp_linear.log = False
 
 @snap_field(alias='nelec')
 def ne(sim, partType, field, args):
@@ -704,7 +687,7 @@ def tau0_(sim, partType, field, args):
     else:
         raise Exception('Not handled.')
 
-    temp = sim.snapshotSubset(partType, 'temp_sfcold_linear', **args) # K
+    temp = sim.snapshotSubset(partType, 'temp_sfcold', **args) # K
     dens = sim.snapshotSubset(partType, '%s numdens' % baseSpecies, **args) # linear 1/cm^3
     cellsize = sim.snapshotSubset(partType, 'cellsize', **args) # code
 
@@ -755,7 +738,7 @@ metaldens_.log = True
 @snap_field(aliases=['sz_yparam','yparam'])
 def sz_y(sim, partType, field, args):
     """ Sunyaev-Zeldovich y-parameter (per gas cell). """
-    temp = sim.snapshotSubset(partType, 'temp_sfcold_linear', **args)
+    temp = sim.snapshotSubset(partType, 'temp_sfcold', **args)
     xe   = sim.snapshotSubset(partType, 'ElectronAbundance', **args)
     mass = sim.snapshotSubset(partType, 'Masses', **args)
 
@@ -807,7 +790,7 @@ def s850um_flux(sim, partType, field, args):
     metalmass = sim.snapshotSubset(partType, 'metalmass_msun', **args)
 
     if '_ismcut' in field:
-        temp = sim.snapshotSubset(partType, 'temp', **args)
+        temp = sim.snapshotSubset(partType, 'temp_log', **args)
         dens = sim.snapshotSubset(partType, 'Density', **args)
         ismCut = True
     else:

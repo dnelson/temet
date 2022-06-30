@@ -1087,9 +1087,8 @@ def export_ovi_phase():
     haloID = None # if not None, only this fof halo
 
     # load
-    xvals = sP.snapshotSubset(partType, 'hdens', haloID=haloID, haloSubset=fofOnly)
-    xvals = np.log10(xvals) # log=True
-    yvals = sP.snapshotSubset(partType, 'temp', haloID=haloID, haloSubset=fofOnly)
+    xvals = sP.snapshotSubset(partType, 'hdens_log', haloID=haloID, haloSubset=fofOnly)
+    yvals = sP.snapshotSubset(partType, 'temp_log', haloID=haloID, haloSubset=fofOnly)
     weight = sP.snapshotSubset(partType, 'O VI mass', haloID=haloID, haloSubset=fofOnly)
     weight = sP.units.codeMassToMsun(weight)
     N_tot = xvals.size
@@ -1771,7 +1770,7 @@ def exportHierarchicalBoxGrids(sP, partType='gas', partField='mass', nCells=[32,
         f = BytesIO()
     else:
         fileName = "boxgrid_%s_%s_%s_z%.1f.dat" % \
-                (sP.simName.replace("-2",""),partType,partField.replace("_linear",""),sP.redshift)
+                (sP.simName.replace("-2",""),partType,partField,sP.redshift)
 
         f = open(fileName,'wb')
 

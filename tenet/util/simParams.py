@@ -564,11 +564,7 @@ class simParams:
 
             dmStr = '_DM' if '_dm' in run else ''
 
-            # temporary: new L35n2160TNG_fixed/ used by -default-!
-            fof0str = '_old' if (res == 2160 and '_old' in run) else ''
-            fof0str = '_alex' if (res == 910 and 'alex' in self.variant) else fof0str
-
-            self.arepoPath  = self.basePath + 'sims.'+dirStr+'/L'+bs+'n'+str(res)+runStr+dmStr+fof0str+'/'
+            self.arepoPath  = self.basePath + 'sims.'+dirStr+'/L'+bs+'n'+str(res)+runStr+dmStr+'/'
             self.simName    = 'L' + bs + 'n' + str(res) + runStr + dmStr
             self.simNameAlt = self.simName
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
