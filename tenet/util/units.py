@@ -109,6 +109,7 @@ class units(object):
     erg_in_kev    = 6.2415e8   # 1 erg in keV
 
     # derived unit conversions
+    s_in_kyr      = None
     s_in_Myr      = None
     s_in_Gyr      = None
     kpc_in_km     = None
@@ -128,8 +129,7 @@ class units(object):
             self.UnitLength_str = 'cMpc/h'
 
         # custom (non-standard) unit system in header? only for non-cosmological runs
-        # TESTING. Very incomplete support!
-        if self._sP.redshift is not None and np.isnan(self._sP.redshift):
+        if self._sP.redshift is not None and not self._sP.comoving:
             keys = ['UnitMass_in_g','UnitLength_in_cm','UnitVelocity_in_cm_per_s']
             header = self._sP.snapshotHeader()
 
@@ -184,6 +184,7 @@ class units(object):
         self.UnitTime_in_yr      = self.UnitTime_in_s / self.s_in_yr
 
         # derived unit conversions
+        self.s_in_kyr  = self.s_in_yr * 1e3
         self.s_in_Myr  = self.s_in_yr * 1e6
         self.s_in_Gyr  = self.s_in_yr * 1e9
         self.kpc_in_km = self.pc_in_cm * (1e3/1e5)

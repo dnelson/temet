@@ -26,8 +26,6 @@ def catalog_field(arg=None, **kwargs):
         # add entry using the function name as the custom field name
         custom_cat_fields[f.__name__] = f
 
-        print('add: ', f.__name__)
-
         # add entries for alias(es)
         aliases = iterable(kwargs.get('aliases', [])) + iterable(kwargs.get('alias', []))
 

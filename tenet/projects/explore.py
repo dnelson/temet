@@ -943,7 +943,7 @@ def xenoSNevo_profiles():
         sim.refPos = np.array([sim.boxSize/2, sim.boxSize/2, sim.boxSize/2]) # for vrad
         sim.refVel = np.array([0,0,0]) # for vrad
 
-        cur_time = sim.time * (sim.units.UnitTime_in_s / sim.units.s_in_Myr)
+        cur_time = sim.time * (sim.units.UnitTime_in_s / sim.units.s_in_kyr)
 
         # load
         pos = sim.gas('pos')
@@ -958,7 +958,7 @@ def xenoSNevo_profiles():
 
         # plot: dens
         rr, yy, std, percs = running_median(dist, dens_phys, nBins=80, percs=[15,50,84])
-        ax1.plot(rr, yy, '-', lw=lw, label='t = %.3f Myr' % cur_time)
+        ax1.plot(rr, yy, '-', lw=lw, label='t = %4.1f kyr' % cur_time)
 
         # plot: temp
         rr, yy, std, percs = running_median(dist, temp, nBins=80, percs=[15,50,84])
@@ -966,7 +966,7 @@ def xenoSNevo_profiles():
 
         # plot: radial velocity
         rr, yy, std, percs = running_median(dist, vrad, nBins=80, percs=[15,50,84])
-        ax3.plot(rr, yy, '-', lw=lw)
+        ax3.plot(rr, yy, '-', lw=lw, label='t = %4.1f kyr' % cur_time)
 
     # finish plot
     ax1.plot([sim.boxSize/2,sim.boxSize/2],ax1.get_ylim(),':',color='#cccccc', label='Box Boundary')
@@ -974,6 +974,7 @@ def xenoSNevo_profiles():
     ax3.plot([sim.boxSize/2,sim.boxSize/2],ax3.get_ylim(),':',color='#cccccc')
 
     ax1.legend(loc='best')
+    ax3.legend(loc='upper right')
     fig.savefig('dens_profiles_vs_time-%s.png' % runName)
     plt.close(fig)
 
@@ -998,22 +999,25 @@ def xenoSNevo_movie(conf=1):
         plotHalos  = False
 
         partType   = 'gas'
+        labelCustom = ['t = %.3f' % sim.time,
+                       't [kyr] = %.1f' % (sim.time*sim.units.UnitTime_in_yr/1000)]
+
         if conf == 1:
-            partField  = 'coldens'
-            valMinMax  = [20.8, 22.0]
+            panels = [{'partField':'coldens', 'valMinMax':[20.8, 22.0]},
+                      {'partField':'temp', 'valMinMax':[2.0, 7.0]}]
         if conf == 2:
-            partField = 'temp'
-            valMinMax = [1.0, 7.0]
+            pass
 
         # render config (global)
         class plotConfig:
             plotStyle  = 'open'
             rasterPx   = 800
             colorbars  = True
+            title      = True
 
-            saveFilename = 'frame_%s_%03d.png' % (partField,i)
+            saveFilename = 'frame_%s_%03d.png' % ('-'.join([p['partField'] for p in panels]),i)
 
-        renderBox([{}], plotConfig, locals())
+        renderBox(panels, plotConfig, locals())
 
 def arjenMasses5kpc():
     """ Explore Mtot_5kpc vs M*_5kpc. """

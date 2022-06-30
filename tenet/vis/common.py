@@ -2903,7 +2903,8 @@ def renderMultiPanel(panels, conf):
                     if sP.redshift/0.1 != int(sP.redshift/0.1): ax.set_title('%s z=%4.2f%s' % (sP.simName,sP.redshift,idStr))
                 elif np.isfinite(sP.time):
                     # non-cosmological
-                    ax.set_title('%s t=%6.3f' % (sP.simName,sP.time))
+                    ax.set_title(sP.simName)
+                    #ax.set_title('%s t=%6.3f' % (sP.simName,sP.time))
 
             if 'title' in p and p['title'] is not None:
                 ax.set_title(p['title'])
@@ -2982,7 +2983,7 @@ def renderMultiPanel(panels, conf):
             ax.tick_params(axis='y', which='major', labelsize=conf.fontsize)
             ax.xaxis.label.set_size(conf.fontsize)
             ax.yaxis.label.set_size(conf.fontsize)
-            ax.title.set_fontsize(conf.fontsize)
+            ax.title.set_fontsize(conf.fontsize-2)
             ax.tick_params(axis='both', which='major', pad=padding)
 
             if conf.colorbars:

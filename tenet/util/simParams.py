@@ -116,16 +116,18 @@ class simParams:
     simName     = ''    #: label to add to plot legends (e.g. "Illustris-2", "TNG300-1")
     simNameAlt  = ''    #: alternative label for simulation names (e.g. "L75n1820FP", "L205n1250TNG_DM")
 
-    # snapshots
-    groupOrdered  = None  # False: IDs stored in group catalog, True: snapshot is group ordered (by type) 
+    # simulation config
     snap          = None  # copied/derived from input
     redshift      = None  # copied/derived from input (always matched to snap)
     time          = None  # copied/derived from input (only for non-cosmological runs)
     run           = ''    # copied from input
+    res           = 0     # copied from input
     variant       = ''    # copied from input (to pick any sim with variations beyond run/res/hInd)
     
+    groupOrdered  = None  # False: IDs stored in group catalog, True: snapshot is group ordered (by type)
+    comoving      = True  # True for cosmological runs with comoving coordinates (have scalefactor/redshift)
+
     # run parameters
-    res           = 0     # copied from input
     boxSize       = 0.0   # boxsize of simulation (ckpc/h)
     targetGasMass = 0.0   # refinement/derefinement target, equal to SPH gas mass in equivalent run
     gravSoft      = 0.0   # gravitational softening length (ckpc/h)
@@ -343,12 +345,21 @@ class simParams:
 
         with h5py.File(hdf5file, 'r') as hf:
             header = dict(hf["Header"].attrs)
+            params = dict(hf["Parameters"].attrs) if "Parameters" in hf else None
 
         self.boxSize     = header["BoxSize"]
         self.omega_m     = header["Omega0"]
         self.omega_L     = header["OmegaLambda"]
         self.HubbleParam = header["HubbleParam"]
         self.omega_b     = header["OmegaBaryon"] if "OmegaBaryon" in header else None
+
+        # cosmological/comoving simulation, or idealized simulation?
+        if params is not None and params['ComovingIntegrationOn'] == 0:
+            print('a')
+            self.comoving = False
+        elif header['Omega0'] == 0 and header['OmegaLambda'] == 0:
+            print('b')
+            self.comoving = False
 
     def lookup_simulation(self, res=None, run=None, variant=None, redshift=None, time=None, snap=None, hInd=None,
                           haloInd=None, subhaloInd=None):
@@ -1372,7 +1383,7 @@ class simParams:
                 assert self.run in ['tng','tng_dm','tng_zoom','tng_zoom_dm'] # otherwise generalize
             else:
                 # actual snapshot
-                if 0: #self.redshift is None or np.isnan(self.redshift): # todo generalize
+                if not self.comoving:
                     # non-cosmological
                     self.time = self.snapNumToRedshift(time=True)
                     self.redshift = np.nan
