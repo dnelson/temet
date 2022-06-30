@@ -9,7 +9,6 @@ from os.path import isfile, isdir, getsize
 from os import mkdir
 
 from .snapshot import snap_field, _haloOrSubhaloIndRange
-from ..plot.quantities import simParticleQuantity
 from ..util.helper import numPartToChunkLoadSize, pSplitRange
 
 # -------------------- general/all particle types -------------------------------------------------
@@ -1335,7 +1334,7 @@ def cloudy_flux_(sim, partType, field, args):
     for a given line name. Note: uses spaces in field name. """
     return _cloudy_load(sim, partType, field, args)
 
-cloudy_flux_.label = lambda sim,pt,f: '%s Line Flux' % (f.replace(' flux','').replace('-',' '))
+cloudy_flux_.label = lambda sim,pt,f: '%s Line Flux' % (f.split(' flux','').replace('-',' '))
 cloudy_flux_.units = r'$\rm{photon/s/cm^2}$'
 cloudy_flux_.limits = [-30.0, -15.0]
 cloudy_flux_.limits_halo = [-25.0, -15.0]

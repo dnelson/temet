@@ -5,6 +5,7 @@ post-processing data catalogs (auxCats), as well as observational data.
 from . import auxcat
 from . import data
 from . import groupcat
+from . import groupcat_fields_custom
 from . import snapshot
 from . import snap_fields
 from . import snap_fields_custom

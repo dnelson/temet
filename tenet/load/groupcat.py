@@ -11,6 +11,53 @@ import illustris_python as il
 from ..util.helper import iterable, logZeroNaN
 from ..cosmo.color import loadColors, gfmBands, vegaMagCorrections
 
+# registry for groupcat field metadata (in groupcat_fields.py)
+groupcat_fields = {}
+
+# and custom-derived catalog fields (in groupcat_fields_custom.py)
+custom_cat_fields = {}
+custom_cat_fields_aliases = {}
+custom_cat_multi_fields = {}
+
+def catalog_field(arg=None, **kwargs):
+    """ Decorator factory to save custom catalog field deriving functions into the registry.
+    """
+    def decorator(f):
+        # add entry using the function name as the custom field name
+        custom_cat_fields[f.__name__] = f
+
+        print('add: ', f.__name__)
+
+        # add entries for alias(es)
+        aliases = iterable(kwargs.get('aliases', [])) + iterable(kwargs.get('alias', []))
+
+        for alias in aliases:
+            custom_cat_fields[alias] = f
+
+        # is this a handler for multiple fields/wildcards?
+        multi = kwargs.get('multi')
+
+        if multi:
+            if isinstance(multi,str):
+                # value of 'multi' argument is the wildcard search key
+                custom_cat_fields[multi] = f
+                custom_cat_multi_fields[multi] = f
+            else:
+                # otherwise, name of the decorated function is the search key
+                custom_cat_multi_fields[f.__name__] = f
+        else:
+            # for non-multi fields, keep track of primary name, and its list of aliases (for docs)
+            custom_cat_fields_aliases[f.__name__] = aliases
+
+        return f
+
+    if callable(arg):
+        # @catalog_field() is a function returning a decorator
+        return decorator(arg)
+    else:
+        # catalog_field is just a decorator
+        return decorator
+
 def gcPath(basePath, snapNum, chunkNum=0, noLocal=False, checkExists=False):
     """ Find and return absolute path to a group catalog HDF5 file.
         Can be used to redefine illustris_python version (il.groupcat.gcPath = load.groupcat.gcPath). """
@@ -121,42 +168,25 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
 
             quantName = quant.lower().replace("_log","")
 
-            # --- meta ---
+            # does (exact) field name exist in custom field registry?
+            partType = 'subhalo' # completely redundant? can remove?
+            kwargs = None # never used? can remove?
 
-            # subhalo ID/index
-            if quantName in ['subhalo_id','subhalo_index','id','index']:
-                assert '_log' not in quant
-                r[field] = np.arange(sP.numSubhalos)
+            if quantName in custom_cat_fields:
+                # yes: load/compute now
+                data = custom_cat_fields[field](sP, partType, quantName, kwargs)
 
-            # central flag (1 if central, 0 if not)
-            if quantName in ['central_flag','cen_flag','is_cen','is_central']:
-                gc = groupCat(sP, fieldsHalos=['GroupFirstSub'])
-                gc = gc[ np.where(gc >= 0) ]
+                # if return is None, then this is a fall-through to a normal load
+                if data is not None:
+                    r[field] = data
+            else:
+                # if not, try wild-card matching for custom fields
+                for search_key in custom_cat_multi_fields:
+                    # requested field contains search key?
+                    if search_key in quantName:
+                        r[field] = custom_cat_multi_fields[search_key](sP, partType, quantName, kwargs)
 
-                # satellites given zero
-                r[field] = np.zeros( sP.numSubhalos, dtype='int16' )
-                r[field][ gc ] = 1
-
-            # --- group catalog ---
-
-            # halo mass (m200 or m500) of parent halo [code, msun, or log msun]
-            if quantName in ['mhalo_200','mhalo_200_code','mhalo_500','mhalo_200_code','mhalo_200_parent','mhalo_vir']:
-                od = 200 if '_200' in quant else 500
-
-                haloField = 'Group_M_Crit%d'%od
-                if '_vir' in quant: haloField = 'Group_M_TopHat200'
-                gc = groupCat(sP, fieldsHalos=[haloField,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
-
-                r[field] = gc['halos'][haloField][gc['subhalos']]
-
-                if '_code' not in quant: r[field] = sP.units.codeMassToMsun( r[field] )
-
-                # satellites given nan
-                if '_parent' not in quantName:
-                    mask = np.zeros( gc['subhalos'].size, dtype='int16' )
-                    mask[ gc['halos']['GroupFirstSub'] ] = 1
-                    wSat = np.where(mask == 0)
-                    r[field][wSat] = np.nan
+            # -------------------------------------------------------------------------------------------
 
             # number of satellites in (fof) halo, only for centrals
             if quantName in ['halo_numsubs','halo_nsubs','nsubs','numsubs']:

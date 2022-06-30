@@ -243,7 +243,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     cQuant, wrapping any special loading or processing. Also return an appropriate label and range.
     If clean is True, label is cleaned up for presentation. If tight is true, alternative range is 
     used (less restrictive, targeted for y-axes/slice1D/medians instead of histo2D colors). """
-    assert isinstance(quant,str)
+    from ..load.groupcat import groupcat_fields, custom_cat_fields, custom_cat_multi_fields
+
+    prop = quant.lower().replace('_log','') # new
+    quantname = quant.replace('_log','') # old
     
     label = None
     takeLog = True # default
@@ -256,10 +259,75 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         vals, label, minMax, takeLog = sP.data[cacheKey]
         return vals.copy(), label, list(minMax), takeLog
 
-    # TODO: once every field is generalized as "vals = sP.groupCat(sub=quantname)", can pull out (needs to be quantname, i.e. w/o _log, to avoid x2)
+    # property name is complex / contains a free-form parameter?
+    for search_key in custom_cat_multi_fields:
+        if search_key in prop:
+            # prop is e.g. 'delta_temp', convert to 'delta_'
+            prop = search_key
 
-    # fields:
-    quantname = quant.replace('_log','')
+    # extract metadata from field registry
+    if prop in groupcat_fields:
+        units = groupcat_field[prop].get('units', None)
+
+        label = groupcat_field[prop].get('label', '')
+
+        lim = groupcat_field[prop].get('limits', None)
+
+        log = groupcat_field[prop].get('log', True)
+
+    elif prop in custom_cat_fields:
+        units = getattr(custom_cat_fields[prop], 'units', None)
+
+        label = getattr(custom_cat_fields[prop], 'label', '')
+
+        lim = getattr(custom_cat_fields[prop], 'limits', None)
+
+        log = getattr(custom_cat_fields[prop], 'log', True)
+
+    # any of these fields could be functions, in which case our convention is to call with 
+    # (sP,pt,field) as the arguments, i.e. in order to make redshift-dependent decisions
+    ptType = 'subhalo' # completely redundant, can remove?
+    ptProperty = quantname # todo: unify and remove redundancy
+
+    if callable(label):
+        label = label(sP, ptType, ptProperty)
+
+    if callable(lim):
+        lim = lim(sP, ptType, ptProperty)
+
+    if callable(units):
+        units = units(sP, ptType, ptProperty)
+
+    if callable(log):
+        log = log(sP, ptType, ptProperty)
+
+    # does units refer to a base code unit (code_mass, code_length, or code_velocity)
+    units = units.replace('code_length', sP.units.UnitLength_str)
+    units = units.replace('code_mass', sP.units.UnitMass_str)
+    units = units.replace('code_velocity', sP.units.UnitVelocity_str)
+
+    # does units refer to a derived code unit? (could be improved if we move to symbolic manipulation)
+    units = units.replace('code_density', '%s/(%s)$^3$' % (sP.units.UnitMass_str,sP.units.UnitLength_str))
+    units = units.replace('code_volume', '(%s)^3' % sP.units.UnitLength_str)
+
+    # append units to label
+    if units is not None:
+        logUnitStr = ('%s%s' % ('log ' if log else '',units)).strip()
+
+        # if we have a dimensional unit, or a logarithmic dimensionless unit
+        if logUnitStr != '':
+            label += ' [ %s ]' % logUnitStr
+
+    # load actual values
+    if label is not None:
+        vals = sP.groupCat(sub=quantname)
+
+    minMax = lim # temporary
+
+    # -------------------------------- old ----------------------------------------------
+
+    # TODO: once every field is generalized as "vals = sP.groupCat(sub=quantname)", 
+    # can pull out (needs to be quantname, i.e. w/o _log, to avoid x2)
 
     if quantname in ['mstar1','mstar2','mgas1','mgas2']:
         # stellar/gas mass (within 1 or 2 r1/2stars) [msun or log msun]
@@ -344,29 +412,6 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [8.0, 11.5]
         if sP.boxSize < 50000: minMax = [7.0, 10.5]
         label = 'M$_{\\rm HI} (<%s)$ [ log M$_{\\rm sun}$ ]' % radStr
-
-    if quantname in ['mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent','mhalo_vir']:
-        # halo mass
-        vals = sP.groupCat(sub=quantname)
-
-        if '_200' in quant or '_500' in quant:
-            mTypeStr = '%d,crit' % (200 if '_200' in quant else 500)
-
-        if '_vir' in quant:
-            mTypeStr = 'vir'
-
-        if '_parent' in quant:
-            mTypeStr += ",parent"
-
-        if '_subfind' in quant:
-            mTypeStr = 'Subfind'
-
-        minMax = [11.0, 14.0]
-        if sP.boxSize > 200000: minMax = [11.0, 15.0]
-        if sP.boxSize < 50000: minMax = [10.5, 13.5]
-
-        label = 'Halo Mass M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % mTypeStr
-        #if clean: label = 'M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ]'
 
     if quantname in ['halo_numsubs','halo_nsubs','nsubs','numsubs']:
         # number of subhalos in halo
