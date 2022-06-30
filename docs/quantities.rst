@@ -122,7 +122,7 @@ For example, to define a new custom field for the 'spherical equivalent radius' 
         vol = sim.snapshotSubset(partType, 'vol', **args)
         return (vol * 3.0 / (4*np.pi))**(1.0/3.0)
 
-Important metadata should also be specified just below::
+Important metadata should also be specified, just below (and outside) the function itself::
 
     cell_radius.units = 'code_length'
     cell_radius.label = 'Cell Radius'
@@ -144,7 +144,7 @@ You can also register the same derived field under one or more additional names 
 Finally, you can define 'wildcard' fields which capture, and then handle, many different field names 
 at once. For example, imagine you could compute the optical stellar spectrum for any star particle, 
 and you wanted to define a new field of the form ``specmean_{wavemin}_{wavemax}`` which would return 
-the mean flux between the two specified wavelengths, which are arbitrary. If we had such a custom 
+the mean flux between the two specified wavelengths, which are arbitrary inputs. If we had such a custom 
 field, we could compute e.g. ``D4000 = specmean_4050_4250 / specmean_3750_3950}`` (indeed, 
 we could then define yet another custom field called ``D4000`` which did exactly this, automatically).
 To handle these two field names, or any others of the same form, we could define::

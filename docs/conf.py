@@ -138,13 +138,31 @@ def quant_rowtext(custom_fields, custom_fields_aliases, key):
     f_link = ":py:func:`~%s.%s`" % (func.__module__, func.__name__)
     f_desc = func.__doc__.replace('\n','').strip()
 
-    f_aliases = ', '.join(custom_fields_aliases[key])
+    f_aliases = ''
+    if key in custom_fields_aliases:
+        f_aliases = ', '.join(custom_fields_aliases[key])
 
     # label
     f_label = getattr(func, 'label', '')
 
     if callable(f_label):
-        f_label = f_label('','',key) # sim,pt are blank
+        # we don't know the actual format of the expected field, try a few
+        if key in [' flux', ' lum']:
+            field = '\{line_name\}' + key # prefixed single parameter case (e.g. cloudy_flux_)
+        else:
+            field = key + 'X' # single parameter cases
+
+        for i in range(3):
+            try:
+                f_label = f_label('','',field) # sim,pt are blank
+                break # quit on success
+            except:
+                if i == 0:
+                    field = key + 'X_Y' # double parameter cases (e.g. ionmassratio_)
+                if i == 1:
+                    field = '\{ion\} \{num\}' + key # prefixed double parameter cases (e.g. cloudy_mass_)
+
+        f_name = field.replace('_','\_') # include in display name
 
     f_label = math_latex(f_label.replace('[pt]',''))
 
@@ -157,27 +175,36 @@ def quant_rowtext(custom_fields, custom_fields_aliases, key):
     f_units = math_latex(f_units)
     if f_units == '': f_units = '--' # dimensionless
 
-    # print table row
-    s = '    "%s", "%s", "%s", "%s", "%s"\n' % (f_name,f_label,f_units,f_aliases,f_desc)
-
-    return s
+    # return strings
+    return f_name, f_label, f_units, f_aliases, f_desc
 
 with open('quants_custom.rst','w') as f:
     from tenet.load.snapshot import custom_fields, custom_multi_fields
     from tenet.load.snapshot import custom_fields_aliases
 
-    # write header
+    # write header for custom table
     f.write('.. csv-table::\n')
     f.write('    :header: "Field Name", "Label", "Units", "Aliases", "Description"\n')
     f.write('    :widths: 10, 25, 15, 20, 30\n')
     f.write('\n')
 
     for key in custom_fields_aliases.keys():
-        # skip multi fields here
-        #if key in custom_multi_fields.keys():
-        #    continue
+        f_name, f_label, f_units, f_aliases, f_desc = quant_rowtext(custom_fields,custom_fields_aliases,key)
+        s = '    "%s", "%s", "%s", "%s", "%s"\n' % (f_name,f_label,f_units,f_aliases,f_desc)
+        f.write(s)
 
-        s = quant_rowtext(custom_fields,custom_fields_aliases,key)
+    # write header for multi table
+    f.write('\n\n')
+    f.write('The following \'wildcard\' fields match any field request whose name contains the pattern.\n\n')
+
+    f.write('.. csv-table::\n')
+    f.write('    :header: "Field Name", "Label", "Units", "Description"\n')
+    f.write('    :widths: 10, 25, 15, 50\n')
+    f.write('\n')
+
+    for key in custom_multi_fields.keys():
+        f_name, f_label, f_units, f_aliases, f_desc = quant_rowtext(custom_fields,custom_fields_aliases,key)
+        s = '    "%s", "%s", "%s", "%s"\n' % (f_name,f_label,f_units,f_desc)
         f.write(s)
 
     f.write('\n')

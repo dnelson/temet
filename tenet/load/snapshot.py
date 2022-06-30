@@ -25,30 +25,7 @@ custom_fields_aliases = {}
 custom_multi_fields = {}
 
 def snap_field(arg=None, **kwargs):
-    """ Decorator factory to save custom snapshot field deriving functions into the registry. 
-    Example usage to define a new custom field for the 'spherical equivalent radius' of a gas cell:
-
-        @snap_field
-        def cell_radius(sim, partType, field, args):
-            # load and manipulate data, return
-            vol = sim.snapshotSubset(partType, 'vol', **args)
-            return (vol * 3.0 / (4*np.pi))**(1.0/3.0)
-
-        cell_radius.units = 'code_length'
-        cell_radius.label = 'Cell Radius'
-        cell_radius.limits = [-2.0, 2.0]
-        cell_radius.log = True
-
-    You can also register the same derived field under one or more additional names ('aliases'):
-
-        @snap_field(aliases=['cellrad','rcell'])
-        def cell_radius(sim, partType, field, args):
-            # load and manipulate data, return
-            # ...
-
-    Note: 'limits' is a default suggestion, while 'log' indicates if the value should in general 
-    be logged for plotting/display (usually True, and by default True if omitted, as our 
-    convention is to return linear values).
+    """ Decorator factory to save custom snapshot field deriving functions into the registry.
     """
     def decorator(f):
         # wrap the actual calculation function (not needed unless we want to actually add pre or 

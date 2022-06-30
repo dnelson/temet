@@ -711,7 +711,7 @@ def tau0_(sim, partType, field, args):
 
     return sim.units.opticalDepthLineCenter(transition, dens, temp, cellsize)
 
-tau0_.label = r'Optical Depth $\rm{\tau_0}$'
+tau0_.label = lambda sim,pt,f: r'Optical Depth $\rm{\tau_{%s,0}}$' % f.split('tau0_')[1]
 tau0_.units = '' # dimensionless
 tau0_.limits = [-2.0, 3.0]
 tau0_.limits_halo = [-2.0, 6.0]
@@ -876,7 +876,7 @@ def xray_lum_apec(sim, partType, field, args):
     return xray
 
 def xray_lum_apec_metadata(sim, pt, f, ret):
-    """ Helper to determine 'cloudy_' field metadata. """
+    """ Helper to determine 'xray_' field metadata. """
     label = 'X'
 
     if '05-2kev' in f:
@@ -998,7 +998,7 @@ hi_mass.limits = [-2.0, 6.0]
 hi_mass.limits_halo = [1.0, 6.0]
 hi_mass.log = True
 
-@snap_field(aliases=['mass_h2','h2mass'], multi='h2mass_')
+@snap_field(aliases=['mass_h2','h2mass'])
 def h2_mass(sim, partType, field, args):
     """ Hydrogen model: molecular H (neutral subtracting atomic) mass calculation. """
     from ..cosmo.hydrogen import hydrogenMass
@@ -1007,11 +1007,9 @@ def h2_mass(sim, partType, field, args):
     if args['haloID'] is not None or args['subhaloID'] is not None:
         indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
 
-    if 'h2mass_' in field:
-        molecularModel = field.split('_')[1]
-    else:
-        molecularModel = 'BL06'
-        print('Warning: using [%s] model for H2 by default since unspecified.' % molecularModel)
+    # choose molecular model: could generalize this field to accept different options
+    molecularModel = 'BL06'
+    print('Note: using [%s] model for H2 by default.' % molecularModel)
 
     data = hydrogenMass(None, sim, molecular=molecularModel, indRange=indRange)
 
@@ -1142,11 +1140,8 @@ numdens_h_diemer.limits = [-14.0, -1.0]
 numdens_h_diemer.limits_halo = [-12.0, 0.0]
 numdens_h_diemer.log = True
 
-@snap_field(multi=' ')
-def cloudy_(sim, partType, field, args):
-    """ CLOUDY based ionic fraction, mass, number density, or lines emission. 
-    (e.g. 'O VI mass', 'Mg II frac', 'C IV numdens', 'OVII lum', 'CVI flux', 'O  8 16.0067A')
-    Note: uses a wildcard space! Will match any requested field load containing a space. """
+def _cloudy_load(sim, partType, field, args):
+    """ Helper caching loader, for all of the following CLOUDY-based fields. """
     from ..cosmo.cloudy import cloudyIon, cloudyEmission
 
     if 'flux' in field or 'lum' in field:
@@ -1298,65 +1293,65 @@ def cloudy_(sim, partType, field, args):
 
     return values
 
-def cloudy_metadata(sim, pt, f, ret=None):
-    """ Helper to determine 'cloudy_' field metadata. """
-    label = '(varies)'
-    units = '(varies)'
+@snap_field(multi=' mass')
+def cloudy_mass_(sim, partType, field, args):
+    """ CLOUDY-based photoionization calculation: **total ionic mass** (e.g. 'O VI mass', 'Mg II mass'), 
+    for any known ion name and excited level number. Note: uses spaces in field name. """
+    return _cloudy_load(sim, partType, field, args)
 
-    if 'flux' in f:
-        # e.g. "H alpha flux"
-        lineName, prop = f.rsplit(" ",1)
-        lineName = lineName.replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
-        label = f'{lineName} Line Flux'
-        units = r'$\rm{photon/s/cm^2}$'
-        limits = [-30.0, -15.0]
-        limits_halo = [-25.0, -15.0]
-        log = True
-    elif 'mass' in f:
-        # e.g. "O VI mass"
-        element, ionNum, _ = f.split()
-        label = '%s %s Ionic Mass' % (element, ionNum)
-        units = r'\rm{M_{sun}}$'
-        limits = [1.0, 7.0]
-        limits_halo = [2.0, 6.0]
-        log = True
-    elif 'frac' in f:
-        # e.g. "Mg II frac"
-        element, ionNum, _ = f.split()
-        label = '%s %s Ionization Fraction' % (element, ionNum)
-        units = '' # dimensionless
-        limits = [-10.0, -2.0]
-        limits_halo = [-10.0, -4.0]
-        log = True
-    elif 'numdens' in f:
-        # e.g. "Mg II numdens"
-        element, ionNum, _ = f.split()
-        label = '$n_{\\rm %s%s}$' % (element, ionNum)
-        units = r'$\rm{cm^{-3}}$'
-        limits = [-14.0, -4.0]
-        limits_halo = [-12.0, -6.0]
-        log = True
-    elif 'lum' in f:
-        # e.g. "H alpha lum", "MgII lum", "MgII lum_dustdepleted"
-        lineName, prop = f.rsplit(" ",1)
-        lineName = lineName.replace("_dustdepleted","")
-        label = '%s Luminosity' % lineName
-        units = r'$\rm{10^{30}\ erg/s}$'
-        limits = [-15.0, 10.0]
-        limits_halo = [-5.0, 10.0]
-        log = True
+cloudy_mass_.label = lambda sim,pt,f: '%s %s Ionic Mass' % (f.split()[0], f.split()[1])
+cloudy_mass_.units = r'$\rm{M_{sun}}$'
+cloudy_mass_.limits = [1.0, 7.0]
+cloudy_mass_.limits_halo = [2.0, 6.0]
+cloudy_mass_.log = True
 
-    if ret == 'label': return label
-    if ret == 'units': return units
-    if ret == 'limits' : return limits
-    if ret == 'limits_halo': return limits_halo
-    if ret == 'log': return log
+@snap_field(multi=' frac')
+def cloudy_frac_(sim, partType, field, args):
+    """ CLOUDY-based photoionization calculation: **ionic mass fraction** (e.g. 'O VI frac', 'Mg II frac'), 
+    for a given ion name and excited level number. Note: uses spaces in field name. """
+    return _cloudy_load(sim, partType, field, args)
 
-cloudy_.label = partial(cloudy_metadata, ret='label')
-cloudy_.units = partial(cloudy_metadata, ret='units')
-cloudy_.limits = partial(cloudy_metadata, ret='limits')
-cloudy_.limits_halo = partial(cloudy_metadata, ret='limits_halo')
-cloudy_.log = partial(cloudy_metadata, ret='log')
+cloudy_frac_.label = lambda sim,pt,f: '%s %s Ionization Fraction' % (f.split()[0], f.split()[1])
+cloudy_frac_.units = '' # dimensionless
+cloudy_frac_.limits = [-10.0, -2.0]
+cloudy_frac_.limits_halo = [-10.0, -4.0]
+cloudy_frac_.log = True
+
+@snap_field(multi=' numdens')
+def cloudy_numdens_(sim, partType, field, args):
+    """ CLOUDY-based photoionization calculation: **ionic number density** (e.g. 'O VI numdens', 'Mg II numdens'), 
+    for a given ion name and excited level number. Note: uses spaces in field name. """
+    return _cloudy_load(sim, partType, field, args)
+
+cloudy_numdens_.label = lambda sim,pt,f: r'$\rm{n_{%s%s}}$' % (f.split()[0], f.split()[1])
+cloudy_numdens_.units = r'$\rm{cm^{-3}}$'
+cloudy_numdens_.limits = [-14.0, -4.0]
+cloudy_numdens_.limits_halo = [-12.0, -6.0]
+cloudy_numdens_.log = True
+
+@snap_field(multi=' flux')
+def cloudy_flux_(sim, partType, field, args):
+    """ CLOUDY-based photoionization calculation: **ion line emission flux** (e.g. 'H-alpha flux', 'O--6-1037.62A'), 
+    for a given line name. Note: uses spaces in field name. """
+    return _cloudy_load(sim, partType, field, args)
+
+cloudy_flux_.label = lambda sim,pt,f: '%s Line Flux' % (f.replace(' flux','').replace('-',' '))
+cloudy_flux_.units = r'$\rm{photon/s/cm^2}$'
+cloudy_flux_.limits = [-30.0, -15.0]
+cloudy_flux_.limits_halo = [-25.0, -15.0]
+cloudy_flux_.log = True
+
+@snap_field(multi=' lum')
+def cloudy_lum_(sim, partType, field, args):
+    """ CLOUDY-based photoionization calculation: **ion line luminosity** (e.g. 'MgII lum', 'CVI lum'), 
+    for a given line name. Note: uses spaces in field name. """
+    return _cloudy_load(sim, partType, field, args)
+
+cloudy_lum_.label = lambda sim,pt,f: '%s Luminosity' % (f.replace(' lum','').replace('_dustdepleted',' '))
+cloudy_lum_.units = r'$\rm{10^{30}\ erg/s}$'
+cloudy_lum_.limits = [-15.0, 10.0]
+cloudy_lum_.limits_halo = [-5.0, 10.0]
+cloudy_lum_.log = True
 
 @snap_field(multi=True)
 def ionmassratio_(sim, partType, field, args):
@@ -1557,7 +1552,7 @@ def metalmass_(sim, partType, field, args):
 
     return masses
 
-metalmass_.label = lambda sim,pt,f: '[pt] %s Metal Mass' % f.replace('metalmass_','').replace('_msun','')
+metalmass_.label = lambda sim,pt,f: '[pt] %s Metal Mass' % f.split('metalmass_')[1].replace('_msun','')
 metalmass_.units = lambda sim,pt,f: r'$\rm{M_{\rm sun}}$' if '_msun' in f else 'code_mass'
 metalmass_.limits = [2.0, 6.0]
 metalmass_.limits_halo = [3.0, 6.0]
@@ -2049,7 +2044,7 @@ def delta_(sim, partType, field, args):
     from scipy.stats import binned_statistic
     from scipy.interpolate import interp1d
 
-    propName = field[len('delta_'):]
+    propName = field.split('_')[1]
 
     prop = sim.snapshotSubset(partType, propName, **args)
     rad = sim.snapshotSubset(partType, 'rad', **args)
@@ -2082,7 +2077,7 @@ def delta_(sim, partType, field, args):
 
     return ratio
 
-delta_.label = lambda sim,pt,f: r'$\rm{\delta %s / <%s>}$' % (f.replace('delta_',''),f.replace('delta_',''))
+delta_.label = lambda sim,pt,f: r'$\rm{\delta %s / <%s>}$' % (f.split('delta_')[1],f.split('delta_')[1])
 delta_.units = '' # dimensionless
 delta_.limits = [-1.0, 1.0]
 delta_.log = True
@@ -2134,7 +2129,7 @@ halo_id.log = True
 @snap_field(multi=True)
 def parent_subhalo_(sim, partType, field, args):
     """ Any property of the parent subhalo, per particle/cell. """
-    parentField = field.replace('parent_subhalo_','')
+    parentField = field.split('parent_subhalo_')[1]
     parentIDs = sim.snapshotSubset(partType, 'subhalo_id', **args)
     parentProp = sim.subhalos(parentField)
 
@@ -2146,7 +2141,7 @@ def parent_subhalo_(sim, partType, field, args):
 
     return data
 
-parent_subhalo_.label = lambda sim,pt,f: 'Parent Subhalo [%s]' % f.replace('parent_subhalo_','')
+parent_subhalo_.label = lambda sim,pt,f: 'Parent Subhalo [%s]' % f.split('parent_subhalo_')[1]
 parent_subhalo_.units = '' # TODO: call simSubhaloQuantity in lambda and retrieve
 parent_subhalo_.limits = [0, 1e7] # TODO: as above
 parent_subhalo_.log = True
@@ -2154,7 +2149,7 @@ parent_subhalo_.log = True
 @snap_field(multi=True)
 def parent_halo_(sim, partType, field, args):
     """ Any property of the parent halo, per particle/cell. """
-    parentField = field.replace('parent_halo_','')
+    parentField = field.split('parent_halo_')[1]
     parentIDs = sim.snapshotSubset(partType, 'halo_id', **args)
     parentProp = sim.halos(parentField)
 
@@ -2166,7 +2161,7 @@ def parent_halo_(sim, partType, field, args):
 
     return data
 
-parent_halo_.label = lambda sim,pt,f: 'Parent Halo [%s]' % f.replace('parent_halo_','')
+parent_halo_.label = lambda sim,pt,f: 'Parent Halo [%s]' % f.split('parent_halo_')[1]
 parent_halo_.units = '' # TODO: call simSubhaloQuantity in lambda and retrieve
 parent_halo_.limits = [0, 1e7] # TODO: as above
 parent_halo_.log = True
