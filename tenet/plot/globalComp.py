@@ -2454,8 +2454,7 @@ def plots():
     if 0:
         # single plot and quit
         pdf = PdfPages('comptest_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        sfrdVsRedshift(sPs, pdf, xlog=True)
-        sfrdVsRedshift(sPs, pdf, xlog=False)
+        plotPhaseSpace2D(sPs[0], xQuant='numdens', yQuant='temp', pdf=pdf)
         pdf.close()
         return
 

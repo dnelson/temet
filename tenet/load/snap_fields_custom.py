@@ -119,29 +119,29 @@ dt.log = True
 def temp(sim, partType, field, args):
     """ Gas temperature. """
     u  = sim.snapshotSubset(partType, 'u', **args)
-    ne = sim.snapshotSubset(partType, 'ne', **args)
+    xe = sim.snapshotSubset(partType, 'xe', **args)
 
-    return sim.units.UToTemp(u,ne,log=False)
+    return sim.units.UToTemp(u,xe,log=False)
 
 temp.label = 'Gas Temperature'
 temp.units = r'$\rm{K}$'
 temp.limits = [2.0, 8.0]
 temp.limits_halo = [3.5, 8.0]
-temp.log = False
+temp.log = True
 
 @snap_field
 def temp_old(sim, partType, field, args):
     """ Gas temperature (uncorrected values for TNG runs). """
     u  = sim.snapshotSubset(partType, 'InternalEnergyOld', **args)
-    ne = sim.snapshotSubset(partType, 'ne', **args)
+    xe = sim.snapshotSubset(partType, 'xe', **args)
 
-    return sim.units.UToTemp(u,ne,log=False)
+    return sim.units.UToTemp(u,xe,log=False)
 
 temp_old.label = 'Gas Temperature (Uncorrected)'
 temp_old.units = r'$\rm{K}$'
 temp_old.limits = [2.0, 8.0]
 temp_old.limits_halo = [3.5, 8.0]
-temp_old.log = False
+temp_old.log = True
 
 @snap_field
 def temp_sfcold(sim, partType, field, args):
@@ -159,7 +159,7 @@ temp_sfcold.label = 'Gas Temperature'
 temp_sfcold.units = r'$\rm{K}$'
 temp_sfcold.limits = [3.5, 7.2]
 temp_sfcold.limits_halo = [3.5, 8.0]
-temp_sfcold.log = False
+temp_sfcold.log = True
 
 @snap_field(alias='nelec')
 def ne(sim, partType, field, args):
