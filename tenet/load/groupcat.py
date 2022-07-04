@@ -172,10 +172,11 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
 
             if quantName in custom_cat_fields:
                 # yes: load/compute now
-                data = custom_cat_fields[field](sP, partType, quantName, kwargs)
+                data = custom_cat_fields[quantName](sP, partType, quantName, kwargs)
 
                 # if return is None, then this is a fall-through to a normal load
                 if data is not None:
+                    assert data.size == sP.numSubhalos, 'Size-mismatch intended?'
                     r[field] = data
             else:
                 # if not, try wild-card matching for custom fields
@@ -185,33 +186,6 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                         r[field] = custom_cat_multi_fields[search_key](sP, partType, quantName, kwargs)
 
             # -------------------------------------------------------------------------------------------
-
-            # number of satellites in (fof) halo, only for centrals
-            if quantName in ['halo_numsubs','halo_nsubs','nsubs','numsubs']:
-                haloField = 'GroupNsubs'
-                gc = groupCat(sP, fieldsHalos=[haloField,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
-
-                r[field] = gc['halos'][haloField][gc['subhalos']].astype('float32') # int dtype
-
-                # satellites given nan
-                mask = np.zeros(gc['subhalos'].size, dtype='int16')
-                mask[gc['halos']['GroupFirstSub']] = 1
-                wSat = np.where(mask == 0)
-                r[field][wSat] = np.nan
-
-            # subhalo mass [msun or log msun]
-            if quantName in ['mhalo_subfind']:
-                gc = groupCat(sP, fieldsSubhalos=['SubhaloMass'])
-                r[field] = sP.units.codeMassToMsun( gc )
-
-            # subhalo stellar mass (<1 or <2 rhalf definition, from groupcat) [msun or log msun]
-            if quantName in ['mstar1','mstar2','mgas1','mgas2']:
-                field = 'SubhaloMassInRadType' if '2' in quant else 'SubhaloMassInHalfRadType'
-                if 'mstar' in quantName: ptNum = sP.ptNum('stars')
-                if 'mgas' in quantName: ptNum = sP.ptNum('gas')
-
-                mass = groupCat(sP, fieldsSubhalos=[field])[:,ptNum]
-                r[field] = sP.units.codeMassToMsun(mass)
 
             # snapshot: photometric/broadband magnitudes [AB]
             if quantName in ['m_v','m_u','m_b']:
@@ -260,42 +234,6 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
 
                 if '_gyr' in quant: r[field] *= 1e9 # 1/yr to 1/Gyr
 
-            # virial radius (r200 or r500) of parent halo [code, pkpc]
-            if quantName in ['rhalo_200_code', 'rhalo_200', 'rhalo_500_code', 'rhalo_500', 'rhalo_200_parent']:
-                od = 200 if '_200' in quant else 500
-
-                gc = groupCat(sP, fieldsHalos=['Group_R_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
-                r[field] = gc['halos']['Group_R_Crit%d'%od][gc['subhalos']]
-
-                if '_code' not in quant: r[field] = sP.units.codeLengthToKpc( r[field] )
-
-                # satellites given nan
-                if '_parent' not in quantName:
-                    mask = np.zeros( gc['subhalos'].size, dtype='int16' )
-                    mask[ gc['halos']['GroupFirstSub'] ] = 1
-                    wSat = np.where(mask == 0)
-                    r[field][wSat] = np.nan
-
-            # virial velocity (v200) of parent halo [km/s]
-            if quantName in ['vhalo','v200']:
-                gc = groupCat(sP, fieldsSubhalos=['mhalo_200_code','rhalo_200_code'])
-                r[field] = sP.units.codeM200R200ToV200InKmS(gc['mhalo_200_code'], gc['rhalo_200_code'])
-
-            # circular velocity [km/s]
-            if quantName in ['vcirc','vmax']:
-                r[field] = groupCat(sP, sub='SubhaloVmax') # units correct
-
-            # velocity / spin vector magnitudes
-            if quantName in ['velmag','vmag']:
-                vals = groupCat(sP, fieldsSubhalos=['SubhaloVel'])
-                vals = sP.units.subhaloCodeVelocityToKms(vals)
-                r[field] = np.sqrt( vals[:,0]**2 + vals[:,1]**2 + vals[:,2]**2 )
-
-            if quantName in ['spinmag']:
-                vals = groupCat(sP, fieldsSubhalos=['SubhaloSpin'])
-                vals = sP.units.subhaloSpinToKpcKms(vals)
-                r[field] = np.sqrt( vals[:,0]**2 + vals[:,1]**2 + vals[:,2]**2 )
-
             # stellar half mass radii [code, pkpc, log pkpc]
             if quantName in ['size_stars_code','size_stars','rhalf_stars_code','rhalf_stars']:
                 gc = groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
@@ -324,63 +262,6 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 r[field] = sP.units.codeMassToVirTemp(mass).astype('float32')
 
             # --- auxcat ---
-
-            # subhalo stellar mass (<30 pkpc or <5 pkpc definitions, with auxCat) [msun or log msun]
-            if quantName in ['mstar_30pkpc','mstar_5pkpc','mgas_5pkpc','mdm_5pkpc']:
-                if 'mstar_' in quantName: pt = 'Stars'
-                if 'mgas_' in quantName: pt = 'Gas'
-                if 'mdm_' in quantName: pt = 'DM'
-
-                acField = 'Subhalo_Mass_%s_%s' % (quantName.split('_')[1],pt)
-                ac = auxCat(sP, fields=[acField])
-                r[field] = sP.units.codeMassToMsun( ac[acField] )
-
-            # subhalo total mass (in spatial aperture) [msun or log msun]
-            if quantName in ['mtot_5pkpc']:
-                ptTypesLoad = ['Gas','Stars','DM','BH']
-                r[field] = np.zeros(sP.numSubhalos, dtype='float32')
-
-                for pt in ptTypesLoad:
-                    acField = 'Subhalo_Mass_5pkpc_%s' % pt
-                    ac = auxCat(sP, fields=[acField])
-                    r[field] += sP.units.codeMassToMsun( ac[acField] )
-
-            # subhalo stellar or gas mass (<r500c definition, with auxCat, fof-scope) [msun or log msun]
-            if quantName in ['mstar_r500','mgas_r500']:
-                pt = 'Stars' if 'mstar' in quantName else 'Gas'
-                acField = 'Subhalo_Mass_r500_%s_FoF' % pt
-                ac = auxCat(sP, fields=[acField], expandPartial=True)
-                r[field] = sP.units.codeMassToMsun( ac[acField] )
-
-            # stellar mass to halo mass ratio
-            if quantName in ['mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio','mstar_mhalo_ratio']:
-                fields = ['mhalo_200_code']
-                acField = 'Subhalo_Mass_30pkpc_Stars'
-                if 'mstar2_' in quantName: fields.append('SubhaloMassInRadType')
-
-                gc = groupCat(sP, fieldsSubhalos=fields, sq=False)
-
-                w = np.where(gc['mhalo_200_code'] == 0.0) # low mass halos with no central
-                gc['mhalo_200_code'][w] = np.nan
-
-                if 'mstar2_' in quantName:
-                    mstar = gc['SubhaloMassInRadType'][:,sP.ptNum('stars')]
-                else:
-                    mstar = sP.auxCat(fields=[acField])[acField]
-
-                with np.errstate(invalid='ignore'):
-                    r[field] = mstar / gc['mhalo_200_code']
-
-            # HI (atomic hydrogen) mass
-            if quantName in ['mhi','mhi_30pkpc','mhi2']:
-                radStr = '' # mhi
-                if '_30pkpc' in quantName: radStr = '_30pkpc'
-                if '2' in quantName: radStr = '_2rstars'
-
-                acField = 'Subhalo_Mass%s_HI' % radStr
-
-                ac = sP.auxCat(fields=[acField])
-                r[field] = sP.units.codeMassToMsun(ac[acField])
 
             # isolated flag (1 if 'isolated' according to criterion, 0 if not, -1 if unprocessed)
             if 'isolated3d,' in quantName:

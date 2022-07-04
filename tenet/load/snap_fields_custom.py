@@ -1317,7 +1317,7 @@ def cloudy_flux_(sim, partType, field, args):
     for a given line name. Note: uses spaces in field name. """
     return _cloudy_load(sim, partType, field, args)
 
-cloudy_flux_.label = lambda sim,pt,f: '%s Line Flux' % (f.split(' flux','').replace('-',' '))
+cloudy_flux_.label = lambda sim,pt,f: '%s Line Flux' % (f.replace(' flux','').replace('-',' '))
 cloudy_flux_.units = r'$\rm{photon/s/cm^2}$'
 cloudy_flux_.limits = [-30.0, -15.0]
 cloudy_flux_.limits_halo = [-25.0, -15.0]
@@ -1378,11 +1378,11 @@ def wind_dpdt(sim, partType, field, args):
 
     return sim.units.codeSfrZToWindMomentumRate(sfr, metal, dm_sigma)
 
-wind_dedt.label = 'Wind Momentum Injection Rate'
-wind_dedt.units = r'$\rm{10^{51}\ g\,cm\,s^{-2}}$' # 1e51 unit system to avoid overflow
-wind_dedt.limits = [-24.0, -18.0]
-wind_dedt.limits_halo = [-23.0, -18.0]
-wind_dedt.log = True
+wind_dpdt.label = 'Wind Momentum Injection Rate'
+wind_dpdt.units = r'$\rm{10^{51}\ g\,cm\,s^{-2}}$' # 1e51 unit system to avoid overflow
+wind_dpdt.limits = [-24.0, -18.0]
+wind_dpdt.limits_halo = [-23.0, -18.0]
+wind_dpdt.log = True
 
 @snap_field(alias='wind_launchvel')
 def wind_vel(sim, partType, field, args):

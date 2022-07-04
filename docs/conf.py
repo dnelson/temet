@@ -130,7 +130,7 @@ def math_latex(label):
 
     return label_math.strip()
 
-def quant_rowtext(custom_fields, custom_fields_aliases, key):
+def quant_rowtext(custom_fields, custom_fields_aliases, key, cat=False):
     """ Write a given quantity out, given its key and the registry dict to use. """
     # get properties
     func = custom_fields[key]
@@ -147,16 +147,17 @@ def quant_rowtext(custom_fields, custom_fields_aliases, key):
 
     if callable(f_label):
         # we don't know the actual format of the expected field, try a few
-        if key in [' flux', ' lum']:
+        field = key
+        if key in [' flux',' lum']:
             field = '\{line_name\}' + key # prefixed single parameter case (e.g. cloudy_flux_)
-        else:
+        elif not cat:
             field = key + 'X' # single parameter cases
 
         for i in range(3):
             try:
                 f_label = f_label('','',field) # sim,pt are blank
                 break # quit on success
-            except:
+            except Exception as e:
                 if i == 0:
                     field = key + 'X_Y' # double parameter cases (e.g. ionmassratio_)
                 if i == 1:
@@ -209,3 +210,19 @@ with open('quants_custom.rst','w') as f:
 
     f.write('\n')
 
+with open('quants_cat_custom.rst','w') as f:
+    from tenet.load.groupcat import custom_cat_fields, custom_cat_multi_fields
+    from tenet.load.groupcat import custom_cat_fields_aliases
+
+    # write header for custom (catalog field) table
+    f.write('.. csv-table::\n')
+    f.write('    :header: "Field Name", "Label", "Units", "Aliases", "Description"\n')
+    f.write('    :widths: 10, 25, 15, 20, 30\n')
+    f.write('\n')
+
+    for key in custom_cat_fields_aliases.keys():
+        f_name, f_label, f_units, f_aliases, f_desc = quant_rowtext(custom_cat_fields,custom_cat_fields_aliases,key,cat=True)
+        s = '    "%s", "%s", "%s", "%s", "%s"\n' % (f_name,f_label,f_units,f_aliases,f_desc)
+        f.write(s)
+
+    f.write('\n')

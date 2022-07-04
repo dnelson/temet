@@ -165,7 +165,11 @@ itself is used as the matching pattern (see ``cloudy_`` for an example, which ma
 Custom Catalog Quantities
 -------------------------
 
-TODO.
+The following halo/subhalo custom quantities are currently defined, in the
+:py:mod:`tenet.load.groupcat_fields_custom` module, along with associated metadata including
+a description, units, reasonable bounds, and so on.
+
+.. include:: quants_cat_custom.rst
 
 Adding New Custom Catalog Quantiites
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

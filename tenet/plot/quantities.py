@@ -11,6 +11,7 @@ from ..util.helper import logZeroNaN, running_median_clipped
 from ..cosmo.cloudy import cloudyIon
 from ..plot.config import *
 
+# todo: these are for the web interface, take instead (unify with) docstring
 quantDescriptions = {
   'None'             : 'Count of the number of galaxies in each bin.',
   'ssfr'             : 'Galaxy specific star formation rate, where sSFR = SFR / M*, both defined within twice the stellar half mass radius.',
@@ -35,34 +36,14 @@ quantDescriptions = {
   'sfr2'             : 'Galaxy star formation rate, instantaneous, integrated within twice the stellar half mass radius.',
   'sfr1_surfdens'    : 'Galaxy star formation surface density, defined as Sigma = SFR / (pi R^2), where SFR is measured within R, the stellar half mass radius.',
   'sfr2_surfdens'    : 'Galaxy star formation surface density, defined as Sigma = SFR / (pi R^2), where SFR is measured within R, twice the stellar half mass radius.',
-  'mstar1'           : 'Galaxy stellar mass, measured within the stellar half mass radius.',
-  'mstar2'           : 'Galaxy stellar mass, measured within twice the stellar half mass radius.',
-  'mgas1'            : 'Galaxy gas mass (all phases), measured within the stellar half mass radius.',
-  'mgas2'            : 'Galaxy gas mass (all phases), measured within twice the stellar half mass radius.',
-  'mstar_30pkpc'     : 'Galaxy stellar mass, measured within a fixed 3D aperture of 30 physical kpc.',
-  'mhi_30pkpc'       : 'Galaxy atomic HI gas mass (BR06 molecular H2 model), measured within a fixed 3D aperture of 30 physical kpc.',
-  'mhi2'             : 'Galaxy atomic HI gas mass (BR06 molecular H2 model), measured within twice the stellar half mass radius.',
-  'mhalo_200'        : 'Total mass of the parent dark matter halo, defined by M_200_Crit. Because satellites have no such measure, they are excluded.',
-  'mhalo_500'        : 'Total mass of the parent dark matter halo, defined by M_500_Crit. Because satellites have no such measure, they are excluded.',
-  'mhalo_subfind'    : 'Parent dark matter (sub)halo total mass, defined by the gravitationally bound mass as determined by Subfind.',
-  'mhalo_200_parent' : 'Total mass of the host/parent dark matter halo, defined by M_200_Crit. Satellites have the value of their host/parent halo.',
-  'mhalo_vir'        : 'Total mass of the parent dark matter halo, defined by M_DeltaC_Crit where DeltaC is the overdensity based on spherical tophat collapse. Because satellites have no such measure, they are excluded.',
-  'halo_numsubs'     : 'Total number of subhalos in the parent dark matter halo (GroupNsubs). A value of one implies only a central subhalo exists, while a value of two indicates a central and one satellite, and so on. Because satellites have no such measure, they are excluded.',
-  'rhalo_200'        : 'Virial radius of the parent dark matter halo, defined by R_200_Crit. Because satellites have no such measure, they are excluded.',
-  'rhalo_500'        : 'The radius R500 of the parent dark matter halo, defined by R_500_Crit. Because satellites have no such measure, they are excluded.',
   'virtemp'          : 'The virial temperature of the parent dark matter halo. Because satellites have no such measure, they are excluded.',
-  'velmag'           : 'The magnitude of the current velocity of the subhalo, in the simulation reference frame.',
-  'spinmag'          : 'The magnitude of the subhalo spin vector, computed as the mass weighted sum of all subhalo particles/cells.',
   'M_V'              : 'Galaxy absolute magnitude in the "visible" (V) band (AB). Intrinsic light, with no consideration of dust or obscuration.',
   'M_U'              : 'Galaxy absolute magnitude in the "ultraviolet" (U) band (AB). Intrinsic light, with no consideration of dust or obscuration.',
   'M_B'              : 'Galaxy absolute magnitude in the "blue" (B) band (AB). Intrinsic light, with no consideration of dust or obscuration.',
   'color_UV'         : 'Galaxy U-V color, which is defined as M_U-M_V. Intrinsic light, with no consideration of dust or obscuration.',
   'color_VB'         : 'Galaxy V-B color, which is defined as M_V-M_B. Intrinsic light, with no consideration of dust or obscuration.',
-  'vcirc'            : 'Maximum value of the spherically-averaged 3D circular velocity curve (i.e. galaxy circular velocity).',
   'distance'         : 'Radial distance of this satellite galaxy from the center of its parent host halo. Central galaxies have zero distance by definition.',
   'distance_rvir'    : 'Radial distance of this satellite galaxy from the center of its parent host halo, normalized by the virial radius. Central galaxies have zero distance by definition.',
-  'mstar2_mhalo200_ratio'      : 'Galaxy stellar mass to halo mass ratio, the former defined as M* within twice the stellar half mass radius, the latter as M_200_Crit.',
-  'mstar30pkpc_mhalo200_ratio' : 'Galaxy stellar mass to halo mass ratio, the former defined as M* within 30 physical kpc, the latter as M_200_Crit.',
   'BH_mass'            : 'Black hole mass of this galaxy, a value which starts at the seed mass and increases monotonically as gas is accreted.',
   'BH_CumEgy_low'      : 'Black hole (feedback) energy released in the low accretion state (kinetic wind mode). Cumulative since birth. Includes contributions from BHs which have merged into the current BH.',
   'BH_CumEgy_high'     : 'Black hole (feedback) energy released in the high accretion state (thermal/quasar mode). Cumulative since birth. Includes contributions from BHs which have merged into the current BH.',
@@ -286,160 +267,49 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     # any of these fields could be functions, in which case our convention is to call with 
     # (sP,pt,field) as the arguments, i.e. in order to make redshift-dependent decisions
-    ptType = 'subhalo' # completely redundant, can remove?
-    ptProperty = quantname # todo: unify and remove redundancy
+    if label is not None: # remove once migration is complete
+        ptType = 'subhalo' # completely redundant, can remove?
+        ptProperty = quantname # todo: unify and remove redundancy
 
-    if callable(label):
-        label = label(sP, ptType, ptProperty)
+        if callable(label):
+            label = label(sP, ptType, ptProperty)
 
-    if callable(lim):
-        lim = lim(sP, ptType, ptProperty)
+        if callable(lim):
+            lim = lim(sP, ptType, ptProperty)
 
-    if callable(units):
-        units = units(sP, ptType, ptProperty)
+        if callable(units):
+            units = units(sP, ptType, ptProperty)
 
-    if callable(log):
-        log = log(sP, ptType, ptProperty)
+        if callable(log):
+            log = log(sP, ptType, ptProperty)
 
-    # does units refer to a base code unit (code_mass, code_length, or code_velocity)
-    units = units.replace('code_length', sP.units.UnitLength_str)
-    units = units.replace('code_mass', sP.units.UnitMass_str)
-    units = units.replace('code_velocity', sP.units.UnitVelocity_str)
+        # does units refer to a base code unit (code_mass, code_length, or code_velocity)
+        units = units.replace('code_length', sP.units.UnitLength_str)
+        units = units.replace('code_mass', sP.units.UnitMass_str)
+        units = units.replace('code_velocity', sP.units.UnitVelocity_str)
 
-    # does units refer to a derived code unit? (could be improved if we move to symbolic manipulation)
-    units = units.replace('code_density', '%s/(%s)$^3$' % (sP.units.UnitMass_str,sP.units.UnitLength_str))
-    units = units.replace('code_volume', '(%s)^3' % sP.units.UnitLength_str)
+        # does units refer to a derived code unit? (could be improved if we move to symbolic manipulation)
+        units = units.replace('code_density', '%s/(%s)$^3$' % (sP.units.UnitMass_str,sP.units.UnitLength_str))
+        units = units.replace('code_volume', '(%s)^3' % sP.units.UnitLength_str)
 
-    # append units to label
-    if units is not None:
-        logUnitStr = ('%s%s' % ('log ' if log else '',units)).strip()
+        # append units to label
+        if units is not None:
+            logUnitStr = ('%s%s' % ('log ' if log else '',units)).strip()
 
-        # if we have a dimensional unit, or a logarithmic dimensionless unit
-        if logUnitStr != '':
-            label += ' [ %s ]' % logUnitStr
+            # if we have a dimensional unit, or a logarithmic dimensionless unit
+            if logUnitStr != '':
+                label += ' [ %s ]' % logUnitStr
 
-    # load actual values
-    if label is not None:
-        vals = sP.groupCat(sub=quantname)
+        # load actual values
+        if label is not None:
+            vals = sP.groupCat(sub=quantname)
 
-    minMax = lim # temporary
+        minMax = lim # temporary
 
     # -------------------------------- old ----------------------------------------------
 
     # TODO: once every field is generalized as "vals = sP.groupCat(sub=quantname)", 
     # can pull out (needs to be quantname, i.e. w/o _log, to avoid x2)
-
-    if quantname in ['mstar1','mstar2','mgas1','mgas2']:
-        # stellar/gas mass (within 1 or 2 r1/2stars) [msun or log msun]
-        vals = sP.groupCat(sub=quantname)
-
-        if 'mstar' in quant:
-            partLabel = '\star'
-            minMax = [9.0, 12.0]
-        if 'mgas' in quant:
-            partLabel = 'gas'
-            minMax = [8.0, 11.0]
-
-        if '1' in quant:
-            radStr = '1'
-        if '2' in quant:
-            radStr = '2'
-
-        if sP.boxSize < 50000: minMax = np.array(minMax) - 1.0
-
-        label = 'M$_{\\rm '+partLabel+'}(<'+radStr+'r_{\star,1/2})$ [ log M$_{\\rm sun}$ ]'
-        if clean: label = 'M$_{\\rm '+partLabel+'}$ [ log M$_{\\rm sun}$ ]'
-
-    if quantname in ['mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio']:
-        # stellar mass / halo mass ratio
-        vals = sP.groupCat(sub=quantname)
-
-        minMax = [-3.0, -1.0]
-        if 'mstar2_' in quantname: distStr = '<2r_{\star,1/2}'
-        if 'mstar30pkpc_' in quantname: distStr = '<30 pkpc'
-
-        label = 'M$_{\star,%s}$ / $M_{\\rm halo,200crit}$ [ log ]' % distStr
-        if clean: label = 'M$_{\star}$ / $M_{\\rm halo}$ [ log ]'
-
-    if quantname in ['mstar_30pkpc','mstar_r500','mgas_r500','mstar_5pkpc','mgas_5pkpc','mdm_5pkpc','mtot_5pkpc']:
-        # stellar or gas mass in different apertures (auxcat based calculations)
-        vals = sP.groupCat(sub=quantname)
-
-        minMax = [9.0, 12.0]
-        if sP.boxSize < 50000: minMax = [8.0, 11.0]
-        if quantname == 'mstar_5pkpc': minMax = [8.0, 12.0]
-        if quantname == 'mgas_5pkpc': minMax = [7.5, 10.5]
-
-        if '_30pkpc' in quantname: selStr = '<30pkpc'
-        if '_5pkpc' in quantname: selStr = '<5pkpc'
-        if '_r500' in quantname: selStr = '<r500'
-
-        if 'mstar_' in quantname: partLabel = '\star'
-        if 'mgas_' in quantname: partLabel = 'gas'
-        if 'mdm_' in quantname: partLabel = 'DM'
-        if 'mtot_' in quantname: partLabel = 'total'
-
-        label = 'M$_{\\rm %s}$(%s) [ log M$_{\\rm sun}$ ]' % (partLabel,selStr)
-        #if clean: label = 'M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % partLabel
-
-    if quantname in ['mstar_mtot_ratio_5pkpc']:
-        # M*/Mtot (<5 pkpc)
-        mstar = sP.subhalos('mstar_5pkpc')
-        mtot = sP.subhalos('mtot_5pkpc')
-
-        vals = mstar / mtot
-
-        label = 'M$_{\\rm \star}$ / M$_{\\rm total}$ (<5pkpc)'
-
-        if '_log' in quant:
-            minMax = [-2.5, 0.0]
-            label += ' [log]'
-        else:
-            takeLog = False # show linear by default
-            minMax = [0.0, 0.8]
-        
-    if quantname in ['mhi','mhi_30pkpc','mhi2']:
-        # HI (atomic hydrogen) mass, either in 30pkpc or 2rhalfstars apertures (auxcat calculations)
-        vals = sP.groupCat(sub=quantname)
-
-        if quantname == 'mhi_30pkpc':
-            radStr = '\\rm{30pkpc}'
-        if quantname == 'mhi2':
-            radStr = '2r_{\\rm \star,1/2}'
-        if quantname == 'mhi':
-            radStr = '\\rm{sub}'
-
-        minMax = [8.0, 11.5]
-        if sP.boxSize < 50000: minMax = [7.0, 10.5]
-        label = 'M$_{\\rm HI} (<%s)$ [ log M$_{\\rm sun}$ ]' % radStr
-
-    if quantname in ['halo_numsubs','halo_nsubs','nsubs','numsubs']:
-        # number of subhalos in halo
-        vals = sP.groupCat(sub=quantname)
-
-        minMax = [0, 2]
-        if tight: minMax = [0,3]
-        label = 'N$_{\\rm sub}$ in Halo [ log ]'
-
-    if quantname in ['rhalo_200','rhalo_500']:
-        # R200crit or R500crit
-        vals = sP.groupCat(sub=quantname)
-
-        minMax = [1.0, 3.0]
-        label = 'R$_{\\rm halo}$ (%d,crit) [ log kpc ]' % (200 if '_200' in quant else 500)
-        if clean: label = 'R$_{\\rm halo}$ [ log kpc ]'
-
-    if quantname in ['vhalo','v200']:
-        # virial velocity: v200
-        vals = sP.groupCat(sub=quantname)
-
-        takeLog = False # show linear by default
-
-        logStr = 'log ' if takeLog else ''
-        minMax = [1.0,2.5] if takeLog else [0, 200]
-            
-        label = 'v$_{\\rm 200,halo}$  [ %skm/s ]' % logStr
-        if clean: label = 'v$_{\\rm halo}$ [ %skm/s ]' % logStr
 
     if quantname in ['virtemp']:
         # virial temperature [K]
@@ -448,19 +318,6 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [4.0, 7.0]
         if tight: minMax = [4.0, 8.0]
         label = 'T$_{\\rm vir}$ [ log K ]'
-
-    if quantname in ['vmag','velmag','spinmag']:
-        # SubhaloVel [physical km/s] or SubhaloSpin [physical kpc km/s]
-        vals = sP.groupCat(sub=quantname)
-
-        if quant == 'spinmag':
-            label = '|V|$_{\\rm subhalo}$ [ log kpc km/s ]'
-            minMax = [1.5, 4.5]
-            if tight: minMax = [1.0, 5.0]
-        else:
-            label = '|V|$_{\\rm subhalo}$ [ log km/s ]'
-            minMax = [1.5, 3.5]
-            if tight: minMax = [1.0, 3.5]
 
     if quantname in ['M_V', 'M_U', 'M_B']:
         # StellarPhotometrics from snapshot
@@ -471,14 +328,6 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         minMax = [-24, -16]
         if tight: minMax = [-25, -14]
-
-    if quantname == 'vcirc':
-        # circular velocity [km/s] from snapshot
-        vals = sP.groupCat(sub=quantname)
-
-        label = 'V$_{\\rm circ}$ [ log km/s ]'
-        minMax = [1.8, 2.8]
-        if tight: minMax = [1.5, 3.0]
 
     if quantname in ['distance','distance_rvir']:
         # radial distance of satellites to the center of the host halo

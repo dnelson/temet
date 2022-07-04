@@ -934,7 +934,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                     ax.text(9.94, 730.0, '$z$ < 4', color='#888888', rotation=65.0)
 
                 alpha = 0.6 if len(redshifts) == 1 else 0.5
-                ax.plot(xm2, ym2, '-', lw=lw, linestyle=linestyles[k], color='black', alpha=alpha, label=label)
+                ax.plot(xm2, ym2, lw=lw, linestyle=linestyles[k], color='black', alpha=alpha, label=label)
 
         # loop over redshifts
         data_z = []
@@ -1034,7 +1034,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
 
                     l, = ax.plot(xm, ym, linestyles[lsInd], lw=lw, alpha=1.0, color=c, label=label)
 
-                    data_z.append( {'redshift':redshift, 'xm':xm, 'ym':ym} )
+                    data_z.append( {'redshift':redshift, 'vperc':percs[perc_ind], 'rad':radMidPoint, 'xm':xm, 'ym':ym} )
 
                     # shade percentile band?
                     if i == j or markersize > 0 or 'mstar' not in xQuant:
@@ -1121,7 +1121,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                 rad_code = sP.units.physicalKpcToCodeLength(10.0)
                 vesc = np.sqrt(2 * sP.units.G * tot_mass_enc / rad_code) # code velocity units = [km/s]
 
-            if sP.snapHasField('gas', 'Potential'):
+            if 0 and sP.snapHasField('gas', 'Potential'):
                 # escape velocity curves, via mean Potential in 10kpc slice for gas cells
                 acField = 'Subhalo_EscapeVel_10pkpc_Gas'
                 vesc = sP.auxCat(acField)[acField] # physical km/s
@@ -1211,6 +1211,28 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
         #    import pickle
         #    with open('vout_%d_%s.pickle' % (percs[percIndsPlot[0]],sP.simName), 'wb') as f:
         #        pickle.dump(data_z, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+        # print text file
+        filename = 'fig6_vel_vs_mstar_z=%.1f.txt' % sP.redshift
+        out = '# Nelson+ (2019) http://arxiv.org/abs/1902.05554\n'
+        out += '# Figure 6 Outflow Velocity vs. Stellar Mass (%s z=%.1f) (r = %s)\n' % \
+          (sP.simName, sP.redshift, data_z[0]['rad'])
+        out += '# M* [log Msun]'
+        for entry in data_z: out += ', v_cut=%d' % entry['vperc']
+        out += ' (all [km/s])\n'
+
+        for i in range(len(data_z)): # make sure all stellar mass values are the same
+            assert np.array_equal(data_z[i]['xm'], data_z[0]['xm'])
+
+        for i in range(data_z[0]['xm'].size):
+            out += '%7.2f' % data_z[0]['xm'][i]
+            for j in range(len(data_z)): # loop over redshifts
+                out += ' %6.2f' % data_z[j]['ym'][i]
+            out += '\n'
+
+        with open(filename, 'w') as f:
+            f.write(out)
+        print(out)
 
     # load outflow rates and outflow velocities (total)
     data = []
@@ -1475,6 +1497,7 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
 
             with open(filename, 'w') as f:
                 f.write(out)
+
         if 1:
             out = '# Nelson+ (2019) http://arxiv.org/abs/1902.05554\n'
             out += '# theta [deg], outflow rate [msun/yr/ster]\n'
@@ -2619,7 +2642,7 @@ def paperPlots(sPs=None):
         ylim = [0,800]
         config = {'percInds':[2,4], 'radInds':[1], 'ylim':ylim, 'stat':'mean', 'skipZeros':False, 'markersize':4.0, 'loc2':'upper left', 'addModelTNG':True}
         gasOutflowVelocityVsQuant(TNG50, xQuant='mstar_30pkpc', config=config)
-
+        
         # outflow velocity as a function of M* at one redshift, variations in (radius,v_perc) values
         #config = {'percInds':[3,1], 'radInds':[1,2,4], 'ylim':ylim, 'xlim':[8.5,11.0], 'stat':'mean', 'skipZeros':False, 'loc2':'upper left', 'addModelTNG':True}
         #TNG50_z05 = simParams(run='tng50-1',redshift=0.5)

@@ -14,6 +14,47 @@ from .util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def simba_caesar_smf():
+    """ Compare Simba SMFs from the original (caesar) catalogs. """
+    runs = ['m25n512','m50n512','m100n1024']
+    snap = 151
+
+    # load
+    mstar = {}
+    for run in runs:
+        print(run)
+        with h5py.File('%s_%03d.hdf5' % (run,snap),'r') as f:
+            if 'masses.star_30kpc' in f['galaxy_data/dicts']:
+                key = 'galaxy_data/dicts/masses.star_30kpc'
+            else:
+                key = 'galaxy_data/dicts/masses.stellar_30kpc'
+
+            mstar[run] = f[key][()]
+            #print(f[key].attrs['unit'])
+
+    # plot
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_title('Simba SMFs: Original Caesar Catalogs')
+    ax.set_xlabel('Galaxy Stellar Mass [log Msun]')
+    ax.set_ylabel('N / Mpc$^3$')
+    ax.set_yscale('log')
+
+    for run in runs:
+        mass = np.log10(mstar[run]) # log msun
+        
+        h, bins = np.histogram(mass, bins=25, range=[7.5,12.5])
+
+        bins = bins[:-1] + 0.1 # mids
+        boxsize = float(run.split('n')[0][1:]) # Mpc
+        print(run, mass.min(), mass.max(), boxsize)
+        h = h.astype('float32') / boxsize**3
+
+        ax.plot(bins, h, 'o-', lw=2, label=run)
+
+    ax.legend(loc='best')
+    fig.savefig('simba_smf.pdf')
+    plt.close(fig)
+
 def filter_list():
     """ Check algorithm to remove elements with a given value from a list, keeping rest in order. """
     # setup

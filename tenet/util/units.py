@@ -1199,7 +1199,7 @@ class units(object):
         return r200.astype('float32')
 
     def codeM200R200ToV200InKmS(self, m200, r200):
-        """ Given a (M200,R200) pair of a FoF group, compute V200 in physical [km/s]. """
+        """ Given a (M200,R200) pair in code units for a FoF group, compute V200 in physical [km/s]. """
         assert self._sP.redshift is not None
 
         with np.errstate(invalid='ignore'):

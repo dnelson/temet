@@ -1,7 +1,7 @@
 __pycache__
 docs/_build/
 docs/source/
-docs/quants_custom.rst
+docs/quants*custom.rst
 .pyc
 .so
 .ipynb_checkpoints
