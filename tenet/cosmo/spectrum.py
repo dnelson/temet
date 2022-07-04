@@ -23,7 +23,7 @@ from ..util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
 # (and Morton+03 https://iopscience.iop.org/article/10.1086/377639/fulltext/)
 # f - oscillator strength [dimensionless]
 # gamma - damping constant [1/s], where tau=1/gamma is the ~lifetime (is the sum of A)
-# wave0 - transition wavelength [ang]
+# wave0 - transition wavelength vacuum [ang]
 lines = {'LyA'        : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion':'H I'},
          'HI 1025'    : {'f':0.0791,   'gamma':1.67e8,  'wave0':1025.7223, 'ion':'H I'},
          'HI 972'     : {'f':0.0290,   'gamma':6.82e7,  'wave0':972.5367,  'ion':'H I'},
@@ -164,20 +164,62 @@ lines = {'LyA'        : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion'
          'FeI 2518'   : {'f':1.07e-1,  'gamma':1.88e8,  'wave0':2518.8595, 'ion':'Fe I'},
          'FeI 2490'   : {'f':6.46e-1,  'gamma':2.31e8,  'wave0':2490.5036, 'ion':'Fe I'},
          'FeI 2167'   : {'f':1.50e-1,  'gamma':2.74e8,  'wave0':2167.4534, 'ion':'Fe I'},
-         # only some FeII with f>0.1 (lots more missing)
-         'FeII 2632'  : {'f':1.25e-1,  'gamma':9.01e7,  'wave0':2632.1081, 'ion':'Fe II'},
-         'FeII 2631'  : {'f':1.75e-1,  'gamma':1.12e8,  'wave0':2631.8321, 'ion':'Fe II'},
-         'FeII 2629'  : {'f':1.75e-1,  'gamma':1.12e8,  'wave0':2629.0777, 'ion':'Fe II'},
-         'FeII 2614'  : {'f':1.14e-1,  'gamma':2.23e8,  'wave0':2614.6051, 'ion':'Fe II'},
-         'FeII 2612'  : {'f':1.31e-1,  'gamma':1.28e8,  'wave0':2612.6542, 'ion':'Fe II'},
-         'FeII 2607'  : {'f':1.18e-1,  'gamma':1.73e8,  'wave0':2607.8664, 'ion':'Fe II'},
-         'FeII 2600'  : {'f':2.40e-1,  'gamma':2.37e8,  'wave0':2600.1729, 'ion':'Fe II'},
-         'FeII 2414'  : {'f':1.75e-1,  'gamma':1.00e8,  'wave0':2414.0450, 'ion':'Fe II'},
-         'FeII 2382'  : {'f':3.43e-1,  'gamma':3.35e8,  'wave0':2382.7652, 'ion':'Fe II'},
-         'FeII 2345'  : {'f':1.26e-1,  'gamma':7.66e7,  'wave0':2345.0011, 'ion':'Fe II'},
-         'FeII 2344'  : {'f':1.26e-1,  'gamma':1.92e8,  'wave0':2344.2139, 'ion':'Fe II'},
-         'FeII 1148'  : {'f':1.13e-1,  'gamma':4.56e8,  'wave0':1148.2773, 'ion':'Fe II'},
-         'FeII 1144'  : {'f':1.33e-1,  'gamma':5.65e8,  'wave0':1144.9390, 'ion':'Fe II'},
+         # partial FeII
+         'FeII 2632'  : {'f':8.60e-2,  'gamma':2.72e8,  'wave0':2632.1081, 'ion':'Fe II'}, # 1u
+         'FeII 2631'  : {'f':1.31e-1,  'gamma':2.75e8,  'wave0':2631.8321, 'ion':'Fe II'},
+         'FeII 2629'  : {'f':1.73e-1,  'gamma':2.61e8,  'wave0':2629.0777, 'ion':'Fe II'},
+         'FeII 2625'  : {'f':4.41e-2,  'gamma':3.41e7,  'wave0':2626.4511, 'ion':'Fe II'},
+         'FeII 2622'  : {'f':5.60e-2,  'gamma':2.66e8,  'wave0':2622.4518, 'ion':'Fe II'},
+         'FeII 2621'  : {'f':3.93e-3,  'gamma':2.61e8,  'wave0':2621.1912, 'ion':'Fe II'},
+         'FeII 2618'  : {'f':5.05e-2,  'gamma':2.75e8,  'wave0':2618.3991, 'ion':'Fe II'},
+         'FeII 2614'  : {'f':1.08e-1,  'gamma':2.66e8,  'wave0':2614.6051, 'ion':'Fe II'},
+         'FeII 2612'  : {'f':1.26e-1,  'gamma':2.61e8,  'wave0':2612.6542, 'ion':'Fe II'},
+         'FeII 2607'  : {'f':1.18e-1,  'gamma':2.61e8,  'wave0':2607.8664, 'ion':'Fe II'},
+         'FeII 2600'  : {'f':2.39e-1,  'gamma':2.70e8,  'wave0':2600.1729, 'ion':'Fe II'},
+         'FeII 2599'  : {'f':1.08e-1,  'gamma':2.75e8,  'wave0':2599.1465, 'ion':'Fe II'},
+         'FeII 2586'  : {'f':6.91e-2,  'gamma':2.72e8,  'wave0':2586.6500, 'ion':'Fe II'},
+         'FeII 2414'  : {'f':1.75e-1,  'gamma':2.99e8,  'wave0':2414.0450, 'ion':'Fe II'}, # 2u
+         'FeII 2411a' : {'f':2.10e-1,  'gamma':3.03e8,  'wave0':2411.8023, 'ion':'Fe II'},
+         'FeII 2411b' : {'f':2.10e-1,  'gamma':3.00e8,  'wave0':2411.2533, 'ion':'Fe II'},
+         'FeII 2407'  : {'f':1.48e-1,  'gamma':2.99e8,  'wave0':2407.3942, 'ion':'Fe II'},
+         'FeII 2405a' : {'f':2.37e-1,  'gamma':3.07e8,  'wave0':2405.6186, 'ion':'Fe II'},
+         'FeII 2405b' : {'f':2.60e-2,  'gamma':3.03e8,  'wave0':2405.1638, 'ion':'Fe II'},
+         'FeII 2399'  : {'f':1.19e-1,  'gamma':3.00e8,  'wave0':2399.9728, 'ion':'Fe II'},
+         'FeII 2396a' : {'f':2.88e-1,  'gamma':3.09e8,  'wave0':2396.3559, 'ion':'Fe II'},
+         'FeII 2396b' : {'f':1.53e-2,  'gamma':2.99e8,  'wave0':2396.1497, 'ion':'Fe II'},
+         'FeII 2389'  : {'f':8.25e-2,  'gamma':3.07e8,  'wave0':2389.3582, 'ion':'Fe II'},
+         'FeII 2383'  : {'f':5.57e-3,  'gamma':3.00e8,  'wave0':2383.7884, 'ion':'Fe II'},
+         'FeII 2382'  : {'f':3.20e-1,  'gamma':3.13e8,  'wave0':2382.7652, 'ion':'Fe II'},
+         'FeII 2374'  : {'f':3.13e-2,  'gamma':3.09e8,  'wave0':2374.4612, 'ion':'Fe II'},
+         'FeII 2367'  : {'f':2.16e-5,  'gamma':3.07e8,  'wave0':2367.5905, 'ion':'Fe II'},
+         'FeII 2380'  : {'f':3.38e-2,  'gamma':2.68e8,  'wave0':2381.4887, 'ion':'Fe II'}, # 3u
+         'FeII 2365'  : {'f':4.95e-2,  'gamma':2.68e8,  'wave0':2365.5518, 'ion':'Fe II'},
+         'FeII 2359'  : {'f':6.79e-2,  'gamma':2.62e8,  'wave0':2359.8278, 'ion':'Fe II'},
+         'FeII 2349'  : {'f':8.98e-2,  'gamma':2.62e8,  'wave0':2349.0223, 'ion':'Fe II'},
+         'FeII 2345'  : {'f':1.53e-1,  'gamma':2.70e8,  'wave0':2345.0011, 'ion':'Fe II'},
+         'FeII 2344'  : {'f':1.14e-1,  'gamma':2.68e8,  'wave0':2344.2139, 'ion':'Fe II'},
+         'FeII 2338'  : {'f':8.97e-2,  'gamma':2.70e8,  'wave0':2338.7248, 'ion':'Fe II'},
+         'FeII 2333'  : {'f':7.78e-2,  'gamma':2.62e8,  'wave0':2333.5156, 'ion':'Fe II'},
+         'FeII 2328'  : {'f':3.45e-2,  'gamma':2.70e8,  'wave0':2328.1112, 'ion':'Fe II'},
+         'FeII 2280'  : {'f':4.38e-3,  'gamma':2.58e8,  'wave0':2280.6202, 'ion':'Fe II'}, # 4u
+         'FeII 2268'  : {'f':3.62e-3,  'gamma':2.75e8,  'wave0':2268.2878, 'ion':'Fe II'},
+         'FeII 2261'  : {'f':2.25e-3,  'gamma':2.67e8,  'wave0':2261.5600, 'ion':'Fe II'},
+         'FeII 2260'  : {'f':2.44e-3,  'gamma':2.58e8,  'wave0':2260.7805, 'ion':'Fe II'},
+         'FeII 2256'  : {'f':1.17e-3,  'gamma':2.6e8,   'wave0':2256.6869, 'ion':'Fe II'},
+         'FeII 2253'  : {'f':3.23e-3,  'gamma':2.75e8,  'wave0':2253.8254, 'ion':'Fe II'},
+         'FeII 2251'  : {'f':2.20e-3,  'gamma':2.67e8,  'wave0':2250.8739, 'ion':'Fe II'},
+         'FeII 2250'  : {'f':1.35e-3,  'gamma':2.6e8,   'wave0':2250.8739, 'ion':'Fe II'},
+         # skip rest of FeII (many lines) with wave0<=2241 (5u-29u) except f>0.05
+         'FeII 1611'  : {'f':1.38e-3,  'gamma':2.86e8,  'wave0':1611.2003, 'ion':'Fe II'},
+         'FeII 1608'  : {'f':5.77e-2,  'gamma':2.74e8,  'wave0':1608.4509, 'ion':'Fe II'},
+         'FeII 1260'  : {'f':2.40e-2,  'gamma':1.26e8,  'wave0':1260.5330, 'ion':'Fe II'},
+         'FeII 1151'  : {'f':5.90e-2,  'gamma':3.58e8,  'wave0':1151.1458, 'ion':'Fe II'},
+         'FeII 1150a' : {'f':6.15e-2,  'gamma':4.34e8,  'wave0':1150.4691, 'ion':'Fe II'},
+         'FeII 1148'  : {'f':8.28e-2,  'gamma':4.56e8,  'wave0':1148.2773, 'ion':'Fe II'},
+         'FeII 1144'  : {'f':8.30e-2,  'gamma':5.65e8,  'wave0':1144.9390, 'ion':'Fe II'},
+         'FeII 1128'  : {'f':5.36e-2,  'gamma':2.12e8,  'wave0':1128.0457, 'ion':'Fe II'},
+         'FeII 1063a' : {'f':4.75e-3,  'gamma':3.50e7,  'wave0':1063.9718, 'ion':'Fe II'},
+         'FeII 1063b' : {'f':5.47e-2,  'gamma':4.00e8,  'wave0':1063.1764, 'ion':'Fe II'},
          'FeXVII 15'  : {'f':2.95,     'gamma':2.91e13, 'wave0':15.015,    'ion':'Fe XVII'}, # x-ray
          'FeXVII 13'  : {'f':0.331,    'gamma':3.85e12, 'wave0':13.823,    'ion':'Fe XVII'}, # x-ray
          'FeXVII 12'  : {'f':0.742,    'gamma':1.12e13, 'wave0':12.12,     'ion':'Fe XVII'}, # x-ray
@@ -199,6 +241,10 @@ instruments = {'idealized'  : {'wave_min':1000, 'wave_max':12000, 'dwave':0.1}, 
                'SDSS-BOSS'  : {'wave_min':3543, 'wave_max':10400, 'dlogwave':1e-4}, # constant log10(dwave)=1e-4
                '4MOST_LRS'  : {'wave_min':4000, 'wave_max':8860,  'dwave':0.8},     # assume R=5000 = lambda/dlambda
                '4MOST_HRS'  : {'wave_min':3926, 'wave_max':6790,  'R':20000},       # but gaps!
+               'PFS-B'      : {'wave_min':3800, 'wave_max':6500,  'R':2300},        # blue arm (3 arms used simultaneously)
+               'PFS-R-LR'   : {'wave_min':6300, 'wave_max':9700,  'R':3000},        # low-res red arm
+               'PFS-R-HR'   : {'wave_min':7100, 'wave_max':8850,  'R':5000},        # high-res red arm
+               'PFS-NIR'    : {'wave_min':9400, 'wave_max':12600, 'R':4300},        # NIR arm
                'MIKE-B'     : {'wave_min':3350, 'wave_max':5000,  'R':83000},       # blue arm (on Magellan 2/Clay)
                'MIKE-R'     : {'wave_min':4900, 'wave_max':9500,  'R':65000},       # red arm (used simultaneously)
                'KECK-HIRES' : {'wave_min':3000, 'wave_max':9250,  'R':45000},       # different plates: R=60k, 45k, 34k, 23k
@@ -485,9 +531,9 @@ def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_
         local_fac *= 1.2
         n_iter += 1
 
-    if (tau[0] > edge_tol or tau[-1] > edge_tol):
-        print('WARNING: final local grid edges still have high tau')
-        if not debug: assert 0
+    #if (tau[0] > edge_tol or tau[-1] > edge_tol):
+    #    print('WARNING: final local grid edges still have high tau')
+    #    #if not debug: assert 0
 
     # integrate local tau within each bin of master tau
     master_ind = master_startind
@@ -760,7 +806,7 @@ def generate_spectrum_uniform_grid():
         vel_los = sP.snapshotSubsetP('gas', velField, haloID=haloID) # code
         mass = sP.snapshotSubsetP('gas', massField, haloID=haloID) # code
         hsml = sP.snapshotSubsetP('gas', 'hsml', haloID=haloID) # code
-        temp = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', haloID=haloID) # K
+        temp = sP.snapshotSubsetP('gas', 'temp_sfcold', haloID=haloID) # K
 
         # grid
         if haloID is None:
@@ -902,7 +948,7 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
 
     cell_pos    = sP.snapshotSubsetP('gas', 'pos', haloID=haloIDLoad) # code
     cell_vellos = sP.snapshotSubsetP('gas', velLosField, haloID=haloIDLoad) # code
-    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', haloID=haloIDLoad) # K
+    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold', haloID=haloIDLoad) # K
     cell_dens   = sP.snapshotSubset('gas', densField, haloID=haloIDLoad) # ions/cm^3
 
     cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
@@ -1042,7 +1088,7 @@ def generate_spectra_voronoi_halo():
     velLosField = 'vel_'+['x','y','z'][projAxis]
 
     cell_vellos = sP.snapshotSubsetP('gas', velLosField, haloID=haloIDLoad) # code
-    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', haloID=haloIDLoad) # K
+    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold', haloID=haloIDLoad) # K
     
     cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
 
@@ -1273,7 +1319,7 @@ def _spectra_filepath(sim, projAxis, instrument, lineNames, pSplit=None):
 
     return path + filename
 
-def generate_spectra_from_saved_rays(sP, ion='C IV', pSplit=None):
+def generate_spectra_from_saved_rays(sP, ion='Fe II', pSplit=None):
     """ Generate a large number of spectra, based on already computed and saved rays.
 
     Args:
@@ -1298,7 +1344,7 @@ def generate_spectra_from_saved_rays(sP, ion='C IV', pSplit=None):
     velLosField = 'vel_'+['x','y','z'][projAxis]
 
     cell_vellos = sP.snapshotSubsetP('gas', velLosField, inds=cell_inds) # code # , verbose=True
-    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold_linear', inds=cell_inds) # K # , verbose=True
+    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold', inds=cell_inds) # K # , verbose=True
     
     cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
 
@@ -1311,19 +1357,39 @@ def generate_spectra_from_saved_rays(sP, ion='C IV', pSplit=None):
 
     EWs = {}
 
-    # start output
-    with h5py.File(saveFilename,'w') as f:
-        f['master_wave'] = master_mid
+    # (re)start output
+    densField = None
+    existing_lines = []
 
-        # attach ray configuration for reference
-        f['ray_pos'] = ray_pos
-        f['ray_dir'] = ray_dir
-        f['ray_total_dl'] = total_dl
+    with h5py.File(saveFilename,'a') as f:
+        if 'master_wave' not in f:
+            # master wavelength grid, common to all spectra
+            f['master_wave'] = master_mid
+
+            # attach ray configuration for reference
+            f['ray_pos'] = ray_pos
+            f['ray_dir'] = ray_dir
+            f['ray_total_dl'] = total_dl
+        else:
+            # restarting, which lines are already done?
+            existing_lines = [k.replace('tau_','').replace('_',' ') for k in f.keys() if 'tau_' in k]
 
     # loop over requested line(s)
     for i, line in enumerate(lineNames):
         # load ion abundances per cell, unless we already have
-        if i == 0 or lines[line]['ion'] != lines[lineNames[0]]['ion']:
+        print(f'[{i+1:02d}] of [{len(lineNames):02d}] lines: {line}', flush=True)
+
+        if line in existing_lines:
+            print(' already exists, skipping...')
+            continue
+
+        # is (redshifted) line outside of the instrumental wavelength range? then skip
+        wave_z = lines[line]['wave0'] * (1+sP.redshift)
+        if wave_z < master_mid.min() or wave_z > master_mid.max():
+            print(f' wave0 = {lines[line]["wave0"]:.4f} at {wave_z = :.4f} outside of spec range, skipping...')
+            continue
+
+        if densField is None or lines[line]['ion'] != lines[lineNames[0]]['ion']:
             densField = '%s numdens' % lines[line]['ion']
             cell_dens = sP.snapshotSubsetP('gas', densField, inds=cell_inds) # ions/cm^3 # , verbose=True
 
@@ -1340,9 +1406,9 @@ def generate_spectra_from_saved_rays(sP, ion='C IV', pSplit=None):
 
         with h5py.File(saveFilename,'r+') as f:
             # save tau per line
-            f['tau_%s' % line.replace(' ','_')] = tau_local
+            f.create_dataset('tau_%s' % line.replace(' ','_'), data=tau_local, compression='gzip')
             # save EWs per line
-            f['EW_%s' % line.replace(' ','_')] = EW_local
+            f.create_dataset('EW_%s' % line.replace(' ','_'), data=EW_local, compression='gzip')
 
     # calculate flux and total EW
     flux = np.exp(-1*tau_master)
