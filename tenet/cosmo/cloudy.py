@@ -344,7 +344,7 @@ def _getRhoTZzGrid(res):
         temps     = np.arange(3.0, 9.0+eps, 0.05)
         metals    = np.arange(-3.0,1.0+eps,0.4)
         redshifts = np.arange(0.0,8.0+eps,0.5)
-
+    
     densities[np.abs(densities) < eps] = 0.0
     metals[np.abs(metals) < eps] = 0.0
 
@@ -397,14 +397,15 @@ def runCloudyGrid(redshiftInd, nThreads=61, res='lg'):
 def collectCloudyOutputs(res='lg'):
     """ Combine all CLOUDY outputs for a grid into our master HDF5 table used for post-processing. """
     # config
-    maxNumIons = 10    # keep at most the 10 lowest ions per element
+    maxNumIons = 99    # keep at most the N lowest ions per element
     zeroValLog = -30.0 # what Cloudy reports log(zero fraction) as
     densities, temps, metals, redshifts = _getRhoTZzGrid(res=res)
 
     def parseCloudyIonFile(basePath,r,d,Z,T,maxNumIons=99):
         """ Construct file path to a given Cloudy output, load and parse. """
         basePath = basePath + 'redshift_' + '%04.2f' % r + '/'
-        fileNameStr = "z" + str(r) + "_n" + str(d) + "_Z" + str(Z) + "_T" + str(T)
+        #fileNameStr = "z" + str(r) + "_n" + str(d) + "_Z" + str(Z) + "_T" + str(T)
+        fileNameStr = "z%.1f_n%.1f_Z%.1f_T%s" % (r,d,Z,np.round(T*100)/100)
         path = basePath + 'output_' + fileNameStr + '.txt'
 
         data = [line.split('#',1)[0].replace('\n','').strip().split() for line in open(path)]
@@ -456,7 +457,7 @@ def collectCloudyOutputs(res='lg'):
                         data[element][0:abunds[elemNum].size,i,j,k,l] = abunds[elemNum]
 
     # save grid to HDF5
-    saveFile = basePath + 'grid_' + res + '.hdf5'
+    saveFile = basePath + 'grid_' + res + '_complete.hdf5'
     print('Write: ' + saveFile)
 
     with h5py.File(saveFile,'w') as f:
@@ -687,10 +688,13 @@ class cloudyIon():
         return ions
 
     # simple roman numeral mapping
-    _roman = {'I':1, 'II':2, 'III':3, 'IV':4, 'V':5, 'VI':6, 'VII':7, 'VIII':8, 'IX':9, 'X':10, 'XI':11}
-    _romanInv = {1:'I', 2:'II', 3:'III', 4:'IV', 5:'V', 6:'VI', 7:'VII', 8:'VIII', 9:'IX', 10:'X', 11:'XI'}
+    _roman = {'I':1, 'II':2, 'III':3, 'IV':4, 'V':5, 'VI':6, 'VII':7, 'VIII':8, 'IX':9, 'X':10, 'XI':11,
+              'XII':12, 'XIII':13, 'XIV':14, 'XV':15, 'XVI':16, 'XVII':17, 'XVIII':18, 'XIX':19, 'XX':20,
+              'XXI':21, 'XXII':22, 'XXIII':23, 'XXIV':24, 'XXV':25, 'XXVI':26, 'XXVII':27, 'XXVIII':28,
+              'XXIX':29, 'XXX':30, 'XXXI':31}
+    _romanInv = {v:k for k,v in _roman.items()}
 
-    def __init__(self, sP, el=None, res='lg', redshiftInterp=False, order=3):
+    def __init__(self, sP, el=None, res='lg_c17', redshiftInterp=False, order=3):
         """ Load the table, optionally only for a given element(s). """
         if sP is None: return # instantiate only for misc methods
 
@@ -802,7 +806,7 @@ class cloudyIon():
             if str(ionNum).upper() in self._roman:
                 ionNums[i] = self._roman[str(ionNum).upper()]
 
-            if not isinstance(ionNums[i], int) or ionNums[i] == 0:
+            if not isinstance(ionNums[i], (np.integer,int)) or ionNums[i] == 0:
                 raise Exception('Failed to map ionization number to integer, or is 0-based index.')
 
         if len(ionNums) == 1: return ionNums[0]

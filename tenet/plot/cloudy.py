@@ -108,7 +108,7 @@ def plotUVB(uvbName='fg11'):
     fig.savefig('uvb_%s.pdf' % uvbName)
     plt.close(fig)
 
-def plotIonAbundances(res='lg', elements=['Carbon']):
+def plotIonAbundances(res='lg_c17', elements=['Magnesium']):
     """ Debug plots of the cloudy element ion abundance trends with (z,dens,Z,T). """
     from ..util import simParams   
 
@@ -121,11 +121,11 @@ def plotIonAbundances(res='lg', elements=['Carbon']):
     redshift = 0.0
     gridSize = 3 # 3x3
 
-    ion = cloudyIon(sP=simParams(res=455,run='illustris'),res=res,redshiftInterp=True)
+    ion = cloudyIon(sP=simParams(run='tng100-1'),res=res,redshiftInterp=True)
 
     for element in elements:
         # start pdf, one per element
-        pdf = PdfPages('cloudyIons_' + element + '_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+        pdf = PdfPages('cloudyIons_' + element + '_' + datetime.now().strftime('%d-%m-%Y')+'_' + res + '.pdf')
 
         # (A): plot vs. temperature, lines for different metals, panels for different densities
         cm = sampleColorTable(ct, ion.grid['metal'].size)
@@ -139,7 +139,7 @@ def plotIonAbundances(res='lg', elements=['Carbon']):
             for i, dens in enumerate( evenlySample(ion.grid['dens'],gridSize**2) ):
                 # panel setup
                 ax = fig.add_subplot(gridSize,gridSize,i+1)
-                ax.set_title(element + str(ionNum) + ' dens='+str(dens))
+                ax.set_title(element + str(ionNum) + ' dens='+str(np.round(dens*100)/100))
                 ax.set_xlim(ion.range['temp'])
                 ax.set_ylim(abund_range)
                 ax.set_xlabel('Temp [ log K ]')
@@ -148,7 +148,7 @@ def plotIonAbundances(res='lg', elements=['Carbon']):
                 # load table slice and plot
                 for j, metal in enumerate(ion.grid['metal']):
                     T, ionFrac = ion.slice(element, ionNum, redshift=redshift, dens=dens, metal=metal)
-                    
+
                     label = 'Z = '+str(metal) if np.abs(metal-round(metal)) < 0.00001 else ''
                     ax.plot(T, ionFrac, lw=lw, color=cm[j], label=label)
 
@@ -190,7 +190,7 @@ def plotIonAbundances(res='lg', elements=['Carbon']):
 
         # (C): 2d histograms (x=T, y=dens, color=log fraction) (different panels for ions)
         metal = 1.0
-        ionGridSize = np.ceil( np.sqrt( ion.numIons[element] ) )
+        ionGridSize = int(np.ceil(np.sqrt(ion.numIons[element])))
         
         for redshift in np.arange(ion.grid['redshift'].max()+1):
             print(' [%s] 2d, z = %2d' % (element,redshift))
@@ -218,7 +218,7 @@ def plotIonAbundances(res='lg', elements=['Carbon']):
                 z = np.clip(z, abund_range[0], abund_range[1])
 
                 # contour plot
-                contourf(XX, YY, z, 40)
+                contourf(XX, YY, z, 40, cmap=ct)
                 cb = plt.colorbar()
                 cb.ax.set_ylabel('log Abundance Fraction')
 
@@ -238,7 +238,7 @@ def plotIonAbundances(res='lg', elements=['Carbon']):
 
                 # panel setup
                 ax = fig.add_subplot(gridSize,gridSize,i+1)
-                ax.set_title(element + ' Z=' + str(metal) + ' dens='+str(dens))
+                ax.set_title(element + ' Z=' + str(metal) + ' dens='+str(np.round(dens*100)/100))
                 ax.set_xlim(ion.range['temp'])
                 ax.set_ylim(abund_range)
                 ax.set_xlabel('Temp [ log K ]')
@@ -257,7 +257,7 @@ def plotIonAbundances(res='lg', elements=['Carbon']):
             plt.close(fig)
 
         # (E): vs redshift (x=T, y=abund) (lines=redshifts) (panels=dens)
-        cm = sampleColorTable(ct, ion.grid['redshift'].max()+1)
+        cm = sampleColorTable(ct, int(ion.grid['redshift'].max()+1))
         metal = -1.0
 
         for ionNum in np.arange(ion.numIons[element])+1:
