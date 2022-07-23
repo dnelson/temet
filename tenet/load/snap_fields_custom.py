@@ -961,7 +961,7 @@ def hi_mass(sim, partType, field, args):
     """ Hydrogen model: atomic H (neutral subtracting molecular) mass calculation. """
     from ..cosmo.hydrogen import hydrogenMass
 
-    indRange = None
+    indRange = args['indRange']
     if args['haloID'] is not None or args['subhaloID'] is not None:
         indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
 
@@ -985,7 +985,7 @@ def h2_mass(sim, partType, field, args):
     """ Hydrogen model: molecular H (neutral subtracting atomic) mass calculation. """
     from ..cosmo.hydrogen import hydrogenMass
 
-    indRange = None
+    indRange = args['indRange']
     if args['haloID'] is not None or args['subhaloID'] is not None:
         indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
 
@@ -1008,7 +1008,7 @@ def mass_h_popping(sim, partType, field, args):
     """ Pre-computed atomic (HI) and molecular (H2) gas cell masses (from Popping+2019). """
     if field == 'mass_h_popping': raise Exception('Specify HI or H2, and molecular model.')
 
-    indRange = None
+    indRange = args['indRange']
     if args['haloID'] is not None or args['subhaloID'] is not None:
         indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
 
@@ -1071,7 +1071,7 @@ def mass_h_diemer(sim, partType, field, args):
     """ Pre-computed atomic (HI) and molecular (H2) gas cell masses (from Diemer+2019). """
     if field == 'mass_h_diemer': raise Exception('Specify HI or H2, and molecular model.')
 
-    indRange = None
+    indRange = args['indRange']
     if args['haloID'] is not None or args['subhaloID'] is not None:
         indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
 
@@ -1134,7 +1134,11 @@ def _cloudy_load(sim, partType, field, args):
             dustDepletion = True
             prop = prop.replace('_dustdepleted', '')
     else:
-        element, ionNum, prop = field.split() # e.g. "O VI mass" or "Mg II frac" or "C IV numdens"
+        assumeSolarAbunds = False
+        element, ionNum, prop = field.split() # e.g. "O VI mass", "Mg II frac", "C IV numdens", or "Si II numdens_solar"
+        if '_solar' in prop:
+            assumeSolarAbunds = True
+            prop = prop.replace('_solar','')
 
     assert sim.isPartType(partType, 'gas')
     assert prop in ['mass','frac','flux','lum','numdens']
@@ -1213,15 +1217,20 @@ def _cloudy_load(sim, partType, field, args):
 
                 if prop in ['mass','frac','numdens']:
                     # either ionization fractions, or total mass in the ion
-                    values = ion.calcGasMetalAbundances(sim, element, ionNum, indRange=indRangeLocal)
+                    values = ion.calcGasMetalAbundances(sim, element, ionNum, indRange=indRangeLocal, 
+                                                        assumeSolarAbunds=assumeSolarAbunds)
+
                     if prop == 'mass':
                         values *= sim.snapshotSubset(partType, 'Masses', indRange=indRangeLocal)
+
                     if prop == 'numdens':
                         values *= sim.snapshotSubset(partType, 'numdens', indRange=indRangeLocal)
                         values /= ion.atomicMass(element) # [H atoms/cm^3] to [ions/cm^3]
+
                 elif prop == 'lum':
                     values = emis.calcGasLineLuminosity(sim, lineName, indRange=indRangeLocal, dustDepletion=dustDepletion)
                     values /= 1e30 # 10^30 erg/s unit system to avoid overflow
+                    
                 elif prop == 'flux':
                     # emission flux
                     lum = emis.calcGasLineLuminosity(sim, lineName, indRange=indRangeLocal, dustDepletion=dustDepletion)
@@ -2069,7 +2078,7 @@ delta_.log = True
 @snap_field(aliases=['subid','subhaloid'])
 def subhalo_id(sim, partType, field, args):
     """ Parent subhalo ID, per particle/cell. """
-    indRange = None
+    indRange = args['indRange']
     if args['haloID'] is not None or args['subhaloID'] is not None:
         indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
 
@@ -2090,7 +2099,7 @@ subhalo_id.log = True
 @snap_field(alias='haloid')
 def halo_id(sim, partType, field, args):
     """ Parent halo ID, per particle/cell. """
-    indRange = None
+    indRange = args['indRange']
     if args['haloID'] is not None or args['subhaloID'] is not None:
         indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
 
