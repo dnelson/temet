@@ -588,14 +588,15 @@ def create_spectrum_from_traced_ray(sP, f, gamma, wave0, ion_mass, instrument,
     master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
 
     # assign sP.redshift to the front intersectiom (beginning) of the box
-    z_start = sP.redshift # 0.1 # change to imagine that this snapshot is at a different redshift
+    z_start = sP.redshift # change to 'pretend' that this snapshot is at a different redshift
 
-    z_vals = np.linspace(z_start, z_start+0.1, 200)
+    z_vals = np.linspace(z_start, z_start+0.1, 400)
     lengths = sP.units.redshiftToComovingDist(z_vals) - sP.units.redshiftToComovingDist(z_start)
 
     # cumulative pathlength, Mpc from start of box i.e. start of ray (at z_start)
     cum_pathlength = np.zeros(nCells, dtype='float32') 
-    cum_pathlength[1:] = np.cumsum(master_dx)[:-1] # Mpc
+    cum_pathlength[1:] = np.cumsum(master_dx)[:-1]
+    cum_pathlength /= sP.scalefac # input in pMpc, convert to cMpc
 
     # cosmological redshift of each intersected cell
     z_cosmo = np.interp(cum_pathlength, lengths, z_vals)
@@ -652,7 +653,8 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
 
         # cumulative pathlength, Mpc from start of box i.e. start of ray (at sP.redshift)
         cum_pathlength = np.zeros(length, dtype=np.float32) 
-        cum_pathlength[1:] = np.cumsum(master_dx)[:-1] # Mpc
+        cum_pathlength[1:] = np.cumsum(master_dx)[:-1] # pMpc
+        cum_pathlength /= sP.scalefac # input in pMpc, convert to cMpc
 
         # cosmological redshift of each intersected cell
         z_cosmo = np.interp(cum_pathlength, z_lengths, z_vals)
@@ -1298,43 +1300,57 @@ def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None, search=False):
 
     return rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl
 
-def _spectra_filepath(sim, projAxis, instrument, lineNames, pSplit=None):
+def _spectra_filepath(sim, projAxis, instrument, lineNames=None, ion=None, pSplit=None, assumeSolar=False):
     """ Return the path to a file of saved spectra. """
-    ions = [lines[line]['ion'] for line in lineNames]
+    assert ion is None or lineNames is None, 'Input either [lineNames] or [ion].'
+
+    if lineNames is not None:
+        ions = [lines[line]['ion'] for line in lineNames]
+    else:
+        ions = [ion]
+
     ionStr = ions[0].replace(' ','')
     assert len(set(ions)) == 1, 'Process sets of lines for one ion at a time.'
 
     path = sim.derivPath + "rays/"
     filebase = 'spectra_%s_z%.1f_%d_%s_%s' % (sim.simName,sim.redshift,projAxis,instrument,ionStr)
 
-    filename = filebase + '.hdf5'
-
     if isinstance(pSplit,list):
         # a specific chunk
         filename = filebase + '_%d-of-%d.hdf5' % (pSplit[0],pSplit[1])
 
-    if str(pSplit) == '*':
+    elif str(pSplit) == '*':
         # leave wildcard for glob search
         filename = filebase + '_*.hdf5'
 
+    else:
+        # concatenated set
+        filename = filebase + '_combined.hdf5'
+
+    if assumeSolar:
+        filename = filename.replace('.hdf5','_solar.hdf5')
+
     return path + filename
 
-def generate_spectra_from_saved_rays(sP, ion='Fe II', pSplit=None):
+def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST_HRS', pSplit=None, assumeSolar=False):
     """ Generate a large number of spectra, based on already computed and saved rays.
 
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
+      ion (str): space separated species name and ionic number e.g. 'Mg II'.
+      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
       pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
         that we follow a spatial subdivision, so the total job number should be an integer squared.
+      assumeSolar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+        use the (constant) solar value.
     """
     # config
     projAxis = 2
-    instrument = '4MOST_HRS' # 'SDSS-BOSS'
 
     # save file
     lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
 
-    saveFilename = _spectra_filepath(sP, projAxis, instrument, lineNames, pSplit)
+    saveFilename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=pSplit, assumeSolar=assumeSolar)
 
     # load rays
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
@@ -1389,8 +1405,11 @@ def generate_spectra_from_saved_rays(sP, ion='Fe II', pSplit=None):
             print(f' wave0 = {lines[line]["wave0"]:.4f} at {wave_z = :.4f} outside of spec range, skipping...')
             continue
 
+        # do we not already have the ion density loaded?
         if densField is None or lines[line]['ion'] != lines[lineNames[0]]['ion']:
             densField = '%s numdens' % lines[line]['ion']
+            if assumeSolar: densField += '_solar'
+
             cell_dens = sP.snapshotSubsetP('gas', densField, inds=cell_inds) # ions/cm^3 # , verbose=True
 
         # create spectra
@@ -1414,28 +1433,36 @@ def generate_spectra_from_saved_rays(sP, ion='Fe II', pSplit=None):
     flux = np.exp(-1*tau_master)
 
     with h5py.File(saveFilename,'r+') as f:
-        f['flux'] = flux
+        f.create_dataset('flux', data=flux, compression='gzip')
 
     print(f'Saved: [{saveFilename}]')
 
-def concat_and_filter_spectra(sP, ion='C IV'):
-    """ Combine split files for spectra, and filter, keeping only those above an EW threshold. """
+def concat_and_filter_spectra(sP, ion='Fe II', instrument='4MOST_HRS', assumeSolar=False):
+    """ Combine split files for spectra, and filter, keeping only those above an EW threshold.
+
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      ion (str): space separated species name and ionic number e.g. 'Mg II'.
+      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      assumeSolar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+        use the (constant) solar value.
+    """
 
     # config
     projAxis = 2
-    instrument = '4MOST_HRS' # 'SDSS-BOSS'
 
     EW_threshold = 0.001 # applied to sum of lines [ang]
 
     # search for chunks
     lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
 
-    loadFilename = _spectra_filepath(sP, projAxis, instrument, lineNames, pSplit='*')
-    saveFilename = _spectra_filepath(sP, projAxis, instrument, lineNames, pSplit=None)
+    loadFilename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit='*', assumeSolar=assumeSolar)
+    saveFilename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=None, assumeSolar=assumeSolar)
 
-    pSplitNum = len(glob.glob(loadFilename))
+    pSplitNum = len([f for f in glob.glob(loadFilename) if '_combined' not in f])
 
     # load all for count
+    lines_present = []
     inds = []
     EW_total = []
 
@@ -1443,18 +1470,35 @@ def concat_and_filter_spectra(sP, ion='C IV'):
     count_tot = 0
 
     for i in range(pSplitNum):
-        file = _spectra_filepath(sP, projAxis, instrument, lineNames, pSplit=[i,pSplitNum])
-        with h5py.File(file,'r') as f:
+        filename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=[i,pSplitNum], assumeSolar=assumeSolar)
+        with h5py.File(filename,'r') as f:
+            # missing chunk?
             if 'flux' not in f:
-                print(' skip')
+                assert 0 # print(' skip')
                 inds.append([])
                 EWs.append([])
                 continue
+
             n_wave = f['flux'].shape[1]
             n_spec = f['flux'].shape[0]
+
+            # sum up EW across all lines of this ion
             EW_local = np.zeros(n_spec, dtype='float32')
+
             for line in lineNames:
-                EW_local += f['EW_%s' % line.replace(' ','_')][()]
+                key = 'EW_%s' % line.replace(' ','_')
+                if key not in f:
+                    if i == 0:
+                        print('Skipping [%s], not in file.' % line)
+                    continue
+
+                if i == 0:
+                    lines_present.append(line)
+
+                # load and add
+                EW_local += f[key][()]
+
+            # do we need the (combined) flux array now?
             #flux = f['flux'][()]
             #master_mid = f['master_wave'][()]
 
@@ -1481,7 +1525,7 @@ def concat_and_filter_spectra(sP, ion='C IV'):
     global_inds = np.zeros(count, dtype='int32')
 
     EWs = []
-    for line in lineNames:
+    for line in lines_present:
         EWs.append( np.zeros(count, dtype='float32') )
 
     # load and keep specific spectra passing EW threshold
@@ -1492,16 +1536,16 @@ def concat_and_filter_spectra(sP, ion='C IV'):
         if len(inds[i]) == 0:
             continue
 
-        file = _spectra_filepath(sP, projAxis, instrument, lineNames, pSplit=[i,pSplitNum])
-        print(file, offset)
+        filename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=[i,pSplitNum], assumeSolar=assumeSolar)
+        print(filename, offset)
 
         # load
-        with h5py.File(file,'r') as f:
+        with h5py.File(filename,'r') as f:
             flux[offset:offset+len(inds[i])] = f['flux'][inds[i]]
             ray_pos[offset:offset+len(inds[i])] = f['ray_pos'][inds[i]]
             master_wave = f['master_wave'][()]
 
-            for j, line in enumerate(lineNames):
+            for j, line in enumerate(lines_present):
                 EWs[j][offset:offset+len(inds[i])] = f['EW_%s' % line.replace(' ','_')][inds[i]]
 
         # construct global indices, giving for each saved spectra in this concat file, the corresponding 
@@ -1513,11 +1557,11 @@ def concat_and_filter_spectra(sP, ion='C IV'):
     # save
     with h5py.File(saveFilename,'w') as f:
         f['master_wave'] = master_wave
-        f['flux'] = flux
+        f.create_dataset('flux', data=flux, compression='gzip')
         f['ray_pos'] = ray_pos
         f['EW_total'] = np.hstack(EW_total)
 
-        for i, line in enumerate(lineNames):
+        for i, line in enumerate(lines_present):
             f['EW_%s' % line.replace(' ','_')] = EWs[i]
 
         for i in range(pSplitNum):
@@ -1529,7 +1573,7 @@ def concat_and_filter_spectra(sP, ion='C IV'):
         f.attrs['redshift'] = sP.redshift
         f.attrs['snapshot'] = sP.snap
         f.attrs['instrument'] = instrument
-        f.attrs['lineNames'] = lineNames
+        f.attrs['lineNames'] = lines_present
         f.attrs['EW_threshold'] = EW_threshold
         f.attrs['count_tot'] = count_tot
 
