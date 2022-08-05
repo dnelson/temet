@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_filepath
 from ..cosmo.spectrum import create_master_grid, deposit_single_line, lines
-from ..util.helper import logZeroNaN
+from ..util.helper import logZeroNaN, sampleColorTable
 from ..util import units
 from ..plot.config import *
 
@@ -302,43 +302,106 @@ def _spectrum_debug_plot(line, plotName, master_mid, tau_master, master_dens, ma
     fig.savefig(plotName)
     plt.close(fig)
 
-def concat_spectra_gallery(sim):
-    """ Plot a gallery of absorption profiles within a given EW range based on a concatenated spectra file.
+def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST_HRS', EW_minmax=[0.1,1.0], 
+                          num=10, mode='random', SNR=None, xlim=None):
+    """ Plot a gallery of individual absorption profiles within a given EW range.
 
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
+      ion (str): space separated species name and ionic number e.g. 'Mg II'.
+      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      EW_minmax (list[float]): minimum and maximum EW to plot [Ang].
+      num (int): how many individual spectra to show.
+      mode (str): either 'random' or 'evenly'.
+      SNR (float): if not None, then add noise to achieve this signal to noise ratio.
+      xlim (str, list[float]): either 'full' or a 2-tuple of [min,max], or automatic if None (default)
     """
 
     # config data
     projAxis = 2
-    instrument = '4MOST_HRS'
-    lineNames = ['MgII 2796','MgII 2803']
-
-    # config plot
-    EW_min = 0.6
-    EW_max = 0.7
-    SNR = 5.0 # if not None, add Gaussian noise for the given signal-to-noise ratio
-    num = 10
-
-    wave_minmax = [4180,4250] # z=0.5
+    ctName = 'thermal'    
 
     # load
-    filepath = _spectra_filepath(sim, projAxis, instrument, lineNames)
+    filepath = _spectra_filepath(sim, projAxis, instrument, ion=ion)
 
     with h5py.File(filepath,'r') as f:
-        flux = f['flux'][()]
         EW = f['EW_total'][()]
+        lineNames = f.attrs['lineNames']
         wave = f['master_wave'][()]
 
     # select
-    inds = np.where( (EW>EW_min) & (EW<=EW_max) )[0]
-    print(f'Found [{len(inds)}] of [{EW.size}] spectra within EW range [{EW_min}-{EW_max}] Ang.')
+    if EW_minmax is not None:
+        inds_all = np.where( (EW>EW_minmax[0]) & (EW<=EW_minmax[1]) )[0]
+        print(f'[{ion}] Found [{len(inds_all)}] of [{EW.size}] spectra in EW range [{EW_minmax[0]}-{EW_minmax[1]}] Ang.')
+    else:
+        inds_all = np.arange(EW.size)
+        print(f'[{ion}] Loaded [{len(inds_all)}] spectra, no EW range window.')
 
-    rng = np.random.default_rng(4242+inds[0]+inds[-1])
-    rng.shuffle(inds)
+    rng = np.random.default_rng(4242+inds_all[0]+inds_all[-1])
 
-    flux = flux[inds,:]
+    if mode == 'random':
+        # randomly shuffle all spectra in the EW bin, then select num
+        rng.shuffle(inds_all)
+        inds = inds_all[0:num]
+
+    if mode == 'evenly':
+        # evenly sample across EW, selecting one spectrum in each of num equal bins
+        binsize = (EW_minmax[1] - EW_minmax[0]) / num
+
+        inds = []
+
+        for i in range(num):
+            w = np.where((EW>EW_minmax[0]+i*binsize) & (EW<=EW_minmax[0]+(i+1)*binsize))[0]
+            rng.shuffle(w)
+
+            inds.append(w[0])
+
+    inds = np.sort(inds)
+
+    # partial load of selected spectra, in case datafile is large
+    with h5py.File(filepath,'r') as f:
+        flux = f['flux'][inds,:]
+
     EW = EW[inds]
+
+    # how many lines do we have? what is their span in wavelength?
+    lines_wavemin = 0
+    lines_wavemax = np.inf
+
+    for line in lineNames:
+        lines_wavemin = np.clip(lines_wavemin, lines[line]['wave0'], np.inf)
+        lines_wavemax = np.clip(lines_wavemax, 0, lines[line]['wave0'])
+        
+    # determine wavelength (x-axis) bounds
+    if str(xlim) == 'full':
+        xlim = [np.min(wave), np.max(wave)]
+    elif isinstance(xlim,list):
+        # input directly
+        pass
+    else:
+        # automatic
+        xlim = [np.inf, 0]
+
+        for i in range(num):
+            w = np.where(flux[i,:] < 0.99)[0]
+            w_min = wave[w].min()
+            w_max = wave[w].max()
+
+            if w_min < xlim[0]: xlim[0] = w_min
+            if w_max > xlim[1]: xlim[1] = w_max
+
+        dwave = (xlim[1] - xlim[0]) * 0.01
+        xlim[0] = np.floor((xlim[0]-dwave)/10) * 10
+        xlim[1] = np.ceil((xlim[1]+dwave)/10) * 10
+
+    # determine flux (y-axis) bounds
+    spacingFac = 1.0
+    if EW_minmax is not None:
+        if np.max(EW_minmax) <= 0.4:
+            spacingFac = 0.5
+        if np.max(EW_minmax) > 0.8:
+            spacingFac = 1.2
+    ylim = [-spacingFac/2, num*spacingFac + spacingFac/2]
 
     # add noise? ("signal" is now 1.0)
     if SNR is not None:
@@ -348,18 +411,43 @@ def concat_spectra_gallery(sim):
         flux = np.clip(flux, 0, np.inf) # clip negative values at zero
 
     # plot
-    fig = plt.figure(figsize=(16,8))
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
-    ax.set_xlim(wave_minmax)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
     ax.set_xlabel('Wavelength [ Ang ]')
-    ax.set_ylabel('Relative Flux')
+    ax.set_ylabel('Relative Flux (+ constant offset)')
+
+    ax.set_yticks(np.arange(num+1)*spacingFac)
+    if spacingFac >= 1.0:
+        ax.set_yticklabels(['%d' % i for i in range(num+1)])
+    else:
+        ax.set_yticklabels(['%.1f' % (i*spacingFac) for i in range(num+1)])
+
+    colors = sampleColorTable(ctName, num, bounds=[0.0, 0.9])
 
     for i in range(num):
-        ax.step(wave, flux[i,:], '-', where='mid', lw=lw, label='EW = %.1f$\AA$' % EW[i])
+        # vertical offset by 1.0 for each spectrum
+        y_offset = (i+1)*spacingFac - 1
+        ax.step(wave, flux[i,:]+y_offset, '-', color=colors[i], where='mid', lw=lw)
 
-    ax.legend(loc='best')
-    fig.savefig('spectra_%.1f-%.1f.pdf' % (EW_min,EW_max))
+        # label
+        text_x = xlim[0] + (xlim[1]-xlim[0])/100
+        text_y = y_offset + 1.0 - (num/50) * spacingFac
+        if SNR is not None: text_y -= (num/50) * (5/SNR)
+        label = 'EW = %.2f$\AA$' % EW[i]
+
+        ax.text(text_x, text_y, label, color=colors[i], alpha=0.6, ha='left', va='top')
+
+    # finish plot
+    label = r'%s ($\rm{z \simeq %.1f}$)' % (ion,sim.redshift)
+    ax.legend([plt.Line2D((0,1),(0,0),lw=0,marker='')], [label], loc='lower right')
+
+    snrStr = '_snr%d' % SNR if SNR is not None else ''
+    ewStr = '_%.1f-%.1f' % (EW_minmax[0],EW_minmax[1]) if EW_minmax is not None else ''
+    fig.savefig('spectra_%s_%d_%s_%s%s_%d-%s%s.pdf' % \
+        (sim.simName,sim.snap,ion.replace(' ',''),instrument,ewStr,num,mode,snrStr))
     plt.close(fig)
 
 def EW_distribution(sim_in, redshifts=[0.5,0.7,1.0], log=False):

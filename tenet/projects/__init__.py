@@ -8,6 +8,7 @@ from . import color
 from . import explore
 from . import lrg
 from . import mg2emission
+from . import mockspec
 from . import outflows_vis
 from . import outflows_analysis
 from . import outflows
