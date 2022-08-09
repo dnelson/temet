@@ -482,7 +482,7 @@ class sps():
 
             # request magnitudes in all bands
             redshift = self.sP.redshift if self.redshifted else None
-            x = pop.get_mags(bands=self.bands, redshift=redshift) # by default, redshift zero
+            x = pop.get_mags(bands=self.bands, redshift=redshift) # by default, z=None (redshift zero)
 
             w, s = pop.get_spectrum(peraa=False) # Lsun/Hz, Angstroms
             assert np.array_equal(w,wave0) # we assume same wavelengths for all metal indices
@@ -961,8 +961,9 @@ class sps():
         If output_wave is not None, then this output spectrum is interpolated to the requested 
         wavelength grid (in Angstroms, should be rest or observed frame depending on self.redshifted).
         If rel_vel is not None, then add LoS peculiar velocity shifts (physical km/s) of each star.
-        Note: Will return either apparent or absolute magnitudes (or spectra) if (self.redshifted 
-        and self.sP.redshift is nonzero) or zero, respectively. """
+        Note: Will return apparent magnitudes if self.sP.redshift > 0, or absolute magnitudes if 
+        self.sP.redshift == 0. Will return redshifted (and attenuated) spectra if self.redshifted 
+        and self.sP.redshift is nonzero, otherwise rest-frame spectra. """
         assert N_H.size == Z_g.size == ages_logGyr.size == metals_log.size == masses_msun.size
         assert N_H.ndim == Z_g.ndim == ages_logGyr.ndim == metals_log.ndim == masses_msun.ndim == 1
         if rel_vel is not None: assert ret_full_spectrum
@@ -1069,6 +1070,7 @@ class sps():
                 r[band] = self.sP.units.lumToAbsMag(r[band])
 
             # optionally convert to apparent magnitude
+            # TODO - should also require self.redshifted to be consistent with unresolved dust magnitudes
             if self.sP.redshift > 0:
                 r[band] = self.sP.units.absMagToApparent(r[band])
 

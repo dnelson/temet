@@ -1285,7 +1285,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
       fullSubhaloSpectra (bool): save a full spectrum vs wavelength for every subhalo.
       redshifted (bool): all the stellar spectra/magnitudes are computed at sP.redshift and the band filters 
         are then applied, resulting in apparent magnitudes. If False (default), stars are assumed to be at 
-        z=0, spectra are rest-frame and magnitudes are absolute.
+        z=0, spectra are rest-frame and magnitudes are absolute (if dust is unresolved) or apparent 
+        (if dust is resolved).
       emlines (bool): include nebular emission lines.
       seeing (float or None): if not None, then instead of a binary inclusion/exclusion of each star particle 
         based on the ``rad`` aperture, include all stars weighted by the fraction of their light which 
@@ -1400,6 +1401,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     if redshifted:
         desc += " Redshifted, observed-frame bands/wavelengths, apparent magnitudes/luminosities."
     else:
+        # note: if '_res' in dust, then magnitudes are actually apparent!
         desc += " Unredshifted, rest-frame bands/wavelengths, absolute magnitudes/luminosities."
     if seeing is not None:
         desc += ' Weighted contributions incorporating atmospheric seeing of [%.1f arcsec].' % seeing
@@ -1490,7 +1492,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         for bandNum, band in enumerate(bands):
             print('  %02d/%02d [%s]' % (bandNum+1,len(bands),band))
 
-            # request magnitudes in this band for all stars
+            # request magnitudes in this band for all stars (apparent if redshifted == True, otherwise absolute)
             mags = pop.mags_code_units(sP, band, stars['GFM_StellarFormationTime'], 
                                                  stars['GFM_Metallicity'], 
                                                  stars['GFM_InitialMass'], retFullSize=True)
@@ -1853,6 +1855,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                     r[i,:,projNum] = spectrum[spec_min_ind:spec_max_ind]
                 else:
                     # compute total attenuated stellar luminosity in each band
+                    # (apparent even if redshifted == False, which is not consistent with the unresolved case)
                     magsLocal = pop.dust_tau_model_mags(bands,N_H,Z_g,ages_logGyr,metals_log,masses_msun)
 
                     # loop over each requested band within this projection
