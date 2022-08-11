@@ -717,7 +717,7 @@ def massBinsSample_3x2_EdgeOnFaceOn(res,conf,haloOrMassBinNum=None,panelNum=None
         panels.append( {'subhaloInd':shID, 'rotation':'edge-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMMedge} )
 
         plotConfig.saveFilename = savePathDefault + 'renderHalo_%s-%d_bin%d_halo%d_hID-%d_shID-%d.pdf' % \
-                                  (sP.simName,sP.snap,binInd,haloOrMassBinNum,haloInd,hID)
+                                  (sP.simName,sP.snap,binInd,haloOrMassBinNum,haloInd,shID)
 
     if conf == 'halos_combined':
         # combined plot of centrals in mass bins
@@ -1452,5 +1452,6 @@ def mwbubbles_tng50_top30(setType='top30', partType='gas', partField='P_gas', in
         for j in range(nCols):
             panels.append( {'subhaloInd':shIDs[i*nCols+j], **plotOptions} )
 
-    plotConfig.saveFilename = savePathDefault + 'apillepich_%s_bubbles_%s_%s_%d_%s_Lkpc_%d_DepthPercentage_%d_%s_%s.pdf' % (setType,run,res,snap,rotation,size,depthFac*100,partType,partField)
+    plotConfig.saveFilename = savePathDefault + 'apillepich_%s_bubbles_%s_%s_%d_%s_Lkpc_%d_DepthPercentage_%d_%s_%s.pdf' % \
+        (setType,run,res,snap,input_rotation,size,depthFac*100,partType,partField)
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)

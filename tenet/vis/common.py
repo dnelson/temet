@@ -2512,7 +2512,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
         if 'mhalo' in str(p['labelHalo']):
             # just Mhalo
             legend_labels.append( str1 )
-        if 'id' in str(p['labelHalo']):
+        if 'haloid' in str(p['labelHalo']):
+            legend_labels.append( 'HaloID %d' % subhalo['SubhaloGrNr'] )
+        elif 'id' in str(p['labelHalo']):
             legend_labels.append( 'ID %d' % p['subhaloInd'] )
         if 'redshift' in str(p['labelHalo']):
             legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,p['subhaloInd']))
