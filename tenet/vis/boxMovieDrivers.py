@@ -181,10 +181,15 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one', render8k=False):
         #saveStr = 'fb_gridmethod'
         #panels.append( {'partType':'gas', 'partField':'coldens', 'valMinMax':[0.0,2.0], 'ctName':'seismic'} )
 
+    if conf == 'bmag':
+        saveStr = 'bmag'
+        panels.append( {'partType':'gas', 'partField':'bmag_uG', 'valMinMax':[-3.5, 0.0] })
+
     if render8k:
         nPixels = [7680, 7680]
         labelScale = False
         labelZ = False
+        plotHalos = False
         saveStr += '_8k'
 
     class plotConfig:
@@ -207,7 +212,14 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one', render8k=False):
         plotConfig.colorbarOverlay = True
 
     if 0:
+        # annalisa custom movie, z<0.5 TNG50 subbox2 thin slice
+        plotConfig.maxZ = 0.5
+        plotConfig.maxNSnaps = None
+        sliceFac = 0.01
+
+    if 0:
         # render single z=0.0 frame for testing
+        #sliceFac = 0.005 # thin slice (only for conf=='bmag' for DFG-calendar2022)
         redshift = 0.0
         renderBox(panels, plotConfig, locals())
         return

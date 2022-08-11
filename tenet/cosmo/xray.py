@@ -340,7 +340,7 @@ class xrayEmission():
                 raise Exception('Must specify 2 of 3 grid positions.')
 
             # closest array indices
-            _, i0 = closest( self.grid['Normalisation'], dens if dens else 0 )
+            _, i0 = closest( self.grid['Normalisation'], norm if norm else 0 )
             _, i1 = closest( self.grid['Temperature'], temp if temp else 0 )
             _, i2 = closest( self.grid['Metallicity'], metal if metal else 0 )
 
@@ -467,7 +467,8 @@ class xrayEmission():
         assert np.count_nonzero(np.isnan(vals)) == 0
 
         w = np.where(vals == 0)
-        vals[w] = vals[vals > 0].min()
+        if np.count_nonzero(vals > 0):
+            vals[w] = vals[vals > 0].min()
 
         return vals # note: float64
 

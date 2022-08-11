@@ -1173,7 +1173,7 @@ class units(object):
         """ Given a total halo mass, return a S200 (e.g. Pvir/rho_200crit^gamma). """
         virTemp = self.codeMassToVirTemp(mass, log=False)
         virNe = np.array([1.0]) # todo, want mu=0.6 for fully ionized
-        virU = self.TempToU(virTemp, ne)
+        virU = self.TempToU(virTemp, virNe)
         r200crit = self.critRatioToCodeDens(np.array(200.0), baryon=True)
 
         s200 = self.calcEntropyCGS(virU, r200crit, log=log)

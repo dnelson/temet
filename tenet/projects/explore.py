@@ -921,10 +921,11 @@ def xenoSNevo_profiles():
     """ Xeno idealized SNe runs: density profiles vs time. """
 
     # config
-    runName = '1_1_cluster_dt_0_cRad_0pc_density_1_nstar_1_E_1e51erg_boxSize_48_res_128'
+    #runName = '1_1_cluster_dt_0_cRad_0pc_density_1_nstar_1_E_1e51erg_boxSize_48_res_128'
+    runName = '1_test_8_negative_pressure_set_to_zero'
     sim = simParams('~/sims.idealized/sims.xeno/%s/' % runName)
 
-    skip = int(sim.numSnaps/15) if sim.numSnaps > 100 else 1
+    skip = int(sim.numSnaps/15) if sim.numSnaps > 100 else 5
 
     # start plot
     fig, (ax1,ax2,ax3) = plt.subplots(figsize=(figsize[0]*3,figsize[1]), ncols=3)
@@ -938,7 +939,7 @@ def xenoSNevo_profiles():
     ax3.set_ylabel('Radial Velocity [km/s]')
 
     # loop over snaps
-    for i in range(sim.numSnaps)[::skip]:
+    for i in range(8): #range(sim.numSnaps)[::skip]:
         sim.setSnap(i)
         sim.refPos = np.array([sim.boxSize/2, sim.boxSize/2, sim.boxSize/2]) # for vrad
         sim.refVel = np.array([0,0,0]) # for vrad

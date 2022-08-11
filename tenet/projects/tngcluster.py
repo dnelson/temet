@@ -837,6 +837,9 @@ def bfield_strength_vs_halomass(sPs, redshifts):
         # |B| = 2.8 +/- 0.1 uG (within 200 kpc)
         # M_500,SZ = 5.91e14 Msun
 
+        # TODO: Mernier+2022 https://arxiv.org/abs/2207.10092
+        # |B| = 1.9 +/- 0.3 uG (volume-averaged) (z=0.1) (aperture? mass?)
+
     quantMedianVsSecondQuant(sPs_in, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 

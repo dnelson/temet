@@ -329,7 +329,7 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
 
     if 0:
         # old trials, KBU is similar to method used in many Auriga papers
-        fac = (1/res)**2 * (pxScale)**2 # check
+        fac = (1/sP.res)**2 * (boxSizeImg[0]/nPixels[0])**2 # check
 
         dranges = {'snap_K' : [400, 80000], # red
                    'snap_B' : [20, 13000], # green
@@ -2667,7 +2667,7 @@ def addContourOverlay(p, conf, ax):
     # compress vector grids along third direction to more thin slice?
     boxSizeImg = np.array(p['boxSizeImg'])
     if 'contourSliceDepth' in p:
-        boxSizeImg[3-p['axes'][0]-p['axes'][1]] = p['sP'].units.physicalKpcToCodeLength(contourSliceDepth)
+        boxSizeImg[3-p['axes'][0]-p['axes'][1]] = p['sP'].units.physicalKpcToCodeLength(p['contourSliceDepth'])
 
     # load grid of contour quantity
     if field_name == p['partField']:

@@ -386,7 +386,7 @@ def periodic_slurm_status(machine='vera',nosave=False):
 
         pos_timeseries_week = [0.507, 0.566, 0.236, 0.14] # left,bottom,width,height
         pos_series_longterm = [0.507, 0.741, 0.485, 0.142] # left,bottom,width,height
-        numMonthsLongTerm = 1
+        numMonthsLongTerm = 4
 
     allocStates = ['ALLOCATED','MIXED']
     idleStates = ['IDLE','PLANNED']
