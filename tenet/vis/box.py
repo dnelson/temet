@@ -134,7 +134,7 @@ def renderBox(panels_in, plotConfig, localVars, skipExisting=True, retInfo=False
         if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'])
 
         # add simParams info if not directly input
-        if 'run' in p:
+        if 'sP' not in p:
             v = p['variant'] if 'variant' in p else None
             h = p['hInd'] if 'hInd' in p else None
             s = p['snap'] if 'snap' in p else None
@@ -142,18 +142,15 @@ def renderBox(panels_in, plotConfig, localVars, skipExisting=True, retInfo=False
             rp = p['refPos'] if 'refPos' in p else None
             rv = p['refVel'] if 'refVel' in p else None
 
-            if 'sP' in p:
-                print('Warning: Overriding common sP with specified run,snap,redshift.')
-
             p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=h, variant=v)
             p['sP'].refPos = rp
             p['sP'].refVel = rv
 
         # add imaging config for render of the whole box, if not directly specified
-        boxSizeImg, boxCenter, extent = boxImgSpecs(**p)
-        if 'boxSizeImg' not in p: p['boxSizeImg'] = boxSizeImg
-        if 'boxCenter' not in p: p['boxCenter'] = boxCenter
-        if 'extent' not in p: p['extent'] = extent
+        boxSizeImg_loc, boxCenter_loc, extent_loc = boxImgSpecs(**p)
+        if 'boxSizeImg' not in p: p['boxSizeImg'] = boxSizeImg_loc
+        if 'boxCenter' not in p: p['boxCenter'] = boxCenter_loc
+        if 'extent' not in p: p['extent'] = extent_loc
 
         if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]
 

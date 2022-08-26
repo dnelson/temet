@@ -1,5 +1,7 @@
 """
 Angular dependence/anisotropy of x-ray emission of the CGM/ICM (Troung+21, TNG50).
+https://arxiv.org/abs/2109.06884
+OVII and OVIII emission (Troung+22).
 https://arxiv.org/abs/xxxx.xxxxx
 """
 import numpy as np
@@ -12,6 +14,7 @@ import matplotlib.pyplot as plt
 from ..util.helper import running_median, sampleColorTable
 from ..plot.config import *
 from ..vis.halo import renderSingleHalo
+from ..vis.box import renderBox
 from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
 
 valMinMaxQuant = {'coldens' : [18.5, 20.0], # in case we render actual quantities instead of deltas
@@ -517,3 +520,40 @@ def paperPlots():
 
             distBins = [[0.08,0.12],[0.23,0.27],[0.48,0.52],[0.73,0.77]]
             stackedPropVsTheta(sP, [mStarBin], distBins, conf=conf, depthFac=1.0, distRvir=True)
+
+def fullboxEmissionO8():
+    """ Create fullbox emission figure for Truong+22. """
+    from ..util import simParams
+    
+    # panels
+    redshift = 0.0
+    panels = []
+
+    runs = ['tng100-1','eagle','simba100']
+    for run in runs:
+        panels.append({'sP':simParams(run=run, redshift=redshift)})
+
+    # config
+    nPixels    = 2000
+    axes       = [0,1] # x,y
+    labelZ     = True
+    labelScale = 'physical'
+    labelSim   = True
+    plotHalos  = 50
+    method     = 'sphMap'
+    hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
+
+    sliceFac = 0.15
+
+    partType = 'gas'
+    partField = 'sb_OVIII'
+    valMinMax = [-18, -10]
+
+    class plotConfig:
+        plotStyle  = 'open' # open, edged
+        rasterPx   = nPixels
+        colorbars  = True
+
+        saveFilename = './boxImage_%s-%s_%s_z%.1f.pdf' % (partType,partField.replace(' ','-'),'-'.join(runs),redshift)
+
+    renderBox(panels, plotConfig, locals())
