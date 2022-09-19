@@ -2872,7 +2872,7 @@ def paperPlots(sPs=None):
 
     if 0:
         # fig 16: stacked radial profiles of SFR surface density
-        sP = TNG50_z1
+        sP = simParams(run='tng50-1', redshift=0.0) #TNG50_z1
         cenSatSelect = 'cen'
         field   = 'SFR'
         projDim = '2Dz'

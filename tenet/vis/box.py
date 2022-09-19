@@ -134,7 +134,10 @@ def renderBox(panels_in, plotConfig, localVars, skipExisting=True, retInfo=False
         if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'])
 
         # add simParams info if not directly input
-        if 'sP' not in p:
+        if ('run' in p) or ('sP' not in p):
+            if 'run' in p and 'sP' in p:
+                print('Warning: Both sP and run specified in panel, too ambiguous.')
+
             v = p['variant'] if 'variant' in p else None
             h = p['hInd'] if 'hInd' in p else None
             s = p['snap'] if 'snap' in p else None

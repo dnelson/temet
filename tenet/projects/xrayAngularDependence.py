@@ -531,12 +531,12 @@ def fullboxEmissionO8():
 
     runs = ['tng100-1','eagle','simba100']
     for run in runs:
-        panels.append({'sP':simParams(run=run, redshift=redshift)})
+        labelZ = True if run == runs[-1] else False
+        panels.append({'sP':simParams(run=run, redshift=redshift), 'labelZ':labelZ})
 
     # config
     nPixels    = 2000
     axes       = [0,1] # x,y
-    labelZ     = True
     labelScale = 'physical'
     labelSim   = True
     plotHalos  = 50
@@ -550,7 +550,7 @@ def fullboxEmissionO8():
     valMinMax = [-18, -10]
 
     class plotConfig:
-        plotStyle  = 'open' # open, edged
+        plotStyle  = 'edged' # open, edged
         rasterPx   = nPixels
         colorbars  = True
 

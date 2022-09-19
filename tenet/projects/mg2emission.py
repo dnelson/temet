@@ -66,7 +66,7 @@ def singleHaloImageMGII(sP, subhaloInd, conf=1, size=100, rotation='edge-on', la
         projParams = {'fov':360.0}
         nPixels    = [1200,600]
         axesUnits  = 'rad_pi'
-    if conf in [7,8]:
+    if conf in [7,8,9,10]:
         # BlueMUSE
         panels.append( {'partType':'gas', 'partField':'sb_MgII_ergs_dustdeplete', 'valMinMax':[-22.0, -17.0]} )
         axesUnits = 'arcsec'
@@ -82,11 +82,30 @@ def singleHaloImageMGII(sP, subhaloInd, conf=1, size=100, rotation='edge-on', la
         size = 1.4
         sizeType = 'arcmin'
 
-        contour = ['gas','sb_MgII_ergs_dustdeplete']
-        # second is 5h 3sigma detection limit for KWCI, first is 100h 3sigma for BlueMUSE
-        # scaling only by (100/3.5)^{-1/2} - 4.3e-20
-        # (100h S/N=5 for BlueMUSE is 1.5e-20)
-        contourLevels = [np.log10(4.3e-20),np.log10(2.3e-19)] # erg/s/cm^2/arcsec^2
+        if conf in [9,10]:
+            # wide vs narrow field mode (FoV = 7.5" x 7.5")
+            size = 7.5
+            sizeType = 'arcsec'
+            labelHalo = False
+            contour = False
+            panels[0]['valMinMax'] = [-20.0, -17.0]
+        else:
+            contour = ['gas','sb_MgII_ergs_dustdeplete']
+            # second is 5h 3sigma detection limit for KWCI, first is 100h 3sigma for BlueMUSE
+            # scaling only by (100/3.5)^{-1/2} - 4.3e-20
+            # (100h S/N=5 for BlueMUSE is 1.5e-20)
+            contourLevels = [np.log10(4.3e-20),np.log10(2.3e-19)] # erg/s/cm^2/arcsec^2
+
+        if conf == 9:
+            # wide field mode: 0.2"/px, PSF=0.7"
+            smoothFWHM = sP.units.arcsecToAngSizeKpcAtRedshift(0.7)
+            nPixels = [38, 38]
+            labelCustom = ['Wide Field Mode','0.2"/px, PSF = 0.7"']
+        if conf == 10:
+            # narrow field mode: 0.025"/px, PSF=0.05"
+            smoothFWHM = sP.units.arcsecToAngSizeKpcAtRedshift(0.05)
+            nPixels = [300, 300]
+            labelCustom = ['Narrow Field Mode','0.025"/px, PSF=0.05"']
 
     class plotConfig:
         plotStyle    = 'edged'
@@ -96,7 +115,7 @@ def singleHaloImageMGII(sP, subhaloInd, conf=1, size=100, rotation='edge-on', la
         saveFilename = '%s_%d_%d_%s%s.pdf' % \
           (sP.simName,sP.snap,subhaloInd,'-'.join([p['partField'] for p in panels]),'_psf' if psf else '')
 
-    if conf in [7,8]:
+    if conf in [7,8,9,10]:
         plotConfig.plotStyle = 'open'
         plotConfig.title = False
         plotConfig.rasterPx = [800, 800]
@@ -1093,3 +1112,10 @@ def paperPlots():
                                  scatterPoints=True, nBins=24, ctName=['magma',[0.3,0.7]], 
                                  qRestrictions=qRestrictions, indivRestrictions=True, 
                                  sizefac=sizefac, legendLoc='upper left', pdf=None)
+
+    # explore: peroux proposal image
+    if 0:
+        sP = simParams(run='tng50-1', redshift=0.5)
+        subhaloID = 465009 #316152
+        singleHaloImageMGII(sP, subhaloID, rotation='face-on', conf=9, cbars=False, font=28)
+        #singleHaloImageMGII(sP, subhaloID, rotation='face-on', conf=10, cbars=False, font=28)

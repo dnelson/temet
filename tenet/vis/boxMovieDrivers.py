@@ -212,12 +212,6 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one', render8k=False):
         plotConfig.colorbarOverlay = True
 
     if 0:
-        # annalisa custom movie, z<0.5 TNG50 subbox2 thin slice
-        plotConfig.maxZ = 0.5
-        plotConfig.maxNSnaps = None
-        sliceFac = 0.01
-
-    if 0:
         # render single z=0.0 frame for testing
         #sliceFac = 0.005 # thin slice (only for conf=='bmag' for DFG-calendar2022)
         redshift = 0.0
@@ -225,145 +219,6 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one', render8k=False):
         return
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
-
-def _correct_subbox_subhalo_pos(sP, sbNum, subhaloID, subhalo_pos):
-    """ Temporary helper until TNG50-1 fof0 complete. """
-    import h5py
-    from os import path
-    from scipy import interpolate
-
-    saveFilename = sP.derivPath + 'subbox_movie_galtwo_pos.hdf5'
-    if path.isfile(saveFilename):
-        with h5py.File(saveFilename,'r') as f:
-            subhalo_pos = f['subhalo_pos'][()]
-        return subhalo_pos, 0, 3400
-
-    # load MDB down to snap 68
-    mdb = sP.loadMDB(subhaloID)
-
-    loc_pos = mdb['SubhaloPos']
-    loc_snap = mdb['SnapNum']
-
-    snap0 = 68
-    snap1 = 90
-    snap0_ind = list(loc_snap).index(snap0)
-
-    # prepare
-    fullsnap_pos = np.zeros( (snap1-snap0+1,3), dtype='float32' )
-    fullsnap_snap = np.zeros( fullsnap_pos.shape[0], dtype='int32' )
-
-    sP_loc = simParams(res=sP.res, run=sP.run, snap=snap0)
-    snapTimes = sP_loc.snapNumToRedshift(time=True, all=True)
-
-    sPsub = simParams(res=sP_loc.res, run=sP_loc.run, variant='subbox%d' % sbNum)
-    subboxTimes = sPsub.snapNumToRedshift(time=True, all=True)
-
-    pos = np.zeros( (subboxTimes.size,3), dtype='float32' )
-    pos[0:subhalo_pos.shape[0],:] = subhalo_pos.copy() # copy
-
-    # get most bound particle ID at snap 68        
-    sub = sP_loc.groupCatSingle(subhaloID=mdb['SubfindID'][snap0_ind])
-    mbid = sub['SubhaloIDMostbound']
-    print('Most bound ID: ', mbid)
-
-    # re-locate most bound particle down to snap 90
-    for i, snap in enumerate(range(snap0,snap1+1)):
-        sP_loc.setSnap(snap)
-        for ptType in ['stars','gas','dm','bh']:
-            loc_ids = sP_loc.snapshotSubsetP(ptType, 'ids')
-            w = np.where(loc_ids == mbid)
-            if len(w[0]):
-                fullsnap_pos[i,:] = sP_loc.snapshotSubset(ptType, 'pos', indRange=[w[0],w[0]])
-                fullsnap_snap[i] = snap
-                print(' [%2d] found ID [%s] pos = ' % (snap,ptType), fullsnap_pos[i,:])
-                break # exit ptType loop early
-
-    # combine with MDB info
-    w = np.where(loc_snap < snap0)
-    loc_pos = loc_pos[w[0],:][::-1,:] # reverse into ascending snapshot order
-    loc_snap = loc_snap[w[0]][::-1]
-
-    sub_pos58 = sP.groupCatSingle(subhaloID=subhaloID)['SubhaloPos'] # add snap=58 position
-    loc_pos = np.vstack( (sub_pos58,loc_pos) )
-
-    fullsnap_pos = np.vstack( (loc_pos,fullsnap_pos))
-    times = snapTimes[sP.snap:]
-
-    assert fullsnap_pos.shape[0] == times.size
-
-    # wipe out old [inaccurate linear] extrapolation past snap 58
-    w = np.where( (subboxTimes >= times.min()) & (pos[:,0] != 0) )
-    pos[w[0],:] = 0.0
-
-    # interpolate positions to subbox times
-    wInterp = np.where( (subboxTimes >= times.min()) & (subboxTimes <= times.max()) & (pos[:,0] == 0) )
-    wExtrap = np.where( ((subboxTimes < times.min()) | (subboxTimes > times.max())) & (pos[:,0] == 0) )
-
-    for j in range(3):
-        # each axis separately, first cubic spline interp
-        f = interpolate.interp1d(times, fullsnap_pos[:,j], kind='cubic')
-        pos[wInterp,j] = f(subboxTimes[wInterp])
-
-        # linear extrapolation
-        f = interpolate.interp1d(times, fullsnap_pos[:,j], kind='linear', fill_value='extrapolate')
-        pos[wExtrap,j] = f(subboxTimes[wExtrap])
-
-    # save
-    with h5py.File(saveFilename,'w') as f:
-        f['subhalo_pos'] = pos
-    print('Saved: [%s]' % saveFilename)
-
-    return pos, 0, 3400
-
-def _add_temp_props(sP, sbNum, subhalo_pos):
-    """ Temporary helper until TNG50-1 fof0 complete. """
-    import h5py
-    from os import path
-
-    saveFilename = sP.derivPath + 'subbox_movie_galtwo_props.hdf5'
-    if path.isfile(saveFilename):
-        with h5py.File(saveFilename,'r') as f:
-            mstar = f['mstar'][()]
-            sfr = f['sfr'][()]
-        return mstar, sfr
-
-    # allocate
-    sPsub = simParams(res=sP.res, run=sP.run, variant='subbox%d' % sbNum)
-    subboxTimes = sPsub.snapNumToRedshift(time=True, all=True)
-
-    mstar = np.zeros( (1,1,subboxTimes.size), dtype='float32' )
-    sfr   = np.zeros( (1,1,subboxTimes.size), dtype='float32' )
-
-    assert subhalo_pos.shape[0] == subboxTimes.size
-
-    # loop over all subbox snapshots
-    for i in range(subboxTimes.size):
-        print(i)
-
-        sPsub = simParams(res=sP.res, run=sP.run, variant='subbox%d' % sbNum, snap=i)
-        stars = sPsub.snapshotSubsetP('stars', ['pos','mass'])
-        gas = sPsub.snapshotSubsetP('gas', ['pos','sfr'])
-
-        # locate within aperture of 30 pkpc
-        aperture_sq = sPsub.units.physicalKpcToCodeLength(30.0)**2
-
-        if stars['count'] > 0:
-            dist = sPsub.periodicDistsSq(subhalo_pos[i,:], stars['Coordinates'])
-            w    = np.where(dist <= aperture_sq)
-            mstar[0,0,i] = np.sum( stars['Masses'][w] )
-
-        if gas['count'] > 0:
-            dist = sPsub.periodicDistsSq(subhalo_pos[i,:], gas['Coordinates'])
-            w    = np.where(dist <= aperture_sq)
-            sfr[0,0,i] = np.sum( gas['StarFormationRate'][w] )
-
-    # save
-    with h5py.File(saveFilename,'w') as f:
-        f['mstar'] = mstar
-        f['sfr'] = sfr
-    print('Saved: [%s]' % saveFilename)
-
-    return mstar, sfr
 
 def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', frameNum=None, rotSeqFrameNum=None, rotSeqFrameNum2=None):
     """ Use the subbox tracking catalog to create a movie highlighting the evolution of a single galaxy.
@@ -435,7 +290,6 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         sbNum = 2
         subhaloID = 543114 # snaps 3211 - 3599
 
-        
     if gal == 'mwbubbles2':
         sP = simParams(run='tng50-1', redshift=0.0)
         sbNum = 2
@@ -448,7 +302,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         sP_sub.setSnap(sbSnapNum)
         labelCustom = ['$\Delta t$ = %6.1f Myr' % ((sP_sub.tage - age_start) * 1000)]
 
-    # load subbox catalog, get time-evolving positions
+    # parse subbox catalog, get time-evolving positions
     cat = subboxSubhaloCat(sP, sbNum)
     assert cat['EverInSubboxFlag'][subhaloID]
 
@@ -458,12 +312,6 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     subhalo_pos = cat['SubhaloPos'][w[0],:,:] # [nSubboxSnaps,3]
     snap_start  = cat['SubhaloMinSBSnap'][w[0]]
     snap_stop   = cat['SubhaloMaxSBSnap'][w[0]]
-
-    # for gal == 'two', need positions after snap 58 where we soon run out of subhalo data, after snap68 (in fof0)
-    if gal == 'two':
-        subhalo_pos, snap_start, snap_stop = _correct_subbox_subhalo_pos(sP, sbNum, subhaloID, subhalo_pos)
-        cat['SubhaloStars_Mass'], cat['SubhaloGas_SFR'] = _add_temp_props(sP, sbNum, subhalo_pos)
-        w[0] = 0 # override location in 'cat'
 
     assert sbSnapNum >= snap_start and sbSnapNum <= snap_stop
 
@@ -521,8 +369,6 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     snap    = sbSnapNum
 
     axes = [0,1] # x,y
-
-    #if gal == 'mwbubbles1': axes = [0,2]
 
     labelScale = False #'physical' #'lightyears'
     labelZ     = False #True #'tage'
@@ -643,6 +489,24 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         boxSizeImg = [int(boxSizeSq * aspect * 4), boxSizeSq * 4, boxSizeSq * 4]
         labelZ = True
         labelScale = True
+    if conf == 'eighteen':
+        # xray TNG50 Fof0 cluster center thin slice
+        panels.append( {'partType':'gas', 'partField':'xray_lum_0.5-2.0kev', 'valMinMax':[36.3,38.3]})
+
+        boxSizeImg = [int(200.0 * aspect), 200.0, 10.0]
+        labelZ = True
+        labelScale = True
+
+        sP_sub = simParams(run='tng50-1',variant='subbox%d' % sbNum,redshift=0.0)
+        age_z0 = sP_sub.tage
+        sP_sub.setSnap(sbSnapNum)
+        labelCustom = ['$\Delta t$ = %6.1f Myr' % ((age_z0 - sP_sub.tage) * 1000)]
+        #if 'SubhaloBH_Mass' in cat:
+        #    aperture_num = 0 # 0= 30 pkpc, 1= 30 ckpc/h, 2= 50 ckpc/h
+        #    bhMass = np.squeeze(cat['SubhaloBH_Mass'][w[0],aperture_num,sbSnapNum])
+        #    bhMdot = np.squeeze(cat['SubhaloBH_Mdot'][w[0],aperture_num,sbSnapNum])
+        #    labelCustom.append(r'$\rm{M_{BH} = %.1f M_{sun}}' % sP.units.codeMassToLogMsun(bhMass))
+        #    labelCustom.append(r'$\rm{\dot{M}_{BH} = %.2f M_{sun}/yr' % sP.units.codeMassOverTimeToMsunPerYear(bhMdot))
 
     if 0:
         # SWR
@@ -686,6 +550,11 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
     maxNSnaps = 2968 # there are 867 snaps with excessively small spacing between a=0.33 and a=0.47 (1308-2344)
                      # as a final config, filter out half: take Nsb_final-867/2 (currently: 3400-433+eps = 2968)
 
+    if conf == 'eighteen':
+        # annalisa custom movie TNG50 Fof0
+        maxZ = 0.5
+        maxNSnaps = None
+
     # get snapshot list
     sP = simParams(res=2160,run='tng',snap=90,variant='subbox0')
 
@@ -693,9 +562,9 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
 
     # normal render
     for i, sbSnapNum in enumerate(sbSnapNums):
-        if isfile(savePathBase + '2160sb0_s90_sh440389/frame_%s_%d.png' % (conf,i)):
-            print('skip ', i)
-            continue
+        #if isfile(savePathBase + '2160sb0_s90_sh440389/frame_%s_%d.png' % (conf,i)):
+        #    print('skip ', i)
+        #    continue
 
         subbox_movie_tng_galaxyevo_frame(sbSnapNum=sbSnapNum, gal=gal, conf=conf, frameNum=i)
 
