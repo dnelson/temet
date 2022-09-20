@@ -6,7 +6,7 @@ import h5py
 import glob
 import threading
 from os.path import isfile, isdir, expanduser
-from os import mkdir
+from os import mkdir, unlink
 from scipy.special import wofz
 
 from numba import jit
@@ -239,8 +239,8 @@ instruments = {'idealized'  : {'wave_min':1000, 'wave_max':12000, 'dwave':0.1}, 
                'COS-G160M'  : {'wave_min':1405, 'wave_max':1777,  'dwave':0.012},   # approximate
                'test_EUV'   : {'wave_min':800,  'wave_max':1300,  'dwave':0.1},     # to see LySeries at rest
                'SDSS-BOSS'  : {'wave_min':3543, 'wave_max':10400, 'dlogwave':1e-4}, # constant log10(dwave)=1e-4
-               '4MOST_LRS'  : {'wave_min':4000, 'wave_max':8860,  'dwave':0.8},     # assume R=5000 = lambda/dlambda
-               '4MOST_HRS'  : {'wave_min':3926, 'wave_max':6790,  'R':20000},       # but gaps!
+               '4MOST-LRS'  : {'wave_min':4000, 'wave_max':8860,  'dwave':0.8},     # assume R=5000 = lambda/dlambda
+               '4MOST-HRS'  : {'wave_min':3926, 'wave_max':6790,  'R':20000},       # but gaps!
                'PFS-B'      : {'wave_min':3800, 'wave_max':6500,  'R':2300},        # blue arm (3 arms used simultaneously)
                'PFS-R-LR'   : {'wave_min':6300, 'wave_max':9700,  'R':3000},        # low-res red arm
                'PFS-R-HR'   : {'wave_min':7100, 'wave_max':8850,  'R':5000},        # high-res red arm
@@ -622,6 +622,30 @@ def create_spectrum_from_traced_ray(sP, f, gamma, wave0, ion_mass, instrument,
     return master_mid, tau_master, z_eff
 
 @jit(nopython=True, nogil=True, cache=False)
+def integrate_quantity_along_traced_rays(rays_off, rays_len, rays_cell_dl, rays_cell_inds, cell_values):
+    """ Integrate a given physical quantity along each sightline. One scalar return per sightline, with 
+    units given by [rays_cell_dl * cell_values].
+    """
+    n_rays = rays_len.size
+
+    r = np.zeros(n_rays, dtype=np.float32)
+
+    # loop over rays
+    for i in range(n_rays):
+        # get local properties
+        offset = rays_off[i] # start of intersected cells (in rays_cell*)
+        length = rays_len[i] # number of intersected gas cells
+
+        master_dx = rays_cell_dl[offset:offset+length]
+        master_inds = rays_cell_inds[offset:offset+length]
+
+        master_values = cell_values[master_inds]
+
+        r[i] = np.sum(master_dx * master_values)
+
+    return r
+
+@jit(nopython=True, nogil=True, cache=False)
 def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
                                      rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
                                      cell_dens, cell_temp, cell_vellos, 
@@ -629,6 +653,7 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
                                      master_mid, master_edges, ind0, ind1):
     """ JITed helper (see below). """
     n_rays = ind1 - ind0 + 1
+    scalefac = 1/(1+z_vals[0])
 
     # allocate: full spectra return as well as derived EWs
     tau_master = np.zeros(master_mid.size, dtype=np.float32)
@@ -654,7 +679,7 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
         # cumulative pathlength, Mpc from start of box i.e. start of ray (at sP.redshift)
         cum_pathlength = np.zeros(length, dtype=np.float32) 
         cum_pathlength[1:] = np.cumsum(master_dx)[:-1] # pMpc
-        cum_pathlength /= sP.scalefac # input in pMpc, convert to cMpc
+        cum_pathlength /= scalefac # input in pMpc, convert to cMpc
 
         # cosmological redshift of each intersected cell
         z_cosmo = np.interp(cum_pathlength, z_lengths, z_vals)
@@ -1025,7 +1050,7 @@ def generate_spectra_voronoi_halo():
     sP = simParams(run='tng50-1', redshift=0.5)
 
     lineNames = ['MgII 2796','MgII 2803']
-    instrument = '4MOST_HRS' # 'SDSS-BOSS'
+    instrument = '4MOST-HRS' # 'SDSS-BOSS'
     haloID = 150 # 150 for TNG50-1, 800 for TNG100-1
 
     nRaysPerDim = 50 # total number of rays is square of this number
@@ -1150,9 +1175,12 @@ def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None, search=False):
       search (bool): if True, return existing data only, do not calculate new files.
     """
 
-    # config
-    nRaysPerDim = 1000 # total number of rays (per box, summing over all pSplits) is this number squared
+    # config (total number of rays, per box, summing over all pSplits, is nRaysPerDim**2)
+    nRaysPerDim = 1000
     raysType = 'voronoi_fullbox'
+
+    #nRaysPerDim = 2000
+    #raysType = 'voronoi_rndfullbox'
 
     # paths and save file
     if not isdir(sP.derivPath + 'rays'):
@@ -1206,7 +1234,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None, search=False):
         nPerDim = int(np.sqrt(pSplit[1]))
         extent = sP.boxSize / nPerDim
 
-        # [x,y] bounds of this spatial subset
+        # [x,y] bounds of this spatial subset e.g. if projection direction is [z]
         ij = np.unravel_index(pSplit[0], (nPerDim,nPerDim))
         xmin = ij[0] * extent
         xmax = (ij[0]+1) * extent
@@ -1225,18 +1253,29 @@ def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None, search=False):
         xmin = ymin = 0.0
         xmax = ymax = sP.boxSize
 
-    # ray starting positions (skip last, which will be duplicate with first)
-    xpts = np.linspace(xmin, xmax, nRaysPerDim+1)[:-1]
-    ypts = np.linspace(ymin, ymax, nRaysPerDim+1)[:-1]
+    # ray starting positions
+    if raysType == 'voronoi_fullbox':
+        # evenly spaced (skip last, which will be duplicate with first)
+        xpts = np.linspace(xmin, xmax, nRaysPerDim+1)[:-1]
+        ypts = np.linspace(ymin, ymax, nRaysPerDim+1)[:-1]
 
-    xpts, ypts = np.meshgrid(xpts, ypts, indexing='ij')
+        xpts, ypts = np.meshgrid(xpts, ypts, indexing='ij')
 
-    # construct [N,3] list of ray locations
+    if raysType == 'voronoi_rndfullbox':
+        # stable, random
+        rng = np.random.default_rng(424242 + nRaysPerDim + sP.snap + sP.res)
+
+        xpts = rng.uniform(low=xmin, high=xmax, size=nRaysPerDim**2)
+        ypts = rng.uniform(low=ymin, high=ymax, size=nRaysPerDim**2)
+
+    # construct [N,3] list of ray starting locations
     ray_pos = np.zeros( (nRaysPerDim**2,3), dtype='float64')
     
-    ray_pos[:,0] = xpts.ravel()
-    ray_pos[:,1] = ypts.ravel()
-    ray_pos[:,2] = 0.0
+    inds = list(set([0,1,2]) - set([projAxis])) # e.g. [0,1] for projAxis == 2
+
+    ray_pos[:,inds[0]] = xpts.ravel()
+    ray_pos[:,inds[1]] = ypts.ravel()
+    ray_pos[:,projAxis] = 0.0
 
     # determine spatial mask (cuboid with long side equal to boxlength in line-of-sight direction)
     cell_inds = None
@@ -1246,7 +1285,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None, search=False):
         mask += 1 # all required
 
         print(' pSplitSpatial:', end='')
-        for ind, axis in enumerate(['x','y']):
+        for ind, axis in enumerate([['x','y','z'][i] for i in inds]):
             print(' slice[%s]...' % axis, end='')
             dists = sP.snapshotSubsetP('gas', 'pos_'+axis, float32=True)
 
@@ -1300,7 +1339,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None, search=False):
 
     return rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl
 
-def _spectra_filepath(sim, projAxis, instrument, lineNames=None, ion=None, pSplit=None, assumeSolar=False):
+def _spectra_filepath(sim, projAxis, instrument=None, lineNames=None, ion=None, pSplit=None, solar=False):
     """ Return the path to a file of saved spectra. """
     assert ion is None or lineNames is None, 'Input either [lineNames] or [ion].'
 
@@ -1313,26 +1352,79 @@ def _spectra_filepath(sim, projAxis, instrument, lineNames=None, ion=None, pSpli
     assert len(set(ions)) == 1, 'Process sets of lines for one ion at a time.'
 
     path = sim.derivPath + "rays/"
-    filebase = 'spectra_%s_z%.1f_%d_%s_%s' % (sim.simName,sim.redshift,projAxis,instrument,ionStr)
+
+    if instrument is not None:
+        filebase = 'spectra_%s_z%.1f_%d_%s_%s' % (sim.simName,sim.redshift,projAxis,instrument,ionStr)
+    else:
+        filebase = 'integral_%s_z%.1f_%d_%s' % (sim.simName,sim.redshift,projAxis,ionStr)
 
     if isinstance(pSplit,list):
         # a specific chunk
         filename = filebase + '_%d-of-%d.hdf5' % (pSplit[0],pSplit[1])
 
     elif str(pSplit) == '*':
-        # leave wildcard for glob search
-        filename = filebase + '_*.hdf5'
+        # leave wildcard for glob search (would have to generalized if pSplit[1] is not two digits)
+        filename = filebase + '_*of-??.hdf5'
 
     else:
         # concatenated set
         filename = filebase + '_combined.hdf5'
 
-    if assumeSolar:
+    if solar:
         filename = filename.replace('.hdf5','_solar.hdf5')
 
     return path + filename
 
-def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST_HRS', pSplit=None, assumeSolar=False):
+def integrate_along_saved_rays(sP, field, pSplit=None):
+    """ Integrate a physical (gas) property along the line of sight, based on already computed and saved rays.
+    The result has units of [pc] * [field] where [field] is the original units of the physical field as loaded.
+    
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      field (str): any available gas field.
+    """
+    # config
+    projAxis = 2
+
+    # save file
+    saveFilename = _spectra_filepath(sP, projAxis, ion=field, pSplit=pSplit)
+
+    if isfile(saveFilename):
+        with h5py.File(saveFilename,'r') as f:
+            result = f['result'][()]
+        return result
+
+    # load rays
+    rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
+      generate_rays_voronoi_fullbox(sP, projAxis=projAxis, pSplit=pSplit)
+
+    # load required gas cell properties
+    if field.endswith('_los'):
+        field = field.replace('_los','') + '_' + ['x','y','z'][projAxis]
+
+    cell_values = sP.snapshotSubsetP('gas', field, inds=cell_inds) # units unchanged
+
+    # convert length units [parsecs]
+    rays_dl = sP.units.codeLengthToPc(rays_dl)
+
+    # start output
+    with h5py.File(saveFilename,'w') as f:
+        # attach ray configuration for reference
+        f['ray_pos'] = ray_pos
+        f['ray_dir'] = ray_dir
+        f['ray_total_dl'] = total_dl
+
+    # integrate
+    result = integrate_quantity_along_traced_rays(rays_off, rays_len, rays_dl, rays_inds, cell_values)
+
+    with h5py.File(saveFilename,'r+') as f:
+        f.create_dataset('result', data=result, compression='gzip')
+
+    print(f'Saved: [{saveFilename}]')
+
+    return result
+
+def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', pSplit=None, solar=False):
     """ Generate a large number of spectra, based on already computed and saved rays.
 
     Args:
@@ -1341,7 +1433,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST_HRS', pS
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
       pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
         that we follow a spatial subdivision, so the total job number should be an integer squared.
-      assumeSolar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
         use the (constant) solar value.
     """
     # config
@@ -1350,7 +1442,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST_HRS', pS
     # save file
     lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
 
-    saveFilename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=pSplit, assumeSolar=assumeSolar)
+    saveFilename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=pSplit, solar=solar)
 
     # load rays
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
@@ -1408,7 +1500,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST_HRS', pS
         # do we not already have the ion density loaded?
         if densField is None or lines[line]['ion'] != lines[lineNames[0]]['ion']:
             densField = '%s numdens' % lines[line]['ion']
-            if assumeSolar: densField += '_solar'
+            if solar: densField += '_solar'
 
             cell_dens = sP.snapshotSubsetP('gas', densField, inds=cell_inds) # ions/cm^3 # , verbose=True
 
@@ -1437,145 +1529,196 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST_HRS', pS
 
     print(f'Saved: [{saveFilename}]')
 
-def concat_and_filter_spectra(sP, ion='Fe II', instrument='4MOST_HRS', assumeSolar=False):
-    """ Combine split files for spectra, and filter, keeping only those above an EW threshold.
+def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
+    """ Combine split files for spectra into a single file.
 
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
       ion (str): space separated species name and ionic number e.g. 'Mg II'.
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
-      assumeSolar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
         use the (constant) solar value.
     """
 
     # config
     projAxis = 2
 
-    EW_threshold = 0.001 # applied to sum of lines [ang]
-
     # search for chunks
     lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
 
-    loadFilename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit='*', assumeSolar=assumeSolar)
-    saveFilename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=None, assumeSolar=assumeSolar)
+    loadFilename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit='*', solar=solar)
+    saveFilename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=None, solar=solar)
 
     pSplitNum = len([f for f in glob.glob(loadFilename) if '_combined' not in f])
+    assert pSplitNum > 0, 'Error: No split spectra files found.'
 
     # load all for count
     lines_present = []
-    inds = []
-    EW_total = []
-
     count = 0
-    count_tot = 0
 
     for i in range(pSplitNum):
-        filename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=[i,pSplitNum], assumeSolar=assumeSolar)
+        filename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=[i,pSplitNum], solar=solar)
+
         with h5py.File(filename,'r') as f:
-            # missing chunk?
-            if 'flux' not in f:
-                assert 0 # print(' skip')
-                inds.append([])
-                EWs.append([])
-                continue
+            # first file: load number of spectra per chunk file, master wavelength grid, and other metadata
+            if i == 0:
+                n_wave = f['flux'].shape[1]
+                n_spec = f['flux'].shape[0]
 
-            n_wave = f['flux'].shape[1]
-            n_spec = f['flux'].shape[0]
+                ray_dir = f['ray_dir'][()]
+                ray_total_dl = f['ray_total_dl'][()]
+                master_wave = f['master_wave'][()]
 
-            # sum up EW across all lines of this ion
-            EW_local = np.zeros(n_spec, dtype='float32')
+                # allocate
+                ray_pos = np.zeros((pSplitNum*n_spec,3), dtype='float32')
 
-            for line in lineNames:
-                key = 'EW_%s' % line.replace(' ','_')
-                if key not in f:
-                    if i == 0:
-                        print('Skipping [%s], not in file.' % line)
-                    continue
+                # which lines of this ion are present?
+                for line in lineNames:
+                    # this line is present?
+                    key = 'EW_%s' % line.replace(' ','_')
+                    if key in f:
+                        lines_present.append(line)
+                    else:
+                        print('Skipping [%s], not present.' % line)
+                
+            else:
+                # all other chunks: sanity checks
+                assert n_spec == f['flux'].shape[0] # should be constant
+                assert np.array_equal(master_wave, f['master_wave'][()]) # should be the same
 
-                if i == 0:
-                    lines_present.append(line)
+            # load ray starting positions
+            ray_pos[count:count+n_spec] = f['ray_pos'][()]
 
-                # load and add
-                EW_local += f[key][()]
+            print(f'[{count:7d} - {count+n_spec:7d}] {filename}')
+            count += n_spec
 
-            # do we need the (combined) flux array now?
-            #flux = f['flux'][()]
-            #master_mid = f['master_wave'][()]
+    print(f'In total [{count}] spectra with: [{", ".join(lines_present)}]')
 
-        # recalculate EW based on total flux (e.g. combine lines/doublets)
-        #EW_local = np.zeros(flux.shape[0], dtype='float32')
-        #for i in range(flux.shape[0]):
-        #    EW_local[i] = _equiv_width_flux(flux[i,:],master_mid)
-        count_tot += n_spec
-
-        # select
-        w = np.where(EW_local >= EW_threshold)[0]
-        count += len(w)
-
-        inds.append(w)
-        EW_total.append(EW_local[w])
-
-    print(f'In total [{count}] spectra of [{count_tot}] above {EW_threshold = }')
+    lines_present = [line.replace(' ','_') for line in lines_present]
 
     assert count > 0, 'Error: All EWs are zero. Observed frame wavelengths outside instrument coverage?'
+    assert count == n_spec * pSplitNum, 'Error: Unexpected total number of spectra.'
 
-    # allocate
-    flux = np.zeros((count,n_wave), dtype='float32')
-    ray_pos = np.zeros((count,3), dtype='float32')
-    global_inds = np.zeros(count, dtype='int32')
-
-    EWs = []
-    for line in lines_present:
-        EWs.append( np.zeros(count, dtype='float32') )
-
-    # load and keep specific spectra passing EW threshold
-    offset = 0
-
-    for i in range(pSplitNum):
-        # skip if not existing
-        if len(inds[i]) == 0:
-            continue
-
-        filename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=[i,pSplitNum], assumeSolar=assumeSolar)
-        print(filename, offset)
-
-        # load
-        with h5py.File(filename,'r') as f:
-            flux[offset:offset+len(inds[i])] = f['flux'][inds[i]]
-            ray_pos[offset:offset+len(inds[i])] = f['ray_pos'][inds[i]]
-            master_wave = f['master_wave'][()]
-
-            for j, line in enumerate(lines_present):
-                EWs[j][offset:offset+len(inds[i])] = f['EW_%s' % line.replace(' ','_')][inds[i]]
-
-        # construct global indices, giving for each saved spectra in this concat file, the corresponding 
-        # index in any analysis array saved one value per ray
-        global_inds[offset:offset+len(inds[i])] = inds[i]
-
-        offset += len(inds[i])
-
-    # save
+    # start save
     with h5py.File(saveFilename,'w') as f:
+        # wavelength grid, flux array, ray positions
         f['master_wave'] = master_wave
-        f.create_dataset('flux', data=flux, compression='gzip')
         f['ray_pos'] = ray_pos
-        f['EW_total'] = np.hstack(EW_total)
+        f['ray_dir'] = ray_dir
+        f['ray_total_dl'] = ray_total_dl
 
-        for i, line in enumerate(lines_present):
-            f['EW_%s' % line.replace(' ','_')] = EWs[i]
-
-        for i in range(pSplitNum):
-            f['inds/%d' % i] = inds[i]
-        f['inds/global'] = global_inds
-
+        # metadata
         f.attrs['projAxis'] = projAxis
         f.attrs['simName'] = sP.simName
         f.attrs['redshift'] = sP.redshift
         f.attrs['snapshot'] = sP.snap
         f.attrs['instrument'] = instrument
         f.attrs['lineNames'] = lines_present
-        f.attrs['EW_threshold'] = EW_threshold
-        f.attrs['count_tot'] = count_tot
+        f.attrs['count'] = count
+
+        # load large datasets, one at a time, and save
+        dsets = ['flux']
+        dsets += ['EW_%s' % line for line in lines_present]
+        dsets += ['tau_%s' % line for line in lines_present]
+
+        for dset in dsets:
+            # allocate
+            print(f'Loading [{dset}] -- [', end='')
+            offset = 0
+
+            if 'EW_' in dset:
+                data = np.zeros(count, dtype='float32')
+            else:
+                data = np.zeros((count,n_wave), dtype='float32')
+
+            # load
+            for i in range(pSplitNum):
+                filename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=[i,pSplitNum], solar=solar)
+                print(i, end=' ', flush=True)
+
+                with h5py.File(filename,'r') as f_read:
+                    data[offset:offset+n_spec] = f_read[dset][()]
+                offset += n_spec
+
+            # write
+            print('] writing...')
+            f.create_dataset(dset, data=data, compression='gzip')
+
+    print('Saved: [%s]' % saveFilename)
+
+    # remove split files
+    for i in range(pSplitNum):
+        filename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=[i,pSplitNum], solar=solar)
+        unlink(filename)
+
+    print('Split files removed.')
+
+def filter_concatenated_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
+    """ Filter a single concatenated spectra file, keeping only those above an EW threshold.
+
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      ion (str): space separated species name and ionic number e.g. 'Mg II'.
+      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+        use the (constant) solar value.
+    """
+
+    # config
+    projAxis = 2
+
+    EW_threshold = 0.01 # applied to sum of lines [ang]
+
+    # search for chunks
+    lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
+
+    loadFilename = _spectra_filepath(sP, projAxis, instrument, ion=ion, solar=solar)
+    saveFilename = loadFilename.replace('_combined','_filtered')
+
+    # load EWs
+    with h5py.File(loadFilename,'r') as f:
+        # allocate
+        count_tot = f.attrs['count']
+        EW_total = np.zeros(count_tot, dtype='float32')
+
+        # loop over possible transitions
+        for line in lineNames:
+            key = 'EW_%s' % line.replace(' ','_')
+            if key not in f:
+                print(f'[{line}] skipping, not present.')
+                continue
+
+            # load and sum
+            print(f'[{line}] found, summing EW.')
+            EW_total += f[key][()]
+
+    # select
+    inds = np.where(EW_total >= EW_threshold)[0]
+    count = len(inds)
+
+    print(f'In total [{count}] spectra of [{count_tot}] above {EW_threshold = }')
+
+    # open file for writing
+    fOut = h5py.File(saveFilename,'w')
+
+    # load subset
+    with h5py.File(loadFilename,'r') as f:
+        # copy metadata
+        for attr in f.attrs:
+            fOut.attrs[attr] = f.attrs[attr]
+        fOut.attrs['EW_threshold'] = EW_threshold
+
+        fOut['inds'] = inds
+
+        # copy all datasets
+        for key in f:
+            print(key)
+            if f[key].shape[0] == count_tot:
+                fOut.create_dataset(key, data=f[key][inds], compression='gzip')
+            else:
+                fOut[key] = f[key][()]
+
+    fOut.close()
 
     print('Saved: [%s]' % saveFilename)
 

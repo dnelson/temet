@@ -1054,7 +1054,8 @@ def subboxSubhaloCatExtend(sP, sbNum, redo=False):
     nSubSnaps  = r['SubboxScaleFac'].size
     nSubs      = r['SubhaloIDs'].size
 
-    dataFieldKeys = ['SubhaloStars_Mass','SubhaloGas_Mass','SubhaloBH_Mass','SubhaloBH_Mass2','SubhaloGas_SFR',
+    dataFieldKeys = ['SubhaloStars_Mass','SubhaloGas_Mass','SubhaloBH_Mass','SubhaloBH_Mass2',
+                     'SubhaloBH_Mdot','SubhaloBH_MdotEddington','SubhaloGas_SFR',
                      'SubhaloBH_CumEgyInjection_QM','SubhaloBH_CumEgyInjection_RM','SubhaloBH_Num']
 
     for key in dataFieldKeys:
@@ -1075,7 +1076,7 @@ def subboxSubhaloCatExtend(sP, sbNum, redo=False):
         sP_sub.setSnap(sbSnapNum)
 
         apertures_sq = [sP_sub.units.physicalKpcToCodeLength(30.0)**2, 30.0**2, 50.0**2] # 30 pkpc, 30 ckpc/h, 50 ckpc/h
-        print(' [%4d] z = %.2f (30pkpc rad_code = %.2f)' % (sbSnapNum,1/r['SubboxScaleFac'][sbSnapNum]-1,np.sqrt(apertures_sq[0])))
+        print(' [%4d] z = %.2f (30pkpc rad_code = %.2f)' % (sbSnapNum,1/r['SubboxScaleFac'][sbSnapNum]-1,np.sqrt(apertures_sq[0])), flush=True)
 
         if r['done'][sbSnapNum]:
             print(' skip, already done.')
@@ -1090,6 +1091,8 @@ def subboxSubhaloCatExtend(sP, sbNum, redo=False):
                 loadFields.append('BH_CumEgyInjection_QM')
                 loadFields.append('BH_CumEgyInjection_RM')
                 loadFields.append('BH_Mass')
+                loadFields.append('BH_Mdot')
+                loadFields.append('BH_MdotEddington')
                 
             # particle data load   
             x = sP_sub.snapshotSubset(ptType, loadFields)
@@ -1120,11 +1123,15 @@ def subboxSubhaloCatExtend(sP, sbNum, redo=False):
                     result2 = calcQuantReduction(pos, x['BH_CumEgyInjection_RM'], hsml, op='max', boxSizeSim=0, posSearch=posSearch, tree=tree)
                     result3 = calcQuantReduction(pos, x['BH_Mass'], hsml, op='max', boxSizeSim=0, posSearch=posSearch, tree=tree)
                     result4 = calcQuantReduction(pos, x['BH_Mass'], hsml, op='count', boxSizeSim=0, posSearch=posSearch, tree=tree)
+                    result5 = calcQuantReduction(pos, x['BH_Mdot'], hsml, op='max', boxSizeSim=0, posSearch=posSearch, tree=tree)
+                    result6 = calcQuantReduction(pos, x['BH_MdotEddington'], hsml, op='max', boxSizeSim=0, posSearch=posSearch, tree=tree)
 
                     r['SubhaloBH_CumEgyInjection_QM'][:,i,sbSnapNum] = result1
                     r['SubhaloBH_CumEgyInjection_RM'][:,i,sbSnapNum] = result2
                     r['SubhaloBH_Mass2'][:,i,sbSnapNum] = result3
                     r['SubhaloBH_Num'][:,i,sbSnapNum] = result4
+                    r['SubhaloBH_Mdot'][:,i,sbSnapNum] = result5
+                    r['SubhaloBH_MdotEddington'][:,i,sbSnapNum] = result6
 
         # save each subbox snap as we go (every field full, could optimize)
         r['done'][sbSnapNum] = 1

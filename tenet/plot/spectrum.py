@@ -302,8 +302,8 @@ def _spectrum_debug_plot(line, plotName, master_mid, tau_master, master_dens, ma
     fig.savefig(plotName)
     plt.close(fig)
 
-def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST_HRS', EW_minmax=[0.1,1.0], 
-                          num=10, mode='random', SNR=None, xlim=None):
+def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0.1,1.0], 
+                          num=10, mode='random', solar=False, SNR=None, xlim=None):
     """ Plot a gallery of individual absorption profiles within a given EW range.
 
     Args:
@@ -313,6 +313,8 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST_HRS', EW_minmax=[0
       EW_minmax (list[float]): minimum and maximum EW to plot [Ang].
       num (int): how many individual spectra to show.
       mode (str): either 'random' or 'evenly'.
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+        use the (constant) solar value.
       SNR (float): if not None, then add noise to achieve this signal to noise ratio.
       xlim (str, list[float]): either 'full' or a 2-tuple of [min,max], or automatic if None (default)
     """
@@ -322,10 +324,12 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST_HRS', EW_minmax=[0
     ctName = 'thermal'    
 
     # load
-    filepath = _spectra_filepath(sim, projAxis, instrument, ion=ion)
+    filepath = _spectra_filepath(sim, projAxis, instrument, ion=ion, solar=solar)
 
     with h5py.File(filepath,'r') as f:
-        EW = f['EW_total'][()]
+        # compute total EW (summing all transitions)
+        EW = np.sum(np.vstack([f[key][()] for key in f.keys() if 'EW_' in key]), axis=0)
+
         lineNames = f.attrs['lineNames']
         wave = f['master_wave'][()]
 
@@ -356,19 +360,26 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST_HRS', EW_minmax=[0
 
             inds.append(w[0])
 
+    # partial load of selected spectra
     inds = np.sort(inds)
 
-    # partial load of selected spectra, in case datafile is large
     with h5py.File(filepath,'r') as f:
         flux = f['flux'][inds,:]
 
     EW = EW[inds]
+
+    # re-sort
+    if mode == 'evenly':
+        sort_inds = np.argsort(EW)
+        flux = flux[sort_inds]
+        EW = EW[sort_inds]
 
     # how many lines do we have? what is their span in wavelength?
     lines_wavemin = 0
     lines_wavemax = np.inf
 
     for line in lineNames:
+        line = line.replace('_',' ')
         lines_wavemin = np.clip(lines_wavemin, lines[line]['wave0'], np.inf)
         lines_wavemax = np.clip(lines_wavemax, 0, lines[line]['wave0'])
         
@@ -450,25 +461,27 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST_HRS', EW_minmax=[0
         (sim.simName,sim.snap,ion.replace(' ',''),instrument,ewStr,num,mode,snrStr))
     plt.close(fig)
 
-def EW_distribution(sim_in, redshifts=[0.5,0.7,1.0], log=False):
+def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=[0.5,0.7,1.0], solar=False, log=False):
     """ Plot the EW distribution of a given line based on a concatenated spectra file.
 
     Args:
       sim_in (:py:class:`~util.simParams`): simulation instance.
+      line (str): string specifying the line transition.
+      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
       redshifts (list[float]): list of redshifts to overplot.
+      solar (bool): use the (constant) solar value instead of simulation-tracked metal abundances.
       log (bool): plot log(EW) instead of linear EWs.
     """
     sim = sim_in.copy()
 
     # config
     projAxis = 2
-    instrument = '4MOST_HRS'
-    lineNames = ['MgII 2796','MgII 2803']
-    line = lineNames[0] # which to use
+    
+    ion = lines[line]['ion']
 
     xlim = [0, 8] # ang
     if log: xlim = [-1.0, 1.4] # log[ang]
-    nBins = 40
+    nBins = 80
 
     EW_z_thresh = [0.3,1.0] # thresholds for EW for vs. redshift plot
 
@@ -477,10 +490,10 @@ def EW_distribution(sim_in, redshifts=[0.5,0.7,1.0], log=False):
 
     for redshift in redshifts:
         sim.setRedshift(redshift)
-        filepath = _spectra_filepath(sim, projAxis, instrument, lineNames)
+        filepath = _spectra_filepath(sim, projAxis, instrument, ion=ion, solar=solar)
 
         with h5py.File(filepath,'r') as f:
-            count_tot = f.attrs['count_tot']
+            count = f.attrs['count']
             data = f['EW_%s' % line.replace(' ','_')][()]
 
         # convert to rest-frame
@@ -509,7 +522,7 @@ def EW_distribution(sim_in, redshifts=[0.5,0.7,1.0], log=False):
         hh, bin_edges = np.histogram(x, bins=nBins, range=xlim)
 
         # normalize by dz = total redshift path length = N_sightlines * boxSizeInDeltaRedshift
-        hh = hh.astype('float32') / (count_tot * sim.boxLengthDeltaRedshift)
+        hh = hh.astype('float32') / (count * sim.boxLengthDeltaRedshift)
 
         # normalize by dW = equivalent width bin sizes [Ang]
         dW_norm = bin_edges[1:] - bin_edges[:-1] # constant (linear)
@@ -519,22 +532,35 @@ def EW_distribution(sim_in, redshifts=[0.5,0.7,1.0], log=False):
 
         ax.stairs(hh, edges=bin_edges, lw=lw, label='z = %.1f' % sim.redshift)
 
-    # plot obs data (Matejek+13 Table 3)
-    m13_x = [0.42, 0.94, 1.52, 2.11, 2.70, 4.34]
-    m13_x_lower = [0.05, 0.64, 1.23, 1.82, 2.41, 3.00]
-    m13_x_upper = [0.64, 1.23, 1.82, 2.41, 3.00, 5.68]
-    m13_y = [1.570, 0.594, 0.291, 0.187, 0.083, 0.027]
-    m13_yerr = [0.272, 0.119, 0.080, 0.064, 0.042, 0.011]
-    m13_label = 'Matejek+13 (1.9 < z < 6.3)'
+    # plot obs data
+    if line == 'MgII 2796':
+        # (Matejek+12 Table 3)
+        # https://ui.adsabs.harvard.edu/abs/2012ApJ...761..112M/abstract
+        # (!) see also https://ui.adsabs.harvard.edu/abs/2013ApJ...764....9M/abstract
+        m13_x = [0.42, 0.94, 1.52, 2.11, 2.70, 4.34]
+        m13_x_lower = [0.05, 0.64, 1.23, 1.82, 2.41, 3.00]
+        m13_x_upper = [0.64, 1.23, 1.82, 2.41, 3.00, 5.68]
+        m13_y = [1.570, 0.594, 0.291, 0.187, 0.083, 0.027]
+        m13_yerr = [0.272, 0.119, 0.080, 0.064, 0.042, 0.011]
+        m13_label = 'Matejek+12 (1.9 < z < 6.3)'
 
-    xerr = np.vstack( (np.array(m13_x) - m13_x_lower,np.array(m13_x_upper) - m13_x) )
+        xerr = np.vstack( (np.array(m13_x) - m13_x_lower,np.array(m13_x_upper) - m13_x) )
 
-    opts = {'color':'#333333', 'ecolor':'#333333', 'alpha':0.9, 'capsize':0.0, 'fmt':'s'}
-    ax.errorbar(m13_x, m13_y, yerr=m13_yerr, xerr=xerr, label=m13_label, **opts)
+        opts = {'color':'#333333', 'ecolor':'#333333', 'alpha':0.6, 'capsize':0.0, 'fmt':'s'}
+        ax.errorbar(m13_x, m13_y, yerr=m13_yerr, xerr=xerr, label=m13_label, **opts)
+
+        # Chen+16 (updated/finished sample of Matejek+, identical EW bins)
+        # https://ui.adsabs.harvard.edu/abs/2017ApJ...850..188C/abstract
+        c16_y = [1.539, 0.591, 0.298, 0.185, 0.134, 0.026]
+        c16_yerr = [0.215, 0.082, 0.055, 0.042, 0.035, 0.007]
+        c16_label = 'Chen+16 (1.9 < z < 6.3)'
+
+        opts = {'color':'#333333', 'ecolor':'#333333', 'alpha':0.9, 'capsize':0.0, 'fmt':'D'}
+        ax.errorbar(m13_x, c16_y, yerr=c16_yerr, xerr=xerr, label=c16_label, **opts)
 
     # finish plot
     ax.legend(loc='best')
-    fig.savefig('EW_histogram_%s%s.pdf' % (line,'_log' if log else ''))
+    fig.savefig('EW_histogram_%s%s_%s.pdf' % (line,'_log' if log else '',instrument))
     plt.close(fig)
 
     # (b) - evolution versus redshift above some threshold EW (dN/dz)
@@ -547,7 +573,18 @@ def EW_distribution(sim_in, redshifts=[0.5,0.7,1.0], log=False):
     ax.set_yscale('log')
 
     # todo
+
     # also todo: check if we are combining multiple absorbers per spectra for EW calculation
+    # is this the reason of the periodic peaks in the EWDF?
+
+    if line == 'MgII 2796':
+        pass
+        # Zou+21
+        # https://ui.adsabs.harvard.edu/abs/2017MNRAS.472.1023C/abstract
+
+    if line == 'CIV': # also SiIV
+        pass # https://ui.adsabs.harvard.edu/abs/2022ApJ...924...12H/abstract
+        # https://ui.adsabs.harvard.edu/abs/2018MNRAS.481.4940C/abstract
 
     # finish plot
     ax.legend(loc='best')
@@ -609,7 +646,7 @@ def n_clouds_vs_EW(sim):
     projAxis = 2
     ionName = 'Mg II' # n_cloud
     lineNames = ['MgII 2796','MgII 2803'] # EW
-    instrument = '4MOST_HRS' # EW
+    instrument = '4MOST-HRS' # EW
 
     xlog = False
 

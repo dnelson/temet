@@ -11,10 +11,10 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from os.path import isfile
 
-from ..cosmo.spectrum import _spectra_filepath, lines
-from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
-from ..plot.spectrum import spectra_gallery_indiv, EW_distribution
-from ..plot.config import *
+from tenet.cosmo.spectrum import _spectra_filepath, lines
+#from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
+from tenet.plot.spectrum import spectra_gallery_indiv, EW_distribution
+from tenet.plot.config import *
 
 def metalAbundancesVsSolar(sim, ion='Mg II'):
     """ Diagnostic plot of how much various metal abundances actual vary vs. the solar abundance ratio. """
@@ -164,14 +164,14 @@ def lightconeSpectraConfig(sim, max_redshift=5.0):
 
     return snaps, num_boxes, z_init
 
-def lightconeSpectra(sim, instrument, ion, assumeSolar=False, add_lines=None):
+def lightconeSpectra(sim, instrument, ion, solar=False, add_lines=None):
     """ Create a composite spectrum spanning a cosmological distance.
 
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
       instrument (str): specify observational instrument (from tenet.cosmo.spectrum.instruments).
       ion (str): space-separated name of ion e.g. 'Mg II'.
-      assumeSolar (bool): if True, then adopt solar abundance ratio for the given species, instead of snap value.
+      solar (bool): if True, then adopt solar abundance ratio for the given species, instead of snap value.
       add_lines (list[str] or None): if not None, then a list of lines to include. otherwise, include all for this ion.
 
     Return:
@@ -183,7 +183,6 @@ def lightconeSpectra(sim, instrument, ion, assumeSolar=False, add_lines=None):
     rng = np.random.default_rng(424242)
 
     # config
-    pSplitNum = 16
     projAxis = 2
 
     # get replication configuration
@@ -192,7 +191,7 @@ def lightconeSpectra(sim, instrument, ion, assumeSolar=False, add_lines=None):
     # load metadata from first (available) snapshot
     for snap in snaps:
         sim.setSnap(snap)
-        fname = _spectra_filepath(sim, projAxis, instrument, ion=ion, pSplit=[0,pSplitNum], assumeSolar=assumeSolar)
+        fname = _spectra_filepath(sim, projAxis, instrument, ion=ion, solar=solar)
 
         if isfile(fname):
             break
@@ -213,7 +212,7 @@ def lightconeSpectra(sim, instrument, ion, assumeSolar=False, add_lines=None):
         print(f'[{snap = :3d}] at z = {sim.redshift:.2f}, num spec = {num_box}')
 
         # check existence
-        fname = _spectra_filepath(sim, projAxis, instrument, ion=ion, pSplit=[0,pSplitNum], assumeSolar=assumeSolar)
+        fname = _spectra_filepath(sim, projAxis, instrument, ion=ion, solar=solar)
 
         if not isfile(fname):
             # (hopefully, no lines at the relevant wavelength range at this redshift)
@@ -221,17 +220,17 @@ def lightconeSpectra(sim, instrument, ion, assumeSolar=False, add_lines=None):
             continue
 
         # select N at random
-        split_inds = rng.integers(low=0, high=pSplitNum, size=int(num_box))
         spec_inds = rng.integers(low=0, high=num_spec, size=int(num_box))
 
-        # load (individually, one spectrum from a given split file)
-        for split_ind, spec_ind, z_local in zip(split_inds,spec_inds,z_init):
-            # allocate
-            tau_local = np.zeros(master_wave.size, dtype='float64')
+        # open file
+        fname = _spectra_filepath(sim, projAxis, instrument, ion=ion, solar=solar)
 
-            fname = _spectra_filepath(sim, projAxis, instrument, ion=ion, pSplit=[split_ind,pSplitNum], assumeSolar=assumeSolar)
+        with h5py.File(fname,'r') as f:
+            # load each spectrum individually, shift, and accumulate
+            for spec_ind, z_local in zip(spec_inds,z_init):
+                # allocate
+                tau_local = np.zeros(master_wave.size, dtype='float64')
 
-            with h5py.File(fname,'r') as f:
                 # combine optical depth arrays for all transitions of this ion
                 for key in f:
                     # skip unrelated non-tau datasets
@@ -243,16 +242,16 @@ def lightconeSpectra(sim, instrument, ion, assumeSolar=False, add_lines=None):
                         continue
 
                     # load entire tau array for one transition of this ion
-                    print(f' [file {split_ind:2d} spec {spec_ind:5d}] at {z_local = :.3f} adding [{key}]')
+                    print(f' [spec {spec_ind:5d}] at {z_local = :.3f} adding [{key}]')
                     tau_local += f[key][spec_ind,:]
 
-            # shift in redshift according to the cumulative pathlength (z_init)
-            wave_redshifted = master_wave * ((1 + z_local) / (1 + sim.redshift))
+                # shift in redshift according to the cumulative pathlength (z_init)
+                wave_redshifted = master_wave * ((1 + z_local) / (1 + sim.redshift))
 
-            # interpolate back onto the master (rest-frame) wavelength grid, and accumulate
-            tau_redshifted = np.interp(master_wave, wave_redshifted, tau_local, left=0.0, right=0.0)
+                # interpolate back onto the master (rest-frame) wavelength grid, and accumulate
+                tau_redshifted = np.interp(master_wave, wave_redshifted, tau_local, left=0.0, right=0.0)
 
-            tau_master += tau_redshifted
+                tau_master += tau_redshifted
 
     # convert optical depth to flux
     flux = np.exp(-1*tau_master)
@@ -266,6 +265,7 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None):
       sim (:py:class:`~util.simParams`): simulation instance.
       instrument (str): specify observational instrument (from tenet.cosmo.spectrum.instruments).
       ion (str): space-separated name of ion e.g. 'Mg II'.
+      add_lines (list[str] or None): if not None, then a list of lines to include. otherwise, include all for this ion.
     """
 
     # generate, quick caching
@@ -309,24 +309,27 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None):
     ax_top_zoom.step(wave, flux, '-', where='mid', lw=lw)
 
     # bottom panel: weak absorbers, 1% from the continuum
-    ax_bottom.set_ylim([0.99,1.001])
-    #ax_bottom.set_xlim([wave.min(),wave.max()])
-    ax_bottom.set_xlim([5500,7400])
+    ax_bottom.set_ylim([0.95,1.001])
+    ax_bottom.set_xlim([wave.min(),wave.max()])
     ax_bottom.set_xlabel('Wavelength [ Ang ]')
     ax_bottom.set_ylabel('Continuum Normalized Flux')
 
     ax_bottom.step(wave, flux, '-', where='mid', lw=lw)
 
-    for z in [4.897,4.795,4.696,4.600,4.506]:
-        z_obs = lines['LyA']['wave0'] * (1+z)
-        ax_bottom.plot([z_obs,z_obs], ax_bottom.get_ylim(), '-', color='black')
-    for z in [4.420,4.340,4.262,4.186,4.112,4.039,3.968,3.898,3.829,3.762,3.697,3.632,3.569,3.507]:
-        z_obs = lines['LyA']['wave0'] * (1+z)
-        ax_bottom.plot([z_obs,z_obs], ax_bottom.get_ylim(), '-', color='green')
+    # debugging: (we have some small wavelength regions which are covered by no volume, due to 
+    # requirement of sampling integer numbers of boxes -- not important for rare absorption, but
+    # causes erroneous high flux spikes where we are absorption dominated e.g. high-z LyA forest)
+    if 0:
+        for z in [4.897,4.795,4.696,4.600,4.506]:
+            z_obs = lines['LyA']['wave0'] * (1+z)
+            ax_bottom.plot([z_obs,z_obs], ax_bottom.get_ylim(), '-', color='black')
+        for z in [4.420,4.340,4.262,4.186,4.112,4.039,3.968,3.898,3.829,3.762,3.697,3.632,3.569,3.507]:
+            z_obs = lines['LyA']['wave0'] * (1+z)
+            ax_bottom.plot([z_obs,z_obs], ax_bottom.get_ylim(), '-', color='green')
 
     # bottom zoom panel (detail)
-    ax_bottom_zoom.set_ylim([-0.05,1.05])
-    ax_bottom_zoom.set_xlim([4950,5000])
+    ax_bottom_zoom.set_ylim([-0.01,0.20])
+    ax_bottom_zoom.set_xlim([6000,6100])
     ax_bottom_zoom.set_xlabel('Wavelength [ Ang ]')
 
     ax_bottom_zoom.step(wave, flux, '-', where='mid', lw=lw)
@@ -342,17 +345,19 @@ def paperPlots():
     if 0:
         # Mg II
         sim = simParams(run='tng50-1', redshift=0.5)
-        inst = 'SDSS-BOSS' #'4MOST_HRS'
+        inst = 'SDSS-BOSS' #'4MOST-HRS'
+        solar = False
         num = 10
 
-        spectra_gallery_indiv(sim, ion='Mg II', instrument=inst, EW_minmax=[0.1, 5.0], num=num, mode='evenly', SNR=20)
-        spectra_gallery_indiv(sim, ion='Mg II', instrument=inst, EW_minmax=[0.01, 0.4], num=num, mode='evenly', SNR=50)
-        spectra_gallery_indiv(sim, ion='Mg II', instrument=inst, EW_minmax=[3.0, 6.0], num=num, mode='random', SNR=20)
+        opts = {'instrument':inst, 'num':num, 'solar':solar}
+        spectra_gallery_indiv(sim, ion='Mg II', EW_minmax=[0.1, 5.0], mode='evenly', SNR=20, **opts)
+        spectra_gallery_indiv(sim, ion='Mg II', EW_minmax=[0.01, 0.4], mode='evenly', SNR=50, **opts)
+        spectra_gallery_indiv(sim, ion='Mg II', EW_minmax=[3.0, 6.0], mode='random', SNR=20, **opts)
 
     if 0:
         # C IV
         sim = simParams(run='tng50-1', redshift=2.0)
-        inst = '4MOST_HRS'
+        inst = '4MOST-HRS'
         num = 10
 
         spectra_gallery_indiv(sim, ion='C IV', instrument=inst, EW_minmax=[0.1, 5.0], num=num, mode='evenly', SNR=20)
@@ -362,20 +367,12 @@ def paperPlots():
     if 0:
         # Fe II
         sim = simParams(run='tng50-1', redshift=2.0)
-        inst = '4MOST_HRS'
+        inst = '4MOST-HRS'
         num = 10
 
         spectra_gallery_indiv(sim, ion='Fe II', instrument=inst, EW_minmax=[0.1, 5.0], num=num, mode='evenly', SNR=None)
         spectra_gallery_indiv(sim, ion='Fe II', instrument=inst, EW_minmax=[0.01, 0.4], num=num, mode='evenly', SNR=None)
         spectra_gallery_indiv(sim, ion='Fe II', instrument=inst, EW_minmax=[3.0, 6.0], num=num, mode='random', SNR=None)
-
-    if 0:
-        # Lyman-alpha forest (testing)
-        sim = simParams(run='tng50-1', redshift=5.0)
-        inst = 'KECK-HIRES'
-        num = 10
-
-        spectra_gallery_indiv(sim, ion='H I', instrument=inst, EW_minmax=None, num=num, mode='random', xlim='full', SNR=None)
 
     # fig 2: 2d spectra visualization
     if 0:
@@ -384,7 +381,13 @@ def paperPlots():
     # fig 3: EW distribution functions
     if 0:
         sim = simParams(run='tng50-1')
-        EW_distribution(sim)
+        line = 'MgII 2796'
+        inst = 'SDSS-BOSS'
+        redshifts = [0.5, 0.7, 1.0, 2.0]
+        solar = False
+        log = False
+
+        EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, solar=solar, log=log)
 
     # fig X: abundances vs solar i.e. for mini-snaps
     if 0:
@@ -395,9 +398,17 @@ def paperPlots():
     if 1:
         sim = simParams(run='tng50-1')
 
-        #plotLightconeSpectrum(sim, instrument='SDSS-BOSS', ion='Mg II')
+        plotLightconeSpectrum(sim, instrument='SDSS-BOSS', ion='Fe II')
         #plotLightconeSpectrum(sim, instrument='KECK-HIRES', ion='H I')
-        plotLightconeSpectrum(sim, instrument='KECK-HIRES', ion='H I', add_lines=['LyA'])
+        #plotLightconeSpectrum(sim, instrument='KECK-HIRES', ion='H I')
+
+    # fig X: Lyman-alpha forest sightlines (testing)
+    if 0:
+        sim = simParams(run='tng50-1', redshift=5.0)
+        inst = 'KECK-HIRES'
+        num = 10
+
+        spectra_gallery_indiv(sim, ion='H I', instrument=inst, EW_minmax=None, num=num, mode='random', xlim='full', SNR=None)
 
     # fig X: EW_solar/EW_sim vs EW_sim test
     if 0:
@@ -407,3 +418,5 @@ def paperPlots():
     if 0:
         pass # x-axis: redshift?
 
+if __name__ == "__main__":
+    paperPlots()

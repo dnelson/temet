@@ -521,6 +521,10 @@ class units(object):
         """ Convert length/distance in code units to physical Mpc. """
         return self.codeLengthToKpc(x) / 1000.0
 
+    def codeLengthToPc(self, x):
+        """ Convert length/distance in code units to physical parsec. """
+        return self.codeLengthToKpc(x) * 1000.0
+
     def codeLengthToComovingMpc(self, x):
         """ Convert length/distance in code units to comoving Mpc. """
         return self.codeLengthToComovingKpc(x) / 1000.0
