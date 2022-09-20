@@ -2617,7 +2617,6 @@ def spence18(vel05=False):
 def toba17():
     """ Load observational data points from Toba+ (2017), BH outflow properties. """
     path = dataBasePath + 'toba/toba17.txt'
-    from ..util.units import units
 
     # load table
     with open(path,'r') as f:

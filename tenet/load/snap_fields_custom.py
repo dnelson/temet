@@ -184,6 +184,25 @@ ne.limits = [-9.0, -3.0]
 ne.limits_halo = [-6.0, 0.0]
 ne.log = True
 
+@snap_field
+def ne_twophase(sim, partType, field, args):
+    """ Electron number density, where for star-forming gas cells we override the naive snapshot value, 
+    which is unphysically high, with a value based on the SH03 hot-phase mass only. """
+    ne = sim.snapshotSubset(partType, 'ne', **args)
+
+    # compute hot-phase fraction (is 1.0 for SFR==0 cells)
+    nh = sim.snapshotSubset(partType, 'nh', **args)
+    sfr = sim.snapshotSubset(partType, 'sfr', **args)
+    hot_frac = 1.0 - sim.units.densToSH03ColdFraction(nh, sfr)
+
+    return ne*hot_frac
+
+ne_twophase.label = r'Hot-phase Electron Number Density $\rm{n_e}$'
+ne_twophase.units = r'$\rm{cm^{-3}}$'
+ne_twophase.limits = [-9.0, -3.0]
+ne_twophase.limits_halo = [-6.0, 0.0]
+ne_twophase.log = True
+
 @snap_field(alias='hdens')
 def nh(sim, partType, field, args):
     """ Hydrogen number density, derived from total Density. """

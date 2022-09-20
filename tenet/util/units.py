@@ -439,6 +439,67 @@ class units(object):
 
         return eta_w
 
+    def densToSH03ColdFraction(self, dens_in, sfr):
+        """ Convert a gas cell density [code units] to the cold-phase (i.e. cold clouds) mass fraction 
+        according to the Springel & Hernquist (2003) sub-grid two-phase ISM pressurization model.
+        
+        Args:
+          dens_in (float or ndarray): hydrogen physical gas number density [H atoms/cm^3]
+          sfr (float or ndarray): star formation rate [Msun/yr]
+        """
+        assert 'TNG' in self._sP.simName, 'Check applicability to non-TNG models.'
+
+        dens = np.array(dens_in)
+
+        nH_thresh = 0.13 # star formation density threshold [H atoms/cm^3]
+        A0 = 573.0 # FactorEVP
+        T_SN = 5.73e7 # Kelvin
+        T_c = 1000.0 # Kelvin
+        beta = 0.22578 # mass fraction of stars which promptly explode as SNe
+        t_star = 3.27665 # Gyr (from MaxSfrTimescale)
+
+        # load KWH+96 lambda
+        from ..load.data import dataBasePath
+        lambda_tab = np.loadtxt(dataBasePath + '/kwh/kwh96_lambda.txt')
+
+        # SH03 Eqn. 20
+        A = A0 * (dens/nH_thresh)**(-0.8)
+
+        mu_cold = 4 / (1 + 3 * self.hydrogen_massfrac) # fully neutral
+        mu_hot = 4 / (3 + 5 * self.hydrogen_massfrac) # fully ionized
+
+        u_SN = T_SN * self.boltzmann / (mu_hot*(self.gamma-1)) # erg
+        u_c = T_c * self.boltzmann / (mu_cold*(self.gamma-1)) # erg
+
+        # SH03 Eqn. 11
+        u_h = u_SN / (A+1) + u_c
+
+        T_h = u_h * (mu_hot*(self.gamma-1)) / self.boltzmann
+
+        lambda_net = np.interp(T_h, lambda_tab[:,0], lambda_tab[:,1])
+        lambda_net *= self.hydrogen_massfrac**2 # KWH+96 convention
+        lambda_net *= -1 # cooling -> positive values
+
+        # SH03 Eqn. 16 (lambda_net at dens,u_h)
+        cooling_net = lambda_net * self.s_in_Gyr * dens**2 # erg cm^3/s -> erg/Gyr/cm^3
+
+        # [Gyr * erg/Gyr/cm^3 / cm^-3 / erg] = [unitless]
+        y = t_star * cooling_net / (dens*(beta*u_SN - (1-beta)*u_c))
+
+        #tsfr = np.sqrt(nH_thresh / dens) * MaxSfrTimescale
+        #y = tsfr / tcool * u_h / (FactorSN * EgySpecSN - (1 - FactorSN) * EgySpecCold)
+
+        # SH03 Eqn. 18 (cold cloud fraction)
+        x = 1 + 1/(2*y) - np.sqrt( 1/y + 1/(4*y**2) )
+        
+        # clip from [0,1] and set to zero below star-formation threshold (use sfr directly to avoid 
+        # any possible mismatch between pressurized and unpressurized cells)
+        x = np.clip(x, 0.0, 1.0)
+
+        x[sfr == 0] = 0.0        
+
+        return x
+
     def logMsunToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert halo mass (in log msun, no little h) to virial temperature at specified redshift. """
         return self.codeMassToVirTemp( self.logMsunToCodeMass(mass), meanmolwt=meanmolwt, log=log)
