@@ -2483,7 +2483,8 @@ def addBoxMarkers(p, conf, ax, pExtent):
         color = 'white' if 'textcolor' not in p else p['textcolor']
 
         ax.plot( [x0,x1], [yy,yy], '-', color=color, lw=lw, alpha=1.0)
-        ax.text( np.mean([x0,x1]), yt, scaleBarStr, color=color, alpha=1.0, size=conf.fontsize, ha='center', va='top')
+        #AP: ax.text( np.mean([x0,x1]), yt, scaleBarStr, color=color, alpha=1.0, size=conf.fontsize, ha='center', va='top')
+        ax.text( x0, yt, scaleBarStr, color=color, alpha=1.0, size=conf.fontsize, ha='left', va='top')
 
     # text in a combined legend?
     legend_labels = []
@@ -2516,8 +2517,10 @@ def addBoxMarkers(p, conf, ax, pExtent):
             legend_labels.append( 'HaloID %d' % subhalo['SubhaloGrNr'] )
         elif 'id' in str(p['labelHalo']):
             legend_labels.append( 'ID %d' % p['subhaloInd'] )
+            #legend_labels.append( 'ID %d' % subhalo['SubhaloGrNr'] )
         if 'redshift' in str(p['labelHalo']):
-            legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,p['subhaloInd']))
+            #legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,p['subhaloInd']))
+            legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,subhalo['SubhaloGrNr']))
         if str1 not in legend_labels and str2 not in legend_labels:
             # both Mhalo and Mstar
             legend_labels.append( str1 )

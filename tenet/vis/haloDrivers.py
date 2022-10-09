@@ -865,11 +865,47 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
         colorBar      = True
         nGalaxies     = 30
         nRowsFig      = 6
-        method        = 'sphMap_global'
+        method        = 'sphMap' #sphMap_global'
     if conf == 2:
         partField     = 'O VI fracmass'
         valMinMax     = [-5.0, -3.0]
-
+    if conf in [3]:
+        size          = 500.0 # 500: 250 kpc in each direction from the center; 800: 400 kpc in each direction from center
+        partType      = 'gas'
+        partField     = 'O VII'
+        ctName        = 'magma'
+        hsmlFac       = 3.5
+        valMinMax     = [13.0,16.5]
+        rVirFracs     = [1.0]
+        colorBar      = True
+        nGalaxies     = 30
+        nRowsFig      = 6
+        method        = 'sphMap' #sphMap_global'
+    if conf in [4]:
+        size          = 500.0 # 500: 250 kpc in each direction from the center; 800: 400 kpc in each direction from center
+        partType      = 'gas'
+        partField     = 'O VIII'
+        ctName        = 'magma'
+        hsmlFac       = 3.5
+        valMinMax     = [13.0,16.5]
+        rVirFracs     = [1.0]
+        colorBar      = True
+        nGalaxies     = 30
+        nRowsFig      = 6
+        method        = 'sphMap' #sphMap_global'
+    if conf in [5]:
+        size          = 500.0 # 500: 250 kpc in each direction from the center; 800: 400 kpc in each direction from center
+        partType      = 'gas'
+        partField     = 'Fe XVII'
+        ctName        = 'magma'
+        hsmlFac       = 3.5
+        valMinMax     = [13.0,16.5]
+        rVirFracs     = [1.0]
+        colorBar      = True
+        nGalaxies     = 30
+        nRowsFig      = 6
+        method        = 'sphMap' #sphMap_global'
+        
         # global pre-cache of selected fields into memory        
         if 0:
             fieldsToCache = ['Coordinates','Masses','O VI mass']
@@ -932,24 +968,24 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
           (baseStr,sP.simName,partType,rotation,curPage,numPages,hsmlFac,size)
 
     # load colors and morphs for custom labeling
-    if not evo:
-        gr_colors_z0, _ = loadSimGalColors(sP, defSimColorModel, bands=['g','r'], projs='random')
-        kappa_stars, _, _, _ = sP.simSubhaloQuantity('Krot_oriented_stars2')
-        mass_ovi, _, _, _ = sP.simSubhaloQuantity('mass_ovi')
-        mass_ovi = logZeroNaN(mass_ovi)
+    #if not evo:
+        #gr_colors_z0, _ = loadSimGalColors(sP, defSimColorModel, bands=['g','r'], projs='random')
+        #kappa_stars, _, _, _ = sP.simSubhaloQuantity('Krot_oriented_stars2')
+        #mass_ovi, _, _, _ = sP.simSubhaloQuantity('mass_ovi')
+        #mass_ovi = logZeroNaN(mass_ovi)
 
     # create panels, one per galaxy
     panels = []
     for i, shID in enumerate(shIDs):
-        lCust = ['ID %d z = %.1f' % (shID, redshifts[i])]
+        lCust = ['%s, ID %d, z = %.1f' % (sP.simName, shID, redshifts[i])]
         lScale = True if i == 0 else False
 
-        if not evo:
-            if conf == 0:
-                detailsStr = '(g-r) = %.2f $\kappa_\star$ = %.2f' % (gr_colors_z0[shID],kappa_stars[shID])
-            if conf in [1,2]:
-                detailsStr = '(g-r) = %.2f $M_{\\rm OVI}$ = %.1f' % (gr_colors_z0[shID],mass_ovi[shID])
-            lCust.append(detailsStr)
+        #if not evo:
+        #    if conf == 0:
+        #        detailsStr = '(g-r) = %.2f $\kappa_\star$ = %.2f' % (gr_colors_z0[shID],kappa_stars[shID])
+        #    if conf in [1,2]:
+        #        detailsStr = '(g-r) = %.2f $M_{\\rm OVI}$ = %.1f' % (gr_colors_z0[shID],mass_ovi[shID])
+        #    lCust.append(detailsStr)
                            
         panels.append( {'subhaloInd':shID, 'redshift':redshifts[i], 'labelCustom':lCust, 'labelScale':lScale} )
 
@@ -1314,6 +1350,7 @@ def erica_tng50_sfrmaps():
 
 
 def gjoshi_clustermaps(conf=0, haloID=0):
+    """ Author: A. Pillepich """
     """ Joshi et al. 2020 (Figs. 1 and 2): stellar maps of two TNG50 Virgo-mass clusters at z=0 """
     """ In a single panel centered on a halo, show one field from the box. """
     """ To run for HaloID = 0,1 at snap = 099. """
@@ -1369,16 +1406,22 @@ def gjoshi_clustermaps(conf=0, haloID=0):
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 
-def mwbubbles_tng50_top30(setType='top30', partType='gas', partField='P_gas', input_rotation='edge-on'):
-    """ Pillepich et al. 2021 (): mostly edge-on views of MW/M31 analogs """
+def apillepich_TNG50MWM31s_bubbles_top30(setType='top30', partType='gas', partField='P_gas', rotation='edge-on'):
+    """ Author: A. Pillepich """
+    """ Pillepich et al. 2021 (Figs. 2, 3 and Appendix): mostly edge-on views of MW/M31 analogs """
     """ 6x5 posters of random 30 bubbles, P_gas and X-ray """
     """ Interesting options for partType='gas': xray_lum, coldens_msunkpc2, machnum, P_gas, P_B, entropy, temperature, metal_solar, vrad, bmag_uG, HI_segmented, ionmassratio_OVII_OVIII, SN_IaII_ratio_Fe """
     """ Interesting options for  partType='stars': coldens_msunkpc2 """
 
+    """ Other setType options: """
+    """ lowSFRs: 4x4 posters of galaxies with lowSFRs and yet bubbles: P_gas, HI_segmented ... """
+    """ MWs: 7x3 posters of MW-like galaxies with bubbles: P_gas, X-ray, temperature, machnum, HI_segmented... """
+    """ M31s: 3x3 posters of MW-like galaxies with bubbles: P_gas, X-ray, temperature, machnum, HI_segmented... """
+
     panels = []
 
     # imaging options
-    plotOptions = {'rotation'   : input_rotation,
+    plotOptions = {'rotation'   : rotation,
                    'labelSim'   : True,
                    'labelZ'     : False,
                    'labelScale' : True,
@@ -1389,6 +1432,10 @@ def mwbubbles_tng50_top30(setType='top30', partType='gas', partField='P_gas', in
     #import matplotlib as mpl
     #mpl.rcParams['font.family'] = 'serif'
     #mpl.rcParams['font.serif'] = ['Times New Roman']
+
+    if partField == 'machnum':
+        ptRestrictions = {'machnum':['gt',0.9]}
+        hsmlFac = 0.7
 
     class plotConfig:
         plotStyle = 'edged'
@@ -1440,13 +1487,23 @@ def mwbubbles_tng50_top30(setType='top30', partType='gas', partField='P_gas', in
 
     # custom options
     # To reproduce paper plots, leave auto ranges of all fields but 'xray_lum' and 'xray_lum_05-2kev'
-    #if partField == 'P_gas':
-    #    valMinMax = [1.0, 2.5]
+    if partField == 'P_gas':
+        valMinMax = [1.0, 3.0]
     if partField == 'xray_lum':
         valMinMax = [33.0, 36.0]
     if partField == 'xray_lum_05-2kev':
         valMinMax = [33.0, 36.0]
-    
+    if partField == 'temperature':
+        valMinMax = [5.0, 7.5]
+    if partField == 'coldens_msunkpc2':
+        valMinMax = [4.0, 7.0]
+    if partField == 'O VI':
+        valMinMax = [11.0, 15.0]
+    if partField == 'machnum':
+        valMinMax = [0.0, 5.0]
+    if partField == 'metal_solar':
+        valMinMax = [-1.0, 1.0]        
+
     # configure panels: only edge-on 
     for i in range(int(plotConfig.nRows)):
         for j in range(nCols):
@@ -1455,3 +1512,206 @@ def mwbubbles_tng50_top30(setType='top30', partType='gas', partField='P_gas', in
     plotConfig.saveFilename = savePathDefault + 'apillepich_%s_bubbles_%s_%s_%d_%s_Lkpc_%d_DepthPercentage_%d_%s_%s.pdf' % \
         (setType,run,res,snap,input_rotation,size,depthFac*100,partType,partField)
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+
+def pgalan_tng50_fornax(setType='fornax10', partType='stars', partField='coldens_msunkpc2'):
+    """ Author: A. Pillepich """
+    """ Galan et al. 2022 (Fig. 1): stellar mass maps of Fornax-like groups and clusters """
+    """ Other interesting options for partType='gas': xray_lum, coldens_msunkpc2, machnum, P_gas, P_B, entropy, temperature, metal_solar, vrad, bmag_uG, HI_segmented, OVI_OVII_ionmassratio, SN_IaII_ratio_Fe """
+    
+    panels = []
+
+    # imaging options
+    plotOptions = {'rotation'   : None,
+                   'labelSim'   : True,
+                   'labelZ'     : False,
+                   'labelScale' : True,
+                   'labelHalo'  : 'mhalo,mstar,redshift',
+                   'nPixels'    : [400,400]}
+
+    class plotConfig:
+        plotStyle       = 'edged'
+        rasterPx        = plotOptions['nPixels'][0] * 4
+        colorbars       = True
+        fontsize        = 70.0
+
+    sP         = simParams(res=2160, run='tng', redshift=0.0)
+    snap       = 99
+    rVirFracs  = [1.0]
+    method     = 'sphMap_global'
+    axes       = [0,1]
+    rVirFracs  = [0.5, 1.0]
+    size       = 4.0
+    sizeType   = 'rVirial' #'kpc'
+    setNum     = 0
+    
+    if setType == 'fornax10':
+        ids         = [2, 3, 4, 6, 7, 8, 9, 10, 11, 13]
+        numPerSet   = 10
+        shIDs = ids[setNum*numPerSet:(setNum+1)*numPerSet]
+        print(shIDs)
+        nCols = 2
+        plotConfig.nRows = 5
+    elif setType == 'top16':
+        ids        = list(range(16))
+        numPerSet = 16
+        shIDs = ids[setNum*numPerSet:(setNum+1)*numPerSet]
+        print(shIDs)
+        nCols = 4
+        plotConfig.nRows = 4
+
+    # custom options
+    if partField == 'coldens_msunkpc2':
+        valMinMax = [3.0, 10.0]
+    if partField == 'xray_lum':
+        valMinMax = [33.0, 36.0]
+    if partField == 'xray_lum_05-2kev':
+        valMinMax = [33.0, 36.0]
+    
+    # configure panels:  
+    for i in range(int(plotConfig.nRows*nCols)):
+        local_subhaloInd = sP.groupCatSingle(haloID=shIDs[i])['GroupFirstSub']
+        panels.append( {'subhaloInd':local_subhaloInd, **plotOptions} )
+
+    plotConfig.saveFilename = savePathDefault + 'pgalan_clustermaps_%s_%s_%d_%d_%s_%s_%s.png' % \
+          (setType,sP.run,sP.res,snap,method,partType,partField) 
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+
+def cengler_tng50_MWM31satellites(setNum=0, setType='MWM31satellites_selection', setMaps='stellarmass'):
+    """ Author: A. Pillepich """
+    """ Engler et al. 2022 (Fig. 1): stellar mass and gas maps of massive MW/M31-like galaxies """
+    """ Selection of satellites: MW/M31-like hosts, <300 kpc, massive """
+    """ To be run for setNum = 0, ...11 """
+    """ To be run for setMaps='stellarmass',gasmass,... """ 
+    
+    panels = []
+
+    # imaging options
+    plotOptions = {'rotation'   : None,
+                   'labelSim'   : True,
+                   'labelHalo'  : True,
+                   'labelZ'     : False,
+                   'labelScale' : True,
+                   'labelHalo'  : 'mhalo, mstar,redshift',
+                   'nPixels'    : [400,400]}
+
+    class plotConfig:
+        plotStyle       = 'edged'
+        rasterPx        = plotOptions['nPixels'][0] * 4
+        colorbars       = True
+        fontsize        = 70.0
+
+    sP         = simParams(res=2160, run='tng', redshift=0.0)
+    snap       = 99
+    rVirFracs  = [1.0]
+    method     = 'sphMap'#_subhalo'
+    axes       = [0,1]
+    rVirFracs  = [0.5, 1.0]
+    size       = 100
+    sizeType   = 'kpc'
+    
+    if setType == 'MWM31satellites':
+        ids         = np.loadtxt('/u/apillepi/sims.TNG/L35n2160TNG/appostprocessing/mwm31s/L35n2160TNG_099_SubfindIDs_MassiveSats_MWM31like.txt', dtype='int')
+        numPerSet   = 20
+        shIDs       = ids[setNum*numPerSet:(setNum+1)*numPerSet]
+        print(shIDs)
+        nCols           = 4
+        plotConfig.nRows= 5
+    elif setType == 'MWM31satellites_selection':
+        #ids         = [388547, 424295, 479291, 492877, 511304] # C. Engler proposals
+        #ids         = [388547, 424295, 447915, 479291, 485058, 492877, 502374, 511304, 525535, 567386] 
+        ids         = [424295, 435758, 447915, 479291, 485058, 492877, 502374, 511304, 525535, 567386] #435758 
+        numPerSet   = 10
+        shIDs       = ids[setNum*numPerSet:(setNum+1)*numPerSet]
+        print(shIDs)
+        nCols           = 5
+        plotConfig.nRows= 2
+
+    if str(setMaps) == 'stellarmass':
+        partType    = 'stars'
+        partField   = 'coldens_msunkpc2'
+        valMinMax   = [3.0,9.5]
+        #hsmlFac     = 1.0, 
+    elif str(setMaps) == 'stellarlight':
+        partType    = 'stars'
+        partField   = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
+    elif str(setMaps) == 'gasmass':
+        partType    = 'gas'
+        partField   = 'coldens_msunkpc2'
+        valMinMax   = [4.0,8.0]
+
+    # custom options
+    if partField == 'xray_lum':
+        valMinMax = [33.0, 36.0]
+    if partField == 'xray_lum_05-2kev':
+        valMinMax = [33.0, 36.0]
+    
+    # configure panels:  
+    for i in range(int(plotConfig.nRows*nCols)):
+        panels.append( {'subhaloInd':shIDs[i], **plotOptions} )
+
+    plotConfig.saveFilename = savePathDefault + 'cengler_satellitemaps_%s_%s_%d_%d_%s_%s_%s_set-%d.png' % \
+          (setType,sP.run,sP.res,snap,method,partType,partField, setNum) 
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+
+def apillepich_TNG50MWM31s_maps(setType='TNG50MWM31s', setMaps='stellarlight'):
+    """ Author: A. Pillepich """
+    """ Pillepich et al. 2022 (Figs. XXX): various maps of the MW/M31-like galaxies in TNG50, random projections """
+    """ Selection of galaxies: TNG50 MW/M31-like hosts """
+    """ To be run for setMaps='stellarlight', 'stellarmass',gasmass,... """ 
+    
+    panels = []
+
+    # imaging options
+    plotOptions = {'rotation'   : None,
+                   'labelSim'   : True,
+                   'labelHalo'  : True,
+                   'labelZ'     : False,
+                   'labelScale' : True,
+                   'labelHalo'  : 'mhalo, mstar,redshift',
+                   'nPixels'    : [400,400]}
+
+    class plotConfig:
+        plotStyle       = 'edged'
+        rasterPx        = plotOptions['nPixels'][0] * 4
+        colorbars       = True
+        fontsize        = 20.0
+
+    sP         = simParams(res=2160, run='tng', redshift=0.0)
+    snap       = 99
+    rVirFracs  = [1.0]
+    method     = 'sphMap'#_subhalo'
+    axes       = [0,1]
+    rVirFracs  = [0.5, 1.0]
+    size       = 100
+    sizeType   = 'kpc'
+    
+    if setType == 'TNG50MWM31s':
+        fname       = '/u/apillepi/sims.TNG/L35n2160TNG/appostprocessing/mwm31s/TNG_L35n2160TNG_099_MWM31likeGalaxies.txt'
+        data        = np.genfromtxt(fname, skip_header=4)
+        ids         = data[:,0]
+        ids         = ids.astype(int)
+        print(ids)
+
+    if str(setMaps) == 'stellarmass':
+        partType    = 'stars'
+        partField   = 'coldens_msunkpc2'
+        valMinMax   = [6.0,12.0]
+        #hsmlFac     = 1.0, 
+    elif str(setMaps) == 'stellarlight':
+        partType    = 'stars'
+        partField   = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
+    elif str(setMaps) == 'gasmass':
+        partType    = 'gas'
+        partField   = 'coldens_msunkpc2'
+        valMinMax   = [4.0,8.0]
+    
+    # configure panels:  
+    for i in ids:
+        panels = []
+        panels.append( {'subhaloInd':i, **plotOptions} )
+        plotConfig.saveFilename = savePathDefault + 'apillepich_mwm31s_maps_%s_%s_%d_%d_%s_%s_%s_%d_proj_%d_%d.png' % \
+          (setType,sP.run,sP.res,snap,method,partType,partField, i, axes[0], axes[1]) 
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)

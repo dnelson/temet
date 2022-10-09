@@ -104,7 +104,7 @@ and install the Roboto font used by default
 .. code-block:: bash
 
     cd ~/tenet/tenet/tables/
-    wget -r -nH --cut-dirs=2 --no-parent --reject="index.html*" -e robots=off tenet.tng-project.org/tables/
+    wget -r -nH --cut-dirs=1 --no-parent --reject="index.html*" -e robots=off tenet.tng-project.org/tables/
 
 8. Organize simulation directories as follows
 
