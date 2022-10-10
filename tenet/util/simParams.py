@@ -1503,15 +1503,33 @@ class simParams:
     def boxLengthDeltaRedshift(self):
         """ The redshift interval dz corresponding to traversing one box side-length. """
         z_start = self.redshift
-        z_vals = np.linspace(z_start, z_start+0.1, 200)
+        z_vals = np.linspace(z_start, z_start+1.0, 800)
 
-        # compute distance as a function of delta redshift after z_start
+        # compute distance as a function of delta redshift after z_start [cMpc]
         lengths = self.units.redshiftToComovingDist(z_vals) - self.units.redshiftToComovingDist(z_start)
 
         # interpolate to find redshift for a distance of one box length
-        box_length_mpc = self.units.codeLengthToMpc(self.boxSize)
-        z_final = np.interp(box_length_mpc, lengths, z_vals)
+        box_length_cmpc = self.units.codeLengthToComovingMpc(self.boxSize)
+        assert box_length_cmpc < lengths.max(), 'Error. Increase range of z_vals.'
+
+        z_final = np.interp(box_length_cmpc, lengths, z_vals)
         return z_final - z_start
+
+    @property
+    def dz(self):
+        return self.boxLengthDeltaRedshift
+
+    @property
+    def boxLengthComovingPathLength(self):
+        """ The comoving pathlength i.e. 'absorption distance' (dX) corresponding to one box side-length. """ 
+        dX = self.units.H0_h1_s/self.units.c_cgs * (1+self.redshift)**2
+        dX *= self.boxSize * self.units.UnitLength_in_cm # [dimensionless]
+
+        return dX
+
+    @property
+    def dX(self):
+        return self.boxLengthComovingPathLength
 
     @property
     def zoomSubhaloID(self):
