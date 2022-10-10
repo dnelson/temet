@@ -784,7 +784,7 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
             # have to do this at exactly the right moment (not here! after done with the return of snapshotSubsetP)
             print('WARNING: Erasing global _heap of mp and recreating!')
             mp.heap.BufferWrapper._heap = mp.heap.Heap()
-            gc.collect()
+            #gc.collect()
         if 0:
             # diagnostic
             nMallocs = mp.heap.BufferWrapper._heap._n_mallocs

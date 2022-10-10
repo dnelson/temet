@@ -420,8 +420,8 @@ def replicateVar(childCounts, subsetInds=None):
         totChildren = np.sum( childCounts[subsetInds] )
 
         # we also return the child index array (i.e. which children belong to the subsetInds parents)
-        r = { parentInds : np.array( totChildren, dtype='uint32' ),
-              childInds  : np.array( totChildren, dtype='uint32' ) }
+        r = { 'parentInds' : np.array( totChildren, dtype='uint32' ),
+              'childInds'  : np.array( totChildren, dtype='uint32' ) }
 
         offsetSub = 0
 
@@ -673,7 +673,7 @@ def sgolay2d(z, window_size, order, derivative=None):
     elif derivative == 'both':
         c = np.linalg.pinv(A)[1].reshape((window_size, -1))
         r = np.linalg.pinv(A)[2].reshape((window_size, -1))
-        return sfftconvolve(Z, -r, mode='valid'), fftconvolve(Z, -c, mode='valid')
+        return fftconvolve(Z, -r, mode='valid'), fftconvolve(Z, -c, mode='valid')
 
 def gaussian_filter_nan(zz, sigma):
     """ Filter 2D array zz by a Gaussian with input sigma, ignoring any NaN entries. """
@@ -791,10 +791,9 @@ def binned_stat_2d(x, y, c, bins, range_x, range_y, stat='median'):
         result = np.zeros( nbins, dtype=c.dtype )
         result.fill(np.nan)
 
-        if 0:
-            # handle odd/even definition for np.median
-            result[w] = (c_sorted[med_inds[w_even]] + c_sorted[med_inds[w_even]-1]) * 0.5
-            result[w] = c_sorted[med_inds[w_odd]]
+        # handle odd/even definition for np.median
+        #result[w] = (c_sorted[med_inds[w_even]] + c_sorted[med_inds[w_even]-1]) * 0.5
+        #result[w] = c_sorted[med_inds[w_odd]]
 
         # fastest method (unfinished!)
         if 0:

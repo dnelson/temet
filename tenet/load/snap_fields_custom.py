@@ -466,7 +466,7 @@ def pressure(sim, partType, field, args):
     u    = sim.snapshotSubset(partType, 'u', **args)
     dens = sim.snapshotSubset(partType, 'dens', **args)
 
-    return units.calcPressureCGS(u,dens)
+    return sim.units.calcPressureCGS(u,dens)
 
 pressure.label = 'Gas Pressure'
 pressure.units = r'$\rm{K\ cm^{-3}}$'
@@ -932,9 +932,9 @@ def n_hi(sim, partType, field, args):
     savePath = sim.derivPath + 'cache/hi_column_%s_%03d.hdf5' % (partType,sim.snap)
 
     if isfile(savePath):
-        with h5py.File(savepath,'r') as f:
+        with h5py.File(savePath,'r') as f:
             data = f['hi_column'][()]
-        print('Loaded: [%s]' % savepath)
+        print('Loaded: [%s]' % savePath)
     else:
         # config
         acFieldName = 'Box_Grid_nHI_GK_depth10'
@@ -1182,8 +1182,8 @@ def _cloudy_load(sim, partType, field, args):
                 (cache_key,indRangeOrig[0],indRangeOrig[1]))
             return sim.data[cache_key][indRangeOrig[0]:indRangeOrig[1]+1]
         if args['inds'] is not None:
-            print('NOTE: Returning [%s] from cache, inds of size [%d]!' % (cache_key,inds.size))
-            return sim.data[cache_key][inds]
+            print('NOTE: Returning [%s] from cache, inds of size [%d]!' % (cache_key,args['inds'].size))
+            return sim.data[cache_key][args['inds']]
 
         # if key exists but neither indRange or inds specified, we return this (possibly custom subset)
         print('CAUTION: Cached return [%s], and indRange is None, returning all of sim.data field.' % cache_key)
@@ -1745,7 +1745,7 @@ def vel_rel(sim, partType, field, args):
     """ 3D (xyz) velocity, relative to the halo/subhalo motion. """
     if sim.isZoom:
         subhaloID = sim.zoomSubhaloID
-        print(f'WARNING: Using {zoomSubhaloID =} for zoom run to compute [{field}]!')
+        print(f'WARNING: Using {sim.zoomSubhaloID =} for zoom run to compute [{field}]!')
 
     # get reference velocity
     if args['haloID'] is None and args['subhaloID'] is None:
@@ -1792,7 +1792,7 @@ def rad(sim, partType, field, args):
 
     if sim.isZoom:
         subhaloID = sim.zoomSubhaloID
-        print(f'WARNING: Using {zoomSubhaloID = } for zoom run to compute [{field}]!')
+        print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
 
     pos = sim.snapshotSubset(partType, 'pos', **args)
 
@@ -1848,7 +1848,7 @@ def vrad(sim, partType, field, args):
     Optionally normalized by the halo virial velocity. Convention: negative = in, positive = out. """
     if sim.isZoom:
         subhaloID = sim.zoomSubhaloID
-        print(f'WARNING: Using {zoomSubhaloID = } for zoom run to compute [{field}]!')
+        print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
 
     # get position and velocity of reference
     if args['haloID'] is None and args['subhaloID'] is None:
@@ -1880,7 +1880,7 @@ def vrad(sim, partType, field, args):
     if '_vvir' in field:
         # normalize by halo v200
         mhalo = sim.halo(haloID)['Group_M_Crit200']
-        vv /= sP.units.codeMassToVirVel(mhalo)
+        vv /= sim.units.codeMassToVirVel(mhalo)
 
     return vv
 
@@ -1898,7 +1898,7 @@ def angmom(sim, partType, field, args):
 
     if sim.isZoom:
         subhaloID = sim.zoomSubhaloID
-        print(f'WARNING: Using {zoomSubhaloID = } for zoom run to compute [{field}]!')
+        print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
 
     pos = sim.snapshotSubset(partType, 'pos', **args)
     vel = sim.snapshotSubset(partType, 'vel', **args)

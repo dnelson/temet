@@ -391,7 +391,7 @@ def supplementVirtualSimHDF5AddSnapField():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
     from ..util.simParams import simParams
 
-    sP = simParams(res=2500,run='tng')
+    sP = simParams(res=1080,run='tng')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
 
     # open (append mode)
@@ -401,8 +401,8 @@ def supplementVirtualSimHDF5AddSnapField():
     # start custom
     chunkPath = sP.snapPath
     nChunks   = sP.snapNumChunks(snaps[-1])
-    gName     = 'PartType0'
-    field     = 'InternalEnergyOld'
+    gName     = 'PartType4'
+    field     = 'StellarHsml'
     baseName  = 'Snapshots'
 
     # acquire field name, shape, dtype of dataset from final snapshot
@@ -577,7 +577,7 @@ def supplementVirtualSimHDF5():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
     from ..util.simParams import simParams
 
-    sP = simParams(run='tng100-1')
+    sP = simParams(run='tng50-2')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
 
     # open (append mode)
@@ -678,7 +678,7 @@ def supplementVirtualSimHDF5():
 
             _addPostprocessingCat(fSim,filepath,baseName,gNames)
 
-    if 1:
+    if 0:
         # change to re-ordered tracer_tracks, first delete old then add new
         gName = '/Snapshots/99/PartType2/'
         for key in fSim[gName]:

@@ -299,6 +299,8 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
         else:
             colors = sampleColorTable('plasma', len(massBins), bounds=[0.1,0.7])
 
+        txt = []
+
         # loop over halos in each mass bin
         for i, massBin in enumerate(massBins):
 
@@ -445,6 +447,33 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
                 #ax.fill_between(radMidPts, sbr_stack_med[:,0], sbr_stack_med[:,2], color=l.get_color(), alpha=0.1)
 
                 #l, = ax.plot(radMidPts, sbr_stack_mean, lw=lw, label=label + ' (stack then prof, mean)')
+
+                # add to txt 
+                sbr_mean = np.nanpercentile(sbr_indiv_mean, percs, axis=0)
+                sbr_median = np.nanpercentile(sbr_indiv_med[:,:,1], percs, axis=0)
+                #txt.append({'rad':radMidPts, 'massBin':massBin, 'sb_mean':sbr_median, 'sb_med':sbr_mean})
+
+                # print text file
+                filename = 'fig3_sb_profiles_z=%.1f_Mstar=%.1f.txt' % (sP.redshift,massBin[0])
+                out = '# Nelson+ (2021) https://arxiv.org/abs/2106.09023\n'
+                out += '# Figure 3 Radial Surface Brightness Profiles (%s z=%.1f)\n' % (sP.simName, sP.redshift)
+                out += '# Stellar mass bin: [%.2f - %.2f] Msun\n' % (massBin[0],massBin[1])
+                if psf:
+                    out += '# note: PSF FWHM=0.7 arcsec applied\n'
+                out += '# note: percentiles for each type of stack are across the population (halo-to-halo variation)\n'
+                out += '# Column 1: Projected Distance [pkpc]\n'
+                out += '# Columns 2-4: SB mean stack: p16, p50, p84 [log erg/s/cm^2/arcsec^2]\n'
+                out += '# Columns 5-7: SB median stack: p16, p50, p84 [log erg/s/cm^2/arcsec^2]\n'
+
+                assert radMidPts.size == sbr_mean.shape[1] == sbr_median.shape[1]
+
+                for i in range(radMidPts.size):
+                    out += '%5.2f %6.2f %6.2f %6.2f %6.2f %6.2f %6.2f\n' % \
+                        (radMidPts[i],sbr_mean[0,i],sbr_mean[1,i],sbr_mean[2,i],
+                         sbr_median[0,i],sbr_median[1,i],sbr_median[2,i])
+
+                with open(filename, 'w') as f:
+                    f.write(out)
 
     # observational data
     if sP.redshift == 0.7 and not indiv:
@@ -878,8 +907,10 @@ def paperPlots():
 
     # figure 3 - stacked SB profiles
     if 0:
-        mStarBins = [ [9.0, 9.05], [9.5, 9.6], [10.0,10.1], [10.4,10.45], [10.9,11.1] ]
-        for redshift in [0.7]:#redshifts:
+        mStarBins = [[9.0, 9.05], [9.5, 9.6], [10.0,10.1], [10.4,10.45], [10.9,11.1]]
+        #mStarBins = [[7.5,7.55], [8.0,8.05], [8.5, 8.55], [9.0, 9.05], 
+        #             [9.5, 9.6], [10.0,10.1], [10.4,10.45], [10.9,11.1]]
+        for redshift in [0.3,0.7,1.0,1.5,2.0]:#redshifts:
             sP.setRedshift(redshift)
             radialSBProfiles([sP], mStarBins, minRedshift=redshifts[0], xlim=[0,50], psf=True)
 

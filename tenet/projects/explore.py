@@ -922,7 +922,8 @@ def xenoSNevo_profiles():
 
     # config
     #runName = '1_1_cluster_dt_0_cRad_0pc_density_1_nstar_1_E_1e51erg_boxSize_48_res_128'
-    runName = '1_test_8_negative_pressure_set_to_zero'
+    #runName = '1_test_8_negative_pressure_set_to_zero'
+    runName = '17_IC_SN_base'
     sim = simParams('~/sims.idealized/sims.xeno/%s/' % runName)
 
     skip = int(sim.numSnaps/15) if sim.numSnaps > 100 else 5
