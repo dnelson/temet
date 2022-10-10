@@ -1572,12 +1572,13 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
                 hsml = 2 * np.arcsin(hsml_orig / (2*s_rad))
 
-                # TODO: handle differential distortion along x/y directions
-                # I.e. the distortion in s_long is equal to s_lat/sin(s_lat) or approx by the formula below
-                # But at the moment it seems like this is not necessary 
-                #hsml_1 = hsml.astype('float32') # hsml_1 (hsml_r) unmodified
-                #hsml = hsml * (1 + s_lat**2 / 6.0 + 7.0 * s_lat**4 / 360.0) # hsml_0 (i.e. hsml_phi) only
+                # handle differential distortion along x/y directions
+                # i.e. the distortion in s_long is equal to s_lat/sin(s_lat) or approx by the formula below
+                # (does not seem necessary, future todo)
                 hsml = hsml.astype('float32')
+                if 0: 
+                    hsml_1 = hsml.astype('float32') # hsml_1 (hsml_r) unmodified
+                    hsml = hsml * (1 + s_lat**2 / 6.0 + 7.0 * s_lat**4 / 360.0) # hsml_0 (i.e. hsml_phi) only
 
                 # we will project in this space, periodic on the boundaries
                 pos = np.zeros( (s_rad.size,2), dtype=pos.dtype )
@@ -2992,6 +2993,10 @@ def renderMultiPanel(panels, conf):
                 cb.ax.yaxis.label.set_size(conf.fontsize)
                 cb.ax.tick_params(axis='both', which='major', pad=padding)
 
+            # post-render function hook?
+            if 'f_post' in p and callable(p['f_post']):
+                p['f_post'](ax)
+
         if nRows == 1 and nCols == 3: plt.subplots_adjust(top=0.97,bottom=0.06) # fix degenerate case
 
     if conf.plotStyle in ['edged','edged_black']:
@@ -3203,6 +3208,10 @@ def renderMultiPanel(panels, conf):
             addVectorFieldOverlay(p, conf, ax)
 
             addContourOverlay(p, conf, ax)
+
+            # post-render function hook?
+            if 'f_post' in p and callable(p['f_post']):
+                p['f_post'](ax)
 
             # colobar(s)
             if oneGlobalColorbar:

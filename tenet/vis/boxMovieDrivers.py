@@ -10,6 +10,7 @@ from ..vis.box import renderBox, renderBoxFrames
 from ..util import simParams
 from ..cosmo.util import subboxSubhaloCat
 from ..util.rotation import rotationMatrixFromAngleDirection
+from ..util.helper import logZeroNaN
 
 def subbox_4x2_movie(curTask=0, numTasks=1):
     """ Render a movie comparing several quantities of a single subbox (4x2 panels, 4K). """
@@ -220,7 +221,7 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one', render8k=False):
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
-def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', frameNum=None, rotSeqFrameNum=None, rotSeqFrameNum2=None):
+def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', frameNum=None, rotSeqFrameNum=None, rotSeqFrameNum2=None, cat=None):
     """ Use the subbox tracking catalog to create a movie highlighting the evolution of a single galaxy.
     If frameNum is not None, then use this for save filename instead of sbSnapNum. 
     If rotSeqFrameNum is not None, then proceed to render rotation squence (at fixed time iff sbSnapNum is kept fixed). """
@@ -240,7 +241,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     # set selection subhaloID at sP.snap
     if gal == 'one':
         # first movie, Andromeda (sbSnaps 51 - 3600)
-        sP = simParams(res=2160,run='tng',snap=99)
+        sP_par = simParams(res=2160,run='tng',snap=99)
         sbNum = 0
         #subhaloID = 389836 # halo 296, snap 58
         #subhaloID = 440389 # re-located at snap 90 (halo 227)
@@ -260,7 +261,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
 
     if gal == 'two':
         # second movie, massive elliptical (sbSnaps 0 - 3600)
-        sP = simParams(res=2160,run='tng',snap=99)
+        sP_par = simParams(res=2160,run='tng',snap=99)
         sbNum = 2
         subhaloID = 0 # halo 0, snap 58, also snap 99
         refVel = np.array([-195.3,-52.9,-157.0]) # avg of stars within 30 pkpc of subhalo_pos at sbSnapNum=1762
@@ -277,7 +278,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
 
     if gal == 'three':
         # third movie, Milky Way (sbSnaps 0 - ...)
-        sP = simParams(res=2160,run='tng',snap=90)
+        sP_par = simParams(res=2160,run='tng',snap=90)
         sbNum = 0
         subhaloID = 481167 # halo 359, snap 90
         refVel = np.array([-10.29, -13.75, 74.17]) # snap 40, z=1.5
@@ -286,12 +287,12 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
 
     if gal == 'mwbubbles1':
         # annalisa TNG50 MW bubbles paper: object one
-        sP = simParams(run='tng50-1', redshift=0.0)
+        sP_par = simParams(run='tng50-1', redshift=0.0)
         sbNum = 2
         subhaloID = 543114 # snaps 3211 - 3599
 
     if gal == 'mwbubbles2':
-        sP = simParams(run='tng50-1', redshift=0.0)
+        sP_par = simParams(run='tng50-1', redshift=0.0)
         sbNum = 2
         subhaloID = 565089 # snaps 3030 - 3599
 
@@ -303,7 +304,8 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         labelCustom = ['$\Delta t$ = %6.1f Myr' % ((sP_sub.tage - age_start) * 1000)]
 
     # parse subbox catalog, get time-evolving positions
-    cat = subboxSubhaloCat(sP, sbNum)
+    if cat is None:
+        cat = subboxSubhaloCat(sP_par, sbNum)
     assert cat['EverInSubboxFlag'][subhaloID]
 
     w = np.where(cat['SubhaloIDs'] == subhaloID)[0]
@@ -420,9 +422,9 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
             aperture_num = 0 # 0= 30 pkpc, 1= 30 ckpc/h, 2= 50 ckpc/h
             stellarMass = np.squeeze(cat['SubhaloStars_Mass'][w[0],aperture_num,sbSnapNum])
             SFR = np.squeeze(cat['SubhaloGas_SFR'][w[0],aperture_num,sbSnapNum])
-            #labelCustom = ["log M$_{\star}$ = %.2f" % sP.units.codeMassToLogMsun(stellarMass),
-            #               "SFR = %.1f M$_\odot$ yr$^{-1}$" % SFR]
-            #labelCustom = ["galaxy stellar mass = %s million suns" % locale.format_string('%d', sP.units.codeMassToMsun(stellarMass)/1e6,'1')]
+            labelCustom = ["log M$_{\star}$ = %.2f" % sP_par.units.codeMassToLogMsun(stellarMass),
+                           "SFR = %.1f M$_\odot$ yr$^{-1}$" % SFR]
+            #labelCustom = ["galaxy stellar mass = %s million suns" % locale.format_string('%d', sP_par.units.codeMassToMsun(stellarMass)/1e6,'1')]
 
     if conf == 'two':
         # galaxy zoom panel: gas
@@ -501,12 +503,36 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         age_z0 = sP_sub.tage
         sP_sub.setSnap(sbSnapNum)
         labelCustom = ['$\Delta t$ = %6.1f Myr' % ((age_z0 - sP_sub.tage) * 1000)]
-        #if 'SubhaloBH_Mass' in cat:
-        #    aperture_num = 0 # 0= 30 pkpc, 1= 30 ckpc/h, 2= 50 ckpc/h
-        #    bhMass = np.squeeze(cat['SubhaloBH_Mass'][w[0],aperture_num,sbSnapNum])
-        #    bhMdot = np.squeeze(cat['SubhaloBH_Mdot'][w[0],aperture_num,sbSnapNum])
-        #    labelCustom.append(r'$\rm{M_{BH} = %.1f M_{sun}}' % sP.units.codeMassToLogMsun(bhMass))
-        #    labelCustom.append(r'$\rm{\dot{M}_{BH} = %.2f M_{sun}/yr' % sP.units.codeMassOverTimeToMsunPerYear(bhMdot))
+        if 'SubhaloBH_Mass' in cat:
+            aperture_num = 0 # 0= 30 pkpc, 1= 30 ckpc/h, 2= 50 ckpc/h
+            bhMass = np.squeeze(cat['SubhaloBH_Mass'][w[0],aperture_num,sbSnapNum])
+            bhMdot = np.squeeze(cat['SubhaloBH_Mdot'][w[0],aperture_num,sbSnapNum])
+            labelCustom.append(r'$\rm{M_{BH} = %.1f \,M_{sun}}$' % sP_sub.units.codeMassToLogMsun(bhMass))
+            labelCustom.append(r'$\rm{log\,\dot{M}_{BH} = %.1f \,M_{sun}/yr}$' % np.log10(sP_sub.units.codeMassOverTimeToMsunPerYear(bhMdot)))
+
+            def func_post(parent_ax):
+                """ Custom post-render hook to draw plot on top. """ 
+                from .common import setAxisColors
+                from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+                ax = inset_axes(parent_ax, width="20%", height="20%", loc=4, borderpad=2.5) # lower right corner
+
+                ax.set_xlabel('Redshift', size=12)
+                ax.set_ylabel(r'$\rm{\dot{M}_{BH} \,[log \,M_{sun}/yr}]$', size=16)
+                ax.set_xlim([0.5, 0.0])
+                ax.set_ylim([-4.5,-1.0])
+                for tick in ax.get_xticklabels() + ax.get_yticklabels():
+                    tick.set_fontsize(12)
+
+                ax.set_facecolor('None')
+                setAxisColors(ax, 'white')
+
+                xx = 1/cat['SubboxScaleFac'] - 1
+                yy = logZeroNaN(np.squeeze(cat['SubhaloBH_Mdot'][w[0],aperture_num,:]))
+
+                ax.plot(xx, yy, '-', lw=1.5, color='white', alpha=0.5)
+                ax.plot(xx[sbSnapNum], yy[sbSnapNum], 'o', color='white')
+
+            panels[0]['f_post'] = func_post
 
     if 0:
         # SWR
@@ -522,7 +548,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     # render
     frameSaveNum = sbSnapNum if frameNum is None else frameNum
     class plotConfig:
-        saveFilename = savePathBase + '%ssb%d_s%d_sh%d/frame_%s_%d%s.png' % (sP.res,sbNum,sP.snap,subhaloID,conf,frameSaveNum,rotStr)
+        saveFilename = savePathBase + 'frame_%s_%d%s.png' % (conf,frameSaveNum,rotStr)
         plotStyle = 'edged_black'
         rasterPx  = nPixels
         colorbars = False
@@ -537,7 +563,6 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
     from ..cosmo.util import validSnapList
 
     # movie config
-    #minZ = 0.1260 # stop after sb snap 3399 which was what existed when we originally made the movies (to keep frameNum sync)
     minZ = 0.0
 
     if gal == 'one':
@@ -560,13 +585,19 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
 
     sbSnapNums = validSnapList(sP, maxNum=maxNSnaps, minRedshift=minZ, maxRedshift=maxZ)
 
+    # pre-load subbox cat (optional, must be correct for gal!)
+    cat = None
+    if 1:
+        assert gal == 'two'
+        cat = subboxSubhaloCat(simParams(run='tng50-1',redshift=0.0), sbNum=2)
+
     # normal render
     for i, sbSnapNum in enumerate(sbSnapNums):
         #if isfile(savePathBase + '2160sb0_s90_sh440389/frame_%s_%d.png' % (conf,i)):
         #    print('skip ', i)
         #    continue
 
-        subbox_movie_tng_galaxyevo_frame(sbSnapNum=sbSnapNum, gal=gal, conf=conf, frameNum=i)
+        subbox_movie_tng_galaxyevo_frame(sbSnapNum=sbSnapNum, gal=gal, conf=conf, frameNum=i, cat=cat)
 
 def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):
     """ Render a movie comparing Illustris-1 and L75n1820TNG subbox0, one quantity side by side. """
