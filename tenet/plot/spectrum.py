@@ -4,6 +4,7 @@ Diagnostic and production plots based on synthetic ray-traced absorption spectra
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+from os.path import isfile
 
 from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_filepath
 from ..cosmo.spectrum import create_master_grid, deposit_single_line, lines
@@ -319,12 +320,11 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
       xlim (str, list[float]): either 'full' or a 2-tuple of [min,max], or automatic if None (default)
     """
 
-    # config data
-    projAxis = 2
+    # config
     ctName = 'thermal'    
 
     # load
-    filepath = _spectra_filepath(sim, projAxis, instrument, ion=ion, solar=solar)
+    filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
 
     with h5py.File(filepath,'r') as f:
         # compute total EW (summing all transitions)
@@ -462,7 +462,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
     plt.close(fig)
 
 def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=[0.5,0.7,1.0], solar=False, log=False):
-    """ Plot the EW distribution of a given line based on a concatenated spectra file.
+    """ Plot the EW distribution (dN/dWdz) of a given absorption line.
 
     Args:
       sim_in (:py:class:`~util.simParams`): simulation instance.
@@ -474,23 +474,18 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
     """
     sim = sim_in.copy()
 
-    # config
-    projAxis = 2
-    
-    ion = lines[line]['ion']
-
+    # plot config
     xlim = [0, 8] # ang
     if log: xlim = [-1.0, 1.4] # log[ang]
     nBins = 80
-
-    EW_z_thresh = [0.3,1.0] # thresholds for EW for vs. redshift plot
 
     # load: loop over requested redshifts
     EWs = {}
 
     for redshift in redshifts:
         sim.setRedshift(redshift)
-        filepath = _spectra_filepath(sim, projAxis, instrument, ion=ion, solar=solar)
+        ion = lines[line]['ion']
+        filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
 
         with h5py.File(filepath,'r') as f:
             count = f.attrs['count']
@@ -501,7 +496,7 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
 
         EWs[redshift] = data
 
-    # (A) - EW distribution functions (dN/dzdW)
+    # start plot
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
@@ -522,7 +517,7 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
         hh, bin_edges = np.histogram(x, bins=nBins, range=xlim)
 
         # normalize by dz = total redshift path length = N_sightlines * boxSizeInDeltaRedshift
-        hh = hh.astype('float32') / (count * sim.boxLengthDeltaRedshift)
+        hh = hh.astype('float32') / (count * sim.dz)
 
         # normalize by dW = equivalent width bin sizes [Ang]
         dW_norm = bin_edges[1:] - bin_edges[:-1] # constant (linear)
@@ -558,25 +553,123 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
         opts = {'color':'#333333', 'ecolor':'#333333', 'alpha':0.9, 'capsize':0.0, 'fmt':'D'}
         ax.errorbar(m13_x, c16_y, yerr=c16_yerr, xerr=xerr, label=c16_label, **opts)
 
+    # TODO: check if we are combining multiple absorbers per spectra for EW calculation
+    # is this the reason of the periodic peaks in the EWDF?
+
     # finish plot
     ax.legend(loc='best')
-    fig.savefig('EW_histogram_%s%s_%s.pdf' % (line,'_log' if log else '',instrument))
+    fig.savefig('EW_histogram_%s_%s%s_%s.pdf' % (sim.simName,line.replace(' ','-'),'_log' if log else '',instrument))
     plt.close(fig)
 
-    # (b) - evolution versus redshift above some threshold EW (dN/dz)
+def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', solar=False):
+    """ Plot the redshift evolution (i.e. dN/dz) and comoving incidence rate (dN/dX) of a given absorption line.
+
+    Args:
+      sim_in (:py:class:`~util.simParams`): simulation instance.
+      line (str): string specifying the line transition.
+      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      redshifts (list[float]): list of redshifts to overplot.
+      solar (bool): use the (constant) solar value instead of simulation-tracked metal abundances.
+      log (bool): plot log(EW) instead of linear EWs.
+    """
+    from ..load.data import zhu13mgii
+
+    sim = sim_in.copy()
+
+    # config
+    z13 = zhu13mgii()
+    #EW_thresholds = [0.3,1.0,3.0] # thresholds for EW for vs. redshift plot
+    EW_thresholds = z13['EW0'] # match to obs data
+
+    xlim = [0.0, np.max(redshifts)+1]
+    ylim = [8e-4, 4.0]
+
+    # load: loop over all available redshifts
+    zz = []
+    dNdz = {thresh:[] for thresh in EW_thresholds}
+    dNdX = {thresh:[] for thresh in EW_thresholds}
+
+    for redshift in redshifts:
+        sim.setRedshift(redshift)
+        ion = lines[line]['ion']
+        filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
+
+        if not isfile(filepath):
+            continue
+
+        with h5py.File(filepath,'r') as f:
+            count = f.attrs['count']
+            EWs = f['EW_%s' % line.replace(' ','_')][()]
+
+        # convert to rest-frame and store
+        EWs /= (1+sim.redshift)
+
+        # loop over requested thresholds
+        for EW_thresh in EW_thresholds:
+            num = len(np.where(EWs >= EW_thresh)[0])
+
+            # normalize by dz = total redshift path length = N_sightlines * boxSizeInDeltaRedshift
+            num_dz = float(num) / (count * sim.dz)
+
+            # normalize by dX = total comoving path length
+            num_dX = float(num) / (count * sim.dX)
+
+            # store
+            dNdz[EW_thresh].append(num_dz)
+            dNdX[EW_thresh].append(num_dX)
+
+        zz.append(redshift)
+
+    # start plot
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
-    ax.set_xlim([0.0, np.max(redshifts)+1])
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
     ax.set_xlabel('Redshift')
-    ax.set_ylabel('d$N$/d$z$')
+    ax.set_ylabel('d$N$/d$z$ (%s)' % line)
     ax.set_yscale('log')
 
-    # todo
+    # plot the simulation dN/dz for each EW threshold
+    colors = []
+    for EW_thresh in EW_thresholds:
+        l, = ax.plot(zz, dNdz[EW_thresh], '-', lw=lw, label='EW > %.1f$\,\\rm{\AA}$' % EW_thresh)
+        colors.append(l.get_color())
 
-    # also todo: check if we are combining multiple absorbers per spectra for EW calculation
-    # is this the reason of the periodic peaks in the EWDF?
+    # observational data
+    if line == 'MgII 2796':     
+        for i, EW0 in enumerate(z13['EW0']):
+            label = r'%s ($\rm{W_0 > %.1f \AA}$)' % (z13['label'],EW0)
+            typical_error = 1e-3
+            ax.errorbar(z13['z'], z13['dNdz'][EW0], yerr=typical_error, 
+              color=colors[i], alpha=0.8, marker='s', linestyle='none', label=label)
 
+        # Zou+21 (z>2)
+        # https://ui.adsabs.harvard.edu/abs/2017MNRAS.472.1023C/abstract
+
+    if line == 'CIV': # also SiIV
+        pass # https://ui.adsabs.harvard.edu/abs/2022ApJ...924...12H/abstract
+        # https://ui.adsabs.harvard.edu/abs/2018MNRAS.481.4940C/abstract
+
+    # finish plot
+    ax.legend(loc='best')
+    fig.savefig('dNdz_evolution_%s_%s.pdf' % (sim.simName,line.replace(' ','-')))
+    plt.close(fig)
+
+    # start plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel('d$N$/d$X$ (%s)' % line)
+    ax.set_yscale('log')
+
+    for EW_thresh in EW_thresholds:
+        ax.plot(zz, dNdX[EW_thresh], '-', label='EW > %.1f$\,\\rm{\AA}$' % EW_thresh)
+
+    # observational data
     if line == 'MgII 2796':
         pass
         # Zou+21
@@ -588,21 +681,17 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
 
     # finish plot
     ax.legend(loc='best')
-    fig.savefig('EW_zevo_%s.pdf' % line)
+    fig.savefig('dNdX_evolution_%s_%s.pdf' % (sim.simName,line.replace(' ','-')))
     plt.close(fig)
 
-def n_cloud_distribution(sim, redshifts=[0.5,0.7]):
+def n_cloud_distribution(sim, ion='Mg II', redshifts=[0.5,0.7]):
     """ Plot the N_cloud distribution of a given ion based on a rays statistics file.
 
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
       redshifts (list[float]): list of redshifts to overplot.
     """
-
     # config
-    projAxis = 2
-    ionName = 'Mg II'
-
     xlim = [0, 20]
     nBins = xlim[1]
 
@@ -618,8 +707,7 @@ def n_cloud_distribution(sim, redshifts=[0.5,0.7]):
     # loop over requested redshifts
     for redshift in redshifts:
         # load
-        saveFilename = sim.derivPath + 'rays/stats_%s_z%.1f_%d_%s.hdf5' % \
-          (sim.simName,redshift,projAxis,ionName.replace(' ','_'))
+        saveFilename = _spectra_filepath(sim, ion).replace('integral_','stats_').replace('_combined','')
 
         with h5py.File(saveFilename,'r') as f:
             n_clouds = f['n_clouds'][()]
@@ -633,7 +721,7 @@ def n_cloud_distribution(sim, redshifts=[0.5,0.7]):
 
     # finish plot
     ax.legend(loc='best')
-    fig.savefig('N_clouds_histogram_%s.pdf' % ionName.replace(' ','_'))
+    fig.savefig('N_clouds_histogram_%s.pdf' % ion.replace(' ','_'))
     plt.close(fig)
 
 def n_clouds_vs_EW(sim):
@@ -643,22 +731,19 @@ def n_clouds_vs_EW(sim):
     """
 
     # config
-    projAxis = 2
-    ionName = 'Mg II' # n_cloud
-    lineNames = ['MgII 2796','MgII 2803'] # EW
-    instrument = '4MOST-HRS' # EW
+    ion = 'Mg II'
+    instrument = '4MOST-HRS'
 
     xlog = False
 
     # load n_clouds
-    saveFilename = sim.derivPath + 'rays/stats_%s_z%.1f_%d_%s.hdf5' % \
-      (sim.simName,sim.redshift,projAxis,ionName.replace(' ','_'))
+    saveFilename = _spectra_filepath(sim, ion).replace('integral_','stats_').replace('_combined','')
 
     with h5py.File(saveFilename,'r') as f:
         n_clouds = f['n_clouds'][()]
 
     # load EWs
-    filepath = _spectra_filepath(sim, projAxis, instrument, lineNames)
+    filepath = _spectra_filepath(sim, ion, instrument=instrument)
 
     EWs = {}
     inds = {}
@@ -688,5 +773,5 @@ def n_clouds_vs_EW(sim):
 
     # finish plot
     ax.legend(loc='upper right')
-    fig.savefig('N_clouds_vs_EW_%s.pdf' % ionName.replace(' ','_'))
+    fig.savefig('N_clouds_vs_EW_%s.pdf' % ion.replace(' ','_'))
     plt.close(fig)

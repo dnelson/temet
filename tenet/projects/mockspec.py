@@ -13,7 +13,7 @@ from os.path import isfile
 
 from tenet.cosmo.spectrum import _spectra_filepath, lines
 #from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
-from tenet.plot.spectrum import spectra_gallery_indiv, EW_distribution
+from tenet.plot.spectrum import spectra_gallery_indiv, EW_distribution, dNdz_evolution
 from tenet.plot.config import *
 
 def metalAbundancesVsSolar(sim, ion='Mg II'):
@@ -182,16 +182,13 @@ def lightconeSpectra(sim, instrument, ion, solar=False, add_lines=None):
     """
     rng = np.random.default_rng(424242)
 
-    # config
-    projAxis = 2
-
     # get replication configuration
     snaps, num_boxes, z_inits = lightconeSpectraConfig(sim)
 
     # load metadata from first (available) snapshot
     for snap in snaps:
         sim.setSnap(snap)
-        fname = _spectra_filepath(sim, projAxis, instrument, ion=ion, solar=solar)
+        fname = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
 
         if isfile(fname):
             break
@@ -212,7 +209,7 @@ def lightconeSpectra(sim, instrument, ion, solar=False, add_lines=None):
         print(f'[{snap = :3d}] at z = {sim.redshift:.2f}, num spec = {num_box}')
 
         # check existence
-        fname = _spectra_filepath(sim, projAxis, instrument, ion=ion, solar=solar)
+        fname = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
 
         if not isfile(fname):
             # (hopefully, no lines at the relevant wavelength range at this redshift)
@@ -223,7 +220,7 @@ def lightconeSpectra(sim, instrument, ion, solar=False, add_lines=None):
         spec_inds = rng.integers(low=0, high=num_spec, size=int(num_box))
 
         # open file
-        fname = _spectra_filepath(sim, projAxis, instrument, ion=ion, solar=solar)
+        fname = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
 
         with h5py.File(fname,'r') as f:
             # load each spectrum individually, shift, and accumulate
@@ -341,6 +338,11 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None):
 def paperPlots():
     from ..util.simParams import simParams
 
+    # pre-computed sightlines and spectra:
+    redshifts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0]
+    instruments = ['4MOST-HRS','SDSS-BOSS','KECK-HIRES'] # todo: add cos
+    ions = ['HI','MgII','CaII','FeII','SiII','ZnII','NV','CIV','OVI'] # CaII and ZnII with solar abunds
+
     # fig 1: individual spectra galleries
     if 0:
         # Mg II
@@ -378,7 +380,7 @@ def paperPlots():
     if 0:
         pass
 
-    # fig 3: EW distribution functions
+    # fig 3: EW distribution functions vs. data
     if 0:
         sim = simParams(run='tng50-1')
         line = 'MgII 2796'
@@ -389,13 +391,22 @@ def paperPlots():
 
         EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, solar=solar, log=log)
 
+    # fig 4: dN/dz (absorber incidence s a function of redshift) vs. data
+    if 1:
+        sim = simParams(run='tng50-1')
+        line = 'MgII 2796'
+        inst = 'SDSS-BOSS'
+        solar = False
+
+        dNdz_evolution(sim, redshifts=redshifts, line=line, instrument=inst, solar=solar)
+
     # fig X: abundances vs solar i.e. for mini-snaps
     if 0:
         sim = simParams(run='tng50-1', redshift=0.5)
         metalAbundancesVsSolar(sim, 'Mg II')
 
     # fig X: example of a cosmological-distance (i.e. lightcone) spectrum
-    if 1:
+    if 0:
         sim = simParams(run='tng50-1')
 
         plotLightconeSpectrum(sim, instrument='SDSS-BOSS', ion='Fe II')

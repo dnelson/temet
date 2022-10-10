@@ -2610,7 +2610,7 @@ def spence18(vel05=False):
     if vel05:
         # maximal v05 values instead of the default 'v50' (fluxe-weighted) values
         r['vout'] = np.log10(v05)
-        v['Mdot'] = np.log10(v05_Mdot)
+        r['Mdot'] = np.log10(v05_Mdot)
 
     return r
 
@@ -2821,6 +2821,40 @@ def decia2018():
           'delta_Fe'  : data['delta_Fe'],
           'gasphase_frac_Si' : gasphase_frac_Si, # function
           'label'     : 'De Cia+ (2018)' }
+
+    return r
+
+def zhu13mgii():
+    """ Load MgII absorption data from Zhu & Menard (2013)."""
+    path = dataBasePath + 'zhu/zhu13_fig10a.txt'
+
+    # load
+    data = np.loadtxt(path, delimiter=',')
+
+    EW0 = [0.2, 0.6, 1.2, 1.8, 2.4, 3.0, 3.6]
+
+    # each EW0 threshold should have the same number of entries (vs. redshift)
+    num_per = data.shape[0] / len(EW0)
+    assert num_per == round(num_per)
+    num_per = int(num_per)
+
+    # allocate
+    z     = np.zeros( num_per, dtype='float32' )
+    dNdz  = {} # np.zeros( (len(EW0),num_per), dtype='float32' )
+
+    # parse
+    for i in range(num_per):
+        # take redshift as avg (are all the same)
+        z[i] = data[i::num_per,0].mean()
+
+    for i in range(len(EW0)):
+        # extract dN/dz, store as dict where keys are EW0 values
+        dNdz[EW0[i]] = data[i*num_per:(i+1)*num_per,1]
+
+    r = {'EW0'   : np.array(EW0), # minimum EW thresholds [Ang]
+         'dNdz'  : dNdz, # unitless
+         'z'     : z, # redshift
+         'label' : 'Zhu+13'}
 
     return r
 

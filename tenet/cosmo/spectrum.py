@@ -247,6 +247,9 @@ instruments = {'idealized'  : {'wave_min':1000, 'wave_max':12000, 'dwave':0.1}, 
                'PFS-NIR'    : {'wave_min':9400, 'wave_max':12600, 'R':4300},        # NIR arm
                'MIKE-B'     : {'wave_min':3350, 'wave_max':5000,  'R':83000},       # blue arm (on Magellan 2/Clay)
                'MIKE-R'     : {'wave_min':4900, 'wave_max':9500,  'R':65000},       # red arm (used simultaneously)
+               'XSHOOTER-VIS-07' : {'wave_min':5500,  'wave_max':10200, 'R':11400}, # VLT X-Shooter (R depends on slit width = 0.7")
+               'XSHOOTER-NIR-06' : {'wave_min':10200, 'wave_max':24800, 'R':8100},  # VLT X-Shooter (R depends on slit width = 0.6")
+               'GNIRS-SXD-R800'  : {'wave_min':8500,  'wave_max':25000, 'R':800},   # Gemini-GNIRS cross-dispersed (multi-order), short-camera (SXD), 0.675" slit width
                'KECK-HIRES' : {'wave_min':3000, 'wave_max':9250,  'R':45000},       # different plates: R=60k, 45k, 34k, 23k
                'KECK-LRIS'  : {'wave_min':2940, 'wave_max':9200,  'R':1200}}        # different grisms/gratings: from R=300 to R=1200
 
@@ -740,6 +743,8 @@ def create_spectra_from_traced_rays(sP, line, instrument,
 
     # assign sP.redshift to the front intersectiom (beginning) of the box
     z_vals = np.linspace(sP.redshift, sP.redshift+0.1, 200)
+    assert sP.boxSize < 40000, 'Increase 0.1 factor above for boxes larger than TNG50.'
+
     z_lengths = sP.units.redshiftToComovingDist(z_vals) - sP.units.redshiftToComovingDist(sP.redshift)
 
     # sample master grid
@@ -1164,24 +1169,26 @@ def generate_spectra_voronoi_halo():
 
     return master_wave, flux, EWs
 
-def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None, search=False):
+# default configuration
+projAxis_def = 2
+#nRaysPerDim_def = 2000
+#raysType_def = 'voronoi_rndfullbox'
+nRaysPerDim_def = 1000
+raysType_def = 'voronoi_fullbox'
+
+def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def, 
+                                  pSplit=None, search=False):
     """ Generate a large grid of (fullbox) rays by ray-tracing through the Voronoi mesh.
 
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
       projAxis (int): either 0, 1, or 2. only axis-aligned allowed for now.
+      nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
+      raysType (str): either 'voronoi_fullbox' (equally spaced) or 'voronoi_rndfullbox' (random).
       pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
         that we follow a spatial subdivision, so the total job number should be an integer squared.
       search (bool): if True, return existing data only, do not calculate new files.
     """
-
-    # config (total number of rays, per box, summing over all pSplits, is nRaysPerDim**2)
-    nRaysPerDim = 1000
-    raysType = 'voronoi_fullbox'
-
-    #nRaysPerDim = 2000
-    #raysType = 'voronoi_rndfullbox'
-
     # paths and save file
     if not isdir(sP.derivPath + 'rays'):
         mkdir(sP.derivPath + 'rays')
@@ -1339,24 +1346,30 @@ def generate_rays_voronoi_fullbox(sP, projAxis=2, pSplit=None, search=False):
 
     return rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl
 
-def _spectra_filepath(sim, projAxis, instrument=None, lineNames=None, ion=None, pSplit=None, solar=False):
-    """ Return the path to a file of saved spectra. """
-    assert ion is None or lineNames is None, 'Input either [lineNames] or [ion].'
-
-    if lineNames is not None:
-        ions = [lines[line]['ion'] for line in lineNames]
-    else:
-        ions = [ion]
-
-    ionStr = ions[0].replace(' ','')
-    assert len(set(ions)) == 1, 'Process sets of lines for one ion at a time.'
-
+def _spectra_filepath(sim, ion, projAxis=projAxis_def, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def,
+                      instrument=None, pSplit=None, solar=False):
+    """ Return the path to a file of saved spectra.
+    
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      ion (str): space separated species name and ionic number e.g. 'Mg II'.
+      projAxis (int): either 0, 1, or 2. only axis-aligned allowed for now.
+      nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
+      raysType (str): either 'voronoi_fullbox' (equally spaced) or 'voronoi_rndfullbox' (random).
+      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
+        that we follow a spatial subdivision, so the total job number should be an integer squared.
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+        use the (constant) solar value.
+    """
+    ionStr = ion.replace(' ','')
     path = sim.derivPath + "rays/"
+    confStr = 'n%dd%d-%s' % (nRaysPerDim,projAxis,raysType.replace('voronoi_','')) # e.g. 'n1000d2-fullbox'
 
     if instrument is not None:
-        filebase = 'spectra_%s_z%.1f_%d_%s_%s' % (sim.simName,sim.redshift,projAxis,instrument,ionStr)
+        filebase = 'spectra_%s_z%.1f_%s_%s_%s' % (sim.simName,sim.redshift,confStr,instrument,ionStr)
     else:
-        filebase = 'integral_%s_z%.1f_%d_%s' % (sim.simName,sim.redshift,projAxis,ionStr)
+        filebase = 'integral_%s_z%.1f_%s_%s' % (sim.simName,sim.redshift,confStr,ionStr)
 
     if isinstance(pSplit,list):
         # a specific chunk
@@ -1382,12 +1395,11 @@ def integrate_along_saved_rays(sP, field, pSplit=None):
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
       field (str): any available gas field.
+      pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
+        that we follow a spatial subdivision, so the total job number should be an integer squared.
     """
-    # config
-    projAxis = 2
-
     # save file
-    saveFilename = _spectra_filepath(sP, projAxis, ion=field, pSplit=pSplit)
+    saveFilename = _spectra_filepath(sP, ion=field, pSplit=pSplit)
 
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
@@ -1396,10 +1408,11 @@ def integrate_along_saved_rays(sP, field, pSplit=None):
 
     # load rays
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
-      generate_rays_voronoi_fullbox(sP, projAxis=projAxis, pSplit=pSplit)
+      generate_rays_voronoi_fullbox(sP, pSplit=pSplit)
 
     # load required gas cell properties
     if field.endswith('_los'):
+        projAxis = list(ray_dir).index(1)
         field = field.replace('_los','') + '_' + ['x','y','z'][projAxis]
 
     cell_values = sP.snapshotSubsetP('gas', field, inds=cell_inds) # units unchanged
@@ -1436,19 +1449,17 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', pS
       solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
         use the (constant) solar value.
     """
-    # config
-    projAxis = 2
-
     # save file
     lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
 
-    saveFilename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=pSplit, solar=solar)
+    saveFilename = _spectra_filepath(sP, ion, instrument=instrument, pSplit=pSplit, solar=solar)
 
     # load rays
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
-      generate_rays_voronoi_fullbox(sP, projAxis=projAxis, pSplit=pSplit)
+      generate_rays_voronoi_fullbox(sP, pSplit=pSplit)
 
     # load required gas cell properties
+    projAxis = list(ray_dir).index(1)
     velLosField = 'vel_'+['x','y','z'][projAxis]
 
     cell_vellos = sP.snapshotSubsetP('gas', velLosField, inds=cell_inds) # code # , verbose=True
@@ -1539,15 +1550,11 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
       solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
         use the (constant) solar value.
     """
-
-    # config
-    projAxis = 2
-
     # search for chunks
     lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
 
-    loadFilename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit='*', solar=solar)
-    saveFilename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=None, solar=solar)
+    loadFilename = _spectra_filepath(sP, ion, instrument=instrument, pSplit='*', solar=solar)
+    saveFilename = _spectra_filepath(sP, ion, instrument=instrument, pSplit=None, solar=solar)
 
     pSplitNum = len([f for f in glob.glob(loadFilename) if '_combined' not in f])
     assert pSplitNum > 0, 'Error: No split spectra files found.'
@@ -1557,7 +1564,7 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
     count = 0
 
     for i in range(pSplitNum):
-        filename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=[i,pSplitNum], solar=solar)
+        filename = _spectra_filepath(sP, ion, instrument=instrument, pSplit=[i,pSplitNum], solar=solar)
 
         with h5py.File(filename,'r') as f:
             # first file: load number of spectra per chunk file, master wavelength grid, and other metadata
@@ -1608,7 +1615,6 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
         f['ray_total_dl'] = ray_total_dl
 
         # metadata
-        f.attrs['projAxis'] = projAxis
         f.attrs['simName'] = sP.simName
         f.attrs['redshift'] = sP.redshift
         f.attrs['snapshot'] = sP.snap
@@ -1633,7 +1639,7 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
 
             # load
             for i in range(pSplitNum):
-                filename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=[i,pSplitNum], solar=solar)
+                filename = _spectra_filepath(sP, ion, instrument=instrument, pSplit=[i,pSplitNum], solar=solar)
                 print(i, end=' ', flush=True)
 
                 with h5py.File(filename,'r') as f_read:
@@ -1648,7 +1654,7 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
 
     # remove split files
     for i in range(pSplitNum):
-        filename = _spectra_filepath(sP, projAxis, instrument, ion=ion, pSplit=[i,pSplitNum], solar=solar)
+        filename = _spectra_filepath(sP, ion, instrument=instrument, pSplit=[i,pSplitNum], solar=solar)
         unlink(filename)
 
     print('Split files removed.')
@@ -1663,16 +1669,13 @@ def filter_concatenated_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=F
       solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
         use the (constant) solar value.
     """
-
     # config
-    projAxis = 2
-
     EW_threshold = 0.01 # applied to sum of lines [ang]
 
     # search for chunks
     lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
 
-    loadFilename = _spectra_filepath(sP, projAxis, instrument, ion=ion, solar=solar)
+    loadFilename = _spectra_filepath(sP, ion, instrument=instrument, solar=solar)
     saveFilename = loadFilename.replace('_combined','_filtered')
 
     # load EWs
@@ -1729,18 +1732,16 @@ def calc_statistics_from_saved_rays(sP):
       sP (:py:class:`~util.simParams`): simulation instance.
     """
     # config
-    projAxis = 2
-    ionName = 'Mg II' # results depend on ion, independent of actual transition
+    ion = 'Mg II' # results depend on ion, independent of actual transition
     dens_threshold = 1e-12 # ions/cm^3
 
     pSplitNum = 16
 
     # save file
-    saveFilename = sP.derivPath + 'rays/stats_%s_z%.1f_%d_%s.hdf5' % \
-      (sP.simName,sP.redshift,projAxis,ionName.replace(' ','_'))
+    saveFilename = _spectra_filepath(sP, ion).replace('integral_','stats_').replace('_combined','')
 
     # (global) load required gas cell properties
-    densField = '%s numdens' % ionName
+    densField = '%s numdens' % ion
     cell_dens = sP.snapshotSubset('gas', densField) # ions/cm^3
 
     # loop over splits
@@ -1750,7 +1751,7 @@ def calc_statistics_from_saved_rays(sP):
         pSplit = [i, pSplitNum]
 
         # load rays
-        result = generate_rays_voronoi_fullbox(sP, projAxis=projAxis, pSplit=pSplit, search=True)
+        result = generate_rays_voronoi_fullbox(sP, pSplit=pSplit, search=True)
         if result is None:
             continue
 
