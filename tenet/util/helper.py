@@ -47,7 +47,9 @@ def evenlySample(sequence, num, logSpace=False):
     return sequence[inds.astype('int32')]
 
 def contiguousIntSubsets(x):
-    """ Return a list of index pairs corresponding to contiguous integer subsets of the input array. """
+    """ Return a list of index pairs corresponding to contiguous integer subsets of the input array. 
+    Final index of each pair is inclusive, not exclusive as in numpy syntax, so to obtain all the 
+    elements of a range from a numpy array, x[ranges[0][0]:ranges[0][1]+1]."""
     assert x.dtype in ['int32','int64']
 
     ranges = []
@@ -63,8 +65,9 @@ def contiguousIntSubsets(x):
             if x[i+1] == x[i] + 1:
                 continue # range continues
             else:
+                # range is over, save and start next
                 inRange = False
-                rangeEnd = i
+                rangeEnd = i + 1
                 ranges.append( (rangeStart,rangeEnd) )
     if inRange:
         ranges.append( (rangeStart,i) ) # final range
