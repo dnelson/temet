@@ -1164,6 +1164,7 @@ def _cloudy_load(sim, partType, field, args):
 
     # indRange subset herein (do not change args dict, could be used on other fields)
     indRangeOrig = args['indRange']
+    assert args['inds'] is None # custom field, old code, nowadays should not ever be passed inds, only indRange
 
     # haloID or subhaloID subset
     if args['haloID'] is not None or args['subhaloID'] is not None:
@@ -1182,7 +1183,7 @@ def _cloudy_load(sim, partType, field, args):
                 (cache_key,indRangeOrig[0],indRangeOrig[1]))
             return sim.data[cache_key][indRangeOrig[0]:indRangeOrig[1]+1]
         if args['inds'] is not None:
-            print('NOTE: Returning [%s] from cache, inds of size [%d]!' % (cache_key,args['inds'].size))
+            print('NOTE: Returning [%s] from cache, [%d] discrete indices!' % (cache_key,args['inds'].size))
             return sim.data[cache_key][args['inds']]
 
         # if key exists but neither indRange or inds specified, we return this (possibly custom subset)
@@ -1197,6 +1198,8 @@ def _cloudy_load(sim, partType, field, args):
         createCache = False
     if args['haloID'] is not None or args['subhaloID'] is not None:
         createCache = False
+    if hasattr(sim,'createCloudyCache') and not sim.createCloudyCache:
+        createCache = False
 
     cachePath = sim.derivPath + 'cache/'
     sbStr = 'sb%d_' % sim.subbox if sim.subbox is not None else ''
@@ -1205,16 +1208,34 @@ def _cloudy_load(sim, partType, field, args):
 
     if useCache:
         # does not exist yet, and should create?
-        if createCache and (not isfile(cacheFile) or getsize(cacheFile) < 2000):
+        nChunks = numPartToChunkLoadSize(indRangeAll[1])
+
+        # does a cache file already exist? only use it if the calculation finished
+        if isfile(cacheFile):
+            remakeCacheFile = False
+
+            if getsize(cacheFile) < 2000:
+                print('Warning: Found cache file [%d], but size is abnormally small, remaking.' % cacheFile)
+                remakeCacheFile = True
+            else:
+                with h5py.File(cacheFile,'r') as f:
+                    nChunksDone = f.attrs['nChunksDone']
+                if nChunksDone != nChunks:
+                    print('Warning: Found cache file [%s], but only has [%d] of [%d] chunks done, remaking.' % \
+                        (cacheFile.split(cachePath)[1],nChunksDone,nChunks))
+                    remakeCacheFile = True
+
+        if createCache and (not isfile(cacheFile) or remakeCacheFile):
             if not isdir(cachePath):
                 mkdir(cachePath)
+
             # compute for indRange == None (whole snapshot) with a reasonable pSplit
-            nChunks = numPartToChunkLoadSize(indRangeAll[1])
-            print('Creating [%s] for [%d] particles in [%d] chunks.' % \
+            print('Creating [%s] for [%d] particles in [%d] chunks (set sP.createCloudyCache = False to disable).' % \
                 (cacheFile.split(sim.derivPath)[1], indRangeAll[1], nChunks) )
 
             # create file and init ionization calculator
             with h5py.File(cacheFile, 'w') as f:
+                f.attrs['nChunksDone'] = 0
                 dset = f.create_dataset('field', (indRangeAll[1],), dtype='float32')
 
             if prop in ['mass','frac','numdens']:
@@ -1256,6 +1277,7 @@ def _cloudy_load(sim, partType, field, args):
                     values = sim.units.luminosityToFlux(lum, wavelength=wavelength) # [photon/s/cm^2] @ sim.redshift
 
                 with h5py.File(cacheFile,'a') as f:
+                    f.attrs['nChunksDone'] = f.attrs['nChunksDone'] + 1
                     f['field'][indRangeLocal[0]:indRangeLocal[1]+1] = values
 
                 print(' [%2d] saved %d - %d' % (i,indRangeLocal[0],indRangeLocal[1]), flush=True)
