@@ -804,7 +804,9 @@ class cloudyIon():
 
         for i, ionNum in enumerate(ionNums):
             if str(ionNum).upper() in self._roman:
-                ionNums[i] = self._roman[str(ionNum).upper()]
+                ionNums[i] = self._roman[str(ionNum).upper()] # e.g. 'VI'
+            if str(ionNum).isdigit() and int(ionNum) in self._roman.values():
+                ionNums[i] = int(ionNums[i]) # e.g. '7'
 
             if not isinstance(ionNums[i], (np.integer,int)) or ionNums[i] == 0:
                 raise Exception('Failed to map ionization number to integer, or is 0-based index.')

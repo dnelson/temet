@@ -515,12 +515,17 @@ def correctPeriodicPosBoxWrap(vecs, sP):
 
     return r
 
-def periodicDists(pt, vecs, sP, chebyshev=False):
-    """ Calculate distances correctly taking into account periodic B.C.
-          if pt is one point: distance from pt to all vecs
-          if pt is several points: distance from each pt to each vec (must have same number of points as vecs)
-          Chebyshev=1 : use Chebyshev distance metric (greatest difference in positions along any one axis)
+def periodicDists(pt, vecs, sP, chebyshev=False, xyzMin=False):
+    """ Calculate distances correctly taking into account periodic boundary conditions.
+
+    Args:
+      pt (list[3] or [N,3]): if pt is one point, distance from pt to all vecs.
+        if pt is several points, distance from each pt to each vec (must have same number of points as vecs).
+      vecs (list[3,N]): position array in periodic 3D space.
+      sP (:py:class:`~util.simParams`): simulation instance.
+      chebyshev (bool): use Chebyshev distance metric (greatest difference in positions along any one axis)
     """
+    assert not (chebyshev and xyzMin), 'At most one.'
     assert vecs.ndim in [1,2]
     assert pt.ndim in [1,2]
 
@@ -547,12 +552,13 @@ def periodicDists(pt, vecs, sP, chebyshev=False):
     correctPeriodicDistVecs(zDist, sP)
 
     if chebyshev:
-        dists = np.zeros( xDist.size, dtype='float32' )
-        dists[ np.where(xDist > dists) ] = xDist
-        dists[ np.where(yDist > dists) ] = yDist
-        dists[ np.where(zDist > dists) ] = zDist
+        dists = np.abs(xDist)
+        wy = np.where(np.abs(yDist) > dists)
+        dists[wy] = np.abs(yDist[wy])
+        wz = np.where(np.abs(zDist) > dists)
+        dists[wz] = np.abs(zDist[wz])
     else:
-        dists = np.sqrt( xDist*xDist + yDist*yDist + zDist*zDist )
+        dists = np.sqrt(xDist*xDist + yDist*yDist + zDist*zDist)
 
     return dists
 

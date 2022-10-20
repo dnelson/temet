@@ -954,32 +954,6 @@ def combineAuxCatSubdivisions():
     assert np.allclose( verify_r, new_r, equal_nan=True)
     print('Verified.')
 
-def redshiftWikiTable():
-    """ Output wiki-syntax table of snapshot spacings. """
-    fname = path.expanduser("~") + '/sims.TNG/outputs.txt'
-    with open(fname,'r') as f:
-        lines = f.readlines()
-
-    for i,line in enumerate([l.strip() for l in lines]):
-        scaleFac, snapType = line.split()
-        scaleFac = float(scaleFac)
-        snapType = int(snapType)
-
-        if snapType == 1:
-            print('| %3d || %6.4g || %5.2g || {{yes}} || - ' % (i,scaleFac,1/scaleFac-1.0))
-            print('|-')
-        if snapType == 3:
-            print('| %3d || %6.4g || %5.2g || -       || {{yes}} ' % (i,scaleFac,1/scaleFac-1.0))
-            print('|-')
-
-    sP = simParams(res=455,run='tng')
-    z = sP.snapNumToRedshift(all=True)
-
-    w = np.where(z >= 0.0)[0]
-    print(len(w))
-    for redshift in z[w]:
-        pass
-
 def snapRedshiftsTxt():
     """ Output a text-file of snapshot redshifts, etc. """
     from ..util.simParams import simParams
@@ -1003,7 +977,7 @@ def snapRedshiftsTxt():
     ages      = snapNumToAgeFlat(sP, snap=snapNums)
 
     # write
-    with file('frames.txt','w') as f:
+    with open('frames.txt','w') as f:
         f.write('# frame_number snapshot_number redshift age_universe_gyr\n')
         for i in range(frameNums.size):
             f.write('%04d %04d %6.3f %5.3f\n' % (frameNums[i],snapNums[i],redshifts[i],ages[i]))
@@ -1069,107 +1043,6 @@ def tngVariantsLatexOrWikiTable(variants='all', fmt='wiki'):
         print('    \end{tabular}')
         print('  \end{center}')
         print('\end{table*}')
-
-def export_ovi_phase():
-    """ Export raw data points for OVI phase diagram. """
-    from ..cosmo.util import inverseMapPartIndicesToSubhaloIDs, cenSatSubhaloIndices
-    from ..tracer.tracerMC import match3
-    from ..util.simParams import simParams
-    from getpass import getuser
-    
-    sP = simParams(res=1820,run='tng',redshift=0.0)
-    N = int(1e7) # None for all
-    partType = 'gas'
-
-    # one of the these three:
-    cenSubsOnly = False # select from particles within central subhalos only, otherwise all in box
-    fofOnly = True # select from particles within FoF halos only
-    haloID = None # if not None, only this fof halo
-
-    # load
-    xvals = sP.snapshotSubset(partType, 'hdens_log', haloID=haloID, haloSubset=fofOnly)
-    yvals = sP.snapshotSubset(partType, 'temp_log', haloID=haloID, haloSubset=fofOnly)
-    weight = sP.snapshotSubset(partType, 'O VI mass', haloID=haloID, haloSubset=fofOnly)
-    weight = sP.units.codeMassToMsun(weight)
-    N_tot = xvals.size
-
-    # subsample?
-    if N is not None:
-        np.random.seed(424242)
-        inds = np.arange(xvals.size)
-
-        selection = 'all particles in box'
-        if cenSubsOnly:
-            assert haloID is None and not fofOnly
-            inds2 = inverseMapPartIndicesToSubhaloIDs(sP, inds, partType)
-            cen_inds = cenSatSubhaloIndices(sP, cenSatSelect='cen')
-            _, in_cen_inds = match3(cen_inds, inds2)
-            inds = inds[in_cen_inds]
-            selection = 'central subhalo particles only (all masses)'
-            selStr = '_censub'
-        if fofOnly:
-            assert haloID is None and not cenSubsOnly
-            selection = 'fof halo particles only (all masses)'
-            selStr = '_fof'
-
-        if haloID is not None:
-            selection = 'all member particles of fof halo [%d] only' % haloID
-            selStr = '_halo%d' % haloID
-        else:
-            inds_sel = np.random.choice(inds, size=N, replace=False)
-            xvals = xvals[inds_sel]
-            yvals = yvals[inds_sel]
-            weight = weight[inds_sel]
-
-    # save
-    with h5py.File('ovi_%s_z%s_%s%s.hdf5' % (sP.simName,sP.redshift,N,selStr), 'w') as f:
-        h = f.create_group('Header')
-        h.attrs['num_pts'] = N if haloID is None else N_tot
-        h.attrs['num_pts_total'] = N_tot
-        h.attrs['written_by'] = getuser()
-        h.attrs['selection'] = selection
-        h.attrs['sim_name'] = sP.simName
-        h.attrs['sim_redshift'] = sP.redshift
-
-        h['hdens_logcm3'] = xvals
-        h['temp_logk'] = yvals
-        h['ovi_mass_msun'] = weight
-
-def makeCohnVsuiteCatalog(redshift=0.0):
-    """ Write a .txt file for input into Joanne Cohn's validation-suite. """
-    from ..util.simParams import simParams
-    sP = simParams(res=1820,run='illustris',redshift=redshift)
-
-    # load
-    mstar = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log']) # log msun
-    sfr   = sP.groupCat(fieldsSubhalos=['SubhaloSFRinRad']) # msun/yr
-    cen   = sP.groupCat(fieldsSubhalos=['central_flag'])
-    mhalo = sP.groupCat(fieldsSubhalos=['mhalo_subfind_log']) # log msun
-    m200  = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
-
-    sat = (~cen.astype('bool')).astype('int16')
-
-    w = np.where(np.isnan(mstar)) # zero stellar mass
-    mstar[w] = 0.0
-
-    w = np.where(cen == 1)
-    mhalo[w] = m200[w] # use m200,crit values for centrals at least
-
-    w = np.where(mstar >= 7.8)
-    mstar = mstar[w]
-    sfr = sfr[w]
-    cen = cen[w]
-    mhalo = mhalo[w]
-    sat = sat[w]
-
-    with open('inputstats_%s_z%s.txt' % (sP.simName,int(redshift)),'w') as f:
-        f.write('# Illustris-1 simulation (z=%s)\n' % redshift)
-        f.write('# Nelson+ (2015) (https://arxiv.org/abs/1504.00362) (http://www.illustris-project.org/data/)\n')
-        f.write('# note: M* is 30pkpc aperture values, SFR is SubhaloSFRinRad, M_halo is Group_M_Crit200 for centrals, SubhaloMass for satellites\n')
-        f.write('# note: minimum M* of 7.8 log msun for inclusion here (50 stars)\n')
-        f.write('# \log_10 M^* [M_\odot], SFR (M^*[M_\odot]/yr), RA, DEC, zred, ifsat, \log_10 M_halo [M_\odot]\n')
-        for i in range(mstar.size):
-            f.write('%7.3f %7.3f 1.0 1.0 %.1f %d %7.3f\n' % (mstar[i],sfr[i],redshift,sat[i],mhalo[i]))
 
 def splitSingleHDF5IntoChunks(snap=151):
     """ Split a single-file snapshot/catalog/etc HDF5 into a number of roughly equally sized chunks. """
@@ -1803,4 +1676,75 @@ def exportHierarchicalBoxGrids(sP, partType='gas', partField='mass', nCells=[32,
         return f
 
     f.close()
+    print('Saved: [%s]' % fileName)
+
+def exportIltisCutout(sim, haloID, emLine='O  7 21.6020A', haloSizeRvir=2.0, redshiftIltis=0.01):
+    """ Export a snapshot cutout (global scope) around a given halo, for use in ILTIS-RT.
+
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      haloID (int): the FoF halo ID to center the cutout on.
+      emLine (str): the emission line to save the emissivity of, which also specifies the ion for the density field.
+      haloSizeRvir (float): the box side-length in rvir units.
+      redshiftIltis (float or None): if not None, then use this value for Redshift in the Iltis header.
+
+    Return:
+      None. An actual file is written to disk.
+    """
+    sim.createCloudyCache = False
+
+    # load gas positions and make spatial cutout
+    halo = sim.halo(haloID)
+    pos = sim.gas('pos')
+
+    dists_xyz = sim.periodicDists(halo['GroupPos'], pos, chebyshev=True)
+
+    dists_xyz /= halo['Group_R_Crit200']
+
+    inds = np.where(dists_xyz <= haloSizeRvir)[0]
+
+    print(f'Selected [{inds.size}] of [{dists_xyz.size}] total gas cells = {inds.size/dists_xyz.size*100:.2f}%%')
+
+    # coordinates in box length units
+    pos = pos[inds] / sim.boxSize
+
+    # load additional data
+    vel = sim.gas('vel', inds=inds)
+    vel = sim.units.particleCodeVelocityToKms(vel) * 1e5 # cm/s
+
+    emis = sim.gas('%s lum' % emLine, inds=inds) * (1e30/1e42) # in 1e42 erg/s
+
+    ionName = emLine.split()[0] + ' ' + emLine.split()[1]
+    dens = sim.gas('%s numdens' % ionName, inds=inds) # cm^-3
+
+    temp = sim.gas('temp_sfcold', inds=inds) # K
+
+    # not yet used: dust, turbulent velocity
+    dust_dens = np.zeros(dens.size, dtype='float32')
+    turb_vel = np.zeros(dens.size, dtype='float32')
+
+    # write hdf5 file
+    fileName = 'cutout_%s_%d_halo%d_size%d.hdf5' % (sim.simName,sim.snap,haloID,int(haloSizeRvir))
+
+    with h5py.File(fileName,'w') as f:
+        # write header attributes
+        f.attrs['BoxSizeCGS'] = sim.units.codeLengthToKpc(sim.boxSize) * sim.units.kpc_in_cm
+        f.attrs['Center'] = halo['GroupPos'] / sim.boxSize
+        f.attrs['CutoutLength'] = (haloSizeRvir * halo['Group_R_Crit200']) / sim.boxSize
+        f.attrs['CutoutShape'] = 'cube'
+        f.attrs['Redshift'] = sim.redshift if redshiftIltis is None else redshiftIltis
+
+        # Coordinates* are in boxlength units [0.0,1.0), Emissivity is in [1e42 erg/s], everything else in [cgs]
+        f['CoordinateX'] = pos[:,0]
+        f['CoordianteY'] = pos[:,1]
+        f['CoordinateZ'] = pos[:,2]
+        f['Emissivity'] = emis
+        f['density'] = dens
+        f['dust_density'] = dust_dens
+        f['temperature'] = temp
+        f['turbulent_velocity'] = turb_vel
+        f['velocity_x'] = vel[:,0]
+        f['velocity_y'] = vel[:,1]
+        f['velocity_z'] = vel[:,2]
+
     print('Saved: [%s]' % fileName)
