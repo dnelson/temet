@@ -376,6 +376,12 @@ def snapshotSubset(sP, partType, fields,
     # return dict
     r = {}
 
+    # custom field functions must handle indRange, but they do not handle inds
+    kwargs_custom = dict(kwargs)
+    if inds is not None:
+        kwargs_custom['indRange'] = [np.min(inds), np.max(inds)]
+        kwargs_custom['inds'] = None
+
     # handle any custom fields: these include composite or derived fields (temp, vmag, ...), 
     # unit conversions (bmag_uG, ...), and custom analysis (ionic masses, ...)
     for i, fieldName in enumerate(fields):
@@ -390,7 +396,7 @@ def snapshotSubset(sP, partType, fields,
         # does (exact) field name exist in custom field registry?
         if field in custom_fields:
             # yes: load/compute now
-            data = custom_fields[field](sP, partType, field, kwargs)
+            data = custom_fields[field](sP, partType, field, kwargs_custom)
 
             # if return is None, then this is a fall-through to a normal load
             if data is not None:
@@ -400,7 +406,11 @@ def snapshotSubset(sP, partType, fields,
             for search_key in custom_multi_fields:
                 # requested field contains search key?
                 if search_key in field:
-                    r[fieldName] = custom_multi_fields[search_key](sP, partType, fieldName, kwargs)
+                    r[fieldName] = custom_multi_fields[search_key](sP, partType, fieldName, kwargs_custom)
+
+        # inds subset?
+        if inds is not None and fieldName in r:
+            r[fieldName] = r[fieldName][inds-np.min(inds)]
 
         # unit-postprocessing
         if takeLog:
@@ -480,7 +490,7 @@ def snapshotSubset(sP, partType, fields,
             if field in swiftRenames:
                 fields[i] = swiftRenames[field]
 
-    # inds and indRange based subset
+    # inds based subset
     if inds is not None:
         # load the range which bounds the minimum and maximum indices, then return subset
         indRange = [np.min(inds), np.max(inds)]
@@ -488,6 +498,7 @@ def snapshotSubset(sP, partType, fields,
         val = snapshotSubset(sP, partType, fields, indRange=indRange)
         return val[ inds-np.min(inds) ]
 
+    # indRange based subset
     if indRange is not None:
         # load a contiguous chunk by making a subset specification in analogy to the group ordered loads
         subset = { 'offsetType'  : np.zeros(sP.nTypes, dtype='int64'),
