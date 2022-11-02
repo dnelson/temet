@@ -1219,7 +1219,7 @@ def _cloudy_load(sim, partType, field, args):
                 remakeCacheFile = True
             else:
                 with h5py.File(cacheFile,'r') as f:
-                    nChunksDone = f.attrs['nChunksDone']
+                    nChunksDone = f.attrs['nChunksDone'] if 'nChunksDone' in f.attrs else nChunks # fallback
                 if nChunksDone != nChunks:
                     print('Warning: Found cache file [%s], but only has [%d] of [%d] chunks done, remaking.' % \
                         (cacheFile.split(cachePath)[1],nChunksDone,nChunks))
