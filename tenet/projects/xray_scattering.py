@@ -118,7 +118,7 @@ def radialProfileIltisPhotons():
     # (A) radial profile of intrinsic (input) versus scattered (peeling)
     fig, (ax, subax) = plt.subplots(ncols=1, nrows=2, sharex=True, height_ratios=[0.8,0.2], figsize=figsize)
 
-    ax.set_title('O VII 21.6020$\AA$ (%s $\cdot$ HaloID %d $\cdot\, \\rm{M_\star = 10^{%.1f} \,M_\odot}$)' % (sim, haloID, mstar))
+    ax.set_title('O VII 21.6020$\\rm{\AA}$ (%s $\cdot$ HaloID %d $\cdot\, \\rm{M_\star = 10^{%.1f} \,M_\odot}$)' % (sim, haloID, mstar))
     ax.set_xlabel('Projected Distance [pkpc]')
     ax.set_yscale('log')
     ax.set_ylabel('Surface Brightness [ erg s$^{-1}$ kpc$^{-2}$ ]')

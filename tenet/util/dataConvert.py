@@ -1678,7 +1678,7 @@ def exportHierarchicalBoxGrids(sP, partType='gas', partField='mass', nCells=[32,
     f.close()
     print('Saved: [%s]' % fileName)
 
-def exportIltisCutout(sim, haloID, emLine='O  7 21.6020A', haloSizeRvir=2.0, redshiftIltis=0.01):
+def exportIltisCutout(sim, haloID, emLine='O  7 21.6020A', haloSizeRvir=2.0, sfrEmisFac=1):
     """ Export a snapshot cutout (global scope) around a given halo, for use in ILTIS-RT.
 
     Args:
@@ -1686,12 +1686,13 @@ def exportIltisCutout(sim, haloID, emLine='O  7 21.6020A', haloSizeRvir=2.0, red
       haloID (int): the FoF halo ID to center the cutout on.
       emLine (str): the emission line to save the emissivity of, which also specifies the ion for the density field.
       haloSizeRvir (float): the box side-length in rvir units.
-      redshiftIltis (float or None): if not None, then use this value for Redshift in the Iltis header.
+      sfrEmisBoost (float): if not unity, then multiplicative (boost) factor by which to change the emissivities 
+        for star-forming gas only, e.g. to generate simple models for bright central sources.
 
     Return:
       None. An actual file is written to disk.
     """
-    sim.createCloudyCache = False
+    sim.createCloudyCache = True
 
     # load gas positions and make spatial cutout
     halo = sim.halo(haloID)
@@ -1712,7 +1713,12 @@ def exportIltisCutout(sim, haloID, emLine='O  7 21.6020A', haloSizeRvir=2.0, red
     vel = sim.gas('vel', inds=inds)
     vel = sim.units.particleCodeVelocityToKms(vel) * 1e5 # cm/s
 
-    emis = sim.gas('%s lum' % emLine, inds=inds) * (1e30/1e42) # in 1e42 erg/s
+    emis = sim.gas('%s lum2phase' % emLine, inds=inds) * (1e30/1e42) # in 1e42 erg/s
+
+    if sfrEmisFac != 1:
+        sfr = sim.gas('sfr', inds=inds)
+        ww = np.where(sfr > 0)
+        emis[ww] *= sfrEmisFac
 
     ionName = emLine.split()[0] + ' ' + emLine.split()[1]
     dens = sim.gas('%s numdens' % ionName, inds=inds) # cm^-3
@@ -1725,6 +1731,8 @@ def exportIltisCutout(sim, haloID, emLine='O  7 21.6020A', haloSizeRvir=2.0, red
 
     # write hdf5 file
     fileName = 'cutout_%s_%d_halo%d_size%d.hdf5' % (sim.simName,sim.snap,haloID,int(haloSizeRvir))
+    if sfrEmisFac != 1:
+        fileName = fileName.replace('.hdf5','_b%d.hdf5' % sfrEmisFac)
 
     with h5py.File(fileName,'w') as f:
         # write header attributes
@@ -1732,11 +1740,11 @@ def exportIltisCutout(sim, haloID, emLine='O  7 21.6020A', haloSizeRvir=2.0, red
         f.attrs['Center'] = halo['GroupPos'] / sim.boxSize
         f.attrs['CutoutLength'] = (haloSizeRvir * halo['Group_R_Crit200']) / sim.boxSize
         f.attrs['CutoutShape'] = 'cube'
-        f.attrs['Redshift'] = sim.redshift if redshiftIltis is None else redshiftIltis
+        f.attrs['Redshift'] = sim.redshift
 
         # Coordinates* are in boxlength units [0.0,1.0), Emissivity is in [1e42 erg/s], everything else in [cgs]
         f['CoordinateX'] = pos[:,0]
-        f['CoordianteY'] = pos[:,1]
+        f['CoordinateY'] = pos[:,1]
         f['CoordinateZ'] = pos[:,2]
         f['Emissivity'] = emis
         f['density'] = dens

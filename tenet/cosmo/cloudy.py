@@ -961,7 +961,7 @@ class cloudyIon():
         return abunds
 
     def calcGasMetalAbundances(self, sP, element, ionNum, indRange=None, 
-                               assumeSolarAbunds=False, assumeSolarMetallicity=False, tempSfCold=True):
+                               assumeSolarAbunds=False, assumeSolarMetallicity=False, sfGasTemp='cold'):
         """ Compute abundance mass fraction of the given metal ion for gas particles in the 
         whole snapshot, optionally restricted to an indRange. 
 
@@ -971,9 +971,10 @@ class cloudyIon():
           ionNum  (str or int): roman numeral (e.g. IV) or numeral starting at 1 (e.g. CII is ionNum=2).
           indRange (2-tuple): if not None, the usual particle/cell-level index range to load.
           assumeSolarAbunds (bool): assume solar abundances (metal ratios), thereby ignoring GFM_Metals field.
-          assumeSolarMetallicity (bool): assume solar metallicity, thereby ignoring GFM_Metallicity field. 
-          tempSfCold (bool): set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp,
-            which is the default behavior.
+          assumeSolarMetallicity (bool): assume solar metallicity, thereby ignoring GFM_Metallicity field.
+          sfGasTemp (str): must be 'cold' (i.e. 1000 K), 'hot' (i.e. 5.73e7 K), 'effective' (snapshot value), 
+            or 'both', in which case abundances from both cold and hot phases are combined, each given fractional 
+            densities of the total gas density based on the two-phase model.
 
         Return:
           ndarray: mass fraction of the requested ion, relative to the total cell gas mass [linear].
@@ -990,15 +991,32 @@ class cloudyIon():
 
         metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
 
-        tempField = 'temp_sfcold' if tempSfCold else 'temp' # use cold phase temperature for eEOS gas (by default)
-        temp = sP.snapshotSubset('gas', tempField, indRange=indRange) # K
-        temp = np.log10(temp) # log K
+        if sfGasTemp == 'effective':
+            # snapshot value
+            temp = sP.snapshotSubset('gas', 'temp_log', indRange=indRange)
+        elif sfGasTemp == 'cold':
+            # cold-phase value (i.e. 1000 K)
+            temp = sP.snapshotSubset('gas', 'temp_sfcold_log', indRange=indRange)
+        elif sfGasTemp == 'hot':
+            # hot-phase value (i.e. 5.73e7 K)
+            temp = sP.snapshotSubset('gas', 'temp_sfhot_log', indRange=indRange)
+        elif sfGasTemp == 'both':
+            # add contributions from both
+            temp = sP.snapshotSubset('gas', 'temp_sfcold_log', indRange=indRange)
+            temp_hot = sP.snapshotSubset('gas', 'temp_sfhot_log', indRange=indRange)
         
         # interpolate for log(abundance) and convert to linear
         # note: doesn't matter if "ionziation fraction" is mass ratio, mass density ratio, or 
         # number density ratio, so long both the numerator and denominator refer to the same 
         # element (e.g. are relative values, and so \Sum_j f_Xj = 1)
-        ion_fraction = 10.0**self.frac(element, ionNum, dens, metal_logSolar, temp, sP.redshift)
+        if sfGasTemp == 'both':
+            # contributions from multiple (sub-grid) phases
+            coldfrac = sP.snapshotSubset('gas', 'twophase_coldfrac', indRange=indRange)
+            ion_fraction = 10.0**self.frac(element, ionNum, dens*(coldfrac), metal_logSolar, temp, sP.redshift)
+            ion_fraction += 10.0**self.frac(element, ionNum, dens*(1-coldfrac), metal_logSolar, temp_hot, sP.redshift)
+        else:
+            # normal: each gas cell is assumed to be single-phase (constant dens, temp)
+            ion_fraction = 10.0**self.frac(element, ionNum, dens, metal_logSolar, temp, sP.redshift)
 
         # total mass of ion j of element X is  (where f_Xj is the ionization fraction from CLOUDY)
         #   M_X = M_gas * (M_metals/M_gas) * (M_X/M_metals) * (M_Xj/M_X)
@@ -1206,7 +1224,7 @@ class cloudyEmission():
         return emis
 
     def calcGasLineLuminosity(self, sP, line, indRange=None, dustDepletion=False, 
-                              assumeSolarAbunds=False, assumeSolarMetallicity=False, tempSfCold=True):
+                              assumeSolarAbunds=False, assumeSolarMetallicity=False, sfGasTemp='cold'):
         """ Compute luminosity of line emission in for the given 'line',
         for gas particles in the whole snapshot, optionally restricted to an indRange.
 
@@ -1217,12 +1235,14 @@ class cloudyEmission():
           dustDepletion (bool): apply a dust-depletion model for a given species.
           assumeSolarAbunds (bool): assume solar abundances (metal ratios), thereby ignoring GFM_Metals field.
           assumeSolarMetallicity (bool): assume solar metallicity, thereby ignoring GFM_Metallicity field. 
-          tempSfCold (bool): set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp,
-            which is the default behavior.
+          sfGasTemp (str): must be 'cold' (i.e. 1000 K), 'hot' (i.e. 5.73e7 K), 'effective' (snapshot value), 
+            or 'both', in which case abundances from both cold and hot phases are combined, each given fractional 
+            densities of the total gas density based on the two-phase model.
 
         Return:
           ndarray: luminosity of line emission, per cell [linear erg/s].
         """
+        print(sP, line, indRange)
         ion = cloudyIon(sP=None)
         line = self._resolveLineNames(line, single=True)
 
@@ -1237,12 +1257,29 @@ class cloudyEmission():
 
         metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
 
-        tempField = 'temp_sfcold' if tempSfCold else 'temp' # use cold phase temperature for eEOS gas (by default)
-        temp = sP.snapshotSubset('gas', tempField, indRange=indRange) # K
-        temp = np.log10(temp) # log K
+        if sfGasTemp == 'effective':
+            # snapshot value
+            temp = sP.snapshotSubset('gas', 'temp_log', indRange=indRange)
+        elif sfGasTemp == 'cold':
+            # cold-phase value (i.e. 1000 K)
+            temp = sP.snapshotSubset('gas', 'temp_sfcold_log', indRange=indRange)
+        elif sfGasTemp == 'hot':
+            # hot-phase value (i.e. 5.73e7 K)
+            temp = sP.snapshotSubset('gas', 'temp_sfhot_log', indRange=indRange)
+        elif sfGasTemp == 'both':
+            # add contributions from both
+            temp = sP.snapshotSubset('gas', 'temp_sfcold_log', indRange=indRange)
+            temp_hot = sP.snapshotSubset('gas', 'temp_sfhot_log', indRange=indRange)
         
         # interpolate for log(emissivity) and convert to linear [erg/cm^3/s]
-        emissivity = 10.0**self.emis(line, dens, metal_logSolar, temp, sP.redshift)
+        if sfGasTemp == 'both':
+            # contributions from multiple (sub-grid) phases
+            coldfrac = sP.snapshotSubset('gas', 'twophase_coldfrac', indRange=indRange)
+            emissivity = 10.0**self.emis(line, dens*(coldfrac), metal_logSolar, temp, sP.redshift)
+            emissivity += 10.0**self.emis(line, dens*(1-coldfrac), metal_logSolar, temp_hot, sP.redshift)
+        else:
+            # normal: each gas cell is assumed to be single-phase (constant dens, temp)
+            emissivity = 10.0**self.emis(line, dens, metal_logSolar, temp, sP.redshift)
 
         # total luminosity of gas cell is (where e_l is the volume emissivity from CLOUDY for line L)
         #   L_l = e_l(z,Z,T,n) * (mass/rho) * (X_j/X_j_solar) = e_l * cell_volume * (X_j/X_j_solar)

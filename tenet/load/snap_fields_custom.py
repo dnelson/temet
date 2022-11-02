@@ -146,7 +146,7 @@ temp_old.log = True
 @snap_field
 def temp_sfcold(sim, partType, field, args):
     """ Gas temperature, where star-forming gas is set to the sub-grid (constant)
-    cold-phase temperature instead of eEOS temperature. """
+    cold-phase temperature, instead of eEOS 'effective' temperature. """
     temp = sim.snapshotSubset(partType, 'temp', **args)
     sfr = sim.snapshotSubset(partType, 'sfr', **args)
 
@@ -160,6 +160,39 @@ temp_sfcold.units = r'$\rm{K}$'
 temp_sfcold.limits = [3.5, 7.2]
 temp_sfcold.limits_halo = [3.5, 8.0]
 temp_sfcold.log = True
+
+@snap_field
+def temp_sfhot(sim, partType, field, args):
+    """ Gas temperature, where star-forming gas is set to the sub-grid (constant)
+    hot-phase temperature, instead of the eEOS 'effective' temperature. Use with caution. """
+    temp = sim.snapshotSubset(partType, 'temp', **args)
+    sfr = sim.snapshotSubset(partType, 'sfr', **args)
+
+    w = np.where(sfr > 0.0)
+    temp[w] = 5.73e7 # fiducial Illustris/TNG model: T_clouds = 1000 K, T_SN = 5.73e7 K
+
+    return temp
+
+temp_sfhot.label = 'Gas Temperature'
+temp_sfhot.units = r'$\rm{K}$'
+temp_sfhot.limits = [3.5, 7.2]
+temp_sfhot.limits_halo = [3.5, 8.0]
+temp_sfhot.log = True
+
+@snap_field
+def twophase_coldfrac(sim, partType, field, args):
+    """ Cold-phase mass (or density) fraction, for the SH03 two-phase ISM model.
+    Note: is exactly 0.0 for non-starforming (SFR==0) gas cells, and typically of order ~0.9 for SFR>0 cells. """
+    nh = sim.snapshotSubset(partType, 'nh', **args)
+    sfr = sim.snapshotSubset(partType, 'sfr', **args)
+
+    return sim.units.densToSH03ColdFraction(nh, sfr)
+
+twophase_coldfrac.label = r'SH03 Cold-phase Mass Fraction'
+twophase_coldfrac.units = '' # dimensionless
+twophase_coldfrac.limits = [0, 1]
+twophase_coldfrac.limits_halo = [0, 1]
+twophase_coldfrac.log = False
 
 @snap_field(alias='nelec')
 def ne(sim, partType, field, args):
@@ -190,10 +223,8 @@ def ne_twophase(sim, partType, field, args):
     which is unphysically high, with a value based on the SH03 hot-phase mass only. """
     ne = sim.snapshotSubset(partType, 'ne', **args)
 
-    # compute hot-phase fraction (is 1.0 for SFR==0 cells)
-    nh = sim.snapshotSubset(partType, 'nh', **args)
-    sfr = sim.snapshotSubset(partType, 'sfr', **args)
-    hot_frac = 1.0 - sim.units.densToSH03ColdFraction(nh, sfr)
+    # compute hot-phase fraction (is 1.0 for SFR==0 cells, and of order ~0.1 for SFR>0 cells)
+    hot_frac = 1.0 - sim.snapshotSubset(partType, 'twophase_coldfrac', **args)
 
     return ne*hot_frac
 
@@ -1160,7 +1191,7 @@ def _cloudy_load(sim, partType, field, args):
             prop = prop.replace('_solar','')
 
     assert sim.isPartType(partType, 'gas')
-    assert prop in ['mass','frac','flux','lum','numdens']
+    assert prop in ['mass','frac','flux','lum','lum2phase','numdens']
 
     # indRange subset herein (do not change args dict, could be used on other fields)
     indRangeOrig = args['indRange']
@@ -1268,9 +1299,15 @@ def _cloudy_load(sim, partType, field, args):
                         values /= ion.atomicMass(element) # [H atoms/cm^3] to [ions/cm^3]
 
                 elif prop == 'lum':
+                    # by default, gas temperature is 'temp_sfcold' i.e. star-forming gas is set to 1000 K
                     values = emis.calcGasLineLuminosity(sim, lineName, indRange=indRangeLocal, dustDepletion=dustDepletion)
                     values /= 1e30 # 10^30 erg/s unit system to avoid overflow
-                    
+
+                elif prop == 'lum2phase':
+                    # for star-forming gas, include contributions from both the cold and hot phases, with their respective mass fractions
+                    values = emis.calcGasLineLuminosity(sim, lineName, indRange=indRangeLocal, dustDepletion=dustDepletion, sfGasTemp='both')
+                    values /= 1e30 # 10^30 erg/s unit system to avoid overflow
+
                 elif prop == 'flux':
                     # emission flux
                     lum = emis.calcGasLineLuminosity(sim, lineName, indRange=indRangeLocal, dustDepletion=dustDepletion)
@@ -1317,6 +1354,9 @@ def _cloudy_load(sim, partType, field, args):
                 values /= ion.atomicMass(element) # [H atoms/cm^3] to [ions/cm^3]
         elif prop == 'lum':
             values = emis.calcGasLineLuminosity(sim, lineName, indRange=indRangeOrig, dustDepletion=dustDepletion)
+            values /= 1e30 # 10^30 erg/s unit system to avoid overflow
+        elif prop == 'lum2phase':
+            values = emis.calcGasLineLuminosity(sim, lineName, indRange=indRangeOrig, dustDepletion=dustDepletion, sfGasTemp='both')
             values /= 1e30 # 10^30 erg/s unit system to avoid overflow
         elif prop == 'flux':
             # emission flux
