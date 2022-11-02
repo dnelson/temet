@@ -1607,9 +1607,10 @@ def plotxy(x, y, filename='plot.pdf'):
         ax.set_ylabel(['y','y','log(y)','log(y)'][i])
 
         if i == 0:
-            ax.plot(x[::step], y[::step], '.')
+            ax.plot(x[::step], y[::step], '.', label='data')
             mx, my, _ = running_median(x, y, nBins=20)
-            ax.plot(mx, my, '-', lw=2.5)
+            ax.plot(mx, my, '-', lw=2.5, label='median')
+            ax.legend(loc='best')
         if i == 1:
             ax.plot(xx_log[::step], y[::step], '.')
             mx, my, _ = running_median(xx_log, y, nBins=20)

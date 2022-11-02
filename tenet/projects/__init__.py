@@ -16,4 +16,5 @@ from . import oxygen
 from . import rshock
 from . import tngcluster
 from . import xrayAngularDependence
+from . import xray_scattering
 from . import zooming2
