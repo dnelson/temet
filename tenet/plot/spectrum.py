@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from os.path import isfile
 
 from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_filepath
-from ..cosmo.spectrum import create_master_grid, deposit_single_line, lines
+from ..cosmo.spectrum import create_master_grid, deposit_single_line, lines, absorber_catalog
 from ..util.helper import logZeroNaN, sampleColorTable
 from ..util import units
 from ..plot.config import *
@@ -304,7 +304,7 @@ def _spectrum_debug_plot(line, plotName, master_mid, tau_master, master_dens, ma
     plt.close(fig)
 
 def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0.1,1.0], 
-                          num=10, mode='random', solar=False, SNR=None, xlim=None):
+                          num=10, mode='random', inds=None, solar=False, SNR=None, xlim=None):
     """ Plot a gallery of individual absorption profiles within a given EW range.
 
     Args:
@@ -313,13 +313,17 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
       EW_minmax (list[float]): minimum and maximum EW to plot [Ang].
       num (int): how many individual spectra to show.
-      mode (str): either 'random' or 'evenly'.
+      mode (str): either 'random', 'evenly', or 'inds'.
+      inds (list[int]): if mode is 'inds', then the list of specific spectra indices to plot. num is ignored.
       solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
         use the (constant) solar value.
       SNR (float): if not None, then add noise to achieve this signal to noise ratio.
       xlim (str, list[float]): either 'full' or a 2-tuple of [min,max], or automatic if None (default)
     """
-
+    assert mode in ['random','evenly','inds']
+    if mode == 'inds': assert inds is not None
+    if mode in ['random','evenly']: assert inds is None
+    
     # config
     ctName = 'thermal'    
 
@@ -327,11 +331,15 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
     filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
 
     with h5py.File(filepath,'r') as f:
-        # compute total EW (summing all transitions)
-        EW = np.sum(np.vstack([f[key][()] for key in f.keys() if 'EW_' in key]), axis=0)
-
+        # load metadata
         lineNames = f.attrs['lineNames']
         wave = f['master_wave'][()]
+
+        # total EW (summing all transitions)
+        EW = np.sum(np.vstack([f[key][()] for key in f.keys() if 'EW_' in key]), axis=0)
+
+        # total EW (of a single transition)
+        #EW = f['EW_MgII_2796'][()]
 
     # select
     if EW_minmax is not None:
@@ -353,12 +361,14 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         binsize = (EW_minmax[1] - EW_minmax[0]) / num
 
         inds = []
-
         for i in range(num):
             w = np.where((EW>EW_minmax[0]+i*binsize) & (EW<=EW_minmax[0]+(i+1)*binsize))[0]
             rng.shuffle(w)
 
             inds.append(w[0])
+
+    if mode == 'inds':
+        num = len(inds)
 
     # partial load of selected spectra
     inds = np.sort(inds)
@@ -461,7 +471,8 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         (sim.simName,sim.snap,ion.replace(' ',''),instrument,ewStr,num,mode,snrStr))
     plt.close(fig)
 
-def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=[0.5,0.7,1.0], solar=False, log=False):
+def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=[0.5,0.7,1.0], 
+                    solar=False, indivEWs=False, log=False):
     """ Plot the EW distribution (dN/dWdz) of a given absorption line.
 
     Args:
@@ -470,11 +481,15 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
       redshifts (list[float]): list of redshifts to overplot.
       solar (bool): use the (constant) solar value instead of simulation-tracked metal abundances.
+      indivEWs (bool): if True, then use/create absorber catalog, to handle multiple absorbers per sightline, 
+        otherwise use the available 'global' EWs, one per sightline.
       log (bool): plot log(EW) instead of linear EWs.
     """
     sim = sim_in.copy()
 
     # plot config
+    EW_min = 1e-3 # rest-frame ang
+
     xlim = [0, 8] # ang
     if log: xlim = [-1.0, 1.4] # log[ang]
     nBins = 80
@@ -484,15 +499,28 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
 
     for redshift in redshifts:
         sim.setRedshift(redshift)
+
         ion = lines[line]['ion']
         filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
 
-        with h5py.File(filepath,'r') as f:
-            count = f.attrs['count']
-            data = f['EW_%s' % line.replace(' ','_')][()]
+        # raw EWs (one per sightline), or re-processed EWs (one per individual absorber)?
+        if indivEWs:
+            EWs_orig, _, EWs_processed, counts_processed, _ = absorber_catalog(sim, ion, instrument=instrument, solar=solar)
+            data = EWs_processed[line]
+            count = EWs_orig[line].size
+        else:
+            with h5py.File(filepath,'r') as f:
+                count = f.attrs['count']
+                data = f['EW_%s' % line.replace(' ','_')][()]
+
+        # exclude absolute zero EWs (i.e. no absorption)
+        data = data[data > 0]
 
         # convert to rest-frame
         data /= (1+sim.redshift)
+
+        # exclude unobservably small EWs
+        data = data[data >= EW_min]
 
         EWs[redshift] = data
 
@@ -501,7 +529,7 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
     ax = fig.add_subplot(111)
 
     ax.set_xlim(xlim)
-    ax.set_xlabel('Rest-frame Equivalent Width [ %s$\AA$ ]' % ('Log ' if log else ''))
+    ax.set_xlabel('Rest-frame Equivalent Width [ %s$\\rm{\AA}$ ]' % ('Log ' if log else ''))
     ax.set_ylabel('d$^2 N$/d$z$d$W$ (%s)' % line)
     ax.set_yscale('log')
 

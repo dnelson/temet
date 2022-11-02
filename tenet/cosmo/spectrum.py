@@ -13,9 +13,15 @@ from numba import jit
 from numba.extending import get_cython_function_address
 import ctypes
 
-from ..util.helper import logZeroNaN, pSplitRange
-from ..util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
-                              trace_ray_through_voronoi_mesh_with_connectivity, rayTrace
+from ..util.helper import logZeroNaN, pSplitRange, contiguousIntSubsets
+from ..util.voronoiRay import rayTrace
+
+# default configuration for ray generation
+projAxis_def = 2
+#nRaysPerDim_def = 2000
+#raysType_def = 'voronoi_rndfullbox'
+nRaysPerDim_def = 1000
+raysType_def = 'voronoi_fullbox'
 
 # line data (e.g. AtomDB), name is ion plus wavelength in ang rounded down
 # (and Verner+96 https://www.pa.uky.edu/~verner/lines.html)
@@ -234,12 +240,13 @@ lines = {'LyA'        : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion'
 # R = lambda/dlambda = c/dv
 # EW_restframe = W_obs / (1+z_abs)
 instruments = {'idealized'  : {'wave_min':1000, 'wave_max':12000, 'dwave':0.1},     # used for EW map vis
+               'master'     : {'wave_min':1,    'wave_max':25000, 'dwave':0.0005},  # used to create master spectra (400MB per, float64 uncompressed)
                'COS-G130M'  : {'wave_min':1150, 'wave_max':1450,  'dwave':0.01},    # approximate
                'COS-G140L'  : {'wave_min':1130, 'wave_max':2330,  'dwave':0.08},    # approximate
                'COS-G160M'  : {'wave_min':1405, 'wave_max':1777,  'dwave':0.012},   # approximate
                'test_EUV'   : {'wave_min':800,  'wave_max':1300,  'dwave':0.1},     # to see LySeries at rest
                'SDSS-BOSS'  : {'wave_min':3543, 'wave_max':10400, 'dlogwave':1e-4}, # constant log10(dwave)=1e-4
-               '4MOST-LRS'  : {'wave_min':4000, 'wave_max':8860,  'dwave':0.8},     # assume R=5000 = lambda/dlambda
+               '4MOST-LRS'  : {'wave_min':4000, 'wave_max':8860,  'R':5000},        # assume R=5000 = lambda/dlambda
                '4MOST-HRS'  : {'wave_min':3926, 'wave_max':6790,  'R':20000},       # but gaps!
                'PFS-B'      : {'wave_min':3800, 'wave_max':6500,  'R':2300},        # blue arm (3 arms used simultaneously)
                'PFS-R-LR'   : {'wave_min':6300, 'wave_max':9700,  'R':3000},        # low-res red arm
@@ -296,7 +303,9 @@ def _voigt0(wave_cm, b, wave0_ang, gamma):
 
     # use Faddeeva for integral
     alpha = gamma / (4*np.pi*dnu)
-    voigt_u = (nu - nu0) / dnu # z
+    voigt_u = (nu - nu0) / dnu # = (nu-nu0) * wave_rest / b_cgs
+    # = (c/wave_cm - c/wave_rest) * wave_rest / b_cgs
+    # = c * (wave_rest/wave_cm - 1) / b_cgs
 
     # numba wofz issue: https://github.com/numba/numba/issues/3086
     #voigt_wofz = wofz(voigt_u + 1j*alpha).real # H(alpha,z)
@@ -308,11 +317,11 @@ def _voigt0(wave_cm, b, wave0_ang, gamma):
     return phi_wave
 
 @jit(nopython=True, nogil=True, cache=False)
-def _voigt_tau(wave, N, b, wave0, f, gamma, wave0_rest=None, logwave=False):
+def _voigt_tau(wave, N, b, wave0, f, gamma, wave0_rest=None):
     """ Compute optical depth tau as a function of wavelength for a Voigt absorption profile.
 
     Args:
-      wave (array[float]): wavelength grid in [ang]
+      wave (array[float]): wavelength grid in [linear ang]
       N (float): column density of absorbing species in [cm^-2]
       b (float): doppler parameter, equal to sqrt(2kT/m) where m is the particle mass.
         b = sigma*sqrt(2) where sigma is the velocity dispersion.
@@ -320,23 +329,19 @@ def _voigt_tau(wave, N, b, wave0, f, gamma, wave0_rest=None, logwave=False):
       f (float): oscillator strength of the transition
       gamma (float): sum of transition probabilities (Einstein A coefficients) [1/s]
       wave0_rest (float): if not None, then rest-frame central wavelength, i.e. wave0 could be redshifted
-      logwave (bool): if True, interpret wave input as [log ang].
     """
     if wave0_rest is None:
         wave0_rest = wave0
 
     # get dimensionless shape for voigt profile:
-    if logwave:
-        wave_cm = np.exp(wave) * 1e-8
-    else:
-        wave_cm = wave * 1e-8
+    wave_cm = wave * 1e-8
 
     phi_wave = _voigt0(wave_cm, b, wave0, gamma)
 
     consts = 0.014971475 # sqrt(pi)*e^2 / m_e / c = cm^2/s
     wave0_rest_cm = wave0_rest * 1e-8
 
-    tau_wave = (consts * N * f * wave0_rest_cm) * phi_wave
+    tau_wave = (consts * N * f * wave0_rest_cm) * phi_wave # dimensionless
     return tau_wave
 
 @jit(nopython=True, nogil=True, cache=True)
@@ -354,20 +359,6 @@ def _equiv_width(tau,wave_mid_ang):
     # (only for constant dwave):
     # dang = wave_mid_ang[1] - wave_mid_ang[0]
     # res = dang / 2 * (integrand[0] + integrand[-1] + np.sum(2*integrand[1:-1]))
-
-    return res
-
-@jit(nopython=True, nogil=True, cache=True)
-def _equiv_width_flux(flux,wave_mid_ang):
-    """ Compute the equivalent width by integrating the continuum normalized flux array across the given wavelength grid. """
-    assert wave_mid_ang.size == flux.size
-
-    # wavelength bin size
-    dang = np.abs(np.diff(wave_mid_ang))
-
-    # integrate 1-flux = (1-exp(-tau_lambda)) d_lambda from 0 to inf, composite trap rule
-    integrand = 1 - flux
-    res = np.sum(dang * (integrand[1:] + integrand[:-1])/2)
 
     return res
 
@@ -401,10 +392,10 @@ def create_master_grid(line=None, instrument=None):
 
     # if dwave is specified, use linear wavelength spacing
     if dwave is not None:
-        print(f'Creating linear wavelength grid with {dwave = :.3f}')
         num_edges = int(np.floor((wave_max - wave_min) / dwave)) + 1
         wave_edges = np.linspace(wave_min, wave_max, num_edges)
         wave_mid = (wave_edges[1:] + wave_edges[:-1]) / 2
+        print(f'Created [N = {wave_mid.size}] linear wavelength grid with {dwave = :.3f} for [{instrument}]')
 
     # if dlogwave is specified, use log10-linear wavelength spacing
     if dlogwave is not None:
@@ -414,11 +405,11 @@ def create_master_grid(line=None, instrument=None):
         wave_mid = 10.0**log_wave_mid
         log_wave_edges = np.arange(log_wavemin-dlogwave/2,log_wavemax+dlogwave+dlogwave/2,dlogwave)
         wave_edges = 10.0**log_wave_edges
+        print(f'Created [N = {wave_mid.size}] loglinear wavelength grid with {dlogwave = } for [{instrument}]')
 
     # else, use spectral resolution R, and create linear in log(wave) grid
     if dwave is None and dlogwave is None:
         R = instruments[instrument]['R']
-        print(f'Creating loglinear wavelength grid with {R = }')
         log_wavemin = np.log(wave_min)
         log_wavemax = np.log(wave_max)
         d_loglam = 1/R
@@ -426,14 +417,17 @@ def create_master_grid(line=None, instrument=None):
         wave_mid = np.exp(log_wave_mid)
         log_wave_edges = np.arange(log_wavemin-d_loglam/2,log_wavemax+d_loglam+d_loglam/2,d_loglam)
         wave_edges = np.exp(log_wave_edges)
+        print(f'Created [N = {wave_mid.size}] loglinear wavelength grid with {R = } for [{instrument}]')
 
     tau_master = np.zeros(wave_mid.size, dtype='float32')
 
     return wave_mid, wave_edges, tau_master
 
 @jit(nopython=True, nogil=True, cache=False)
-def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_eff, logwave=False, debug=False):
+def deposit_single_line(wave_edges_master, wave_mid_master, tau_master, f, gamma, wave0, N, b, z_eff, debug=False):
     """ Add the absorption profile of a single transition, from a single cell, to a spectrum.
+    Global method, where the original master grid is assumed to be very high resolution, such that 
+    no sub-sampling is necessary (re-sampling onto an instrument grid done later).
 
     Args:
       wave_edges_master (array[float]): bin edges for master spectrum array [ang].
@@ -444,7 +438,6 @@ def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_
       gamma (float): sum of transition probabilities (Einstein A coefficients) [1/s]
       wave0 (float): central wavelength, rest-frame [ang].
       z_eff (float): effective redshift, i.e. including both cosmological and peculiar components.
-      logwave (bool): if True, interpret wave_edges_master as [log ang].
       debug (bool): if True, return local grid info and do checks.
 
     Return:
@@ -453,32 +446,26 @@ def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_
     if N == 0:
         return # empty
 
-    # local (to the line), rest-frame wavelength grid
-    dwave_local = 0.01 # ang
-    edge_tol = 1e-4 # if the optical depth is larger than this by the edge of the local grid, redo
+    # if the optical depth is larger than this by the edge of the local grid, redo
+    edge_tol = 1e-4 
 
+    # check that grid resolution is sufficient
+    dwave_master = wave_edges_master[1] - wave_edges_master[0]
     b_dwave = b / sP_units_c_km_s * wave0 # v/c = dwave/wave
 
-    # adjust local resolution to make sure we sample narrow lines
-    while b_dwave < dwave_local * 4:
-        dwave_local *= 0.5
+    if b_dwave < dwave_master * 10:
+        print('WARNING: b_dwave is too small for the master_dwave, ', b_dwave)
+        assert 0 # check
 
-        if dwave_local < 1e-5:
-            print(b, b_dwave, dwave_local)
-            assert 0 # check
-            break
-
-    # prep local grid
+    # prep local grid where we will sample tau
     wave0_obsframe = wave0 * (1 + z_eff)
 
     line_width_safety = b / sP_units_c_km_s * wave0_obsframe
 
-    dwave_master = wave_edges_master[1] - wave_edges_master[0]
-    nloc_per_master = int(np.round(dwave_master / dwave_local))
-
     n_iter = 0
     local_fac = 5.0
     tau = np.array([np.inf], dtype=np.float64)
+    master_previnds = np.array([-1,-1], dtype=np.int32)
 
     while tau[0] > edge_tol or tau[-1] > edge_tol:
         # determine where local grid overlaps with master
@@ -488,6 +475,15 @@ def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_
         master_inds = np.searchsorted(wave_edges_master, [wave_min_local,wave_max_local])
         master_startind = master_inds[0] - 1
         master_finalind = master_inds[1]
+
+        if master_startind == master_previnds[0] and master_finalind == master_previnds[1]:
+            # increase of local_fac was too small to actually increase coverage of master grid, repeat
+            local_fac *= 2.0
+            n_iter += 1
+            continue
+
+        master_previnds[0] = master_startind
+        master_previnds[1] = master_finalind
 
         # sanity checks
         if master_startind == -1:
@@ -508,22 +504,15 @@ def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_
             if debug: print('WARNING: absorber entirely off edge of master spectrum! skipping!')
             return
 
-        # create local grid specification aligned with master
-        nmaster_covered = master_finalind - master_startind # difference of bin edge indices
-        num_bins_local = nmaster_covered * nloc_per_master
-
-        wave_min_local = wave_edges_master[master_startind]
-        wave_max_local = wave_edges_master[master_finalind]
-
-        # create local grid
-        wave_edges_local = np.linspace(wave_min_local, wave_max_local, num_bins_local+1)
+        # local grid
+        wave_edges_local = wave_edges_master[master_startind:master_finalind]
         wave_mid_local = (wave_edges_local[1:] + wave_edges_local[:-1]) / 2
 
         # get optical depth
-        tau = _voigt_tau(wave_mid_local, N, b, wave0_obsframe, f, gamma, wave0_rest=wave0, logwave=logwave)
+        tau = _voigt_tau(wave_mid_local, N, b, wave0_obsframe, f, gamma, wave0_rest=wave0)
 
         # iterate and increase wavelength range of local grid if the optical depth at the edges is still large
-        #if debug: print(f'{local_fac = }, {tau[0] = :.3g}, {tau[-1] = :.3g}, {edge_tol = }')
+        #if debug: print(f'  [iter {n_iter}] master inds [{master_startind} - {master_finalind}], {local_fac = }, {tau[0] = :.3g}, {tau[-1] = :.3g}, {edge_tol = }')
 
         if n_iter > 100:
             break
@@ -531,137 +520,99 @@ def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_
         if master_startind == 0 and master_finalind == wave_edges_master.size - 1:
             break # local grid already extended to entire master
 
-        local_fac *= 1.2
+        local_fac *= 2.0
         n_iter += 1
 
-    #if (tau[0] > edge_tol or tau[-1] > edge_tol):
-    #    print('WARNING: final local grid edges still have high tau')
-    #    #if not debug: assert 0
-
-    # integrate local tau within each bin of master tau
-    master_ind = master_startind
-    count = 0
-    tau_bin = 0.0
-
-    for local_ind in range(wave_mid_local.size):
-        # deposit partial integral of tau into master bin
-        tau_bin += tau[local_ind]
-        count += 1
-
-        #print(f' add to tau_master[{master_ind:2d}] from {local_ind = :2d} with {tau[local_ind] = :.3g} i.e. {wave_mid_local[local_ind]:.4f} [{wave_edges_local[local_ind]:.4f}-{wave_edges_local[local_ind+1]:.4f}] Ang into {wave_mid[master_ind]:.2f} [{wave_edges_master[master_ind]}-{wave_edges_master[master_ind+1]}] Ang')
-
-        if count == nloc_per_master:
-            # midpoint rule
-            tau_master[master_ind] += tau_bin * (dwave_local/dwave_master)
-            #print(f'  midpoint tau_master[{master_ind:2d}] = {tau_master[master_ind]:.4f}')
-
-            # move to next master bin
-            master_ind += 1
-            count = 0
-            tau_bin = 0.0
-
-    if debug:
-        # debug check
-        wave_mid_master = (wave_edges_master[1:] + wave_edges_master[:-1]) / 2
-        EW_local = _equiv_width(tau,wave_mid_local)
-        EW_master = _equiv_width(tau_master,wave_mid_master)
-
-        tau_local_tot = np.sum(tau * dwave_local)
-        tau_master_tot = np.sum(tau_master * dwave_master)
-
-        #print(f'{EW_local = :.6f}, {EW_master = :.6f}, {tau_local_tot = :.5f}, {tau_master_tot = :.5f}')
-
-    if debug:
-        # get flux
-        flux = np.exp(-1*tau)
-
-        # return local wavelength, tau, and flux arrays
-        return wave_mid_local, tau, flux
+    # deposit local tau into each bin of master tau
+    tau_master[master_startind:master_finalind-1] += tau
 
     return
 
-def create_spectrum_from_traced_ray(sP, f, gamma, wave0, ion_mass, instrument, 
-    master_dens, master_dx, master_temp, master_vellos):
-    """ Given a completed (single) ray traced through a volume, and the properties of all the intersected 
-    cells (dens, dx, temp, vellos), create the final absorption spectrum, depositing a Voigt absorption 
-    profile for each cell. """
-    nCells = master_dens.size
-
-    # create master grid
-    master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
-
-    # assign sP.redshift to the front intersectiom (beginning) of the box
-    z_start = sP.redshift # change to 'pretend' that this snapshot is at a different redshift
-
-    z_vals = np.linspace(z_start, z_start+0.1, 400)
-    lengths = sP.units.redshiftToComovingDist(z_vals) - sP.units.redshiftToComovingDist(z_start)
-
-    # cumulative pathlength, Mpc from start of box i.e. start of ray (at z_start)
-    cum_pathlength = np.zeros(nCells, dtype='float32') 
-    cum_pathlength[1:] = np.cumsum(master_dx)[:-1]
-    cum_pathlength /= sP.scalefac # input in pMpc, convert to cMpc
-
-    # cosmological redshift of each intersected cell
-    z_cosmo = np.interp(cum_pathlength, lengths, z_vals)
-
-    # doppler shift
-    z_doppler = master_vellos / sP.units.c_km_s
-
-    # effective redshift
-    z_eff = (1+z_doppler)*(1+z_cosmo) - 1
-
-    # column density
-    N = master_dens * (master_dx * sP.units.Mpc_in_cm) # cm^-2
-
-    # doppler parameter b = sqrt(2kT/m) where m is the particle mass
-    b = np.sqrt(2 * sP.units.boltzmann * master_temp / ion_mass) # cm/s
-    b /= 1e5 # km/s
-
-    # deposit each intersected cell as an absorption profile onto spectrum
-    for i in range(nCells):
-        print(f'[{i:3d}] N = {logZeroNaN(N[i]):6.3f} {b[i] = :7.2f} {z_eff[i] = :.6f}')
-        deposit_single_line(master_edges, tau_master, f, gamma, wave0, N[i], b[i], z_eff[i])
-
-    return master_mid, tau_master, z_eff
-
 @jit(nopython=True, nogil=True, cache=False)
-def integrate_quantity_along_traced_rays(rays_off, rays_len, rays_cell_dl, rays_cell_inds, cell_values):
-    """ Integrate a given physical quantity along each sightline. One scalar return per sightline, with 
-    units given by [rays_cell_dl * cell_values].
+def _resample_spectrum(master_mid, tau_master, inst_waveedges):
+    """ Resample a high-resolution spectrum defined on the master_mid wavelength (midpoints) grid, 
+    with given optical depths at each wavelength point, onto a lower resolution inst_waveedges 
+    wavelength (bin edges) grid, preserving flux i.e. equivalent width.
+
+    Args:
+      master_mid (array[float]): high-resolution spectrum wavelength grid midpoints.
+      tau_master (array[float]): optical depth, defined at each master_mid wavelength point.
+      inst_waveedges (array[float]): low-resolution spectrum wavelength grid bin edges, 
+        should have the same units as master_mid.
+
+    Return:
+      inst_tau (array[float]): optical depth array at the lower resolution, with total size 
+        equal to (inst_waveedges.size - 1).
     """
-    n_rays = rays_len.size
+    flux_smallval = 1.0 - 1e-10
 
-    r = np.zeros(n_rays, dtype=np.float32)
+    # where does instrumental grid start within master?
+    master_startind, master_finalind = np.searchsorted(master_mid, [inst_waveedges[0], inst_waveedges[-1]])
 
-    # loop over rays
-    for i in range(n_rays):
-        # get local properties
-        offset = rays_off[i] # start of intersected cells (in rays_cell*)
-        length = rays_len[i] # number of intersected gas cells
+    assert master_startind > 0, 'Should not occur.'
+    assert master_finalind < master_mid.size-1, 'Should not occur.'
 
-        master_dx = rays_cell_dl[offset:offset+length]
-        master_inds = rays_cell_inds[offset:offset+length]
+    # convert optical depth to flux
+    flux_master = np.exp(-tau_master)
 
-        master_values = cell_values[master_inds]
+    dwave_master = master_mid[1] - master_mid[0] # constant
 
-        r[i] = np.sum(master_dx * master_values)
+    # allocate
+    inst_tau = np.zeros(inst_waveedges.size-1, dtype=np.float32)
 
-    return r
+    flux_bin = 0.0
+    inst_ind = 0
+
+    # loop through high-res master that falls within the instrumental grid
+    # (master_startind is inside the first inst bin, while master_finalind is outside the last inst bin)
+    for master_ind in range(master_startind, master_finalind):
+        # has master bin moved into the next instrumental wavelength bin?
+        if master_mid[master_ind] > inst_waveedges[inst_ind+1] or master_ind == master_finalind - 1:
+            # midpoint rule, deposit accumulated flux into this instrumental bin
+            local_EW = flux_bin * dwave_master
+
+            # h = area / width gives the 'height' of (1-flux) in the instrumental grid
+            dwave_inst = inst_waveedges[inst_ind+1] - inst_waveedges[inst_ind]
+
+            inst_height = local_EW / dwave_inst 
+
+            # sanity checks and handle rounding issues
+            assert inst_height >= 0.0
+            assert inst_height < 1.000001 # impossible to have >1, in which case np.log(negative) is nan
+
+            if inst_height > flux_smallval:
+                # entire inst bin is saturated to zero flux, but rounding errors could place the height > 1.0
+                # set to 1-eps, such that tau is very large (~20 for this value of eps), and final flux ~ 1e-10
+                inst_height = flux_smallval
+
+            localEW_to_tau = -np.log(1-inst_height)
+
+            # save into instrumental optical depth array (TODO check)
+            assert inst_tau[inst_ind] == 0, 'Should be empty.'
+            inst_tau[inst_ind] = localEW_to_tau
+
+            # move to next instrumental bin
+            inst_ind += 1
+            flux_bin = 0.0
+
+        # accumulate (partial) sum of 1-flux
+        flux_bin += (1-flux_master[master_ind])
+
+    return inst_tau
 
 @jit(nopython=True, nogil=True, cache=False)
-def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
+def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, 
                                      rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
-                                     cell_dens, cell_temp, cell_vellos, 
-                                     z_vals, z_lengths,
-                                     master_mid, master_edges, ind0, ind1):
+                                     cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
+                                     master_mid, master_edges, inst_wavemid, inst_waveedges, ind0, ind1):
     """ JITed helper (see below). """
     n_rays = ind1 - ind0 + 1
     scalefac = 1/(1+z_vals[0])
 
     # allocate: full spectra return as well as derived EWs
-    tau_master = np.zeros(master_mid.size, dtype=np.float32)
-    tau_allrays = np.zeros((n_rays,tau_master.size), dtype=np.float32)
-    EW_master = np.zeros(n_rays, dtype=np.float32)
+    tau_master = np.zeros(master_mid.size, dtype=np.float64)
+    tau_allrays = np.zeros((n_rays,inst_wavemid.size), dtype=np.float32)
+    EW_allrays = np.zeros(n_rays, dtype=np.float32)
 
     # loop over rays
     for i in range(n_rays):
@@ -702,17 +653,29 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
 
         # deposit each intersected cell as an absorption profile onto spectrum
         for j in range(length):
-            #print(f' [{j:3d}] N = {logZeroNaN(N[j]):6.3f} {b[j] = :7.2f} {z_eff[j] = :.6f}')
-            deposit_single_line(master_edges, tau_master, f, gamma, wave0, N[j], b[j], z_eff[j])
+            # skip negligibly small columns (in linear cm^-2) for efficiency
+            if N[j] < 1e2:
+                continue
 
-        # stamp spectrum
-        tau_allrays[i,:] = tau_master
+            deposit_single_line(master_edges, master_mid, tau_master, f, gamma, wave0, N[j], b[j], z_eff[j])
+
+        # TODO: convolve by instrumental resolution/LSF
+        # ...
+
+        # resample tau_master on to instrument wavelength grid, and save
+        tau_inst = _resample_spectrum(master_mid, tau_master, inst_waveedges)
+        tau_allrays[i,:] = tau_inst
 
         # also compute EW and save
-        # note: is currently a global EW, i.e. not localized/restricted to a single absorber
-        EW_master[i] = _equiv_width(tau_master,master_mid)
+        # note: is a global EW, i.e. not localized/restricted to a single absorber
+        EW_allrays[i] = _equiv_width(tau_master,master_mid)
 
-    return master_mid, tau_allrays, EW_master
+        # debug: (verify EW is same in master and instrumental grids)
+        if 1:
+            EW_check = _equiv_width(tau_inst,inst_wavemid)
+            assert np.abs(EW_check - EW_allrays[i]) < 0.01
+
+    return tau_allrays, EW_allrays
 
 def create_spectra_from_traced_rays(sP, line, instrument,
                                     rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
@@ -747,18 +710,25 @@ def create_spectra_from_traced_rays(sP, line, instrument,
 
     z_lengths = sP.units.redshiftToComovingDist(z_vals) - sP.units.redshiftToComovingDist(sP.redshift)
 
-    # sample master grid
-    master_mid, master_edges, _ = create_master_grid(instrument=instrument)
+    # sample master, and instrumental, grids
+    master_mid, master_edges, _ = create_master_grid(instrument='master')
+
+    inst_wavemid, inst_waveedges, _ = create_master_grid(instrument=instrument)
+
+    assert inst_waveedges[0] >= master_edges[0], 'Instrumental wavelength grid min extends off master.'
+    assert inst_waveedges[-1] <= master_edges[-1], 'Instrumental wavelength grid max extends off master.'
 
     # single-threaded
     if nThreads == 1 or n_rays < nThreads:
         ind0 = 0
         ind1 = n_rays - 1
 
-        return _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
-                                                rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
-                                                cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
-                                                master_mid, master_edges, ind0, ind1)
+        tau, EW = _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, 
+                                                   rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
+                                                   cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
+                                                   master_mid, master_edges, inst_wavemid, inst_waveedges, ind0, ind1)
+
+        return inst_wavemid, tau, EW
 
     # multi-threaded
     class specThread(threading.Thread):
@@ -772,10 +742,10 @@ def create_spectra_from_traced_rays(sP, line, instrument,
 
         def run(self):
             # call JIT compiled kernel
-            self.result = _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, instrument,
+            self.result = _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, 
                                                 rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
                                                 cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
-                                                master_mid, master_edges, self.ind0, self.ind1)
+                                                master_mid, master_edges, inst_wavemid, inst_waveedges, self.ind0, self.ind1)
 
     # create threads
     threads = [specThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
@@ -789,392 +759,16 @@ def create_spectra_from_traced_rays(sP, line, instrument,
 
     # all threads are done, determine return size and allocate
     tau_allrays = np.zeros((n_rays,master_mid.size), dtype='float32')
-    EW_master = np.zeros(n_rays, dtype='float32')
+    EW_allrays = np.zeros(n_rays, dtype='float32')
 
     # add the result array from each thread to the global
     for thread in threads:
-        wave_loc, tau_loc, EW_loc = thread.result
+        _, tau_loc, EW_loc = thread.result
 
         tau_allrays[thread.ind0 : thread.ind1 + 1,:] = tau_loc
-        EW_master[thread.ind0 : thread.ind1 + 1] = EW_loc
+        EW_allrays[thread.ind0 : thread.ind1 + 1] = EW_loc
 
-    return master_mid, tau_allrays, EW_master
-
-def generate_spectrum_uniform_grid():
-    """ Generate an absorption spectrum by ray-tracing through a uniform grid (deposit using sphMap). """
-    from ..util.simParams import simParams
-    from ..util.sphMap import sphGridWholeBox, sphMap
-    from ..cosmo.cloudy import cloudyIon
-    from ..plot.spectrum import _spectrum_debug_plot
-
-    # config
-    sP = simParams(run='tng50-4', redshift=0.5)
-
-    line = 'OVI 1032' #'LyA'
-    instrument = 'test_EUV2' # 'SDSS-BOSS' #
-    nCells = 64
-    haloID = 150 # if None, then full box
-
-    posInds = [int(nCells*0.5),int(nCells*0.5)] # [0,0] # (x,y) pixel indices to ray-trace along
-    projAxis = 2 # z, to simplify vellos
-
-    # quick caching
-    cacheFile = f"cache_{line}_{nCells}_h{haloID}_{sP.snap}.hdf5"
-    if isfile(cacheFile):
-        # load now
-        print(f'Loading [{cacheFile}].')
-        with h5py.File(cacheFile,'r') as f:
-            grid_dens = f['grid_dens'][()]
-            grid_vel = f['grid_vel'][()]
-            grid_temp = f['grid_temp'][()]
-            if haloID is not None:
-                boxSizeImg = f['boxSizeImg'][()]
-    else:
-        # load
-        massField = '%s mass' % lines[line]['ion']
-        velField = 'vel_' + ['x','y','z'][projAxis]
-
-        pos = sP.snapshotSubsetP('gas', 'pos', haloID=haloID) # code
-        vel_los = sP.snapshotSubsetP('gas', velField, haloID=haloID) # code
-        mass = sP.snapshotSubsetP('gas', massField, haloID=haloID) # code
-        hsml = sP.snapshotSubsetP('gas', 'hsml', haloID=haloID) # code
-        temp = sP.snapshotSubsetP('gas', 'temp_sfcold', haloID=haloID) # K
-
-        # grid
-        if haloID is None:
-            grid_mass = sphGridWholeBox(sP, pos, hsml, mass, None, nCells=nCells)
-            grid_vel = sphGridWholeBox(sP, pos, hsml, mass, vel_los, nCells=nCells)
-            grid_temp = sphGridWholeBox(sP, pos, hsml, mass, temp, nCells=nCells)
-
-            pxVol = (sP.boxSize / nCells)**3 # code units (ckpc/h)^3
-        else:
-            halo = sP.halo(haloID)
-            haloSizeRvir = 2.0
-            boxSizeImg = halo['Group_R_Crit200'] * np.array([haloSizeRvir,haloSizeRvir,haloSizeRvir])
-            boxCen = halo['GroupPos']
-
-            grid_mass = sphMap( pos=pos, hsml=hsml, mass=mass, quant=None, axes=[0,1], 
-                                ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, 
-                                boxCen=boxCen, nPixels=[nCells, nCells, nCells] )
-            grid_vel  = sphMap( pos=pos, hsml=hsml, mass=mass, quant=vel_los, axes=[0,1], 
-                                ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, 
-                                boxCen=boxCen, nPixels=[nCells, nCells, nCells] )
-            grid_temp = sphMap( pos=pos, hsml=hsml, mass=mass, quant=temp, axes=[0,1], 
-                                ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, 
-                                boxCen=boxCen, nPixels=[nCells, nCells, nCells] )
-
-            pxVol = np.prod(boxSizeImg) / nCells**3 # code units
-
-        # unit conversions: mass -> density
-        f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
-
-        grid_dens = sP.units.codeDensToPhys(grid_mass/pxVol, cgs=True, numDens=True) # H atoms/cm^3
-        grid_dens /= ion_amu # [ions/cm^3]
-
-        # unit conversions: line-of-sight velocity
-        grid_vel = sP.units.particleCodeVelocityToKms(grid_vel) # physical km/s
-
-        # save
-        with h5py.File(cacheFile,'w') as f:
-            f['grid_dens'] = grid_dens
-            f['grid_vel'] = grid_vel
-            f['grid_temp'] = grid_temp
-            if haloID is not None:
-                f['boxSizeImg'] = boxSizeImg
-        print(f'Saved [{cacheFile}].')
-
-    # print ray starting location in global space (note: possible the grid is permuted/transposed still)
-    print(f'{boxSizeImg = }')
-    if haloID is None:
-        boxCen = np.zeros(3) + sP.boxSize/2
-    else:
-        halo = sP.halo(haloID)
-        boxCen = halo['GroupPos']
-    pxScale = boxSizeImg[0] / grid_dens.shape[0]
-
-    ray_x = boxCen[0] - boxSizeImg[0]/2 + posInds[0]*pxScale
-    ray_y = boxCen[1] - boxSizeImg[1]/2 + posInds[1]*pxScale
-    ray_z = boxCen[2] - boxSizeImg[2]/2
-    print(f'Starting {ray_x = :.4f} {ray_y = :.4f} {ray_z = :4f}')
-
-    # create theory-space master grids
-    master_dens   = np.zeros(nCells, dtype='float32') # density for each ray segment
-    master_dx     = np.zeros(nCells, dtype='float32') # pathlength for each ray segment
-    master_temp   = np.zeros(nCells, dtype='float32') # temp for each ray segment
-    master_vellos = np.zeros(nCells, dtype='float32') # line of sight velocity
-
-    # init
-    f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
-
-    boxSize = sP.boxSize if haloID is None else boxSizeImg[projAxis]
-    dx_Mpc = sP.units.codeLengthToMpc(boxSize / nCells)
-
-    # 'ray trace' a single pixel from front of box to back of box
-    for i in range(nCells):
-        # store cell properties
-        master_vellos[i] = grid_vel[posInds[0], posInds[1], i]
-        master_dens[i] = grid_dens[posInds[0], posInds[1], i]
-        master_temp[i] = grid_temp[posInds[0], posInds[1], i]
-        master_dx[i] = dx_Mpc # constant
-
-    # create spectrum
-    master_mid, tau_master, z_eff = create_spectrum_from_traced_ray(sP, f, gamma, wave0, ion_mass, instrument, 
-                                      master_dens, master_dx, master_temp, master_vellos)
-
-    # plot
-    plotName = f"spectrum_box_{sP.simName}_{line}_{nCells}_h{haloID}_{posInds[0]}-{posInds[1]}_z{sP.redshift:.0f}.pdf"
-
-    _spectrum_debug_plot(line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos)
-
-def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1, verify=True):
-    """ Generate a single absorption spectrum by ray-tracing through the Voronoi mesh.
-
-    Args:
-      use_precomputed_mesh (bool): if True, use pre-computed Voronoi mesh connectivity from VPPP, 
-        otherwise use tree-based, connectivity-free method.
-      compare (bool): if True, run both methods and compare results.
-      debug (int): verbosity level for diagnostic outputs: 0 (silent), 1, 2, or 3 (most verbose).
-      verify (bool): if True, brute-force distance calculation verify parent cell at each step.
-    """
-    from ..util.simParams import simParams
-    from ..util.voronoi import loadSingleHaloVPPP, loadGlobalVPPP
-    from ..cosmo.cloudy import cloudyIon
-    from ..util.treeSearch import buildFullTree
-    from ..plot.spectrum import _spectrum_debug_plot
-
-    # config
-    sP = simParams(run='tng50-4', redshift=0.5)
-
-    line = 'OVI 1032' #'LyA'
-    instrument = 'test_EUV2' # 'SDSS-BOSS'
-    haloID = 150 # if None, then full box
-
-    ray_offset_x = 0.0 # relative to halo center, in units of rvir
-    ray_offset_y = 0.5 # relative to halo center, in units of rvir
-    ray_offset_z = -2.0 # relative to halo center, in units of rvir
-    projAxis = 2 # z, to simplify vellos for now
-
-    fof_scope_mesh = False
-
-    # load halo
-    halo = sP.halo(haloID)
-
-    print(f"Halo [{haloID}] center {halo['GroupPos']} and Rvir = {halo['Group_R_Crit200']:.2f}")
-
-    # ray starting position, and total requested pathlength
-    ray_start_x = halo['GroupPos'][0]        + ray_offset_x*halo['Group_R_Crit200']
-    ray_start_y = halo['GroupPos'][1]        + ray_offset_y*halo['Group_R_Crit200']
-    ray_start_z = halo['GroupPos'][projAxis] + ray_offset_z*halo['Group_R_Crit200']
-
-    total_dl = np.abs(ray_offset_z*2) * halo['Group_R_Crit200'] # twice distance to center
-
-    # ray direction
-    ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
-    ray_dir[projAxis] = 1.0
-
-    # load cell properties (pos,vel,species dens,temp)
-    densField = '%s numdens' % lines[line]['ion']
-    velLosField = 'vel_'+['x','y','z'][projAxis]
-
-    haloIDLoad = haloID if fof_scope_mesh else None # if global mesh, then global gas load
-
-    cell_pos    = sP.snapshotSubsetP('gas', 'pos', haloID=haloIDLoad) # code
-    cell_vellos = sP.snapshotSubsetP('gas', velLosField, haloID=haloIDLoad) # code
-    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold', haloID=haloIDLoad) # K
-    cell_dens   = sP.snapshotSubset('gas', densField, haloID=haloIDLoad) # ions/cm^3
-
-    cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
-
-    # ray starting position
-    ray_pos = np.array([ray_start_x, ray_start_y, ray_start_z])
-
-    # use precomputed connectivity method, or tree-based method?
-    if use_precomputed_mesh or compare:
-        # load mesh neighbor connectivity
-        if fof_scope_mesh:
-            num_ngb, ngb_inds, offset_ngb = loadSingleHaloVPPP(sP, haloID=haloID)
-        else:
-            num_ngb, ngb_inds, offset_ngb = loadGlobalVPPP(sP)
-
-        # ray-trace
-        master_dx, master_ind = trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, 
-                                       num_ngb, ngb_inds, offset_ngb, ray_pos, ray_dir, total_dl, 
-                                       sP.boxSize, debug, verify, fof_scope_mesh)
-
-        master_dens = cell_dens[master_ind]
-        master_temp = cell_temp[master_ind]
-        master_vellos = cell_vellos[master_ind]
-        assert np.abs(master_dx.sum() - total_dl) < 1e-4
-
-    if (not use_precomputed_mesh) or compare:
-        # construct neighbor tree
-        tree = buildFullTree(cell_pos, boxSizeSim=sP.boxSize, treePrec=cell_pos.dtype, verbose=debug)
-        NextNode, length, center, sibling, nextnode = tree
-
-        if compare:
-            ray_pos = np.array([ray_start_x, ray_start_y, ray_start_z]) # reset
-            master_ind2 = master_ind.copy()
-            master_dx2 = master_dx.copy()
-
-        # ray-trace
-        master_dx, master_ind = trace_ray_through_voronoi_mesh_treebased(cell_pos, 
-                                       NextNode, length, center, sibling, nextnode, ray_pos, ray_dir, total_dl, 
-                                       sP.boxSize, debug, verify)
-
-        master_dens = cell_dens[master_ind]
-        master_temp = cell_temp[master_ind]
-        master_vellos = cell_vellos[master_ind]
-        assert np.abs(master_dx.sum() - total_dl) < 1e-4
-
-        if compare:
-            assert np.allclose(master_dx,master_dx2)
-            assert np.array_equal(master_ind,master_ind2)
-            print(master_dx,master_dx2,'Comparison success.')
-
-    # create spectrum
-    f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
-
-    # convert length units, all other units already appropriate
-    master_dx = sP.units.codeLengthToMpc(master_dx)
-
-    master_mid, tau_master, z_eff = create_spectrum_from_traced_ray(sP, f, gamma, wave0, ion_mass, instrument, 
-                                      master_dens, master_dx, master_temp, master_vellos)
-
-    # plot
-    meshStr = 'vppp' if use_precomputed_mesh else 'treebased'
-    plotName = f"spectrum_voronoi_{sP.simName}_{line}_{meshStr}_h{haloID}_z{sP.redshift:.0f}.pdf"
-
-    _spectrum_debug_plot(line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos)
-
-def generate_spectra_voronoi_halo():
-    """ Generate a large grid of (halocentric) absorption spectra by ray-tracing through the Voronoi mesh. """
-    from ..util.simParams import simParams
-    from ..cosmo.cloudy import cloudyIon
-
-    # config
-    sP = simParams(run='tng50-1', redshift=0.5)
-
-    lineNames = ['MgII 2796','MgII 2803']
-    instrument = '4MOST-HRS' # 'SDSS-BOSS'
-    haloID = 150 # 150 for TNG50-1, 800 for TNG100-1
-
-    nRaysPerDim = 50 # total number of rays is square of this number
-    projAxis = 2 # z, to simplify vellos for now, keep axis-aligned
-
-    fof_scope_mesh = True # if False then full box load
-
-    # caching file
-    saveFilename = 'spectra_%s_z%.1f_halo%d-%d_n%d_%s_%s.hdf5' % \
-      (sP.simName,sP.redshift,haloID,projAxis,nRaysPerDim,instrument,'-'.join(lineNames))
-
-    if isfile(saveFilename):
-        # load cache
-        EWs = {}
-        with h5py.File(saveFilename,'r') as f:
-            master_wave = f['master_wave'][()]
-            flux = f['flux'][()]
-            for line in lineNames:
-                EWs[line] = f['EW_%s' % line.replace(' ','_')][()]
-
-        print(f'Loaded: [{saveFilename}]')
-
-        return master_wave, flux, EWs        
-
-    # load halo
-    halo = sP.halo(haloID)
-    cen = halo['GroupPos']
-    mass = sP.units.codeMassToLogMsun(halo['Group_M_Crit200'])[0]
-    size = 2 * halo['Group_R_Crit200']
-
-    print(f"Halo [{haloID}] mass = {mass:.2f} and Rvir = {halo['Group_R_Crit200']:.2f}")
-
-    # ray starting positions, and total requested pathlength
-    xpts = np.linspace(cen[0]-size/2, cen[0]+size/2, nRaysPerDim)
-    ypts = np.linspace(cen[1]-size/2, cen[1]+size/2, nRaysPerDim)
-
-    xpts, ypts = np.meshgrid(xpts, ypts, indexing='ij')
-
-    # construct [N,3] list of search positions
-    ray_pos = np.zeros( (nRaysPerDim**2,3), dtype='float64')
-    
-    ray_pos[:,0] = xpts.ravel()
-    ray_pos[:,1] = ypts.ravel()
-    ray_pos[:,2] = cen[2] - size/2
-
-    # total requested pathlength (twice distance to halo center)
-    total_dl = size
-
-    # ray direction
-    ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
-    ray_dir[projAxis] = 1.0
-
-    # load cell properties (pos,vel,species dens,temp)
-    haloIDLoad = haloID if fof_scope_mesh else None # if global mesh, then global gas load
-
-    cell_pos = sP.snapshotSubsetP('gas', 'pos', haloID=haloIDLoad) # code
-
-    # ray-trace
-    rays_off, rays_len, rays_dl, rays_inds = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, mode='full',nThreads=4)
-
-    # load other cell properties
-    velLosField = 'vel_'+['x','y','z'][projAxis]
-
-    cell_vellos = sP.snapshotSubsetP('gas', velLosField, haloID=haloIDLoad) # code
-    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold', haloID=haloIDLoad) # K
-    
-    cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
-
-    # convert length units, all other units already appropriate
-    rays_dl = sP.units.codeLengthToMpc(rays_dl)
-
-    # sample master grid
-    master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
-    tau_master = np.zeros( (nRaysPerDim**2,tau_master.size), dtype=tau_master.dtype )
-
-    EWs = {}
-
-    # start cache
-    with h5py.File(saveFilename,'w') as f:
-        f['master_wave'] = master_mid
-
-    # loop over requested line(s)
-    for line in lineNames:
-        densField = '%s numdens' % lines[line]['ion']
-        cell_dens = sP.snapshotSubset('gas', densField, haloID=haloIDLoad) # ions/cm^3
-
-        # create spectra
-        master_wave, tau_local, EW_local = \
-          create_spectra_from_traced_rays(sP, line, instrument, 
-                                          rays_off, rays_len, rays_dl, rays_inds,
-                                          cell_dens, cell_temp, cell_vellos)
-
-        assert np.array_equal(master_wave,master_mid)
-
-        tau_master += tau_local
-        EWs[line] = EW_local
-
-        with h5py.File(saveFilename,'r+') as f:
-            # save tau per line
-            f['tau_%s' % line.replace(' ','_')] = tau_local
-            # save EWs per line
-            f['EW_%s' % line.replace(' ','_')] = EW_local
-
-    # calculate flux and total EW
-    flux = np.exp(-1*tau_master)
-
-    with h5py.File(saveFilename,'r+') as f:
-        f['flux'] = flux
-
-    print(f'Saved: [{saveFilename}]')
-
-    return master_wave, flux, EWs
-
-# default configuration
-projAxis_def = 2
-#nRaysPerDim_def = 2000
-#raysType_def = 'voronoi_rndfullbox'
-nRaysPerDim_def = 1000
-raysType_def = 'voronoi_fullbox'
+    return inst_wavemid, tau_allrays, EW_allrays
 
 def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def, 
                                   pSplit=None, search=False):
@@ -1388,6 +982,30 @@ def _spectra_filepath(sim, ion, projAxis=projAxis_def, nRaysPerDim=nRaysPerDim_d
 
     return path + filename
 
+@jit(nopython=True, nogil=True)
+def _integrate_quantity_along_traced_rays(rays_off, rays_len, rays_cell_dl, rays_cell_inds, cell_values):
+    """ Integrate a given physical quantity along each sightline. One scalar return per sightline, with 
+    units given by [rays_cell_dl * cell_values].
+    """
+    n_rays = rays_len.size
+
+    r = np.zeros(n_rays, dtype=np.float32)
+
+    # loop over rays
+    for i in range(n_rays):
+        # get local properties
+        offset = rays_off[i] # start of intersected cells (in rays_cell*)
+        length = rays_len[i] # number of intersected gas cells
+
+        master_dx = rays_cell_dl[offset:offset+length]
+        master_inds = rays_cell_inds[offset:offset+length]
+
+        master_values = cell_values[master_inds]
+
+        r[i] = np.sum(master_dx * master_values)
+
+    return r
+
 def integrate_along_saved_rays(sP, field, pSplit=None):
     """ Integrate a physical (gas) property along the line of sight, based on already computed and saved rays.
     The result has units of [pc] * [field] where [field] is the original units of the physical field as loaded.
@@ -1428,7 +1046,7 @@ def integrate_along_saved_rays(sP, field, pSplit=None):
         f['ray_total_dl'] = total_dl
 
     # integrate
-    result = integrate_quantity_along_traced_rays(rays_off, rays_len, rays_dl, rays_inds, cell_values)
+    result = _integrate_quantity_along_traced_rays(rays_off, rays_len, rays_dl, rays_inds, cell_values)
 
     with h5py.File(saveFilename,'r+') as f:
         f.create_dataset('result', data=result, compression='gzip')
@@ -1449,10 +1067,44 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', pS
       solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
         use the (constant) solar value.
     """
-    # save file
-    lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
+    # sample master grid
+    wave_mid, _, tau = create_master_grid(instrument=instrument)
+    
+    # list of lines to process for this ion
+    lineCandidates = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
 
+    # is (redshifted) line outside of the instrumental wavelength range? then skip
+    lineNames = []
+
+    for line in lineCandidates:
+        wave_z = lines[line]['wave0'] * (1+sP.redshift)
+        if wave_z < wave_mid.min() or wave_z > wave_mid.max():
+            print(f' [{line}] wave0 = {lines[line]["wave0"]:.4f} at {wave_z = :.4f} outside of ' + \
+                  f'{instrument} spec range [{wave_mid.min():.1f} - {wave_mid.max():.1f}], skipping.')
+            continue
+        print(f' [{line}] wave0 = {lines[line]["wave0"]:.4f} at {wave_z = :.4f} to compute.')
+        lineNames.append(line)
+
+    # save file
     saveFilename = _spectra_filepath(sP, ion, instrument=instrument, pSplit=pSplit, solar=solar)
+    saveFilenameConcat = _spectra_filepath(sP, ion, instrument=instrument, pSplit=None, solar=solar)
+
+    # does save already exist, with all lines done?
+    existing_lines = []
+
+    if isfile(saveFilenameConcat):
+        print(f'Final save [{saveFilenameConcat.split("/")[-1]}] already exists! Exiting.')
+        return
+
+    if isfile(saveFilename):
+        with h5py.File(saveFilename,'r') as f:
+            # which lines are already done?
+            existing_lines = [k.replace('tau_','').replace('_',' ') for k in f.keys() if 'tau_' in k]
+
+        all_done = all([line in existing_lines for line in lineNames])
+        if all_done:
+            print(f'Save [{saveFilename.split("/")[-1]}] already exists and is done, exiting.')
+            return
 
     # load rays
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
@@ -1470,42 +1122,25 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', pS
     # convert length units, all other units already appropriate
     rays_dl = sP.units.codeLengthToMpc(rays_dl)
 
-    # sample master grid
-    master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
-    tau_master = np.zeros((rays_len.size,tau_master.size), dtype=tau_master.dtype)
-
-    EWs = {}
-
     # (re)start output
+    EWs = {}
     densField = None
-    existing_lines = []
 
     with h5py.File(saveFilename,'a') as f:
-        if 'master_wave' not in f:
-            # master wavelength grid, common to all spectra
-            f['master_wave'] = master_mid
-
-            # attach ray configuration for reference
+        # not restarting? save metadata now
+        if 'wave' not in f:
+            f['wave'] = wave_mid
             f['ray_pos'] = ray_pos
             f['ray_dir'] = ray_dir
             f['ray_total_dl'] = total_dl
-        else:
-            # restarting, which lines are already done?
-            existing_lines = [k.replace('tau_','').replace('_',' ') for k in f.keys() if 'tau_' in k]
 
     # loop over requested line(s)
     for i, line in enumerate(lineNames):
         # load ion abundances per cell, unless we already have
-        print(f'[{i+1:02d}] of [{len(lineNames):02d}] lines: {line}', flush=True)
+        print(f'[{i+1:02d}] of [{len(lineNames):02d}] computing: [{line}] wave0 = {lines[line]["wave0"]:.4f} at {wave_z = :.4f}', flush=True)
 
         if line in existing_lines:
             print(' already exists, skipping...')
-            continue
-
-        # is (redshifted) line outside of the instrumental wavelength range? then skip
-        wave_z = lines[line]['wave0'] * (1+sP.redshift)
-        if wave_z < master_mid.min() or wave_z > master_mid.max():
-            print(f' wave0 = {lines[line]["wave0"]:.4f} at {wave_z = :.4f} outside of spec range, skipping...')
             continue
 
         # do we not already have the ion density loaded?
@@ -1516,14 +1151,13 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', pS
             cell_dens = sP.snapshotSubsetP('gas', densField, inds=cell_inds) # ions/cm^3 # , verbose=True
 
         # create spectra
-        master_wave, tau_local, EW_local = \
+        inst_wave, tau_local, EW_local = \
           create_spectra_from_traced_rays(sP, line, instrument, 
                                           rays_off, rays_len, rays_dl, rays_inds,
                                           cell_dens, cell_temp, cell_vellos)
 
-        assert np.array_equal(master_wave,master_mid)
-
-        tau_master += tau_local
+        assert np.array_equal(inst_wave,wave_mid)
+        
         EWs[line] = EW_local
 
         with h5py.File(saveFilename,'r+') as f:
@@ -1532,8 +1166,15 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', pS
             # save EWs per line
             f.create_dataset('EW_%s' % line.replace(' ','_'), data=EW_local, compression='gzip')
 
-    # calculate flux and total EW
-    flux = np.exp(-1*tau_master)
+    # sum optical depths across all lines, use to calculate flux array (i.e. the spectrum), and total EW
+    tau = np.zeros((rays_len.size,tau.size), dtype=tau.dtype)
+
+    with h5py.File(saveFilename,'r') as f:
+        for line in lineNames:
+            tau_local = f['tau_%s' % line.replace(' ','_')][()]
+            tau += tau_local
+
+    flux = np.exp(-1*tau)
 
     with h5py.File(saveFilename,'r+') as f:
         f.create_dataset('flux', data=flux, compression='gzip')
@@ -1574,7 +1215,7 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
 
                 ray_dir = f['ray_dir'][()]
                 ray_total_dl = f['ray_total_dl'][()]
-                master_wave = f['master_wave'][()]
+                wave = f['wave'][()]
 
                 # allocate
                 ray_pos = np.zeros((pSplitNum*n_spec,3), dtype='float32')
@@ -1591,7 +1232,7 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
             else:
                 # all other chunks: sanity checks
                 assert n_spec == f['flux'].shape[0] # should be constant
-                assert np.array_equal(master_wave, f['master_wave'][()]) # should be the same
+                assert np.array_equal(wave, f['wave'][()]) # should be the same
 
             # load ray starting positions
             ray_pos[count:count+n_spec] = f['ray_pos'][()]
@@ -1609,7 +1250,7 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
     # start save
     with h5py.File(saveFilename,'w') as f:
         # wavelength grid, flux array, ray positions
-        f['master_wave'] = master_wave
+        f['wave'] = wave
         f['ray_pos'] = ray_pos
         f['ray_dir'] = ray_dir
         f['ray_total_dl'] = ray_total_dl
@@ -1659,8 +1300,10 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
 
     print('Split files removed.')
 
-def filter_concatenated_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
-    """ Filter a single concatenated spectra file, keeping only those above an EW threshold.
+def absorber_catalog(sP, ion, instrument, solar=False):
+    """ Detect and chatacterize absorbers, handling the possibility of one or possibly multiple per sightline, 
+    defined as separated but contiguous regions of absorption. Create an absorber catalog, i.e. counts and 
+    offsets per sightline, and compute their EWs.
 
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
@@ -1670,36 +1313,109 @@ def filter_concatenated_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=F
         use the (constant) solar value.
     """
     # config
-    EW_threshold = 0.01 # applied to sum of lines [ang]
+    EW_threshold = 1e-3 # observed frame [ang]
 
-    # search for chunks
+    # lines of this ion
     lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
 
     loadFilename = _spectra_filepath(sP, ion, instrument=instrument, solar=solar)
-    saveFilename = loadFilename.replace('_combined','_filtered')
+    saveFilename = loadFilename.replace('_combined','_EWs')
 
-    # load EWs
-    with h5py.File(loadFilename,'r') as f:
-        # allocate
-        count_tot = f.attrs['count']
-        EW_total = np.zeros(count_tot, dtype='float32')
+    # dicts
+    EWs_orig = {}
+    spec_inds = {}
+    tau = {}
 
-        # loop over possible transitions
-        for line in lineNames:
+    EWs_processed = {}
+    counts_processed = {}
+    offset_processed = {}
+
+    # save file already exists? then load now and return
+    if isfile(saveFilename):
+        with h5py.File(saveFilename,'r') as f:
+            for line in f['EWs_orig'].keys():
+                EWs_orig[line]  = f['EWs_orig/'+line][()]
+                spec_inds[line] = f['spec_inds/'+line][()]
+
+                EWs_processed[line]  = f['EWs_processed/'+line][()]
+                counts_processed[line] = f['counts_processed/'+line][()]
+                offset_processed[line] = f['offset_processed/'+line][()]
+
+        print('Loaded: [%s]' % saveFilename)
+
+        return EWs_orig, spec_inds, EWs_processed, counts_processed, offset_processed
+
+    # loop over possible transitions
+    for line in lineNames:
+
+        with h5py.File(loadFilename,'r') as f:
+            # load metadata
+            count_tot = f.attrs['count']
+            wave = f['wave'][()]
+            dang = np.abs(np.diff(wave)) # wavelength bin size
+
             key = 'EW_%s' % line.replace(' ','_')
             if key not in f:
                 print(f'[{line}] skipping, not present.')
                 continue
 
-            # load and sum
-            print(f'[{line}] found, summing EW.')
-            EW_total += f[key][()]
+            # load original EWs
+            EWs_orig[line] = f[key][()]
 
-    # select
-    inds = np.where(EW_total >= EW_threshold)[0]
-    count = len(inds)
+            # select above threshold
+            spec_inds[line] = np.where(EWs_orig[line] >= EW_threshold)[0]
+            count = len(spec_inds[line])
+            print('[%s] [%s] have [%d] of [%d] above EW > %g.' % (sP,line,count,EWs_orig[line].size,EW_threshold))
 
-    print(f'In total [{count}] spectra of [{count_tot}] above {EW_threshold = }')
+            # load spectra, for this subset only
+            key = 'tau_%s' % line.replace(' ','_')
+            tau[line] = f[key][()][spec_inds[line]]
+
+        # allocate for processed results
+        nspec = spec_inds[line].size
+        count_abs = 0
+
+        EWs_processed[line] = np.zeros(nspec*10, dtype='float32') # space for >1 absorber per sightline
+        counts_processed[line] = np.zeros(nspec, dtype='int32')
+        
+        # loop over spectra, find deviations from tau==0, find contiguous regions, compute EW in each
+        for i in range(nspec):
+            if i % int(nspec/10) == 0: print(' %.2f%%' % (i/nspec*100))
+            # single spectrum
+            local_tau = tau[line][i,:].flatten()
+
+            # regions of non-zero optical depth (i.e. normalized flux less than unity)
+            local_tau_nonzero_inds = np.where(local_tau > 0)[0]
+
+            # find contiguous tau > 0 regions
+            ranges = contiguousIntSubsets(local_tau_nonzero_inds)
+
+            counts_processed[line][i] = len(ranges)
+            
+            # loop over each contiguous range
+            for ind_start,ind_stop in ranges:
+                local_inds = local_tau_nonzero_inds[ind_start:ind_stop+1]
+
+                # integrate (1-exp(-tau_lambda)) d_lambda from 0 to inf, composite trap rule
+                integrand = 1 - np.exp(-local_tau[local_inds])
+                res = np.sum(dang[local_inds[:-1]] * (integrand[1:] + integrand[:-1])/2)
+
+                # save EW of this single absorption feature
+                EWs_processed[line][count_abs] = res
+                count_abs += 1
+
+                # debug
+                #ratio = EWs_orig[line][spec_inds[line][i]]/res
+                #if np.abs(ratio - 1.0) > 0.01:
+                #    print('compare new vs orig EW: ',i,spec_inds[line][i],res,EWs_orig[line][spec_inds[line][i]],ratio)
+            
+        # sanity checks, and reduce EW array to used size
+        assert count_abs == counts_processed[line].sum()
+        EWs_processed[line] = EWs_processed[line][0:count_abs]
+
+        # create offsets
+        offset_processed[line] = np.zeros(nspec, dtype='int32')
+        offset_processed[line][1:] = np.cumsum(counts_processed[line])[:-1]
 
     # open file for writing
     fOut = h5py.File(saveFilename,'w')
@@ -1709,30 +1425,32 @@ def filter_concatenated_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=F
         # copy metadata
         for attr in f.attrs:
             fOut.attrs[attr] = f.attrs[attr]
-        fOut.attrs['EW_threshold'] = EW_threshold
+    fOut.attrs['EW_threshold'] = EW_threshold
 
-        fOut['inds'] = inds
-
-        # copy all datasets
-        for key in f:
-            print(key)
-            if f[key].shape[0] == count_tot:
-                fOut.create_dataset(key, data=f[key][inds], compression='gzip')
-            else:
-                fOut[key] = f[key][()]
+    # loop over lines
+    for line in EWs_orig.keys():
+        fOut['EWs_orig/%s' % line] = EWs_orig[line]
+        fOut['spec_inds/%s' % line] = spec_inds[line]
+        fOut['EWs_processed/%s' % line] = EWs_processed[line]
+        fOut['counts_processed/%s' % line] = counts_processed[line]
+        fOut['offset_processed/%s' % line] = offset_processed[line]
 
     fOut.close()
 
     print('Saved: [%s]' % saveFilename)
 
-def calc_statistics_from_saved_rays(sP):
+    return EWs_orig, spec_inds, EWs_processed, counts_processed, offset_processed
+
+def calc_statistics_from_saved_rays(sP, ion):
     """ Calculate useful statistics based on already computed and saved rays.
+    Results depend on ion, independent of actual transition.
+    Results depend on the physical properties along each sightline, not on the absorption spectra.
 
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
+      ion (str): space separated species name and ionic number e.g. 'Mg II'.
     """
     # config
-    ion = 'Mg II' # results depend on ion, independent of actual transition
     dens_threshold = 1e-12 # ions/cm^3
 
     pSplitNum = 16
@@ -1795,41 +1513,3 @@ def calc_statistics_from_saved_rays(sP):
         f['n_clouds'] = n_clouds
 
     print(f'Saved: [{saveFilename}]')
-
-def benchmark_line():
-    """ Deposit many random lines. """
-    import time
-
-    line = 'MgII 2803'
-    instrument = None
-
-    # parameter ranges
-    n = int(1e4)
-    rng = np.random.default_rng(424242)
-
-    N_vals = rng.uniform(low=10.0, high=16.0, size=n) # log cm^-2
-    b_vals = rng.uniform(low=1.0, high=25.0, size=n) # km/s
-    vel_los = rng.uniform(low=-300, high=300, size=n) # km/s
-    z_cosmo = 0.0
-
-    # create master grid
-    master_mid, master_edges, tau_master = create_master_grid(line=line, instrument=instrument)
-
-    f, gamma, wave0, _, _ = _line_params(line)
-
-    # start timer
-    start_time = time.time()
-
-    # deposit
-    for i in range(n):
-        # effective redshift
-        z_doppler = vel_los[i] / sP_units_c_km_s
-        z_eff = (1+z_doppler)*(1+z_cosmo) - 1 
-
-        if i % (n/10) == 0:
-            print(i, N_vals[i], b_vals[i], vel_los[i], z_eff)
-
-        deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N_vals[i], b_vals[i], z_eff)
-
-    tot_time = time.time() - start_time
-    print('depositions took [%g] sec, i.e. [%g] each' % (tot_time, tot_time/n))

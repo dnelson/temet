@@ -384,15 +384,15 @@ def paperPlots():
     if 0:
         sim = simParams(run='tng50-1')
         line = 'MgII 2796'
-        inst = 'SDSS-BOSS'
-        redshifts = [0.5, 0.7, 1.0, 2.0]
+        inst = 'SDSS-BOSS' # '4MOST-HRS' #
+        redshifts = [0.5, 0.7, 1.0] #2.0]
         solar = False
         log = False
 
-        EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, solar=solar, log=log)
+        EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, solar=solar, indivEWs=False, log=log)
 
     # fig 4: dN/dz (absorber incidence s a function of redshift) vs. data
-    if 1:
+    if 0:
         sim = simParams(run='tng50-1')
         line = 'MgII 2796'
         inst = 'SDSS-BOSS'
