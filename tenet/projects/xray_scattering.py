@@ -131,17 +131,13 @@ def _sb_image(sim, photons, attrs, halo, size=None):
 
     return im
 
-def radialProfileIltisPhotons():
-    """ Explore RT-scattered photon datasets produced by VoroILTIS: surface brightness radial profile. """
+def _load_data(sim, haloID):
+    """ Helper to load VoroILTIS data files. """
     # config
-    sim = simParams('tng50-1', redshift=0.0)
-    haloID = 204
-
     path = "/vera/ptmp/gc/byrohlc/public/OVII_RT/"
-    run = "v1_cutout_TNG50-1_99_halo%d_size2" % haloID
+    run = "v1_cutout_%s_%d_halo%d_size2" % (sim.name,sim.snap,haloID)
     file = "data.hdf5"
 
-    # load
     photons_input = {}
     photons_peeling = {}
 
@@ -153,7 +149,17 @@ def radialProfileIltisPhotons():
             photons_peeling[key] = f['photons_peeling_los0'][key][()]
         attrs = dict(f['config'].attrs)
 
-    # load halo metadata
+    return photons_input, photons_peeling, attrs
+
+def radialProfileIltisPhotons():
+    """ Explore RT-scattered photon datasets produced by VoroILTIS: surface brightness radial profile. """
+    # config
+    sim = simParams('tng50-1', redshift=0.0)
+    haloID = 204
+
+    # load
+    photons_input, photons_peeling, attrs = _load_data(sim, haloID)
+
     halo = sim.halo(haloID)
 
     halo_r200 = sim.units.codeLengthToKpc(halo['Group_R_Crit200'])
@@ -199,7 +205,7 @@ def radialProfileIltisPhotons():
 
     # finish and save plot
     ax.legend(loc='upper right')
-    fig.savefig('sb_profile_%s.pdf' % run)
+    fig.savefig('sb_profile_%s_%d_h%d.pdf' % (sim.name,sim.snap,haloID))
     plt.close(fig)
 
 def imageIltisPhotons():
@@ -210,23 +216,9 @@ def imageIltisPhotons():
 
     size = 250 # pkpc
 
-    path = "/vera/ptmp/gc/byrohlc/public/OVII_RT/"
-    run = "v1_cutout_TNG50-1_99_halo%d_size2" % haloID
-    file = "data.hdf5"
-
     # load
-    photons_input = {}
-    photons_peeling = {}
+    photons_input, photons_peeling, attrs = _load_data(sim, haloID)
 
-    with h5py.File('%s%s/%s' % (path,run,file),'r') as f:
-        # load
-        for key in f['photons_input']:
-            photons_input[key] = f['photons_input'][key][()]
-        for key in f['photons_peeling_los0']:
-            photons_peeling[key] = f['photons_peeling_los0'][key][()]
-        attrs = dict(f['config'].attrs)
-
-    # load halo metadata
     halo = sim.halo(haloID)
 
     halo_r200 = sim.units.codeLengthToKpc(halo['Group_R_Crit200'])
@@ -289,6 +281,54 @@ def imageIltisPhotons():
     cb.ax.set_ylabel('Surface Brightness Ratio [ log ]')
 
     # finish and save plot
-    fig.savefig('sb_image_%s.pdf' % run)
+    fig.savefig('sb_image_%s_%d_h%d.pdf' % (sim.name,sim.snap,haloID))
     plt.close(fig)
-    
+
+def spectraIltisPhotons():
+    # config
+    sim = simParams('tng50-1', redshift=0.0)
+    haloID = 204
+
+    radbin = [30,50] # pkpc
+    nspecbins = 50
+
+    # load
+    photons_input, photons_peeling, attrs = _load_data(sim, haloID)
+
+    halo = sim.halo(haloID)
+
+    # start plot
+    fig, ax = plt.subplots(figsize=figsize)
+
+    ax.set_title('O VII 21.6020$\\rm{\AA}$ (%s $\cdot$ HaloID %d) (%d < R/kpc < %d)' % (sim, haloID, radbin[0], radbin[1]))
+    ax.set_xlabel('Offset from Line Center $\\rm{\Delta \lambda} \ [ \AA ]}$')
+    #ax.set_xlabel('Offset from Line Center $\\rm{\Delta E} \ [ keV ]}$')
+    ax.set_ylabel('Spectrum [ erg s$^{-1}$ $\\rm{\AA}^{-1}$ ]')
+    #ax.set_yscale('log')
+
+    # loop for intrinsic vs. scattered
+    for photons, label in zip([photons_input,photons_peeling],['Intrinsic','Scattered']):
+        # project photons
+        x, y, lum = _photons_projected(sim, photons, attrs, halo)
+
+        dist_2d = sim.units.codeLengthToKpc(np.sqrt(x**2 + y**2)) # pkpc
+
+        # restrict to radial projected aperture, and compute 'total' spectrum
+        w_rad = np.where((dist_2d >= radbin[0]) & (dist_2d < radbin[1]))
+
+        spec, spec_bins = np.histogram(photons['lambda'][w_rad], weights=lum[w_rad], bins=nspecbins)
+
+        spec_mid = (spec_bins[1:] + spec_bins[:-1]) / 2
+        spec_dwave = spec_bins[1] - spec_bins[0]
+        spec /= spec_dwave # erg/s -> erg/s/Ang
+
+        # convert dAng to dKev for the x-axis
+        #spec_dKeV = sim.units.hc_kev_ang / (wave0 + spec_mid)
+
+        # plot
+        ax.plot(spec_mid, spec, '-', lw=lw, label=label)
+
+    # finish and save plot
+    ax.legend(loc='upper right')
+    fig.savefig('spec_%s_%d_h%d.pdf' % (sim.name,sim.snap,haloID))
+    plt.close(fig)

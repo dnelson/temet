@@ -1431,6 +1431,10 @@ class simParams:
 
     # attribute helpers
     @property
+    def name(self):
+        return self.simName
+
+    @property
     def isZoom(self):
         return self.zoomLevel != 0
 
