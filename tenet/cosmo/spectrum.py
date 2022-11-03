@@ -240,7 +240,7 @@ lines = {'LyA'        : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion'
 # R = lambda/dlambda = c/dv
 # EW_restframe = W_obs / (1+z_abs)
 instruments = {'idealized'  : {'wave_min':1000, 'wave_max':12000, 'dwave':0.1},     # used for EW map vis
-               'master'     : {'wave_min':1,    'wave_max':25000, 'dwave':0.0005},  # used to create master spectra (400MB per, float64 uncompressed)
+               'master'     : {'wave_min':1,    'wave_max':25000, 'dwave':0.0001},  # used to create master spectra (2GB per, float64 uncompressed)
                'COS-G130M'  : {'wave_min':1150, 'wave_max':1450,  'dwave':0.01},    # approximate
                'COS-G140L'  : {'wave_min':1130, 'wave_max':2330,  'dwave':0.08},    # approximate
                'COS-G160M'  : {'wave_min':1405, 'wave_max':1777,  'dwave':0.012},   # approximate
@@ -454,8 +454,8 @@ def deposit_single_line(wave_edges_master, wave_mid_master, tau_master, f, gamma
     b_dwave = b / sP_units_c_km_s * wave0 # v/c = dwave/wave
 
     if b_dwave < dwave_master * 10:
-        print('WARNING: b_dwave is too small for the master_dwave, ', b_dwave)
-        assert 0 # check
+        print('WARNING: b_dwave is too small for the dwave_master, ', b_dwave, dwave_master)
+        #assert 0 # check
 
     # prep local grid where we will sample tau
     wave0_obsframe = wave0 * (1 + z_eff)
@@ -577,8 +577,9 @@ def _resample_spectrum(master_mid, tau_master, inst_waveedges):
             inst_height = local_EW / dwave_inst 
 
             # sanity checks and handle rounding issues
-            assert inst_height >= 0.0
-            assert inst_height < 1.000001 # impossible to have >1, in which case np.log(negative) is nan
+            if inst_height < 0 or inst_height > 1.0001:
+                print('WARNING: strange inst_height is above unity: ', inst_height)
+                # assert 0 # impossible to have >1, in which case np.log(negative) is nan, which we fix below
 
             if inst_height > flux_smallval:
                 # entire inst bin is saturated to zero flux, but rounding errors could place the height > 1.0
@@ -758,12 +759,12 @@ def create_spectra_from_traced_rays(sP, line, instrument,
         thread.join()
 
     # all threads are done, determine return size and allocate
-    tau_allrays = np.zeros((n_rays,master_mid.size), dtype='float32')
+    tau_allrays = np.zeros((n_rays,inst_wavemid.size), dtype='float32')
     EW_allrays = np.zeros(n_rays, dtype='float32')
 
     # add the result array from each thread to the global
     for thread in threads:
-        _, tau_loc, EW_loc = thread.result
+        tau_loc, EW_loc = thread.result
 
         tau_allrays[thread.ind0 : thread.ind1 + 1,:] = tau_loc
         EW_allrays[thread.ind0 : thread.ind1 + 1] = EW_loc
