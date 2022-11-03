@@ -28,7 +28,7 @@ lineList = """
 #3687    H  1 4101.73A      H-like, 2 17,   2^2S -   6^2P, (n=6 to n=2) "H-delta" / "Balmer-delta"
 #7487    C  6 33.7372A      H-like, 1 3,   1^2S -   2^2P, in Bertone+ 2010 (highest energy CVI line photon)
 #7795    N  7 24.7807A      H-like, 1 3,   1^2S -   2^2P, in Bertone+ 2010 (")
-#8103    O  8 18.9709A      H-like, 1 3,   1^2S -   2^2P, OVIII (n=2 to n=1) in Bertone+ 2010
+#8103    O  8 18.9709A      H-like, 1 3,   1^2S -   2^2P, OVIII (n=2 to n=1) in Bertone+ 2010, "OVIII LyA"
 #8108    O  8 16.0067A      H-like, 1 5,   1^2S -   3^2P, OVIII (n=3 to n=1)
 #8113    O  8 15.1767A      H-like, 1 8,   1^2S -   4^2P, OVIII (n=4 to n=1)
 #8148    O  8 102.443A      H-like, 2 5,   2^2S -   3^2P, OVIII (n=3 to n=2)
@@ -41,11 +41,11 @@ lineList = """
 #12819   Fe26 1.78177A      H-like, 1 3,   1^2S -   2^2P
 #21954   C  5 40.2678A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance"
 #21989   C  5 41.4721A      He-like, 1 2,   1^1S -   2^3S
-#23516   N  6 29.5343A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "resonance"
-#24998   O  7 21.8070A      He-like, 1 5,   1^1S -   2^3P_1, in Bertone+ (2010) "intercombination"
+#23516   N  6 29.5343A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "resonance" "NVI(f)"
+#24998   O  7 21.8070A      He-like, 1 5,   1^1S -   2^3P_1, in Bertone+ (2010) "intercombination" "OVII(i)"
 #25003   O  7 21.8044A      He-like, 1 6,   1^1S -   2^3P_2, doublet? or effectively would be blend
-#25008   O  7 21.6020A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance"
-#25043   O  7 22.1012A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "forbidden"
+#25008   O  7 21.6020A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance" "OVII(r)"
+#25043   O  7 22.1012A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "forbidden" "OVII(f)"
 #26912   Ne 9 13.6987A      He-like, 1 2,   1^1S -   2^3S
 #26867   Ne 9 13.5529A      He-like, 1 5,   1^1S -   2^3P_1
 #26872   Ne 9 13.5500A      He-like, 1 6,   1^1S -   2^3P_2
@@ -1242,7 +1242,6 @@ class cloudyEmission():
         Return:
           ndarray: luminosity of line emission, per cell [linear erg/s].
         """
-        print(sP, line, indRange)
         ion = cloudyIon(sP=None)
         line = self._resolveLineNames(line, single=True)
 

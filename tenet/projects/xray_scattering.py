@@ -4,7 +4,9 @@ Resonant scattering of x-ray line emission (e.g. OVII) for LEM.
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+from ..util.helper import loadColorTable, logZeroNaN
 from ..plot.config import *
 from ..vis.box import renderBox
 from ..util import simParams
@@ -53,21 +55,40 @@ def lemIGM():
 
     renderBox(panels, plotConfig, locals())
 
-def _sb_profile(sim, photons, halo):
+def _photons_projected(sim, photons, attrs, halo):
+    """ Helper. Project photons along a line-of-sight and return projected (x,y) positions and luminosities. """
+    # line of sight (is specified by the RT run)
+    los = np.array([float(i) for i in attrs['line_of_sight'].split(' ')])
+    assert np.count_nonzero(los) == 1 # xyz aligned
+    peeling_index = np.where(los == 1)[0][0] # 0=x, 1=y, 2=z
+
+    imageplane_i1 = (1+peeling_index) % 3
+    imageplane_i2 = (2+peeling_index) % 3
+
+    # photon packet weights (luminosities)
+    lum = photons['weight'] if 'weight' in photons else photons['weight_peeling'] # 1e42 erg/s
+    lum = lum.astype('float64') * 1e42 # erg/s
+
+    # periodic distances
+    xyz = np.zeros((lum.size,3), dtype='float32')
+    xyz[:,0] = photons['lspx'] * sim.boxSize - halo['GroupPos'][0]
+    xyz[:,1] = photons['lspy'] * sim.boxSize - halo['GroupPos'][1]
+    xyz[:,2] = photons['lspz'] * sim.boxSize - halo['GroupPos'][2]
+    
+    sim.correctPeriodicDistVecs(xyz)
+
+    print(f'{los = }, {peeling_index = }, {imageplane_i1 = }, {imageplane_i2 = }')
+
+    return xyz[:,imageplane_i1], xyz[:,imageplane_i2], lum
+
+def _sb_profile(sim, photons, attrs, halo):
     """ Helper. Compute SB radial profile for a given photon set. """
     # binning config
     nrad_bins = 50
     rad_minmax = [0, 500] # pkpc
 
-    # periodic distances
-    x = photons['lspx'] * sim.boxSize - halo['GroupPos'][0]
-    y = photons['lspy'] * sim.boxSize - halo['GroupPos'][1]
-    z = photons['lspz'] * sim.boxSize - halo['GroupPos'][2]
-    lum = photons['weight'] if 'weight' in photons else photons['weight_peeling'] # 1e42 erg/s
-
-    sim.correctPeriodicDistVecs(x)
-    sim.correctPeriodicDistVecs(y)
-    sim.correctPeriodicDistVecs(z)
+    # project photons
+    x, y, lum = _photons_projected(sim, photons, attrs, halo)
 
     dist_2d = sim.units.codeLengthToKpc(np.sqrt(x**2 + y**2)) # pkpc
 
@@ -80,14 +101,38 @@ def _sb_profile(sim, photons, halo):
 
     for i in range(nrad_bins):
         w = np.where((dist_2d >= bin_edges[i]) & (dist_2d < bin_edges[i+1]))
-        yy[i] = lum[w].sum() * 1e42 # erg/s
+        yy[i] = lum[w].sum() # erg/s
 
     sb = yy / bin_areas # erg/s/pkpc^2]
 
     return bin_mid, sb
 
+def _sb_image(sim, photons, attrs, halo, size=None):
+    """ Helper. Compute a SB image for a given photon set. """
+    # binning config
+    nbins = 200
+
+    if size is None:
+        extent = [[-250,250],[-250,250]] # pkpc
+    else:
+        extent = [[-size,size],[-size,size]]
+
+    # project photons
+    x, y, lum = _photons_projected(sim, photons, attrs, halo)
+
+    # histogram
+    im, _, _= np.histogram2d(x, y, weights=lum, bins=nbins, range=extent)
+
+    # normalize by pixel area
+    px_area = (extent[0][1] - extent[0][0]) / nbins * (extent[1][1] - extent[1][0]) / nbins # pkpc^2
+
+    im = im.astype('float64') / px_area # erg/s/pkpc^2
+    im = logZeroNaN(im)
+
+    return im
+
 def radialProfileIltisPhotons():
-    """ Explore RT-scattered photon datasets produced by VoroILTIS. """
+    """ Explore RT-scattered photon datasets produced by VoroILTIS: surface brightness radial profile. """
     # config
     sim = simParams('tng50-1', redshift=0.0)
     haloID = 204
@@ -106,7 +151,7 @@ def radialProfileIltisPhotons():
             photons_input[key] = f['photons_input'][key][()]
         for key in f['photons_peeling_los0']:
             photons_peeling[key] = f['photons_peeling_los0'][key][()]
-        #attrs = dict(f['config'].attrs)
+        attrs = dict(f['config'].attrs)
 
     # load halo metadata
     halo = sim.halo(haloID)
@@ -115,7 +160,7 @@ def radialProfileIltisPhotons():
     halo_r500 = sim.units.codeLengthToKpc(halo['Group_R_Crit500'])
     mstar = sim.units.codeMassToLogMsun(sim.subhalo(halo['GroupFirstSub'])['SubhaloMassInRadType'][4])
 
-    # (A) radial profile of intrinsic (input) versus scattered (peeling)
+    # start plot
     fig, (ax, subax) = plt.subplots(ncols=1, nrows=2, sharex=True, height_ratios=[0.8,0.2], figsize=figsize)
 
     ax.set_title('O VII 21.6020$\\rm{\AA}$ (%s $\cdot$ HaloID %d $\cdot\, \\rm{M_\star = 10^{%.1f} \,M_\odot}$)' % (sim, haloID, mstar))
@@ -124,18 +169,20 @@ def radialProfileIltisPhotons():
     ax.set_ylabel('Surface Brightness [ erg s$^{-1}$ kpc$^{-2}$ ]')
     ax.set_xlim([-5, halo_r200*1.5])
     ax.set_ylim([2e31,1e37])
+
     ax.xaxis.set_tick_params(labelbottom=True)
 
-    rr1, yy_intrinsic = _sb_profile(sim, photons_input, halo)
+    # radial profiles of intrinsic (input) versus scattered (peeling)
+    rr1, yy_intrinsic = _sb_profile(sim, photons_input, attrs, halo)
     ax.plot(rr1, yy_intrinsic, lw=lw, label='Intrinsic (no RT)')
 
-    rr2, yy_scattered = _sb_profile(sim, photons_peeling, halo)
+    rr2, yy_scattered = _sb_profile(sim, photons_peeling, attrs, halo)
     ax.plot(rr2, yy_scattered, lw=lw, label='Scattered (w/ RT)')
     
     ax.plot([halo_r200,halo_r200], ax.get_ylim(), ':', color='#aaa', label='Halo R$_{200}$', zorder=-1)
     ax.plot([halo_r500,halo_r500], ax.get_ylim(), '--', color='#aaa', label='Halo R$_{500}$', zorder=-1)
 
-    # sub-axis # plot ratio
+    # sub-axis: ratio
     subax.set_ylim([0.5,20])
     subax.set_xlabel('Projected Distance [pkpc]')
     subax.set_ylabel('Ratio')
@@ -154,3 +201,94 @@ def radialProfileIltisPhotons():
     ax.legend(loc='upper right')
     fig.savefig('sb_profile_%s.pdf' % run)
     plt.close(fig)
+
+def imageIltisPhotons():
+    """ Explore RT-scattered photon datasets produced by VoroILTIS: surface brightness image. """
+    # config
+    sim = simParams('tng50-1', redshift=0.0)
+    haloID = 204
+
+    size = 250 # pkpc
+
+    path = "/vera/ptmp/gc/byrohlc/public/OVII_RT/"
+    run = "v1_cutout_TNG50-1_99_halo%d_size2" % haloID
+    file = "data.hdf5"
+
+    # load
+    photons_input = {}
+    photons_peeling = {}
+
+    with h5py.File('%s%s/%s' % (path,run,file),'r') as f:
+        # load
+        for key in f['photons_input']:
+            photons_input[key] = f['photons_input'][key][()]
+        for key in f['photons_peeling_los0']:
+            photons_peeling[key] = f['photons_peeling_los0'][key][()]
+        attrs = dict(f['config'].attrs)
+
+    # load halo metadata
+    halo = sim.halo(haloID)
+
+    halo_r200 = sim.units.codeLengthToKpc(halo['Group_R_Crit200'])
+    halo_r500 = sim.units.codeLengthToKpc(halo['Group_R_Crit500'])
+    mstar = sim.units.codeMassToLogMsun(sim.subhalo(halo['GroupFirstSub'])['SubhaloMassInRadType'][4])
+
+    circOpts = {'color':'#fff', 'alpha':0.2, 'linewidth':2.0, 'fill':False}
+    vmm = [27, 37] # log(erg/s/kpc^2)
+
+    # start plot
+    fig, (ax_left, ax_mid, ax_right) = plt.subplots(ncols=3, nrows=1, figsize=(figsize[0]*2.0,figsize[1]*0.85))
+
+    # left: intrinsic
+    ax_left.set_title('Intrinsic (no RT)')
+    ax_left.set_xlabel('$\\rm{\Delta\,x}$ [pkpc]')
+    ax_left.set_ylabel('$\\rm{\Delta\,y}$ [pkpc]')
+
+    im_intrinsic = _sb_image(sim, photons_input, attrs, halo, size=size)
+    im_left = ax_left.imshow(im_intrinsic, cmap='inferno', extent=[-size,size,-size,size], aspect=1.0, vmin=vmm[0], vmax=vmm[1])
+
+    ax_left.add_artist(plt.Circle((0,0), halo_r200, **circOpts))
+    ax_left.add_artist(plt.Circle((0,0), halo_r500, **circOpts))
+
+    s = 'O VII 21.6020$\\rm{\AA}$\n%s\nHaloID %d\n$\\rm{M_\star = 10^{%.1f} \,M_\odot}$' % (sim, haloID, mstar)
+    ax_left.text(0.03, 0.03, s, ha='left', va='bottom', color='#fff', alpha=0.5, transform=ax_left.transAxes)
+
+    cax = make_axes_locatable(ax_left).append_axes('right', size='4%', pad=0.1)
+    cb = plt.colorbar(im_left, cax=cax)
+    cb.ax.set_ylabel('Surface Brightness [ erg s$^{-1}$ kpc$^{-2}$ ]')
+
+    # middle: scattered
+    ax_mid.set_title('Scattered (w/ RT)')
+    ax_mid.set_xlabel('$\\rm{\Delta\,x}$ [pkpc]')
+    ax_mid.set_ylabel('$\\rm{\Delta\,y}$ [pkpc]')
+
+    im_scattered = _sb_image(sim, photons_peeling, attrs, halo, size=size)
+    im_mid = ax_mid.imshow(im_scattered, cmap='inferno', extent=[-size,size,-size,size], aspect=1.0, vmin=vmm[0], vmax=vmm[1])
+
+    ax_mid.add_artist(plt.Circle((0,0), halo_r200, **circOpts))
+    ax_mid.add_artist(plt.Circle((0,0), halo_r500, **circOpts))
+
+    cax = make_axes_locatable(ax_mid).append_axes('right', size='4%', pad=0.1)
+    cb = plt.colorbar(im_mid, cax=cax)
+    cb.ax.set_ylabel('Surface Brightness [ erg s$^{-1}$ kpc$^{-2}$ ]')
+
+    # right: ratio
+    ax_right.set_title('Ratio (Scattered / Intrinsic)')
+    ax_right.set_xlabel('$\\rm{\Delta\,x}$ [pkpc]')
+    ax_right.set_ylabel('$\\rm{\Delta\,y}$ [pkpc]')
+
+    im_ratio = np.log10(10.0**im_scattered / 10.0**im_intrinsic)
+    im_right = ax_right.imshow(im_ratio, cmap='coolwarm', extent=[-size,size,-size,size], aspect=1.0, vmin=-1.0, vmax=1.0)
+
+    circOpts['color'] = '#000'
+    ax_right.add_artist(plt.Circle((0,0), halo_r200, **circOpts))
+    ax_right.add_artist(plt.Circle((0,0), halo_r500, **circOpts))
+
+    cax = make_axes_locatable(ax_right).append_axes('right', size='4%', pad=0.1)
+    cb = plt.colorbar(im_right, cax=cax)
+    cb.ax.set_ylabel('Surface Brightness Ratio [ log ]')
+
+    # finish and save plot
+    fig.savefig('sb_image_%s.pdf' % run)
+    plt.close(fig)
+    
