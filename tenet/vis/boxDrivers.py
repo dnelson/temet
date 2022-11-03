@@ -63,7 +63,7 @@ def _TNGboxSliceConfig(res):
 
     gasFullMM = [12.0,16.0] # equirectangular/full depth
 
-    if res in [455,910,1820]:
+    if res in [455,910,1820,1024,1504]:
         # L75
         centerHaloID = 1 # fof
         nSlicesTot   = 3 # slice depth equal to a third, 25 Mpc/h = 37 Mpc
@@ -79,7 +79,7 @@ def _TNGboxSliceConfig(res):
         gasMM[0] += 0.7
         gasFullMM[0] += 1.5
         gasFullMM[1] += 1.5
-    if res in [1024,2048]:
+    if res in [2048]:
         # L680
         centerHaloID = 0 # fof
         nSlicesTot   = 4 # slice depth equal to a third, ~170 Mpc/h ~ 251 Mpc
@@ -189,15 +189,15 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
     panels, centerHaloID, nSlicesTot, curSlice = _TNGboxFieldConfig(res, conf, thinSlice)
 
-    run        = 'tng' #'millennium'
+    run        = 'eagle' #'tng' #'millennium'
     redshift   = 0.0
-    nPixels    = 8000 # 800, 2000, 8000
+    nPixels    = 2000 # 800, 2000, 8000
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = False
     labelSim   = False
     plotHalos  = False
-    method     = 'voronoi_slice' #'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
+    method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
 
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)

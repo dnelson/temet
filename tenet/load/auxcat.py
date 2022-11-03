@@ -1054,6 +1054,8 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_Env_Closest_Distance_Mstar_Gt8' : \
      partial(subhaloCatNeighborQuant,quant=None,op='closest_rad',subRestrictions=[['mstar_30pkpc_log',8.0,np.inf]],cenSatSelect='cen'),
+   'Subhalo_Env_d5_Mstar_Gt10' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='d5_rad',subRestrictions=[['mstar_30pkpc_log',10.0,np.inf]]),
    'Subhalo_Env_d5_Mstar_Gt8' : \
      partial(subhaloCatNeighborQuant,quant=None,op='d5_rad',subRestrictions=[['mstar_30pkpc_log',8.0,np.inf]],cenSatSelect='cen'),
    'Subhalo_Env_d5_Mstar_Gt7' : \

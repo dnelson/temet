@@ -14,6 +14,36 @@ from .util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def varsha_nhi_metal():
+    """ Plot N_HI vs Z. Note: Z is the mass weighted mean along each LoS, not N_HI weighted! """
+    from .util.helper import running_median
+
+    path = '/u/dnelson/sims.TNG/TNG100-1/data.files/auxCat/'
+    f1 = 'Box_Grid_nHI_025.hdf5'
+    f2 = 'Box_Grid_Z_025.hdf5'
+
+    with h5py.File(path+f1,'r') as f:
+        nhi = f['Box_Grid_nHI'][()].ravel()
+
+    with h5py.File(path+f2,'r') as f:
+        Z = f['Box_Grid_Z'][()].ravel()
+
+    w = np.where(nhi > 18.0)[0]
+
+    # plot
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_title('TNG100-1 z=0')
+    ax.set_xlabel('N$_{\\rm HI}$ [log cm$^{-2}$]')
+    ax.set_ylabel('Metallicity [log Z$_{\\rm sun}$]')
+
+    xm, ymm, sm, ym = running_median(nhi[w],Z[w],percs=[16,50,84],binSize=0.1)
+    l, = ax.plot(xm, ym[1,:], '-', lw=3.0, alpha=0.7)
+    ax.plot(xm, ym[0,:], ':', lw=3.0, color=l.get_color(), alpha=0.5)
+    ax.plot(xm, ym[2,:], ':', lw=3.0, color=l.get_color(), alpha=0.5)
+
+    fig.savefig('nhi_vs_Z_TNG100.pdf')
+    plt.close(fig)
+
 def simba_caesar_smf():
     """ Compare Simba SMFs from the original (caesar) catalogs. """
     runs = ['m25n512','m50n512','m100n1024']
