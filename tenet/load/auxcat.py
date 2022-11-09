@@ -582,12 +582,13 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_1pkpc_2D_Stars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='1pkpc_2d'),
 
-   # subhalo
+   # cooling properties
    'Subhalo_CoolingTime_HaloGas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='tcool',op='mean',rad='r015_1rvir_halo',ptRestrictions=sfreq0),
    'Subhalo_CoolingTime_OVI_HaloGas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='tcool',op='mean',weighting='O VI mass',rad='r015_1rvir_halo',ptRestrictions=sfreq0),
 
+   # star formation rates
    'Subhalo_StellarMassFormed_10myr_30pkpc': \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='initialmass',op='sum',rad=30.0,ptRestrictions={'stellar_age':['lt',0.01]}),
    'Subhalo_StellarMassFormed_50myr_30pkpc': \
@@ -597,6 +598,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_GasSFR_30pkpc': \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='sfr',op='sum',rad=30.0),
 
+   # sizes
    'Subhalo_Gas_SFR_HalfRad': \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='sfr',op='halfrad',rad=None),
    'Subhalo_Gas_Halpha_HalfRad': \
@@ -610,6 +612,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_Stars_R80': \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='mass',op='rad80',rad=None),
 
+   # emission: x-rays
    'Subhalo_XrayBolLum' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad=None),
    'Subhalo_XrayLum_05-2kev' : \
@@ -620,10 +623,33 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad='2rhalfstars'),
    'Subhalo_XrayLum_05-2kev_2rhalfstars' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum_05-2kev',op='sum',rad='2rhalfstars'),
+
+   'Subhalo_OVIIr_GalaxyLum' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='O  7 21.6020A lum2phase',op='sum',rad=None,ptRestrictions=sfrgt0),
+
+   # emission
    'Subhalo_S850um' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='s850um_flux',op='sum',rad=None),
    'Subhalo_S850um_25pkpc' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='s850um_flux',op='sum',rad=25.0),
+
+   'Subhalo_MgII_Lum_DustDepleted' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='sum',rad=None),
+   'Subhalo_MgII_LumSize_DustDepleted' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='halfrad',rad=None),
+   'Subhalo_MgII_LumConcentration_DustDepleted' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='concentration',rad=None),
+
+   'Subhalo_SynchrotronPower_SKA' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_sync_ska',op='sum',rad=None),
+   'Subhalo_SynchrotronPower_SKA_eta43' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_sync_ska_eta43',op='sum',rad=None),
+   'Subhalo_SynchrotronPower_SKA_alpha15' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_sync_ska_alpha15',op='sum',rad=None),
+   'Subhalo_SynchrotronPower_VLA' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_sync_vla',op='sum',rad=None),
+
+   # black holes
    'Subhalo_BH_Mass_largest' : \
      partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_Mass',op='max',rad=None),
    'Subhalo_BH_Mdot_largest' : \
@@ -641,13 +667,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_BH_mode' : \
      partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_mode',op='mean',rad=None), # if not zero or unity, >1 BH
 
-   'Subhalo_MgII_Lum_DustDepleted' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='sum',rad=None),
-   'Subhalo_MgII_LumSize_DustDepleted' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='halfrad',rad=None),
-   'Subhalo_MgII_LumConcentration_DustDepleted' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='concentration',rad=None),
-
+   # wind-model
    'Subhalo_Gas_Wind_vel' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='wind_vel',op='mean',rad='2rhalfstars'),
    'Subhalo_Gas_Wind_dEdt' : \
@@ -657,15 +677,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_Gas_Wind_etaM' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='wind_etaM',op='mean',rad='2rhalfstars'),
 
-   'Subhalo_SynchrotronPower_SKA' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_sync_ska',op='sum',rad=None),
-   'Subhalo_SynchrotronPower_SKA_eta43' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_sync_ska_eta43',op='sum',rad=None),
-   'Subhalo_SynchrotronPower_SKA_alpha15' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_sync_ska_alpha15',op='sum',rad=None),
-   'Subhalo_SynchrotronPower_VLA' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_sync_vla',op='sum',rad=None),
-
+   # kinematics and morphology
    'Subhalo_StellarRotation' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Krot',op='ufunc',rad=None),
    'Subhalo_StellarRotation_2rhalfstars' : \
@@ -686,6 +698,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_EllipsoidShape_Gas_SFRgt0_2rhalfstars_shell' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='shape_ellipsoid',op='ufunc',weighting='mass',ptRestrictions=sfrgt0,rad=None),
 
+   # stellar age/metallicity
    'Subhalo_StellarAge_NoRadCut_MassWt'       : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=None,weighting='mass'),
    'Subhalo_StellarAge_NoRadCut_rBandLumWt' : \
@@ -724,6 +737,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_StellarMeanVel' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='vel',op='mean',rad=None,weighting='mass'),
 
+   # magnetic fields
    'Subhalo_Bmag_SFingGas_massWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad=None,weighting='mass',ptRestrictions=sfrgt0),
    'Subhalo_Bmag_SFingGas_volWt' : \
@@ -749,6 +763,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_Bmag_fof_halfr500_volWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='0.5r500crit',weighting='volume',scope='fof',cenSatSelect='cen',minHaloMass='10000dm'),
 
+   # CGM gas properties
    'Subhalo_Temp_halo_massWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='temp',op='mean',rad='r015_1rvir_halo',weighting='mass'),
    'Subhalo_Temp_halo_volWt' : \
@@ -884,7 +899,7 @@ fieldComputeFunctionMapping = \
                                          fullSubhaloSpectra=1, Nside='z-axis', redshifted=True, emlines=True, seeing=0.4, minStellarMass=9.8),
 
 
-   # UVJ: Martina Donnari
+   # stellar light: UVJ colors (Donnari)
    'Subhalo_StellarPhot_UVJ_p07c_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='none', bands=['u','v','2mass_j']),
    'Subhalo_StellarPhot_UVJ_p07c_nodust_5pkpc'   : partial(subhaloStellarPhot, 
@@ -905,6 +920,11 @@ fieldComputeFunctionMapping = \
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', bands=['vista_k'], rad=30.0),
    'Subhalo_StellarPhot_ugr_p07c_cf00dust_res_conv_z_30pkpc'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', bands=['sdss_u','sdss_g','sdss_r'], rad=30.0),
+
+   'Subhalo_StellarPhot_NUV_cfht-i_p07c_nodust_30pkpc'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='none', bands=['galex_nuv','cfht_i'], rad=30.0),
+   'Subhalo_StellarPhot_NUV_cfht-i_p07c_cf00dust_res_conv_z_30pkpc' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', bands=['galex_nuv','cfht_i'], rad=30.0),                           
 
    # light: redshifted/apparent
    'Subhalo_StellarPhot_p07c_nodust_red'   : partial(subhaloStellarPhot,

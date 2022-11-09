@@ -77,7 +77,7 @@ def _photons_projected(sim, photons, attrs, halo):
     
     sim.correctPeriodicDistVecs(xyz)
 
-    print(f'{los = }, {peeling_index = }, {imageplane_i1 = }, {imageplane_i2 = }')
+    #print(f'{los = }, {peeling_index = }, {imageplane_i1 = }, {imageplane_i2 = }')
 
     return xyz[:,imageplane_i1], xyz[:,imageplane_i2], lum
 
@@ -131,12 +131,15 @@ def _sb_image(sim, photons, attrs, halo, size=None):
 
     return im
 
-def _load_data(sim, haloID):
+def _load_data(sim, haloID, b=None):
     """ Helper to load VoroILTIS data files. """
     # config
+    bStr = '' if b is None else '_b%s' % b
     path = "/vera/ptmp/gc/byrohlc/public/OVII_RT/"
-    run = "v1_cutout_%s_%d_halo%d_size2" % (sim.name,sim.snap,haloID)
+    run = "v2_cutout_%s_%d_halo%d_size2%s" % (sim.name,sim.snap,haloID,bStr)
     file = "data.hdf5"
+
+    print(run)
 
     photons_input = {}
     photons_peeling = {}
@@ -151,14 +154,44 @@ def _load_data(sim, haloID):
 
     return photons_input, photons_peeling, attrs
 
-def radialProfileIltisPhotons():
+def luminosityIltisPhotons(haloID=204, b=None, aperture_kpc=20.0):
+    """ Compute (total) luminosity (within some aperture) for scattered photon datasets. """
+    # config
+    sim = simParams('tng50-1', redshift=0.0)
+
+    # load
+    photons_input, photons_peeling, attrs = _load_data(sim, haloID, b=b)
+
+    halo = sim.halo(haloID)
+
+    # intrinsic: project and 2d distances, sum for lum
+    x, y, lum = _photons_projected(sim, photons_input, attrs, halo)
+    dist_2d = sim.units.codeLengthToKpc(np.sqrt(x**2 + y**2)) # pkpc
+    w = np.where(dist_2d <= aperture_kpc)
+
+    tot_lum_intrinsic = lum[w].sum()
+
+    # scattered
+    x, y, lum = _photons_projected(sim, photons_peeling, attrs, halo)
+    dist_2d = sim.units.codeLengthToKpc(np.sqrt(x**2 + y**2)) # pkpc
+    w = np.where(dist_2d <= aperture_kpc)
+
+    tot_lum_scattered = lum[w].sum()
+
+    # note: https://academic.oup.com/mnras/article/356/2/727/1159998 for NGC 7213
+    # (a S0 at D=23 Mpc, w/ an AGN Lbol=1.7e43 erg/s, strong outflow, MBH ~ 1e8 Msun, lambda_edd ~ 1e-3i)
+    # MBH vs M* scaling gives M* between 10-11 and median at 10.5 Msun
+    # gives a OVIIr 21.6A luminosity of 1.9e+39 erg/s 
+    print(f'{sim} {haloID = } {b = } has {tot_lum_intrinsic = :g} [erg/s], {tot_lum_scattered = :g} [erg/s]')
+    return tot_lum_intrinsic, tot_lum_scattered
+
+def radialProfileIltisPhotons(haloID=204, b=None):
     """ Explore RT-scattered photon datasets produced by VoroILTIS: surface brightness radial profile. """
     # config
     sim = simParams('tng50-1', redshift=0.0)
-    haloID = 204
 
     # load
-    photons_input, photons_peeling, attrs = _load_data(sim, haloID)
+    photons_input, photons_peeling, attrs = _load_data(sim, haloID, b=b)
 
     halo = sim.halo(haloID)
 
@@ -205,19 +238,74 @@ def radialProfileIltisPhotons():
 
     # finish and save plot
     ax.legend(loc='upper right')
-    fig.savefig('sb_profile_%s_%d_h%d.pdf' % (sim.name,sim.snap,haloID))
+    fig.savefig('sb_profile_%s_%d_h%d_b%s.pdf' % (sim.name,sim.snap,haloID,b))
     plt.close(fig)
 
-def imageIltisPhotons():
+def radialProfilesInput(haloID=204):
+    """ Debug plot: input SB profiles of emission. """
+    sim = simParams('tng50-1', redshift=0.0)
+    import glob
+    nrad_bins = 100
+    rad_minmax = [0, 300]
+
+    if haloID is None:
+        path = '/u/dnelson/data/public/OVII_iltis/cutout_TNG50-1_99_halo*.hdf5'
+    else:
+        path = '/u/dnelson/data/public/OVII_iltis/cutout_TNG50-1_99_halo%d_*.hdf5' % haloID
+
+    files = glob.glob(path)
+
+    # start plot
+    fig, ax = plt.subplots(figsize=figsize)
+
+    ax.set_xlabel('Distance [pkpc]')
+    ax.set_yscale('log')
+    ax.set_ylabel('Emissivity [ erg s$^{-1}$ kpc$^{-3}$ ]')
+
+    # loop over each input file found
+    for file in files:
+        # load
+        print(file)
+
+        with h5py.File(file,'r') as f:
+            x = f['CoordinateX'][()] * sim.boxSize # code units
+            y = f['CoordinateY'][()] * sim.boxSize # code units
+            z = f['CoordinateZ'][()] * sim.boxSize # code units
+            emis = f['Emissivity'][()].astype('float64') * 1e42 # erg/s
+
+        rad = np.sqrt((x-x.mean())**2 + (y-y.mean())**2 + (z-z.mean())**2)
+        rad = sim.units.codeLengthToKpc(rad)
+        
+        # calc radial 3D surface brightness profile
+        yy = np.zeros(nrad_bins, dtype='float64')
+
+        bin_edges = np.linspace(rad_minmax[0], rad_minmax[1], nrad_bins+1)
+        bin_mid = (bin_edges[1:] + bin_edges[:-1]) / 2 # pkpc
+        bin_vol = 4/3*np.pi * (bin_edges[1:]**3 - bin_edges[:-1]**3) # pkpc^3
+
+        for i in range(nrad_bins):
+            w = np.where((rad >= bin_edges[i]) & (rad < bin_edges[i+1]))
+            yy[i] = emis[w].sum() # erg/s
+
+        sb = yy / bin_vol # erg/s/pkpc^3
+
+        # plot
+        ax.plot(bin_mid, sb, '-', lw=lw, label=file.rsplit('/',1)[1])
+
+    # finish plot
+    ax.legend(loc='upper right')
+    fig.savefig('input_profiles_%s_%d.pdf' % (sim.name,sim.snap))
+    plt.close(fig)
+
+def imageIltisPhotons(haloID=204, b=None):
     """ Explore RT-scattered photon datasets produced by VoroILTIS: surface brightness image. """
     # config
     sim = simParams('tng50-1', redshift=0.0)
-    haloID = 204
 
     size = 250 # pkpc
 
     # load
-    photons_input, photons_peeling, attrs = _load_data(sim, haloID)
+    photons_input, photons_peeling, attrs = _load_data(sim, haloID, b=b)
 
     halo = sim.halo(haloID)
 
@@ -281,19 +369,18 @@ def imageIltisPhotons():
     cb.ax.set_ylabel('Surface Brightness Ratio [ log ]')
 
     # finish and save plot
-    fig.savefig('sb_image_%s_%d_h%d.pdf' % (sim.name,sim.snap,haloID))
+    fig.savefig('sb_image_%s_%d_h%d_b%s.pdf' % (sim.name,sim.snap,haloID,b))
     plt.close(fig)
 
-def spectraIltisPhotons():
+def spectraIltisPhotons(haloID=204, b=None):
     # config
     sim = simParams('tng50-1', redshift=0.0)
-    haloID = 204
 
     radbin = [30,50] # pkpc
     nspecbins = 50
 
     # load
-    photons_input, photons_peeling, attrs = _load_data(sim, haloID)
+    photons_input, photons_peeling, attrs = _load_data(sim, haloID, b=b)
 
     halo = sim.halo(haloID)
 
@@ -330,5 +417,85 @@ def spectraIltisPhotons():
 
     # finish and save plot
     ax.legend(loc='upper right')
-    fig.savefig('spec_%s_%d_h%d.pdf' % (sim.name,sim.snap,haloID))
+    fig.savefig('spec_%s_%d_h%d_b%s.pdf' % (sim.name,sim.snap,haloID,b))
     plt.close(fig)
+
+def galaxyLumVsSFR():
+    """ Test the hot ISM emission model by comparing to observational scaling relations. """
+    # config
+    sim = simParams('tng50-1', redshift=0.0)
+
+    # load catalog of OVII luminosities, per subhalo, star-forming gas only
+    acField = 'Subhalo_OVIIr_GalaxyLum'
+    ac = sim.auxCat(acField)
+    lum = ac[acField].astype('float64') * 1e30 # unit conversion
+
+    # sample selection in mstar
+    sfr_min = 1e-2
+    mstar_min = 9.4
+    mstar_max = 10.8
+
+    sfr = sim.subhalos('sfr2')
+    mstar = sim.subhalos('mstar_30pkpc_log')
+
+    w = np.where((mstar > mstar_min) & (mstar <= mstar_max) & (sfr > sfr_min))
+
+    print(f'{sim}: found [{len(w[0])}] galaxies with ({mstar_min:.1f} < M* < {mstar_max:.1f}) and (SFR > {sfr_min:g}')
+
+    # start plot
+    fig, ax = plt.subplots(figsize=figsize)
+
+    ax.set_title('%s (%.1f < $\\rm{M_\star / M_\odot}$ < %.1f and SFR > %g $\\rm{M_\odot yr^{-1}})$' % (sim, mstar_min, mstar_max, sfr_min))
+    ax.set_xlabel('Galaxy SFR [ $\\rm{M_{sun}}$ yr$^{-1}$ ]')
+    ax.set_ylabel('Galaxy Intrinsic Hot ISM OVII(r) Lum [ erg s$^{-1}$ ]')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+
+    s = ax.scatter(sfr[w], lum[w], c=mstar[w])
+
+    # Mineo+ (2012) observed relation for L_{0.5-2keV} vs SFR, i.e. an upper limit on L_OVIIr vs SFR
+    xx = np.linspace(0.1, 20, 50)
+    yy = 8.3e38 * xx
+    yy2 = 5.2e38 * xx
+
+    ax.plot(xx, yy, '--', lw=lw, color='#000', label='Mineo+12 $\\rm{L_{0.5-2keV}}$ vs. SFR relation')
+    ax.plot(xx, yy2, '--', lw=lw, color='#555', label='Mineo+12 mekal best-fit')
+
+    # data points (Figure 6 left panel )
+    mineo_sfr = [0.08,0.09,0.17,0.18,0.29,0.29,0.38,0.44,1.83,1.84,3.05,3.76,4.09,4.60,5.29,11.46,14.65,5.99,5.36,7.08,16.74]
+    mineo_lum = [1.06,0.67,0.30,0.38,0.59,1.14,2.28,3.11,13.14,16.42,11.62,44.10,38.69,33.31,53.65,41.95,59.29,90.14,148.58,212.43,254.49]
+
+    ax.plot(mineo_sfr, np.array(mineo_lum)*1e38, 'D', color='#000', label='Mineo+12 data')
+
+    # colobar and save plot
+    ax.legend(loc='upper left')
+    cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.1)
+    cb = plt.colorbar(s, cax=cax)
+    cb.ax.set_ylabel('Galaxy Stellar Mass [ $\\rm{M_{sun}}$ ]')
+
+    fig.savefig('galaxy_OVIIr_lum_vs_SFR_%s_%d.pdf' % (sim.name,sim.snap))
+    plt.close(fig)
+
+def paperPlots():
+    haloIDs = [201,202,203,204]
+
+    if 0:
+        # fig X: make all individual halo plots, for all halos
+        for haloID in haloIDs:
+            #luminosityIltisPhotons(haloID=haloID) # check intrinsic vs. scattered galaxy lum
+            radialProfileIltisPhotons(haloID=haloID)
+            imageIltisPhotons(haloID=haloID)
+            spectraIltisPhotons(haloID=haloID)
+
+    if 0:
+        # fig X: make all individual halo plots, for a single halo, across boosts
+        haloID = 204
+        for b in [0.1,1,10,100]:
+            radialProfilesInput(haloID=204) # check boost models
+            radialProfileIltisPhotons(haloID=haloID, b=b)
+            imageIltisPhotons(haloID=haloID, b=b)
+            spectraIltisPhotons(haloID=haloID, b=b)
+
+    if 0:
+        # fig X: check galaxy OVIIr luminosity vs observational constraints
+        galaxyLumVsSFR()

@@ -296,6 +296,8 @@ class simParams:
 
     def __repr__(self):
         """ Representation of this simParams object as a string (for debugging). """
+        if np.abs(self.redshift - np.round(self.redshift)) < 1e-6:
+            return "%s z=%d" % (self.simName, self.redshift)
         return "%s z=%.1f" % (self.simName, self.redshift)
         #return "%s (z=%.1f, snapshot %d)" % (self.simName, self.redshift, self.snap)
 

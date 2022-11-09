@@ -438,6 +438,31 @@ mhi_30pkpc.limits = lambda sim,pt,f: [8.0, 11.5] if sim.boxSize > 50000 else [7.
 mhi_30pkpc.log = True
 mhi_30pkpc.auxcat = True
 
+# -------------------- star formation rates -------------------------------------------------------
+
+@catalog_field(alias='sfr_30pkpc')
+def sfr(sim, partType, field, args):
+    """ Galaxy star formation rate (instantaneous, within 30pkpc aperture). """
+    acField = 'Subhalo_GasSFR_30pkpc'
+    sfr = sim.auxCat(acField)[acField] # units correct
+    return sfr
+
+sfr.label = r'$\rm{SFR_{<30kpc}}$'
+sfr.units = r'$\rm{M_{sun} yr^{-1}}$'
+sfr.limits = [-2.5, 1.0]
+sfr.log = True
+sfr.auxcat = True
+
+@catalog_field
+def sfr2(sim, partType, field, args):
+    """ Galaxy star formation rate (instantaneous, within twice the stellar half mass radius). """
+    return sim.subhalos('SubhaloSFRinRad') # units correct
+
+sfr.label = r'$\rm{SFR_{<2r_{\star}}}$'
+sfr.units = r'$\rm{M_{sun} yr^{-1}}$'
+sfr.limits = [-2.5, 1.0]
+sfr.log = True
+
 # -------------------- subhalos -------------------------------------------------------------------
 
 @catalog_field(aliases=['vc','vmax'])

@@ -1732,7 +1732,7 @@ def exportIltisCutout(sim, haloID, emLine='O  7 21.6020A', haloSizeRvir=2.0, sfr
     # write hdf5 file
     fileName = 'cutout_%s_%d_halo%d_size%d.hdf5' % (sim.simName,sim.snap,haloID,int(haloSizeRvir))
     if sfrEmisFac != 1:
-        fileName = fileName.replace('.hdf5','_b%d.hdf5' % sfrEmisFac)
+        fileName = fileName.replace('.hdf5','_b%s.hdf5' % sfrEmisFac)
 
     with h5py.File(fileName,'w') as f:
         # write header attributes

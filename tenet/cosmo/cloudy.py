@@ -39,13 +39,13 @@ lineList = """
 #9105    Si14 6.18452A      H-like, 1 3,   1^2S -   2^2P
 #9894    S 16 4.73132A      H-like, 1 3,   1^2S -   2^2P
 #12819   Fe26 1.78177A      H-like, 1 3,   1^2S -   2^2P
-#21954   C  5 40.2678A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance"
-#21989   C  5 41.4721A      He-like, 1 2,   1^1S -   2^3S
-#23516   N  6 29.5343A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "resonance" "NVI(f)"
-#24998   O  7 21.8070A      He-like, 1 5,   1^1S -   2^3P_1, in Bertone+ (2010) "intercombination" "OVII(i)"
+#21954   C  5 40.2678A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance" (leftmost of triplet)
+#21989   C  5 41.4721A      He-like, 1 2,   1^1S -   2^3S, forbidden? (rightmost of triplet)
+#23516   N  6 29.5343A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "forbidden" "NVI(f)" (leftmost of 'Kalpha' triplet)
+#24998   O  7 21.8070A      He-like, 1 5,   1^1S -   2^3P_1, in Bertone+ (2010) "intercombination" "OVII(i)" (middle of triplet)
 #25003   O  7 21.8044A      He-like, 1 6,   1^1S -   2^3P_2, doublet? or effectively would be blend
-#25008   O  7 21.6020A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance" "OVII(r)"
-#25043   O  7 22.1012A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "forbidden" "OVII(f)"
+#25008   O  7 21.6020A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance" "OVII(r)" (leftmost of triplet)
+#25043   O  7 22.1012A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "forbidden" "OVII(f)" (rightmost of triplet)
 #26912   Ne 9 13.6987A      He-like, 1 2,   1^1S -   2^3S
 #26867   Ne 9 13.5529A      He-like, 1 5,   1^1S -   2^3P_1
 #26872   Ne 9 13.5500A      He-like, 1 6,   1^1S -   2^3P_2
@@ -105,6 +105,7 @@ lineList = """
 #N   5 1242.804A, doublet in Bertone+ (2010b)
 #Ne  8 770.409A, doublet in Bertone+ (2010b)
 #Ne  8 780.324, doublet in Bertone+ (2010b)
+#Fe 17 * including 17.073 for LEM
 
 def getEmissionLines():
     """ Return the list of emission lines (``lineList`` above) that we save from CLOUDY runs. """
@@ -1011,9 +1012,22 @@ class cloudyIon():
         # element (e.g. are relative values, and so \Sum_j f_Xj = 1)
         if sfGasTemp == 'both':
             # contributions from multiple (sub-grid) phases
+            # note: temp and temp_hot are the same for non-starforming gas, where coldfrac == 0
             coldfrac = sP.snapshotSubset('gas', 'twophase_coldfrac', indRange=indRange)
-            ion_fraction = 10.0**self.frac(element, ionNum, dens*(coldfrac), metal_logSolar, temp, sP.redshift)
-            ion_fraction += 10.0**self.frac(element, ionNum, dens*(1-coldfrac), metal_logSolar, temp_hot, sP.redshift)
+            ion_fraction = np.zeros(dens.size, dtype='float32')
+
+            # compute multi-contributions for star-forming gas
+            w_sfr = np.where(coldfrac > 0)[0]
+
+            if len(w_sfr) > 0:
+                ion_fraction[w_sfr] = 10.0**self.frac(element, ionNum, dens[w_sfr]*coldfrac[w_sfr], metal_logSolar[w_sfr], temp[w_sfr], sP.redshift)
+                ion_fraction[w_sfr] += 10.0**self.frac(element, ionNum, dens[w_sfr]*(1-coldfrac[w_sfr]), metal_logSolar[w_sfr], temp_hot[w_sfr], sP.redshift)
+
+            # compute normal single contribution for non-starforming gas
+            w_nosfr = np.where(coldfrac == 0)[0]
+
+            if len(w_nosfr) > 0:
+                ion_fraction[w_nosfr] = 10.0**self.frac(element, ionNum, dens[w_nosfr], metal_logSolar[w_nosfr], temp_hot[w_nosfr], sP.redshift)
         else:
             # normal: each gas cell is assumed to be single-phase (constant dens, temp)
             ion_fraction = 10.0**self.frac(element, ionNum, dens, metal_logSolar, temp, sP.redshift)
@@ -1273,9 +1287,22 @@ class cloudyEmission():
         # interpolate for log(emissivity) and convert to linear [erg/cm^3/s]
         if sfGasTemp == 'both':
             # contributions from multiple (sub-grid) phases
+            # note: temp and temp_hot are the same for non-starforming gas, where coldfrac == 0
             coldfrac = sP.snapshotSubset('gas', 'twophase_coldfrac', indRange=indRange)
-            emissivity = 10.0**self.emis(line, dens*(coldfrac), metal_logSolar, temp, sP.redshift)
-            emissivity += 10.0**self.emis(line, dens*(1-coldfrac), metal_logSolar, temp_hot, sP.redshift)
+            emissivity = np.zeros(dens.size, dtype='float32')
+
+            # compute multi-contributions for star-forming gas
+            w_sfr = np.where(coldfrac > 0)[0]
+
+            if len(w_sfr) > 0:
+                emissivity[w_sfr] = 10.0**self.emis(line, dens[w_sfr]*coldfrac[w_sfr], metal_logSolar[w_sfr], temp[w_sfr], sP.redshift)
+                emissivity[w_sfr] += 10.0**self.emis(line, dens[w_sfr]*(1-coldfrac[w_sfr]), metal_logSolar[w_sfr], temp_hot[w_sfr], sP.redshift)
+
+            # compute normal single contribution for non-starforming gas
+            w_nosfr = np.where(coldfrac == 0)[0]
+
+            if len(w_nosfr) > 0:
+                emissivity[w_nosfr] = 10.0**self.emis(line, dens[w_nosfr], metal_logSolar[w_nosfr], temp_hot[w_nosfr], sP.redshift)
         else:
             # normal: each gas cell is assumed to be single-phase (constant dens, temp)
             emissivity = 10.0**self.emis(line, dens, metal_logSolar, temp, sP.redshift)
