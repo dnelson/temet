@@ -55,30 +55,31 @@ def mhalo_lim(sim,pt,f):
 
 def _mhalo_load(sim, partType, field, args):
     """ Helper for the halo mass fields below. """
-    if '_200' in field:
+    if '200' in field:
         haloField = 'Group_M_Crit200'
-    if '_500' in field:
+    if '500' in field:
         haloField = 'Group_M_Crit500'
-    if '_vir' in field:
+    if 'vir' in field:
         haloField = 'Group_M_TopHat200' # misleading name
 
-    gc = sim.groupCat(fieldsHalos=[haloField,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
+    halos = sim.groupCat(fieldsHalos=[haloField,'GroupFirstSub'])
+    GrNr = sim.subhalos('SubhaloGrNr')
 
-    mhalo = gc['halos'][haloField][gc['subhalos']]
+    mhalo = halos[haloField][GrNr]
 
     if '_code' not in field:
         mhalo = sim.units.codeMassToMsun(mhalo)
 
     if '_parent' not in field:
         # satellites given nan (by default)
-        mask = np.zeros(gc['subhalos'].size, dtype='int16')
-        mask[gc['halos']['GroupFirstSub']] = 1
+        mask = np.zeros(GrNr.size, dtype='int16')
+        mask[halos['GroupFirstSub']] = 1
 
         mhalo[mask == 0] = np.nan
 
     return mhalo
 
-@catalog_field(aliases=['mhalo_200_code','mhalo_200_parent'])
+@catalog_field(aliases=['mhalo_200_code','mhalo_200_parent','m200'])
 def mhalo_200(sim, partType, field, args):
     """ Parent halo total mass (:math:`\\rm{M_{200,crit}}`).
     Only defined for centrals: satellites are assigned a value of nan (excluded by default), 
@@ -91,7 +92,7 @@ mhalo_200.units = lambda sim,pt,f: r'$\rm{M_{sun}}$' if '_code' not in f else 'c
 mhalo_200.limits = mhalo_lim
 mhalo_200.log = True
 
-@catalog_field(aliases=['mhalo_500_code','mhalo_500_parent'])
+@catalog_field(aliases=['mhalo_500_code','mhalo_500_parent','m500'])
 def mhalo_500(sim, partType, field, args):
     """ Parent halo total mass (:math:`\\rm{M_{500,crit}}`).
     Only defined for centrals: satellites are assigned a value of nan (excluded by default)."""
@@ -116,18 +117,20 @@ mhalo_vir.log = True
 
 def _rhalo_load(sim, partType, field, args):
     """ Helper for the halo radii loads below. """
-    rField = 'Group_R_Crit200' if '_200' in field else 'Group_R_Crit500'
+    rField = 'Group_R_Crit200' if '200' in field else 'Group_R_Crit500'
 
-    gc = sim.groupCat(fieldsHalos=[rField,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
-    rad = gc['halos'][rField][gc['subhalos']]
+    halos = sim.groupCat(fieldsHalos=[rField,'GroupFirstSub'])
+    GrNr = sim.subhalos('SubhaloGrNr')
+
+    rad = halos[rField][GrNr]
 
     if '_code' not in field:
         rad = sim.units.codeLengthToKpc(rad)
 
     # satellites given nan
     if '_parent' not in field:
-        mask = np.zeros(gc['subhalos'].size, dtype='int16')
-        mask[gc['halos']['GroupFirstSub']] = 1
+        mask = np.zeros(GrNr.size, dtype='int16')
+        mask[halos['GroupFirstSub']] = 1
         wSat = np.where(mask == 0)
         rad[wSat] = np.nan
 
@@ -144,7 +147,7 @@ rhalo_200.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_code' not in f else 'code_
 rhalo_200.limits = [1.0, 3.0]
 rhalo_200.log = True
 
-@catalog_field(aliases=['rhalo_500_code','rhalo_500_parent'])
+@catalog_field(aliases=['rhalo_500_code','rhalo_500_parent','r500'])
 def rhalo_500(sim, partType, field, args):
     """ Parent halo :math:`\\rm{R_{500,crit}}` radius.
     Only defined for centrals: satellites are assigned a value of nan (excluded by default)."""
@@ -173,13 +176,14 @@ def halo_numsubs(sim, partType, field, args):
     central subhalo exists, while a value of two indicates a central and one satellite, 
     and so on. Only defined for centrals: satellites are assigned a value of nan (excluded by default). """
     haloField = 'GroupNsubs'
-    gc = sim.groupCat(fieldsHalos=[haloField,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
+    halos = sim.groupCat(fieldsHalos=[haloField,'GroupFirstSub'])
+    GrNr = sim.subhalos('SubhaloGrNr')
 
-    num = gc['halos'][haloField][gc['subhalos']].astype('float32') # int dtype
+    num = halos[haloField][GrNr].astype('float32') # int dtype
 
     # satellites given nan
-    mask = np.zeros(gc['subhalos'].size, dtype='int16')
-    mask[gc['halos']['GroupFirstSub']] = 1
+    mask = np.zeros(GrNr.size, dtype='int16')
+    mask[halos['GroupFirstSub']] = 1
     wSat = np.where(mask == 0)
     num[wSat] = np.nan
 

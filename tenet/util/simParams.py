@@ -96,6 +96,8 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      'tng50-4-dark':['tng_dm',270],
                      'tng-cluster':['tng',8192],
                      'tng-cluster-dark':['tng_dm',2048],
+                     'mtng':['mtng',4320],
+                     'mtng-dark':['mtng_dm',4320],
                      'tng-local-dark':['tng_dm_local',512],
                      'eagle':['eagle',1504],
                      'eagle-dark':['eagle_dm',1504],
@@ -395,7 +397,7 @@ class simParams:
         self.data = {}
 
         # IllustrisTNG (L35 L75 and L205 boxes) + (L12.5 and L25 test boxes)
-        if 'tng' in run and ('zoom' not in run):
+        if 'tng' in run and ('zoom' not in run) and ('mtng' not in run):
 
             res_L25  = [128, 256, 512, 1024]
             res_L35  = [270, 540, 1080, 2160]
@@ -851,6 +853,40 @@ class simParams:
             self.simNameAlt = 'Simba-L'+bs+'n'+str(res)+'FP'
 
             if res == 1024: self.simName = 'Simba100'
+
+        # MTNG
+        if run in ['mtng','mtng_dm']:
+            self.validResLevels = [4320,1080,540,270]
+            if self.res == 4320: self.boxSize = 500000.0
+            if self.res == 1080: self.boxSize = 125000.0
+            if self.res == 540:  self.boxSize = 62500.0
+            if self.res == 270:  self.boxSize = 31250.0
+
+            self.mpcUnits       = True
+            self.groupOrdered   = True
+            self.numSnaps       = 265
+
+            self.omega_m     = 0.3089
+            self.omega_L     = 0.6911
+            self.omega_b     = 0.0486
+            self.HubbleParam = 0.6774
+
+            self.gravSoft = 2.5 # ckpc/h
+
+            bs = str( round(self.boxSize/1000) )
+
+            self.trMCPerCell = 0
+            self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
+            self.metals      = None
+            self.winds       = 2
+            self.BHs         = 2
+
+            self.targetGasMass = 2.09e-3
+
+            dmStr = '_DM' if '_dm' in run else ''
+            self.arepoPath  = self.basePath + 'sims.other/MTNG-L'+bs+'n'+str(res)+dmStr+'/'
+            self.simName    = 'MTNG-L'+bs+'n'+str(res)+dmStr
+            self.simNameAlt = self.simName
 
         # ZOOMS-1 (paper.zoomsI, suite of 10 zooms, 8 published, numbering permuted)
         if run in ['zooms','zooms_dm']:
@@ -1561,7 +1597,8 @@ class simParams:
         """ Return number of Subfind subhalos in the group catalog at this sP.snap. """
         if self.isSubbox:
             return 0
-        return self.groupCatHeader()['Nsubgroups_Total']
+        header = self.groupCatHeader()
+        return header.get('Nsubgroups_Total', header['Nsubhalos_Total'])
 
     @property
     def numPart(self):

@@ -155,6 +155,10 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
     if fieldsSubhalos is not None:
         fieldsSubhalos = list(iterable(fieldsSubhalos))
 
+        # special behaviors
+        if 'SubhaloGrNr' in fieldsSubhalos and not sP.groupCatHasField('Subhalo','SubhaloGrNr'):
+            fieldsSubhalos[fieldsSubhalos.index('SubhaloGrNr')] = 'SubhaloGroupNr'
+
         for i, field in enumerate(fieldsSubhalos):
             quant = field.lower()
 
