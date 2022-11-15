@@ -151,7 +151,7 @@ def temp_sfcold(sim, partType, field, args):
     sfr = sim.snapshotSubset(partType, 'sfr', **args)
 
     w = np.where(sfr > 0.0)
-    temp[w] = 1000 # fiducial Illustris/TNG model: T_clouds = 1000 K, T_SN = 5.73e7 K
+    temp[w] = sim.units.sh03_T_c
 
     return temp
 
@@ -166,10 +166,13 @@ def temp_sfhot(sim, partType, field, args):
     """ Gas temperature, where star-forming gas is set to the sub-grid (constant)
     hot-phase temperature, instead of the eEOS 'effective' temperature. Use with caution. """
     temp = sim.snapshotSubset(partType, 'temp', **args)
+    nh = sim.snapshotSubset(partType, 'nh', **args)
     sfr = sim.snapshotSubset(partType, 'sfr', **args)
 
+    _, T_h = sim.units.densToSH03TwoPhase(nh, sfr)
+
     w = np.where(sfr > 0.0)
-    temp[w] = 5.73e7 # fiducial Illustris/TNG model: T_clouds = 1000 K, T_SN = 5.73e7 K
+    temp[w] = T_h[w]
 
     return temp
 
@@ -186,7 +189,9 @@ def twophase_coldfrac(sim, partType, field, args):
     nh = sim.snapshotSubset(partType, 'nh', **args)
     sfr = sim.snapshotSubset(partType, 'sfr', **args)
 
-    return sim.units.densToSH03ColdFraction(nh, sfr)
+    coldfrac, _ = sim.units.densToSH03TwoPhase(nh, sfr)
+
+    return coldfrac
 
 twophase_coldfrac.label = r'SH03 Cold-phase Mass Fraction'
 twophase_coldfrac.units = '' # dimensionless

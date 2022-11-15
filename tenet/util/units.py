@@ -65,7 +65,6 @@ class units(object):
     BH_eps_r       = 0.2         # BH radiative efficiency, unchanged in Illustris and TNG models
     BH_eps_f_high  = 0.10        # BH high-state efficiency, TNG fiducial model (is 0.05 for Illustris)
     BH_f_thresh    = 0.05        # multiplier on the star-formation threshold modulating eps_f_low, TNG fiducial model
-    PhysDensThresh = 7.54654e-4  # star-formation threshold density (code units, comoving) = 0.232 h^2/cm^3
     N_SNII         = 0.0118008   # winds: number of SNII per Msun formed (IMF integrated between CCSN mass limits), TNG fiducial model
     E_SNII51       = 1.0         # winds: available energy per CC SN in units of 10^51 erg (=unity in Illustris/TNG)
     winds_tau      = 0.1         # winds: thermal energy fraction
@@ -75,6 +74,15 @@ class units(object):
     winds_e        = 3.6         # winds: energy factor, TNG fiducial model (1.09 in Illustris)
     winds_kappa    = 7.4         # winds: velocity factor, TNG fiducial model (3.7 in Illustris)
     winds_vmin     = 350.0       # winds: injection velocity floor, TNG fiducial model (0.0 in Illustris)
+
+    # SFR/SH03 model parameters
+    PhysDensThresh = 7.54654e-4  # star-formation threshold density (from CritOverDensity, code units, comoving) = 0.232 h^2/cm^3
+    sh03_nH_thresh = 0.13        # (from CritOverDensity), star formation density threshold [H atoms/cm^3] (TNG/Illustris value)
+    sh03_A0        = 573.0       # FactorEVP, cloud evaporation efficiency (TNG/Illustris value)
+    sh03_T_SN      = 5.73e7      # TempSupernova, Kelvin (TNG/Illustris value)
+    sh03_T_c       = 1000.0      # TempClouds, Kelvin (TNG/Illustris value)
+    sh03_beta      = 0.22578     # FactorSN, mass fraction of stars which promptly explode as SNe (TNG value, was 0.1 for Illustris)
+    sh03_t_star    = 3.27665     # Gyr (from MaxSfrTimescale) (TNG/Illustris value)
 
     # derived constants (code units without h factors)
     H0               = None    # km/s/kpc (hubble constant at z=0)
@@ -439,37 +447,39 @@ class units(object):
 
         return eta_w
 
-    def densToSH03ColdFraction(self, dens_in, sfr):
-        """ Convert a gas cell density [code units] to the cold-phase (i.e. cold clouds) mass fraction 
-        according to the Springel & Hernquist (2003) sub-grid two-phase ISM pressurization model.
+    def densToSH03TwoPhase(self, dens_in, sfr):
+        """ Convert a gas cell density [code units] to values corresponding to the two-phase 
+        state of the sub-cell gas, according to the Springel & Hernquist (2003) sub-grid 
+        ISM pressurization model. 
         
         Args:
           dens_in (float or ndarray): hydrogen physical gas number density [H atoms/cm^3]
           sfr (float or ndarray): star formation rate [Msun/yr]
+
+        Returns:
+        a 2-tuple composed of
+
+        - **x** (:py:class:`~numpy.ndarray`): the cold-phase (i.e. cold clouds) 
+          mass fraction, which is density-dependent, and always between zero and unity.
+        - **T_h** (:py:class:`~numpy.ndarray`): the hot-phase temperature, which is 
+          density-dependent, and increases from ~1e5 to ~1e8 K.
         """
         assert 'TNG' in self._sP.simName, 'Check applicability to non-TNG models.'
 
         dens = np.array(dens_in)
-
-        nH_thresh = 0.13 # star formation density threshold [H atoms/cm^3]
-        A0 = 573.0 # FactorEVP
-        T_SN = 5.73e7 # Kelvin
-        T_c = 1000.0 # Kelvin
-        beta = 0.22578 # mass fraction of stars which promptly explode as SNe
-        t_star = 3.27665 # Gyr (from MaxSfrTimescale)
 
         # load KWH+96 lambda
         from ..load.data import dataBasePath
         lambda_tab = np.loadtxt(dataBasePath + '/kwh/kwh96_lambda.txt')
 
         # SH03 Eqn. 20
-        A = A0 * (dens/nH_thresh)**(-0.8)
+        A = self.sh03_A0 * (dens/self.sh03_nH_thresh)**(-0.8)
 
         mu_cold = 4 / (1 + 3 * self.hydrogen_massfrac) # fully neutral
         mu_hot = 4 / (3 + 5 * self.hydrogen_massfrac) # fully ionized
 
-        u_SN = T_SN * self.boltzmann / (mu_hot*(self.gamma-1)) # erg
-        u_c = T_c * self.boltzmann / (mu_cold*(self.gamma-1)) # erg
+        u_SN = self.sh03_T_SN * self.boltzmann / (mu_hot*(self.gamma-1)) # erg
+        u_c = self.sh03_T_c * self.boltzmann / (mu_cold*(self.gamma-1)) # erg
 
         # SH03 Eqn. 11
         u_h = u_SN / (A+1) + u_c
@@ -484,9 +494,9 @@ class units(object):
         cooling_net = lambda_net * self.s_in_Gyr * dens**2 # erg cm^3/s -> erg/Gyr/cm^3
 
         # [Gyr * erg/Gyr/cm^3 / cm^-3 / erg] = [unitless]
-        y = t_star * cooling_net / (dens*(beta*u_SN - (1-beta)*u_c))
+        y = self.sh03_t_star * cooling_net / (dens*(self.sh03_beta*u_SN - (1-self.sh03_beta)*u_c))
 
-        #tsfr = np.sqrt(nH_thresh / dens) * MaxSfrTimescale
+        #tsfr = np.sqrt(self.sh03_nH_thresh / dens) * MaxSfrTimescale
         #y = tsfr / tcool * u_h / (FactorSN * EgySpecSN - (1 - FactorSN) * EgySpecCold)
 
         # SH03 Eqn. 18 (cold cloud fraction)
@@ -498,7 +508,7 @@ class units(object):
 
         x[sfr == 0] = 0.0        
 
-        return x
+        return x, T_h
 
     def logMsunToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert halo mass (in log msun, no little h) to virial temperature at specified redshift. """

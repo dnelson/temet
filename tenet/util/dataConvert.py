@@ -1755,4 +1755,7 @@ def exportIltisCutout(sim, haloID, emLine='O  7 21.6020A', haloSizeRvir=2.0, sfr
         f['velocity_y'] = vel[:,1]
         f['velocity_z'] = vel[:,2]
 
+        # keep indices so we can map back to global snapshot cells
+        f['global_inds'] = inds
+
     print('Saved: [%s]' % fileName)
