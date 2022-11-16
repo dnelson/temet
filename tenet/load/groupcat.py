@@ -6,6 +6,7 @@ import h5py
 import glob
 from os.path import isfile, isdir
 from os import mkdir
+from numba import njit
 
 import illustris_python as il
 from ..util.helper import iterable, logZeroNaN
@@ -662,7 +663,7 @@ def groupCatHasField(sP, objType, field):
 
 def groupCatFields(sP, objType):
     """ Return list of all fields in the group catalog for either halos or subhalos. """
-    for i in range(groupCatNumChunks(sP.basePath,sP.snap,sP.subbox)):
+    for i in range(groupCatNumChunks(sP.basePath,sP.snap)):
         with h5py.File(gcPath(sP.simPath,sP.snap,i),'r') as f:
             if objType in f:
                 fields = list(f[objType].keys())
@@ -670,20 +671,16 @@ def groupCatFields(sP, objType):
 
     return fields            
 
-def groupCatNumChunks(basePath, snapNum, subbox=None):
+def groupCatNumChunks(basePath, snapNum):
     """ Find number of file chunks in a group catalog. """
-    from .snapshot import subboxVals
+    # load from header of first file
+    path = gcPath(basePath, snapNum, chunkNum=0, checkExists=True)
 
-    _, sbStr1, sbStr2 = subboxVals(subbox)
-    path = basePath + sbStr2 + 'groups_' + sbStr1 + str(snapNum).zfill(3)
-
-    nChunks = len(glob.glob(path+'/fof_*.*.hdf5'))
-    if nChunks == 0:
-        # only if original 'fof_subhalo_tab' files are not present, then count 'groups' files instead
-        nChunks += len(glob.glob(path+'/groups_*.*.hdf5'))
-
-    if nChunks == 0:
-        nChunks = 1 # single file per snapshot
+    if path is None:
+        return 0
+        
+    with h5py.File(path,'r') as f:
+        nChunks = f['Header'].attrs['NumFiles']
 
     return nChunks
 
@@ -718,9 +715,12 @@ def groupCatOffsetList(sP):
         for i in np.arange(1,nChunks+1):
             f = h5py.File( gcPath(sP.simPath,sP.snap,chunkNum=i-1), 'r' )
 
+            key1 = 'Ngroups_ThisFile'
+            key2 = 'Nsubgroups_ThisFile' if 'Nsubgroups_ThisFile' in f['Header'].attrs else 'Nsubhalos_ThisFile'
+
             if i < nChunks:
-                r['offsetsGroup'][i]   = r['offsetsGroup'][i-1]   + f['Header'].attrs['Ngroups_ThisFile']
-                r['offsetsSubhalo'][i] = r['offsetsSubhalo'][i-1] + f['Header'].attrs['Nsubgroups_ThisFile']
+                r['offsetsGroup'][i]   = r['offsetsGroup'][i-1]   + f['Header'].attrs[key1]
+                r['offsetsSubhalo'][i] = r['offsetsSubhalo'][i-1] + f['Header'].attrs[key2]
 
                 f.close()
 
@@ -730,6 +730,33 @@ def groupCatOffsetList(sP):
             print('Wrote: ' + saveFilename)
 
     return r
+
+@njit
+def _group_cat_offsets(groupLenType, subgroupLenType, groupNsubs, totGroups, totSubGroups, nTypes):
+    """ Loop over each particle type, then over groups, calculate offsets from length. """
+    snapOffsetsGroup   = np.zeros( (totGroups+1, nTypes), dtype=np.int64 )
+    snapOffsetsSubhalo = np.zeros( (totSubGroups+1, nTypes), dtype=np.int64 )
+
+    nTypes = snapOffsetsGroup.shape[1]
+
+    for j in range(nTypes):
+        subgroupCount = 0
+        
+        # compute group offsets first (first entry is zero!)
+        snapOffsetsGroup[1:,j] = np.cumsum( groupLenType[:,j] )
+        
+        for k in range(totGroups):
+            # subhalo offsets depend on group (to allow fuzz)
+            if groupNsubs[k] > 0:
+                snapOffsetsSubhalo[subgroupCount,j] = snapOffsetsGroup[k,j]
+                
+                subgroupCount += 1
+                for m in np.arange(1, groupNsubs[k]):
+                    snapOffsetsSubhalo[subgroupCount,j] = \
+                      snapOffsetsSubhalo[subgroupCount-1,j] + subgroupLenType[subgroupCount-1,j]
+                    subgroupCount += 1
+
+    return snapOffsetsGroup, snapOffsetsSubhalo
 
 def groupCatOffsetListIntoSnap(sP):
     """ Make the offset table (by type) for every group/subgroup, such that the global location of 
@@ -754,12 +781,13 @@ def groupCatOffsetListIntoSnap(sP):
 
     # calculate now: allocate
     with h5py.File( gcPath(sP.simPath,sP.snap,noLocal=True), 'r' ) as f:
-        totGroups    = f['Header'].attrs['Ngroups_Total']
-        totSubGroups = f['Header'].attrs['Nsubgroups_Total']
+        shkey = 'Nsubgroups_Total' if 'Nsubgroups_Total' in f['Header'].attrs else 'Nsubhalos_Total'
 
-    r['snapOffsetsGroup']   = np.zeros( (totGroups+1, sP.nTypes), dtype=np.int64 )
-    r['snapOffsetsSubhalo'] = np.zeros( (totSubGroups+1, sP.nTypes), dtype=np.int64 )
-    
+        totGroups    = int(f['Header'].attrs['Ngroups_Total'])
+        totSubGroups = int(f['Header'].attrs[shkey]) # int() otherwise +1 below casts result to float64
+
+    shkey = shkey.replace('_Total','_ThisFile')
+
     groupCount    = 0
     subgroupCount = 0
     
@@ -775,48 +803,58 @@ def groupCatOffsetListIntoSnap(sP):
         # load header, get number of groups/subgroups in this file, and lengths
         f = h5py.File( gcPath(sP.simPath,sP.snap,chunkNum=i-1,noLocal=True), 'r' )
         header = dict( f['Header'].attrs.items() )
+
+        Ngroups = int(header['Ngroups_ThisFile'])
+        Nsubgroups = int(header[shkey])
         
         if header['Ngroups_ThisFile'] > 0:
             if 'GroupLenType' in f['Group']:
-                groupLenType[groupCount:groupCount+header['Ngroups_ThisFile']] = f['Group']['GroupLenType']
+                groupLenType[groupCount:groupCount+Ngroups] = f['Group']['GroupLenType']
             else:
                 assert sP.targetGasMass == 0.0 # Millennium DMO with no types
-                groupLenType[groupCount:groupCount+header['Ngroups_ThisFile'],sP.ptNum('dm')] = f['Group']['GroupLen']
+                groupLenType[groupCount:groupCount+Ngroups,sP.ptNum('dm')] = f['Group']['GroupLen']
 
-            groupNsubs[groupCount:groupCount+header['Ngroups_ThisFile']]   = f['Group']['GroupNsubs']
-        if header['Nsubgroups_ThisFile'] > 0:
+            groupNsubs[groupCount:groupCount+Ngroups]   = f['Group']['GroupNsubs']
+
+        if Nsubgroups > 0:
             if 'SubhaloLenType' in f['Subhalo']:
-                subgroupLenType[subgroupCount:subgroupCount+header['Nsubgroups_ThisFile']] = f['Subhalo']['SubhaloLenType']
+                subgroupLenType[subgroupCount:subgroupCount+Nsubgroups] = f['Subhalo']['SubhaloLenType']
             else:
                 assert sP.targetGasMass == 0.0 # Millennium DMO with no types
-                subgroupLenType[subgroupCount:subgroupCount+header['Nsubgroups_ThisFile'],sP.ptNum('dm')] = f['Subhalo']['SubhaloLen']
+                subgroupLenType[subgroupCount:subgroupCount+Nsubgroups,sP.ptNum('dm')] = f['Subhalo']['SubhaloLen']
         
-        groupCount += header['Ngroups_ThisFile']
-        subgroupCount += header['Nsubgroups_ThisFile']
+        groupCount += Ngroups
+        subgroupCount += Nsubgroups
         
         f.close()
+    
+    # calculate group and subhalo offsets (allow fuzz gaps)
+    snapOffsetsGroup, snapOffsetsSubhalo = _group_cat_offsets(groupLenType, subgroupLenType, groupNsubs, 
+                                                              totGroups, totSubGroups, sP.nTypes)
+
+    r = {'snapOffsetsGroup':snapOffsetsGroup, 'snapOffsetsSubhalo':snapOffsetsSubhalo}
+
+    #for j in range(sP.nTypes):
+    #    subgroupCount = 0
         
-    # loop over each particle type, then over groups, calculate offsets from length
-    for j in range(sP.nTypes):
-        subgroupCount = 0
+    #    # compute group offsets first (first entry is zero!)
+    #    r['snapOffsetsGroup'][1:,j] = np.cumsum( groupLenType[:,j] )
         
-        # compute group offsets first (first entry is zero!)
-        r['snapOffsetsGroup'][1:,j] = np.cumsum( groupLenType[:,j] )
-        
-        for k in np.arange(totGroups):
-            # subhalo offsets depend on group (to allow fuzz)
-            if groupNsubs[k] > 0:
-                r['snapOffsetsSubhalo'][subgroupCount,j] = r['snapOffsetsGroup'][k,j]
+    #    for k in np.arange(totGroups):
+    #        # subhalo offsets depend on group (to allow fuzz)
+    #        if groupNsubs[k] > 0:
+    #            r['snapOffsetsSubhalo'][subgroupCount,j] = r['snapOffsetsGroup'][k,j]
                 
-                subgroupCount += 1
-                for m in np.arange(1, groupNsubs[k]):
-                    r['snapOffsetsSubhalo'][subgroupCount,j] = \
-                      r['snapOffsetsSubhalo'][subgroupCount-1,j] + subgroupLenType[subgroupCount-1,j]
-                    subgroupCount += 1
+    #            subgroupCount += 1
+    #            for m in np.arange(1, groupNsubs[k]):
+    #                r['snapOffsetsSubhalo'][subgroupCount,j] = \
+    #                  r['snapOffsetsSubhalo'][subgroupCount-1,j] + subgroupLenType[subgroupCount-1,j]
+    #                subgroupCount += 1
 
     with h5py.File(saveFilename,'w') as f:
-        f['snapOffsetsGroup']   = r['snapOffsetsGroup']
-        f['snapOffsetsSubhalo'] = r['snapOffsetsSubhalo']
-        print('Wrote: ' + saveFilename)
+        for key in r:
+            f[key] = r[key]
+
+    print('Wrote: ' + saveFilename)
 
     return r
