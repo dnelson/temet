@@ -13,7 +13,7 @@ from os.path import isfile
 
 from tenet.cosmo.spectrum import _spectra_filepath, lines
 #from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
-from tenet.plot.spectrum import spectra_gallery_indiv, EW_distribution, dNdz_evolution
+from tenet.plot.spectrum import spectra_gallery_indiv, EW_distribution, dNdz_evolution, instrument_lsf
 from tenet.plot.config import *
 
 def metalAbundancesVsSolar(sim, ion='Mg II'):
@@ -194,14 +194,14 @@ def lightconeSpectra(sim, instrument, ion, solar=False, add_lines=None):
             break
 
     with h5py.File(fname,'r') as f:
-        master_wave = f['master_wave'][()]
+        wave = f['wave'][()]
         ray_total_dl = f['ray_total_dl'][()]
         num_spec = f['ray_pos'].shape[0]
 
     assert ray_total_dl == sim.boxSize # otherwise generalize lightconeSpectraConfig()
 
     # allocate
-    tau_master = np.zeros(master_wave.size, dtype='float64')
+    tau_master = np.zeros(wave.size, dtype='float64')
 
     # loop over snapshots
     for snap, num_box, z_init in zip(snaps,num_boxes,z_inits):
@@ -226,7 +226,7 @@ def lightconeSpectra(sim, instrument, ion, solar=False, add_lines=None):
             # load each spectrum individually, shift, and accumulate
             for spec_ind, z_local in zip(spec_inds,z_init):
                 # allocate
-                tau_local = np.zeros(master_wave.size, dtype='float64')
+                tau_local = np.zeros(wave.size, dtype='float64')
 
                 # combine optical depth arrays for all transitions of this ion
                 for key in f:
@@ -243,17 +243,17 @@ def lightconeSpectra(sim, instrument, ion, solar=False, add_lines=None):
                     tau_local += f[key][spec_ind,:]
 
                 # shift in redshift according to the cumulative pathlength (z_init)
-                wave_redshifted = master_wave * ((1 + z_local) / (1 + sim.redshift))
+                wave_redshifted = wave * ((1 + z_local) / (1 + sim.redshift))
 
                 # interpolate back onto the master (rest-frame) wavelength grid, and accumulate
-                tau_redshifted = np.interp(master_wave, wave_redshifted, tau_local, left=0.0, right=0.0)
+                tau_redshifted = np.interp(wave, wave_redshifted, tau_local, left=0.0, right=0.0)
 
                 tau_master += tau_redshifted
 
     # convert optical depth to flux
     flux = np.exp(-1*tau_master)
 
-    return master_wave, flux
+    return wave, flux
 
 def plotLightconeSpectrum(sim, instrument, ion, add_lines=None):
     """ Plot a single lightcone spectrum.
@@ -344,7 +344,7 @@ def paperPlots():
     ions = ['HI','MgII','CaII','FeII','SiII','ZnII','NV','CIV','OVI'] # CaII and ZnII with solar abunds
 
     # fig 1: individual spectra galleries
-    if 0:
+    if 1:
         # Mg II
         sim = simParams(run='tng50-1', redshift=0.5)
         inst = 'SDSS-BOSS' #'4MOST-HRS'
@@ -404,6 +404,11 @@ def paperPlots():
     if 0:
         sim = simParams(run='tng50-1', redshift=0.5)
         metalAbundancesVsSolar(sim, 'Mg II')
+
+    # fig X: instrumental LSFs
+    if 0:
+        inst = '4MOST-HRS' #'SDSS-BOSS'
+        instrument_lsf(inst)
 
     # fig X: example of a cosmological-distance (i.e. lightcone) spectrum
     if 0:

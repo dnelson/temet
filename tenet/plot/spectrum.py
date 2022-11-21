@@ -6,8 +6,8 @@ import h5py
 import matplotlib.pyplot as plt
 from os.path import isfile
 
-from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_filepath
-from ..cosmo.spectrum import create_master_grid, deposit_single_line, lines, absorber_catalog
+from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_filepath, lsf_matrix
+from ..cosmo.spectrum import create_wavelength_grid, deposit_single_line, lines, instruments, absorber_catalog
 from ..util.helper import logZeroNaN, sampleColorTable
 from ..util import units
 from ..plot.config import *
@@ -103,7 +103,7 @@ def profile_single_line():
     z_cosmo = 0.0
 
     # create master grid
-    master_mid, master_edges, tau_master = create_master_grid(line=line, instrument=None)
+    master_mid, master_edges, tau_master = create_wavelength_grid(line=line, instrument=None)
 
     # deposit
     f, gamma, wave0, _, _ = _line_params(line)
@@ -152,7 +152,7 @@ def profiles_multiple_lines():
     z_cosmo = 0.0
 
     # create master grid
-    master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
+    master_mid, master_edges, tau_master = create_wavelength_grid(instrument=instrument)
 
     # deposit
     z_doppler = vel_los / units.c_km_s
@@ -203,7 +203,7 @@ def LyA_profiles_vs_coldens():
     z_cosmo = 0.0
 
     # create master grid
-    master_mid, master_edges, tau_master = create_master_grid(line=line)
+    master_mid, master_edges, tau_master = create_wavelength_grid(line=line)
 
     # setup
     z_doppler = vel_los / units.c_km_s
@@ -248,6 +248,57 @@ def LyA_profiles_vs_coldens():
     cb.ax.set_ylabel('log N$_{\\rm HI}$ [ cm$^{-2}$ ]')
 
     fig.savefig('LyA_absflux_vs_coldens.pdf')
+    plt.close(fig)
+
+def instrument_lsf(instrument):
+    """ Plot LSF(s) of a given instrument. For wavelength-dependent LSF matrices. """
+    num = 6
+
+    # get wavelength grid and wavelength-dependent LSF
+    wave_mid, _, _ = create_wavelength_grid(instrument=instrument)
+    lsf_mode, lsf, lsf_fwhm = lsf_matrix(instrument)
+
+    print(f'{lsf_mode = }, {lsf.shape = }')
+
+    # x-axis
+    lsf_size = lsf.shape[1]
+    cen_i = int(np.floor(lsf_size/2))
+
+    xx = np.arange(lsf_size, dtype='int32') - cen_i
+
+    # start plot
+    fig, axes = plt.subplots(ncols=1, nrows=3, height_ratios=[1,1,0.5], figsize=(8,16.8))
+
+    for ax in axes[0:2]:
+        ax.set_xlabel('Pixel Number')
+        ax.set_xticks(xx)
+        ax.set_ylabel(f'{instrument} LSF')
+
+        # first and second panels are identical, except second is y-log
+        if ax == axes[1]: ax.set_yscale('log')
+
+        # add a number of LSFs across the instrumental wavelength range
+        for i in range(num):
+            # evenly sample
+            d_ind = lsf.shape[0] / num
+            ind = int(i * d_ind + d_ind/2)
+
+            lsf_kernel = lsf[ind,:]
+
+            label = r'$\rm{\lambda = %.1f \AA}$' % wave_mid[ind]
+            ax.plot(xx, lsf_kernel, 'o-', label=label)
+        
+        ax.plot([xx[cen_i],xx[cen_i]], [0, ax.get_ylim()[1]], '--', color='#ccc')
+
+    # bottom panel: FWHM vs wave
+    axes[-1].set_xlabel('Wavelength [ $\\rm{\AA}$ ]')
+    axes[-1].set_ylabel('FWHM [ $\\rm{\AA}$ ]')
+        
+    axes[-1].plot(wave_mid, lsf_fwhm)
+
+    # finish plot
+    axes[0].legend(loc='upper right')
+    fig.savefig('lsf_%s.pdf' % instrument)
     plt.close(fig)
 
 def _spectrum_debug_plot(line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos):
@@ -333,7 +384,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
     with h5py.File(filepath,'r') as f:
         # load metadata
         lineNames = f.attrs['lineNames']
-        wave = f['master_wave'][()]
+        wave = f['wave'][()]
 
         # total EW (summing all transitions)
         EW = np.sum(np.vstack([f[key][()] for key in f.keys() if 'EW_' in key]), axis=0)
@@ -499,6 +550,7 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
 
     for redshift in redshifts:
         sim.setRedshift(redshift)
+        print('EW distribution: ', sim, line)
 
         ion = lines[line]['ion']
         filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
@@ -581,8 +633,7 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
         opts = {'color':'#333333', 'ecolor':'#333333', 'alpha':0.9, 'capsize':0.0, 'fmt':'D'}
         ax.errorbar(m13_x, c16_y, yerr=c16_yerr, xerr=xerr, label=c16_label, **opts)
 
-    # TODO: check if we are combining multiple absorbers per spectra for EW calculation
-    # is this the reason of the periodic peaks in the EWDF?
+    # check: https://iopscience.iop.org/article/10.3847/1538-4357/abbb34/pdf
 
     # finish plot
     ax.legend(loc='best')

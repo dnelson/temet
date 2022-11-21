@@ -5,7 +5,7 @@ import numpy as np
 import h5py
 from os.path import isfile
 
-from ..cosmo.spectrum import create_spectra_from_traced_rays, create_master_grid, _line_params
+from ..cosmo.spectrum import create_spectra_from_traced_rays, create_wavelength_grid, _line_params
 from ..util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
                               trace_ray_through_voronoi_mesh_with_connectivity, rayTrace
 from ..util.sphMap import sphGridWholeBox, sphMap
@@ -539,7 +539,7 @@ def generate_spectra_voronoi_halo():
     rays_dl = sP.units.codeLengthToMpc(rays_dl)
 
     # sample master grid
-    master_mid, master_edges, tau_master = create_master_grid(instrument=instrument)
+    master_mid, master_edges, tau_master = create_wavelength_grid(instrument=instrument)
     tau_master = np.zeros( (nRaysPerDim**2,tau_master.size), dtype=tau_master.dtype )
 
     EWs = {}
@@ -598,7 +598,7 @@ def benchmark_line():
     z_cosmo = 0.0
 
     # create master grid
-    master_mid, master_edges, tau_master = create_master_grid(line=line, instrument=instrument)
+    master_mid, master_edges, tau_master = create_wavelength_grid(line=line, instrument=instrument)
 
     f, gamma, wave0, _, _ = _line_params(line)
 

@@ -1,0 +1,30 @@
+# Smee+ (2013)
+# https://arxiv.org/pdf/1208.2233.pdf (Figure 35, top panel, for spectrograph 1)
+# note: spectrograph 2 is worse by R~100 at the blue end
+# measured from calibration arc images taken before each set of science exposures
+# based on a sample of 100 BOSS plates
+# wavelength [Ang], R = lambda/dlambda where dlambda is the FWHM
+3697.4, 1506.7
+4056.4, 1667.4
+4476.9, 1819.2
+4887.2, 1930.8
+5287.2, 2004.5
+5676.9, 2051.3
+5846.2, 2058.0
+5943.6, 1997.8
+6030.8, 1944.2
+6169.2, 1915.2
+6307.7, 1904.0
+6512.8, 1957.6
+6774.4, 2024.6
+7020.5, 2084.8
+7456.4, 2189.7
+7953.8, 2317.0
+8487.2, 2453.1
+8810.3, 2517.9
+9082.1, 2546.9
+9266.7, 2544.6
+9471.8, 2524.6
+9712.8, 2466.5
+9938.5, 2377.2
+10282.1, 2183.0

@@ -1251,7 +1251,7 @@ def _cloudy_load(sim, partType, field, args):
             remakeCacheFile = False
 
             if getsize(cacheFile) < 2000:
-                print('Warning: Found cache file [%d], but size is abnormally small, remaking.' % cacheFile)
+                print('Warning: Found cache file [%s], but size is abnormally small, remaking.' % cacheFile)
                 remakeCacheFile = True
             else:
                 with h5py.File(cacheFile,'r') as f:

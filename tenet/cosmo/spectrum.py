@@ -234,31 +234,37 @@ lines = {'LyA'        : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion'
          'ZnII 2062'  : {'f':2.46e-1,  'gamma':3.86e8,  'wave0':2062.0012, 'ion':'Zn II'},
          'ZnII 2025'  : {'f':5.01e-1,  'gamma':4.07e8,  'wave0':2025.4845, 'ion':'Zn II'}}
 
-# instrument characteristics (in Ang)
-# TODO: add LSF characteristics and LSF smoothing + S/N effects
-#   4MOST-HRS LSF: Gaussian with FWHMs: 0.216Ang, 0.28Ang, 0.33Ang (blue, green, red arms, respectively)
+# instrument characteristics (all wavelengths in angstroms)
+# TODO: need to finish decoupling pixel wavelength grid specifications from spectral resolution specifications
+#   4MOST-LRS/HRS: "spectral sampling >= 2.5 pixel/FWHM" (https://www.4most.eu/cms/facility/capabilities/)
+#   SDSS: on the detector, sampling is ~3 pixels/FWHM
 # R = lambda/dlambda = c/dv
 # EW_restframe = W_obs / (1+z_abs)
-instruments = {'idealized'  : {'wave_min':1000, 'wave_max':12000, 'dwave':0.1},     # used for EW map vis
-               'master'     : {'wave_min':1,    'wave_max':25000, 'dwave':0.0001},  # used to create master spectra (2GB per, float64 uncompressed)
-               'COS-G130M'  : {'wave_min':1150, 'wave_max':1450,  'dwave':0.01},    # approximate
-               'COS-G140L'  : {'wave_min':1130, 'wave_max':2330,  'dwave':0.08},    # approximate
-               'COS-G160M'  : {'wave_min':1405, 'wave_max':1777,  'dwave':0.012},   # approximate
-               'test_EUV'   : {'wave_min':800,  'wave_max':1300,  'dwave':0.1},     # to see LySeries at rest
-               'SDSS-BOSS'  : {'wave_min':3543, 'wave_max':10400, 'dlogwave':1e-4}, # constant log10(dwave)=1e-4
-               '4MOST-LRS'  : {'wave_min':4000, 'wave_max':8860,  'R':5000},        # assume R=5000 = lambda/dlambda
-               '4MOST-HRS'  : {'wave_min':3926, 'wave_max':6790,  'R':20000},       # but gaps!
-               'PFS-B'      : {'wave_min':3800, 'wave_max':6500,  'R':2300},        # blue arm (3 arms used simultaneously)
-               'PFS-R-LR'   : {'wave_min':6300, 'wave_max':9700,  'R':3000},        # low-res red arm
-               'PFS-R-HR'   : {'wave_min':7100, 'wave_max':8850,  'R':5000},        # high-res red arm
-               'PFS-NIR'    : {'wave_min':9400, 'wave_max':12600, 'R':4300},        # NIR arm
-               'MIKE-B'     : {'wave_min':3350, 'wave_max':5000,  'R':83000},       # blue arm (on Magellan 2/Clay)
-               'MIKE-R'     : {'wave_min':4900, 'wave_max':9500,  'R':65000},       # red arm (used simultaneously)
-               'XSHOOTER-VIS-07' : {'wave_min':5500,  'wave_max':10200, 'R':11400}, # VLT X-Shooter (R depends on slit width = 0.7")
-               'XSHOOTER-NIR-06' : {'wave_min':10200, 'wave_max':24800, 'R':8100},  # VLT X-Shooter (R depends on slit width = 0.6")
-               'GNIRS-SXD-R800'  : {'wave_min':8500,  'wave_max':25000, 'R':800},   # Gemini-GNIRS cross-dispersed (multi-order), short-camera (SXD), 0.675" slit width
-               'KECK-HIRES' : {'wave_min':3000, 'wave_max':9250,  'R':45000},       # different plates: R=60k, 45k, 34k, 23k
-               'KECK-LRIS'  : {'wave_min':2940, 'wave_max':9200,  'R':1200}}        # different grisms/gratings: from R=300 to R=1200
+instruments = {'idealized'       : {'wave_min':1000,  'wave_max':12000, 'dwave':0.1},     # used for EW map vis
+               'master'          : {'wave_min':1,     'wave_max':25000, 'dwave':0.0001},  # used to create master spectra (2GB per, float64 uncompressed)
+               #'master2'         : {'wave_min':1000,  'wave_max':11000, 'dwave':0.02, 'R_tab':True},   # testing conv only
+               'COS-G130M'       : {'wave_min':1150,  'wave_max':1450,  'dwave':0.01},    # approximate
+               'COS-G140L'       : {'wave_min':1130,  'wave_max':2330,  'dwave':0.08},    # approximate
+               'COS-G160M'       : {'wave_min':1405,  'wave_max':1777,  'dwave':0.012},   # approximate
+               #'test_EUV'        : {'wave_min':800,   'wave_max':1300,  'dwave':0.1},     # to see LySeries at rest
+               'SDSS-BOSS'       : {'wave_min':3543,  'wave_max':10400, 'dlogwave':1e-4, 'R_tab':True}, # constant log10(dwave)=1e-4
+               'DESI'            : {'wave_min':3600,  'wave_max':9824,  'dwave':0.8},     # constant dwave (https://arxiv.org/abs/2209.14482 Sec 4.5.5)
+               '4MOST-LRS'       : {'wave_min':4000,  'wave_max':8860,  'R':5000},        # approx R=5000 (for B), ~6000 (for G/R)
+               '4MOST-HRS'       : {'wave_min':3926,  'wave_max':6790,  'R':20000, 'lsf_fwhm':0.3}, # but gaps! R and lsf_fwhm approximate
+               '4MOST-HRS-B'     : {'wave_min':3926,  'wave_max':4355,  'R':20000, 'lsf_fwhm':0.22}, # R approximate
+               '4MOST-HRS-G'     : {'wave_min':5160,  'wave_max':5730,  'R':20000, 'lsf_fwhm':0.28}, # R approximate
+               '4MOST-HRS-R'     : {'wave_min':6100,  'wave_max':6790,  'R':20000, 'lsf_fwhm':0.33}, # R approximate
+               'PFS-B'           : {'wave_min':3800,  'wave_max':6500,  'R':2300},        # blue arm (3 arms used simultaneously)
+               'PFS-R-LR'        : {'wave_min':6300,  'wave_max':9700,  'R':3000},        # low-res red arm
+               'PFS-R-HR'        : {'wave_min':7100,  'wave_max':8850,  'R':5000},        # high-res red arm
+               'PFS-NIR'         : {'wave_min':9400,  'wave_max':12600, 'R':4300},        # NIR arm
+               'MIKE-B'          : {'wave_min':3350,  'wave_max':5000,  'R':83000},       # blue arm (on Magellan 2/Clay)
+               'MIKE-R'          : {'wave_min':4900,  'wave_max':9500,  'R':65000},       # red arm (used simultaneously)
+               'XSHOOTER-VIS-07' : {'wave_min':5500,  'wave_max':10200, 'R':11400},       # VLT X-Shooter (R depends on slit width = 0.7")
+               'XSHOOTER-NIR-06' : {'wave_min':10200, 'wave_max':24800, 'R':8100},        # VLT X-Shooter (R depends on slit width = 0.6")
+               'GNIRS-SXD-R800'  : {'wave_min':8500,  'wave_max':25000, 'R':800},         # Gemini-GNIRS cross-dispersed (multi-order), short-camera (SXD), 0.675" slit width
+               'KECK-HIRES'      : {'wave_min':3000,  'wave_max':9250,  'R':45000},       # different plates: R=60k, 45k, 34k, 23k
+               'KECK-LRIS'       : {'wave_min':2940,  'wave_max':9200,  'R':1200}}        # different grisms/gratings: from R=300 to R=1200
 
 # pull out some units for JITed functions
 sP_units_Mpc_in_cm = 3.08568e24
@@ -268,7 +274,14 @@ sP_units_c_cgs = 2.9979e10
 sP_units_mass_proton = 1.672622e-24
 
 def _line_params(line):
-    """ Return 5-tuple of (f,Gamma,wave0,ion_amu,ion_mass). """
+    """ Get physical atomic parameters for a given electronic (i.e. line) transition.
+
+    Args:
+      line (str): string specifying the line transition.
+
+    Return:
+      5-tuple of (f,Gamma,wave0,ion_amu,ion_mass).
+    """
     from ..cosmo.cloudy import cloudyIon
 
     element = lines[line]['ion'].split(' ')[0]
@@ -276,6 +289,201 @@ def _line_params(line):
     ion_mass = ion_amu * sP_units_mass_proton # g
 
     return lines[line]['f'], lines[line]['gamma'], lines[line]['wave0'], ion_amu, ion_mass
+
+def _generate_lsf_matrix(wave_mid, lsf_dlambda, dwave):
+    """ Helper to generate the discrete LSF across a given wavelength grid.
+    
+    Args:
+      wave_mid (:py:class:`~numpy.ndarray`): instrumental wavelength grid [ang].
+      lsf_dlambda (:py:class:`~numpy.ndarray`): the LSF FWHM [ang] at the same wavelengths.
+      dwave (:py:class:`~numpy.ndarray`): the bin sizes [ang] of the same wavelength grid.
+    
+    Return:
+      lsf_matrix (array[float]): 2d {wavelength,kernel_size} discrete lsf.
+    """
+    # config
+    fwhm_fac = 2.5 # extend LSF to fwhm_fac times the FWHM in each direction
+
+    # fwhm -> sigma
+    lsf_sigma = lsf_dlambda / np.sqrt(8 * np.log(2)) # Gaussian sigma
+
+    # discrete Gaussian (number of pixels must be constant, so take largest)
+    kernel_max = fwhm_fac * lsf_sigma.max() # ang
+    kernel_size = 2 * int(kernel_max / dwave.min()) + 1 # odd
+
+    if kernel_size < 7:
+        kernel_size = 7
+
+    kernel_halfsize = int(kernel_size/2)
+
+    # allocate
+    lsf_matrix = np.zeros((wave_mid.size,kernel_size), dtype='float32')
+
+    # create a different discrete kernel for each wavelength bin
+    for i in range(wave_mid.size):
+        # determine wavelength coordinates to sample lsf
+        ind0 = i - kernel_halfsize
+        ind1 = i + kernel_halfsize + 1
+
+        if ind0 <= 0:
+            ind0 = 0
+        if ind1 >= wave_mid.size - 1:
+            ind1 = wave_mid.size - 1
+        
+        xx = wave_mid[ind0:ind1]
+
+        # sample Gaussian (centered at wave_mid[i]
+        dx = xx - wave_mid[i]
+
+        kernel_loc = np.exp(-(dx/lsf_sigma[i])**2 / 2)
+
+        # normalize to unity
+        kernel_loc /= kernel_loc.sum()
+
+        # stamp (left-aligned when we are near the edges and kernel.size is less than kernel_size)
+        lsf_matrix[i,0:kernel_loc.size] = kernel_loc
+
+    return lsf_matrix
+
+def lsf_matrix(instrument):
+    """ Create a (wavelength-dependent) kernel, for the line spread function (LSF) of the given instrument.
+
+    Args:
+      instrument (str): string specifying the instrumental setup.
+      
+    Return:
+      a 3-tuple composed of
+      
+      - **lsf_mode** (int): integer flag specifying the type of LSF.
+      - **lsf** (:py:class:`~numpy.ndarray`): 2d array, with dimensions corresponding to 
+        wavelength of the instrumental grid, and discrete/pixel kernel size, respectively.
+        Each entry is normalized to unity.
+      - **lsf_dlambda** (:py:class:`~numpy.ndarray`): 1d array, the LSF FWHM at the same wavelengths.
+    """
+    from ..load.data import dataBasePath
+    basePath = dataBasePath + 'lsf/'
+
+    inst = instruments[instrument]
+    lsf_mode = 0
+
+    # get the instrumental wavelength grid
+    wave_mid, wave_edges, _ = create_wavelength_grid(instrument=instrument)
+    dwave = wave_edges[1:] - wave_edges[:-1]
+
+    if 'R_tab' in inst:
+        # tabulated R(lambda)
+        lsf_mode = 1
+        
+        # load from the corresponding LSF data file
+        fname = basePath + instrument + '.txt'
+        data = np.loadtxt(fname, delimiter=',', comments='#')
+        lsf_wave = data[:,0]
+        lsf_R = data[:,1]
+
+        # linearly interpolate lsf resolution onto wavelength grid
+        lsf_R = np.interp(wave_mid, lsf_wave, lsf_R)
+
+        lsf_dlambda = wave_mid / lsf_R # FWHM
+
+        # create
+        lsf = _generate_lsf_matrix(wave_mid, lsf_dlambda, dwave)
+        print(f'Created LSF matrix with shape {lsf.shape} from [{fname}].')
+
+    if 'R_const' in inst:
+        # constant R, independent of wavelength
+        lsf_mode = 1
+
+        lsf_dlambda = wave_mid / inst['R'] # FWHM
+
+        # create
+        lsf = _generate_lsf_matrix(wave_mid, lsf_dlambda, dwave)
+        print(f'Created LSF matrix with shape {lsf.shape} with constant R = {inst["R"]}.')
+
+    if 'lsf_fwhm' in inst:
+        # constant FWHM, independent of wavelength
+        lsf_mode = 1
+
+        lsf_dlambda = np.zeros(wave_mid.size, dtype='float32')
+        lsf_dlambda += inst['lsf_fwhm'] 
+
+        # create
+        lsf = _generate_lsf_matrix(wave_mid, lsf_dlambda, dwave)
+        print(f'Created LSF matrix with shape {lsf.shape} with constant FWHM = {inst["lsf_fwhm"]}.')
+
+    # todo: different analytic shapes in wavelength space
+
+    # todo: discrete LSFs in pixel space (COS)
+    # download LSFs: https://www.stsci.edu/hst/instrumentation/cos/performance/spectral-resolution
+    # tutorial: https://github.com/spacetelescope/notebooks/blob/master/notebooks/COS/LSF/LSF.ipynb
+    # need to handle cubic-polynomial dispersion coefficient table (i.e. pixel num -> wavelength mapping), disptab
+    # https://hst-docs.stsci.edu/cosdhb/chapter-3-cos-calibration/3-7-reference-files#id-3.7ReferenceFiles-3.7.11DISPTAB:DispersionCoefficientTable
+    # https://github.com/sheliak/varconvolve
+
+    if lsf_mode == 0:
+        print('WARNING: No LSF smoothing specified for [%s], will not be applied.' % instrument)
+
+    return lsf_mode, lsf, lsf_dlambda
+
+def create_wavelength_grid(line=None, instrument=None):
+    """ Create a wavelength grid (i.e. x-axis of a spectrum) to receieve absorption line depositions.
+    Must specify one, but not both, of either 'line' or 'instrument'. In the first case, 
+    a local spectrum is made around its rest-frame central wavelength. In the second case, 
+    a global spectrum is made corresponding to the instrumental properties.
+    """
+    assert line is not None or instrument is not None
+
+    if line is not None:
+        f, gamma, wave0_restframe, _, _ = _line_params(line)
+
+    # master wavelength grid, observed-frame [ang]
+    dwave = None
+    dlogwave = None
+
+    if line is not None:
+        wave_min = np.floor(wave0_restframe - 15.0)
+        wave_max = np.ceil(wave0_restframe + 15.0)
+        dwave = 0.1
+
+    if instrument is not None:
+        wave_min = instruments[instrument]['wave_min']
+        wave_max = instruments[instrument]['wave_max']
+        if 'dwave' in instruments[instrument]:
+            dwave = instruments[instrument]['dwave']
+        if 'dlogwave' in instruments[instrument]:
+            dlogwave = instruments[instrument]['dlogwave']
+
+    # if dwave is specified, use linear wavelength spacing
+    if dwave is not None:
+        num_edges = int(np.floor((wave_max - wave_min) / dwave)) + 1
+        wave_edges = np.linspace(wave_min, wave_max, num_edges)
+        wave_mid = (wave_edges[1:] + wave_edges[:-1]) / 2
+        print(f'Created [N = {wave_mid.size}] linear wavelength grid with {dwave = } for [{instrument}]')
+
+    # if dlogwave is specified, use log10-linear wavelength spacing
+    if dlogwave is not None:
+        log_wavemin = np.log10(wave_min)
+        log_wavemax = np.log10(wave_max)
+        log_wave_mid = np.arange(log_wavemin,log_wavemax+dlogwave,dlogwave)
+        wave_mid = 10.0**log_wave_mid
+        log_wave_edges = np.arange(log_wavemin-dlogwave/2,log_wavemax+dlogwave+dlogwave/2,dlogwave)
+        wave_edges = 10.0**log_wave_edges
+        print(f'Created [N = {wave_mid.size}] loglinear wavelength grid with {dlogwave = } for [{instrument}]')
+
+    # else, use spectral resolution R, and create linear in log(wave) grid
+    if dwave is None and dlogwave is None:
+        R = instruments[instrument]['R']
+        log_wavemin = np.log(wave_min)
+        log_wavemax = np.log(wave_max)
+        d_loglam = 1/R
+        log_wave_mid = np.arange(log_wavemin,log_wavemax+d_loglam,d_loglam)
+        wave_mid = np.exp(log_wave_mid)
+        log_wave_edges = np.arange(log_wavemin-d_loglam/2,log_wavemax+d_loglam+d_loglam/2,d_loglam)
+        wave_edges = np.exp(log_wave_edges)
+        print(f'Created [N = {wave_mid.size}] loglinear wavelength grid with {R = } for [{instrument}]')
+
+    tau_master = np.zeros(wave_mid.size, dtype='float32')
+
+    return wave_mid, wave_edges, tau_master
 
 # cpdef double complex wofz(double complex x0) nogil
 addr = get_cython_function_address("scipy.special.cython_special", "wofz")
@@ -362,66 +570,39 @@ def _equiv_width(tau,wave_mid_ang):
 
     return res
 
-def create_master_grid(line=None, instrument=None):
-    """ Create a master grid (i.e. spectrum) to receieve absorption line depositions.
-    Must specify one, but not both, of either 'line' or 'instrument'. In the first case, 
-    a local spectrum is made around its rest-frame central wavelength. In the second case, 
-    a global spectrum is made corresponding to the instrumental properties.
-    """
-    assert line is not None or instrument is not None
+@jit(nopython=True, nogil=True)
+def varconvolve(arr, kernel):
+    """ Convolution (non-fft) with variable kernel. """
+    # allocate
+    arr_conv = np.zeros(arr.size, dtype=arr.dtype)
 
-    if line is not None:
-        f, gamma, wave0_restframe, _, _ = _line_params(line)
+    # discrete: number of pixels on each side of central kernel value
+    kernel_halfsize = np.int(kernel.shape[1]/2)
 
-    # master wavelength grid, observed-frame [ang]
-    dwave = None
-    dlogwave = None
+    # loop over each element of arr
+    for i in range(arr.size):
+        # local kernel i.e. LSF at this wavelength
+        kernel_loc = kernel[i,:]
 
-    if line is not None:
-        wave_min = np.floor(wave0_restframe - 15.0)
-        wave_max = np.ceil(wave0_restframe + 15.0)
-        dwave = 0.1
+        # determine indices (convention consistent with lsf_matrix())
+        ind0 = i - kernel_halfsize
+        ind1 = i + kernel_halfsize + 1
 
-    if instrument is not None:
-        wave_min = instruments[instrument]['wave_min']
-        wave_max = instruments[instrument]['wave_max']
-        if 'dwave' in instruments[instrument]:
-            dwave = instruments[instrument]['dwave']
-        if 'dlogwave' in instruments[instrument]:
-            dlogwave = instruments[instrument]['dlogwave']
+        if ind0 <= 0:
+            ind0 = 0
+        if ind1 >= arr.size - 1:
+            ind1 = arr.size - 1
 
-    # if dwave is specified, use linear wavelength spacing
-    if dwave is not None:
-        num_edges = int(np.floor((wave_max - wave_min) / dwave)) + 1
-        wave_edges = np.linspace(wave_min, wave_max, num_edges)
-        wave_mid = (wave_edges[1:] + wave_edges[:-1]) / 2
-        print(f'Created [N = {wave_mid.size}] linear wavelength grid with {dwave = :.3f} for [{instrument}]')
+        # convolve
+        arr_loc = arr[ind0:ind1]
 
-    # if dlogwave is specified, use log10-linear wavelength spacing
-    if dlogwave is not None:
-        log_wavemin = np.log10(wave_min)
-        log_wavemax = np.log10(wave_max)
-        log_wave_mid = np.arange(log_wavemin,log_wavemax+dlogwave,dlogwave)
-        wave_mid = 10.0**log_wave_mid
-        log_wave_edges = np.arange(log_wavemin-dlogwave/2,log_wavemax+dlogwave+dlogwave/2,dlogwave)
-        wave_edges = 10.0**log_wave_edges
-        print(f'Created [N = {wave_mid.size}] loglinear wavelength grid with {dlogwave = } for [{instrument}]')
+        if arr_loc.size < kernel_loc.size:
+            # left-aligned convention
+            kernel_loc = kernel_loc[0:arr_loc.size]
 
-    # else, use spectral resolution R, and create linear in log(wave) grid
-    if dwave is None and dlogwave is None:
-        R = instruments[instrument]['R']
-        log_wavemin = np.log(wave_min)
-        log_wavemax = np.log(wave_max)
-        d_loglam = 1/R
-        log_wave_mid = np.arange(log_wavemin,log_wavemax+d_loglam,d_loglam)
-        wave_mid = np.exp(log_wave_mid)
-        log_wave_edges = np.arange(log_wavemin-d_loglam/2,log_wavemax+d_loglam+d_loglam/2,d_loglam)
-        wave_edges = np.exp(log_wave_edges)
-        print(f'Created [N = {wave_mid.size}] loglinear wavelength grid with {R = } for [{instrument}]')
+        arr_conv[i] = np.dot(arr_loc, kernel_loc)
 
-    tau_master = np.zeros(wave_mid.size, dtype='float32')
-
-    return wave_mid, wave_edges, tau_master
+    return arr_conv
 
 @jit(nopython=True, nogil=True, cache=False)
 def deposit_single_line(wave_edges_master, wave_mid_master, tau_master, f, gamma, wave0, N, b, z_eff, debug=False):
@@ -588,7 +769,7 @@ def _resample_spectrum(master_mid, tau_master, inst_waveedges):
 
             localEW_to_tau = -np.log(1-inst_height)
 
-            # save into instrumental optical depth array (TODO check)
+            # save into instrumental optical depth array
             assert inst_tau[inst_ind] == 0, 'Should be empty.'
             inst_tau[inst_ind] = localEW_to_tau
 
@@ -605,7 +786,8 @@ def _resample_spectrum(master_mid, tau_master, inst_waveedges):
 def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, 
                                      rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
                                      cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
-                                     master_mid, master_edges, inst_wavemid, inst_waveedges, ind0, ind1):
+                                     master_mid, master_edges, inst_wavemid, inst_waveedges, 
+                                     lsf_mode, lsf_matrix, ind0, ind1):
     """ JITed helper (see below). """
     n_rays = ind1 - ind0 + 1
     scalefac = 1/(1+z_vals[0])
@@ -660,27 +842,37 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
 
             deposit_single_line(master_edges, master_mid, tau_master, f, gamma, wave0, N[j], b[j], z_eff[j])
 
-        # TODO: convolve by instrumental resolution/LSF
-        # ...
-
-        # resample tau_master on to instrument wavelength grid, and save
+        # resample tau_master on to instrument wavelength grid
         tau_inst = _resample_spectrum(master_mid, tau_master, inst_waveedges)
-        tau_allrays[i,:] = tau_inst
 
-        # also compute EW and save
+        # line spread function (LSF) in pixel space? convolve the instrumental (flux) spectrum now
+        # note: in theory we would prefer to convolve the master spectrum prior to resampling, but 
+        # given the ~1e8 resolution of the master spectrum, the cost is prohibitive
+        if lsf_mode == 1:
+            flux_inst = 1 - np.exp(-tau_inst)
+            flux_conv = varconvolve(flux_inst, lsf_matrix)
+            #tau_inst = varconvolve(tau_inst, lsf_matrix) # old, remove
+            tau_inst = -np.log(1-flux_conv)
+
+        # also compute and save a reference EW from master
         # note: is a global EW, i.e. not localized/restricted to a single absorber
         EW_allrays[i] = _equiv_width(tau_master,master_mid)
+
+        # stamp
+        tau_allrays[i,:] = tau_inst
 
         # debug: (verify EW is same in master and instrumental grids)
         if 1:
             EW_check = _equiv_width(tau_inst,inst_wavemid)
             assert np.abs(EW_check - EW_allrays[i]) < 0.01
+            #if np.abs(EW_check - EW_allrays[i]) > 0.01:
+            #    print('WARNING, EW delta = ', EW_check - EW_allrays[i])
 
     return tau_allrays, EW_allrays
 
 def create_spectra_from_traced_rays(sP, line, instrument,
                                     rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
-                                    cell_dens, cell_temp, cell_vellos, nThreads=36):
+                                    cell_dens, cell_temp, cell_vellos, nThreads=54):
     """ Given many completed rays traced through a volume, in the form of a composite list of 
     intersected cell pathlengths and indices, extract the physical properties needed (dens, temp, vellos) 
     and create the final absorption spectrum, depositing a Voigt absorption profile for each cell.
@@ -711,13 +903,19 @@ def create_spectra_from_traced_rays(sP, line, instrument,
 
     z_lengths = sP.units.redshiftToComovingDist(z_vals) - sP.units.redshiftToComovingDist(sP.redshift)
 
-    # sample master, and instrumental, grids
-    master_mid, master_edges, _ = create_master_grid(instrument='master')
+    # adapt master grid to span instrumental grid (optional, save some memory/efficiency)
+    instruments['master']['wave_min'] = instruments[instrument]['wave_min'] - 100
+    instruments['master']['wave_max'] = instruments[instrument]['wave_max'] + 100
 
-    inst_wavemid, inst_waveedges, _ = create_master_grid(instrument=instrument)
+    # sample master, and instrumental, grids
+    master_mid, master_edges, _ = create_wavelength_grid(instrument='master')
+
+    inst_wavemid, inst_waveedges, _ = create_wavelength_grid(instrument=instrument)
 
     assert inst_waveedges[0] >= master_edges[0], 'Instrumental wavelength grid min extends off master.'
     assert inst_waveedges[-1] <= master_edges[-1], 'Instrumental wavelength grid max extends off master.'
+
+    lsf_mode, lsf, _ = lsf_matrix(instrument)
 
     # single-threaded
     if nThreads == 1 or n_rays < nThreads:
@@ -727,7 +925,8 @@ def create_spectra_from_traced_rays(sP, line, instrument,
         tau, EW = _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, 
                                                    rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
                                                    cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
-                                                   master_mid, master_edges, inst_wavemid, inst_waveedges, ind0, ind1)
+                                                   master_mid, master_edges, inst_wavemid, inst_waveedges, 
+                                                   lsf_mode, lsf, ind0, ind1)
 
         return inst_wavemid, tau, EW
 
@@ -746,7 +945,8 @@ def create_spectra_from_traced_rays(sP, line, instrument,
             self.result = _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, 
                                                 rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
                                                 cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
-                                                master_mid, master_edges, inst_wavemid, inst_waveedges, self.ind0, self.ind1)
+                                                master_mid, master_edges, inst_wavemid, inst_waveedges, 
+                                                lsf_mode, lsf, self.ind0, self.ind1)
 
     # create threads
     threads = [specThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
@@ -1069,7 +1269,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', pS
         use the (constant) solar value.
     """
     # sample master grid
-    wave_mid, _, tau = create_master_grid(instrument=instrument)
+    wave_mid, _, tau = create_wavelength_grid(instrument=instrument)
     
     # list of lines to process for this ion
     lineCandidates = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
@@ -1514,3 +1714,110 @@ def calc_statistics_from_saved_rays(sP, ion):
         f['n_clouds'] = n_clouds
 
     print(f'Saved: [{saveFilename}]')
+
+def test_conv():
+    """ Debug check behavior and benchmark variable convolution. """ 
+    import time
+
+    inst = 'SDSS-BOSS'
+    dtype = 'float32'
+
+    # make fake spec
+    wave_mid, _, _ = create_wavelength_grid(instrument=inst)
+    tau = np.zeros(wave_mid.size, dtype=dtype)
+
+    # inject delta function
+    ind_delta = 3000
+    tau[ind_delta:ind_delta+1] = 1.0
+
+    # get kernel
+    lsf_mode, lsf, _ = lsf_matrix(inst)
+    lsf = lsf.astype(dtype)
+
+    # convolve and time
+    start_time = time.time()
+
+    flux = 1 - np.exp(-tau)
+
+    tau_conv = varconvolve(tau, lsf)
+    flux_conv = varconvolve(flux, lsf)
+
+    tau_conv_via_flux = -np.log(1-flux_conv)
+
+    # debug:
+    print(f'Took: [{time.time() - start_time:.1f}] sec')
+
+    print('tau_orig: ', tau[ind_delta-3:ind_delta+4])
+    print('tau_conv: ', tau_conv[ind_delta-3:ind_delta+4])
+    print('tau_convf: ', tau_conv_via_flux[ind_delta-3:ind_delta+4])
+
+    print(f'{tau.sum() = }, {tau_conv.sum() = }')
+    print(f'{flux.sum() = }, {flux_conv.sum() = }')
+    print('EW before = ', _equiv_width(tau, wave_mid))
+    print('EW after = ', _equiv_width(tau_conv, wave_mid))
+    print('EW after via fluxconv = ', _equiv_width(tau_conv_via_flux, wave_mid))
+
+def test_conv_master():
+    """ Debug check convolving on master grid vs inst grid. """ 
+    from ..util.helper import closest
+
+    master = 'master2'
+    inst = 'SDSS-BOSS'
+    dtype = 'float32'
+    tophat_wave = 4000.0 # ang
+    tophat_width = 0.4 # ang
+
+    # make fake spec
+    wave_master, _, _ = create_wavelength_grid(instrument=master)
+    dwave = instruments[master]['dwave']
+    tau_master = np.zeros(wave_master.size, dtype=dtype)
+
+    # inject tophat optical depth
+    _, ind_delta = closest(wave_master, tophat_wave)
+    width_delta = int(tophat_width / dwave)
+
+    tau_master[ind_delta-width_delta:ind_delta+width_delta] = 1.0
+
+    # resample tau_master on to instrument wavelength grid
+    wave_inst, waveedges_inst, _ = create_wavelength_grid(instrument=inst)
+    tau_inst = _resample_spectrum(wave_master, tau_master, waveedges_inst)
+
+    _, ind_inst = closest(wave_inst, tophat_wave)
+
+    print('tau_inst: ', tau_inst[ind_inst-3:ind_inst+4])
+
+    # get lsf for inst, and convolve inst
+    lsf_mode, lsf_inst, _ = lsf_matrix(inst)
+
+    flux_inst = 1 - np.exp(-tau_inst)
+    flux_inst_conv = varconvolve(flux_inst, lsf_inst)
+    tau_inst_conv = -np.log(1-flux_inst_conv)
+
+    print('tau_inst_conv: ', tau_inst_conv[ind_inst-3:ind_inst+4])
+    
+    # get lsf for master2, and convolve master2
+    lsf_mode, lsf_master, _ = lsf_matrix(master)
+
+    flux_master = 1 - np.exp(-tau_master)
+    flux_master_conv = varconvolve(flux_master, lsf_master)
+    tau_master_conv = -np.log(1-flux_master_conv)
+
+    print('tau_master_conv: ', tau_master_conv[ind_delta-3:ind_delta+4])
+
+    # then resample back onto inst grid
+    tau_inst_conv2 = _resample_spectrum(wave_master, tau_master_conv, waveedges_inst)
+    flux_inst_conv2 = 1 - np.exp(-tau_inst_conv2)
+    
+    print('tau_inst_conv2: ', tau_inst_conv2[ind_inst-3:ind_inst+4])
+
+    print(f'{tau_inst_conv.sum() = } is convolved on inst grid.')
+    print(f'{tau_inst_conv2.sum() = } is convolved on master2 grid, then resampled to inst grid.')
+
+    print(f'{_equiv_width(tau_inst, wave_inst) = }')
+    print(f'{_equiv_width(tau_master, wave_master) = }')
+
+    print(f'{_equiv_width(tau_inst_conv, wave_inst) = }')
+    print(f'{_equiv_width(tau_inst_conv2, wave_inst) = }')
+    print(f'{_equiv_width(tau_master_conv, wave_master) = }')
+
+    print(f'Flux ratio: {flux_inst_conv2[ind_inst-3:ind_inst+4] / flux_inst_conv[ind_inst-3:ind_inst+4]}')
