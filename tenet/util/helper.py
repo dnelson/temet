@@ -1589,13 +1589,10 @@ def plothist(x, filename='out.pdf', nBins=50, norm=False, skipzeros=True):
 
 def plotxy(x, y, filename='plot.pdf'):
     """ Plot a quick 1D line plot of x vs. y and save it to a PDF. """
+    step = int(np.clip(x.size / 1e4, 1, np.inf))
+
     xx_log = logZeroNaN(x)
     yy_log = logZeroNaN(y)
-
-    step = 1
-    if x.size > 1e4: step = 10
-    if x.size > 1e5: step = 100
-    print(x.size)
 
     # figure
     figsize = np.array([14,10]) * 0.8 * 2
@@ -1608,20 +1605,20 @@ def plotxy(x, y, filename='plot.pdf'):
 
         if i == 0:
             ax.plot(x[::step], y[::step], '.', label='data')
-            mx, my, _ = running_median(x, y, nBins=20)
+            mx, my, _ = running_median(x[::step], y[::step], nBins=20)
             ax.plot(mx, my, '-', lw=2.5, label='median')
             ax.legend(loc='best')
         if i == 1:
             ax.plot(xx_log[::step], y[::step], '.')
-            mx, my, _ = running_median(xx_log, y, nBins=20)
+            mx, my, _ = running_median(xx_log[::step], y[::step], nBins=20)
             ax.plot(mx, my, '-', lw=2.5)
         if i == 2:
             ax.plot(x[::step], yy_log[::step], '.')
-            mx, my, _ = running_median(x, yy_log, nBins=20)
+            mx, my, _ = running_median(x[::step], yy_log[::step], nBins=20)
             ax.plot(mx, my, '-', lw=2.5)
         if i == 3:
             ax.plot(xx_log[::step], yy_log[::step], '.')
-            mx, my, _ = running_median(xx_log, yy_log, nBins=20)
+            mx, my, _ = running_median(xx_log[::step], yy_log[::step], nBins=20)
             ax.plot(mx, my, '-', lw=2.5)
 
     fig.savefig(filename)
