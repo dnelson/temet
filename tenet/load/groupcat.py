@@ -834,23 +834,6 @@ def groupCatOffsetListIntoSnap(sP):
 
     r = {'snapOffsetsGroup':snapOffsetsGroup, 'snapOffsetsSubhalo':snapOffsetsSubhalo}
 
-    #for j in range(sP.nTypes):
-    #    subgroupCount = 0
-        
-    #    # compute group offsets first (first entry is zero!)
-    #    r['snapOffsetsGroup'][1:,j] = np.cumsum( groupLenType[:,j] )
-        
-    #    for k in np.arange(totGroups):
-    #        # subhalo offsets depend on group (to allow fuzz)
-    #        if groupNsubs[k] > 0:
-    #            r['snapOffsetsSubhalo'][subgroupCount,j] = r['snapOffsetsGroup'][k,j]
-                
-    #            subgroupCount += 1
-    #            for m in np.arange(1, groupNsubs[k]):
-    #                r['snapOffsetsSubhalo'][subgroupCount,j] = \
-    #                  r['snapOffsetsSubhalo'][subgroupCount-1,j] + subgroupLenType[subgroupCount-1,j]
-    #                subgroupCount += 1
-
     with h5py.File(saveFilename,'w') as f:
         for key in r:
             f[key] = r[key]

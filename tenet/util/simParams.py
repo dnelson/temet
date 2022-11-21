@@ -1598,7 +1598,10 @@ class simParams:
         if self.isSubbox:
             return 0
         header = self.groupCatHeader()
-        return header.get('Nsubgroups_Total', header['Nsubhalos_Total'])
+        
+        if 'Nsubgroups_Total' in header:
+            return header['Nsubgroups_Total']
+        return header['Nsubhalos_Total']
 
     @property
     def numPart(self):
