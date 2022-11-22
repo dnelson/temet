@@ -131,12 +131,12 @@ def _sb_image(sim, photons, attrs, halo, size=None):
 
     return im
 
-def _load_data(sim, haloID, b=None):
+def _load_data(sim, haloID, ver="v3delta", b=None):
     """ Helper to load VoroILTIS data files. """
     # config
     bStr = '' if b is None else '_b%s' % b
     path = "/vera/ptmp/gc/byrohlc/public/OVII_RT/"
-    run = "v2_cutout_%s_%d_halo%d_size2%s" % (sim.name,sim.snap,haloID,bStr)
+    run = "%s_cutout_%s_%d_halo%d_size2%s" % (ver,sim.name,sim.snap,haloID,bStr)
     file = "data.hdf5"
 
     print(run)
@@ -163,6 +163,9 @@ def luminosityIltisPhotons(haloID=204, b=None, aperture_kpc=20.0):
     photons_input, photons_peeling, attrs = _load_data(sim, haloID, b=b)
 
     halo = sim.halo(haloID)
+    subhalo = sim.subhalo(halo['GroupFirstSub'])
+    mstar = sim.units.codeMassToLogMsun(subhalo['SubhaloMassInRadType'][4])[0]
+    sfr = subhalo['SubhaloSFRinRad']
 
     # intrinsic: project and 2d distances, sum for lum
     x, y, lum = _photons_projected(sim, photons_input, attrs, halo)
@@ -179,10 +182,23 @@ def luminosityIltisPhotons(haloID=204, b=None, aperture_kpc=20.0):
     tot_lum_scattered = lum[w].sum()
 
     # note: https://academic.oup.com/mnras/article/356/2/727/1159998 for NGC 7213
-    # (a S0 at D=23 Mpc, w/ an AGN Lbol=1.7e43 erg/s, strong outflow, MBH ~ 1e8 Msun, lambda_edd ~ 1e-3i)
+    # (a S0 at D=23 Mpc, w/ an AGN Lbol=1.7e43 erg/s, strong outflow, MBH ~ 1e8 Msun, lambda_edd ~ 1e-3)
+    # (SFR = 1.0 +/- 0.1 Msun/yr from Gruppioni+2016)
     # MBH vs M* scaling gives M* between 10-11 and median at 10.5 Msun
     # gives a OVIIr 21.6A luminosity of 1.9e+39 erg/s 
-    print(f'{sim} {haloID = } {b = } has {tot_lum_intrinsic = :g} [erg/s], {tot_lum_scattered = :g} [erg/s]')
+
+    # note: https://www.aanda.org/articles/aa/abs/2007/21/aa6340-06/aa6340-06.html for NGC 253
+    # (a SAB starburst, like M82, at a D=3.94 Mpc, z=0.000864)
+    # summing up fluxes across all 4 spatial regions, flux = 5.3e-6 cm^-2 s^-1 (assume phot cm^-2 s^-1) = 9.2e-10 erg/s/cm^2
+    # gives a OVIIr 21.6A luminosity of 1.6e42 erg/s (this is a hot superwind outflow within <~= 5 kpc)
+
+    # note: https://ui.adsabs.harvard.edu/abs/2012MNRAS.420.3389L/abstract for a sample of 9 nearby star-forming galaxies
+    # names = ['NGC253A', 'M51', 'M94', 'M83', 'NGC2903', 'M61', 'NGC4631', 'Antennae', 'NGC253B', 'M82A', 'M82B', 'M82C']
+    # fluxes_o7r = [0.9, 1.1, 1.8, 1.3, 1.3, 1.1, 0.8, 0.5, 0.4, 1.5, 1.1, 2.1] * 1e-5 photons/s/cm^2
+    #            = [8.28e-15, 1.01e-14, 1.66e-14, 1.20e-14, 1.20e-14, 1.01e-14, 7.36e-15, 4.60e-15, 3.68e-15, 1.38e-14, 1.01e-14, 1.93e-14] erg/s/cm^2
+    # distances = [3.2, 8.0, 5.0, 4.7, 9.4, 12.1, 6.7, 21.6, 3.2, 3.9, 3.9, 3.9] Mpc
+    # gives OVIIr 21.6A luminosities = [1.0e37, 7.8e37, 5.0e37, 3.2e37, 1.3e38, 1.8e38, 4.0e37, 2.6e38, 4.5e36, 2.5e37, 1.8e37, 3.5e37] erg/s
+    print(f'{sim} {haloID = } {mstar = :.1f} {sfr = :.1f} {b = } has {tot_lum_intrinsic = :g} [erg/s], {tot_lum_scattered = :g} [erg/s]')
     return tot_lum_intrinsic, tot_lum_scattered
 
 def radialProfileIltisPhotons(haloID=204, b=None):
@@ -420,52 +436,88 @@ def spectraIltisPhotons(haloID=204, b=None):
     fig.savefig('spec_%s_%d_h%d_b%s.pdf' % (sim.name,sim.snap,haloID,b))
     plt.close(fig)
 
-def galaxyLumVsSFR():
+def galaxyLumVsSFR(b=1, addDiffuse=True, correctLineToBandFluxRatio=True):
     """ Test the hot ISM emission model by comparing to observational scaling relations. """
     # config
     sim = simParams('tng50-1', redshift=0.0)
 
-    # load catalog of OVII luminosities, per subhalo, star-forming gas only
-    acField = 'Subhalo_OVIIr_GalaxyLum'
+    # load catalog of OVII luminosities, per subhalo, star-forming gas only (no radial restriction)
+    acField = 'Subhalo_OVIIr_GalaxyLum_30pkpc'
+
     ac = sim.auxCat(acField)
     lum = ac[acField].astype('float64') * 1e30 # unit conversion
 
+    # apply boost factor (this auxCat has only SFR>0 gas, so we directly, and only, modify the lum2phase modeled gas)
+    lum *= b
+
+    if addDiffuse:
+        # add contributions from all non-starforming gas within 30 pkpc
+        print('Adding diffuse contribution within 30pkpc to star-forming lum2phase.')
+        acField = 'Subhalo_OVIIr_DiffuseLum_30pkpc'
+        ac = sim.auxCat(acField)
+        lum_diffuse = ac[acField].astype('float64') * 1e30 # unit conversion
+
+        lum += lum_diffuse
+
     # sample selection in mstar
     sfr_min = 1e-2
-    mstar_min = 9.4
-    mstar_max = 10.8
+    mstar_min = 10.0
+    mstar_max = 11.0
 
     sfr = sim.subhalos('sfr2')
     mstar = sim.subhalos('mstar_30pkpc_log')
 
     w = np.where((mstar > mstar_min) & (mstar <= mstar_max) & (sfr > sfr_min))
 
-    print(f'{sim}: found [{len(w[0])}] galaxies with ({mstar_min:.1f} < M* < {mstar_max:.1f}) and (SFR > {sfr_min:g}')
+    print(f'{sim}: found [{len(w[0])}] galaxies with ({mstar_min:.1f} < M* < {mstar_max:.1f}) and (SFR > {sfr_min:g})')
 
     # start plot
     fig, ax = plt.subplots(figsize=figsize)
 
     ax.set_title('%s (%.1f < $\\rm{M_\star / M_\odot}$ < %.1f and SFR > %g $\\rm{M_\odot yr^{-1}})$' % (sim, mstar_min, mstar_max, sfr_min))
     ax.set_xlabel('Galaxy SFR [ $\\rm{M_{sun}}$ yr$^{-1}$ ]')
-    ax.set_ylabel('Galaxy Intrinsic Hot ISM OVII(r) Lum [ erg s$^{-1}$ ]')
+    ax.set_ylabel('Galaxy Intrinsic OVII(r) Luminosity [ erg s$^{-1}$ ]')
     ax.set_xscale('log')
     ax.set_yscale('log')
+    ax.set_ylim([1e36,1e41])
 
-    s = ax.scatter(sfr[w], lum[w], c=mstar[w])
+    cmap = loadColorTable('plasma', fracSubset=[0.1,0.9])
+    s = ax.scatter(sfr[w], lum[w], c=mstar[w], cmap=cmap, vmin=mstar_min, vmax=mstar_max)
 
     # Mineo+ (2012) observed relation for L_{0.5-2keV} vs SFR, i.e. an upper limit on L_OVIIr vs SFR
     xx = np.linspace(0.1, 20, 50)
     yy = 8.3e38 * xx
     yy2 = 5.2e38 * xx
 
+    # Mineo+ (2012) data points (Figure 6 left panel)
+    mineo_sfr = np.array([0.08,0.09,0.17,0.18,0.29,0.29,0.38,0.44,1.83,1.84,3.05,3.76,
+                          4.09,4.60,5.29,11.46,14.65,5.99,5.36,7.08,16.74])
+    mineo_lum = np.array([1.06,0.67,0.30,0.38,0.59,1.14,2.28,3.11,13.14,16.42,11.62,44.10,
+                          38.69,33.31,53.65,41.95,59.29,90.14,148.58,212.43,254.49])
+
+    if correctLineToBandFluxRatio:
+        # take approximate fraction of OVII(r) luminosity to total 0.5-2.0 keV luminosity as a correction 
+        # factor, to convert our L_OVII(r) output into a L_0.5-2.0keV, for comparison with the data
+        # Q: what fraction of the 0.5-2KeV lum comes from OVIIr?
+        # --> actually a lot! depends on density and temp.
+        # --> for n=-2.0 and denser, ~25% (at 5.8 < logT[K] < 6.25), dropping to 5% at 10^5.6K and 10^6.5K
+        # note: the median/mean density of star-forming gas is about 5-20x the threshold density in TNG50-1 MW halos
+        # --> eEOS hot-phase temperature is actually within the range of peak OVII(r) fraction
+        line_ratio_fac = 0.2
+
+        print(f'Correcting Mineo+ 0.5-2 keV data to OVII(r) line luminosity with {line_ratio_fac = }')
+
+        yy *= line_ratio_fac
+        yy2 *= line_ratio_fac
+        mineo_lum *= line_ratio_fac
+
     ax.plot(xx, yy, '--', lw=lw, color='#000', label='Mineo+12 $\\rm{L_{0.5-2keV}}$ vs. SFR relation')
     ax.plot(xx, yy2, '--', lw=lw, color='#555', label='Mineo+12 mekal best-fit')
 
-    # data points (Figure 6 left panel )
-    mineo_sfr = [0.08,0.09,0.17,0.18,0.29,0.29,0.38,0.44,1.83,1.84,3.05,3.76,4.09,4.60,5.29,11.46,14.65,5.99,5.36,7.08,16.74]
-    mineo_lum = [1.06,0.67,0.30,0.38,0.59,1.14,2.28,3.11,13.14,16.42,11.62,44.10,38.69,33.31,53.65,41.95,59.29,90.14,148.58,212.43,254.49]
-
     ax.plot(mineo_sfr, np.array(mineo_lum)*1e38, 'D', color='#000', label='Mineo+12 data')
+
+    # Salvestrini+2020 NGC 7213 L_OVIIr = 1.9e+39 erg/s and SFR = 1.0 +/- 0.1 Msun/yr (Gruppioni+2016)
+    ax.errorbar(1.0, 1.9e39, xerr=0.1, yerr=1.0e39, marker='o', lw=lw, color='black', label='NGC 7213')
 
     # colobar and save plot
     ax.legend(loc='upper left')
@@ -473,7 +525,7 @@ def galaxyLumVsSFR():
     cb = plt.colorbar(s, cax=cax)
     cb.ax.set_ylabel('Galaxy Stellar Mass [ $\\rm{M_{sun}}$ ]')
 
-    fig.savefig('galaxy_OVIIr_lum_vs_SFR_%s_%d.pdf' % (sim.name,sim.snap))
+    fig.savefig('galaxy_OVIIr_lum_vs_SFR_%s_%d_b%s.pdf' % (sim.name,sim.snap,b))
     plt.close(fig)
 
 def paperPlots():
@@ -482,20 +534,29 @@ def paperPlots():
     if 0:
         # fig X: make all individual halo plots, for all halos
         for haloID in haloIDs:
-            #luminosityIltisPhotons(haloID=haloID) # check intrinsic vs. scattered galaxy lum
-            radialProfileIltisPhotons(haloID=haloID)
-            imageIltisPhotons(haloID=haloID)
-            spectraIltisPhotons(haloID=haloID)
+            luminosityIltisPhotons(haloID=haloID, b=0) # check intrinsic vs. scattered galaxy lum
+            radialProfileIltisPhotons(haloID=haloID, b=0)
+            imageIltisPhotons(haloID=haloID, b=0)
+            spectraIltisPhotons(haloID=haloID, b=0)
 
     if 0:
         # fig X: make all individual halo plots, for a single halo, across boosts
         haloID = 204
-        for b in [0.1,1,10,100]:
-            radialProfilesInput(haloID=204) # check boost models
+        #radialProfilesInput(haloID=haloID) # check boost models
+
+        for b in [0.0001, 0.001, 0.01]:
             radialProfileIltisPhotons(haloID=haloID, b=b)
             imageIltisPhotons(haloID=haloID, b=b)
             spectraIltisPhotons(haloID=haloID, b=b)
 
     if 0:
+        # fig X: check input luminosity profiles
+        radialProfilesInput(haloID=None) # None, 204
+
+    if 0:
         # fig X: check galaxy OVIIr luminosity vs observational constraints
-        galaxyLumVsSFR()
+        # decision: b=0.001 is the bright case, b=0 is the dim case, and they likely bracket the truth
+        # (adopt b=0.0001 as the fiducial case)
+        for b in [0, 0.0001, 0.001, 0.01]:
+            galaxyLumVsSFR(b=b, addDiffuse=True, correctLineToBandFluxRatio=False)
+            #luminosityIltisPhotons(haloID=204, b=b)

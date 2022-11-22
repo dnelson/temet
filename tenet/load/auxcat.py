@@ -624,8 +624,10 @@ fieldComputeFunctionMapping = \
    'Subhalo_XrayLum_05-2kev_2rhalfstars' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum_05-2kev',op='sum',rad='2rhalfstars'),
 
-   'Subhalo_OVIIr_GalaxyLum' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='O  7 21.6020A lum2phase',op='sum',rad=None,ptRestrictions=sfrgt0),
+   'Subhalo_OVIIr_GalaxyLum_30pkpc' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='O  7 21.6020A lum2phase',op='sum',rad=30.0,ptRestrictions=sfrgt0),
+   'Subhalo_OVIIr_DiffuseLum_30pkpc' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='O  7 21.6020A lum2phase',op='sum',rad=30.0,ptRestrictions=sfreq0),
 
    # emission
    'Subhalo_S850um' : \

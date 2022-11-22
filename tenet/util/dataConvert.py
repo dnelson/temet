@@ -1678,12 +1678,12 @@ def exportHierarchicalBoxGrids(sP, partType='gas', partField='mass', nCells=[32,
     f.close()
     print('Saved: [%s]' % fileName)
 
-def exportIltisCutout(sim, haloID, emLine='O  7 21.6020A', haloSizeRvir=2.0, sfrEmisFac=1):
+def exportIltisCutout(sim, haloIDs, emLine='O  7 21.6020A', haloSizeRvir=2.0, sfrEmisFac=1):
     """ Export a snapshot cutout (global scope) around a given halo, for use in ILTIS-RT.
 
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
-      haloID (int): the FoF halo ID to center the cutout on.
+      haloIDs (list[int]): list of FoF halo IDs to center the cutouts on.
       emLine (str): the emission line to save the emissivity of, which also specifies the ion for the density field.
       haloSizeRvir (float): the box side-length in rvir units.
       sfrEmisBoost (float): if not unity, then multiplicative (boost) factor by which to change the emissivities 
@@ -1694,68 +1694,76 @@ def exportIltisCutout(sim, haloID, emLine='O  7 21.6020A', haloSizeRvir=2.0, sfr
     """
     sim.createCloudyCache = True
 
-    # load gas positions and make spatial cutout
-    halo = sim.halo(haloID)
+    # load gas of entire box (large-memory node, for multi-halo efficiency)
     pos = sim.gas('pos')
+    vel = sim.gas('vel')
 
-    dists_xyz = sim.periodicDists(halo['GroupPos'], pos, chebyshev=True)
-
-    dists_xyz /= halo['Group_R_Crit200']
-
-    inds = np.where(dists_xyz <= haloSizeRvir)[0]
-
-    print(f'Selected [{inds.size}] of [{dists_xyz.size}] total gas cells = {inds.size/dists_xyz.size*100:.2f}%%')
-
-    # coordinates in box length units
-    pos = pos[inds] / sim.boxSize
-
-    # load additional data
-    vel = sim.gas('vel', inds=inds)
-    vel = sim.units.particleCodeVelocityToKms(vel) * 1e5 # cm/s
-
-    emis = sim.gas('%s lum2phase' % emLine, inds=inds) * (1e30/1e42) # in 1e42 erg/s
+    emis = sim.gas('%s lum2phase' % emLine) * (1e30/1e42) # in 1e42 erg/s
 
     if sfrEmisFac != 1:
-        sfr = sim.gas('sfr', inds=inds)
-        ww = np.where(sfr > 0)
-        emis[ww] *= sfrEmisFac
+        sfr = sim.gas('sfr')
 
     ionName = emLine.split()[0] + ' ' + emLine.split()[1]
-    dens = sim.gas('%s numdens' % ionName, inds=inds) # cm^-3
+    dens = sim.gas('%s numdens' % ionName) # cm^-3
 
-    temp = sim.gas('temp_sfcold', inds=inds) # K
+    temp = sim.gas('temp_sfcold') # K
 
-    # not yet used: dust, turbulent velocity
-    dust_dens = np.zeros(dens.size, dtype='float32')
-    turb_vel = np.zeros(dens.size, dtype='float32')
+    # make halo-based spatial cutout
+    for haloID in haloIDs:
+        halo = sim.halo(haloID)
 
-    # write hdf5 file
-    fileName = 'cutout_%s_%d_halo%d_size%d.hdf5' % (sim.simName,sim.snap,haloID,int(haloSizeRvir))
-    if sfrEmisFac != 1:
-        fileName = fileName.replace('.hdf5','_b%s.hdf5' % sfrEmisFac)
+        dists_xyz = sim.periodicDists(halo['GroupPos'], pos, chebyshev=True)
 
-    with h5py.File(fileName,'w') as f:
-        # write header attributes
-        f.attrs['BoxSizeCGS'] = sim.units.codeLengthToKpc(sim.boxSize) * sim.units.kpc_in_cm
-        f.attrs['Center'] = halo['GroupPos'] / sim.boxSize
-        f.attrs['CutoutLength'] = (haloSizeRvir * halo['Group_R_Crit200']) / sim.boxSize
-        f.attrs['CutoutShape'] = 'cube'
-        f.attrs['Redshift'] = sim.redshift
+        dists_xyz /= halo['Group_R_Crit200']
 
-        # Coordinates* are in boxlength units [0.0,1.0), Emissivity is in [1e42 erg/s], everything else in [cgs]
-        f['CoordinateX'] = pos[:,0]
-        f['CoordinateY'] = pos[:,1]
-        f['CoordinateZ'] = pos[:,2]
-        f['Emissivity'] = emis
-        f['density'] = dens
-        f['dust_density'] = dust_dens
-        f['temperature'] = temp
-        f['turbulent_velocity'] = turb_vel
-        f['velocity_x'] = vel[:,0]
-        f['velocity_y'] = vel[:,1]
-        f['velocity_z'] = vel[:,2]
+        inds = np.where(dists_xyz <= haloSizeRvir)[0]
 
-        # keep indices so we can map back to global snapshot cells
-        f['global_inds'] = inds
+        print(f'Selected [{inds.size}] of [{dists_xyz.size}] total gas cells = {inds.size/dists_xyz.size*100:.2f}%%')
 
-    print('Saved: [%s]' % fileName)
+        # coordinates in box length units
+        pos_loc = pos[inds] / sim.boxSize
+
+        # velocities and emissivities
+        vel_loc = sim.units.particleCodeVelocityToKms(vel[inds]) * 1e5 # cm/s
+
+        emis_loc = emis[inds]
+
+        if sfrEmisFac != 1:
+            ww = np.where(sfr[inds] > 0)
+            emis_loc[ww] *= sfrEmisFac
+
+        dens_loc = dens[inds]        
+        temp_loc = temp[inds]        
+
+        # not yet used: dust, turbulent velocity
+        dust_dens = np.zeros(dens_loc.size, dtype='float32')
+        turb_vel = np.zeros(dens_loc.size, dtype='float32')
+
+        # write hdf5 file
+        fileName = 'cutout_%s_%d_halo%d_size%d_b%s.hdf5' % (sim.simName,sim.snap,haloID,int(haloSizeRvir),sfrEmisFac)
+
+        with h5py.File(fileName,'w') as f:
+            # write header attributes
+            f.attrs['BoxSizeCGS'] = sim.units.codeLengthToKpc(sim.boxSize) * sim.units.kpc_in_cm
+            f.attrs['Center'] = halo['GroupPos'] / sim.boxSize
+            f.attrs['CutoutLength'] = (haloSizeRvir * halo['Group_R_Crit200']) / sim.boxSize
+            f.attrs['CutoutShape'] = 'cube'
+            f.attrs['Redshift'] = sim.redshift
+
+            # Coordinates* are in boxlength units [0.0,1.0), Emissivity is in [1e42 erg/s], everything else in [cgs]
+            f['CoordinateX'] = pos_loc[:,0]
+            f['CoordinateY'] = pos_loc[:,1]
+            f['CoordinateZ'] = pos_loc[:,2]
+            f['Emissivity'] = emis_loc
+            f['density'] = dens_loc
+            f['dust_density'] = dust_dens
+            f['temperature'] = temp_loc
+            f['turbulent_velocity'] = turb_vel
+            f['velocity_x'] = vel_loc[:,0]
+            f['velocity_y'] = vel_loc[:,1]
+            f['velocity_z'] = vel_loc[:,2]
+
+            # keep indices so we can map back to global snapshot cells
+            f['global_inds'] = inds
+
+        print('Saved: [%s]' % fileName)

@@ -417,9 +417,9 @@ def plotCpuTimes():
     # config
     sPs = []
     #sPs.append( simParams(res=1820, run='illustris') )
-    #sPs.append( simParams(res=1820, run='tng') )
+    sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='illustris') )
-    #sPs.append( simParams(res=910, run='tng') )
+    sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='illustris') )
     #sPs.append( simParams(res=455, run='tng') )
 
@@ -437,10 +437,10 @@ def plotCpuTimes():
     #sPs.append( simParams(res=1024, run='tng', variant=0000) )
     #sPs.append( simParams(res=1024, run='tng', variant=4503) )
 
-    sPs.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3'))
-    sPs.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3_s'))
-    sPs.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3'))
-    sPs.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3_s'))
+    #sPs.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3'))
+    #sPs.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3_s'))
+    #sPs.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3'))
+    #sPs.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3_s'))
 
     plotKeys = ['total','total_log','treegrav','pm_grav','voronoi','blackholes','hydro',
                 'gradients','enrich','domain','i_o','restart','subfind']
