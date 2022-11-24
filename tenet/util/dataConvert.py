@@ -1692,6 +1692,7 @@ def exportIltisCutout(sim, haloIDs, emLine='O  7 21.6020A', haloSizeRvir=2.0, sf
     Return:
       None. An actual file is written to disk.
     """
+    savePath = path.expanduser('~') + '/data/public/OVII_iltis/inprogress/'
     sim.createCloudyCache = True
 
     # load gas of entire box (large-memory node, for multi-halo efficiency)
@@ -1710,6 +1711,14 @@ def exportIltisCutout(sim, haloIDs, emLine='O  7 21.6020A', haloSizeRvir=2.0, sf
 
     # make halo-based spatial cutout
     for haloID in haloIDs:
+        # filename
+        fileName = savePath + 'cutout_%s_%d_halo%d_size%d_b%s_%s.hdf5' % \
+            (sim.simName,sim.snap,haloID,int(haloSizeRvir),sfrEmisFac,emLine.replace(' ','-'))
+
+        if path.isfile(fileName):
+            continue
+
+        # load halo, calculate spatial subset
         halo = sim.halo(haloID)
 
         dists_xyz = sim.periodicDists(halo['GroupPos'], pos, chebyshev=True)
@@ -1740,8 +1749,6 @@ def exportIltisCutout(sim, haloIDs, emLine='O  7 21.6020A', haloSizeRvir=2.0, sf
         turb_vel = np.zeros(dens_loc.size, dtype='float32')
 
         # write hdf5 file
-        fileName = 'cutout_%s_%d_halo%d_size%d_b%s.hdf5' % (sim.simName,sim.snap,haloID,int(haloSizeRvir),sfrEmisFac)
-
         with h5py.File(fileName,'w') as f:
             # write header attributes
             f.attrs['BoxSizeCGS'] = sim.units.codeLengthToKpc(sim.boxSize) * sim.units.kpc_in_cm
@@ -1766,4 +1773,4 @@ def exportIltisCutout(sim, haloIDs, emLine='O  7 21.6020A', haloSizeRvir=2.0, sf
             # keep indices so we can map back to global snapshot cells
             f['global_inds'] = inds
 
-        print('Saved: [%s]' % fileName)
+        print('Saved: [%s]' % fileName, flush=True)

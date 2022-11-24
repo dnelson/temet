@@ -407,14 +407,14 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
             p['sP'].subhaloInd = p['subhaloInd']
 
         # load MPB once per panel
-        p['mpb'] = mpbSmoothedProperties(sP, p['sP'].subhaloInd)
+        p['mpb'] = mpbSmoothedProperties(p['sP'], p['sP'].subhaloInd)
 
         if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]
 
     # determine frame sequence (as the last sP in panels is used somewhat at random, we are here 
     # currently assuming that all runs in panels have the same snapshot configuration)
-    snapNums = sP.validSnapList(maxNum=plotConfig.maxNumSnaps, 
-                                 minRedshift=plotConfig.minRedshift, maxRedshift=plotConfig.maxRedshift)
+    snapNums = p['sP'].validSnapList(maxNum=plotConfig.maxNumSnaps, 
+                                     minRedshift=plotConfig.minRedshift, maxRedshift=plotConfig.maxRedshift)
     frameNum = 0
 
     for snapNum in snapNums:
@@ -538,7 +538,7 @@ def selectHalosFromMassBins(sP, massBins, numPerBin, selType='linear'):
 def subsampleRandomSubhalos(sP, maxPointsPerDex, mstarMinMax, mstar=None, cenOnly=False):
     """ Sub-select subhalos, returning indices, such that we have at least N per 0.1 dex bin of 
     stellar mass. """
-    np.random.seed(424242)
+    rng = np.random.default_rng(424242)
     binsize = 0.1 # dex
 
     if mstar is None:
@@ -561,7 +561,7 @@ def subsampleRandomSubhalos(sP, maxPointsPerDex, mstarMinMax, mstar=None, cenOnl
             inds[count:count + len(w)] = w
             count += len(w)
         else:
-            inds_loc = np.random.choice(w, int(maxPointsPerDex*binsize), replace=False)
+            inds_loc = rng.choice(w, int(maxPointsPerDex*binsize), replace=False)
             inds[count:count+inds_loc.size] = inds_loc
             count += inds_loc.size
 

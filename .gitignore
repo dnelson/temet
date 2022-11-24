@@ -3,6 +3,7 @@ docs/_build/
 docs/source/
 docs/quants*custom.rst
 *.pdf
+*.hdf5
 .pyc
 .so
 .ipynb_checkpoints

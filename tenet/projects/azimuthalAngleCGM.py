@@ -615,8 +615,8 @@ def paperPlots():
 
     if 0:
         # figure 1: schematic visual
-        singleHaloImage(sP, conf=0)
-        singleHaloImage(sP, conf=4)
+        singleHaloImage(TNG50, conf=0)
+        singleHaloImage(TNG50, conf=4)
 
     if 0:
         # figure 2: TNG50 lines for massflow rate vs angle
