@@ -240,6 +240,7 @@ def renderBoxFrames(panels_in, plotConfig, localVars, curTask=0, numTasks=1, ski
     if not isinstance(plotConfig.rasterPx,list): plotConfig.rasterPx = [plotConfig.rasterPx,plotConfig.rasterPx]
 
     if not isdir(plotConfig.savePath):
+        print(f'Note: save path [{plotConfig.savePath}] does not exist, saving to default [{savePathDefault}] instead.')
         plotConfig.savePath = savePathDefault
 
     # finalize panels list (do not modify below)

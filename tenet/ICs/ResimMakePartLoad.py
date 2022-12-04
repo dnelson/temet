@@ -517,11 +517,11 @@ def generate_set():
     """ Driver. """
     from ..util.simParams import simParams
 
-    if 1:
+    if 0:
         # TNG-Cluster
         sP = simParams(res=2048,run='tng_dm',redshift=0.0)
         zoomFac = 4
-        haloIDs = [40,42,44,45,46,49]
+        haloIDs = [385,387,391,392,393,395,616,625,636,653,694,698]
         sizeFac = 3.0 #[2.0,3.0,4.0]
 
     if 0:
@@ -532,11 +532,25 @@ def generate_set():
         sizeFac = 4.0
 
     if 0:
-        # TNG50 zooms
+        # TNG50 Milky Way zooms (rahul)
         sP = simParams(run='tng50-2', redshift=0.0)
         zoomFac = 1
-        haloIDs = [91,98,105,146,160,167,206,210,221,201,264,298] # (rahul)
+        haloIDs = [91,98,105,146,160,167,206,210,221,201,264,298]
         sizeFac = 4.0
+
+    if 1:
+        # TNG50 dwarf zooms (STRUCTURES/MCS/Byrohl)
+        sP = simParams(run='tng50-1', redshift=3.0)
+        zoomFac = 2 # 1 (8e4 msun/TNG50-1 res), 2 (1e4 msun), 4 (1320 msun), 8 (160 msun), 16 (20 msun)
+        # mstar = 1e7 at z=3
+        # grnr[np.where( (mstar>6.9) & (mstar<7.1) & (mhalo>9.8) & (mhalo<10.0) & (cen_flag) )[0][::200]]
+        haloIDs = [3272, 10677, 12688, 14043, 14997, 15998, 16996, 18203, 19761]
+
+        # mstar = 1e6 at z=3
+        # grnr[np.where( (mstar>5.9) & (mstar<6.1) & (mhalo>9.3) & (mhalo<9.5) & (cen_flag) )[0][::400]]
+        haloIDs += [8795, 31619, 37411, 40928, 43571, 45925, 48539, 51074, 53960, 57526, 63330]
+
+        sizeFac = 4.0 # 6.0
 
     # run
     for haloID in haloIDs:

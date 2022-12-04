@@ -183,7 +183,7 @@ class simParams:
     # physical models: GFM and other indications of optional snapshot fields
     metals    = None  # set to list of string labels for GFM runs outputting abundances by metal
     BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=TNG Model, 3=Auriga model)
-    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=TNG Model, 3=Auriga model)
+    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=MCS model)
 
     def __init__(self, run, res=None, variant=None, redshift=None, time=None, snap=None, 
                        hInd=None, haloInd=None, subhaloInd=None, arepoPath=None,
@@ -681,6 +681,50 @@ class simParams:
                 #    self.zoomShiftPhys = f['Header'].attrs['GroupCM'] / 1000 # code (mpc) units
 
             self.arepoPath  = self.basePath + 'sims.TNG_zooms/' + dirStr + '/'
+            self.simName    = dirStr
+
+        # STRUCTURES
+        if run in ['structures']:
+            assert hInd is not None
+            assert self.variant in ['DM','SN','TNG']
+
+            self.validResLevels = [11,12]
+            self.groupOrdered = True
+
+            # TNG50-1 zooms to z=3
+            parentRes = 2160
+            self.zoomLevel = self.res # L11 (TNG50-1)
+            self.sP_parent = simParams(res=parentRes, run='tng', redshift=self.redshift, snap=self.snap)
+
+            self.gravSoft = 0.390 / (res-10)
+            if self.variant != 'DM':
+                self.targetGasMas = 5.73879e-6 / (res-10)**3
+            self.boxSize = 35000.0 # ckpc/h
+
+            # common: Planck2015 TNG cosmology
+            self.omega_m     = 0.3089
+            self.omega_L     = 0.6911
+            self.omega_b     = 0.0486
+            self.HubbleParam = 0.6774
+
+            # physics
+            if self.variant == 'TNG':
+                self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
+                self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
+                self.winds = 2
+                self.BHs   = 2
+            elif self.variant == 'SN':
+                self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
+                self.metals = None
+                self.winds = 4 # MCS
+                self.BHs   = None
+
+            # paths
+            dirStr = 'L%dn%dTNG_h%d_z3_L%d_%s' % (int(self.boxSize/1000.0),parentRes,self.hInd,self.zoomLevel,self.variant)
+            icsStr = 'ics_zoom_%s_halo%d_L%d_sf6.0.hdf5' % (self.sP_parent.simName,self.hInd,self.zoomLevel)
+
+            self.icsPath    = self.basePath + 'sims.structures/ICs/output/' + icsStr
+            self.arepoPath  = self.basePath + 'sims.structures/' + dirStr + '/'
             self.simName    = dirStr
 
         # AURIGA

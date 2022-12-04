@@ -154,12 +154,13 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
 
 def check_contamination():
     """ Check level of low-resolution contamination (DM particles) in zoom run. """
-    hInd = 50
-    zoomRes = 14
-    variant = 'sf3'
+    hInd = 31619
+    zoomRes = 11
+    variant = 'DM' # sf3
 
-    zoomRun = 'tng_zoom' #'tng50_zoom_dm'
-    redshift = 0.5 # 0.0
+    zoomRun = 'structures' #'tng_zoom' #'tng50_zoom_dm'
+    redshift = 3.0 # 0.0
+
     #sP = simParams(res=2048,run='tng_dm',redshift=redshift) # parent box
     sP = simParams(run='tng50-1', redshift=redshift)
 
