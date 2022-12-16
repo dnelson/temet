@@ -472,6 +472,7 @@ def vis_fullbox_virtual(sP, conf=0):
         ptRestrictions = {'Masses':['lt',maxGasCellMass]}
 
     if conf == 5:
+        from ..util.simParams import simParams
         sP = simParams(run='tng_dm',res=2048,redshift=0.0) # parent box
         method = 'sphMap'
         panels = [{'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[7.0,8.4]}]
@@ -1042,7 +1043,7 @@ def paperPlots():
         pdf.close()
 
     # figure X - BCG stellar sizes
-    if 1:
+    if 0:
         from ..plot.sizes import galaxySizes
         pdf = PdfPages('galaxy_stellar_sizes_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
         galaxySizes(sPs, xlim=[11.0,13.0], ylim=[3,300], onlyRedData=True, scatterPoints=True, pdf=pdf)

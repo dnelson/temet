@@ -135,8 +135,8 @@ def eniaSFRD2022():
     r['redshift_errLeft'] = [d[0]-d[2] for d in data]
 
     r['sfrd'] = [10.0**d[3] for d in data]
-    r['sfrd_errUp'] = [10.0**d[4]-10.0**d[3] for d in data]
-    r['sfrd_errDown'] = [10.0**d[3]-10.0**d[5] for d in data]
+    r['sfrd_errUp'] = [10.0**d[5]-10.0**d[3] for d in data]
+    r['sfrd_errDown'] = [10.0**d[3]-10.0**d[4] for d in data]
     r['label'] = 'Enia+ (2022)'
 
     return r
@@ -310,8 +310,8 @@ def mcconnellMa2013():
 
     galName   = np.array([d[0] for d in data])
     M_BH      = np.array([d[2] for d in data])
-    M_BH_up   = np.array([d[3] for d in data])
-    M_BH_down = np.array([d[4] for d in data])
+    M_BH_down = np.array([d[3] for d in data])
+    M_BH_up   = np.array([d[4] for d in data])
     M_bulge   = np.array([d[13] for d in data])
 
     w = np.where(M_bulge > 0.0)
@@ -370,14 +370,14 @@ def baldry2012SizeMass():
     r = {}
     r['blue'] = { 'stellarMass' : data[:n,1], 
                   'sizeKpc'     : logPcToKpc(data[:n,3]),
-                  'sizeKpcUp'   : logPcToKpc(data[:n,2]), 
-                  'sizeKpcDown' : logPcToKpc(data[:n,4]),
+                  'sizeKpcUp'   : logPcToKpc(data[:n,4]), 
+                  'sizeKpcDown' : logPcToKpc(data[:n,2]),
                   'label'       : 'Baldry+ (2012) GAMA R$_{\\rm e}$ blue' }
 
     r['red'] = { 'stellarMass' : data[n:,1], 
                  'sizeKpc'     : logPcToKpc(data[n:,3]),
-                 'sizeKpcUp'   : logPcToKpc(data[n:,2]), 
-                 'sizeKpcDown' : logPcToKpc(data[n:,4]),
+                 'sizeKpcUp'   : logPcToKpc(data[n:,4]), 
+                 'sizeKpcDown' : logPcToKpc(data[n:,2]),
                  'label'       : 'Baldry+ (2012) GAMA R$_{\\rm e}$ red' }
 
     for t in ['red','blue']:

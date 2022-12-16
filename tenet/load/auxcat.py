@@ -824,7 +824,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1_rad30pkpc' : partial(subhaloStellarPhot, # main model, with 12 projections per
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside=1, rad=30.0),
    'Subhalo_StellarPhot_p07c_cf00dust_res_conv_z_30pkpc' : partial(subhaloStellarPhot, # main model, with 1 projection per
-                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', rad=30.0, minHaloMass='1000dm'),
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', rad=30.0),
    'Subhalo_StellarPhot_p07c_cf00dust_z_30pkpc' : partial(subhaloStellarPhot, # model B, with 1 projection per
                                          iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', rad=30.0, minHaloMass='1000dm'),
    'Subhalo_StellarPhot_p07c_cf00dust_z_2rhalf' : partial(subhaloStellarPhot, # model B, with 1 projection per

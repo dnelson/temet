@@ -85,7 +85,7 @@ def plotSingleResult(ind, sps=None, doSim=None):
     # plot prep
     if doSim is None:
         orig_spec = loadSDSSSpectrum(ind, fits=True)
-        saveStr = 'sdss_%s'% zBin
+        saveStr = 'sdss'
         label1 = 'SDSS #%d z=%.3f' % (ind,orig_spec['redshift'])
         label2 = 'SpecObjID ' + str(orig_spec['specobjid'])
         label3 = 'ObjID ' + str(orig_spec['objid'])
@@ -113,7 +113,7 @@ def plotSingleResult(ind, sps=None, doSim=None):
             spec *= (dL_old_cm)**2 / (dL_new_cm)**2
 
             wave_redshifted = wave * (1.0 + target_z)
-            spec = interp1d(wave_redshifted, spec, kind='linear', assume_sorted=True, 
+            spec = np.interp1d(wave_redshifted, spec, kind='linear', assume_sorted=True, 
                          bounds_error=False, fill_value=np.nan)(wave)
             spec *= (1.0 + target_z)
 

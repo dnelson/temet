@@ -1625,29 +1625,24 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
         sP.setRedshift(simRedshift)
 
         if sP.isZoom:
-            ac = sP.auxCat(fields=[field])
-            ac[field] = ac[field][sP.zoomSubhaloID,:]
+            data = sP.auxCat(fields=[acField])[acField][sP.zoomSubhaloID,:]
 
             # halo mass definition (xx_code == gc['halos']['Group_M_Crit500'] by construction)
-            xx_code = np.sum( ac[field] )
-            xx = sP.units.codeMassToLogMsun( xx_code )
+            xx_code = np.sum(data)
+            xx = sP.units.codeMassToLogMsun(xx_code)
 
             for i, fracType in enumerate(fracTypes):
                 if fracType == 'gas':
-                    val = ac[field][1]
+                    val = data[1]
                 if fracType == 'stars':
-                    val = ac[field][2]
+                    val = data[2]
                 if fracType == 'baryons':
-                    val = ac[field][1] + ac[field][2]
+                    val = data[1] + data[2]
 
                 yy = val / xx_code # fraction with respect to total
                 ax.plot(xx,yy,markers[i],color=colors[0])
         else:
-            ac = sP.auxCat(fields=[acField]) #, searchExists=True)
-            #if ac[acField] is None:
-            #    print(' SKIP missing')
-            #    continue
-            data = ac[acField]
+            data = sP.auxCat(fields=[acField])[acField]
 
             # halo mass definition (xx_code == gc['halos']['Group_M_Crit500'] by construction)
             xx_code = np.sum( data, axis=1 )
@@ -2412,13 +2407,13 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(run='tng100-1', redshift=0.0) )
+    #sPs.append( simParams(run='tng100-1', redshift=0.0) )
     #sPs.append( simParams(run='tng100-1', redshift=1.0) )
     #sPs.append( simParams(run='tng100-1', redshift=2.0) )
     #sPs.append( simParams(run='tng100-1', redshift=4.0) )
 
-    #for variant in ['0000','4503','4504']:
-    #    sPs.append( simParams(res=512, run='tng', variant=variant) )
+    for variant in ['0000','5010','5014','5015','5017']:
+        sPs.append( simParams(res=512, run='tng', variant=variant) )
     #for variant in ['','0000','4503']:
     #    sPs.append( simParams(res=625, run='tng', variant=variant) )
 
@@ -2434,20 +2429,9 @@ def plots():
     #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
     #sPs.append( simParams(run='eagle', redshift=0.0) )
     #sPs.append( simParams(run='simba50', redshift=0.0) )
-    sPs.append( simParams(run='simba100', redshift=0.0) )
-    sPs.append( simParams(run='simba25', redshift=0.0) )
+    #sPs.append( simParams(run='simba100', redshift=0.0) )
+    #sPs.append( simParams(run='simba25', redshift=0.0) )
     #sPs.append( simParams(run='tng-cluster') )
-
-    # add runs: TNG_methods
-    #sPs.append( simParams(res=128, run='tng', variant='6003') )
-    #sPs.append( simParams(res=128, run='tng', variant='6004') )
-    #sPs.append( simParams(res=128, run='tng', variant='6005') )
-    #sPs.append( simParams(res=256, run='tng', variant='0000') )
-    #sPs.append( simParams(res=256, run='tng', variant='4601') )
-    #sPs.append( simParams(res=256, run='tng', variant='4602') )
-    #sPs.append( simParams(res=512, run='tng', variant='0000') )
-    #sPs.append( simParams(res=512, run='tng', variant='5014') )
-
     # change to plot simulations at z>0 against z=0 observational data
     zZero = 0.0
 
@@ -2471,6 +2455,7 @@ def plots():
     sfrAvgVsRedshift(sPs, pdf)
     sfrdVsRedshift(sPs, pdf, xlog=True)
     sfrdVsRedshift(sPs, pdf, xlog=False)
+
     blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, simRedshift=zZero)

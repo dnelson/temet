@@ -1011,7 +1011,7 @@ n_hi.units = r'$\rm{cm^{-2}}$'
 n_hi.limits = [15.0, 22.0]
 n_hi.log = True
 
-@snap_field(aliases=['mass_hi','h i mass','h i numdens'])
+@snap_field(aliases=['mass_hi','h i mass','hi mass','h i numdens'])
 def hi_mass(sim, partType, field, args):
     """ Hydrogen model: atomic H (neutral subtracting molecular) mass calculation. """
     from ..cosmo.hydrogen import hydrogenMass
