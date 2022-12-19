@@ -162,6 +162,7 @@ class simParams:
     targetHaloMass = 0.0  # mass (logmsun) at targetRedshift
     targetRedshift = 0.0  # maximum redshift the halo can be resimulated to
     ids_offset     = 0    # IDS_OFFSET configuration parameter
+    sP_parent      = None # simParams() instance of parent box at halo selection redshift
     
     # tracers
     trMassConst  = 0.0  # mass per tracerMC under equal mass assumption (=TargetGasMass/trMCPerCell)
@@ -604,7 +605,7 @@ class simParams:
                 # TNG1
                 parentRes = 2048
                 self.zoomLevel = self.res # L11 (L680n2048 or ~TNG300-3) to L13 (~TNG300-1.3) to L14 (~TNG300-1)
-                #self.sP_parent = simParams(res=parentRes, run='tng_dm', redshift=self.redshift, snap=self.snap)
+                self.sP_parent = simParams(res=parentRes, run='tng_dm', redshift=0.0)
 
                 if res == 11: self.gravSoft = 8.0 # L680n2048
                 if res == 12: self.gravSoft = 4.0
@@ -615,7 +616,7 @@ class simParams:
                 # L75* zoom tests
                 parentRes = 1820
                 self.zoomLevel = self.res # L11 (TNG100-1)
-                self.sP_parent = simParams(res=parentRes, run='tng', redshift=self.redshift, snap=self.snap)
+                self.sP_parent = simParams(res=parentRes, run='tng', redshift=0.0)
 
                 self.gravSoft = 1.0 / (res-10)
                 self.targetGasMass = 9.43950e-5 / (res-10)**3
@@ -625,7 +626,8 @@ class simParams:
                 parentRes = 2160
                 self.validResLevels = [11]
                 self.zoomLevel = self.res # L11 (TNG50-1)
-                self.sP_parent = simParams(res=parentRes, run='tng', redshift=self.redshift, snap=self.snap)
+                self.sP_parent = simParams(res=parentRes, run='tng', redshift=0.0)
+                # note: sP_parent is z=0.5 for Nelson+20 LRG noMHD resimulations
 
                 self.gravSoft = 0.390 / (res-10)
                 self.targetGasMas = 5.73879e-6 / (res-10)**3
@@ -688,13 +690,13 @@ class simParams:
             assert hInd is not None
             assert self.variant in ['DM','SN','TNG']
 
-            self.validResLevels = [11,12]
+            self.validResLevels = [11,12,14,18]
             self.groupOrdered = True
 
             # TNG50-1 zooms to z=3
             parentRes = 2160
             self.zoomLevel = self.res # L11 (TNG50-1)
-            self.sP_parent = simParams(res=parentRes, run='tng', redshift=self.redshift, snap=self.snap)
+            self.sP_parent = simParams(res=parentRes, run='tng', redshift=3.0)
 
             self.gravSoft = 0.390 / (res-10)
             if self.variant != 'DM':

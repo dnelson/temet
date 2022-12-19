@@ -274,6 +274,10 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
             p['sP'] = p['sP'].copy()
             p['sP'].subhaloInd = p['subhaloInd']
 
+        if 'subhaloInd' not in p and p['sP'].subhaloInd is None and p['sP'].isZoom:
+            p['sP'].subhaloInd = p['sP'].zoomSubhaloID
+            print('Note: Using sP.zoomSubhaloID = %d as subhaloInd for vis.' % p['sP'].zoomSubhaloID)
+            
         assert 'subhaloInd' in p or p['sP'].subhaloInd is not None, 'subhaloInd unspecified!'
 
         # add imaging config for single halo view
@@ -344,6 +348,7 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
     projType    = 'ortho'         # projection type, 'ortho', 'equirectangular', 'mollweide'
     projParams  = {}              # dictionary of parameters associated to this projection type
     rotation    = None            # 'face-on', 'edge-on', or None
+    inclination = None            # inclination angle (degrees, about the x-axis) (0=unchanged)
     remapRatio  = None            # [x,y,z] periodic->cuboid remapping ratios, always None for single halos
 
     # defaults (global plot configuration options)
@@ -422,7 +427,7 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
         # finalize panels list (all properties not set here are invariant in time)
         for p in panels:
             # override simParams info at this snapshot
-            p['sP'] = simParams(res=p['res'], run=p['run'], snap=snapNum, hInd=p['hInd'])
+            p['sP'] = simParams(res=p['res'], run=p['run'], snap=snapNum, hInd=p['hInd'], variant=p['variant'])
 
             # add imaging config for single halo view using MPB
             p['boxSizeImg'], p['boxCenter'], p['extent'], \

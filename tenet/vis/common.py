@@ -6,7 +6,7 @@ import hashlib
 import h5py
 from getpass import getuser
 from os.path import isfile, isdir, expanduser
-from os import mkdir
+from os import mkdir, makedirs
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -426,14 +426,20 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
         resFac = 1.0 #(512.0/sP.res)**2.0
 
         # 2.2 for twelve, 1.4 for thirteen
-        minValLog = np.array([2.2,2.2,2.2]) # 0.6, 1.4, previous: 2.2 = best recent option, 2.8, 3.3 (nice control of low-SB features)
+        minVal = 2.2 # 0.6, 1.4, previous: 2.2 = best recent option, 2.8, 3.3 (nice control of low-SB features)
+        maxVal = 5.60 # control clipping of high-SB features
+
+        if band0_grid.max() < 1e2:
+            minVal = 0.6
+            maxVal = 3.60
+
+        minValLog = np.array([minVal,minVal,minVal]) 
         minValLog = np.log10( (10.0**minValLog) * (pxArea/pxArea0*resFac) )
 
         #maxValLog = np.array([5.71, 5.68, 5.36])*0.9 # jwst f200w, f115w, f070w # previous
-        maxValLog = np.array([5.60, 5.68, 5.36])*1.0 # little less clipping, more yellow/red color (fiducial)
+        maxValLog = np.array([maxVal, maxVal+0.08, maxVal-0.24]) # little less clipping, more yellow/red color (fiducial)
         #maxValLog = np.array([5.40, 5.48, 5.16]) # TNG50 sb0sh481167 movie: galaxy three only
         #maxValLog = np.array([6.70, 6.78, 6.46]) # TNG50 sb2sh0 movie: galaxy two only
-        #print('stellarComp maxValLog changed, undo!')
 
         maxValLog = np.log10( (10.0**maxValLog) * (pxArea/pxArea0*resFac) )
         #print('pxArea*res mod: ',(pxArea/pxArea0*resFac))
@@ -487,8 +493,8 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
                 grid_master_u[:,:,i] = np.uint8( np.clip( new_i, 0, 255 ) )
             #print(' adjusted contrast ',F)
 
-    # DEBUG: dump 16 bit tiff without clipping
     if 0:
+        # DEBUG: dump 16 bit tiff without clipping
         im = np.zeros( (nPixels[0], nPixels[1], 3), dtype='uint16' )
 
         for i in range(3):
@@ -508,9 +514,13 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
 
         import skimage.io
         skimage.io.imsave('out_%s.tif' % '-'.join(bands), im, plugin='tifffile')
-    # END DEBUG
 
-    config = {'ctName':'gray', 'label':'Stellar Composite [%s]' % ', '.join(bands), 'vMM_guess':None}
+
+    bandsStr = ', '.join(bands)
+    if all([band.startswith('jwst_') for band in bands]):
+        bandsStr = 'JWST %s' % ', '.join([band.replace('jwst_','') for band in bands])
+
+    config = {'ctName':'gray', 'label':'Stellar Composite [%s]' % bandsStr, 'vMM_guess':None}
     return grid_master_u, config, grid_master
 
 def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, weightField, indRange=None):
@@ -2383,8 +2393,8 @@ def addBoxMarkers(p, conf, ax, pExtent):
         if p['labelZ'] == 'tage':
             zStr = "%5.2f billion years after the Big Bang" % p['sP'].units.redshiftToAgeFlat(p['sP'].redshift)
 
-        xt = pExtent[1] - (pExtent[1]-pExtent[0])*(0.02)*conf.nLinear # upper right
-        yt = pExtent[3] - (pExtent[3]-pExtent[2])*(0.02)*conf.nLinear
+        xt = pExtent[1] - (pExtent[1]-pExtent[0])*(0.01)*conf.nLinear # upper right
+        yt = pExtent[3] - (pExtent[3]-pExtent[2])*(0.01)*conf.nLinear
         color = 'white' if 'textcolor' not in p else p['textcolor']
 
         ax.text( xt, yt, zStr, color=color, alpha=1.0, 
@@ -2409,7 +2419,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
         # if scale bar is more than X Mpc/kpc, round to nearest X Mpc/kpc
         mpcFac = 1000.0 if p['sP'].mpcUnits else 1.0
-        roundScales = np.array([10000.0, 1000.0, 1000.0, 100.0, 10.0]) / mpcFac
+        roundScales = np.array([10000.0, 1000.0, 1000.0, 100.0, 10.0, 1.0, 0.1]) / mpcFac
 
         for roundScale in roundScales:
             if scaleBarLen >= roundScale:
@@ -2484,8 +2494,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
         color = 'white' if 'textcolor' not in p else p['textcolor']
 
         ax.plot( [x0,x1], [yy,yy], '-', color=color, lw=lw, alpha=1.0)
-        #AP: ax.text( np.mean([x0,x1]), yt, scaleBarStr, color=color, alpha=1.0, size=conf.fontsize, ha='center', va='top')
-        ax.text( x0, yt, scaleBarStr, color=color, alpha=1.0, size=conf.fontsize, ha='left', va='top')
+        ax.text( np.mean([x0,x1]), yt, scaleBarStr, color=color, alpha=1.0, size=conf.fontsize, ha='center', va='top')
 
     # text in a combined legend?
     legend_labels = []
@@ -2496,7 +2505,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
     if 'labelHalo' in p and p['labelHalo']:
         assert p['sP'].subhaloInd is not None
 
-        subhalo = p['sP'].groupCatSingle(subhaloID=p['subhaloInd'])
+        subhalo = p['sP'].groupCatSingle(subhaloID=p['sP'].subhaloInd)
         halo = p['sP'].groupCatSingle(haloID=subhalo['SubhaloGrNr'])
 
         haloMass = p['sP'].units.codeMassToLogMsun(halo['Group_M_Crit200'])
@@ -2517,10 +2526,10 @@ def addBoxMarkers(p, conf, ax, pExtent):
         if 'haloid' in str(p['labelHalo']):
             legend_labels.append( 'HaloID %d' % subhalo['SubhaloGrNr'] )
         elif 'id' in str(p['labelHalo']):
-            legend_labels.append( 'ID %d' % p['subhaloInd'] )
+            legend_labels.append( 'ID %d' % p['sP'].subhaloInd )
             #legend_labels.append( 'ID %d' % subhalo['SubhaloGrNr'] )
         if 'redshift' in str(p['labelHalo']):
-            #legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,p['subhaloInd']))
+            #legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,p['sP'].subhaloInd))
             legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,subhalo['SubhaloGrNr']))
         if str1 not in legend_labels and str2 not in legend_labels:
             # both Mhalo and Mstar
@@ -2537,6 +2546,10 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
     # draw legend
     if len(legend_labels):
+        # sort in order of string length, if first entry is longer than last
+        if len(legend_labels[0]) > len(legend_labels[-1]):
+            legend_labels.sort(key=lambda s:len(s))
+
         legend_lines = [plt.Line2D((0,0),(0,0), linestyle='') for _ in legend_labels]
         loc = p['legendLoc'] if 'legendLoc' in p else 'lower left'
         legend = ax.legend(legend_lines, legend_labels, fontsize=conf.fontsize, loc=loc, 
@@ -2775,8 +2788,15 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     colorbar.outline.set_edgecolor(color2)
 
     # label, centered and below/above
-    cax.text(0.5, textTopY, config['label'], color=color2, transform=cax.transAxes, 
-             size=conf.fontsize, ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
+    t = cax.text(0.5, textTopY, config['label'], color=color2, transform=cax.transAxes, 
+                 size=conf.fontsize, ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
+
+    bb = t.get_window_extent(renderer=fig.canvas.get_renderer())
+    if bb.y0 < 0:
+        print('Not good, colorbar is falling off bottom of plot, need to increase barAreaHeight.')
+
+    if 'Stellar Composite' in config['label']:
+        return # skip meaningless [0, ..., 255] labels
 
     # tick labels, 5 evenly spaced inside bar
     colorsA = [(1,1,1),(0.9,0.9,0.9),(0.8,0.8,0.8),(0.2,0.2,0.2),(0,0,0)]
@@ -2846,6 +2866,8 @@ def renderMultiPanel(panels, conf):
 
     color1 = 'black' if '_black' in conf.plotStyle else 'white'
     color2 = 'white' if '_black' in conf.plotStyle else 'black'
+
+    makedirs(conf.savePath, exist_ok=True)
 
     # plot sizing and arrangement
     sizeFac = np.array(conf.rasterPx) / mpl.rcParams['savefig.dpi']
@@ -3009,7 +3031,7 @@ def renderMultiPanel(panels, conf):
             barAreaHeight += 0.03
         barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, 0.2)
 
-        if nCols >= 3:
+        if nCols >= 2:
             barAreaHeight += 0.014*nCols
         if not conf.colorbars:
             barAreaHeight = 0.0
@@ -3096,7 +3118,8 @@ def renderMultiPanel(panels, conf):
         nShortRows = nShortPanels / nCols
 
         # start plot
-        fig = plt.figure(frameon=False, tight_layout=False, facecolor=color1)
+        plt.rcParams.update({'figure.autolayout':False})
+        fig = plt.figure(layout=None, facecolor=color1)
 
         width_in  = sizeFac[0] * np.ceil(nCols)
         height_in = sizeFac[1] * np.ceil(nRows)
@@ -3261,5 +3284,7 @@ def renderMultiPanel(panels, conf):
                                    rowHeight, widthFrac, bottomNorm, 0.55)
 
     # note: conf.saveFilename may be an in-memory buffer, or an actual filesystem path
-    fig.savefig(conf.saveFilename, format=conf.outputFmt, facecolor=fig.get_facecolor())
+    fig.savefig(conf.saveFilename, format=conf.outputFmt, facecolor=fig.get_facecolor(), bbox_inches=0)
     plt.close(fig)
+    plt.rcParams.update({'figure.autolayout':True})
+

@@ -3,7 +3,7 @@ Render specific halo movie/time-series visualizations.
 """
 import numpy as np
 import h5py
-from os.path import isfile
+from os.path import isfile, expanduser
 
 from ..vis.common import savePathDefault, savePathBase
 from ..vis.halo import renderSingleHalo, renderSingleHaloFrames, selectHalosFromMassBin
@@ -77,6 +77,86 @@ def loopTimeSeries():
     """ Helper: Loop the above over configs. """
     for i in range(5):
         tngCluster_center_timeSeriesPanels(conf=i)
+
+def structuresEvo(conf='one'):
+    """ Render movie of a sims.structures/ run, either TNG or SN model (~300 total snapshots). """
+    panels = []
+
+    # halo selection
+    hInd    = 10677 # 10677, 31619
+    run     = 'structures'
+    variant = 'TNG'
+    res     = 18
+    #redshift = 3.0 # for renderSingleHalo()
+
+    # panel selection
+    gasMM = [5.0,7.5]
+    variants = ['TNG','SN'] # for model vs model comparisons
+    resolutions = [14,18] # for res vs res comparisons
+
+    if conf == 'one':
+        # one run, gas and stars side-by-side
+        panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM, 
+                        'labelScale':'physical', 'labelSim':True} )
+        panels.append( {'partType':'stars', 'partField':'stellarComp', 
+                        'labelScale':'physical', 'labelHalo':True, 'labelZ':True} )
+
+    if conf == 'two':
+        # compare two runs (gas) with different models (same res)
+        panels.append( {'partType':'gas', 'variant':variants[0], 'partField':'coldens_msunkpc2', 'valMinMax':gasMM, 
+                        'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
+        panels.append( {'partType':'gas', 'variant':variants[1], 'partField':'coldens_msunkpc2', 'valMinMax':gasMM, 
+                        'labelZ':True, 'labelSim':True, 'labelHalo':True} )
+
+    if conf == 'three':
+        # compare two runs (stars) with different models (same res)
+        panels.append( {'partType':'stars', 'variant':variants[0], 'partField':'stellarComp', 'valMinMax':gasMM, 
+                        'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
+        panels.append( {'partType':'stars', 'variant':variants[1], 'partField':'stellarComp', 'valMinMax':gasMM, 
+                        'labelScale':'physical', 'labelZ':True, 'labelSim':True, 'labelHalo':True} )
+
+    if conf == 'four':
+        # compare two runs (gas+stars) with different models (same res)
+        panels.append( {'partType':'gas', 'variant':variants[0], 'partField':'coldens_msunkpc2', 'valMinMax':gasMM, 
+                        'labelScale':'physical'} )
+        panels.append( {'partType':'gas', 'variant':variants[1], 'partField':'coldens_msunkpc2', 'valMinMax':gasMM, 
+                        'labelScale':'physical', 'labelZ':True} )
+        panels.append( {'partType':'stars', 'variant':variants[0], 'partField':'stellarComp', 'valMinMax':gasMM, 
+                        'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
+        panels.append( {'partType':'stars', 'variant':variants[1], 'partField':'stellarComp', 'valMinMax':gasMM, 
+                        'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
+
+    if conf == 'five':
+        # compare two runs (gas+stars) with different res (same model)
+        panels.append( {'partType':'gas', 'res':resolutions[0], 'partField':'coldens_msunkpc2', 'valMinMax':gasMM, 
+                        'labelScale':'physical'} )
+        panels.append( {'partType':'gas', 'res':resolutions[1], 'partField':'coldens_msunkpc2', 'valMinMax':gasMM, 
+                        'labelScale':'physical', 'labelZ':True} )
+        panels.append( {'partType':'stars', 'res':resolutions[0], 'partField':'stellarComp', 'valMinMax':gasMM, 
+                        'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
+        panels.append( {'partType':'stars', 'res':resolutions[1], 'partField':'stellarComp', 'valMinMax':gasMM, 
+                        'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
+
+    rVirFracs  = [1.0]
+    fracsType  = 'rHalfMassStars'
+    method     = 'sphMap'
+    nPixels    = [960,960]
+    size       = 20.0 if hInd < 20000 else 5.0
+    sizeType   = 'codeUnits'
+    axes       = [1,0]
+    labelSim   = False
+    relCoords  = True
+    rotation   = None
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = nPixels[0]
+        colorbars    = True
+        savePath     = expanduser('~') + '/data/frames/%s_h%d_%s_L%d/' % (run,hInd,variant,res)
+        saveFileBase = '%s_h%d_%s_L%d_evo_%s' % (run,hInd,variant,res,conf)
+
+    renderSingleHaloFrames(panels, plotConfig, locals())
+    #renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 def zoomEvoMovies(conf):
     """ Configurations to render movies of the sims.zooms2 runs (at ~400 total snapshots). """

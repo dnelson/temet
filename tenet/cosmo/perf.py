@@ -397,13 +397,16 @@ def _cpuEstimateFromOtherRunProfile(sP, cur_a, cur_cpu_mh):
 
 def _redshiftAxisHelper(ax):
     """ Add a redshift axis to the top of a single-panel plot. """
-    zVals = [50.0,10.0,6.0,4.0,3.0,2.0,1.5,1.0,0.75,0.5,0.25,0.0]
+    zVals = np.array([20.0, 10.0,6.0,4.0,3.0,2.0,1.5,1.0,0.75,0.5,0.25,0.0])
     axTop = ax.twiny()
-    axTickVals = 1/(1 + np.array(zVals) )
+    axTickVals = 1/(1 + zVals)
 
-    axTop.set_xlim(ax.get_xlim())
-    axTop.set_xticks(axTickVals)
-    axTop.set_xticklabels(zVals)
+    scalefac_lim = ax.get_xlim()
+    w = np.where((axTickVals >= scalefac_lim[0]) & (axTickVals <= scalefac_lim[1]))
+
+    axTop.set_xlim(scalefac_lim)
+    axTop.set_xticks(axTickVals[w])
+    axTop.set_xticklabels(zVals[w])
     axTop.set_xlabel("Redshift")
 
     return axTop
@@ -417,9 +420,9 @@ def plotCpuTimes():
     # config
     sPs = []
     #sPs.append( simParams(res=1820, run='illustris') )
-    sPs.append( simParams(res=1820, run='tng') )
+    #sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='illustris') )
-    sPs.append( simParams(res=910, run='tng') )
+    #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='illustris') )
     #sPs.append( simParams(res=455, run='tng') )
 
@@ -432,15 +435,15 @@ def plotCpuTimes():
     #sPs.append( simParams(res=1080, run='tng') )
     #sPs.append( simParams(res=2160, run='tng') )
     #sPs.append( simParams(res=2160, run='tng_dm') )
-    #sPs.append( simParams(res=2160, run='tng', variant='halted') )
-
-    #sPs.append( simParams(res=1024, run='tng', variant=0000) )
-    #sPs.append( simParams(res=1024, run='tng', variant=4503) )
 
     #sPs.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3'))
     #sPs.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3_s'))
     #sPs.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3'))
     #sPs.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3_s'))
+
+    sPs.append(simParams(run='structures', res=12, hInd=31619, variant='DM'))
+    sPs.append(simParams(run='structures', res=12, hInd=31619, variant='TNG'))
+    sPs.append(simParams(run='structures', res=12, hInd=31619, variant='SN'))
 
     plotKeys = ['total','total_log','treegrav','pm_grav','voronoi','blackholes','hydro',
                 'gradients','enrich','domain','i_o','restart','subfind']
@@ -494,8 +497,6 @@ def plotCpuTimes():
             # include only bigish timesteps
             w = np.where( cpu['hatb'] >= cpu['hatb'].max()-6 )
 
-            print( sP.simName+' ['+str(plotKey)+']: '+str(len(w[0]))+'  max_time: '+str(cpu['time'].max()) )
-
             # loop over each run
             xx = cpu['time'][w]
             yy = np.squeeze( np.squeeze(cpu[plotKey])[w,ind] )
@@ -503,8 +504,21 @@ def plotCpuTimes():
             if ind in [0,2]:
                 yy = yy / (1e6*60.0*60.0) * cpu['numCPUs']
 
-            label = sP.simName if 'total' not in plotKey else sP.simName + ' (%.2f Mh)' % yy[-1]
+            label = sP.simName
+            if 'total' in plotKey:
+                if yy[-1] > 0.1:
+                    label = sP.simName + ' (%.2f Mh)' % yy[-1]
+                else:
+                    label = sP.simName + ' (%.2f Kh)' % (yy[-1]*1000)
+
             l, = ax.plot(xx,yy,lw=lw,label=label)
+
+            if plotKey == 'total':
+                print(f'{sP.simName} [{plotKey}]: entries = {len(w[0])} max_time = {cpu["time"].max()} total CPU hours = {yy.max()*1000:.2f}k')
+
+            # for zooms which stop at high-z, adjust x-axis
+            if xx.max() < 0.99 and sP.isZoom and sP.sP_parent is not None and sP.sP_parent.redshift > 0:
+                ax.set_xlim([0.0,xx.max()])
 
             # total time predictions for runs which aren't yet done
             if plotKey in ['total'] and xx.max() < 0.99 and not sP.isZoom: 

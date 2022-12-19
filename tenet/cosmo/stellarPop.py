@@ -936,9 +936,11 @@ class sps():
 
             stars = sP.snapshotSubset(partType='stars', fields=fields, indRange=indRange)
 
-            mags = self.mags_code_units(sP, band, stars['GFM_StellarFormationTime'], 
-                                        stars['GFM_Metallicity'], stars['GFM_InitialMass'], 
-                                        retFullSize=True)
+            sftime = stars.get('GFM_StellarFormationTime', stars.get('StellarFormationTime'))
+            metal = stars.get('GFM_Metallicity', stars.get('Metallicity'))
+            imass = stars.get('GFM_InitialMass', stars.get('InitialMass'))
+
+            mags = self.mags_code_units(sP, band, sftime, metal, imass, retFullSize=True)
 
         # convert to luminosities in [Lsun/Hz]
         lums = np.zeros( mags.size, dtype='float32' )

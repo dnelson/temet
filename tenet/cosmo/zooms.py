@@ -154,9 +154,9 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
 
 def check_contamination():
     """ Check level of low-resolution contamination (DM particles) in zoom run. """
-    hInd = 31619
-    zoomRes = 11
-    variant = 'DM' # sf3
+    hInd = 31619 # 10677 # 
+    zoomRes = 12
+    variant = 'TNG' # sf3
 
     zoomRun = 'structures' #'tng_zoom' #'tng50_zoom_dm'
     redshift = 3.0 # 0.0
@@ -385,7 +385,14 @@ def sizefacComparison():
     plt.close(fig)
 
 def parentBoxVisualComparison(haloID, variant='sf3', conf=0, snap=99):
-    """ Make a visual comparison (density projection images) between halos in the parent box and their zoom realizations. """
+    """ Make a visual comparison (density projection images) between halos in the parent box and their zoom realizations.
+    
+    Args:
+      haloID (int): the zoom halo ID, at the final redshift (z=0).
+      variant (str): the zoom variant.
+      conf (int): the plotting configuration.
+      snap (int): if not the final snapshot, plot at some redshift other than z=0.
+    """
 
     #sPz = simParams(run='tng_zoom', res=13, hInd=haloID, redshift=0.0, variant=variant)
     #sPz = simParams(run='tng100_zoom_dm', res=11, hInd=haloID, snap=snap, variant='sf4')
@@ -418,16 +425,8 @@ def parentBoxVisualComparison(haloID, variant='sf3', conf=0, snap=99):
     panel_zoom = p.copy()
     panel_parent = p.copy()
 
-    # haloID refers to z=0?
-    if 0:
-        sP_parent_z0 = sPz.sP_parent.copy()
-        sP_parent_z0.setRedshift(0.0)
-    else:
-        # haloID refers to sPz.snap
-        sP_parent_z0 = sPz.sP_parent
-
     # load MPB of this halo
-    haloMPB = sP_parent_z0.loadMPB( sP_parent_z0.groupCatSingle(haloID=haloID)['GroupFirstSub'] )
+    haloMPB = sPz.sP_parent.loadMPB( sPz.sP_parent.groupCatSingle(haloID=haloID)['GroupFirstSub'] )
     assert sPz.snap in haloMPB['SnapNum']
 
     # locate subhaloID at requested snapshot (could be z=0 or z>0)

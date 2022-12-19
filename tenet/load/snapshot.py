@@ -479,6 +479,12 @@ def snapshotSubset(sP, partType, fields,
                 #invNameMappings[toLabel] = fields[i] # save inverse so we can undo
                 fields[i] = toLabel
 
+    # handle non-GFM runs which have the same fields without the name prefix
+    for i,field in enumerate(fields):
+        if field.startswith('GFM_'):
+            if not snapHasField(sP, partType, field) and snapHasField(sP, partType, field.replace('GFM_','')):
+                fields[i] = field.replace('GFM_','')
+
     # check for snapshots written by other codes which require minor field remappings (SWIFT)
     swiftRenames = {'Density':'Densities',
                     'Entropy':'Entropies',

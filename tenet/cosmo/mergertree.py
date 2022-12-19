@@ -247,7 +247,8 @@ def mpbSmoothedProperties(sP, id, fillSkippedEntries=True, extraFields=None):
     identical for all subhalos in the same group. """
     if extraFields is None: extraFields = []
     
-    fields = ['SubfindID','SnapNum','SubhaloPos','SubhaloVel','Group_R_Crit200','Group_M_Crit200']
+    fields = ['SubfindID','SnapNum','SubhaloPos','SubhaloVel','Group_R_Crit200','Group_M_Crit200',
+              'SubhaloHalfmassRad','SubhaloHalfmassRadType']
 
     # any extra fields to be loaded?
     treeFileFields = loadTreeFieldnames(sP)
@@ -302,7 +303,6 @@ def mpbSmoothedProperties(sP, id, fillSkippedEntries=True, extraFields=None):
         iterations = 0 # disabled
 
         for j in range(iterations):
-            print('DEBUG TESTING')
             mpb['sm']['v_sigma'][:,i] = running_sigmawindow( mpb['Redshift'], mpb['sm']['vel'][:,i], medWindowSize)
             mpb['sm']['v_sm'][:,i] = savgol_filter( mpb['sm']['vel'][:,i], sKn*5, sKo )
 
@@ -311,7 +311,6 @@ def mpbSmoothedProperties(sP, id, fillSkippedEntries=True, extraFields=None):
             print(i,mpb['sm']['vel'][w,i],mpb['sm']['v_sm'][w,i])
             mpb['sm']['vel'][w,i] = mpb['sm']['v_sm'][w,i]
             mpb['sm']['vel_moved'][w,i] = mpb['sm']['v_sm'][w,i]
-            # END DEBUG
 
         # smooth
         mpb['sm']['vel'][:,i] = savgol_filter( mpb['sm']['vel'][:,i], sKn, sKo )

@@ -989,7 +989,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     if len(nPixels) not in [2, 3] or len(axes) != 2:
         raise Exception('Strange size of imaging input(s).')
 
-    if not isinstance(boxSizeSim,(float)):
+    if not isinstance(boxSizeSim,(float,int)):
         assert len(boxSizeSim) == 3
     else:
         boxSizeSim = [boxSizeSim, boxSizeSim, boxSizeSim] # same in all 3 coordinate directions
@@ -1296,7 +1296,7 @@ def sphGridWholeBox(sP, pos, hsml, mass, quant, nCells=32):
     boxCen = sP.boxSize * np.array([0.5,0.5,0.5])
 
     if sP.isSubbox:
-        boxSizeImg = sP.subboxSize[sP.subbox] * np.array([1.0,1.0,1.0*sliceFac])
+        boxSizeImg = sP.subboxSize[sP.subbox] * np.array([1.0,1.0,1.0])
         boxCen = sP.subboxCen[sP.subbox]
 
     return sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=[0,1], 
