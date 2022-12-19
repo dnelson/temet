@@ -1,0 +1,13 @@
+# 4MOST-HRS LSF (https://www.4most.eu/cms/facility/capabilities/)
+#  -- pre-construction estimates
+# note: three contiguous rows for the {blue, green, red} arms, with large gaps in-between
+# wavelength [Ang], R = resolving power
+3926.1, 18388.2
+4152.0, 20176.5
+4356.8, 20988.2
+5155.0, 17894.1
+5459.0, 19994.1
+5733.5, 20647.1
+6094.6, 18376.5
+6459.9, 20270.6
+6795.6, 19941.2

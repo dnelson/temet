@@ -340,11 +340,24 @@ def paperPlots():
 
     # pre-computed sightlines and spectra:
     redshifts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0]
-    instruments = ['4MOST-HRS','SDSS-BOSS','KECK-HIRES'] # todo: add cos
-    ions = ['HI','MgII','CaII','FeII','SiII','ZnII','NV','CIV','OVI'] # CaII and ZnII with solar abunds
+    instruments = ['4MOST-HRS','SDSS-BOSS','DESI','KECK-HIRES'] # todo: add cos, and something NIR (XS or GNIRS?)
+    ions = ['HI','MgII','FeII','SiII','NV','CIV','OVI','CaII','ZnII'] # CaII and ZnII with solar abunds
+
+    # {1M-uni} 4MOST-HRS    SDSS-BOSS    KECK-HIRES     COS          DESI          XSHOOTER (something NIR/high-z)
+    # {4M-rnd} ---------    ---------    ----------     ---          ----          --------
+    # HI       [ ]          [ ]          [ ]            [ ]          [ ]           [ ] 
+    # MgII     [ ]          [X] 0.3-2    [ ]            [ ]          [ ]           [ ] 
+    # FeII     [ ]          [ ]          [ ]            [ ]          [ ]           [ ] 
+    # SiII     [ ]          [ ]          [ ]            [ ]          [ ]           [ ] 
+    # SiIV     [ ]          [X] 1.5-5    [ ]            [ ]          [ ]           [ ] 
+    # NV       [ ]          [X] 2-5      [ ]            [ ]          [ ]           [ ] 
+    # CIV      [ ]          [X] 1.5-5    [ ]            [ ]          [ ]           [ ] 
+    # OVI      [ ]          [X] 3-5      [X] 2-5        [ ]          [ ]           [ ] 
+    # CaII     [ ]          [ ]          [ ]            [ ]          [ ]           [ ] 
+    # ZnII     [ ]          [ ]          [ ]            [ ]          [ ]           [ ] 
 
     # fig 1: individual spectra galleries
-    if 1:
+    if 0:
         # Mg II
         sim = simParams(run='tng50-1', redshift=0.5)
         inst = 'SDSS-BOSS' #'4MOST-HRS'

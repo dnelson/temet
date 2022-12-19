@@ -142,7 +142,7 @@ def profiles_multiple_lines():
 
     # transition, instrument, and spectrum type
     lineNames = ['LyA'] + [line for line in lines.keys() if 'HI ' in line] # Lyman series
-    instrument = 'test_EUV'
+    instrument = 'idealized'
     
     # config for 'this cell'
     N = 15.0 # log 1/cm^2
@@ -150,6 +150,8 @@ def profiles_multiple_lines():
 
     vel_los = 0.0 #1000.0 # km/s
     z_cosmo = 0.0
+
+    xlim = [800, 1300]
 
     # create master grid
     master_mid, master_edges, tau_master = create_wavelength_grid(instrument=instrument)
@@ -169,6 +171,7 @@ def profiles_multiple_lines():
     # plot
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(211)
+    ax.set_xlim(xlim)
 
     ax.set_xlabel('Wavelength [ Ang ]')
     ax.set_ylabel('Relative Flux')

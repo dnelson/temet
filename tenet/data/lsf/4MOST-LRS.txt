@@ -1,0 +1,23 @@
+# 4MOST-LRS LSF (https://www.4most.eu/cms/facility/capabilities/)
+#  -- pre-construction estimates
+# note: non-monotonic transitions between three arms are approximate only!
+# wavelength [Ang], R = resolving power
+3681.6, 3782.5
+4155.1, 4599.7
+4612.2, 4946.0
+5093.9, 5555.4
+5314.3, 5693.9
+5379.6, 5555.4
+5436.7, 5479.2
+5583.7, 5673.1
+5824.5, 6019.4
+6840.8, 7182.8
+6979.6, 7162.0
+7044.9, 6746.5
+7077.6, 6081.7
+7167.3, 5749.3
+7240.8, 5707.8
+7314.3, 5777.0
+7971.4, 6400.3
+8718.4, 6995.8
+9510.2, 7667.6

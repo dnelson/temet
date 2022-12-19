@@ -235,36 +235,56 @@ lines = {'LyA'        : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion'
          'ZnII 2025'  : {'f':5.01e-1,  'gamma':4.07e8,  'wave0':2025.4845, 'ion':'Zn II'}}
 
 # instrument characteristics (all wavelengths in angstroms)
-# TODO: need to finish decoupling pixel wavelength grid specifications from spectral resolution specifications
-#   4MOST-LRS/HRS: "spectral sampling >= 2.5 pixel/FWHM" (https://www.4most.eu/cms/facility/capabilities/)
-#   SDSS: on the detector, sampling is ~3 pixels/FWHM
 # R = lambda/dlambda = c/dv
 # EW_restframe = W_obs / (1+z_abs)
-instruments = {'idealized'       : {'wave_min':1000,  'wave_max':12000, 'dwave':0.1},     # used for EW map vis
-               'master'          : {'wave_min':1,     'wave_max':25000, 'dwave':0.0001},  # used to create master spectra (2GB per, float64 uncompressed)
-               #'master2'         : {'wave_min':1000,  'wave_max':11000, 'dwave':0.02, 'R_tab':True},   # testing conv only
+# todo: finish COS and its LSFs
+# todo: finish PFS and MIKE (confirm R, get wave grids)
+# todo: finish MOSFIRE (get wave grid from KOA)
+# todo: finish GNIRS (confirm R, get wave grids)
+instruments = {'idealized'       : {'wave_min':800,   'wave_max':30000, 'dwave':0.01,   'R':None},  # note: also used for EW map vis
+               'master'          : {'wave_min':1,     'wave_max':25000, 'dwave':0.0001, 'R':None},  # used to create master spectra (2GB per, float64 uncompressed)
                'COS-G130M'       : {'wave_min':1150,  'wave_max':1450,  'dwave':0.01},    # approximate
                'COS-G140L'       : {'wave_min':1130,  'wave_max':2330,  'dwave':0.08},    # approximate
                'COS-G160M'       : {'wave_min':1405,  'wave_max':1777,  'dwave':0.012},   # approximate
-               #'test_EUV'        : {'wave_min':800,   'wave_max':1300,  'dwave':0.1},     # to see LySeries at rest
                'SDSS-BOSS'       : {'wave_min':3543,  'wave_max':10400, 'dlogwave':1e-4, 'R_tab':True}, # constant log10(dwave)=1e-4
-               'DESI'            : {'wave_min':3600,  'wave_max':9824,  'dwave':0.8},     # constant dwave (https://arxiv.org/abs/2209.14482 Sec 4.5.5)
-               '4MOST-LRS'       : {'wave_min':4000,  'wave_max':8860,  'R':5000},        # approx R=5000 (for B), ~6000 (for G/R)
-               '4MOST-HRS'       : {'wave_min':3926,  'wave_max':6790,  'R':20000, 'lsf_fwhm':0.3}, # but gaps! R and lsf_fwhm approximate
-               '4MOST-HRS-B'     : {'wave_min':3926,  'wave_max':4355,  'R':20000, 'lsf_fwhm':0.22}, # R approximate
-               '4MOST-HRS-G'     : {'wave_min':5160,  'wave_max':5730,  'R':20000, 'lsf_fwhm':0.28}, # R approximate
-               '4MOST-HRS-R'     : {'wave_min':6100,  'wave_max':6790,  'R':20000, 'lsf_fwhm':0.33}, # R approximate
+               'DESI'            : {'wave_min':3600,  'wave_max':9824,  'dwave':0.8, 'R_tab':True},  # constant dwave (https://arxiv.org/abs/2209.14482 Sec 4.5.5)
+               '4MOST-LRS'       : {'wave_min':4000,  'wave_max':8860,  'dwave':0.35, 'R_tab':True}, # approx R=5000 (for B), ~6000 (for G/R)
+               '4MOST-HRS'       : {'wave_min':3926,  'wave_max':6790,  'dwave':0.08, 'R_tab':True}, # but gaps! made up of three arms (dwave approx only)
+               '4MOST-HRS-B'     : {'wave_min':3926,  'wave_max':4355,  'dwave':0.08, 'R_tab':True}, # blue arm only (dwave approx only)
+               '4MOST-HRS-G'     : {'wave_min':5160,  'wave_max':5730,  'dwave':0.08, 'R_tab':True}, # green arm only (dwave approx only)
+               '4MOST-HRS-R'     : {'wave_min':6100,  'wave_max':6790,  'dwave':0.08, 'R_tab':True}, # red arm only (dwave approx only)
                'PFS-B'           : {'wave_min':3800,  'wave_max':6500,  'R':2300},        # blue arm (3 arms used simultaneously)
                'PFS-R-LR'        : {'wave_min':6300,  'wave_max':9700,  'R':3000},        # low-res red arm
                'PFS-R-HR'        : {'wave_min':7100,  'wave_max':8850,  'R':5000},        # high-res red arm
                'PFS-NIR'         : {'wave_min':9400,  'wave_max':12600, 'R':4300},        # NIR arm
-               'MIKE-B'          : {'wave_min':3350,  'wave_max':5000,  'R':83000},       # blue arm (on Magellan 2/Clay)
-               'MIKE-R'          : {'wave_min':4900,  'wave_max':9500,  'R':65000},       # red arm (used simultaneously)
-               'XSHOOTER-VIS-07' : {'wave_min':5500,  'wave_max':10200, 'R':11400},       # VLT X-Shooter (R depends on slit width = 0.7")
-               'XSHOOTER-NIR-06' : {'wave_min':10200, 'wave_max':24800, 'R':8100},        # VLT X-Shooter (R depends on slit width = 0.6")
+               'MIKE-B'          : {'wave_min':3350,  'wave_max':5000,  'R':83000},       # blue arm (on Magellan 2/Clay) (0.35" slit)
+               'MIKE-R'          : {'wave_min':4900,  'wave_max':9500,  'R':65000},       # red arm (used simultaneously) (0.35" slit)
+               'MOSFIRE'         : {'wave_min':9800,  'wave_max':24200, 'R':3660},         # Y, J, H, and K bands together, R approximate (https://www2.keck.hawaii.edu/inst/mosfire/grating.html)
+               'XSHOOTER-UVB-05' : {'wave_min':2936,  'wave_max':5930,  'dwave':0.2, 'R':9700},  # VLT X-Shooter UVB arm (R depends on slit width = 0.5")
+               'XSHOOTER-UVB-10' : {'wave_min':2936,  'wave_max':5930,  'dwave':0.2, 'R':6200},  
+               'XSHOOTER-UVB-16' : {'wave_min':2936,  'wave_max':5930,  'dwave':0.2, 'R':3200},
+               'XSHOOTER-VIS-04' : {'wave_min':5253,  'wave_max':10489, 'dwave':0.2, 'R':18400}, # VLT X-Shooter VIS arm (R depends on slit width = 0.4"), constant dwave=0.02nm in ADP reduced spectra
+               'XSHOOTER-VIS-07' : {'wave_min':5253,  'wave_max':10489, 'dwave':0.2, 'R':11400}, # https://www.eso.org/sci/facilities/paranal/instruments/xshooter/doc/VLT-MAN-ESO-14650-4942_v88.pdf ("old resolutions")
+               'XSHOOTER-VIS-09' : {'wave_min':5253,  'wave_max':10489, 'dwave':0.2, 'R':8900},  # https://www.eso.org/sci/facilities/paranal/instruments/xshooter/inst.html ("new resolutions")
+               'XSHOOTER-VIS-15' : {'wave_min':5253,  'wave_max':10489, 'dwave':0.2, 'R':5000},
+               'XSHOOTER-NIR-04' : {'wave_min':9827,  'wave_max':24807, 'dwave':0.2, 'R':11600}, # VLT X-Shooter NIR arm (R depends on slit width = 0.4")
+               'XSHOOTER-NIR-06' : {'wave_min':9827,  'wave_max':24807, 'dwave':0.2, 'R':8100},
+               'XSHOOTER-NIR-12' : {'wave_min':9827,  'wave_max':24807, 'dwave':0.2, 'R':4300},
                'GNIRS-SXD-R800'  : {'wave_min':8500,  'wave_max':25000, 'R':800},         # Gemini-GNIRS cross-dispersed (multi-order), short-camera (SXD), 0.675" slit width
-               'KECK-HIRES'      : {'wave_min':3000,  'wave_max':9250,  'R':45000},       # different plates: R=60k, 45k, 34k, 23k
-               'KECK-LRIS'       : {'wave_min':2940,  'wave_max':9200,  'R':1200}}        # different grisms/gratings: from R=300 to R=1200
+               'KECK-HIRES-B14'  : {'wave_min':3000,  'wave_max':9250,  'dlnwave':8.672e-06,  'R':67000},  # deckers B1-5, C1-5, D1-5, E1-5
+               'KECK-HIRES-B5C3' : {'wave_min':3000,  'wave_max':9250,  'dlnwave':8.672e-06,  'R':49000},  # R depends on decker (https://www2.keck.hawaii.edu/inst/hires/slitres.html), from R=24k to R=84k
+               'KECK-HIRES-C4D2' : {'wave_min':3000,  'wave_max':9250,  'dlnwave':8.672e-06,  'R':37000},  # dlogwave from KODIAQ-DR2
+               'KECK-HIRES-D34'  : {'wave_min':3000,  'wave_max':9250,  'dlnwave':8.672e-06,  'R':24000},
+               'KECK-HIRES-E14'  : {'wave_min':3000,  'wave_max':9250,  'dlnwave':8.672e-06,  'R':84000},
+               'KECK-ESI-03'     : {'wave_min':3927,  'wave_max':11068, 'dlogwave':1.4476e-5, 'R':13400}, # ESI (https://www2.keck.hawaii.edu/inst/esi/echmode.html)
+               'KECK-ESI-05'     : {'wave_min':3927,  'wave_max':11068, 'dlogwave':1.4476e-5, 'R':8000},  # dlogwave from KODIAQ-DR3
+               'KECK-ESI-10'     : {'wave_min':3927,  'wave_max':11068, 'dlogwave':1.4476e-5, 'R':4000},
+               'KECK-LRIS-B-300' : {'wave_min':1600,  'wave_max':7450,  'dlogwave':1e-4, 'R':900},  # LRIS blue side, longslit wavelength ranges
+               'KECK-LRIS-B-400' : {'wave_min':1300,  'wave_max':5770,  'dlogwave':1e-4, 'R':1000}, # https://www2.keck.hawaii.edu/inst/lris/dispersive_elements.html
+               'KECK-LRIS-B-600' : {'wave_min':3040,  'wave_max':5630,  'dlogwave':1e-4, 'R':1600}, # R values from Appendix of https://arxiv.org/pdf/astro-ph/0401439.pdf
+               'KECK-LRIS-R-150' : {'wave_min':3500,  'wave_max':9200,  'dlogwave':1e-4, 'R':800},  # LRIS-R R values only approximate
+               'KECK-LRIS-R-300' : {'wave_min':3600,  'wave_max':8600,  'dlogwave':1e-4, 'R':900},  # note: dlogwave waves are just ~3x for R, but aren't based on actual LRIS spectra
+               'KECK-LRIS-R-600' : {'wave_min':3600,  'wave_max':8600,  'dlogwave':1e-4, 'R':1300}}
 
 # pull out some units for JITed functions
 sP_units_Mpc_in_cm = 3.08568e24
@@ -389,7 +409,7 @@ def lsf_matrix(instrument):
         lsf = _generate_lsf_matrix(wave_mid, lsf_dlambda, dwave)
         print(f'Created LSF matrix with shape {lsf.shape} from [{fname}].')
 
-    if 'R_const' in inst:
+    if 'R' in inst:
         # constant R, independent of wavelength
         lsf_mode = 1
 
@@ -436,8 +456,11 @@ def create_wavelength_grid(line=None, instrument=None):
         f, gamma, wave0_restframe, _, _ = _line_params(line)
 
     # master wavelength grid, observed-frame [ang]
+    wave_mid = None
+
     dwave = None
     dlogwave = None
+    dlnwave = None
 
     if line is not None:
         wave_min = np.floor(wave0_restframe - 15.0)
@@ -451,6 +474,7 @@ def create_wavelength_grid(line=None, instrument=None):
             dwave = instruments[instrument]['dwave']
         if 'dlogwave' in instruments[instrument]:
             dlogwave = instruments[instrument]['dlogwave']
+        dlnwave = instruments[instrument].get('dlnwave', None)
 
     # if dwave is specified, use linear wavelength spacing
     if dwave is not None:
@@ -469,7 +493,20 @@ def create_wavelength_grid(line=None, instrument=None):
         wave_edges = 10.0**log_wave_edges
         print(f'Created [N = {wave_mid.size}] loglinear wavelength grid with {dlogwave = } for [{instrument}]')
 
-    # else, use spectral resolution R, and create linear in log(wave) grid
+    # if dlnwave is specified, use log-linear wavelength spacing
+    if dlnwave is not None:
+        log_wavemin = np.log(wave_min)
+        log_wavemax = np.log(wave_max)
+        log_wave_mid = np.arange(log_wavemin,log_wavemax+dlnwave,dlnwave)
+        wave_mid = np.exp(log_wave_mid)
+        log_wave_edges = np.arange(log_wavemin-dlnwave/2,log_wavemax+dlnwave+dlnwave/2,dlnwave)
+        wave_edges = np.exp(log_wave_edges)
+        print(f'Created [N = {wave_mid.size}] lnlinear wavelength grid with {dlnwave = } for [{instrument}]')
+
+    if wave_mid is None:
+        raise Exception(f'Missing wavelength grid specification for [{instrument}].')
+
+    # old: else, use spectral resolution R, and create linear in log(wave) grid
     if dwave is None and dlogwave is None:
         R = instruments[instrument]['R']
         log_wavemin = np.log(wave_min)
@@ -758,7 +795,7 @@ def _resample_spectrum(master_mid, tau_master, inst_waveedges):
             inst_height = local_EW / dwave_inst 
 
             # sanity checks and handle rounding issues
-            if inst_height < 0 or inst_height > 1.0001:
+            if inst_height < 0 or inst_height > 1.001:
                 print('WARNING: strange inst_height is above unity: ', inst_height)
                 # assert 0 # impossible to have >1, in which case np.log(negative) is nan, which we fix below
 

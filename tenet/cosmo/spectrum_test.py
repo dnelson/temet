@@ -230,7 +230,7 @@ def generate_spectrum_uniform_grid():
     sP = simParams(run='tng50-4', redshift=0.5)
 
     line = 'OVI 1032' #'LyA'
-    instrument = 'test_EUV2' # 'SDSS-BOSS' #
+    instrument = 'idealized' # 'SDSS-BOSS'
     nCells = 64
     haloID = 150 # if None, then full box
 
@@ -359,7 +359,7 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
     sP = simParams(run='tng50-4', redshift=0.5)
 
     line = 'OVI 1032' #'LyA'
-    instrument = 'test_EUV2' # 'SDSS-BOSS'
+    instrument = 'idealized' # 'SDSS-BOSS'
     haloID = 150 # if None, then full box
 
     ray_offset_x = 0.0 # relative to halo center, in units of rvir
