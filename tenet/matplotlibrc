@@ -185,6 +185,7 @@ axes.grid           : False   # display grid or not
 axes.titlesize      : xx-large   # fontsize of the axes title
 axes.labelsize       : xx-large  # fontsize of the x any y labels
 #axes.labelpad       : 5.0     # space between label and axis
+axes.titlepad        : 8.0     # space between title and top of panel
 #axes.labelweight    : normal  # weight of the x and y labels
 #axes.labelcolor     : black
 axes.axisbelow      : False   # whether axis gridlines and ticks are below
