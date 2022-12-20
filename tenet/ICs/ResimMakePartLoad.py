@@ -517,11 +517,11 @@ def generate_set():
     """ Driver. """
     from ..util.simParams import simParams
 
-    if 0:
+    if 1:
         # TNG-Cluster
         sP = simParams(res=2048,run='tng_dm',redshift=0.0)
         zoomFac = 4
-        haloIDs = [385,387,391,392,393,395,616,625,636,653,694,698]
+        haloIDs = [811,836,844,850,856,858,861,877,884,898]
         sizeFac = 3.0 #[2.0,3.0,4.0]
 
     if 0:
@@ -538,13 +538,22 @@ def generate_set():
         haloIDs = [91,98,105,146,160,167,206,210,221,201,264,298]
         sizeFac = 4.0
 
-    if 1:
+    if 0:
         # TNG50 dwarf zooms (STRUCTURES/MCS/Byrohl)
         sP = simParams(run='tng50-1', redshift=3.0)
-        zoomFac = 2 # 1 (8e4 msun/TNG50-1 res), 2 (1e4 msun), 4 (1320 msun), 8 (160 msun), 16 (20 msun)
+        zoomFac = 16 # 1 (8e4 msun/TNG50-1 res), 2 (1e4 msun), 4 (1320 msun), 8 (160 msun), 16 (20 msun)
+
+        # mstar = 1e9 at z=3
+        # grnr[np.where( (mstar>8.9) & (mstar<9.1) & (mhalo>11.1) & (mhalo<11.3) & (cen_flag) )[0][::10]]
+        haloIDs = [302, 437, 556, 600, 627, 684, 730, 793, 869]
+
+        # mstar = 1e8 at z=3
+        # grnr[np.where( (mstar>7.9) & (mstar<8.1) & (mhalo>10.4) & (mhalo<10.6) & (cen_flag) )[0][::50]]
+        haloIDs += [607, 2485, 3051, 3345, 3545, 3729, 3938, 4182, 4382, 4697, 5145]
+
         # mstar = 1e7 at z=3
         # grnr[np.where( (mstar>6.9) & (mstar<7.1) & (mhalo>9.8) & (mhalo<10.0) & (cen_flag) )[0][::200]]
-        haloIDs = [3272, 10677, 12688, 14043, 14997, 15998, 16996, 18203, 19761]
+        haloIDs += [3272, 10677, 12688, 14043, 14997, 15998, 16996, 18203, 19761]
 
         # mstar = 1e6 at z=3
         # grnr[np.where( (mstar>5.9) & (mstar<6.1) & (mhalo>9.3) & (mhalo<9.5) & (cen_flag) )[0][::400]]

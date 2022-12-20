@@ -87,9 +87,9 @@ def structuresEvo(conf='one'):
     run     = 'structures'
     variant = 'TNG'
     res     = 18
-    #redshift = 3.0 # for renderSingleHalo()
 
     # panel selection
+    dmMM = [6.0,8.5]
     gasMM = [5.0,7.5]
     variants = ['TNG','SN'] # for model vs model comparisons
     resolutions = [14,18] # for res vs res comparisons
@@ -110,31 +110,25 @@ def structuresEvo(conf='one'):
 
     if conf == 'three':
         # compare two runs (stars) with different models (same res)
-        panels.append( {'partType':'stars', 'variant':variants[0], 'partField':'stellarComp', 'valMinMax':gasMM, 
+        panels.append( {'partType':'stars', 'variant':variants[0], 'partField':'stellarComp', 
                         'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
-        panels.append( {'partType':'stars', 'variant':variants[1], 'partField':'stellarComp', 'valMinMax':gasMM, 
+        panels.append( {'partType':'stars', 'variant':variants[1], 'partField':'stellarComp', 
                         'labelScale':'physical', 'labelZ':True, 'labelSim':True, 'labelHalo':True} )
 
     if conf == 'four':
-        # compare two runs (gas+stars) with different models (same res)
+        # compare two runs (gas+stars+dm) with different models (same res)
+        panels.append( {'partType':'dm', 'variant':variants[0], 'partField':'coldens_msunkpc2', 'valMinMax':dmMM, 
+                        'labelScale':'physical', 'labelZ':True} )
         panels.append( {'partType':'gas', 'variant':variants[0], 'partField':'coldens_msunkpc2', 'valMinMax':gasMM, 
                         'labelScale':'physical'} )
-        panels.append( {'partType':'gas', 'variant':variants[1], 'partField':'coldens_msunkpc2', 'valMinMax':gasMM, 
-                        'labelScale':'physical', 'labelZ':True} )
-        panels.append( {'partType':'stars', 'variant':variants[0], 'partField':'stellarComp', 'valMinMax':gasMM, 
-                        'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
-        panels.append( {'partType':'stars', 'variant':variants[1], 'partField':'stellarComp', 'valMinMax':gasMM, 
+        panels.append( {'partType':'stars', 'variant':variants[0], 'partField':'stellarComp', 
                         'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
 
-    if conf == 'five':
-        # compare two runs (gas+stars) with different res (same model)
-        panels.append( {'partType':'gas', 'res':resolutions[0], 'partField':'coldens_msunkpc2', 'valMinMax':gasMM, 
+        panels.append( {'partType':'dm', 'variant':variants[1], 'partField':'coldens_msunkpc2', 'valMinMax':dmMM, 
+                        'labelScale':'physical', 'labelZ':True} )   
+        panels.append( {'partType':'gas', 'variant':variants[1], 'partField':'coldens_msunkpc2', 'valMinMax':gasMM, 
                         'labelScale':'physical'} )
-        panels.append( {'partType':'gas', 'res':resolutions[1], 'partField':'coldens_msunkpc2', 'valMinMax':gasMM, 
-                        'labelScale':'physical', 'labelZ':True} )
-        panels.append( {'partType':'stars', 'res':resolutions[0], 'partField':'stellarComp', 'valMinMax':gasMM, 
-                        'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
-        panels.append( {'partType':'stars', 'res':resolutions[1], 'partField':'stellarComp', 'valMinMax':gasMM, 
+        panels.append( {'partType':'stars', 'variant':variants[1], 'partField':'stellarComp', 
                         'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
 
     rVirFracs  = [1.0]
@@ -152,11 +146,24 @@ def structuresEvo(conf='one'):
         plotStyle    = 'edged'
         rasterPx     = nPixels[0]
         colorbars    = True
+        fontsize     = 26
         savePath     = expanduser('~') + '/data/frames/%s_h%d_%s_L%d/' % (run,hInd,variant,res)
         saveFileBase = '%s_h%d_%s_L%d_evo_%s' % (run,hInd,variant,res,conf)
 
+    if conf == 'five':
+        # panel
+        panels.append( {'partType':'stars', 'variant':variants[0], 'partField':'stellarComp', 'size':20.0,
+                        'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
+        panels.append( {'partType':'stars', 'variant':variants[1], 'partField':'stellarComp', 'size':2.0,
+                        'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
+
+        # single frame at z=3
+        plotConfig.saveFilename = '%s_h%d_L%d.png' % (run,hInd,res)
+        redshift = 3.0
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+        return
+
     renderSingleHaloFrames(panels, plotConfig, locals())
-    #renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 def zoomEvoMovies(conf):
     """ Configurations to render movies of the sims.zooms2 runs (at ~400 total snapshots). """

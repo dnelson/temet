@@ -3138,6 +3138,10 @@ def renderMultiPanel(panels, conf):
             
         height_in *= (1/(1.0-barAreaTop-barAreaBottom)) # account for colorbar areas
 
+        # make sure pixel number in both width and height is even
+        width_in = np.round(width_in*mpl.rcParams['savefig.dpi']/2)*2/mpl.rcParams['savefig.dpi']
+        height_in = np.round(height_in*mpl.rcParams['savefig.dpi']/2)*2/mpl.rcParams['savefig.dpi']
+
         fig.set_size_inches(width_in, height_in)
 
         # for each panel: paths and render setup
