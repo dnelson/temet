@@ -3,7 +3,7 @@ Observational data importers/converters, between different formats, etc.
 """
 import numpy as np
 import h5py
-from os.path import isdir
+from os.path import isdir, isfile
 import glob
 import matplotlib.pyplot as plt
 
@@ -276,3 +276,108 @@ def plot_dr2_spectrum(path='/virgotng/mpia/obs/KECK/KODIAQ_DR2.hdf5', name='J220
     ax.legend(loc='upper right')
     fig.savefig('spectra_%s.pdf' % name)
     plt.close(fig)
+
+def gaia_dr_hdf5(dr='dr3'):
+    """ Download and convert a GAIA data release into a single-file HDF5 format. """
+    from astropy.table import Table
+    import requests
+    import re
+
+    url = f'http://cdn.gea.esac.esa.int/Gaia/g{dr}/gaia_source/'
+    path = '/virgotng/mpia/obs/GAIA/'
+
+    main_keys = ['source_id', 'l', 'b', 'ra', 'ra_error', 'dec', 'dec_error', 'parallax', 'parallax_error', 
+                 'pmra', 'pmra_error', 'pmdec', 'pmdec_error', 
+                 'phot_g_mean_flux_error', 'phot_g_mean_mag', 'phot_bp_mean_flux_error', 'phot_bp_mean_mag', 
+                 'phot_rp_mean_flux_error', 'phot_rp_mean_mag', 'radial_velocity', 'radial_velocity_error',
+                 'mh_gspphot','mh_gspphot_lower','mh_gspphot_upper',
+                 'distance_gspphot','distance_gspphot_lower','distance_gspphot_upper']
+
+    # get list of all files
+    urls = requests.get(url)
+
+    pattern = re.compile('"GaiaSource_[\d-]*.csv.gz"')
+
+    files = [match[1:-1] for match in pattern.findall(urls.content.decode('ascii'))]
+
+    # download, parse, and convert each file chunk
+    for file in files:
+        # skip if already processed
+        outfile = path + file.replace('.csv.gz','.hdf5')
+        if isfile(outfile):
+            print('skip: ', file)
+            continue
+
+        # download and parse
+        data = Table.read(url + file, format='ascii') # format='ascii.ecsv', fill_values=("null", "0")
+
+        # write HDF5
+        with h5py.File(outfile,'w') as f:
+            for key in data.keys():
+                # skip: designation, phot_variable_flag, libname_gspphot
+                if np.issubdtype(data[key].dtype,np.str):
+                    continue
+
+                # copy
+                f[key] = data[key]
+
+                # description + units metadata
+                desc = data[key].description
+                if data[key].description is not None:
+                    desc = "%s [%s]" % (data[key].description,data[key].unit)
+                f[key].attrs['description'] = desc
+
+    # get metadata from first chunk
+    files = [file.replace('.csv.gz','.hdf5') for file in files]
+
+    with h5py.File(path + files[0],'r') as f:
+        keys = list(f.keys())
+        dtypes = {key:f[key].dtype for key in keys}
+        shapes = {key:f[key].shape for key in keys}
+        desc = {key:f[key].attrs['description'] for key in keys}
+
+    # get global count
+    print('Counting...')
+
+    count = 0
+
+    for file in files:
+        with h5py.File(path + file,'r') as f:
+            count += f[keys[0]].shape[0]
+
+    print('Total count: ', count)
+
+    # create two main output file
+    for i in range(2):
+        if i == 0:
+            # main file
+            fout = h5py.File(path + f'gaia_{dr}.hdf5','w')
+            save_keys = main_keys
+        else:
+            # aux file
+            fout = h5py.File(path + f'gaia_{dr}_aux.hdf5','w')
+            save_keys = list(set(keys) - set(main_keys)) # remainder
+
+        for key in save_keys:
+            print(key)
+
+            # allocate
+            shape = list(shapes[key])
+            shape[0] = count
+
+            fout[key] = np.zeros(shape, dtype=dtypes[key])
+
+            fout[key].attrs['description'] = desc[key]
+
+            # loop over all chunks
+            offset = 0
+            for file in files:
+                with h5py.File(file,'r') as f:
+                    # stamp
+                    length = f[key].shape[0]
+                    fout[key][offset:offset+length] = f[key][()]
+                    offset += length
+
+        fout.close()
+
+    print('Done.')
