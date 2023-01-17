@@ -1055,6 +1055,10 @@ class units(object):
             f12 = 0.6155
             wave0 = 2803.5320
             mass_amu = 24.305
+        if trans == 'oviir':
+            f12 = 6.96e-1
+            wave0 = 21.6019
+            mass_amu = 15.999
         if trans == 'lya':
             f12 = 0.416
             wave0 = 1215.67

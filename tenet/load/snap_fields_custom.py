@@ -733,10 +733,12 @@ tdep.log = False
 @snap_field(multi=True)
 def tau0_(sim, partType, field, args):
     """ Optical depth to a certain line, at line center. """
-    transition = field.split("_")[1] # e.g. "tau0_mgii2796", "tau0_mgii2803", "tau0_lya"
+    transition = field.split("_")[1].lower() # e.g. "tau0_mgii2796", "tau0_mgii2803", "tau0_lya"
     print(field, transition)
     if 'mgii' in transition:
         baseSpecies = 'Mg II'
+    elif 'ovii' in transition:
+        baseSpecies = 'O VII'
     elif 'ly' in transition:
         baseSpecies = 'H I' # note: uses internal hydrogen model, could use e.g. 'nhi_gk' (popping)
     else:

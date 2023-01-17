@@ -76,11 +76,19 @@ def _photons_projected(sim, photons, attrs, halo):
 
     # periodic distances
     xyz = np.zeros((lum.size,3), dtype='float32')
-    xyz[:,0] = photons['lspx'] * sim.boxSize - halo['GroupPos'][0]
-    xyz[:,1] = photons['lspy'] * sim.boxSize - halo['GroupPos'][1]
-    xyz[:,2] = photons['lspz'] * sim.boxSize - halo['GroupPos'][2]
-    
-    sim.correctPeriodicDistVecs(xyz)
+
+    if photons['shifted']:
+        # halo center moved to middle of box
+        xyz[:,0] = (photons['lspx'] - 0.5) * sim.boxSize
+        xyz[:,1] = (photons['lspy'] - 0.5) * sim.boxSize
+        xyz[:,2] = (photons['lspz'] - 0.5) * sim.boxSize
+    else:
+        # halo center in original global position
+        xyz[:,0] = photons['lspx'] * sim.boxSize - halo['GroupPos'][0]
+        xyz[:,1] = photons['lspy'] * sim.boxSize - halo['GroupPos'][1]
+        xyz[:,2] = photons['lspz'] * sim.boxSize - halo['GroupPos'][2]
+        
+        sim.correctPeriodicDistVecs(xyz)
 
     #print(f'{los = }, {peeling_index = }, {imageplane_i1 = }, {imageplane_i2 = }')
 
@@ -108,7 +116,7 @@ def _sb_profile(sim, photons, attrs, halo):
         w = np.where((dist_2d >= bin_edges[i]) & (dist_2d < bin_edges[i+1]))
         yy[i] = lum[w].sum() # erg/s
 
-    sb = yy / bin_areas # erg/s/pkpc^2]
+    sb = yy / bin_areas # [erg/s/pkpc^2]
 
     return bin_mid, sb
 
@@ -158,12 +166,23 @@ def _load_data(sim, haloID, b, ver="v4", line="O--7-21.6020A"):
     run = "%s_cutout_%s_%d_halo%d_size2%s%s" % (ver,sim.name,sim.snap,haloID,bStr,lineStr)
     file = "data.hdf5"
 
-    print(run)
+    photons_input = {'shifted':False}
+    photons_peeling = {'shifted':False}
 
-    photons_input = {}
-    photons_peeling = {}
+    filepath = '%s%s/%s' % (path,run,file)
+    filepath2 = filepath.replace(f'{ver}_',f'{ver}shifted_')
+    if isfile(filepath2):
+        filepath = filepath2 # use v4shifted instead of v4 if it exists
 
-    with h5py.File('%s%s/%s' % (path,run,file),'r') as f:
+        photons_input['shifted'] = True
+        photons_peeling['shifted'] = True
+
+    if 'O--8' in line:
+        filepath = filepath.replace('v4_cutout','v4-O8_cutout')
+
+    print(filepath.replace(path,''))
+
+    with h5py.File(filepath,'r') as f:
         # load
         for key in f['photons_input']:
             photons_input[key] = f['photons_input'][key][()]
@@ -173,7 +192,7 @@ def _load_data(sim, haloID, b, ver="v4", line="O--7-21.6020A"):
 
     return photons_input, photons_peeling, attrs
 
-def radialProfile(sim, haloID, b):
+def radialProfile(sim, haloID, b, line="O--7-21.6020A"):
     """ RT-scattered photon datasets from VoroILTIS: surface brightness radial profile.
 
     Args:
@@ -184,7 +203,7 @@ def radialProfile(sim, haloID, b):
     ylim = [2e31,1e37]
 
     # load
-    photons_input, photons_peeling, attrs = _load_data(sim, haloID, b)
+    photons_input, photons_peeling, attrs = _load_data(sim, haloID, b, line=line)
 
     halo = sim.halo(haloID)
 
@@ -195,7 +214,10 @@ def radialProfile(sim, haloID, b):
     # start plot
     fig, (ax, subax) = plt.subplots(ncols=1, nrows=2, sharex=True, height_ratios=[0.8,0.2], figsize=(10.4,8.8))
 
-    ax.set_title('O VII 21.6020$\\rm{\AA}$ (%s $\cdot$ HaloID %d $\cdot\, \\rm{M_\star = 10^{%.1f} \,M_\odot}$)' % (sim, haloID, mstar))
+    title = 'O VII 21.6020$\\rm{\AA}$'
+    if line == 'O--8-18.9709A': title = 'O VIII 18.9709$\\rm{\AA}$'
+
+    ax.set_title('%s (%s $\cdot$ HaloID %d $\cdot\, \\rm{M_\star = 10^{%.1f} \,M_\odot}$)' % (title,sim,haloID,mstar))
     ax.set_xlabel('Projected Distance [pkpc]')
     ax.set_yscale('log')
     ax.set_ylabel('Surface Brightness [ erg s$^{-1}$ kpc$^{-2}$ ]')
@@ -216,6 +238,7 @@ def radialProfile(sim, haloID, b):
 
     # sub-axis: ratio
     subax.set_ylim([0.5,20])
+    if line == 'O--8-18.9709A': subax.set_ylim([0.9,1.5])
     subax.set_xlabel('Projected Distance [pkpc]')
     subax.set_ylabel('Ratio')
     subax.set_yscale('log')
@@ -231,7 +254,8 @@ def radialProfile(sim, haloID, b):
 
     # finish and save plot
     ax.legend(fontsize=24, loc='upper right')
-    fig.savefig('sb_profile_%s_%d_h%d_b%s.pdf' % (sim.name,sim.snap,haloID,b))
+    lineStr = '_O8' if 'O--8' in line else ''
+    fig.savefig('sb_profile_%s_%d_h%d_b%s%s.pdf' % (sim.name,sim.snap,haloID,b,lineStr))
     plt.close(fig)
 
 def radialProfiles(sim, haloID, b):
@@ -351,10 +375,10 @@ def stackedRadialProfiles(sim, haloIDs, b):
 
             # radial profiles
             halo = sim.halo(haloID)
-            rr1, yy_intrinsic = _sb_profile(sim, photons_input, attrs, halo)
-            rr2, yy_scattered = _sb_profile(sim, photons_peeling, attrs, halo)
+            rad_mid, yy_intrinsic = _sb_profile(sim, photons_input, attrs, halo)
+            rad_mid2, yy_scattered = _sb_profile(sim, photons_peeling, attrs, halo)
 
-            assert np.array_equal(rr1,rr2)
+            assert np.array_equal(rad_mid,rad_mid2)
 
             profiles_intr.append(yy_intrinsic)
             profiles_scat.append(yy_scattered)
@@ -367,7 +391,7 @@ def stackedRadialProfiles(sim, haloIDs, b):
 
         # save cache
         with h5py.File(cacheFile,'w') as f:
-            f['rad_mid'] = rr1
+            f['rad_mid'] = rad_mid
             f['profiles_intr'] = profiles_intr
             f['profiles_scat'] = profiles_scat
             f['haloIDs'] = haloIDs
@@ -446,8 +470,8 @@ def stackedRadialProfiles(sim, haloIDs, b):
     ax.legend(handles, labels, loc='upper right')
 
     # finish and save plot
-    fig.savefig('sb_stacked_profiles_%s_%d_nh%d_b%s.pdf' % \
-        (sim.name,sim.snap,len(haloIDs),b[0] if len(b) == 1 else len(b)))
+    bStr = b[0] if isinstance(b,list) else b
+    fig.savefig('sb_stacked_profiles_%s_%d_nh%d_b%s.pdf' % (sim.name,sim.snap,len(haloIDs),bStr))
     plt.close(fig)
 
 def radialProfilesInput(sim, haloID):
@@ -509,7 +533,7 @@ def radialProfilesInput(sim, haloID):
     fig.savefig('input_profiles_%s_%d.pdf' % (sim.name,sim.snap))
     plt.close(fig)
 
-def imageSBcomp(sim, haloID, b):
+def imageSBcomp(sim, haloID, b, line="O--7-21.6020A"):
     """ RT-scattered photon datasets from VoroILTIS: surface brightness image, intrinsic vs scattered.
 
     Args:
@@ -521,7 +545,7 @@ def imageSBcomp(sim, haloID, b):
     size = 250 # pkpc
 
     # load
-    photons_input, photons_peeling, attrs = _load_data(sim, haloID, b)
+    photons_input, photons_peeling, attrs = _load_data(sim, haloID, b, line=line)
 
     halo = sim.halo(haloID)
 
@@ -546,7 +570,10 @@ def imageSBcomp(sim, haloID, b):
     ax_left.add_artist(plt.Circle((0,0), halo_r200, **circOpts))
     ax_left.add_artist(plt.Circle((0,0), halo_r500, **circOpts))
 
-    s = 'O VII 21.6020$\\rm{\AA}$\n%s\nHaloID %d\n$\\rm{M_\star = 10^{%.1f} \,M_\odot}$' % (sim, haloID, mstar)
+    title = 'O VII 21.6020$\\rm{\AA}$'
+    if line == 'O--8-18.9709A': title = 'O VIII 18.9709$\\rm{\AA}$'
+
+    s = '%s\n%s\nHaloID %d\n$\\rm{M_\star = 10^{%.1f} \,M_\odot}$' % (title, sim, haloID, mstar)
     ax_left.text(0.03, 0.03, s, ha='left', va='bottom', color='#fff', alpha=0.5, transform=ax_left.transAxes)
 
     cax = make_axes_locatable(ax_left).append_axes('right', size='4%', pad=0.1)
@@ -573,8 +600,11 @@ def imageSBcomp(sim, haloID, b):
     ax_right.set_xlabel('$\\rm{\Delta\,x}$ [pkpc]')
     ax_right.set_ylabel('$\\rm{\Delta\,y}$ [pkpc]')
 
+    vmm = [-1.0,1.0]
+    if line == 'O--8-18.9709A': vmm = [-0.1,0.1]
+
     im_ratio = np.log10(10.0**im_scattered / 10.0**im_intrinsic)
-    im_right = ax_right.imshow(im_ratio, cmap='coolwarm', extent=[-size,size,-size,size], aspect=1.0, vmin=-1.0, vmax=1.0)
+    im_right = ax_right.imshow(im_ratio, cmap='coolwarm', extent=[-size,size,-size,size], aspect=1.0, vmin=vmm[0], vmax=vmm[1])
 
     circOpts['color'] = '#000'
     ax_right.add_artist(plt.Circle((0,0), halo_r200, **circOpts))
@@ -585,7 +615,8 @@ def imageSBcomp(sim, haloID, b):
     cb.ax.set_ylabel('Surface Brightness Ratio [ log ]')
 
     # finish and save plot
-    fig.savefig('sb_image_%s_%d_h%d_b%s.pdf' % (sim.name,sim.snap,haloID,b))
+    lineStr = '_O8' if 'O--8' in line else ''
+    fig.savefig('sb_image_%s_%d_h%d_b%s%s.pdf' % (sim.name,sim.snap,haloID,b,lineStr))
     plt.close(fig)
 
 def imageSBgallery(sim, haloIDs, b):
@@ -775,6 +806,35 @@ def galaxyLum(sim, haloID, b, aperture_kpc=10.0):
     #print(f'{sim} {haloID = } {mstar = :.1f} {sfr = :.1f} {b = } has {tot_lum_intrinsic = :g} [erg/s], {tot_lum_scattered = :g} [erg/s]')
     return tot_lum_intrinsic, tot_lum_scattered
 
+def _get_subhalo_sample(sim, mstar_min=10.0, mstar_max=11.0, verbose=False):
+    """ Define the main sample for ILTIS processing. """ 
+    from ..vis.halo import subsampleRandomSubhalos
+
+    # load
+    mstar = sim.subhalos('mstar_30pkpc_log')
+    cen_flag = sim.subhalos('cen_flag')
+
+    grnr = sim.subhalos('SubhaloGrNr')
+
+    # select
+    w_iltis = np.where((mstar > mstar_min) & (mstar <= mstar_max) & cen_flag)
+
+    # sub-sample for at most N systems per 0.1 dex stellar mass bin
+    inds_iltis, _ = subsampleRandomSubhalos(sim, maxPointsPerDex=300, mstarMinMax=[mstar_min,mstar_max], mstar=mstar[w_iltis])
+    subinds_iltis = w_iltis[0][inds_iltis]
+
+    grnr_iltis = grnr[subinds_iltis]
+
+    # sample selection in mstar for ILTIS runs
+    if verbose:
+        print(f'note: for ILTIS sample, found [{len(w_iltis[0])}] galaxies in same mass range, spanning haloIDs [{grnr[w_iltis].min()} - {grnr[w_iltis].max()}]')
+
+        print(f'note: sub-selected ILTIS sample to [{len(subinds_iltis)}] galaxies in same mass range, spanning haloIDs [{grnr[subinds_iltis].min()} - {grnr[subinds_iltis].max()}]')
+
+        #print(repr(grnr_iltis))
+
+    return mstar, cen_flag, w_iltis, subinds_iltis, grnr_iltis
+    
 def galaxyLumVsSFR(sim, b=1, addDiffuse=True, correctLineToBandFluxRatio=False):
     """ Test the hot ISM emission model by comparing to observational scaling relations.
 
@@ -785,7 +845,7 @@ def galaxyLumVsSFR(sim, b=1, addDiffuse=True, correctLineToBandFluxRatio=False):
       correctLineToBandFluxRatio (bool): correct the Mineo+12 0.5-2 keV downwards to account for the fact 
         that OVII(r) is only a (uncertain) fraction of this broadband luminosity
     """
-    from ..vis.halo import subsampleRandomSubhalos
+    from matplotlib.patches import FancyArrowPatch
 
     # load catalog of OVII luminosities, per subhalo, star-forming gas only (no radial restriction)
     acField = 'Subhalo_OVIIr_GalaxyLum_30pkpc'
@@ -809,28 +869,13 @@ def galaxyLumVsSFR(sim, b=1, addDiffuse=True, correctLineToBandFluxRatio=False):
     mstar_min = 10.0
     mstar_max = 11.0
 
+    mstar, cen_flag, w_iltis, subinds_iltis, _ = _get_subhalo_sample(sim, mstar_min, mstar_max, verbose=True)
+
     sfr = sim.subhalos('sfr2')
-    mstar = sim.subhalos('mstar_30pkpc_log')
-    cen_flag = sim.subhalos('cen_flag')
 
     w = np.where((mstar > mstar_min) & (mstar <= mstar_max) & (sfr >= sfr_min) & cen_flag)
 
     print(f'{sim}: found [{len(w[0])}] galaxies with ({mstar_min:.1f} < M* < {mstar_max:.1f}) and (SFR > {sfr_min:g})')
-
-    # sample selection in mstar for ILTIS runs
-    w_iltis = np.where((mstar > mstar_min) & (mstar <= mstar_max) & cen_flag)
-
-    grnr = sim.subhalos('SubhaloGrNr')
-
-    print(f'note: for ILTIS sample, found [{len(w_iltis[0])}] galaxies in same mass range, spanning haloIDs [{grnr[w_iltis].min()} - {grnr[w_iltis].max()}]')
-
-    # sub-sample for at most N systems per 0.1 dex stellar mass bin
-    inds_iltis, _ = subsampleRandomSubhalos(sim, maxPointsPerDex=300, mstarMinMax=[mstar_min,mstar_max], mstar=mstar[w_iltis])
-    subinds_iltis = w_iltis[0][inds_iltis]
-
-    print(f'note: sub-selected ILTIS sample to [{len(subinds_iltis)}] galaxies in same mass range, spanning haloIDs [{grnr[subinds_iltis].min()} - {grnr[subinds_iltis].max()}]')
-
-    print(repr(grnr[subinds_iltis]))
 
     # start plot
     fig, ax = plt.subplots(figsize=figsize_sm)
@@ -842,7 +887,7 @@ def galaxyLumVsSFR(sim, b=1, addDiffuse=True, correctLineToBandFluxRatio=False):
     ax.set_yscale('log')
     ax.set_ylim([1e37,1e41])
 
-    cmap = loadColorTable('viridis', fracSubset=[0.05,0.95])
+    cmap = loadColorTable('viridis', fracSubset=[0.15,0.95])
     s = ax.scatter(sfr[w], lum[w], c=mstar[w], cmap=cmap, vmin=mstar_min, vmax=mstar_max)
 
     # Mineo+ (2012) observed relation for L_{0.5-2keV} vs SFR, i.e. an upper limit on L_OVIIr vs SFR
@@ -878,7 +923,29 @@ def galaxyLumVsSFR(sim, b=1, addDiffuse=True, correctLineToBandFluxRatio=False):
     ax.plot(mineo_sfr, np.array(mineo_lum)*1e38, 'D', color='#000', label='Mineo+12 individual galaxies')
 
     # Salvestrini+2020 NGC 7213 L_OVIIr = 1.9e+39 erg/s and SFR = 1.0 +/- 0.1 Msun/yr (Gruppioni+2016)
-    ax.errorbar(1.0, 1.9e39, xerr=0.2, yerr=1.0e39, marker='o', markersize=10.0, lw=lw, color='black', label='Salvestrini+20 (NGC 7213)')
+    ax.errorbar(1.0, 1.9e39, xerr=0.2, yerr=1.0e39, marker='o', markersize=10.0, lw=lw, color='black', label='NGC 7213')
+
+    if not correctLineToBandFluxRatio:
+        # add downward arrows to indicate possible rescalings
+        color = '#ccc'
+        arrowstyle ='simple, head_width=8, head_length=8, tail_width=2'
+        textOpts = {'color':color, 'rotation':90.0, 'fontsize':15, 'ha':'center', 'va':'top'}
+
+        y = 3.5e39
+        x = 12; f = 0.25
+        p1 = FancyArrowPatch(posA=[x,y], posB=[x,y*f], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        ax.add_artist(p1)
+        ax.text(x, y*f*0.9, '%4.2f' % f, **textOpts)
+
+        x = 16.5; f = 0.10
+        p2 = FancyArrowPatch(posA=[x,y], posB=[x,y*f], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        ax.add_artist(p2)
+        ax.text(x, y*f*0.9, '%4.2f' % f, **textOpts)
+
+        x = 22; f = 0.01
+        p2 = FancyArrowPatch(posA=[x,y], posB=[x,y*f], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        ax.add_artist(p2)
+        ax.text(x, y*f*0.9, '%4.2f' % f, **textOpts)
 
     # colobar and save plot
     ax.legend(loc='upper left')
@@ -933,6 +1000,8 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
     # calculate enhancement factor
     cacheFile = sim.derivPath + 'cache/iltis_enhancefac_%s-%d_nh%d_b%s.hdf5' % (sim.simName,sim.snap,len(haloIDs),b) #sim.cachePath + ''
 
+    subhaloIDs = sim.halos('GroupFirstSub')[haloIDs]
+
     if isfile(cacheFile):
         with h5py.File(cacheFile,'r') as f:
             assert np.array_equal(haloIDs, f['haloIDs'][()])
@@ -944,6 +1013,7 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
             mstar = f['mstar'][()]
             sfr = f['sfr'][()]
             lbol = f['lbol'][()]
+            mbh = f['mbh'][()] if 'mbh' in f else sim.auxCat('Subhalo_BH_Mass_largest')['Subhalo_BH_Mass_largest'][subhaloIDs]
             m200 = f['m200'][()]
             
         print('Loaded: [%s]' % cacheFile)
@@ -966,6 +1036,7 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
 
             # has some dependence on pixel size, adopt LEM resolution at z=0.01
             lem_res_arcsec = 15.0
+            lem_res_arcsec *= 4 # to minimize MC shot noise, bring medians up to reasonable values
             lem_res_kpc_at_z0p01 = sim.units.arcsecToAngSizeKpcAtRedshift(lem_res_arcsec, z=0.01)
             nbins = int(2 * size / lem_res_kpc_at_z0p01)
 
@@ -1009,10 +1080,10 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
             tot_lum_scattered[i] = lum[w].sum()
 
         # load galaxy properties
-        subhaloIDs = sim.halos('GroupFirstSub')[haloIDs]
         mstar = sim.subhalos('mstar_30pkpc_log')[subhaloIDs]
         sfr = sim.subhalos('sfr_30pkpc_log')[subhaloIDs]
         lbol = sim.auxCat('Subhalo_BH_BolLum_largest')['Subhalo_BH_BolLum_largest'][subhaloIDs]
+        mbh = sim.auxCat('Subhalo_BH_Mass_largest')['Subhalo_BH_Mass_largest'][subhaloIDs]
         m200 = sim.subhalos('m200_log')[subhaloIDs]
 
         # save cache
@@ -1026,6 +1097,7 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
             f['sfr'] = sfr
             f['mstar'] = mstar
             f['lbol'] = lbol
+            f['mbh'] = mbh
             f['m200'] = m200
 
         print(f'Saved: [{cacheFile}]')
@@ -1051,7 +1123,7 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
     # select color quantity
     cmap = loadColorTable('plasma', fracSubset=[0.1,0.9])
 
-    assert color_quant in ['sfr', 'LOVII', 'Lbol', 'm200']
+    assert color_quant in ['sfr', 'LOVII', 'Lbol', 'mbh', 'm200']
     if color_quant == 'sfr':
         cvals = sfr
         cminmax = [-1.0, 1.0] # log msun/yr
@@ -1064,6 +1136,10 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
         cvals = np.log10(lbol)
         cminmax = [37, 42]
         clabel = 'SMBH $\\rm{L_{bol}}$ [ log erg s$^{-1}$ ]'
+    if color_quant == 'mbh':
+        cvals = sim.units.codeMassToLogMsun(mbh)
+        cminmax = [7.5,8.5]
+        clabel = 'SMBH Mass [ log $\\rm{M_\odot}$ ]'
     if color_quant == 'm200':
         cvals = m200
         cminmax = [11.4, 12.6]
@@ -1078,7 +1154,8 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
     ax.set_ylim([0.8, np.nanmax(fac)*1.3])
     
     # plot individual galaxies
-    s = ax.scatter(mstar, fac, c=cvals, cmap=cmap, vmin=cminmax[0], vmax=cminmax[1])
+    markersize = 12**2 if color_quant == 'sfr' else 8**2
+    s = ax.scatter(mstar, fac, markersize, c=cvals, cmap=cmap, vmin=cminmax[0], vmax=cminmax[1])
 
     if median:
         # draw individual percentiles as vertical errorbars
@@ -1182,7 +1259,7 @@ def enhancementTrendVsMass(sim, haloIDs, b):
         ax.plot(xm_med, ym_med, ':', color=l.get_color(), lw=lw)
 
     # finish plot
-    ax.text(10.88, 30, 'Mean', ha='center', va='center', fontsize=18, color='black')
+    ax.text(10.88, 45, 'Mean', ha='center', va='center', fontsize=18, color='black')
     ax.text(10.88, 1.8, 'Median', ha='center', va='center', fontsize=18, color='black')
     ax.legend(loc='upper right')
 
@@ -1198,22 +1275,7 @@ def paperPlots():
     # config
     sim = simParams('tng50-1', redshift=0.0)
 
-    haloIDs = [151, 406, 120, 205, 425, 585, 234, 245, 553, 557, 63, 523, 231, 314, 397, 
-               257, 249, 131, 173, 209, 362, 242, 630, 235, 306, 440, 122, 115, 519, 531, 
-               180, 403, 495, 379, 643, 355, 480, 483, 333, 341, 197, 319, 572, 278, 229, 
-               92, 114, 384, 318, 326, 535, 77, 113, 118, 386, 460, 184, 64, 265, 427, 172, 
-               469, 283, 109, 225, 280, 363, 315, 614, 504, 100, 689, 507, 432, 402, 305, 
-               149, 395, 137, 121, 277, 308, 568, 383, 217, 602, 158, 452, 561, 337, 85, 273, 
-               138, 212, 193, 145, 447, 108, 431, 65, 455, 298, 459, 676, 227, 295, 110, 155, 
-               218, 597, 177, 98, 336, 516, 178, 487, 228, 157, 255, 338, 679, 266, 374, 304, 
-               371, 300, 311, 364, 152, 132, 640, 381, 46, 430, 203, 201, 496, 461, 164, 416, 
-               346, 626, 600, 80, 701, 335, 328, 133, 546, 244, 293, 136, 474, 251, 253, 160, 
-               457, 407, 285, 532, 89, 124, 171, 163, 134, 375, 214, 174, 344, 143, 347, 128, 
-               400, 82, 202, 206, 566, 281, 567, 429, 414, 141, 438, 332, 222, 170, 237, 67, 
-               168, 664, 595, 539, 247, 221, 224, 324, 107, 284, 642, 508, 410, 187, 537, 140, 
-               204, 125, 674, 233, 219, 186, 351, 309, 162, 215, 123, 530, 188, 350, 200, 405, 
-               274, 391, 208, 103, 527, 250, 130, 213, 297, 525, 372, 441, 555, 230, 241, 322, 
-               198, 165, 478, 357, 647, 287, 321, 236, 470, 656, 99, 423, 359] # todo: replace with complete list for full-sample analysis
+    _, _, _, _, haloIDs = _get_subhalo_sample(sim)
     haloID_demo = 204 # used for single-halo plots
     b_fiducial = 0.0001
 
@@ -1233,11 +1295,11 @@ def paperPlots():
 
     if 0:
         # fig 5: enhancement factor for (i) whole halo, (ii) 20 kpc<R<200 kpc, (iii) at r500 and r200, vs mstar
-        # (as a function of galaxy properties: SFR, L_OVIIr, L_AGN, etc)
+        # (as a function of galaxy properties: SFR, L_OVIIr, L_AGN, M_BH, etc)
         for i in range(5):
             enhancementVsMass(sim, haloIDs, b=b_fiducial, range_select=i, median=False)
             enhancementVsMass(sim, haloIDs, b=b_fiducial, range_select=i, median=True)
-        for cquant in ['sfr','LOVII','Lbol','m200']:
+        for cquant in ['sfr','LOVII','Lbol','mbh','m200']:
             enhancementVsMass(sim, haloIDs, b=b_fiducial, range_select=4, color_quant=cquant, median=False)
 
     if 0:
@@ -1249,12 +1311,25 @@ def paperPlots():
         galaxyLumVsSFR(sim, b=b_fiducial, addDiffuse=True, correctLineToBandFluxRatio=False)
 
     if 0:
-        # fig 8: OVIII case study
-        pass
-    
-    if 1:
-        # fig 9: impact of central source/boost factor
+        # fig 8: impact of central source/boost factor
         radialProfiles(sim, haloID=haloID_demo, b=[0, 0.0001, 0.001, 0.01])
+
+    if 0:
+        # fig X: OVIII case studies
+        haloIDs = [201,202,203,204]
+        line = 'O--8-18.9709A'
+
+        for haloID in haloIDs:
+            radialProfile(sim, haloID=haloID, b=b_fiducial, line=line)
+            imageSBcomp(sim, haloID=haloID, b=b_fiducial, line=line)
+
+    if 0:
+        # (possibilities for additional content)
+        # - spectral profiles, e.g. intrinsic vs scattered, few different radii
+        # - scattering diagnostics e.g. number of scatterings per photon, optical depths
+        # - a dens-temp phase diagram, and/or with rad, for intrinsic vs scattered (using cell index info)
+        # - a dens-temp phase diagram, and/or with rad, showing intrisic/scattered ratio (using cell index info)
+        pass
 
     if 0:
         # fig X: make all individual halo plots, for all halos
@@ -1283,3 +1358,9 @@ def paperPlots():
         for b in [0, 0.0001, 0.001, 0.01]:
             galaxyLumVsSFR(sim, b=b, addDiffuse=True, correctLineToBandFluxRatio=False)
             #galaxyLum(sim, haloID=haloID_demo, b=b)
+
+    if 0:
+        # fig X: optical depth maps
+        from ..projects.mg2emission import singleHaloImageMGII
+        singleHaloImageMGII(sim, sim.halo(haloID_demo)['GroupFirstSub'], conf=11)
+    

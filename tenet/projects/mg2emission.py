@@ -106,6 +106,17 @@ def singleHaloImageMGII(sP, subhaloInd, conf=1, size=100, rotation='edge-on', la
             smoothFWHM = sP.units.arcsecToAngSizeKpcAtRedshift(0.05)
             nPixels = [300, 300]
             labelCustom = ['Narrow Field Mode','0.025"/px, PSF=0.05"']
+    if conf == 11:
+        # equirectangular - O7 optical depth map
+        contour = None
+        rVirFracs = False
+        panels.append( {'partType':'gas', 'partField':'tau0_OVIIr', 'valMinMax':[-0.5,1.5]} )
+
+        sP.createCloudyCache = False
+        projType   = 'equirectangular' #'mollweide'
+        projParams = {'fov':360.0}
+        nPixels    = [1200,600]
+        axesUnits  = 'rad_pi'
 
     class plotConfig:
         plotStyle    = 'edged'

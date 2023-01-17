@@ -2867,7 +2867,8 @@ def renderMultiPanel(panels, conf):
     color1 = 'black' if '_black' in conf.plotStyle else 'white'
     color2 = 'white' if '_black' in conf.plotStyle else 'black'
 
-    makedirs(conf.savePath, exist_ok=True)
+    if hasattr(conf,'sizePath'):
+        makedirs(conf.savePath, exist_ok=True)
 
     # plot sizing and arrangement
     sizeFac = np.array(conf.rasterPx) / mpl.rcParams['savefig.dpi']
