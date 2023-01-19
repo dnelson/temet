@@ -1595,3 +1595,110 @@ def plot_timeevo():
     ax.legend(loc='best')
     fig.savefig('time_evo_sh%d_%s_%d.pdf' % (subhaloID,field,fieldIndex))
     plt.close(fig)
+
+def mstarVsMhaloEvo():
+    """ Plot galaxy stellar mass vs halo mass evolution/relation, comparison between runs. 
+    """
+    # config simulations and field
+    variants = ['SN','SNPIPE','TNG','ST']
+    res = [11, 12, 14, 18, 26]
+    hInd = 10677 # 31619
+    redshift = 3.0
+
+    sims = []
+    for variant in ['TNG','SN']:
+        sims.append(simParams(run='structures', res=11, hInd=hInd, variant=variant, redshift=redshift))
+        sims.append(simParams(run='structures', res=12, hInd=hInd, variant=variant, redshift=redshift))
+        sims.append(simParams(run='structures', res=14, hInd=hInd, variant=variant, redshift=redshift))
+        sims.append(simParams(run='structures', res=18, hInd=hInd, variant=variant, redshift=redshift))
+
+    if hInd == 10677:
+        sims.append(simParams(run='structures', res=11, hInd=hInd, variant='SNPIPE', redshift=redshift))
+        sims.append(simParams(run='structures', res=11, hInd=hInd, variant='ST', redshift=redshift))
+        sims.append(simParams(run='structures', res=12, hInd=hInd, variant='ST', redshift=redshift))
+
+    # load
+    mhalo = []
+    mstar = []
+    mhalo_evo = []
+    mstar_evo = []
+
+    for sim in sims:
+        sub = sim.subhalo(sim.zoomSubhaloID)
+        halo = sim.halo(sub['SubhaloGrNr'])
+
+        mhalo.append( halo['Group_M_Crit200'] )
+        mstar.append( sub['SubhaloMassInRadType'][sim.ptNum('stars')] )
+
+        try:
+            mpb = sim.loadMPB(sim.zoomSubhaloID)
+            mhalo_evo.append( sim.units.codeMassToLogMsun(mpb['Group_M_Crit200']) )
+            mstar_evo.append( sim.units.codeMassToLogMsun(mpb['SubhaloMassInRadType'][:,sim.ptNum('stars')]) )
+        except:
+            print('No merger tree and/or offsets for [%s], skipping.' % sim)
+            mhalo_evo.append(None)
+            mstar_evo.append(None)
+
+    mstar = sim.units.codeMassToLogMsun(mstar)
+    mhalo = sim.units.codeMassToLogMsun(mhalo)
+
+    # load parent box relation
+    tng100 = simParams(run='tng100-1', redshift=redshift)
+    tng100_cen = tng100.subhalos('cen_flag')
+
+    tng100_mstar = tng100.subhalos('mstar2_log')[tng100_cen == True]
+    tng100_mhalo = tng100.subhalos('m200_log')[tng100_cen == True]
+    
+    xm, ym, _, pm = running_median(tng100_mhalo,tng100_mstar,binSize=0.05,percs=[5,16,50,84,95])
+
+    # plot
+    fig, ax = plt.subplots()
+
+    ax.set_xlabel('Halo Mass $\\rm{M_{200,crit}}$ [ $\\rm{M_\odot}$ ]')
+    ax.set_ylabel('Stellar Mass [ $\\rm{M_\odot}$ ]')
+    if hInd == 10677:
+        ax.set_xlim([9.4,10.2])
+        ax.set_ylim([6.2,7.8])
+    if hInd == 31619:
+        ax.set_xlim([9.1,9.6])
+        ax.set_ylim([5.5,7.5])
+
+    # parent box relation
+    pm = savgol_filter(pm,sKn,sKo,axis=1)
+    ax.fill_between(xm, pm[0,:], pm[-1,:], color='#ccc', alpha=0.4)
+    ax.fill_between(xm, pm[1,:], pm[-2,:], color='#ccc', alpha=0.6)
+    ax.plot(xm, ym, color='#ccc', lw=lw*2, alpha=0.9, label=tng100)
+
+    # halo from parent box
+    sim = sims[0]
+    halo_parentbox = sim.sP_parent.halo(hInd)
+    subhalo_parentbox = sim.sP_parent.subhalo(halo_parentbox['GroupFirstSub'])
+
+    mhalo_parentbox = sim.units.codeMassToLogMsun(halo_parentbox['Group_M_Crit200'])
+    mstar_parentbox = sim.units.codeMassToLogMsun(subhalo_parentbox['SubhaloMassInRadType'][sim.ptNum('stars')])
+
+    label = 'h%d in %s' % (hInd,sim.sP_parent.simName)
+    l, = ax.plot(mhalo_parentbox, mstar_parentbox, markers[3], color='#555', label=label)
+
+    mpb = sim.sP_parent.loadMPB(halo_parentbox['GroupFirstSub'])
+    mpb_mhalo = sim.units.codeMassToLogMsun(mpb['Group_M_Crit200'])
+    mpb_mstar = sim.units.codeMassToLogMsun(mpb['SubhaloMassInRadType'][:,sim.ptNum('stars')])
+
+    ax.plot(mpb_mhalo, mpb_mstar, '-', lw=1.5, color=l.get_color(), alpha=0.2)
+
+    # individual zoom runs
+    for i, sim in enumerate(sims):
+        if sim.variant == 'TNG': marker = markers[0]
+        if sim.variant == 'SN': marker = markers[1]
+        if sim.variant == 'ST': marker = markers[2]
+
+        l, = ax.plot(mhalo[i], mstar[i], marker, label=sim.simName)
+
+        if mhalo_evo[i] is not None:
+            ax.plot(mhalo_evo[i], mstar_evo[i], '-', lw=1.5, color=l.get_color(), alpha=0.2)
+        #print(sim.simName, mhalo[i], mstar[i])
+
+    # finish and save plot
+    ax.legend(loc='upper left')   
+    fig.savefig('smhm_structures_h%d_comp_%d.png' % (hInd,len(sims)))
+    plt.close(fig)

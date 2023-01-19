@@ -183,8 +183,8 @@ class simParams:
     
     # physical models: GFM and other indications of optional snapshot fields
     metals    = None  # set to list of string labels for GFM runs outputting abundances by metal
-    BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=TNG Model, 3=Auriga model)
-    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=MCS model)
+    BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=ST model)
+    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=MCS/ST model)
 
     def __init__(self, run, res=None, variant=None, redshift=None, time=None, snap=None, 
                        hInd=None, haloInd=None, subhaloInd=None, arepoPath=None,
@@ -602,7 +602,7 @@ class simParams:
             self.groupOrdered   = True
 
             if run in ['tng_zoom','tng_zoom_dm']:
-                # TNG1
+                # TNG-Cluster
                 parentRes = 2048
                 self.zoomLevel = self.res # L11 (L680n2048 or ~TNG300-3) to L13 (~TNG300-1.3) to L14 (~TNG300-1)
                 self.sP_parent = simParams(res=parentRes, run='tng_dm', redshift=0.0)
@@ -677,20 +677,22 @@ class simParams:
             if self.variant == 'sf3':
                 ics_filename = 'ics_zoom_L%sn%dTNG_DM_halo%d_L%d_sf3.0_mpc.hdf5' % (bs,parentRes,self.hInd,self.res) # generalize if not sf3
                 self.icsPath = self.basePath + 'sims.TNG_zooms/ICs/output/'
-                if self.res in [13,14]: self.icsPath += 'done/'
                 self.icsPath += ics_filename
-                #with h5py.File(self.icsPath, 'r') as f:
-                #    self.zoomShiftPhys = f['Header'].attrs['GroupCM'] / 1000 # code (mpc) units
+                with h5py.File(self.icsPath, 'r') as f:
+                    self.zoomShiftPhys = f['Header'].attrs['GroupCM'] / 1000 # code (mpc) units
 
-            self.arepoPath  = self.basePath + 'sims.TNG_zooms/' + dirStr + '/'
-            self.simName    = dirStr
+            self.arepoPath = self.basePath + 'sims.TNG_zooms/' + dirStr + '/'
+            if run in ['tng_zoom','tng_zoom_dm']:
+                self.arepoPath = '/virgotng/mpia/TNG-Cluster/' + dirStr + '/'
+
+            self.simName = dirStr
 
         # STRUCTURES
         if run in ['structures']:
             assert hInd is not None
-            assert self.variant in ['DM','SN','TNG']
+            assert self.variant in ['DM','SN','SNPIPE','TNG','ST']
 
-            self.validResLevels = [11,12,14,18]
+            self.validResLevels = [11,12,14,18,26]
             self.groupOrdered = True
 
             # TNG50-1 zooms to z=3
@@ -715,11 +717,16 @@ class simParams:
                 self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
                 self.winds = 2
                 self.BHs   = 2
-            elif self.variant == 'SN':
+            elif self.variant in ['SN','SNPIPE']:
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
                 self.metals = None
                 self.winds = 4 # MCS
                 self.BHs   = None
+            elif self.variant == 'ST':
+                self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
+                self.metals = None
+                self.winds = 4 # MCS/ST
+                self.BHs   = 4 # ST
 
             # paths
             dirStr = 'L%dn%dTNG_h%d_z3_L%d_%s' % (int(self.boxSize/1000.0),parentRes,self.hInd,self.zoomLevel,self.variant)

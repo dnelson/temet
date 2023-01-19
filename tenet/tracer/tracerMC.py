@@ -5,7 +5,7 @@ import numpy as np
 import h5py
 import glob
 import time
-from os.path import isfile, isdir
+from os.path import isfile, isdir, expanduser
 from os import mkdir
 
 try:
@@ -1194,7 +1194,7 @@ def globalTracerLength(sP, halos=False, subhalos=False, haloTracerOffsets=None):
         ParentID -= ParentID_min
 
         assert ParentID.max() < np.iinfo('int64').max
-        ParentID.dtype = np.int64 # change dtype (unsafe cast)
+        #ParentID.dtype = np.int64 # change dtype (unsafe cast) (why? corrupts values, segfaults bincount())
 
         ParentHisto = bincount(ParentID, dtype=np.int32)
 
@@ -1546,7 +1546,7 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
                 trVals['Halo/TracerLength/'+key] = trCounts[key]
                 trVals['Halo/TracerOffset/'+key] = trOffsets[key]
 
-            # compute lengths/offsets by halo
+            # compute lengths/offsets by subhalo
             trCounts, trOffsets = globalTracerLength(sP, subhalos=True, haloTracerOffsets=trOffsets)
 
             for key in trCounts:

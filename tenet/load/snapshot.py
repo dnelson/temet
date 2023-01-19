@@ -583,7 +583,7 @@ def snapshotSubset(sP, partType, fields,
 
     # halo or subhalo based subset
     if haloID is not None or subhaloID is not None:
-        assert not sP.isPartType(partType, 'tracer') # not group-ordered
+        assert not sP.isPartType(partType, 'tracer') # not group-ordered (even in TNG-Cluster, since separated by parent type)
         subset = haloOrSubhaloSubset(sP, haloID=haloID, subhaloID=subhaloID)
 
     # check memory cache (only simplest support at present, for indRange/full returns of global cache)
