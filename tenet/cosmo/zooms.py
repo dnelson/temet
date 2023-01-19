@@ -7,13 +7,13 @@ import matplotlib.pyplot as plt
 from os.path import isfile, isdir, expanduser
 from os import mkdir
 from matplotlib.ticker import MultipleLocator
+from scipy.signal import savgol_filter
 from collections import OrderedDict
-from scipy.stats import binned_statistic
 from numba import jit
 
-from ..cosmo.perf import loadCpuTxt, getCpuTxtLastTimestep
+from ..cosmo.perf import getCpuTxtLastTimestep
 from ..util.simParams import simParams
-from ..util.helper import logZeroNaN
+from ..util.helper import logZeroNaN, running_median
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
 from ..plot.config import *
@@ -40,7 +40,7 @@ def pick_halos():
 
 def _halo_ids_run(res=14, onlyDone=False):
     """ Parse runs.txt and return the list of (all) halo IDs. """
-    path = expanduser("~") + "/sims.TNG_zooms/"
+    path = "/virgotng/mpia/TNG-Cluster/"
 
     if res == 14 and onlyDone:
         # runs.txt file no longer relevant, use directories which exist
@@ -290,8 +290,6 @@ def sizefacComparison():
         for variant in variants:
             sP = simParams(run=run, res=zoomRes, hInd=hInd, redshift=redshift, variant=variant)
 
-            #cpu = loadCpuTxt(sP.arepoPath, keys=['total'])
-            #cpuHours = cpu['total'][0,-1,2] / (60.0*60.0) * cpu['numCPUs']
             _, _, _, cpuHours = getCpuTxtLastTimestep(sP.simPath + '/txt-files/cpu.txt')
 
             min_dist_lr, rVirFacs, counts, fracs, massfracs, _, _, _ = calculate_contamination(sP)
@@ -538,7 +536,7 @@ def _volumes_from_mask(mask):
     return volumes
 
 def maskBoxRegionsByHalo():
-    """ Testing spatial concatenation of zoom runs via discrete convex hull type approach. """
+    """ Compute spatial volume fractions of zoom runs via discrete convex hull type approach. """
     # zoom config
     res = 13
     variant = 'sf3'
@@ -612,7 +610,10 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
     simulation, i.e. concatenate the output/group* and output/snap* of these runs. 
     Process a single snapshot, since all are independent. Note that we write exactly one
     output groupcat file per zoom halo, and exactly two output snapshot files. """
+    from ..tracer.tracerMC import globalTracerChildren, globalTracerLength, match3
+
     outPath = '/u/dnelson/sims.TNG/L680n8192TNG/output/'
+    parent_sim = simParams('tng-cluster')
 
     # zoom config
     res = 14
@@ -634,6 +635,83 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
         # offset (increase) by hInd*1e9
         new_ids += halo_ind * 1000000000
         return new_ids
+
+    # --- tracers ---
+    if snap == 99:
+        # tracers: is final snapshot? then decide tracer ordering and save for use on all snapshots
+        GroupLenTypeTracers = np.zeros(len(hInds), dtype='int32')
+
+        for i, hInd in enumerate(hInds):
+            sP = simParams(run=run, res=res, snap=snap, hInd=hInd, variant=variant)
+            print('[%4d] z=0 tracers.' % hInd)
+
+            # cache
+            saveFilename = outPath + 'tracers_%d.hdf5' % hInd
+
+            if isfile(saveFilename):
+                with h5py.File(saveFilename,'r') as f:
+                    for key in f['TracerLength_Halo']:
+                        GroupLenTypeTracers[i] += np.sum(f['TracerLength_Halo'][key][()])
+
+                print(' skip')
+                continue
+
+            # get child tracers of all particle types in all FoFs
+            # (ordered first by parent type: gas->stars->BHs, then by halo/subhalo membership)
+            trIDs = globalTracerChildren(sP, halos=True)
+
+            # TracerLength and TracerOffset by halo and subhalo
+            trCounts_halo, trOffsets_halo = globalTracerLength(sP, halos=True)
+
+            trCounts_sub, trOffsets_sub = globalTracerLength(sP, subhalos=True, haloTracerOffsets=trOffsets_halo)
+
+            # load all TracerIDs, get those not in FoFs
+            TracerID = sP.snapshotSubsetP('tracer', 'TracerID')
+
+            trInds,_ = match3(TracerID,trIDs)
+            assert trInds.size == trIDs.size
+
+            mask = np.zeros(TracerID.size, dtype='int8')
+            mask[trInds] = 1
+
+            trInds_outside_halos = np.where(mask == 0)[0]
+
+            trIDs_outside_halos = TracerID[trInds_outside_halos]
+
+            # make final, z=0 ordered, list of tracerIDs
+            trInds_final = np.hstack((trInds,trInds_outside_halos))
+
+            if 1:
+                # debug verify
+                mask2 = np.zeros(TracerID.size, dtype='int16')
+                mask2[trInds_final] += 1
+                assert mask2.min() == 1
+                assert mask2.max() == 1
+
+            TracerID = TracerID[trInds_final]
+
+            # save            
+            with h5py.File(saveFilename,'w') as f:
+                # lengths and offsets
+                for key in trCounts_halo.keys():
+                    f['TracerLength_Halo/%s' % key] = trCounts_halo[key]
+                    f['TracerOffset_Halo/%s' % key] = trOffsets_halo[key]
+
+                    f['TracerLength_Subhalo/%s' % key] = trCounts_sub[key]
+                    f['TracerOffset_Subhalo/%s' % key] = trOffsets_sub[key]
+
+                # z=0 ordered TracerIDs
+                f['TracerID'] = TracerID
+
+            # save total length of tracers in FoF halos, for each hInd (sum over all parent types)
+            for key in trCounts_halo.keys():
+                GroupLenTypeTracers[i] += np.sum(trCounts_halo[key])
+
+        with h5py.File(outPath + 'tracers_halolengths.hdf5','w') as f:
+            f['GroupLenTypeTracers'] = GroupLenTypeTracers
+
+    with h5py.File(outPath + 'tracers_halolengths.hdf5','r') as f:
+        GroupLenTypeTracers = f['GroupLenTypeTracers'][()]
 
     # --- groupcat ---
 
@@ -666,6 +744,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
     offsets = {}
     offsets['Group']   = np.hstack( (0,np.cumsum(lengths['Group'])[:-1]) )
     offsets['Subhalo'] = np.hstack( (0,np.cumsum(lengths['Subhalo'])[:-1]) )
+    offsets['Tracers'] = np.hstack( (0,np.cumsum(GroupLenTypeTracers)[:-1]) )
 
     numFiles = sP.groupCatHeader()['NumFiles']
     print('\nCombine [%d] zooms, re-writing group catalogs:' % len(hInds))
@@ -732,7 +811,6 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
                         data[gName][field][start:start+length] = f[gName][field][()]
 
                     offsets_loc[gName] += length
-
         
         if lengths['Group'][hCount]:
             # allocate fields to save originating zoom run IDs
@@ -779,6 +857,17 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
             # record fof-scope lengths by type
             GroupLenType_hInd[hCount,:] = np.sum(data['Group']['GroupLenType'], axis=0)
 
+            # tracers: add Tracer{Length,Offset}Type at z=0
+            if snap == 99:
+                data['Group']['TracerLengthType'] = np.zeros((lengths['Group'][hCount],6), dtype='int32')
+                data['Group']['TracerOffsetType'] = np.zeros((lengths['Group'][hCount],6), dtype='int32')
+
+                with h5py.File(outPath + 'tracers_%d.hdf5' % hInd,'r') as f:
+                    for key in f['TracerLength_Halo'].keys():
+                        data['Group']['TracerLengthType'][:,sP.ptNum(key)] = f['TracerLength_Halo'][key][()]
+                        data['Group']['TracerOffsetType'][:,sP.ptNum(key)] = f['TracerOffset_Halo'][key][()] + \
+                                                                             offsets['Tracers'][hCount]
+
         if lengths['Subhalo'][hCount]:
             data['Subhalo']['SubhaloOrigHaloID'] = np.zeros(lengths['Subhalo'][hCount], dtype='int32')
 
@@ -810,6 +899,17 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
             for field in ['SubhaloBfldDisk','SubhaloBfldHalo']:
                 if field in data['Subhalo']:
                     data['Subhalo'][field] *= fac**(-1.5) # UnitLength^-1.5
+
+            # tracers: add Tracer{Length,Offset}Type at z=0
+            if snap == 99:
+                data['Subhalo']['TracerLengthType'] = np.zeros((lengths['Subhalo'][hCount],6), dtype='int32')
+                data['Subhalo']['TracerOffsetType'] = np.zeros((lengths['Subhalo'][hCount],6), dtype='int32')
+
+                with h5py.File(outPath + 'tracers_%d.hdf5' % hInd,'r') as f:
+                    for key in f['TracerLength_Subhalo'].keys():
+                        data['Subhalo']['TracerLengthType'][:,sP.ptNum(key)] = f['TracerLength_Subhalo'][key][()]
+                        data['Subhalo']['TracerOffsetType'][:,sP.ptNum(key)] = f['TracerOffset_Subhalo'][key][()] + \
+                                                                             offsets['Tracers'][hCount]
 
         # per-halo header adjustments
         headers['Header']['Ngroups_ThisFile'] = lengths['Group'][hCount]
@@ -864,11 +964,13 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
 
     NumPart_Total_Global = np.sum(NumPart_Total, axis=0)
 
-    # determine sizes/split between two files per halo
+    # load total number of tracers in halos and overwrite GroupLenType[3]
     assert np.sum(GroupLenType_hInd[:,3]) == 0
+    assert GroupLenTypeTracers.size == GroupLenType_hInd.shape[0]
 
-    GroupLenType_hInd[:,3] = np.int32(NumPart_Total[:,3]/2) # place half of tracers in first file
+    GroupLenType_hInd[:,3] = GroupLenTypeTracers
 
+    # determine sizes/split between two files per halo
     OuterFuzzLenType_hInd = NumPart_Total - GroupLenType_hInd
 
     # quick save of offsets
@@ -949,6 +1051,19 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
                 data[gName][field] -= sP.boxSize/2
                 data[gName][field] += sP.zoomShiftPhys
                 sP.correctPeriodicPosVecs(data[gName][field])
+
+            # reorder tracers into z=0 order
+            if gName == 'PartType3':
+                with h5py.File(outPath + 'tracers_%d.hdf5' % hInd,'r') as f:
+                    # z=0 ordered TracerIDs
+                    TracerID_z0 = f['TracerID'][()]
+
+                inds_snap, inds_z0 = match3(data[gName]['TracerID'], TracerID_z0)
+                assert data[gName]['TracerID'].size == TracerID_z0.size
+                assert inds_z0.size == TracerID_z0.size
+
+                for trField in data[gName].keys():
+                    data[gName][trField] = data[gName][trField][inds_snap]
 
             # make ID index adjustments
             if 'ParticleIDs' in data[gName]:
@@ -1050,6 +1165,28 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
 
             print(' [%3d] hInd = %4d (gas %8d - %8d of %8d) Wrote: [%s]' % \
                 (hCount,hInd,start[0],start[0]+headers['Header']['NumPart_ThisFile'][0],NumPart_Total[hCount,0],outFile))
+
+
+    # compute offsets and insert them (e.g. new/MTNG convention)
+    parent_sim.snap = snap # avoid setSnap() since our snap<->redshift mapping file is incomplete
+    
+    offsets = parent_sim.groupCatOffsetListIntoSnap()
+
+    w_offset_halos = 0
+    w_offset_subs = 0
+
+    for hCount, hInd in enumerate(hInds):
+        outFile  = outPath + "groups_%03d/fof_subhalo_tab_%03d.%d.hdf5" % (snap,snap,hCount)
+
+        with h5py.File(outFile, 'r+') as f:
+            Nsubhalos = f['Header'].attrs['Nsubgroups_ThisFile']
+            Nhalos = f['Header'].attrs['Ngroups_ThisFile']
+
+            f['Group']['GroupOffsetType'] = offsets['snapOffsetsGroup'][w_offset_halos:w_offset_halos+Nhalos]
+            f['Subhalo']['SubhaloOffsetType'] = offsets['snapOffsetsSubhalo'][w_offset_subs:w_offset_subs+Nsubhalos]
+
+            w_offset_halos += Nhalos
+            w_offset_subs += Nsubhalos
 
     print('Done.')
 
@@ -1217,32 +1354,6 @@ def testVirtualParentBoxSnapshot(snap=99):
 
         # finish
         pdf.close()
-
-def check_all():
-    """ TEMP CHECK NSUBS. """
-    # zoom config
-    res = 14
-    variant = 'sf3'
-    run = 'tng_zoom'
-
-    hInds = [3693] #_halo_ids_run(onlyDone=True) #[5]
-
-    # load total number of halos and subhalos
-    lengths = {'Group'   : np.zeros(len(hInds), dtype='int32'),
-               'Subhalo' : np.zeros(len(hInds), dtype='int32')}
-
-    for i, hInd in enumerate(hInds):
-        print(i,hInd)
-
-        for snap in range(100):
-            print(' snap: ',snap)
-            sP = simParams(run=run, res=res, snap=snap, hInd=hInd, variant=variant)
-
-            lengths['Group'][i] = sP.numHalos
-            lengths['Subhalo'][i] = sP.numSubhalos
-
-            if lengths['Subhalo'][i]:
-                assert lengths['Subhalo'][i] == sP.groups('GroupNsubs').sum()
 
 def check_groupcat_property():
     """ Compare TNG300 vs TNG-Cluster property. """
@@ -1484,4 +1595,3 @@ def plot_timeevo():
     ax.legend(loc='best')
     fig.savefig('time_evo_sh%d_%s_%d.pdf' % (subhaloID,field,fieldIndex))
     plt.close(fig)
-
