@@ -28,7 +28,7 @@ def lemIGM():
     #  (i) 32x32 arcmin FoV with 2ev resolution
     #  (ii) 16x16 arcmin FoV with 0.9ev resolution
 
-    sP = simParams(run='tng100-1', redshift=redshift)
+    sP = simParams(run='tng300-1', redshift=redshift)
 
     # config
     nPixels    = 2000
@@ -46,10 +46,11 @@ def lemIGM():
     partType = 'gas'
     #panels = [{'partField':'sb_OVIII', 'valMinMax':[-18,-10]}]
     #panels = [{'partField':'sb_OVII', 'valMinMax':[-18,-10]}]
-    panels = [{'partField':'O VII', 'valMinMax':[11,16]}]
+    #panels = [{'partField':'O VII', 'valMinMax':[11,16]}]
     #panels = [{'partField':'sb_CVI', 'valMinMax':[-18,-10]}]
     #panels = [{'partField':'sb_NVII', 'valMinMax':[-18,-10]}]
     #panels = [{'partField':'sb_Ne10 12.1375A', 'valMinMax':[-18,-10]}] # also: Fe XVII (neither in elInfo)
+    panels = [{'partField':'coldens_msunkpc2', 'valMinMax':[5,8]}]
 
     class plotConfig:
         plotStyle  = 'open' # open, edged
@@ -341,7 +342,7 @@ def radialProfiles(sim, haloID, b):
     fig.savefig('sb_profile_%s_%d_h%d_b%s.pdf' % (sim.name,sim.snap,haloID,len(b)))
     plt.close(fig)
 
-def stackedRadialProfiles(sim, haloIDs, b):
+def stackedRadialProfiles(sim, haloIDs, b, addObsThresholds=True):
     """ RT-scattered photon datasets from VoroILTIS: stacked surface brightness radial profiles.
 
     Args:
@@ -428,13 +429,46 @@ def stackedRadialProfiles(sim, haloIDs, b):
     ax.set_ylim(ylim)
 
     ax.xaxis.set_tick_params(labelbottom=True)
+    
+    # obs thresholds (see minSBtable.dat) (100 km/s linewidth, 5 sigma, wabs 3e18 galactic absorption)
+    if addObsThresholds:
+        # note: these are "single pointings" at the given exp time, i.e. we assume that all the pixels 
+        # in the entire FoV are binned together to try to make a detection. probably should change to 
+        # a constant size (angular or kpc) for the binning, otherwise we completely neglect the 
+        # spatial mapping capabilities. however, at the 1 arcmin^2 level (~20 pkpc at z=0.035), the 
+        # exposure times for XRISM and XIFU become ridiculous e.g. 10Ms to see anything.
+        c = '#aaa'
+
+        # XRISM-Resolve 500ks
+        xmax = 50.0
+        sb_thresh = 1.1e35
+        ax.plot([xlim[0],xmax], [sb_thresh,sb_thresh], lw=lw*2, color=c)
+        ax.text(xmax+5, sb_thresh, 'XRISM-Resolve (500ks)', ha='left', va='center', color=c, fontsize=16)
+
+        # Athena-XIFU 100ks
+        xmax = 80.0
+        sb_thresh = 2.0e34
+        ax.plot([xlim[0],xmax], [sb_thresh,sb_thresh], lw=lw*2, color=c)
+        ax.text(xmax+5, sb_thresh, 'Athena-XIFU (100ks)', ha='left', va='center', color=c, fontsize=16)
+
+        # Athena-XIFU 1Ms
+        xmax = 150.0
+        sb_thresh = 4.6e33
+        ax.plot([xlim[0],xmax], [sb_thresh,sb_thresh], lw=lw*2, color=c)
+        ax.text(xmax+5, sb_thresh, 'Athena-XIFU (1Ms)', ha='left', va='center', color=c, fontsize=16)
+
+        # LEM 1Ms
+        xmax = 200.0
+        sb_thresh = 2.5e33 # TBD
+        #ax.plot([xlim[0],xmax], [sb_thresh,sb_thresh], lw=lw*2, color=c)
+        #ax.text(xmax+5, sb_thresh, 'LEM (1Ms)', ha='left', va='center', color='#555', fontsize=16)
 
     # loop over each stellar mass bin
     colors = []
 
     for i, mstarBin in enumerate(mstarBins):        
         # plot median radial profiles of intrinsic (input) versus scattered (peeling)
-        label = '%.1f < log($\\rm{M_\star / M_{sun}}$) < %.1f' % (mstarBin[0],mstarBin[1])
+        label = '%.1f < log($M_\star / \\rm{M}_{\odot}$) < %.1f' % (mstarBin[0],mstarBin[1])
 
         l, = ax.plot(rad_mid, intr_stack[i,1,:], lw=lw, linestyle=':', label='')
         ax.plot(rad_mid, scat_stack[i,1,:], lw=lw, linestyle='-', label=label, color=l.get_color())
@@ -789,12 +823,13 @@ def galaxyLum(sim, haloID, b, aperture_kpc=10.0):
     # (a S0 at D=23 Mpc, w/ an AGN Lbol=1.7e43 erg/s, strong outflow, MBH ~ 1e8 Msun, lambda_edd ~ 1e-3)
     # (SFR = 1.0 +/- 0.1 Msun/yr from Gruppioni+2016)
     # MBH vs M* scaling gives M* between 10-11 and median at 10.5 Msun
-    # gives a OVIIr 21.6A luminosity of 1.9e+39 erg/s 
+    # flux = 25e-6 phot/cm^2/s gives a OVIIr 21.6A luminosity of 1.5e+39 erg/s 
 
     # note: https://www.aanda.org/articles/aa/abs/2007/21/aa6340-06/aa6340-06.html for NGC 253
-    # (a SAB starburst, like M82, at a D=3.94 Mpc, z=0.000864)
-    # summing up fluxes across all 4 spatial regions, flux = 5.3e-6 cm^-2 s^-1 (assume phot cm^-2 s^-1) = 9.2e-10 erg/s/cm^2
-    # gives a OVIIr 21.6A luminosity of 1.6e42 erg/s (this is a hot superwind outflow within <~= 5 kpc)
+    # (a SAB starburst, like M82, at a D=3.94 Mpc, z=0.000864) (M* ~ 4e10 Msun, Bailin+11)
+    # summing up fluxes across all 4 spatial regions (Table 2), flux = 5.3e-6 cm^-2 s^-1 (assume phot cm^-2 s^-1)
+    # times 9.2e-10 erg/phot (for OVIIr) = 4.9e-15 erg/s/cm^2
+    # gives a OVIIr 21.6A luminosity of 9.0e36 erg/s (this is a hot superwind outflow within <~= 5 kpc)
 
     # note: https://ui.adsabs.harvard.edu/abs/2012MNRAS.420.3389L/abstract for a sample of 9 nearby star-forming galaxies
     # names = ['NGC253A', 'M51', 'M94', 'M83', 'NGC2903', 'M61', 'NGC4631', 'Antennae', 'NGC253B', 'M82A', 'M82B', 'M82C']
@@ -977,7 +1012,7 @@ def galaxyLumVsSFR(sim, b=1, addDiffuse=True, correctLineToBandFluxRatio=False):
     fig.savefig('galaxy_OVIIr_lum_vs_mstar_%s_%d_b%s.pdf' % (sim.name,sim.snap,b))
     plt.close(fig)
 
-def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median=False):
+def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median=False, pxRatios=True):
     """ Derive and plot SB enhancement factor as a function of mass, for different 
     radial ranges, and coloring by other quantities.
 
@@ -988,6 +1023,10 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
       range_select (int): which of the five radial ranges to use.
       color_quant (str): which galaxy property to color points by, 'sfr', 'LOVII', 'Lbol', or 'm200'.
       median (bool): plot the median (across pixels) SB ratio, instead of the mean (default).
+      pxRatios (bool): if True, define enhancement factor as the mean or median of the ratio of
+        scattered to intrinsic pixel SB values, for a given radial range. If False, instead define 
+        as the ratio of (a) the mean or median scattered SB values for all pixels in a given radial 
+        range, to (b) the mean or median intrinsic SB values for the same pixels.
     """
     # config
     xlim = [10.0, 11.0] # log msun
@@ -1008,22 +1047,35 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
             # enhancement factors
             enhancement_mean = f['enhancement_mean'][()]
             enhancement_percs = f['enhancement_percs'][()]
+            enhancement2_mean = f['enhancement2_mean'][()]
+            enhancement2_percs = f['enhancement2_percs'][()]
+            # sb values
+            sb_scattered_mean = f['sb_scattered_mean'][()]
+            sb_scattered_percs = f['sb_scattered_percs'][()]
             # galaxy propreties
             tot_lum_scattered = f['tot_lum_scattered'][()]
             mstar = f['mstar'][()]
             sfr = f['sfr'][()]
             lbol = f['lbol'][()]
-            mbh = f['mbh'][()] if 'mbh' in f else sim.auxCat('Subhalo_BH_Mass_largest')['Subhalo_BH_Mass_largest'][subhaloIDs]
+            mbh = f['mbh'][()]
             m200 = f['m200'][()]
             
         print('Loaded: [%s]' % cacheFile)
     else:
         # loop over all halos
         n_radranges = 5 # actual definitions hard-coded below
+
+        # enhancements as mean or median of all ratio pixels in a given radial range
         enhancement_mean = np.zeros((len(haloIDs),n_radranges), dtype='float32')
         enhancement_percs = np.zeros((len(haloIDs),n_radranges,len(percs)), dtype='float32')
 
+        # enhancements as ratio of the mean or median of all pixels in a given radial range
+        enhancement2_mean = np.zeros((len(haloIDs),n_radranges), dtype='float32')
+        enhancement2_percs = np.zeros((len(haloIDs),n_radranges,len(percs)), dtype='float32')
+
         tot_lum_scattered = np.zeros((len(haloIDs)),dtype='float64')
+        sb_scattered_mean = np.zeros((len(haloIDs),n_radranges),dtype='float64')
+        sb_scattered_percs = np.zeros((len(haloIDs),n_radranges,len(percs)),dtype='float64')
 
         for i, haloID in enumerate(haloIDs):
             # iltis photons
@@ -1040,37 +1092,45 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
             lem_res_kpc_at_z0p01 = sim.units.arcsecToAngSizeKpcAtRedshift(lem_res_arcsec, z=0.01)
             nbins = int(2 * size / lem_res_kpc_at_z0p01)
 
-            im_intrinsic = _sb_image(sim, photons_input, attrs, halo, size=size, nbins=nbins)
-            im_scattered = _sb_image(sim, photons_peeling, attrs, halo, size=size, nbins=nbins)
-            im_ratio = 10.0**im_scattered / 10.0**im_intrinsic # linear ratio
+            im_intrinsic = 10.0**(_sb_image(sim, photons_input, attrs, halo, size=size, nbins=nbins))
+            im_scattered = 10.0**(_sb_image(sim, photons_peeling, attrs, halo, size=size, nbins=nbins))
+            im_ratio = im_scattered / im_intrinsic # linear ratio
 
             dist, theta = _get_dist_theta_grid(2*size, [nbins,nbins]) # 2*size for convention
 
-            # compute ratio (sky area-weighted, SB ratio, of scattered to intrinsic)
-            # radial range #1 = whole halo (r=0 to r=r200)
-            w_px = np.where((dist > 0) & (dist < r200_kpc))
-            enhancement_mean[i,0] = np.mean(im_ratio[w_px])
-            enhancement_percs[i,0,:] = np.percentile(im_ratio[w_px], percs)
+            for j in range(5):
+                # radial range selection
+                if j == 0:
+                    # radial range #1 = whole halo (r=0 to r=r200)
+                    w_px = np.where((dist > 0) & (dist < r200_kpc))
 
-            # radial range #2 = CGM (r=20 kpc to r=200 kpc)
-            w_px = np.where((dist >= 20) & (dist < 200))
-            enhancement_mean[i,1] = np.mean(im_ratio[w_px])
-            enhancement_percs[i,1,:] = np.percentile(im_ratio[w_px], percs)
+                if j == 1:
+                    # radial range #2 = CGM (r=20 kpc to r=200 kpc)
+                    w_px = np.where((dist >= 20) & (dist < 200))
 
-            # radial range #3 = outer CGM (r=50 kpc to r=200 kpc)
-            w_px = np.where((dist >= 50) & (dist < 200))
-            enhancement_mean[i,2] = np.mean(im_ratio[w_px])
-            enhancement_percs[i,2,:] = np.percentile(im_ratio[w_px], percs)
+                if j == 2:
+                    # radial range #3 = outer CGM (r=50 kpc to r=200 kpc)
+                    w_px = np.where((dist >= 50) & (dist < 200))
 
-            # radial range #4 = at r500 (0.95 < r/r500 < 1.05)
-            w_px = np.where((dist >= 0.95*r200_kpc) & (dist < 1.05*r200_kpc))
-            enhancement_mean[i,3] = np.mean(im_ratio[w_px])
-            enhancement_percs[i,3,:] = np.percentile(im_ratio[w_px], percs)
+                if j == 3:
+                    # radial range #4 = at r500 (0.95 < r/r500 < 1.05)
+                    w_px = np.where((dist >= 0.95*r200_kpc) & (dist < 1.05*r200_kpc))
 
-            # radial range #5 = at r200 (0.9 < r/r200 < 1.1)
-            w_px = np.where((dist >= 0.9*r500_kpc) & (dist < 1.1*r500_kpc))
-            enhancement_mean[i,4] = np.mean(im_ratio[w_px])
-            enhancement_percs[i,4,:] = np.percentile(im_ratio[w_px], percs)
+                if j == 4:
+                    # radial range #5 = at r200 (0.9 < r/r200 < 1.1)
+                    w_px = np.where((dist >= 0.9*r500_kpc) & (dist < 1.1*r500_kpc))
+
+                # compute ratio (sky area-weighted, SB ratio, of scattered to intrinsic)
+                enhancement_mean[i,j] = np.mean(im_ratio[w_px])
+                enhancement_percs[i,j,:] = np.percentile(im_ratio[w_px], percs)
+
+                # compute ratio
+                enhancement2_mean[i,j] = np.mean(im_scattered[w_px]) / np.mean(im_intrinsic[w_px])
+                enhancement2_percs[i,j,:] = np.percentile(im_scattered[w_px], percs) / np.percentile(im_intrinsic[w_px], percs)
+
+                # save actual SB values
+                sb_scattered_mean[i,j] = np.mean(im_scattered[w_px])
+                sb_scattered_percs[i,j,:] = np.percentile(im_scattered[w_px], percs)
 
             # compute galaxy luminosity in this line
             x, y, lum = _photons_projected(sim, photons_peeling, attrs, halo)
@@ -1092,6 +1152,11 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
             # enhancement factors
             f['enhancement_mean'] = enhancement_mean
             f['enhancement_percs'] = enhancement_percs
+            f['enhancement2_mean'] = enhancement2_mean
+            f['enhancement2_percs'] = enhancement2_percs
+            # sb values
+            f['sb_scattered_mean'] = sb_scattered_mean
+            f['sb_scattered_percs'] = sb_scattered_percs
             # galaxy properties
             f['tot_lum_scattered'] = tot_lum_scattered
             f['sfr'] = sfr
@@ -1123,7 +1188,7 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
     # select color quantity
     cmap = loadColorTable('plasma', fracSubset=[0.1,0.9])
 
-    assert color_quant in ['sfr', 'LOVII', 'Lbol', 'mbh', 'm200']
+    assert color_quant in ['sfr', 'LOVII', 'Lbol', 'mbh', 'm200', 'meansb_r200']
     if color_quant == 'sfr':
         cvals = sfr
         cminmax = [-1.0, 1.0] # log msun/yr
@@ -1144,12 +1209,23 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
         cvals = m200
         cminmax = [11.4, 12.6]
         clabel = 'Halo Mass $\\rm{M_{200c}}$ [ log $\\rm{M_\odot}$ ]'
+    if color_quant == 'meansb_r200':
+        cvals = np.log10(sb_scattered_mean[:,4])
+        cminmax = [30.5, 33]
+        clabel = '$<\\rm{SB}>$ [ log erg s$^{-1}$ kpc$^{-2}$ ]'
 
     # select which radial range, and statistic
-    if median:
-        fac = enhancement_percs[:,range_select,1] # percs = [16, 50, 85]
+    if pxRatios:
+        facs_mean = enhancement_mean
+        facs_med = enhancement_percs
     else:
-        fac = enhancement_mean[:,range_select]
+        facs_mean = enhancement2_mean
+        facs_med = enhancement2_percs
+
+    if median:
+        fac = facs_med[:,range_select,1] # percs = [16, 50, 85]
+    else:
+        fac = facs_mean[:,range_select]
 
     ax.set_ylim([0.8, np.nanmax(fac)*1.3])
     
@@ -1161,8 +1237,8 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
         # draw individual percentiles as vertical errorbars
         for i in range(len(haloIDs)):
             xx = mstar[i]
-            yy_low = enhancement_percs[i,range_select,0]
-            yy_high = enhancement_percs[i,range_select,-1]
+            yy_low = facs_med[i,range_select,0]
+            yy_high = facs_med[i,range_select,-1]
 
             ax.plot([xx,xx], [yy_low,yy_high], '-', color='#eee', alpha=0.4, zorder=-1)
 
@@ -1176,8 +1252,8 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
     cb = plt.colorbar(s, cax=cax)
     cb.ax.set_ylabel(clabel)
 
-    fig.savefig('sb_enhancement_vs_mass_rad%d_%s_%s_%s_%d_nh%d_b%s.pdf' % \
-        (range_select,'median' if median else 'mean',color_quant,sim.name,sim.snap,len(haloIDs),b))
+    fig.savefig('sb_enhancement_vs_mass_rad%d_%s_px%d_%s_%s_%d_nh%d_b%s.pdf' % \
+        (range_select,'median' if median else 'mean',pxRatios,color_quant,sim.name,sim.snap,len(haloIDs),b))
     plt.close(fig)
 
 def enhancementTrendVsMass(sim, haloIDs, b):
@@ -1190,8 +1266,8 @@ def enhancementTrendVsMass(sim, haloIDs, b):
     """
     # config
     xlim = [10.0, 11.0] # log msun
-    ylim = [1, 1e3] # enhancement factor
-    binsize = 0.1 # log mstar
+    ylim = [0.8, 1e3] # enhancement factor
+    binsize = 0.1 #0.17 # log mstar
 
     # config - must recompute cache
     size = 250.0 # pkpc for imaging
@@ -1204,11 +1280,17 @@ def enhancementTrendVsMass(sim, haloIDs, b):
             # enhancement factors
             enhancement_mean = f['enhancement_mean'][()]
             enhancement_percs = f['enhancement_percs'][()]
+            enhancement2_mean = f['enhancement2_mean'][()]
+            enhancement2_percs = f['enhancement2_percs'][()]
+            # sb values
+            sb_scattered_mean = f['sb_scattered_mean'][()]
+            sb_scattered_percs = f['sb_scattered_percs'][()]
             # galaxy propreties
             tot_lum_scattered = f['tot_lum_scattered'][()]
             mstar = f['mstar'][()]
             sfr = f['sfr'][()]
             lbol = f['lbol'][()]
+            mbh = f['mbh'][()]
             m200 = f['m200'][()]
             
         print('Loaded: [%s]' % cacheFile)
@@ -1231,39 +1313,87 @@ def enhancementTrendVsMass(sim, haloIDs, b):
     ax.set_ylim(ylim)
 
     # radial range and mean vs median
-    for range_select in range(5):
-        # pull out values
-        fac_median = enhancement_percs[:,range_select,1] # percs = [16, 50, 85]
-        fac_mean = enhancement_mean[:,range_select]
+    colors = ['skip_rad0']
+
+    for range_select in [1,2,3,4]:
+        for i in range(2):
+            # pull out values
+            if i == 0:
+                # mean and median of ratio pixels values
+                fac_median = enhancement_percs[:,range_select,1] # percs = [16, 50, 85]
+                fac_medlower = enhancement_percs[:,range_select,0]
+                fac_medupper = enhancement_percs[:,range_select,-1]
+                fac_mean = enhancement_mean[:,range_select]
+            if i == 1:
+                # ratio of mean or median pixel values
+                fac_median = enhancement2_percs[:,range_select,1] # percs = [16, 50, 85]
+                fac_mean = enhancement2_mean[:,range_select]
         
-        # compute running trend vs mass
-        xm_mean, ym_mean, _, pm_mean = running_median(mstar,fac_mean,binSize=binsize,skipZeros=False,percs=percs)
-        xm_med, ym_med, _, pm_med = running_median(mstar,fac_median,binSize=binsize,skipZeros=False,percs=percs)
+            # compute running trend vs mass
+            xm_mean, ym_mean, _, pm_mean = running_median(mstar,fac_mean,binSize=binsize,skipZeros=False,percs=percs)
+            xm_med, ym_med, _, pm_med = running_median(mstar,fac_median,binSize=binsize,skipZeros=False,percs=percs)
 
-        # extend to right-edge of plot
-        xm_mean = np.append(xm_mean, xlim[1])
-        xm_med = np.append(xm_med, xlim[1])
+            if 0:
+                # percentiles across the population
+                ym_medlower = pm_med[0,:] 
+                ym_medupper = pm_med[-1,:]
+            else:
+                # percentiles from each halo separately, then take median trend of this envelope across the population
+                xm_test1, ym_medlower, _, _ = running_median(mstar,fac_medlower,binSize=binsize,skipZeros=False,percs=percs)
+                xm_test2, ym_medupper, _, _ = running_median(mstar,fac_medupper,binSize=binsize,skipZeros=False,percs=percs)
+                assert np.array_equal(xm_test1, xm_med)
+                assert np.array_equal(xm_test2, xm_med)
 
-        ym_mean = np.append(ym_mean, interp1d(xm_mean[:-1],ym_mean,fill_value='extrapolate')(xlim[1]))
-        ym_med = np.append(ym_med, interp1d(xm_med[:-1],ym_med,fill_value='extrapolate')(xlim[1]))
+            # extend to right-edge of plot
+            xm_mean = np.append(xm_mean, xlim[1])
+            xm_med = np.append(xm_med, xlim[1])
 
-        # extend to left-edge of plot
-        ym_mean = np.insert(ym_mean, 0, interp1d(xm_mean,ym_mean,fill_value='extrapolate')(xlim[0]))
-        ym_med = np.insert(ym_med, 0, interp1d(xm_med,ym_med,fill_value='extrapolate')(xlim[0]))
+            ym_mean = np.append(ym_mean, 10.0**interp1d(xm_mean[:-1],np.log10(ym_mean),fill_value='extrapolate')(xlim[1]))
+            ym_med = np.append(ym_med, 10.0**interp1d(xm_med[:-1],np.log10(ym_med),fill_value='extrapolate')(xlim[1]))
 
-        xm_mean = np.insert(xm_mean, 0, xlim[0])
-        xm_med = np.insert(xm_med, 0, xlim[0])
+            ym_medlower = np.append(ym_medlower, 10.0**interp1d(xm_med[:-1],np.log10(ym_medlower),fill_value='extrapolate')(xlim[1]))
+            ym_medupper = np.append(ym_medupper, 10.0**interp1d(xm_med[:-1],np.log10(ym_medupper),fill_value='extrapolate')(xlim[1]))
 
-        # plot
-        l, = ax.plot(xm_mean, ym_mean, '-', lw=lw, label=labels[range_select])
-        ax.plot(xm_med, ym_med, ':', color=l.get_color(), lw=lw)
+            # extend to left-edge of plot
+            ym_mean = np.insert(ym_mean, 0, 10.0**interp1d(xm_mean,np.log10(ym_mean),fill_value='extrapolate')(xlim[0]))
+            ym_med = np.insert(ym_med, 0, 10.0**interp1d(xm_med,np.log10(ym_med),fill_value='extrapolate')(xlim[0]))
+
+            ym_medlower = np.insert(ym_medlower, 0, 10.0**interp1d(xm_med,np.log10(ym_medlower),fill_value='extrapolate')(xlim[0]))
+            ym_medupper = np.insert(ym_medupper, 0, 10.0**interp1d(xm_med,np.log10(ym_medupper),fill_value='extrapolate')(xlim[0]))
+
+            ym_mean = savgol_filter(ym_mean, sKn, sKo)
+            ym_med = savgol_filter(ym_med, sKn, sKo)
+            ym_medlower = savgol_filter(ym_medlower, sKn, sKo)
+            ym_medupper = savgol_filter(ym_medupper, sKn, sKo)
+
+            xm_mean = np.insert(xm_mean, 0, xlim[0])
+            xm_med = np.insert(xm_med, 0, xlim[0])
+
+            # plot
+            if i == 0:
+                l, = ax.plot(xm_mean, ym_mean, '-', lw=lw, label=labels[range_select])
+                colors.append(l.get_color())
+                ax.plot(xm_med, ym_med, ':', color=colors[range_select], lw=lw)
+                if range_select in [3,4]:
+                    ax.fill_between(xm_med, ym_medlower, ym_medupper, color=colors[range_select], alpha=0.1)
+            if i == 1:
+                #ax.plot(xm_mean, ym_mean, '-.', color=colors[range_select], lw=lw) # similar for large distances, much smaller for small distances
+                ax.plot(xm_med, ym_med, '--', color=colors[range_select], lw=lw)
 
     # finish plot
-    ax.text(10.88, 45, 'Mean', ha='center', va='center', fontsize=18, color='black')
-    ax.text(10.88, 1.8, 'Median', ha='center', va='center', fontsize=18, color='black')
+    type_labels = ['<$L_{\\rm scattered}$/L$_{\\rm intrinsic}$> Mean',
+                   '<$L_{\\rm scattered}$/$L_{\\rm intrinsic}>$ Median',
+                   '<$L_{\\rm scattered}$>/<$L_{\\rm intrinsic}$> Median']
+
+    #ax.text(10.78, 45, type_labels[0], ha='center', va='center', fontsize=18, color='black')
+    #ax.text(10.78, 1.8, type_labels[1], ha='center', va='center', fontsize=18, color='black')
+    handles = [ plt.Line2D( (0,1), (0,0), color='black', lw=lw, linestyle=['-',':','--'][i]) for i in range(len(type_labels)) ]
+    legend2 = ax.legend(handles, type_labels, borderpad=1.0, loc='lower left')
+    ax.add_artist(legend2)
+
     ax.legend(loc='upper right')
 
-    for ratio in [10,100]:
+    for ratio in [1,10,100]:
         if ratio > ax.get_ylim()[1]: continue
         ax.plot(xlim, [ratio,ratio], '-', lw=1.0, color='#ccc', zorder=-1)
         ax.text(xlim[0]+0.01, ratio*1.05, f'{ratio}x', ha='left', va='bottom', color='#ccc', zorder=-1)
@@ -1294,13 +1424,9 @@ def paperPlots():
         stackedRadialProfiles(sim, haloIDs, b=b_fiducial)
 
     if 0:
-        # fig 5: enhancement factor for (i) whole halo, (ii) 20 kpc<R<200 kpc, (iii) at r500 and r200, vs mstar
-        # (as a function of galaxy properties: SFR, L_OVIIr, L_AGN, M_BH, etc)
-        for i in range(5):
-            enhancementVsMass(sim, haloIDs, b=b_fiducial, range_select=i, median=False)
-            enhancementVsMass(sim, haloIDs, b=b_fiducial, range_select=i, median=True)
-        for cquant in ['sfr','LOVII','Lbol','mbh','m200']:
-            enhancementVsMass(sim, haloIDs, b=b_fiducial, range_select=4, color_quant=cquant, median=False)
+        # fig 5: enhancement factor (at r200) vs mstar, colored by galaxy properties
+        for cquant in ['sfr','LOVII','Lbol','meansb_r200']:
+            enhancementVsMass(sim, haloIDs, b=b_fiducial, range_select=4, color_quant=cquant, median=False, pxRatios=True)
 
     if 0:
         # fig 6: enhancement factor vs mass, for different radii and mean vs median
@@ -1324,12 +1450,14 @@ def paperPlots():
             imageSBcomp(sim, haloID=haloID, b=b_fiducial, line=line)
 
     if 0:
-        # (possibilities for additional content)
-        # - spectral profiles, e.g. intrinsic vs scattered, few different radii
-        # - scattering diagnostics e.g. number of scatterings per photon, optical depths
-        # - a dens-temp phase diagram, and/or with rad, for intrinsic vs scattered (using cell index info)
-        # - a dens-temp phase diagram, and/or with rad, showing intrisic/scattered ratio (using cell index info)
-        pass
+        # fig X: explore enhancements factor vs mass for (i) different radial ranges, and 
+        # (ii) as a function of galaxy properties: SFR, L_OVIIr, L_AGN, M_BH, etc
+        for px in [True,False]:
+            for i in range(5):
+                enhancementVsMass(sim, haloIDs, b=b_fiducial, range_select=i, median=False, pxRatios=px)
+                enhancementVsMass(sim, haloIDs, b=b_fiducial, range_select=i, median=True, pxRatios=px)
+            for cquant in ['sfr','LOVII','Lbol','mbh','m200','meansb_r200']:
+                enhancementVsMass(sim, haloIDs, b=b_fiducial, range_select=4, color_quant=cquant, median=False, pxRatios=px)
 
     if 0:
         # fig X: make all individual halo plots, for all halos
@@ -1363,4 +1491,11 @@ def paperPlots():
         # fig X: optical depth maps
         from ..projects.mg2emission import singleHaloImageMGII
         singleHaloImageMGII(sim, sim.halo(haloID_demo)['GroupFirstSub'], conf=11)
-    
+
+    if 0:
+        # (possibilities for additional content)
+        # - spectral profiles, e.g. intrinsic vs scattered, few different radii
+        # - scattering diagnostics e.g. number of scatterings per photon, optical depths
+        # - a dens-temp phase diagram, and/or with rad, for intrinsic vs scattered (using cell index info)
+        # - a dens-temp phase diagram, and/or with rad, showing intrisic/scattered ratio (using cell index info)
+        pass

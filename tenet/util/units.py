@@ -112,6 +112,7 @@ class units(object):
     km_in_cm      = 1e5
     kpc_in_ly     = 3261.56    # lightyears in 1 pkpc
     arcsec_in_rad = 4.84814e-6 # 1 arcsecond in radian (rad / ")
+    ster_in_arcsec2 = 4.25e10  # 1 steradian in square arcseconds
     ang_in_cm     = 1.0e-8     # cm / angstrom (1 angstrom in cm)
     erg_in_J      = 1e-7       # 1 erg in joules
     erg_in_kev    = 6.2415e8   # 1 erg in keV

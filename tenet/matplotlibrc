@@ -271,7 +271,7 @@ grid.alpha       :   0.2     # transparency, between 0.0 and 1.0
 #legend.isaxes        : True
 legend.numpoints     : 1      # the number of points in the legend line
 legend.fontsize      : large
-#legend.borderpad     : 0.5    # border whitespace in fontsize units
+legend.borderpad     : 0.4    # border whitespace in fontsize units
 legend.markerscale   : 1.2    # the relative size of legend markers vs. original
 # the following dimensions are in axes coords
 legend.labelspacing  : 0.4    # the vertical space between the legend entries in fraction of fontsize
