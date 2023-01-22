@@ -536,7 +536,8 @@ def periodic_slurm_status(machine='vera',nosave=False):
         maxNodesPerRack = int(np.ceil(maxNodesPerRack / visRackMultFac))
 
     # start node figure
-    fig = plt.figure(figsize=(18.9,9.2), tight_layout=False)
+    fig = plt.figure(figsize=(18.9,9.2))
+    fig.set_layout_engine('none') # matplotlib 3.6+
 
     rackVisBoxes = [] # in case we want to show more than 1 visible box per rack
     for rackNum in rackNumberList:
@@ -562,6 +563,7 @@ def periodic_slurm_status(machine='vera',nosave=False):
                 rackNodes = rackNodes[nPerSeg*segment:nPerSeg*(segment+1)]
 
         ax = fig.add_subplot(1,len(rackVisBoxes),i+1)
+        ax.set_position([i*0.25+0.005,0.01,0.24,0.87]) # left,bottom,width,height
         
         ax.set_xlim([0,1])
         ax.set_ylim([-1,maxNodesPerRack])
@@ -636,8 +638,6 @@ def periodic_slurm_status(machine='vera',nosave=False):
                 ax.text(xmax+0.14+padx*10, j, real_name, color='#333333', **textOpts)
             elif name in [n['name'] for n in nodes_down]:
                 ax.text(xmax+0.14+padx*10, j, "down!", color='#333333', **textOpts)
-
-    fig.subplots_adjust(left=0.005, right=0.995, bottom=0.005, top=0.88, wspace=0.05)
 
     # time series data load
     data = {}
