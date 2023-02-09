@@ -174,8 +174,15 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                 else:
                     checkSize = r[field].shape[0]
 
-                if checkSize != sP.numSubhalos:
-                    print('WARNING: Return partial auxCat without expanding to fill subhalo IDs!')
+                if field.startswith('Subhalo_'):
+                    verifySize = sP.numSubhalos
+                elif field.startswith('Group_'):
+                    verifySize = sP.numHalos
+                else:
+                    verifySize = 0 # can generalize
+
+                if checkSize != verifySize:
+                    print(f'WARNING: Return partial auxCat [{field}] without expanding to fill!')
 
             # cache
             sP.data['ac_'+field+epStr] = {}

@@ -1220,7 +1220,7 @@ def anderson2015(sP):
     Mstar_width = 0.1
     Mstar += Mstar_width/2
 
-    # [erg/s] X-ray luminosities in (0.5-2.0 keV) soft band, within r500crit
+    # [erg/s] X-ray luminosities in (0.5-2.0 keV) soft band, within r500crit (Table 3, first 4 columns)
     log_Lx_tot = np.array([0.0,   39.60, 40.0, 39.94, 38.96, 39.60, 40.10, 39.96, 40.40, 40.58,
                            40.97, 41.29, 41.52, 41.80, 42.34, 42.64, 42.98, 43.39, 43.46, 43.82])
     sigma_m_Ltot = np.array([0.0,  0.97, 0.19, 0.21, 0.86, 0.97, 0.19, 0.27, 0.09, 0.07,
@@ -1239,11 +1239,14 @@ def anderson2015(sP):
     log_Lx_bol_up = np.log10(10.0**log_Lx_tot_up * C_bolo)
     log_Lx_bol_down = np.log10(10.0**log_Lx_tot_down * C_bolo)
 
-    r = {'stellarMass'         : Mstar,
-         'stellarMass_err'     : Mstar_width/2,
-         'xray_LumBol'         : log_Lx_bol,
-         'xray_LumBol_errUp'   : log_Lx_bol_up - log_Lx_bol,
-         'xray_LumBol_errDown' : log_Lx_bol - log_Lx_bol_down,
+    r = {'stellarMass'          : Mstar,
+         'stellarMass_err'      : Mstar_width/2,
+         'xray_LumBol'          : log_Lx_bol,
+         'xray_LumBol_errUp'    : log_Lx_bol_up - log_Lx_bol,
+         'xray_LumBol_errDown'  : log_Lx_bol - log_Lx_bol_down,
+         'xray_LumSoft'         : log_Lx_tot,
+         'xray_LumSoft_errUp'   : log_Lx_tot_up - log_Lx_tot,
+         'xray_LumSoft_errDown' : log_Lx_tot - log_Lx_tot_down,
          'label' : 'Anderson+ (2015) 0.05<z<0.4 ROSAT stacking'}
 
     return r

@@ -1108,7 +1108,11 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
                         opts['marker'] = 's' if sP.simName == 'TNG-Cluster' else 'o'
 
                     # plot scatter
-                    sc = ax.scatter(xx, yy, s=markersize, alpha=alpha, **opts, zorder=0)
+                    zIsInt = np.abs(sP.redshift-int(sP.redshift)) < 0.01
+                    zStr = ' z=%d' % sP.redshift if zIsInt else ' z=%.1f' % sP.redshift
+                    label = (sP.simName + zStr) if len(sPs) > 1 else ''
+                    if drawMedian: label = '' # only if median lines are not already labeled
+                    sc = ax.scatter(xx, yy, s=markersize, alpha=alpha, **opts, label=label, zorder=0)
 
                 # 1-to-1 line?
                 if mark1to1:

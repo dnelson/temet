@@ -11,7 +11,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from ..load.data import *
 from ..util.helper import running_median, running_histogram, logZeroNaN, iterable
 from ..plot.sizes import galaxySizes, galaxyHISizeMass
-from ..plot.cosmoGeneral import addRedshiftAgeAxes
+from ..plot.cosmoGeneral import addRedshiftAgeAxes, quantMedianVsSecondQuant
 from ..plot.general import plotPhaseSpace2D
 from ..plot.config import *
 from ..projects.oxygen import nOVIcddf
@@ -562,12 +562,19 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
         xm, ym, sm = running_median(xx[ww],yy[ww],binSize=binSize,skipZeros=True,minNumPerBin=minPerBin)
         ym2 = savgol_filter(ym,sKn,sKo) if ym.size > sKn else ym
         sm2 = savgol_filter(sm,sKn,sKo) if sm.size > sKn else sm
-        l, = ax.plot(xm[:-1], ym2[:-1], '-', lw=3.0, label=sP.simName)
 
-        if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2):
-            y_down = np.array(ym2[:-1]) - sm2[:-1]
-            y_up   = np.array(ym2[:-1]) + sm2[:-1]
-            ax.fill_between(xm[:-1], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.2)
+        if any([sP.simName == 'TNG-Cluster' for sP in sPs]):
+            # TNG-Cluster (+TNG300), use individual markers
+            ww = np.where((xx > ax.get_xlim()[0]) & (yy > 0))
+            ax.plot(xx[ww], yy[ww], 'o', label=sP.simName)
+        else:
+            # normal: show running medians with percentile bands
+            l, = ax.plot(xm[:-1], ym2[:-1], '-', lw=3.0, label=sP.simName)
+
+            if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2):
+                y_down = np.array(ym2[:-1]) - sm2[:-1]
+                y_up   = np.array(ym2[:-1]) + sm2[:-1]
+                ax.fill_between(xm[:-1], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.2)
 
     # second legend
     legend2 = ax.legend(loc='lower right')
@@ -2171,226 +2178,73 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
         pdf.savefig()
         plt.close(fig)
 
-def haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0, fig_subplot=[None,None]):
-    """ X-ray bolometric luminosity scaling relation vs halo mass (e.g. Schaye Fig 16). """
-    #lumTypes = ['Subhalo_XrayBolLum','Group_XrayBolLum_Crit500'] #,'Subhalo_XrayBolLum_2rhalfstars']
-    lumTypes = ['Subhalo_XrayLum_05-2kev','Group_XrayLum_0.5-2.0kev_Crit500']
-    if clean: lumTypes = [lumTypes[1]]
+def haloXrayLum(sPs, pdf=None, xlim=[10,12], ylim=[38,45], bolometric=False):
+    """ X-ray luminosity scaling relation vs stellar mass. Bolometric or 0.5-2 keV soft band. """
 
-    # plot setup
-    if fig_subplot[0] is None:
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1])
-    
-    ax.set_xlim([10.0,12.0])
-    ax.set_ylim([38,45])
+    # config
+    xQuant = 'mstar_30pkpc'
+    yQuant = 'xray_0.5-2.0kev_r500_halo' if not bolometric else 'xray_r500'
 
-    rStr = '(r$_{\\rm 500}$) ' if (len(lumTypes)==1 and 'Crit500' in lumTypes[0]) else ''
-    xlabel = 'Stellar Mass [ log M$_{\\rm sun}$ ]'
-    ylabel = 'L$_{\\rm X}$ %sBolometric [ log erg/s ]' % rStr
+    cenSatSelect  = 'cen'
+    scatterPoints = any([sP.simName == 'TNG-Cluster' for sP in sPs]) # TNG-Cluster (+TNG300)
+    drawMedian    = not scatterPoints
+    markersize    = 40.0
+    sizefac       = 0.8 # for single column figure
 
-    if not clean:
-        if use30kpc: xlabel += ' [ < 30 pkpc ]'
-        if not use30kpc: xlabel += ' [ < 2r$_{\star,1/2}$ ]'
-        if centralsOnly: ylabel += ' [ centrals only ]'
-        if not centralsOnly: ylabel += ' [ centrals & satellites ]'
+    def _draw_data(ax):
+        # observational points (only at z~0)
+        for sP in sPs:
+            if sP.redshift > 0.3:
+                return
 
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
+        a15 = anderson2015(sPs[0])
 
-    # observational points
-    a15 = anderson2015(sPs[0])
+        key = 'LumSoft' if 'kev' in yQuant else 'LumBol' # either 0.5-2 kev or bolometric (via correction)
+        l1,_,_ = ax.errorbar(a15['stellarMass'], a15[f'xray_{key}'],xerr=a15['stellarMass_err'],
+                            yerr=[a15[f'xray_{key}_errDown'],a15[f'xray_{key}_errUp']],
+                            color='#000000', ecolor='#000000', alpha=0.9, capsize=0.0, fmt='D',
+                            zorder=10 if scatterPoints else 1)
 
-    l1,_,_ = ax.errorbar(a15['stellarMass'], a15['xray_LumBol'],xerr=a15['stellarMass_err'],
-                         yerr=[a15['xray_LumBol_errDown'],a15['xray_LumBol_errUp']],
-                         color='#666666', ecolor='#666666', alpha=0.9, capsize=0.0, fmt='D')
+        legend1 = ax.legend([l1], [a15['label']], loc='lower right')
+        ax.add_artist(legend1)
 
-    legend1 = ax.legend([l1], [a15['label']], loc='upper left')
-    ax.add_artist(legend1)
+    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                             xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=scatterPoints, sizefac=sizefac, 
+                             f_post=_draw_data, legendLoc='upper left', pdf=pdf)
 
-    # loop over each fullbox run
-    for sP in sPs:
-        print('XRAY: '+sP.simName)
-        sP.setRedshift(simRedshift)
-
-        if sP.isZoom:
-            continue
-
-        # load
-        gc = sP.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])
-        ac = sP.auxCat(fields=lumTypes)
-
-        # include: centrals + satellites, or centrals only
-        if centralsOnly:
-            GroupFirstSub = sP.groupCat(fieldsHalos=['GroupFirstSub'])
-            wHalo = np.where((GroupFirstSub >= 0))
-            w = GroupFirstSub[wHalo]
-        else:
-            w = np.arange(gc.shape[0])
-
-        # stellar mass definition, and enforce resolution limit
-        xx_code = gc[:,sP.ptNum('stars')]
-
-        if use30kpc:
-            # load auxcat
-            field = 'Subhalo_Mass_30pkpc_Stars'
-            xx_code = sP.auxCat(fields=[field])[field]
-
-        xx = sP.units.codeMassToLogMsun( xx_code[w] )
-
-        # loop through x-ray luminosities different techniques
-        c = next(ax._get_lines.prop_cycler)['color']
-                
-        for i, lumType in enumerate(lumTypes):
-            # auxCat values are per subhalo or per group?
-            if 'Group_' in lumType:
-                yy = ac[lumType][wHalo]
-            else:
-                yy = ac[lumType][w]
-
-            # unit conversion: [10^-30 erg/s] -> [log erg/s]
-            yy = logZeroNaN(yy.astype('float64') * 1e30)
-
-            # only include subhalos with non-nan Lum entries
-            ww = np.where(np.isfinite(xx) & np.isfinite(yy))
-            yy_loc = yy[ww]
-            xx_loc = xx[ww]
-
-            xm, ym_i, sm_i, pm_i = running_median(xx_loc,yy_loc,binSize=binSize,percs=[10,25,75,90])
-
-            ym = savgol_filter(ym_i,sKn,sKo)
-            sm = savgol_filter(sm_i,sKn,sKo)
-            pm = savgol_filter(pm_i,sKn,sKo,axis=1)
-
-            label = sP.simName if (i == 0) else ''
-            ax.plot(xm[:-1], ym[:-1], linestyles[i], color=c, lw=3.0, label=label)
-
-            if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2) and i == 0: # P[10,90]
-                ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.25)
-
-    # legend
-    handles, labels = ax.get_legend_handles_labels()
-    sExtra = []
-    lExtra = []
-
-    if not clean and len(lumTypes) > 1:
-        sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[i]) \
-                    for i,lumType in enumerate(lumTypes)]
-        lExtra = [' '.join(lumType.split("_")) for lumType in lumTypes]
-
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower right')
-
-    # finish figure
-    finishFlag = False
-    if fig_subplot[0] is not None: # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]: finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        pdf.savefig()
-        plt.close(fig)
-
-def haloSynchrotronPower(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
+def haloSynchrotronPower(sPs, pdf=None, xlim=[12.5,15.5], ylim=[19,26]):
     """ Halo total synchrotron power at 1.4 Ghz (VLA configuration) vs M500 (e.g. Marinacci 2017 Fig 15). """
-    acField = 'Subhalo_SynchrotronPower_VLA'
-    centralsOnly = True
-    nIndivPoints = 10
 
-    # plot setup
-    if fig_subplot[0] is None:
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1])
-    
-    ax.set_xlim([12.5,15.5])
-    ax.set_ylim([19,26])
+    # config
+    xQuant = 'mhalo_500'
+    yQuant = 'p_sync_vla'
 
-    xlabel = 'M$_{\\rm 500}$ [ log M$_{\\rm sun}$ ]'
-    ylabel = 'Total Synchrotron P$_{\\rm 1.4Ghz}$ VLA [ log W/Hz ]'
+    cenSatSelect  = 'cen'
+    scatterPoints = any([sP.simName == 'TNG-Cluster' for sP in sPs]) # TNG-Cluster (+TNG300)
+    drawMedian    = not scatterPoints
+    markersize    = 40.0
+    sizefac       = 0.8 # for single column figure
 
-    if not clean: ylabel += ' [ centrals only ]'
+    def _draw_data(ax):
+        # observational points (only at z~0)
+        c13 = cassano13()
 
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
+        w_det = np.where(c13['p14_err'] > 0)
+        l1,_,_ = ax.errorbar(c13['m500'][w_det], c13['p14'][w_det], xerr=c13['m500_err'][w_det], yerr=c13['p14_err'][w_det],
+                            color='#444444', ecolor='#444444', alpha=0.9, capsize=0.0, fmt='D')
+        w_upperlim = np.where(c13['p14_err'] < 0)
+        ax.plot(c13['m500'][w_upperlim], c13['p14'][w_upperlim]-0.15, 'v', markersize=7, color='#888888', alpha=0.9)
+        ax.plot([c13['m500'][w_upperlim],c13['m500'][w_upperlim]], 
+                [c13['p14'][w_upperlim],c13['p14'][w_upperlim]-0.15], '-', color='#888888', alpha=0.9)
 
-    # observational points
-    c13 = cassano13()
+        legend1 = ax.legend([l1], [c13['label']], loc='lower right')
+        ax.add_artist(legend1)
 
-    w_det = np.where(c13['p14_err'] > 0)
-    l1,_,_ = ax.errorbar(c13['m500'][w_det], c13['p14'][w_det], xerr=c13['m500_err'][w_det], yerr=c13['p14_err'][w_det],
-                         color='#444444', ecolor='#444444', alpha=0.9, capsize=0.0, fmt='D')
-    w_upperlim = np.where(c13['p14_err'] < 0)
-    ax.plot(c13['m500'][w_upperlim], c13['p14'][w_upperlim]-0.15, 'v', markersize=7, color='#888888', alpha=0.9)
-    ax.plot([c13['m500'][w_upperlim],c13['m500'][w_upperlim]], 
-            [c13['p14'][w_upperlim],c13['p14'][w_upperlim]-0.15], '-', color='#888888', alpha=0.9)
-
-    legend1 = ax.legend([l1], [c13['label']], loc='upper left')
-    ax.add_artist(legend1)
-
-    # loop over each fullbox run
-    for sP in sPs:
-        print('SYNCH: '+sP.simName)
-        sP.setRedshift(simRedshift)
-
-        if sP.isZoom:
-            continue
-
-        if not sP.snapHasField('gas','MagneticField'):
-            continue # non-MHD runs
-
-        # load
-        gc = sP.groupCat(fieldsSubhalos=['mhalo_500_log'])
-        ac = sP.auxCat(fields=acField)
-
-        # x-axis mass definition
-        w = np.where( np.isfinite(gc) ) # centrals only
-        xx = gc[w]
-
-        # auxCat values are per subhalo, and unit conversion: log
-        yy = logZeroNaN(ac[acField][w])
-
-        # only include subhalos with non-nan Lum entries
-        ww = np.where(np.isfinite(xx) & np.isfinite(yy))
-        yy_loc = yy[ww]
-        xx_loc = xx[ww]
-
-        xm, ym_i, sm_i, pm_i = running_median(xx_loc,yy_loc,binSize=binSize,percs=[10,25,75,90])
-
-        ym = savgol_filter(ym_i,sKn,sKo)
-        sm = savgol_filter(sm_i,sKn,sKo)
-        pm = savgol_filter(pm_i,sKn,sKo,axis=1)
-
-        # median line
-        label = sP.simName
-        l, = ax.plot(xm[:-1], ym[:-1], '-', lw=3.0, label=label)
-
-        # colored band
-        if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2): # P[10,90]
-            ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=l.get_color(), interpolate=True, alpha=0.25)
-
-        # individual N most massive points
-        ax.plot(xx_loc[0:nIndivPoints], yy_loc[0:nIndivPoints], 'o', color=l.get_color(), alpha=0.9)
-
-    # legend
-    handles, labels = ax.get_legend_handles_labels()
-    legend2 = ax.legend(handles, labels, loc='lower right')
-
-    # finish figure
-    finishFlag = False
-    if fig_subplot[0] is not None: # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]: finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        pdf.savefig()
-        plt.close(fig)
+    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                             xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=scatterPoints, sizefac=sizefac, 
+                             f_post=_draw_data, legendLoc='upper left', pdf=pdf)
 
 def plots():
     """ Plot portfolio of global population comparisons between runs. """
@@ -2432,6 +2286,7 @@ def plots():
     #sPs.append( simParams(run='simba100', redshift=0.0) )
     #sPs.append( simParams(run='simba25', redshift=0.0) )
     #sPs.append( simParams(run='tng-cluster') )
+
     # change to plot simulations at z>0 against z=0 observational data
     zZero = 0.0
 
@@ -2489,8 +2344,8 @@ def plots():
     velocityFunction(sPs, pdf, centralsOnly=False, simRedshift=zZero)
     stellarAges(sPs, pdf, centralsOnly=False, simRedshift=zZero)
     stellarAges(sPs, pdf, centralsOnly=True, simRedshift=zZero)
-    haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=zZero)
-    haloSynchrotronPower(sPs, pdf, simRedshift=zZero)
+    haloXrayLum(sPs, pdf)
+    haloSynchrotronPower(sPs, pdf)
     HIMassFunction(sPs, pdf, simRedshift=zZero)
     HIMassFraction(sPs, pdf, simRedshift=zZero)
     HIvsHaloMass(sPs, pdf, simRedshift=zZero)

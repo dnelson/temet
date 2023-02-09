@@ -1787,17 +1787,23 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [37, 42]
         #if tight: minMax = [38, 45]
 
-    if quantname in ['xray_05-2kev_r500','xray_0.5-2.0kev_r500']:
+    if quantname in ['xray_05-2kev_r500','xray_0.5-2.0kev_r500','xray_0.5-2.0kev_r500_halo']:
         # x-ray luminosity from APEC (no '.' in name) or XPEC (if '.' in name, from Nhut) tables
         eStr = '0.5-2 keV'
         label = 'L$_{\\rm X,%s}$ [ log erg/s ]' % eStr
 
-        acStr = quantname.replace('xray_','').replace('_r500','')
+        acStr = quantname.replace('xray_','').replace('_r500','').replace('_halo','')
         acField = 'Subhalo_XrayLum_%s' % acStr
+
+        if quantname.endswith('_halo'):
+            acField = 'Group_XrayLum_%s_Crit500' % acStr
 
         # load auxCat, unit conversion: [10^30 erg/s] -> [erg/s]
         ac = sP.auxCat(fields=[acField])[acField]
         vals = ac.astype('float64') * 1e30
+
+        if quantname.endswith('_halo'):
+            vals = groupOrderedValsToSubhaloOrdered(vals, sP)
 
         minMax = [37, 42]
         #if tight: minMax = [38, 45]

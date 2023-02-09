@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.optimize import leastsq
-from os.path import isfile
+from os.path import isfile, isdir
 
 from ..plot.cosmoGeneral import quantMedianVsSecondQuant
 from ..plot.config import *
@@ -550,6 +550,7 @@ def vis_gallery(sP, conf=0, num=20):
 
 def mass_function():
     """ Plot halo mass function from the parent box (TNG300) and the zoom sample. """
+    from ..util import simParams
     from ..cosmo.zooms import _halo_ids_run
     
     mass_range = [14.0, 15.5]
@@ -557,7 +558,7 @@ def mass_function():
     redshift = 0.0
     
     sP_tng300 = simParams(res=2500,run='tng',redshift=redshift)
-    sP_tng1 = simParams(res=2048, run='tng_dm', redshift=redshift)
+    sP_tngc = simParams(res=2048, run='tng_dm', redshift=redshift)
 
     # load halos
     halo_inds = _halo_ids_run()
@@ -583,25 +584,16 @@ def mass_function():
     hh = []
     labels = []
 
-    for sP in [sP_tng300,sP_tng1]:
+    for sP in [sP_tng300,sP_tngc]:
         if sP == sP_tng300:
             # tng300
             gc = sP_tng300.groupCat(fieldsHalos=['Group_M_Crit200'])
             masses = sP_tng300.units.codeMassToLogMsun(gc)
             label = 'TNG300-1'
-        elif sP == sP_tng1:
-            # tng1 - achieved targets (from runs.txt)
-            gc = sP_tng1.groupCat(fieldsHalos=['Group_M_Crit200'])
-            masses = sP_tng1.units.codeMassToLogMsun(gc[halo_inds])
-            label = 'TNG-Cluster'
-        else:
-            # OLD: tng1 parent box for zooms (planned targets)
-            gc = sP_tng1.groupCat(fieldsHalos=['Group_M_Crit200'])
-            halo_inds = pick_halos()
-            first_bin = 5 # >=14.5
-            masses = [gc[inds] for inds in halo_inds[first_bin:]] # list of masses in each bin
-            masses = np.hstack(masses)
-            masses = sP_tng1.units.codeMassToLogMsun(masses)
+        elif sP == sP_tngc:
+            # tng-cluster - achieved targets (from runs.txt)
+            gc = sP_tngc.groupCat(fieldsHalos=['Group_M_Crit200'])
+            masses = sP_tngc.units.codeMassToLogMsun(gc[halo_inds])
             label = 'TNG-Cluster'
 
         w = np.where(~np.isnan(masses))
@@ -807,7 +799,7 @@ def bfield_strength_vs_halomass(sPs, redshifts):
         mass_range = sPs[0].units.m500_to_m200(np.array([5e14, 9e14])) # msun
 
         ax.fill_between(np.log10(mass_range), y1=[bmin,bmin], y2=[bmax,bmax], edgecolor='#cccccc', 
-            facecolor='none', lw=lw, label='Di Gennaro+20 ($z \sim 0.8$)', zorder=2)
+            facecolor='#cccccc', alpha=0.7,lw=lw, label='Di Gennaro+20 ($z \sim 0.8$)', zorder=-1)
 
         # Boehringer+2016 (https://arxiv.org/abs/1610.02887)
         # -- about ~90 measurements have mean r/r500 = 0.32, median r/r500 = 0.25
@@ -816,7 +808,7 @@ def bfield_strength_vs_halomass(sPs, redshifts):
         mass_range = [2e14,4e14] # m200 msun
 
         ax.fill_between(np.log10(mass_range), y1=[bmin,bmin], y2=[bmax,bmax], edgecolor='#eeeeee', 
-            facecolor='none', lw=lw, label='B$\\rm\\"{o}$hringer+16 ($z \sim 0.1$)', zorder=2)
+            facecolor='#eeeeee', lw=lw, label='B$\\rm\\"{o}$hringer+16 ($z \sim 0.1$)', zorder=-1)
 
     def _draw_data2(ax):
         """ Draw additional data constraints on figure, individual halos. """
@@ -840,6 +832,11 @@ def bfield_strength_vs_halomass(sPs, redshifts):
 
         # TODO: Mernier+2022 https://arxiv.org/abs/2207.10092
         # |B| = 1.9 +/- 0.3 uG (volume-averaged) (z=0.1) (aperture? mass?)
+
+        # second legend
+        handles = [ plt.Line2D( (0,1), (0,0), color='black', lw=0, marker=['o','s'][i]) for i in range(len(sPs)) ]
+        legend2 = ax.legend(handles, [sP.simName for sP in sPs], borderpad=0.4, loc='upper right')
+        ax.add_artist(legend2)
 
     quantMedianVsSecondQuant(sPs_in, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
@@ -975,8 +972,15 @@ def gas_fraction_vs_halomass(sPs):
 
         # universal baryon fraction line
         OmegaU = sPs[0].omega_b / sPs[0].omega_m
-        ax.plot( xlim, [OmegaU,OmegaU], '--', lw=1.0, color='#444444', alpha=0.2)
-        ax.text( xlim[1]-0.2, OmegaU+0.003, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', size='large', alpha=0.2)
+        ax.plot( xlim, [OmegaU,OmegaU], '--', lw=1.0, color='#444444', alpha=0.3)
+        ax.text( xlim[1]-0.2, OmegaU+0.003, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', size='large', alpha=0.3)
+
+        # second legend
+        plt.gca().set_prop_cycle(None) # reset color cycle
+        colors = [next(ax._get_lines.prop_cycler)['color'] for i in range(len(sPs))]
+        handles = [ plt.Line2D( (0,1), (0,0), color=colors[i], lw=0, marker='o') for i in range(len(sPs)) ]
+        legend2 = ax.legend(handles, [sP.simName for sP in sPs], loc='upper left')
+        ax.add_artist(legend2)
 
     quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
@@ -1035,26 +1039,36 @@ def paperPlots():
         pdf.close()
 
         pdf = PdfPages('blackhole_masses_vs_mbulge_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, xlim=[11,13.0], ylim=[7.5,11], actualLargestBHMasses=True)
+        blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, xlim=[11.5,13.0], ylim=[8.5,11], actualLargestBHMasses=True)
         pdf.close()
 
         pdf = PdfPages('blackhole_masses_vs_mhalo_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, xlim=[13.8,15.4], ylim=[8.5,11], actualLargestBHMasses=True)
+        blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, xlim=[13.9,15.4], ylim=[8.5,11], actualLargestBHMasses=True)
         pdf.close()
 
     # figure X - BCG stellar sizes
     if 0:
         from ..plot.sizes import galaxySizes
         pdf = PdfPages('galaxy_stellar_sizes_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        galaxySizes(sPs, xlim=[11.0,13.0], ylim=[3,300], onlyRedData=True, scatterPoints=True, pdf=pdf)
+        galaxySizes(sPs, xlim=[11.0,13.0], ylim=[2,400], onlyRedData=True, scatterPoints=True, pdf=pdf)
         pdf.close()
+
+    # figure X - X-ray scaling relations
+    if 0:
+        from ..plot.globalComp import haloXrayLum
+        for sP in sPs: sP.setRedshift(0.3) # median of data at high-mass end
+        haloXrayLum(sPs, xlim=[11.4,12.7], ylim=[41.6,45.7])
+
+    # figure X - halo synchrotron power
+    if 0:
+        from ..plot.globalComp import haloSynchrotronPower
+        haloSynchrotronPower(sPs, xlim=[14.0,15.3], ylim=[21.5,28.5])
 
     # satellite smhm
     # satellite radial number density
     # richness
     # BCG SFR vs M* with quenched fraction indicators
 
-    # figure todo - entropy profiles
-    # figure todo - cc/ncc fractions vs mass
-    # figure todo - Lx vs mass
+    # figure todo - dens/temp/entropy profiles stacked in 0.1 or 0.2 dex bins
+    # figure todo - Lx vs M500
     # figure todo - SZ-y vs mass

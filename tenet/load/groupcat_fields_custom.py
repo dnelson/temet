@@ -391,7 +391,7 @@ mstar_r500.auxcat = True
 def mgas_r500(sim, partType, field, args):
     """ Subhalo gas mass (all phases), measured within :math:`\\rm{R_{500c}}`. """
     acField = 'Subhalo_Mass_r500_Gas_FoF'
-    mass = sim.auxCat(acField, expandPartial=True)[acField]
+    mass = sim.auxCatSplit(acField, expandPartial=True)[acField]
     return sim.units.codeMassToMsun(mass)
 
 mgas_r500.label = r'$\rm{M_{gas, <r500}}$'

@@ -1027,6 +1027,9 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
                         if field in ['TimeStep','TimebinHydro','HighResGasMass']:
                             continue # do not save
 
+                        if gName == 'PartType2' and field in ['SubfindDMDensity','SubfindDensity','SubfindVelDisp']:
+                            continue # all zero for low-res DM, do not save
+
                         if field not in data[gName]:
                             # allocate (could be i>0)
                             shape = list(f[gName][field].shape)

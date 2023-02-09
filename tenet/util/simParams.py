@@ -1190,10 +1190,16 @@ class simParams:
             self.simName += '_sb' + str(sbNum)
             self.groupOrdered = False
 
-    def auxCatSplit(self, field, nThreads=1):
+    def auxCatSplit(self, field, nThreads=1, **kwargs):
         """ Automatically do a pSplit auxCat calculation. """
         import multiprocessing as mp
 
+        # immediate return if catalog already exists
+        data = self.auxCat(field, searchExists=True, **kwargs)
+        if field in data and data[field] is not None:
+            return data
+
+        # automatic number of chunks
         n = 8
         if self.res > 2000:
             n = 16
@@ -1209,7 +1215,7 @@ class simParams:
             pool.map(func, [(i,n) for i in np.arange(n)]) # pSplit 2-tuples
 
         # concat and return
-        return self.auxCat(field, pSplit=[0,n])
+        return self.auxCat(field, pSplit=[0,n], **kwargs)
 
     def fillZoomParams(self, res=None, hInd=None, variant=None):
         """ Fill parameters for individual (MUSIC-based) zooms. """
