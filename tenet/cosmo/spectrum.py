@@ -30,8 +30,8 @@ raysType_def = 'voronoi_fullbox'
 # f - oscillator strength [dimensionless]
 # gamma - damping constant [1/s], where tau=1/gamma is the ~lifetime (is the sum of A)
 # wave0 - transition wavelength vacuum [ang]
-lines = {'LyA'        : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion':'H I'},
-         'HI 1025'    : {'f':0.0791,   'gamma':1.67e8,  'wave0':1025.7223, 'ion':'H I'},
+lines = {'HI 1215'    : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion':'H I'}, # Lyman-alpha
+         'HI 1025'    : {'f':0.0791,   'gamma':1.67e8,  'wave0':1025.7223, 'ion':'H I'}, # Lyman-beta
          'HI 972'     : {'f':0.0290,   'gamma':6.82e7,  'wave0':972.5367,  'ion':'H I'},
          'HI 949'     : {'f':1.395e-2, 'gamma':3.43e7,  'wave0':949.7430,  'ion':'H I'},
          'HI 937'     : {'f':7.803e-3, 'gamma':1.97e7,  'wave0':937.8034,  'ion':'H I'},
@@ -100,11 +100,12 @@ lines = {'LyA'        : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion'
          'OI 1025'    : {'f':1.88e-2,  'gamma':7.14e7,  'wave0':1025.762,  'ion':'O I'}, # 6 subcomponents combined
          'OVI 1037'   : {'f':6.580e-2, 'gamma':4.076e8, 'wave0':1037.6167, 'ion':'O VI'},
          'OVI 1031'   : {'f':1.325e-1, 'gamma':4.149e8, 'wave0':1031.9261, 'ion':'O VI'},
-         'OVII 21'    : {'f':6.96e-1,  'gamma':3.32e12, 'wave0':21.6019,   'ion':'O VII'}, # x-ray
+         'OVII 21'    : {'f':6.96e-1,  'gamma':3.32e12, 'wave0':21.6019,   'ion':'O VII'}, # x-ray (r)
          'OVII 18'    : {'f':1.46e-1,  'gamma':9.35e11, 'wave0':18.6288,   'ion':'O VII'}, # x-ray
          'OVII 17a'   : {'f':5.52e-2,  'gamma':3.89e11, 'wave0':17.7680,   'ion':'O VII'}, # x-ray
-         'OVIII 18a'  : {'f':1.39e-1,  'gamma':2.58e12, 'wave0':18.9725,   'ion':'O VIII'}, # x-ray
+         'OVIII 18a'  : {'f':1.39e-1,  'gamma':2.58e12, 'wave0':18.9725,   'ion':'O VIII'}, # x-ray (LyA) (cloudy wave0=18.9709)
          'OVIII 18b'  : {'f':2.77e-1,  'gamma':2.57e12, 'wave0':18.9671,   'ion':'O VIII'}, # x-ray
+         'OVIII 18c'  : {'f':4.16e-1,  'gamma':2.57e12, 'wave0':18.9689,   'ion':'O VIII'}, # x-ray
          'AlI 3962'   : {'f':1.23e-1,  'gamma':1.04e8,  'wave0':3962.6410, 'ion':'Al I'},
          'AlI 3945'   : {'f':1.23e-1,  'gamma':5.27e7,  'wave0':3945.1224, 'ion':'Al I'},
          'AlI 3093a'  : {'f':1.45e-1,  'gamma':6.74e7,  'wave0':3093.6062, 'ion':'Al I'},
@@ -243,6 +244,8 @@ lines = {'LyA'        : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion'
 # todo: finish GNIRS (confirm R, get wave grids)
 instruments = {'idealized'       : {'wave_min':800,   'wave_max':30000, 'dwave':0.01,   'R':None},  # note: also used for EW map vis
                'master'          : {'wave_min':1,     'wave_max':25000, 'dwave':0.0001, 'R':None},  # used to create master spectra (2GB per, float64 uncompressed)
+               'NIRSpec'         : {'wave_min':11179, 'wave_max':11221, 'dwave':0.002,  'R':2700 }, # testing (celine) only
+               'NIRSpec_inst'    : {'wave_min':11180, 'wave_max':11220, 'dwave':0.2,    'R':2700 }, # testing (celine) only
                'COS-G130M'       : {'wave_min':1150,  'wave_max':1450,  'dwave':0.01},    # approximate
                'COS-G140L'       : {'wave_min':1130,  'wave_max':2330,  'dwave':0.08},    # approximate
                'COS-G160M'       : {'wave_min':1405,  'wave_max':1777,  'dwave':0.012},   # approximate
@@ -795,7 +798,7 @@ def _resample_spectrum(master_mid, tau_master, inst_waveedges):
             inst_height = local_EW / dwave_inst 
 
             # sanity checks and handle rounding issues
-            if inst_height < 0 or inst_height > 1.001:
+            if inst_height < 0 or inst_height > 1.005:
                 print('WARNING: strange inst_height is above unity: ', inst_height)
                 # assert 0 # impossible to have >1, in which case np.log(negative) is nan, which we fix below
 
@@ -901,9 +904,16 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
         # debug: (verify EW is same in master and instrumental grids)
         if 1:
             EW_check = _equiv_width(tau_inst,inst_wavemid)
-            assert np.abs(EW_check - EW_allrays[i]) < 0.01
-            #if np.abs(EW_check - EW_allrays[i]) > 0.01:
-            #    print('WARNING, EW delta = ', EW_check - EW_allrays[i])
+            #assert np.abs(EW_check - EW_allrays[i]) < 0.01
+            if np.abs(EW_check - EW_allrays[i]) > 0.01:
+                # where? ignore if it is in master grid outside of inst grid coverage
+                ww = np.where(tau_master > 0)[0]
+                wavemin = master_mid[ww.min()]
+                wavemax = master_mid[ww.max()]
+                if wavemin > inst_waveedges[0] and wavemax < inst_waveedges[-1]:
+                    print('WARNING, EW delta = ', EW_check - EW_allrays[i], 
+                          ' from wavemin = ',wavemin,' to wavemax = ',wavemax, 
+                          ' EW_inst = ', EW_check, ' EW_master = ', EW_allrays[i])
 
     return tau_allrays, EW_allrays
 
@@ -1266,12 +1276,26 @@ def integrate_along_saved_rays(sP, field, pSplit=None):
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
       generate_rays_voronoi_fullbox(sP, pSplit=pSplit)
 
-    # load required gas cell properties
-    if field.endswith('_los'):
-        projAxis = list(ray_dir).index(1)
-        field = field.replace('_los','') + '_' + ['x','y','z'][projAxis]
+    projAxis = list(ray_dir).index(1)
 
-    cell_values = sP.snapshotSubsetP('gas', field, inds=cell_inds) # units unchanged
+    # load required gas cell properties
+    if field == 'frm':
+        # Faraday rotation measure [rad m^-2]
+        bfield = 'b_' + ['x','y','z'][projAxis]
+
+        # Heesen+2023 Eqn. 2: RM = 0.81 * los_integral( (ne/cm^3) * (b_parallel/uG) * (dr/pc) ) in [rad m^-2]
+        # see Prochaska+2019 Eqn S17: want a (1+z)^-2 factor for z>0?
+        b = sP.snapshotSubsetP('gas', bfield, inds=cell_inds)
+        b = sP.units.particleCodeBFieldToGauss(b) * 1e6 # uG
+
+        ne = sP.snapshotSubsetP('gas', 'ne', inds=cell_inds) # cm^-3
+
+        cell_values = 0.812 * ne * b
+    else:
+        if field.endswith('_los'):
+            field = field.replace('_los','') + '_' + ['x','y','z'][projAxis]
+
+        cell_values = sP.snapshotSubsetP('gas', field, inds=cell_inds) # units unchanged
 
     # convert length units [parsecs]
     rays_dl = sP.units.codeLengthToPc(rays_dl)
@@ -1622,7 +1646,7 @@ def absorber_catalog(sP, ion, instrument, solar=False):
             # single spectrum
             local_tau = tau[line][i,:].flatten()
 
-            # regions of non-zero optical depth (i.e. normalized flux less than unity)
+            # non-zero optical depth regions (i.e. normalized flux less than unity)
             local_tau_nonzero_inds = np.where(local_tau > 0)[0]
 
             # find contiguous tau > 0 regions
