@@ -18,7 +18,7 @@ from ..plot.config import *
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
 
-def singleHaloImage(sP, conf=0):
+def singleHaloImage(sP, subhaloInd=440839, conf=0):
     """ Metallicity distribution in CGM image. """
     rVirFracs  = [0.5]
     method     = 'sphMap'
@@ -30,11 +30,8 @@ def singleHaloImage(sP, conf=0):
     labelHalo  = False
     relCoords  = True
     rotation   = 'edge-on'
-
-    sizeType  = 'kpc'
-
-    size = 200 #100
-    subhaloInd = 440839 # for muse proposal
+    sizeType   = 'kpc'
+    size       = 200
 
     panels = []
 
@@ -48,12 +45,16 @@ def singleHaloImage(sP, conf=0):
         panels.append( {'partType':'gas', 'partField':'MHI_GK', 'valMinMax':[16.0,22.0]} )
     if conf == 4:
         panels.append( {'partType':'gas', 'partField':'vrad', 'valMinMax':[-180,180]} )
+    if conf == 5:
+        panels.append( {'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.4,0.2]} )
+        panels.append( {'partType':'gas', 'partField':'vrad', 'valMinMax':[-180,180]} )
+        panels.append( {'partType':'gas', 'partField':'bmag_uG', 'valMinMax':[-1.5,0.5]} )
 
     class plotConfig:
         plotStyle    = 'edged'
         rasterPx     = nPixels[0] 
         colorbars    = True
-        #fontsize     = 24
+        fontsize     = 18
         saveFilename = './%s.%d.%d.%s.%dkpc.pdf' % (sP.simName,sP.snap,subhaloInd,panels[0]['partField'],size)
 
     # render
@@ -657,7 +658,7 @@ def paperPlots():
 
         metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, sizefac=sf, ylim=ylim, fullbox=True, percs=percs)
 
-    if 1:
+    if 0:
         # figure 5a (variant): subplots for variation of (Z,theta) with M*, at rvir relative impact parameters
         field = 'metal_solar'
         massBins = [ [8.49,8.51], [8.99, 9.01], [9.46,9.54] , [9.95,10.05], [10.44,10.56] ]
@@ -717,3 +718,15 @@ def paperPlots():
 
         for shID in subhaloIDs:
             metallicityVsVradProjected(TNG50, shIDs=[shID], clean=True)
+
+def paperPlotsB():
+    """ Azimuthal angle variation of B field strength. """
+
+    TNG50 = simParams(run='tng50-1', redshift=0.0)
+
+    if 1:
+        # figure 1: schematic visual
+        subhaloInd = 551973 # 549090, 551973, 565947, 567897, 572121, 574286, 575190, 579232
+        #singleHaloImage(TNG50, subhaloInd=subhaloInd, conf=0)
+        #singleHaloImage(TNG50, subhaloInd=subhaloInd, conf=4)
+        singleHaloImage(TNG50, subhaloInd=subhaloInd, conf=5)

@@ -2754,10 +2754,10 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     #conf.fontsize = 13 # tng data release paper: tng_fields override
     #height = 0.047 # tng data release paper: tng_fields override
 
-    #factor = 1.1 # celine muse figure
-    #height = 0.06 # celine muse figure
-
     height *= heightFac
+
+    if hasattr(conf,'fontsize') and conf.nCols == 1:
+        height *= (np.clip(conf.fontsize,9,32)/9)**(1/2)
 
     if barAreaTop == 0.0:
         # bottom
