@@ -14,6 +14,59 @@ from .util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def daniela_accretion_angles():
+    """ Combine three auxCat's and compute final angle. """
+    basePath = '/u/dnelson/sims.TNG/TNG50-1/data.files/auxCat/'
+    sim = simParams(run='tng50-1', redshift=2.0)
+    files = ['Subhalo_CGM_Inflow_Mean%s_%03d.hdf5' % (xyz,sim.snap) for xyz in ['X','Y','Z']]
+
+    # open output file
+    outFile = files[0].replace('MeanX','Angle_%s' % sim.simName)
+    fOut = h5py.File(outFile,'w')
+
+    # copy existing files
+    for file in files:
+        print(file)
+        with h5py.File(sim.derivPath + 'auxCat/' + file,'r') as f:
+            for key in f:
+                print(key)
+                if key in fOut:
+                    assert np.array_equal(f[key][()], fOut[key][()])
+                else:
+                    fOut[key] = f[key][()]
+
+                for attr in f[key].attrs:
+                    #print(attr)
+                    fOut[key].attrs[attr] = f[key].attrs[attr]
+
+    # load subhalo positions
+    print('angle')
+    subhalo_pos = sim.subhalos('SubhaloPos')
+
+    # compute angle
+    mean_x = fOut['Subhalo_CGM_Inflow_MeanX'][()]
+    mean_y = fOut['Subhalo_CGM_Inflow_MeanY'][()]
+    mean_z = fOut['Subhalo_CGM_Inflow_MeanZ'][()]
+
+    angle = np.zeros((sim.numSubhalos,3), dtype='float32')
+
+    angle[:,0] = mean_x - subhalo_pos[:,0]
+    angle[:,1] = mean_y - subhalo_pos[:,1]
+    angle[:,2] = mean_z - subhalo_pos[:,2]
+
+    sim.correctPeriodicDistVecs(angle)
+
+    # normalize to unit vector and save
+    norm = np.linalg.norm(angle,2,axis=1)
+    for i in range(3):
+        angle[:,i] /= norm
+
+    fOut['Subhalo_CGM_Inflow_Angle'] = angle
+
+    fOut.close()
+
+    print("Done.")
+
 def varsha_nhi_metal():
     """ Plot N_HI vs Z. Note: Z is the mass weighted mean along each LoS, not N_HI weighted! """
     from .util.helper import running_median

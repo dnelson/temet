@@ -1921,10 +1921,22 @@ def vrad(sim, partType, field, args):
 
     # get position and velocity of reference
     if args['haloID'] is None and args['subhaloID'] is None:
-        assert sim.refPos is not None and sim.refVel is not None
-        print(f'WARNING: Using refPos and refVel in non-zoom run to compute [{field}]!')
-        refPos = sim.refPos
-        refVel = sim.refVel
+        if sim.refPos is not None and sim.refVel is not None:
+            print(f'WARNING: Using refPos and refVel in non-zoom run to compute [{field}]!')
+            refPos = sim.refPos
+            refVel = sim.refVel
+        else:
+            # full box, replicate (todo: can directly use e.g. 'parent_halo_GroupPos' but need
+            # support for 'parent_subhalo_*' quantities taking central values for satellites)
+            halo_id = sim.snapshotSubset(partType, 'halo_id', **args)
+            subhalo_id = sim.halos('GroupFirstSub')[halo_id]
+            refPos = sim.subhalos('SubhaloPos')[subhalo_id]
+            refVel = sim.subhalos('SubhaloVel')[subhalo_id]
+
+            # particles outside of FoFs
+            w = np.where(halo_id < 0)
+            refPos[w] = np.nan
+            refVel[w] = np.nan
     else:
         haloID = args['haloID']
         if args['subhaloID'] is not None: # for subhalos, take host halo

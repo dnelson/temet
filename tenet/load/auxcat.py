@@ -1238,6 +1238,13 @@ fieldComputeFunctionMapping = \
    'Subhalo_RadProfile3D_FoF_Gas_CellSizeKpc_p10' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='cellsize_kpc',op=lambda x: np.percentile(x,10),scope='fof'),
 
+   'Subhalo_CGM_Inflow_MeanX' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='pos_x',op='mean',rad='r015_1rvir_halo',ptRestrictions={'vrad':['lt',0.0]},scope='fof',cenSatSelect='cen',minStellarMass=1.0),
+   'Subhalo_CGM_Inflow_MeanY' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='pos_y',op='mean',rad='r015_1rvir_halo',ptRestrictions={'vrad':['lt',0.0]},scope='fof',cenSatSelect='cen',minStellarMass=1.0),
+   'Subhalo_CGM_Inflow_MeanZ' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='pos_z',op='mean',rad='r015_1rvir_halo',ptRestrictions={'vrad':['lt',0.0]},scope='fof',cenSatSelect='cen',minStellarMass=1.0),
+
    # radial profiles: 
    'Subhalo_RadProfile3D_Global_Gas_Temp' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='temp_sfcold',op='mean',weighting='mass',scope='global_spatial',radMin=0.0,radMax=2.0,radNumBins=100,radRvirUnits=True,minHaloMass='1000dm'),
