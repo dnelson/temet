@@ -1019,7 +1019,7 @@ def create_spectra_from_traced_rays(sP, line, instrument,
     return inst_wavemid, tau_allrays, EW_allrays
 
 def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def, 
-                                  pSplit=None, search=False):
+                                  pSplit=None, integrateQuant=None, search=False):
     """ Generate a large grid of (fullbox) rays by ray-tracing through the Voronoi mesh.
 
     Args:
@@ -1029,15 +1029,19 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
       raysType (str): either 'voronoi_fullbox' (equally spaced) or 'voronoi_rndfullbox' (random).
       pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
         that we follow a spatial subdivision, so the total job number should be an integer squared.
+      integrateQuant (str): if None, save rays for future use. otherwise, directly perform and save the 
+        integral of the specified gas quantity along each ray.
       search (bool): if True, return existing data only, do not calculate new files.
     """
     # paths and save file
     if not isdir(sP.derivPath + 'rays'):
         mkdir(sP.derivPath + 'rays')
 
-    pathStr1 = sP.derivPath + 'rays/%s_n%dd%d_%03d.hdf5' % (raysType,nRaysPerDim,projAxis,sP.snap)
-    pathStr2 = sP.derivPath + 'rays/%s_n%dd%d_%03d-split-%d-%d.hdf5' % \
-      (raysType,nRaysPerDim,projAxis,sP.snap,pSplit[0],pSplit[1])
+    iqStr = '_%s' % integrateQuant if integrateQuant is not None else ''
+
+    pathStr1 = sP.derivPath + 'rays/%s%s_n%dd%d_%03d.hdf5' % (raysType,iqStr,nRaysPerDim,projAxis,sP.snap)
+    pathStr2 = sP.derivPath + 'rays/%s%s_n%dd%d_%03d-split-%d-%d.hdf5' % \
+      (raysType,iqStr,nRaysPerDim,projAxis,sP.snap,pSplit[0],pSplit[1])
 
     path = pathStr2 if pSplit is not None else pathStr1
 
@@ -1051,6 +1055,20 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
     # check existence
     if isfile(path):
         print('Loading [%s].' % path)
+
+        if integrateQuant is not None:
+            with h5py.File(path, 'r') as f:
+                # integral results
+                result = f['result'][()]
+                ray_pos = f['ray_pos'][()]
+        
+                # metadata
+                attrs = {}
+                for attr in f.attrs:
+                    attrs[attr] = f.attrs[attr]
+
+            return result, ray_pos, ray_dir, attrs['total_dl']
+
         with h5py.File(path, 'r') as f:
             # ray results
             rays_off = f['rays_off'][()]
@@ -1159,7 +1177,37 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
     # load (reduced) cell spatial positions
     cell_pos = sP.snapshotSubsetC('gas', 'pos', inds=cell_inds, verbose=True)
 
-    # ray-trace
+    # ray-trace and compute/save integral only
+    if integrateQuant is not None:
+        # load gas quantity
+        if integrateQuant.endswith('_los'):
+            integrateQuant = integrateQuant.replace('_los','') + '_' + ['x','y','z'][projAxis]
+
+        cell_values = sP.snapshotSubsetP('gas', integrateQuant, inds=cell_inds) # units unchanged
+
+        # integrate
+        result = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, quant=cell_values, mode='quant_dx_sum')
+
+        # special cases
+        if integrateQuant == 'frm_los':
+            # unit conversion [code length] -> [pc] for pathlengths, such that the FRM is in [rad m^-2]
+            result *= sP.units.codeLengthToPc(1.0)
+
+        # save
+        with h5py.File(path, 'w') as f:
+            f['result'] = result
+            f['ray_pos'] = ray_pos
+
+            f.attrs['nRaysPerDim'] = nRaysPerDim
+            f.attrs['projAxis'] = projAxis
+            f.attrs['ray_dir'] = ray_dir
+            f.attrs['total_dl'] = total_dl
+
+        print('Saved: [%s]' % path)
+
+        return result, ray_pos, ray_dir, total_dl
+
+    # full ray-trace to save rays
     print('Load done, tracing...', flush=True)
 
     rays_off, rays_len, rays_dl, rays_inds = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, mode='full')
@@ -1279,23 +1327,10 @@ def integrate_along_saved_rays(sP, field, pSplit=None):
     projAxis = list(ray_dir).index(1)
 
     # load required gas cell properties
-    if field == 'frm':
-        # Faraday rotation measure [rad m^-2]
-        bfield = 'b_' + ['x','y','z'][projAxis]
+    if field.endswith('_los'):
+        field = field.replace('_los','') + '_' + ['x','y','z'][projAxis]
 
-        # Heesen+2023 Eqn. 2: RM = 0.81 * los_integral( (ne/cm^3) * (b_parallel/uG) * (dr/pc) ) in [rad m^-2]
-        # see Prochaska+2019 Eqn S17: want a (1+z)^-2 factor for z>0?
-        b = sP.snapshotSubsetP('gas', bfield, inds=cell_inds)
-        b = sP.units.particleCodeBFieldToGauss(b) * 1e6 # uG
-
-        ne = sP.snapshotSubsetP('gas', 'ne', inds=cell_inds) # cm^-3
-
-        cell_values = 0.812 * ne * b
-    else:
-        if field.endswith('_los'):
-            field = field.replace('_los','') + '_' + ['x','y','z'][projAxis]
-
-        cell_values = sP.snapshotSubsetP('gas', field, inds=cell_inds) # units unchanged
+    cell_values = sP.snapshotSubsetP('gas', field, inds=cell_inds) # units unchanged
 
     # convert length units [parsecs]
     rays_dl = sP.units.codeLengthToPc(rays_dl)
@@ -1316,6 +1351,78 @@ def integrate_along_saved_rays(sP, field, pSplit=None):
     print(f'Saved: [{saveFilename}]')
 
     return result
+
+def concat_integrals(sP, field):
+    """ Combine split files for line-of-sight quantity integrals into a single file.
+
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      field (str): any available gas field.
+    """
+    # search for chunks
+    loadFilename = _spectra_filepath(sP, ion=field, pSplit='*')
+    saveFilename = _spectra_filepath(sP, ion=field, pSplit=None)
+
+    pSplitNum = len([f for f in glob.glob(loadFilename) if '_combined' not in f])
+    assert pSplitNum > 0, 'Error: No split spectra files found.'
+
+    # load all for count
+    lines_present = []
+    count = 0
+
+    for i in range(pSplitNum):
+        filename = _spectra_filepath(sP, ion=field, pSplit=[i,pSplitNum])
+
+        with h5py.File(filename,'r') as f:
+            # first file: load number of spectra per chunk file, master wavelength grid, and other metadata
+            if i == 0:
+                n = f['result'].size
+
+                ray_dir = f['ray_dir'][()]
+                ray_total_dl = f['ray_total_dl'][()]
+
+                # allocate
+                ray_pos = np.zeros((pSplitNum*n,3), dtype='float32')
+                result = np.zeros(pSplitNum*n, dtype=f['result'].dtype)
+                
+            else:
+                # all other chunks: sanity checks
+                assert n == f['result'].size # should be constant
+
+            # load ray starting positions
+            ray_pos[count:count+n] = f['ray_pos'][()]
+            result[count:count+n] = f['result'][()]
+
+            print(f'[{count:7d} - {count+n:7d}] {filename}')
+            count += n
+
+    print(f'In total [{count}] line-of-sight integrals loaded.')
+    assert count == n * pSplitNum, 'Error: Unexpected total number of spectra.'
+
+    # save
+    with h5py.File(saveFilename,'w') as f:
+        # ray metadata and reuslt
+        f['ray_pos'] = ray_pos
+        f['ray_dir'] = ray_dir
+        f['ray_total_dl'] = ray_total_dl
+
+        f['result'] = result
+
+        # metadata
+        f.attrs['simName'] = sP.simName
+        f.attrs['redshift'] = sP.redshift
+        f.attrs['snapshot'] = sP.snap
+        f.attrs['field'] = field
+        f.attrs['count'] = count
+
+    print('Saved: [%s]' % saveFilename)
+
+    # remove split files
+    for i in range(pSplitNum):
+        filename = _spectra_filepath(sP, ion=field, pSplit=[i,pSplitNum])
+        unlink(filename)
+
+    print('Split files removed.')
 
 def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', pSplit=None, solar=False):
     """ Generate a large number of spectra, based on already computed and saved rays.

@@ -649,6 +649,7 @@ def _rayTraceReduced(pos, NextNode, length, center, sibling, nextnode, ray_pos, 
             r_answer[i] = np.sum(quant[ind])
         elif mode == 4:
             # sum of quant*dx (if quant is a number or mass density, this is the integrated column or surface density)
+            # (if quant is frm_xyz, and dx is in parsec, this is the rotation measure)
             r_answer[i] = np.sum(quant[ind] * dx)
         elif mode == 5:
             # mean quant of all intersected cells
@@ -677,8 +678,8 @@ def rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=None, quant2=None, mode=
       quant (ndarray[float][N]): if not None, a quantity with the same size as pos to operate on.
       quant2 (ndarray[float][N]): if not None, a second quantity with the same size as pos to operate on, e.g. for weighting.
       mode (str): one of the following modes of operation:
-        **full**: here
-        **count**: here
+        **full**: return full rays as a 4-tuple of (offsets, lengths, cell_dx, cell_inds)
+        **count, dx_sum, etc**: return a summary statistic for each ray (single array of values)
       nThreads (int): do multithreaded calculation (mem required=nThreads times more).
       tree (list or None) if not None, should be a list of all the needed tree arrays (pre-computed), 
                         i.e the exact return of :py:func:`util.treeSearch.buildFullTree`.

@@ -807,6 +807,29 @@ sz_y.limits = [-12.0, -4.0]
 sz_y.limits_halo = [-10.0, -4.0]
 sz_y.log = True
 
+@snap_field(aliases=['frm_y','frm_z'])
+def frm_x(sim, partType, field, args):
+    """ Faraday rotation measure -integrand- (ne*B_parallel) in [rad m^-2]. Must be integrated through 
+    all cells along a line of sight, as sum(integrand*dl) where dl is the pathlength through each cell in pc.
+    Requires the B-field component 'along the line-of-sight' which must be axis-aligned and specified. """
+    projDir = field.split('_')[1]
+
+    # Heesen+2023 Eqn. 2: RM = 0.81 * los_integral( (ne/cm^3) * (b_parallel/uG) * (dr/pc) ) in [rad m^-2]
+    # see Prochaska+2019 Eqn S17: want a (1+z)^-2 factor for z>0?
+    b = sim.snapshotSubset(partType, 'b_%s' % projDir, **args)
+    b = sim.units.particleCodeBFieldToGauss(b) * 1e6 # uG
+
+    ne = sim.snapshotSubset(partType, 'ne', **args) # cm^-3
+
+    frm = 0.812 * ne * b
+    return frm
+
+frm_x.label = 'Faraday RM'
+frm_x.units = r'$\rm{rad m^{-2}}$'
+frm_x.limits = [-2.0, 2.0]
+frm_x.limits_halo = [-4.0, -4.0]
+frm_x.log = True
+
 @snap_field(aliases=['p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla'])
 def p_sync(sim, partType, field, args):
     """ Radio synchrotron power (simple model). """
