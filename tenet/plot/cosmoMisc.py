@@ -5,7 +5,8 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from os.path import isfile, expanduser
+from os.path import isfile, isdir, expanduser
+from os import mkdir
 from scipy.signal import savgol_filter
 
 from .cosmoGeneral import addRedshiftAxis
@@ -502,6 +503,8 @@ def simHydroResolutionComparison():
 
     def _load_vols(sP, nbins=100):
         # helper: derive new dataset for a simulation we have
+        if not isdir(sP.derivPath + 'cache/'):
+            mkdir(sP.derivPath + 'cache/')
         saveFile = sP.derivPath + 'cache/volume_vs_cellsize_%d.hdf5' % sP.snap
 
         if isfile(saveFile):
@@ -557,7 +560,10 @@ def simHydroResolutionComparison():
              {'sP':simParams(run='auriga',hInd=6,res=2,redshift=2.0), 'name': 'Auriga (L2)'},
              {'sP':simParams(run='zooms2_josh',res=11,hInd=2,variant='FPorig',redshift=2.2), 'name':'Suresh+19 (L11)'},
              {'sP':simParams(run='zooms2_josh',res=11,hInd=2,variant='FP',redshift=2.2), 'name':'Suresh+19 (L12)'},
-             {'name':'FOGGIE (z=2)', 'dx':foggie_dx, 'vol':foggie_cumvol}]
+             {'name':'FOGGIE (z=2)', 'dx':foggie_dx, 'vol':foggie_cumvol},
+             {'sP':simParams(run='gible',res=8,hInd=201,redshift=0.0), 'name':'GIBLE (RF8)'},
+             {'sP':simParams(run='gible',res=64,hInd=201,redshift=0.0), 'name':'GIBLE (RF64)'},
+             {'sP':simParams(run='gible',res=512,hInd=201,redshift=0.0), 'name':'GIBLE (RF512)'}]
 
     # idealized (constant resolution dx in pkpc, total volume in pMpc^3, all lines sum over all runs)
     ideals = [{'name':'CGOLS', 'dx':4.88e-3, 'vol':10*10*20*3/1e9}, # [A,B,C]-2048, Schneider+2018 Table 1
@@ -632,7 +638,7 @@ def simHydroResolutionComparison():
             l, = ax.plot(dx, vol, ls=ls, lw=lw, label=name)
             ax.plot([dx[-1], 1e10], [vol[-1],vol[-1]], ls=ls, lw=lw, alpha=0.2, color=l.get_color())
 
-    def _plot_zooms(ax, ls='dotted'):
+    def _plot_zooms(ax, unitfac=1, ls='dotted'):
         for sim in zooms:
             # calculated or hard-coded data?
             if 'sP' in sim:
@@ -644,14 +650,16 @@ def simHydroResolutionComparison():
 
             # add horizontal line to the left, and vertical line at max res
             xx = np.hstack( [dx[0], dx, 1e10] )
-            yy = np.hstack( [1e-20, vol, vol[-1]] )
-            l, = ax.plot(xx, yy, ls=ls, lw=lw, label=name)
+            yy = np.hstack( [1e-20, vol, vol[-1]] ) * unitfac
+            ls_loc = ls
+            if 'sP' in sim and 'GIBLE' in sim['sP'].simName: ls_loc = '-'
+            l, = ax.plot(xx, yy, ls=ls_loc, lw=lw, label=name)
 
-    def _plot_idealized(ax, ls='dashed'):
+    def _plot_idealized(ax, unitfac=1, ls='dashed'):
         for ideal in ideals:
             # dx is a constant number, vol is a single number
             xx = [1e10, ideal['dx'], ideal['dx']]
-            yy = [ideal['vol'], ideal['vol'], 1e-10]
+            yy = np.array([ideal['vol'], ideal['vol'], 1e-16]) * unitfac
             l, = ax.plot(xx, yy, ls=ls, lw=lw, label=ideal['name'])
 
     # plot (A) - all simulation types, global view
@@ -728,6 +736,57 @@ def simHydroResolutionComparison():
     legend = ax.legend(loc='upper right', **legParams)
 
     fig.savefig('sim_comparison_res_zooms.pdf')
+    plt.close(fig)
+
+    # plot (D) - Ramesh+23c (change global style)
+    import matplotlib as mpl
+    mpl.rcParams.update(mpl.rcParamsDefault)
+
+    #mpl.rcParams['axes.prop_cycle'] = cycler(color=['k', 'r', 'g', 'b', 'c', 'm', 'y'])
+    style = {'font.size':11, 'figure.autolayout':True, 'figure.dpi':100, 'savefig.dpi':300,
+             'xtick.labelsize':'medium', 'ytick.labelsize':'medium', 'xtick.major.size':8,
+             'ytick.major.size':8, 'xtick.minor.size':3, 'ytick.minor.size':3,
+             'xtick.major.width':1.25, 'ytick.major.width':1.25, 'xtick.minor.width':1.25,
+             'ytick.minor.width':1.25, 'xtick.top':True, 'ytick.right':True, 'ytick.minor.visible':True,
+             'xtick.minor.visible':True, 'xtick.direction':'in', 'ytick.direction':'in',
+             'lines.markersize':4, 'lines.linewidth':1, 'lines.markeredgewidth':0,
+             'path.simplify':True, 'axes.linewidth':1.25, 'axes.labelsize':'large',
+             'legend.numpoints':1, 'legend.frameon':False, 'legend.handletextpad':0.3, 
+             'legend.scatterpoints':1, 'legend.handlelength':2, 'legend.handleheight':0.75,
+             'text.usetex':True, 'text.latex.preamble': r'\usepackage[T1]{fontenc}\usepackage{cmbright}'}
+
+    for k,v in style.items():
+        mpl.rcParams[k] = v
+
+    fig = plt.figure(figsize=[7,4])
+    ax = fig.add_subplot(111)
+
+    ax.set_xlim([10, 0.001])
+    ax.set_ylim([8e-7, 1e10])
+
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_xlabel('Spatial Resolution $\Delta x$')
+    ax.set_ylabel('Simulated Volume with $\leq \Delta x$ [kpc$^3$]')
+
+    # 'disk volume'
+    vol_disk = np.pi * (10)**2 * 1 # disk radius=10kpc, height=1kpc [pMpc^3]
+    xx = [ ax.get_xlim()[0], ax.get_xlim()[1] ]
+    ax.plot(xx, [vol_disk,vol_disk], '-', lw=18, color='#ccc')
+    ax.text(xx[0]*0.88, vol_disk, 'Disk Galaxy', va='center', color='#aaa')
+
+    ax.set_xticks([10, 1, 0.1, 0.01, 0.001])
+    ax.set_xticklabels(['10 kpc','1 kpc','100 pc', '10 pc', '1 pc'])
+
+    _plot_zooms(ax, unitfac=1e9, ls='dashed')
+
+    ax.set_prop_cycle(None) # reset color cycle
+    _plot_idealized(ax, unitfac=1e9, ls='dotted')
+
+    legParams = {'ncol':2, 'columnspacing':1.0, 'fontsize':9, 'markerscale':0.6}
+    legend = ax.legend(loc='upper right', **legParams)
+
+    fig.savefig('sim_comparison_res_ramesh.pdf')
     plt.close(fig)
 
 def plotClumpsEvo():

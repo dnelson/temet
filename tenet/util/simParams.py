@@ -687,6 +687,41 @@ class simParams:
 
             self.simName = dirStr
 
+        # GIBLE
+        if run in ['gible']:
+            assert hInd is not None
+            assert self.variant in ['None']
+
+            self.validResLevels = [8,64,512,4096]
+            self.groupOrdered = True
+
+            # TNG50-2 zooms to z=0
+            parentRes = 1080
+            self.zoomLevel = self.res # RF8 (TNG50-1), RF64, RF512, RF4096
+            self.sP_parent = simParams(res=parentRes, run='tng', redshift=0.0)
+
+            self.gravSoft = 0.78 / (self.res/8)**(1/3)
+            self.targetGasMas = 5.73879e-6 * 8 / (self.res/8)
+            self.boxSize = 35000.0 # ckpc/h
+
+            # common: Planck2015 TNG cosmology
+            self.omega_m     = 0.3089
+            self.omega_L     = 0.6911
+            self.omega_b     = 0.0486
+            self.HubbleParam = 0.6774
+
+            # physics
+            self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
+            self.metals = None
+            self.winds = 2
+            self.BHs   = 2
+
+            # paths
+            dirStr = 'L%dn%dTNG_h%d_RF%d' % (int(self.boxSize/1000.0),parentRes,self.hInd,self.zoomLevel)
+
+            self.arepoPath  = self.basePath + 'sims.TNG_zooms/' + dirStr + '/'
+            self.simName    = 'GIBLE S%d RF%d' % (hInd,self.res)
+
         # STRUCTURES
         if run in ['structures']:
             assert hInd is not None
