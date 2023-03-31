@@ -664,7 +664,7 @@ def _rayTraceReduced(pos, NextNode, length, center, sibling, nextnode, ray_pos, 
 
     return r_answer
 
-def rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=None, quant2=None, mode='full', nThreads=20, tree=None):
+def rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=None, quant2=None, mode='full', nThreads=72, tree=None):
     """ For a given set of particle coordinates, assumed to be Voronoi cell center positions, perform a 
     tree-based ray-tracing through this implicit Voronoi mesh, for a number of specified ray_pos initial ray 
     positions, in a given direction, for a total pathlength. The operation while tracing is specified by mode.

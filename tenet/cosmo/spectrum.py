@@ -18,7 +18,7 @@ from ..util.voronoiRay import rayTrace
 
 # default configuration for ray generation
 projAxis_def = 2
-#nRaysPerDim_def = 2000
+#nRaysPerDim_def = 2000 # 10000 for frm_los
 #raysType_def = 'voronoi_rndfullbox'
 nRaysPerDim_def = 1000
 raysType_def = 'voronoi_fullbox'
@@ -1180,10 +1180,11 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
     # ray-trace and compute/save integral only
     if integrateQuant is not None:
         # load gas quantity
-        if integrateQuant.endswith('_los'):
-            integrateQuant = integrateQuant.replace('_los','') + '_' + ['x','y','z'][projAxis]
+        loadQuant = integrateQuant
+        if loadQuant.endswith('_los'):
+            loadQuant = loadQuant.replace('_los','') + '_' + ['x','y','z'][projAxis]
 
-        cell_values = sP.snapshotSubsetP('gas', integrateQuant, inds=cell_inds) # units unchanged
+        cell_values = sP.snapshotSubsetP('gas', loadQuant, inds=cell_inds) # units unchanged
 
         # integrate
         result = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, quant=cell_values, mode='quant_dx_sum')
@@ -1194,6 +1195,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
             result *= sP.units.codeLengthToPc(1.0)
 
         # save
+        path = _spectra_filepath(sP, ion=integrateQuant, pSplit=pSplit)     
         with h5py.File(path, 'w') as f:
             f['result'] = result
             f['ray_pos'] = ray_pos
@@ -1267,7 +1269,7 @@ def _spectra_filepath(sim, ion, projAxis=projAxis_def, nRaysPerDim=nRaysPerDim_d
 
     elif str(pSplit) == '*':
         # leave wildcard for glob search (would have to generalized if pSplit[1] is not two digits)
-        filename = filebase + '_*of-??.hdf5'
+        filename = filebase + '_*of-*.hdf5'
 
     else:
         # concatenated set
@@ -1378,8 +1380,8 @@ def concat_integrals(sP, field):
             if i == 0:
                 n = f['result'].size
 
-                ray_dir = f['ray_dir'][()]
-                ray_total_dl = f['ray_total_dl'][()]
+                ray_dir = f['ray_dir'][()] if 'ray_dir' in f else f.attrs['ray_dir']
+                ray_total_dl = f['ray_total_dl'][()] if 'ray_total_dl' in f else f.attrs['total_dl']
 
                 # allocate
                 ray_pos = np.zeros((pSplitNum*n,3), dtype='float32')

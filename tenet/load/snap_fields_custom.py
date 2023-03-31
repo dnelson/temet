@@ -819,7 +819,7 @@ def frm_x(sim, partType, field, args):
     b = sim.snapshotSubset(partType, 'b_%s' % projDir, **args)
     b = sim.units.particleCodeBFieldToGauss(b) * 1e6 # uG
 
-    ne = sim.snapshotSubset(partType, 'ne', **args) # cm^-3
+    ne = sim.snapshotSubset(partType, 'ne_twophase', **args) # cm^-3
 
     frm = 0.812 * ne * b
     return frm
