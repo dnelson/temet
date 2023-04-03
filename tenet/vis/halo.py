@@ -247,7 +247,7 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
             if cName in ['panels','plotConfig','plotConfigDefaults','simParams','p']:
                 continue
             if cName in p:
-                print('Warning: Letting panel specification ['+cName+'] override common value.')
+                print(f"Warning: Letting panel value [{cName} = {p[cName]}] override common value [{cVal}].")
                 continue
             p[cName] = cVal
 

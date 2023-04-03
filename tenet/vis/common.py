@@ -2499,9 +2499,6 @@ def addBoxMarkers(p, conf, ax, pExtent):
     # text in a combined legend?
     legend_labels = []
 
-    if 'labelSim' in p and p['labelSim']:
-        legend_labels.append( p['sP'].simName )
-
     if 'labelHalo' in p and p['labelHalo']:
         assert p['sP'].subhaloInd is not None
 
@@ -2543,6 +2540,12 @@ def addBoxMarkers(p, conf, ax, pExtent):
     if 'labelAge' in p and p['labelAge']:
         # age of the universe
         legend_labels.append( 't = %.2f Gyr' % p['sP'].tage )
+
+    if 'labelSim' in p and p['labelSim']:
+        if isinstance(p['labelSim'],str):
+            legend_labels.append( p['labelSim'] )
+        else:
+            legend_labels.append( p['sP'].simName )
 
     # draw legend
     if len(legend_labels):
@@ -3078,6 +3081,20 @@ def renderMultiPanel(panels, conf):
 
         if len(pPartTypes) == 1 and len(pPartFields) == 1 and len(pValMinMaxes) == 1:
             oneGlobalColorbar = True
+
+        # check if we have multiple panels with auto min-max scalings, if so, avoid single (wrong) colorbar
+        if oneGlobalColorbar:
+            field_counts = {}
+            for panel in panels:
+                key = '%s-%s' % (panel['partType'], panel['partField'])
+                if key not in field_counts:
+                    field_counts[key] = 0
+                field_counts[key] += (panel['valMinMax'] is None) # auto
+            
+            for k,v in field_counts.items():
+                if v > 1:
+                    print(f'WARNING: [{k}] has multiple panels with auto colorbar minmax. Disabling single global colorbar.')
+                    oneGlobalColorbar = False
 
         if nRows == 2 and not oneGlobalColorbar:
             # two rows, special case, colors on top and bottom, every panel can be different
