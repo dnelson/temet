@@ -631,6 +631,14 @@ fieldComputeFunctionMapping = \
    'Subhalo_XrayLum_05-2kev_2rhalfstars' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum_05-2kev',op='sum',rad='2rhalfstars'),
 
+   'Subhalo_OVIIr_GalaxyLum_1rstars' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='O  7 21.6020A lum2phase',op='sum',rad='1rhalfstars',ptRestrictions=sfrgt0),
+   'Subhalo_OVIIr_DiffuseLum_1rstars' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='O  7 21.6020A lum2phase',op='sum',rad='1rhalfstars',ptRestrictions=sfreq0),
+   'Subhalo_OVIIr_GalaxyLum_10pkpc' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='O  7 21.6020A lum2phase',op='sum',rad=10.0,ptRestrictions=sfrgt0),
+   'Subhalo_OVIIr_DiffuseLum_10pkpc' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='O  7 21.6020A lum2phase',op='sum',rad=10.0,ptRestrictions=sfreq0),
    'Subhalo_OVIIr_GalaxyLum_30pkpc' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O  7 21.6020A lum2phase',op='sum',rad=30.0,ptRestrictions=sfrgt0),
    'Subhalo_OVIIr_DiffuseLum_30pkpc' : \
@@ -725,7 +733,9 @@ fieldComputeFunctionMapping = \
    'Subhalo_StellarZ_SDSSFiber4pkpc_rBandLumWt'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='sdss_fiber_4pkpc',weighting='bandLum-sdss_r'),
    'Subhalo_StellarZ_2rhalf_rBandLumWt': \
-     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='2rhalfstars',weighting='bandLum-sdss_r',minHaloMass='1000dm'),
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='2rhalfstars',weighting='bandLum-sdss_r'),
+   'Subhalo_StellarZ_30pkpc_rBandLumWt': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad=30.0,weighting='bandLum-sdss_r'),
 
    'Subhalo_StellarAge_2rhalf_rBandLumWt'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad='2rhalfstars',weighting='bandLum-sdss_r'),
@@ -742,9 +752,11 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_StellarZform_VIMOS_Slit'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='z_form',op='mean',rad='legac_slit',weighting='mass'),
-
    'Subhalo_StellarMeanVel' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='vel',op='mean',rad=None,weighting='mass'),
+
+   'Subhalo_GasZ_30pkpc_SfrWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metal',op='mean',rad=30.0,weighting='sfr'),
 
    # magnetic fields
    'Subhalo_Bmag_SFingGas_massWt' : \

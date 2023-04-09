@@ -7,6 +7,7 @@ import glob
 import matplotlib.pyplot as plt
 from os.path import isfile
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib.ticker import FormatStrFormatter
 from scipy.signal import savgol_filter
 from scipy.interpolate import interp1d
 
@@ -161,7 +162,7 @@ def _load_data(sim, haloID, b, ver="v4", line="O--7-21.6020A"):
     bStr = '' if b is None else '_b%s' % b
     lineStr = '' if line is None else '_%s' % line
     if b is None: assert ver in ['v1','v2'] # deprecated, b must be specified for v3 onwards
-    if b is None: assert ver in ['v1','v2','v3'] # deprecated, line must be specified for v4 onwards
+    if line is None: assert ver in ['v1','v2','v3'] # deprecated, line must be specified for v4 onwards
 
     path = "/vera/ptmp/gc/byrohlc/public/OVII_RT/"
     run = "%s_cutout_%s_%d_halo%d_size2%s%s" % (ver,sim.name,sim.snap,haloID,bStr,lineStr)
@@ -238,7 +239,7 @@ def radialProfile(sim, haloID, b, line="O--7-21.6020A"):
     ax.plot([halo_r500,halo_r500], ax.get_ylim(), '--', color='#aaa', label='Halo R$_{500}$', zorder=-1)
 
     # sub-axis: ratio
-    subax.set_ylim([0.5,20])
+    subax.set_ylim([0.5,400]) # 20
     if line == 'O--8-18.9709A': subax.set_ylim([0.9,1.5])
     subax.set_xlabel('Projected Distance [pkpc]')
     subax.set_ylabel('Ratio')
@@ -439,29 +440,29 @@ def stackedRadialProfiles(sim, haloIDs, b, addObsThresholds=True):
         # exposure times for XRISM and XIFU become ridiculous e.g. 10Ms to see anything.
         c = '#aaa'
 
-        # XRISM-Resolve 500ks
+        # XRISM-Resolve 1Ms
         xmax = 50.0
         sb_thresh = 1.1e35
         ax.plot([xlim[0],xmax], [sb_thresh,sb_thresh], lw=lw*2, color=c)
-        ax.text(xmax+5, sb_thresh, 'XRISM-Resolve (500ks)', ha='left', va='center', color=c, fontsize=16)
+        ax.text(xmax+5, sb_thresh, 'XRISM-Resolve (1Ms)', ha='left', va='center', color=c, fontsize=16)
 
         # Athena-XIFU 100ks
         xmax = 80.0
-        sb_thresh = 2.0e34
+        sb_thresh = 1.3e34
         ax.plot([xlim[0],xmax], [sb_thresh,sb_thresh], lw=lw*2, color=c)
         ax.text(xmax+5, sb_thresh, 'Athena-XIFU (100ks)', ha='left', va='center', color=c, fontsize=16)
 
         # Athena-XIFU 1Ms
         xmax = 150.0
-        sb_thresh = 4.6e33
+        sb_thresh = 3.2e33
         ax.plot([xlim[0],xmax], [sb_thresh,sb_thresh], lw=lw*2, color=c)
         ax.text(xmax+5, sb_thresh, 'Athena-XIFU (1Ms)', ha='left', va='center', color=c, fontsize=16)
 
         # LEM 1Ms
         xmax = 200.0
-        sb_thresh = 2.5e33 # TBD
-        #ax.plot([xlim[0],xmax], [sb_thresh,sb_thresh], lw=lw*2, color=c)
-        #ax.text(xmax+5, sb_thresh, 'LEM (1Ms)', ha='left', va='center', color='#555', fontsize=16)
+        sb_thresh = 1.17e33 # Gerrit Schellenberger (see emails)
+        ax.plot([xlim[0],xmax], [sb_thresh,sb_thresh], lw=lw*2, color=c)
+        ax.text(xmax+5, sb_thresh, 'LEM (1Ms)', ha='left', va='center', color='#555', fontsize=16)
 
     # loop over each stellar mass bin
     colors = []
@@ -882,8 +883,8 @@ def galaxyLumVsSFR(sim, b=1, addDiffuse=True, correctLineToBandFluxRatio=False):
     """
     from matplotlib.patches import FancyArrowPatch
 
-    # load catalog of OVII luminosities, per subhalo, star-forming gas only (no radial restriction)
-    acField = 'Subhalo_OVIIr_GalaxyLum_30pkpc'
+    # load catalog of OVII luminosities, per subhalo, star-forming gas only (<10 kpc or <30 kpc)
+    acField = 'Subhalo_OVIIr_GalaxyLum_1rstars' # 1rstars, 10pkpc, 30pkpc
     ac = sim.auxCat(acField)
     lum = ac[acField].astype('float64') * 1e30 # unit conversion
 
@@ -891,9 +892,9 @@ def galaxyLumVsSFR(sim, b=1, addDiffuse=True, correctLineToBandFluxRatio=False):
     lum *= b
 
     if addDiffuse:
-        # add contributions from all non-starforming gas within 30 pkpc
-        print('Adding diffuse contribution within 30pkpc to star-forming lum2phase.')
-        acField = 'Subhalo_OVIIr_DiffuseLum_30pkpc'
+        # add contributions from all non-starforming gas (<10 kpc or <30 kpc)
+        print('Adding diffuse contribution within 10pkpc to star-forming lum2phase.')
+        acField = 'Subhalo_OVIIr_DiffuseLum_1rstars' # 1rstars, 10pkpc, 30pkpc
         ac = sim.auxCat(acField)
         lum_diffuse = ac[acField].astype('float64') * 1e30 # unit conversion
 
@@ -920,7 +921,7 @@ def galaxyLumVsSFR(sim, b=1, addDiffuse=True, correctLineToBandFluxRatio=False):
     ax.set_ylabel('Galaxy OVII(r) Luminosity [ erg s$^{-1}$ ]')
     ax.set_xscale('log')
     ax.set_yscale('log')
-    ax.set_ylim([1e37,1e41])
+    ax.set_ylim([1e36,1e41])
 
     cmap = loadColorTable('viridis', fracSubset=[0.15,0.95])
     s = ax.scatter(sfr[w], lum[w], c=mstar[w], cmap=cmap, vmin=mstar_min, vmax=mstar_max)
@@ -944,7 +945,7 @@ def galaxyLumVsSFR(sim, b=1, addDiffuse=True, correctLineToBandFluxRatio=False):
         # --> for n=-2.0 and denser, ~25% (at 5.8 < logT[K] < 6.25), dropping to 5% at 10^5.6K and 10^6.5K
         # note: the median/mean density of star-forming gas is about 5-20x the threshold density in TNG50-1 MW halos
         # --> eEOS hot-phase temperature is actually within the range of peak OVII(r) fraction
-        line_ratio_fac = 0.2
+        line_ratio_fac = 0.1
 
         print(f'Correcting Mineo+ 0.5-2 keV data to OVII(r) line luminosity with {line_ratio_fac = }')
 
@@ -952,20 +953,33 @@ def galaxyLumVsSFR(sim, b=1, addDiffuse=True, correctLineToBandFluxRatio=False):
         yy2 *= line_ratio_fac
         mineo_lum *= line_ratio_fac
 
-    ax.plot(xx, yy, '--', lw=lw, color='#000', label='Mineo+12 $\\rm{L_{0.5-2keV}}$ vs. SFR relation')
-    ax.plot(xx, yy2, '--', lw=lw, color='#555', label='Mineo+12 mekal best-fit')
+    ax.plot(xx, yy, '--', lw=lw, color='#000', label='Mineo+12 $\\rm{L_{0.5-2keV}}$-derived relation')
+    ax.plot(xx, yy2, '--', lw=lw, color='#555', label='Mineo+12 mekal best-fit relation')
 
-    ax.plot(mineo_sfr, np.array(mineo_lum)*1e38, 'D', color='#000', label='Mineo+12 individual galaxies')
+    ax.plot(mineo_sfr, np.array(mineo_lum)*1e38, 'D', color='#000', label='Mineo+12 galaxies')
 
     # Salvestrini+2020 NGC 7213 L_OVIIr = 1.9e+39 erg/s and SFR = 1.0 +/- 0.1 Msun/yr (Gruppioni+2016)
     ax.errorbar(1.0, 1.9e39, xerr=0.2, yerr=1.0e39, marker='o', markersize=10.0, lw=lw, color='black', label='NGC 7213')
 
-    if not correctLineToBandFluxRatio:
-        # add downward arrows to indicate possible rescalings
-        color = '#ccc'
-        arrowstyle ='simple, head_width=8, head_length=8, tail_width=2'
-        textOpts = {'color':color, 'rotation':90.0, 'fontsize':15, 'ha':'center', 'va':'top'}
+    # add arrows to indicate possible rescalings
+    color = '#ccc'
+    arrowstyle ='simple, head_width=8, head_length=8, tail_width=2'
+    textOpts = {'color':color, 'rotation':90.0, 'fontsize':15, 'ha':'center', 'va':'top'}
 
+    if correctLineToBandFluxRatio:
+        # 1% arrow is downwards, 25% arrow is upwards
+        y = 1.5e39
+        x = 22; f = 2.5 # 2.5x higher than fiducial i.e. 25%
+        p1 = FancyArrowPatch(posA=[x,y], posB=[x,y*f], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        ax.add_artist(p1)
+        ax.text(x, y*f*2.4, '0.25', **textOpts)
+
+        x = 22; f = 0.1 # 10% lower than fiducial i.e. 1%
+        p2 = FancyArrowPatch(posA=[x,y], posB=[x,y*f], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        ax.add_artist(p2)
+        ax.text(x, y*f*0.9, '0.01', **textOpts)
+    else:
+        # all arrows are downwards
         y = 3.5e39
         x = 12; f = 0.25
         p1 = FancyArrowPatch(posA=[x,y], posB=[x,y*f], arrowstyle=arrowstyle, alpha=1.0, color=color)
@@ -1199,7 +1213,7 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
         clabel = 'Galaxy $\\rm{L_{OVII(r)}}$ [ log erg s$^{-1}$ ]'
     if color_quant == 'Lbol':
         cvals = np.log10(lbol)
-        cminmax = [37, 42]
+        cminmax = [37, 43]
         clabel = 'SMBH $\\rm{L_{bol}}$ [ log erg s$^{-1}$ ]'
     if color_quant == 'mbh':
         cvals = sim.units.codeMassToLogMsun(mbh)
@@ -1249,7 +1263,8 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
 
     # colobar and save plot
     cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.1)
-    cb = plt.colorbar(s, cax=cax)
+    #cax.yaxis.set_major_formatter()
+    cb = plt.colorbar(s, cax=cax) #, format=FormatStrFormatter('%5.2f'))
     cb.ax.set_ylabel(clabel)
 
     fig.savefig('sb_enhancement_vs_mass_rad%d_%s_px%d_%s_%s_%d_nh%d_b%s.pdf' % \
@@ -1410,7 +1425,7 @@ def paperPlots():
     b_fiducial = 0.0001
 
     if 0:
-        # figs 1 and 2: single halo demonstration, fiducial model
+        # figs 1 and 2: single halo demonstration, fiducial model  
         radialProfile(sim, haloID=haloID_demo, b=b_fiducial)
         imageSBcomp(sim, haloID=haloID_demo, b=b_fiducial)
 
@@ -1432,9 +1447,9 @@ def paperPlots():
         # fig 6: enhancement factor vs mass, for different radii and mean vs median
         enhancementTrendVsMass(sim, haloIDs, b=b_fiducial)
 
-    if 0:
+    if 1:
         # fig 7: check galaxy OVIIr luminosity vs observational constraints
-        galaxyLumVsSFR(sim, b=b_fiducial, addDiffuse=True, correctLineToBandFluxRatio=False)
+        galaxyLumVsSFR(sim, b=b_fiducial, addDiffuse=True, correctLineToBandFluxRatio=True)
 
     if 0:
         # fig 8: impact of central source/boost factor
@@ -1466,6 +1481,13 @@ def paperPlots():
             radialProfile(sim, haloID=haloID, b=0)
             imageSBcomp(sim, haloID=haloID, b=0)
             spectrum(sim, haloID=haloID, b=0)
+
+    if 0:
+        # fig X: check impact of velocities (v4novel cases)
+        _load_data.__defaults__ = ('v4novel', _load_data.__defaults__[1]) # hack
+        for haloID in [201,202,203,204,530,531,532,535]:
+            radialProfile(sim, haloID=haloID, b=b_fiducial)
+            imageSBcomp(sim, haloID=haloID, b=b_fiducial)
 
     if 0:
         # fig X: check input luminosity profiles
