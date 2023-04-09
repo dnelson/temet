@@ -1019,14 +1019,16 @@ def create_spectra_from_traced_rays(sP, line, instrument,
     return inst_wavemid, tau_allrays, EW_allrays
 
 def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def, 
-                                  pSplit=None, integrateQuant=None, search=False):
+                                  subhaloIDs=None, pSplit=None, integrateQuant=None, search=False):
     """ Generate a large grid of (fullbox) rays by ray-tracing through the Voronoi mesh.
 
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
       projAxis (int): either 0, 1, or 2. only axis-aligned allowed for now.
       nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
-      raysType (str): either 'voronoi_fullbox' (equally spaced) or 'voronoi_rndfullbox' (random).
+      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or 
+        'sample_localized' (distributed around a given set of subhalos).
+      subhaloIDs (list): if raysType is 'sample_localized' (only), then a list of subhalo IDs.
       pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
         that we follow a spatial subdivision, so the total job number should be an integer squared.
       integrateQuant (str): if None, save rays for future use. otherwise, directly perform and save the 
@@ -1039,11 +1041,11 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
 
     iqStr = '_%s' % integrateQuant if integrateQuant is not None else ''
 
-    pathStr1 = sP.derivPath + 'rays/%s%s_n%dd%d_%03d.hdf5' % (raysType,iqStr,nRaysPerDim,projAxis,sP.snap)
-    pathStr2 = sP.derivPath + 'rays/%s%s_n%dd%d_%03d-split-%d-%d.hdf5' % \
-      (raysType,iqStr,nRaysPerDim,projAxis,sP.snap,pSplit[0],pSplit[1])
+    path = sP.derivPath + 'rays/%s%s_n%dd%d_%03d.hdf5' % (raysType,iqStr,nRaysPerDim,projAxis,sP.snap)
 
-    path = pathStr2 if pSplit is not None else pathStr1
+    if pSplit is not None:
+        path = sP.derivPath + 'rays/%s%s_n%dd%d_%03d-split-%d-%d.hdf5' % \
+               (raysType,iqStr,nRaysPerDim,projAxis,sP.snap,pSplit[0],pSplit[1])
 
     # total requested pathlength (equal to box length)
     total_dl = sP.boxSize
@@ -1051,6 +1053,8 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
     # ray direction
     ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
     ray_dir[projAxis] = 1.0    
+
+    inds = list(set([0,1,2]) - set([projAxis])) # e.g. [0,1] for projAxis == 2
 
     # check existence
     if isfile(path):
@@ -1096,6 +1100,8 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
     print('Total number of rays: %d x %d = %d' % (nRaysPerDim,nRaysPerDim,nRaysPerDim**2))
 
     # spatial decomposition
+    nRaysPerDimOrig = nRaysPerDim
+
     if pSplit is not None:
         assert np.abs(np.sqrt(pSplit[1]) - np.round(np.sqrt(pSplit[1]))) < 1e-6, 'pSplitSpatial: Total number of jobs should have integer square root, e.g. 9, 16, 25, 64.'
         nPerDim = int(np.sqrt(pSplit[1]))
@@ -1123,6 +1129,8 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
     # ray starting positions
     if raysType == 'voronoi_fullbox':
         # evenly spaced (skip last, which will be duplicate with first)
+        numrays = nRaysPerDim**2
+
         xpts = np.linspace(xmin, xmax, nRaysPerDim+1)[:-1]
         ypts = np.linspace(ymin, ymax, nRaysPerDim+1)[:-1]
 
@@ -1130,23 +1138,52 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
 
     if raysType == 'voronoi_rndfullbox':
         # stable, random
+        numrays = nRaysPerDim**2
+
         rng = np.random.default_rng(424242 + nRaysPerDim + sP.snap + sP.res)
 
         xpts = rng.uniform(low=xmin, high=xmax, size=nRaysPerDim**2)
         ypts = rng.uniform(low=ymin, high=ymax, size=nRaysPerDim**2)
 
-    # construct [N,3] list of ray starting locations
-    ray_pos = np.zeros( (nRaysPerDim**2,3), dtype='float64')
-    
-    inds = list(set([0,1,2]) - set([projAxis])) # e.g. [0,1] for projAxis == 2
+    if raysType == 'sample_localized':
+        # localized (e.g. <= rvir) sightlines around a given sample of subhalos, specified by a list of 
+        # subhaloIDs, taking nRaysPerDim**2 sightlines around each subhalo
+        assert subhaloIDs is not None, 'Error: For [sample_localized], specify subhaloIDs.'
+        assert pSplit is None, 'Error: Need to implement, take subset of subhaloIDs in xminmax yminmax.'
 
+        numrays = nRaysPerDim**2 * len(subhaloIDs)
+        virRadFactor = 2.0 # out to this factor times r200c in impact parameter
+
+        # load subhalo metadata
+        SubhaloPos = sP.subhalos('SubhaloPos')
+        Subhalo_R200c = sP.subhalos('rhalo_200')
+
+        rng = np.random.default_rng(424242 + nRaysPerDim + sP.snap + sP.res)
+    
+        xpts = np.zeros(numrays, dtype='float32')
+        ypts = np.zeros(numrays, dtype='float32')
+
+        for i, subhaloID in enumerate(subhaloIDs):
+            randomAngle = rng.uniform(0, 2*np.pi, nRaysPerDim**2)
+            randomDistance = rng.uniform(0, virRadFactor*Subhalo_R200c[subhaloID], nRaysPerDim**2)
+
+            offset = i * nRaysPerDim**2
+            xpts[offset:offset + nRaysPerDim**2] = randomDistance * np.cos(randomAngle)
+            ypts[offset:offset + nRaysPerDim**2] = randomDistance * np.sin(randomAngle)
+    
+            xpts[offset:offset + nRaysPerDim**2] += SubhaloPos[subhaloID,inds[0]]
+            ypts[offset:offset + nRaysPerDim**2] += SubhaloPos[subhaloID,inds[1]]
+    
+    # construct [N,3] list of ray starting locations
+    ray_pos = np.zeros( (numrays,3), dtype='float64')
+    
     ray_pos[:,inds[0]] = xpts.ravel()
     ray_pos[:,inds[1]] = ypts.ravel()
     ray_pos[:,projAxis] = 0.0
 
-    # determine spatial mask (cuboid with long side equal to boxlength in line-of-sight direction)
-    cell_inds = None
+    sP.correctPeriodicPosVecs(ray_pos)
 
+    # determine spatial mask (cuboid with long side equal to boxlength in line-of-sight direction)
     if pSplit is not None:
         mask = np.zeros(sP.numPart[sP.ptNum('gas')], dtype='int8')
         mask += 1 # all required
@@ -1173,6 +1210,9 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
         dists = None
         w_spatial = None
         mask = None
+    else:
+        # global load
+        cell_inds = np.arange(sP.numPart[sP.ptNum('gas')])
 
     # load (reduced) cell spatial positions
     cell_pos = sP.snapshotSubsetC('gas', 'pos', inds=cell_inds, verbose=True)
@@ -1184,7 +1224,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
         if loadQuant.endswith('_los'):
             loadQuant = loadQuant.replace('_los','') + '_' + ['x','y','z'][projAxis]
 
-        cell_values = sP.snapshotSubsetP('gas', loadQuant, inds=cell_inds) # units unchanged
+        cell_values = sP.snapshotSubsetC('gas', loadQuant, inds=cell_inds, verbose=True) # units unchanged
 
         # integrate
         result = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, quant=cell_values, mode='quant_dx_sum')
@@ -1195,7 +1235,8 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
             result *= sP.units.codeLengthToPc(1.0)
 
         # save
-        path = _spectra_filepath(sP, ion=integrateQuant, pSplit=pSplit)     
+        path = _spectra_filepath(sP, ion=integrateQuant, projAxis=projAxis, nRaysPerDim=nRaysPerDimOrig, 
+                                 raysType=raysType, pSplit=pSplit)     
         with h5py.File(path, 'w') as f:
             f['result'] = result
             f['ray_pos'] = ray_pos

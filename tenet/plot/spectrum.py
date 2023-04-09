@@ -6,7 +6,7 @@ import h5py
 import matplotlib.pyplot as plt
 from os.path import isfile
 
-from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_filepath, lsf_matrix
+from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_filepath, lsf_matrix, varconvolve, _resample_spectrum
 from ..cosmo.spectrum import create_wavelength_grid, deposit_single_line, lines, instruments, absorber_catalog
 from ..util.helper import logZeroNaN, sampleColorTable
 from ..util import units
@@ -137,13 +137,13 @@ def profile_single_line():
     fig.savefig('spectrum_single_%s.pdf' % line)
     plt.close(fig)
 
-def profiles_multiple_lines():
+def profiles_multiple_lines(plotTau=True):
     """ Deposit Voigt absorption profiles for a number of transitions: create spectrum and plot. """
 
     # transition, instrument, and spectrum type
     lineNames = ['LyA'] + [line for line in lines.keys() if 'HI ' in line] # Lyman series
     instrument = 'idealized'
-    
+
     # config for 'this cell'
     N = 15.0 # log 1/cm^2
     b = 40.0 # km/s
@@ -152,6 +152,14 @@ def profiles_multiple_lines():
     z_cosmo = 0.0
 
     xlim = [800, 1300]
+
+    if 1:
+        # celine JWST cycle 2 proposal
+        lineNames = ['NaI 5897', 'NaI 5891']
+        instrument = 'NIRSpec'
+        N = 11.5
+        z_cosmo = 0.9
+        xlim = None
 
     # create master grid
     master_mid, master_edges, tau_master = create_wavelength_grid(instrument=instrument)
@@ -163,15 +171,15 @@ def profiles_multiple_lines():
     for line in lineNames:
         f, gamma, wave0, _, _ = _line_params(line)
 
-        deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff)
+        deposit_single_line(master_edges, master_mid, tau_master, f, gamma, wave0, 10.0**N, b, z_eff)
 
     # compute flux
     flux_master = np.exp(-1*tau_master)
 
     # plot
     fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(211)
-    ax.set_xlim(xlim)
+    ax = fig.add_subplot(1+plotTau,1,1)
+    if xlim is not None: ax.set_xlim(xlim)
 
     ax.set_xlabel('Wavelength [ Ang ]')
     ax.set_ylabel('Relative Flux')
@@ -179,14 +187,96 @@ def profiles_multiple_lines():
     ax.plot(master_mid, flux_master, '-', lw=lw, label=label)
 
     ax.legend(loc='best')
-    ax = fig.add_subplot(212)
 
-    ax.set_xlabel('Wavelength [ Ang ]')
-    ax.set_ylabel('Optical Depth $\\tau$')
-    ax.plot(master_mid, tau_master, '-', lw=lw, label=label)
+    if plotTau:
+        ax = fig.add_subplot(1+plotTau,1,2)
+        if xlim is not None: ax.set_xlim(xlim)
 
-    ax.legend(loc='best')
+        ax.set_xlabel('Wavelength [ Ang ]')
+        ax.set_ylabel('Optical Depth $\\tau$')
+        ax.plot(master_mid, tau_master, '-', lw=lw, label=label)
+
+        ax.legend(loc='best')
+
     fig.savefig('spectrum_multi_%s.pdf' % ('-'.join(lineNames)))
+    plt.close(fig)
+
+def profiles_multiple_lines_coldens():
+    """ Deposit Voigt absorption profiles for a number of transitions and N values: create spectrum and plot.
+    Celine Peroux JWST cycle 2 proposal. """
+    rng = np.random.default_rng(424244)
+
+    # transition, instrument, and spectrum type
+    lineNames = ['NaI 5897', 'NaI 5891']
+    instrument = 'NIRSpec'
+
+    # physical config
+    Nvals = [12.5, 13.0, 13.5] # log 1/cm^2
+    b = 5.0 # km/s
+    SNR = 10.0
+
+    z_cosmo = 0.9 # observed frame ~ 1.1 micron
+    vel_los = 0.0 #1000.0 # km/s
+
+    ylim = [-0.1, 1.3]
+    xlim = None
+
+    _, lsf, _ = lsf_matrix(instrument)
+
+    # plot
+    fig = plt.figure(figsize=(14,4))
+
+    for i, N in enumerate(Nvals):
+        ax = fig.add_subplot(1,3,i+1)
+        if xlim is not None: ax.set_xlim(xlim)
+        if ylim is not None: ax.set_ylim(ylim)
+
+        ax.set_xlabel('Wavelength [ $\mu$m ]')
+        ax.set_ylabel('Relative Flux')
+        ax.set_title('log N$_{\\rm NaI}$ = %.1f cm$^{{-2}}$' % N)
+        ax.ticklabel_format(useOffset=False)
+
+        # create master grid
+        master_mid, master_edges, tau_master = create_wavelength_grid(instrument=instrument)
+
+        # deposit
+        z_doppler = vel_los / units.c_km_s
+        z_eff = (1+z_doppler)*(1+z_cosmo) - 1 # effective redshift
+
+        for line in lineNames:
+            f, gamma, wave0, _, _ = _line_params(line)
+
+            deposit_single_line(master_edges, master_mid, tau_master, f, gamma, wave0, 10.0**N, b, z_eff)
+
+        # convovle with LSF, then convert optical depth to relative flux
+        tau_master = varconvolve(tau_master, lsf)
+        flux_master = np.exp(-1*tau_master)
+
+        # down-sample to instrumental wavelength grid
+        inst_mid, inst_waveedges, _ = create_wavelength_grid(instrument=instrument+'_inst')
+        tau_inst = _resample_spectrum(master_mid, tau_master, inst_waveedges)
+
+        flux_inst = np.exp(-1*tau_inst)
+
+        # add noise? ("signal" is now 1.0)
+        if SNR is not None:
+            noise = rng.normal(loc=0.0, scale=1/SNR, size=flux_master.shape)
+            flux_master += noise
+            # achieved SNR = 1/stddev(noise)
+            flux_master = np.clip(flux_master, 0, np.inf) # clip negative values at zero
+
+            noise2 = rng.normal(loc=0.0, scale=1/SNR, size=flux_inst.shape)
+            flux_inst += noise2
+            flux_inst = np.clip(flux_inst, 0, np.inf) # clip negative values at zero
+
+        # plot
+        master_mid /= 10000 # ang -> micron
+        inst_mid /= 10000 # ang -> micron
+        #ax.plot(master_mid, flux_master, '-', lw=lw)
+        ax.plot(inst_mid, flux_inst, '-', color='black', lw=lw)
+
+    lineStr = '-'.join([line.replace(' ','') for line in lineNames])
+    fig.savefig('spectrum_multi_%s_N%d_SNR%d_b%d.pdf' % (lineStr,len(Nvals),SNR,b))
     plt.close(fig)
 
 def LyA_profiles_vs_coldens():
