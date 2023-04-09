@@ -517,12 +517,12 @@ def generate_set():
     """ Driver. """
     from ..util.simParams import simParams
 
-    if 1:
+    if 0:
         # TNG-Cluster
         sP = simParams(res=2048,run='tng_dm',redshift=0.0)
-        zoomFac = 4
-        haloIDs = [811,836,844,850,856,858,861,877,884,898]
-        sizeFac = 3.0 #[2.0,3.0,4.0]
+        zoomFac = 4 # fiducial choice
+        haloIDs = [4274,4369,4394,4414,5122,5711] # last six of 352 in total
+        sizeFac = 3.0 # fiducial choice, [2.0,3.0,4.0]
 
     if 0:
         # LRG-CGM paper: TNG50-1 no-MHD test (z=0.5)
@@ -539,28 +539,47 @@ def generate_set():
         sizeFac = 4.0
 
     if 0:
+        # TNG100 group zooms (Reza)
+        sP = simParams(run='tng100-2', redshift=0.0)
+        zoomFac = 1
+        haloIDs = [135,177] #[88,129,151,147,153,160,167,172,189,164,177,184,192,191,199]
+        sizeFac = 8.0 # 4.0, 27.0, 125.0
+
+    if 0:
         # TNG50 dwarf zooms (STRUCTURES/MCS/Byrohl)
         sP = simParams(run='tng50-1', redshift=3.0)
-        zoomFac = 16 # 1 (8e4 msun/TNG50-1 res), 2 (1e4 msun), 4 (1320 msun), 8 (160 msun), 16 (20 msun)
+        zoomFac = 8 # 1 (8e4 msun/TNG50-1 res), 2 (1e4 msun), 4 (1320 msun), 8 (160 msun), 16 (20 msun)
+
+        # Milky Way progenitors at z=3
+        haloIDs = [1242]
 
         # mstar = 1e9 at z=3
         # grnr[np.where( (mstar>8.9) & (mstar<9.1) & (mhalo>11.1) & (mhalo<11.3) & (cen_flag) )[0][::10]]
-        haloIDs = [302, 437, 556, 600, 627, 684, 730, 793, 869]
+        #haloIDs = [302, 437, 556, 600, 627, 684, 730, 793, 869]
 
         # mstar = 1e8 at z=3
         # grnr[np.where( (mstar>7.9) & (mstar<8.1) & (mhalo>10.4) & (mhalo<10.6) & (cen_flag) )[0][::50]]
-        haloIDs += [607, 2485, 3051, 3345, 3545, 3729, 3938, 4182, 4382, 4697, 5145]
+        #haloIDs += [607, 2485, 3051, 3345, 3545, 3729, 3938, 4182, 4382, 4697, 5145]
 
         # mstar = 1e7 at z=3
         # grnr[np.where( (mstar>6.9) & (mstar<7.1) & (mhalo>9.8) & (mhalo<10.0) & (cen_flag) )[0][::200]]
-        haloIDs += [3272, 10677, 12688, 14043, 14997, 15998, 16996, 18203, 19761]
+        #haloIDs += [3272, 10677, 12688, 14043, 14997, 15998, 16996, 18203, 19761]
 
         # mstar = 1e6 at z=3
         # grnr[np.where( (mstar>5.9) & (mstar<6.1) & (mhalo>9.3) & (mhalo<9.5) & (cen_flag) )[0][::400]]
-        haloIDs += [8795, 31619, 37411, 40928, 43571, 45925, 48539, 51074, 53960, 57526, 63330]
+        #haloIDs += [8795, 31619, 37411, 40928, 43571, 45925, 48539, 51074, 53960, 57526, 63330]
 
         sizeFac = 4.0 # 6.0
 
+    if 0:
+        # byrohl P-ResimICs test
+        sP = simParams(run='tng50-4', redshift=0.0)
+        zoomFac = 2 # 1 (8e4 msun/TNG50-1 res), 2 (1e4 msun), 4 (1320 msun), 8 (160 msun), 16 (20 msun)
+
+        haloIDs = [555]
+        sizeFac = 4.0
+
     # run
     for haloID in haloIDs:
+        #for zoomFac in [1,2,4,8]:
         generate(sP, fofID=haloID, ZoomFactor=zoomFac, EnlargeHighResFactor=sizeFac)

@@ -91,7 +91,7 @@ def structuresEvo(conf='one'):
     # panel selection
     dmMM = [6.0,8.5]
     gasMM = [5.0,7.5]
-    variants = ['TNG','SN'] # for model vs model comparisons
+    variants = ['ST','SN'] # for model vs model comparisons
     resolutions = [14,18] # for res vs res comparisons
 
     if conf == 'one':
@@ -146,6 +146,7 @@ def structuresEvo(conf='one'):
         plotStyle    = 'edged'
         rasterPx     = nPixels[0]
         colorbars    = True
+        minRedshift  = 3.0
         fontsize     = 26
         savePath     = expanduser('~') + '/data/frames/%s_h%d_%s_L%d/' % (run,hInd,variant,res)
         saveFileBase = '%s_h%d_%s_L%d_evo_%s' % (run,hInd,variant,res,conf)
@@ -153,12 +154,13 @@ def structuresEvo(conf='one'):
     if conf == 'five':
         # panel
         panels.append( {'partType':'stars', 'variant':variants[0], 'partField':'stellarComp', 'size':20.0,
-                        'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
-        panels.append( {'partType':'stars', 'variant':variants[1], 'partField':'stellarComp', 'size':2.0,
-                        'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
+                        'labelScale':'physical', 'labelSim':'TNG50-1 h10677 re-simulation (TNG model)', 'labelHalo':True} )
+        panels.append( {'partType':'stars', 'variant':variants[1], 'partField':'stellarComp', 'size':5.0,
+                        'labelScale':'physical', 'labelSim':'TNG50-1 h10677 re-simulation (Smith+ model)', 'labelHalo':True} )
 
-        # single frame at z=3
-        plotConfig.saveFilename = '%s_h%d_L%d.png' % (run,hInd,res)
+        # single frame at z=3 (SAGAS proposal)
+        plotConfig.colorbars = False
+        plotConfig.saveFilename = '%s_h%d_L%d.pdf' % (run,hInd,res)
         redshift = 3.0
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
         return

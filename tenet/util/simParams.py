@@ -771,7 +771,7 @@ class simParams:
 
             self.icsPath    = self.basePath + 'sims.structures/ICs/output/' + icsStr
             self.arepoPath  = self.basePath + 'sims.structures/' + dirStr + '/'
-            self.simName    = dirStr
+            self.simName    = 'h%d_L%d_%s' % (self.hInd,self.zoomLevel,self.variant)
 
         # AURIGA
         if run in ['auriga','auriga_dm']:

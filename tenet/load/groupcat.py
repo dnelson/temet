@@ -616,7 +616,8 @@ def groupCatSingle(sP, haloID=None, subhaloID=None):
         
     gcName = "Subhalo" if subhaloID is not None else "Group"
     gcID = subhaloID if subhaloID is not None else haloID
- 
+    assert gcID >= 0
+
     # load groupcat offsets, calculate target file and offset
     groupFileOffsets = groupCatOffsetList(sP)['offsets'+gcName]
     groupFileOffsets = gcID - groupFileOffsets
