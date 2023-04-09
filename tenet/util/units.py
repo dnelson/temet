@@ -1386,6 +1386,15 @@ class units(object):
         absolute_mag = apparent_mag - 5.0 * (np.log10(d_L_cm) - 1.0)
         return absolute_mag
 
+    def photonWavelengthToErg(self, wavelength, redshift=None):
+        """ Convert a photon wavelength [rest-frame Ang] emitted at a redshift into 
+        photon energy [erg]. """
+        if redshift is None:
+            redshift = self._sP.redshift
+            
+        photon_fac = (wavelength*self.ang_in_cm/self.planck_erg_s/self.c_cgs) * (1.0 + redshift)
+        return photon_fac
+
     def luminosityToFlux(self, lum, wavelength=None, redshift=None):
         """ Convert a luminosity in [erg/s] to a flux [photon/s/cm^2] for e.g. line emission at a 
         given wavelength in [Angstroms] if not None, from a source at the given redshift. 

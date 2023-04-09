@@ -609,12 +609,18 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         lineName = partField.split("_")[1].replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
 
         # compute line emission flux for each gas cell in [erg/s/cm^2] or [photon/s/cm^2]
-        if 0:
+        if 1:
             # use cache
             assert not zeroSfr # not implemented in cache
             assert not lumUnits # not implemented in cache
             assert not dustDepletion # not implemented in cache
             mass = sP.snapshotSubsetP('gas', '%s flux' % lineName, indRange=indRange)
+
+            if ergUnits:
+                # [photon/s/cm^2] -> [erg/s/cm^2]
+                cloudy_e = cloudyEmission(sP, line=lineName, redshiftInterp=True)
+                wavelength = cloudy_e.lineWavelength(lineName)
+                mass /= sP.units.photonWavelengthToErg(wavelength)
         else:
             e_interp = cloudyEmission(sP, line=lineName, redshiftInterp=True)
             lum = e_interp.calcGasLineLuminosity(sP, lineName, indRange=indRange, dustDepletion=dustDepletion)
@@ -958,7 +964,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         if '_kpc' in partField: uLabel = 'kpc$^{-2}$'
         eLabel = 'Surface Brightness [log photon s$^{-1}$ cm$^{-2}$'
         if '_ergs' in partField:
-            eLabel = 'Surface Brightness [log erg s$^{-1}$ cm$^{-2}$'
+            eLabel = 'SB [log erg s$^{-1}$ cm$^{-2}$'
         if '_lum' in partField:
             eLabel = 'Luminosity Surface Density [log erg s$^{-1}$'
 
@@ -2327,7 +2333,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
         if p['relCoords']:
             xyPos = [0.0, 0.0]
 
-        if p['sP'].subhaloInd is not None:
+        if p['sP'].subhaloInd is not None and p['sP'].subhaloInd >= 0:
             # in the case that the box is not centered on the halo (e.g. offset quadrant), can use:
             sub = p['sP'].groupCatSingle(subhaloID=p['sP'].subhaloInd)
 
@@ -2499,7 +2505,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
     # text in a combined legend?
     legend_labels = []
 
-    if 'labelHalo' in p and p['labelHalo']:
+    if 'labelHalo' in p and p['labelHalo'] and p['sP'].subhaloInd >= 0:
         assert p['sP'].subhaloInd is not None
 
         subhalo = p['sP'].groupCatSingle(subhaloID=p['sP'].subhaloInd)
@@ -2915,6 +2921,8 @@ def renderMultiPanel(panels, conf):
             if 'grid' in p:
                 print('NOTE: Overriding computed image grid with input grid!')
                 grid = p['grid']
+            else:
+                p['grid'] = grid # attach for later use
 
             # create this panel, and label axes and title
             ax = fig.add_subplot(nRows,nCols,i+1)
@@ -3171,6 +3179,8 @@ def renderMultiPanel(panels, conf):
             if 'grid' in p:
                 print('NOTE: Overriding computed image grid with input grid!')
                 grid = p['grid']
+            else:
+                p['grid'] = grid # attach for later use
 
             # render tweaks
             if 'splitphase' in p:

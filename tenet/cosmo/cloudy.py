@@ -99,6 +99,8 @@ lineList = """
 #229562  Blnd 1035.00A      Blend: "O  6      1031.91A"+"O  6      1037.62A"
 """
 # missing (for the future):
+#Si  3 (1207A)
+#HeII (1640A)
 #Si  4 1393.755A, doublet in Bertone+ (2010b)
 #Si  4 1402.770A, doublet in Bertone+ (2010b)
 #N   5 1238.821A, doublet in Bertone+ (2010b)
