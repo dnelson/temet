@@ -15,3 +15,4 @@ from . import stellarPop # requires fsps
 from . import util
 from . import xray
 from . import zooms
+from . import zoomsVirtualBox
