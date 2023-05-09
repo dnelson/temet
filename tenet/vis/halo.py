@@ -13,9 +13,10 @@ from ..util.rotation import meanAngMomVector, rotationMatrixFromVec, momentOfIne
   rotationMatricesFromInertiaTensor, rotationMatrixFromAngleDirection
 from ..util.simParams import simParams
 
-def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclination, mpb, cenShift, depthFac, **kwargs):
+def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclination, mpb, cenShift, 
+                 depthFac, depth, depthType, **kwargs):
     """ Factor out some box/image related calculations common to all halo plots. """
-    assert sizeType in ['rVirial','rHalfMass','rHalfMassStars','codeUnits','kpc','arcsec','arcmin']
+    assert sizeType in ['rVirial','r500','rHalfMass','rHalfMassStars','codeUnits','kpc','arcsec','arcmin']
 
     if mpb is None:
         # load halo position and virial radius (of the central zoom halo, or a given halo in a periodic box)
@@ -32,12 +33,13 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclina
         sP.refVel = sh['SubhaloVel']
 
         haloVirRad = gr['Group_R_Crit200']
+        haloR500 = gr['Group_R_Crit500']
         galHalfMassRad = sh['SubhaloHalfmassRad']
         galHalfMassRadStars = sh['SubhaloHalfmassRadType'][sP.ptNum('stars')]
         boxCenter  = sh['SubhaloPos'][ axes + [3-axes[0]-axes[1]] ] # permute into axes ordering
     else:
         # use the smoothed MPB properties to get halo properties at this snapshot
-        assert sizeType not in ['rHalfMass','rHalfMassStars'] # not implemented
+        assert sizeType not in ['rHalfMass','r500','rHalfMassStars'] # not implemented
 
         if sP.snap < mpb['SnapNum'].min():
             # for very early times, linearly interpolate properties at start of tree back to t=0
@@ -70,27 +72,35 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclina
     boxCenter += np.array(cenShift)
 
     # convert size into code units
-    if sizeType == 'rVirial':
-        boxSizeImg = size * haloVirRad
-    if sizeType == 'rHalfMass':
-        boxSizeImg = size * galHalfMassRad
-    if sizeType == 'rHalfMassStars':
-        boxSizeImg = size * galHalfMassRadStars
-        if boxSizeImg == 0.0:
-            boxSizeImg = size * galHalfMassRad / 5
-    if sizeType == 'codeUnits':
-        boxSizeImg = size
-    if sizeType == 'kpc':
-        boxSizeImg = sP.units.physicalKpcToCodeLength(size)
-    if sizeType == 'arcsec':
-        size_pkpc = sP.units.arcsecToAngSizeKpcAtRedshift(size, sP.redshift)
-        boxSizeImg = sP.units.physicalKpcToCodeLength(size_pkpc)
-    if sizeType == 'arcmin':
-        size_pkpc = sP.units.arcsecToAngSizeKpcAtRedshift(size*60, sP.redshift)
-        boxSizeImg = sP.units.physicalKpcToCodeLength(size_pkpc)
-    if sizeType == 'deg':
-        size_pkpc = sP.units.arcsecToAngSizeKpcAtRedshift(size*60*60, sP.redshift)
-        boxSizeImg = sP.units.physicalKpcToCodeLength(size_pkpc)
+    def _convert_size(s, s_type):
+        """ Helper. Convert a numeric size [s] given a string type [s_type]. """
+        if s_type == 'rVirial':
+            s_img = s * haloVirRad
+        if s_type == 'r500':
+            s_img = s * haloR500
+        if s_type == 'rHalfMass':
+            s_img = s * galHalfMassRad
+        if s_type == 'rHalfMassStars':
+            s_img = s * galHalfMassRadStars
+            if s_img == 0.0:
+                s_img = s * galHalfMassRad / 5
+        if s_type == 'codeUnits':
+            s_img = s
+        if s_type == 'kpc':
+            s_img = sP.units.physicalKpcToCodeLength(s)
+        if s_type == 'arcsec':
+            s_pkpc = sP.units.arcsecToAngSizeKpcAtRedshift(s, sP.redshift)
+            s_img = sP.units.physicalKpcToCodeLength(s_pkpc)
+        if s_type == 'arcmin':
+            s_pkpc = sP.units.arcsecToAngSizeKpcAtRedshift(s*60, sP.redshift)
+            s_img = sP.units.physicalKpcToCodeLength(s_pkpc)
+        if s_type == 'deg':
+            s_pkpc = sP.units.arcsecToAngSizeKpcAtRedshift(s*60*60, sP.redshift)
+            s_img = sP.units.physicalKpcToCodeLength(s_pkpc)
+
+        return s_img
+
+    boxSizeImg = _convert_size(size, sizeType)
 
     boxSizeImg = boxSizeImg * np.array([1.0, 1.0, 1.0]) # same width, height, and depth
     boxSizeImg[1] *= (nPixels[1]/nPixels[0]) # account for aspect ratio
@@ -99,7 +109,12 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclina
                boxCenter[1] - 0.5*boxSizeImg[1], boxCenter[1] + 0.5*boxSizeImg[1]]
 
     # modify depth?
-    boxSizeImg[2] *= depthFac
+    if depth is None:
+        # depthFac modifies size interpreted as sizeType
+        boxSizeImg[2] *= depthFac
+    else:
+        # depthFac modifies depth interpreted as depthType
+        boxSizeImg[2] = _convert_size(depth, depthType) * depthFac
 
     # make coordinates relative
     if relCoords:
@@ -188,7 +203,9 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
     cenShift    = [0,0,0]       # [x,y,z] coordinates to shift default box center location by
     size        = 3.0           # side-length specification of imaging box around halo/galaxy center
     depthFac    = 1.0           # projection depth, relative to size (1.0=same depth as width and height)
-    sizeType    = 'rVirial'     # size multiplies [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,kpc,arcsec,arcmin,deg]
+    sizeType    = 'rVirial'     # size multiplies [rVirial,r500,rHalfMass,rHalfMassStars] or in [codeUnits,kpc,arcsec,arcmin,deg]
+    depth       = None          # if None, depth is taken as size*depthFac, otherwise depth is provided here
+    depthType   = 'rVirial'     # as sizeType except for depth, if depth is not None
     #hsmlFac     = 2.5          # multiplier on smoothing lengths for sphMap
     axes        = [1,0]         # e.g. [0,1] is x,y
     axesUnits   = 'code'        # code [ckpc/h], kpc, mpc, deg, arcmin, arcsec
@@ -229,7 +246,7 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
         saveFilename = savePathDefault + 'renderHalo_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
 
     # skip if final output render file already exists?
-    if skipExisting and hasattr(plotConfig,'saveFilename') and isfile(plotConfig.saveFilename):
+    if skipExisting and hasattr(plotConfig,'saveFilename') and isfile(plotConfig.saveFilename) and not returnData:
         print('SKIP: %s' % plotConfig.saveFilename)
         return
 
