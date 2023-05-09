@@ -804,7 +804,17 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
             if sim_yvals is None:
                 print('   skip')
                 continue # property is not calculated for this run (e.g. expensive auxCat)
-            if yLog: sim_yvals = logZeroNaN(sim_yvals)
+            if yLog:
+                # check for zero values (should generalize)
+                w_zero = np.where(sim_yvals == 0)[0]
+                if len(w_zero) and yQuant in ['sfr_30pkpc','sfr','sfr2']:
+                    print('Warning: setting [%d] zero SFRs to random around minimum y-axis value!' % len(w_zero))
+                    rng = np.random.default_rng(424242)
+                    low_val = ylim[0] + 1*(ylim[1]-ylim[0])/100 # 1% above the bottom
+                    high_val = ylim[0] + 15*(ylim[1]-ylim[0])/100 # to 8% above the bottom
+                    sim_yvals[w_zero] = 10.0**(rng.uniform(low=low_val, high=high_val, size=len(w_zero)))
+                
+                sim_yvals = logZeroNaN(sim_yvals)
 
             # x-axis: load fullbox galaxy properties
             sim_xvals, xlabel_def, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean, tight=True)

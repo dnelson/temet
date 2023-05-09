@@ -98,10 +98,10 @@ def galaxyMosaic_topN(numHalosInd, panelNum=1, hIDsPlot=None, redshift=2.0, rota
         if panelNum == 5:
             panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.5,0.5]} )
         if panelNum == 6:
-            panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'gas', 'partField':'vel_los_sfrwt', 'valMinMax':[-300,300]} )
+            panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'gas', 'partField':'vel_los', 'weightField':'sfr', 'valMinMax':[-300,300]} )
             if rotation is None or rotation == 'edge-on': panels[-1]['valMinMax'] = [-400,400]
         if panelNum == 7:
-            panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los_sfrwt', 'valMinMax':[0,400]} )
+            panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los', 'weightField':'sfr', 'valMinMax':[0,400]} )
         if panelNum == 8:
             panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los', 'valMinMax':[0,400]} )
         if panelNum == 9:

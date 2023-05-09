@@ -675,17 +675,18 @@ class simParams:
             if run in ['tng50_zoom','tng50_zoom_dm']:
                 dirStr = dirStr.replace("h23_L11","h23_z05_L11") # tests stopping at z=0.5
 
-            # load cmInitial (box recentering offset) for TNG1 production runs
+            # load cmInitial (box recentering offset) for TNG-Cluster production runs
             if self.variant == 'sf3':
                 ics_filename = 'ics_zoom_L%sn%dTNG_DM_halo%d_L%d_sf3.0_mpc.hdf5' % (bs,parentRes,self.hInd,self.res) # generalize if not sf3
-                self.icsPath = self.basePath + 'sims.TNG_zooms/ICs/output/'
+                #self.icsPath = self.basePath + 'sims.TNG_zooms/ICs/output/'
+                self.icsPath = '/virgotng/mpia/TNG-Cluster/InitialConditions/zooms/'
                 self.icsPath += ics_filename
                 with h5py.File(self.icsPath, 'r') as f:
                     self.zoomShiftPhys = f['Header'].attrs['GroupCM'] / 1000 # code (mpc) units
 
             self.arepoPath = self.basePath + 'sims.TNG_zooms/' + dirStr + '/'
             if run in ['tng_zoom','tng_zoom_dm']:
-                self.arepoPath = '/virgotng/mpia/TNG-Cluster/' + dirStr + '/'
+                self.arepoPath = '/virgotng/mpia/TNG-Cluster/individual/' + dirStr + '/'
 
             self.simName = dirStr
 

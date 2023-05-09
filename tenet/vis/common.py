@@ -33,7 +33,7 @@ colDensityFields  = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI
                      'p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha',
                      'H2_BR','H2_GK','H2_KMT','HI_BR','HI_GK','HI_KMT']
 totSumFields      = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','tau0_LyB','sz_yparam']
-velLOSFieldNames  = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
+velLOSFieldNames  = ['vel_los','velsigma_los']
 velCompFieldNames = ['vel_x','vel_y','vel_z','bfield_x','bfield_y','bfield_z']
 haloCentricFields = ['tff','tcool_tff','menc','specangmom_mag','vrad','vrel','delta_rho']
 
@@ -55,8 +55,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
               'P_gas','P_B','pressure_ratio',
               'metal','Z','metal_solar','Z_solar',
               'SN_IaII_ratio_Fe','SNIaII_ratio_metals','SN_Ia_AGB_ratio_metals',
-              'vmag','velmag','vel_los','vel_los_sfrwt','vel_x','vel_y','vel_z',
-              'velsigma_los','velsigma_los_sfrwt',
+              'vmag','velmag','vel_los','vel_x','vel_y','vel_z','velsigma_los',
               'vrad','halo_vrad','radvel','halo_radvel',
               'vrad_vvir',
               'specangmom_mag','specj_mag'
@@ -674,10 +673,6 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
     if partField in ['masspart','particle_mass']:
         partFieldLoad = 'mass'
 
-    # weighted quantity, but using some property other than mass for the weighting (replace now)
-    if partField in ['vel_los_sfrwt','velsigma_los_sfrwt']:
-        mass = sP.snapshotSubsetP(partType, 'sfr', indRange=indRange)
-
     # quantity and column density normalization
     normCol = False
 
@@ -1114,7 +1109,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['ctName'] = 'afmhot' # same as pm/f-34-35-36 (illustris)
         logMin = False
 
-    if partField in ['vel_los','vel_los_sfrwt']:
+    if partField in ['vel_los']:
         grid = grid
         config['label']  = '%s Line of Sight Velocity [km/s]' % ptStr
         config['ctName'] = 'RdBu_r' # bwr, coolwarm, RdBu_r
@@ -1127,7 +1122,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['ctName'] = 'RdBu_r'
         logMin = False
 
-    if partField in ['velsigma_los','velsigma_los_sfrwt']:
+    if partField in ['velsigma_los']:
         grid = np.sqrt(grid) # variance -> sigma
         config['label']  = '%s Line of Sight Velocity Dispersion [km/s]' % ptStr
         config['ctName'] = 'PuBuGn_r' # hot, magma
@@ -1386,8 +1381,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
         # quantity is computed with respect to a pre-existing grid? load now
         refGrid = None
-        if partField in ['velsigma_los','velsigma_los_sfrwt']:
-            partFieldRef = partField.replace('sigma','') # e.g. 'velsigma_los_sfrwt' -> 'vel_los_sfrwt'
+        if partField in ['velsigma_los']:
+            partFieldRef = partField.replace('sigma','') # e.g. 'velsigma_los' -> 'vel_los'
             projParamsLoc = dict(projParams)
             projParamsLoc['noclip'] = True
             refGrid, _, _ = gridBox(sP, method, partType, partFieldRef, nPixels, axes, projType, projParamsLoc, 
@@ -1720,7 +1715,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
                 # special behavior
                 #def _weighted_std(values, weights):
-                #    """ Return weighted standard deviation. Would enable e.g. velsigma_los_sfrwt, except that user 
+                #    """ Return weighted standard deviation. Would enable e.g. velsigma_los with sfr/X-ray weights, except that user 
                 #        functions in binned_statistic_2d() cannot accept any arguments beyond the list of values in a bin. 
                 #        So we cannot do a weighted f(), without rewriting the internals therein. """
                 #    avg = np.average(values, weights=weights)
@@ -1928,6 +1923,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     # handle units and come up with units label
     grid_master, config, data_grid = gridOutputProcess(sP, grid_master, partType, partField, boxSizeImg, nPixels, projType, method)
 
+    config['boxCenter'] = boxCenter
+    config['boxSizeImg'] = boxSizeImg
+
     if projType == 'mollweide':
         # we do not yet support actual projection onto mollweide (or healpix) coordinate systems
         # instead we produce an equirectangular projection, then re-map the 2d pixel image
@@ -1998,7 +1996,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
         grid_master[grid_nHI < 19.0] = np.nan
 
-    if 1 and partField in velLOSFieldNames:
+    if 0 and partField in velLOSFieldNames:
         if 'noclip' not in projParams:
             print('Clipping LOS velocity, visible at SFR surface density > 0.01 msun/yr/kpc^2 only.')
             grid_sfrsd, _, _ = gridBox(sP, method, 'gas', 'sfr_msunyrkpc2', nPixels, axes, projType, projParams, 

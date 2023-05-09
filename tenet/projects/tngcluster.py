@@ -6,89 +6,13 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.optimize import leastsq
+from scipy.interpolate import interp1d
 from os.path import isfile, isdir
 
 from ..plot.cosmoGeneral import quantMedianVsSecondQuant
 from ..plot.config import *
-
-def satelliteVelocityDistribution(sP, minMasses, sub_N=1):
-    """ Calculate relative velocity between Nth most massive satellite and central halo, in units 
-    of V200 of the halo. (sub_N=1 means the 1st, most massive, satellite). """
-    groupFields   = ['Group_M_Crit200','Group_R_Crit200','GroupFirstSub','GroupNsubs']
-    subhaloFields = ['SubhaloVel','SubhaloPos','SubhaloMass']
-
-    gc = sP.groupCat(fieldsSubhalos=subhaloFields, fieldsHalos=groupFields)
-
-    haloMasses = sP.units.codeMassToMsun(gc['halos']['Group_M_Crit200'])
-
-    r = {}
-
-    for minMass in minMasses:
-        # find all fof halos above this M200_Crit minimum value
-        w = np.where( haloMasses >= minMass )[0]
-
-        if len(w) == 0:
-            continue
-
-        # compute V200 circular velocity
-        V200 = sP.units.codeM200R200ToV200InKmS(gc['halos']['Group_M_Crit200'][w], 
-                                                gc['halos']['Group_R_Crit200'][w])
-
-        V200b = sP.units.codeMassToVirVel(gc['halos']['Group_M_Crit200'][w]) # max 1% different
-
-        # subhalo velocities
-        assert np.min(gc['halos']['GroupFirstSub'][w]) >= 0
-        assert np.min(gc['halos']['GroupNsubs'][w]) > sub_N
-
-        priInds = gc['halos']['GroupFirstSub'][w]
-        Vpri = sP.units.subhaloCodeVelocityToKms(gc['subhalos']['SubhaloVel'][priInds])
-
-        subInds = gc['halos']['GroupFirstSub'][w] + sub_N
-        Vsub = sP.units.subhaloCodeVelocityToKms(gc['subhalos']['SubhaloVel'][subInds])
-
-        # relative subhalo velocity
-        Vrel = Vsub - Vpri
-
-        Vrel_mag = np.sqrt( Vrel[:,0]**2.0 + Vrel[:,1]**2.0 + Vrel[:,2]**2.0 ) 
-
-        # ratio of V_sub/V200_central for Nth (most massive) satellite
-        r[minMass] = Vrel_mag/V200
-        wMax = np.argmax(Vrel_mag)
-        massMax = sP.units.codeMassToLogMsun(gc['subhalos']['SubhaloMass'][subInds[wMax]])
-
-        print(sP.redshift, sP.snap, minMass, len(w), Vrel_mag.max(), r[minMass].max(), massMax)
-
-    return r
-
-def plotRelativeVelDists():
-    """ Do we have a bullet cluster in the volume? Based on relative velocity of sub-component. """
-    from ..util import simParams
-    
-    for snap in range(99,60,-1):
-        sP = simParams(res=625, run='tng_dm', snap=snap)
-
-        minMasses = [5e14, 1e15] #[1e14, 3e14, 1e15] # Msun
-
-        vv = satelliteVelocityDistribution(sP, minMasses, sub_N=1)
-
-        # start plot
-        fig = plt.figure(figsize=(16,9))
-        ax = fig.add_subplot(111)
-
-        ax.set_xlabel('V$_{\\rm sub,rel}$ / V$_{\\rm 200}$')
-        ax.set_ylabel('N(>V$_{\\rm sub,rel}$) / N$_{\\rm tot}$')
-
-        for minMass in vv.keys():
-            label = "M$_{\\rm 200}$ > " + str(minMass) + " M$_\odot$"
-            plt.hist( vv[minMass], normed=True, cumulative=True, label=label )
-
-        ax.plot([1.9,1.9],[0,10],'--',label='Bullet')
-
-        ax.legend(loc='best')
-        fig.savefig('subVelDist_' + str(sP.snap) + '.pdf')
-        plt.close(fig)
+from ..util.helper import logZeroNaN, running_median
 
 def clusterEntropyCores():
     """ Plot radial profiles of cluster entropy and measure CC/NCC central entropy values. """
@@ -548,12 +472,13 @@ def vis_gallery(sP, conf=0, num=20):
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def mass_function():
-    """ Plot halo mass function from the parent box (TNG300) and the zoom sample. """
+def mass_function(secondaries=False):
+    """ Plot halo mass function from the parent box (TNG300) and the zoom sample. 
+    If secondaries == True, then also include non-targeted halos with no/little contamination. """
     from ..util import simParams
     from ..cosmo.zooms import _halo_ids_run
     
-    mass_range = [14.0, 15.5]
+    mass_range = [14.0, 15.5] #if not secondaries else [13.0, 15.5]
     binSize = 0.1
     redshift = 0.0
     
@@ -561,10 +486,8 @@ def mass_function():
     sP_tngc = simParams(res=2048, run='tng_dm', redshift=redshift)
 
     # load halos
-    halo_inds = _halo_ids_run()
-
-    print(len(halo_inds))
-    print(halo_inds)
+    halo_inds = _halo_ids_run(onlyDone=True)
+    #print(len(halo_inds), halo_inds)
 
     # start figure
     fig = plt.figure(figsize=figsize)
@@ -587,12 +510,12 @@ def mass_function():
     for sP in [sP_tng300,sP_tngc]:
         if sP == sP_tng300:
             # tng300
-            gc = sP_tng300.groupCat(fieldsHalos=['Group_M_Crit200'])
+            gc = sP_tng300.halos('Group_M_Crit200')
             masses = sP_tng300.units.codeMassToLogMsun(gc)
             label = 'TNG300-1'
         elif sP == sP_tngc:
-            # tng-cluster - achieved targets (from runs.txt)
-            gc = sP_tngc.groupCat(fieldsHalos=['Group_M_Crit200'])
+            # tng-cluster
+            gc = sP_tngc.halos('Group_M_Crit200')
             masses = sP_tngc.units.codeMassToLogMsun(gc[halo_inds])
             label = 'TNG-Cluster'
 
@@ -600,52 +523,64 @@ def mass_function():
         yy, xx = np.histogram(masses[w], bins=nBins, range=mass_range)
         yy_max = np.nanmax([yy_max,np.nanmax(yy)])
 
-        print(xx,yy)
-
         hh.append(masses[w])
         labels.append(label)
 
     # 'bonus': halos above 14.0 in the high-res regions of more massive zoom targets
-    if 0:
-        cacheFile = 'cache_mass_function_bonus.hdf5'
-        if isfile(cacheFile):
-            with h5py.File(cacheFile,'r') as f:
-                masses = f['masses'][()]
-        else:
-            masses = []
-            for i, hInd in enumerate(halo_inds):
-                # only runs with existing data
-                if not isdir('sims.TNG_zooms/L680n2048TNG_h%d_L13_sf3' % hInd):
-                    print('[%3d of %3d]  skip' % (i,len(halo_inds)))
-                    continue
+    if secondaries:
+        sP = simParams('tng-cluster', redshift=redshift)
+        masses = sP.units.codeMassToLogMsun(sP.halos('Group_M_Crit200'))
 
-                # load FoF catalog, record clusters with zero contamination
-                sP = simParams(res=13, run='tng_zoom', redshift=redshift, hInd=hInd, variant='sf3')
-                loc_masses = sP.halos('Group_M_Crit200')
-                loc_masses = sP.units.codeMassToLogMsun(loc_masses[1:]) # skip FoF 0 (assume is target)
+        # zero contamination
+        contam_frac = sP.halos('GroupContaminationFracByMass')
+        w = np.where((masses > ax.get_xlim()[0]) & (contam_frac == 0))
 
-                loc_length = sP.halos('GroupLenType')[1:,:]
-                contam_frac = loc_length[:,sP.ptNum('dm_lowres')] / loc_length[:,sP.ptNum('dm')]
+        w = np.array(list(set(w[0]) - set(halo_inds))) # exclude targeted halos
 
-                w = np.where( (loc_masses >= mass_range[0]) & (contam_frac == 0) )
+        yy, xx = np.histogram(masses[w], bins=nBins, range=mass_range)
+        yy_max = np.nanmax([yy_max,np.nanmax(yy)])
 
-                if len(w[0]):
-                    masses = np.hstack( (masses,loc_masses[w]) )
-                print('[%3d of %3d] ' % (i,len(halo_inds)), hInd, len(w[0]), len(masses))
-            with h5py.File(cacheFile,'w') as f:
-                f['masses'] = masses
+        hh.append(masses[w])
+        labels.append('TNG-Cluster Bonus (no contamination)')
 
-        hh.append(masses)
-        labels.append('TNG1 Bonus')
+        # small contamination
+        contam_thresh = 1e-2
+        w = np.where((masses > ax.get_xlim()[0]) & (contam_frac < contam_thresh) & (contam_frac != 0))
+
+        w = np.array(list(set(w[0]) - set(halo_inds))) # exclude targeted halos
+
+        yy, xx = np.histogram(masses[w], bins=nBins, range=mass_range)
+        yy_max = np.nanmax([yy_max,np.nanmax(yy)])
+
+        hh.append(masses[w])
+        labels.append('TNG-Cluster Bonus ($f_{\\rm contam} < %.1e$)' % contam_thresh)
 
     # plot
     ax.hist(hh,bins=nBins,range=mass_range,label=labels,histtype='bar',alpha=0.9,stacked=True)
 
     ax.set_ylim([0.8,100])
-    ax.legend(loc='upper right')
+    ax.legend(loc='upper right' if not secondaries else 'lower left')
 
     fig.savefig('mass_functions.pdf')
     plt.close(fig)
+
+    # plot histogram of contamination fraction
+    if secondaries:
+        bad_val = -6.0
+        w = np.where(contam_frac == 0)
+        contam_frac = logZeroNaN(contam_frac)
+        contam_frac[w] = bad_val
+
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.hist(contam_frac, bins=100, range=[-7.0, 0.0])
+        ax.text(bad_val+0.1, 1e7, 'Zero', ha='left', va='bottom')
+        ax.set_xlabel('Contamination Fraction [by mass]')
+        ax.set_ylabel('Number of Halos')
+        ax.set_yscale('log')
+        ax.set_xlim([bad_val-0.2, 0.0])
+
+        fig.savefig('contamination_fraction.pdf')
+        plt.close(fig)
 
 def sample_halomasses_vs_redshift(sPs):
     """ Compare simulation vs observed cluster samples as a function of (redshift,mass). """
@@ -987,6 +922,284 @@ def gas_fraction_vs_halomass(sPs):
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                              f_post=_draw_data, legendLoc='lower right', pdf=None)
 
+def sfr_vs_halomass(sPs):
+    """ Plot star formation rate vs halo mass. """
+    #from ..load.data import giodini2009, lovisari2015
+    xQuant = 'mhalo_200_log'
+    cenSatSelect = 'cen'
+
+    xlim = [14.0, 15.4]
+    clim = [-0.4, 0.0] # log fraction
+    scatterPoints = True
+    drawMedian = False
+    markersize = 40.0
+    sizefac = 0.8 # for single column figure
+
+    yQuant = 'sfr_30pkpc'
+    ylim = [-3.5, 4.0]
+    scatterColor = None #'massfrac_exsitu2'
+
+    def _draw_data(ax):
+        # observational points
+
+
+        # 'quenched' indicators i.e. threshold line
+        mhalo = sPs[0].subhalos(xQuant)
+        mstar = sPs[0].subhalos('mstar_30pkpc_log')
+        inds = sPs[0].cenSatSubhaloIndices(cenSatSelect='cen')
+        mhalo = mhalo[inds]
+        mstar = mstar[inds]
+
+        xx, yy, _ = running_median(mhalo, mstar, binSize=0.1) # determine mstar/mhalo relation
+
+        xx_mhalo = xlim #np.linspace(xlim[0], xlim[1], 10) # mhalo
+        f_interp = interp1d(xx, yy, kind='linear', fill_value='extrapolate') # interpolate mstar to requested mhalo values
+        xx_mstar = f_interp(xx_mhalo)
+
+        ssfr_thresh = 1e-11 # 1/yr
+        sfr = np.log10(10.0**xx_mstar * ssfr_thresh) # log(1/yr)
+        label = 'Quiescent\n(sSFR < %g yr$^{-1}$)' % ssfr_thresh
+        ax.plot(xx_mhalo, sfr, '-', lw=lw, color='#000', alpha=0.5)
+        ax.fill_between(xx_mhalo, ylim[0], sfr, color='#000', alpha=0.1)
+        ax.text(xlim[1]-0.05, ylim[0]+2.0, label, color='#000', alpha=0.5, fontsize=20, ha='right')
+
+    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                             xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                             f_pre=_draw_data, legendLoc='upper left', pdf=None)
+
+def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0):
+    """ Generate projections for a given configuration, save results into a single postprocessing file. """
+    from ..vis.halo import renderSingleHalo
+
+    axes_set   = [[0,1],[0,2],[1,2]]
+    nPixels    = 2000
+    depthType  = 'rVirial'
+
+    if conf == 0:
+        sizeType = 'rVirial' # r200c
+        size     = 4.0 # +/- 2 rvir in extent
+        depthFac = 0.5 # +/- 1 rvir in depth
+        confStr  = '2r200'
+    if conf == 1:
+        sizeType  = 'r500'
+        size      = 1.0 # +/- 0.5 r500 in extent
+        depth     = 2.0 # +/- 1 rvir in depth
+        depthType = 'rVirial' # r200c
+        confStr   = 'r500'
+    if conf == 2:
+        sizeType  = 'r500'
+        size      = 1.0
+        depth     = 6.0
+        depthType = 'rVirial'
+        confStr   = 'r500_d=3r200'
+
+    method = 'sphMap_globalZoomOrig' # all particles of original zoom run only
+
+    # TNG300: all halos with M200c > 14.0, TNG-Cluster: all primary zoom targets
+    subhaloIDs = sP.cenSatSubhaloIndices(cenSatSelect='cen')
+    m200c = sP.subhalos('mhalo_200_log')[subhaloIDs]
+
+    w = np.where(m200c > 14.0)[0]
+    subhaloIDs = subhaloIDs[w]
+    haloIDs = sP.subhalos('SubhaloGrNr')[subhaloIDs]
+
+    # start save
+    saveFilename = '%s-%s_%03d_%s.hdf5' % (partType, partField, sP.snap, confStr)
+
+    with h5py.File(saveFilename,'a') as f:
+        f.attrs['axes_set'] = axes_set
+        f.attrs['nPixels'] = nPixels
+        f.attrs['size'] = size
+        f.attrs['sizeType'] = sizeType
+        f.attrs['method'] = method
+        f.attrs['partType'] = partType
+        f.attrs['partField'] = partField
+        f.attrs['simName'] = sP.simName
+        f.attrs['snap'] = sP.snap
+
+        if conf == 0:
+            f.attrs['depthFac'] = depthFac
+        if conf == 1:
+            f.attrs['depth'] = depth
+            f.attrs['depthType'] = depthType
+
+        if 'HaloIDs' not in f:
+            f['HaloIDs'] = haloIDs
+            f['SubhaloIDs'] = subhaloIDs
+
+    # loop over all halos
+    for i, haloID in enumerate(haloIDs):
+        # check for existence
+        subhaloInd = subhaloIDs[i]
+        gName = f'Halo_{haloID}'
+
+        print(f'[{i:03d} of {len(haloIDs):03d}] Halo ID = {haloID}')
+
+        with h5py.File(saveFilename,'r') as f:
+            if gName in f:
+                print(' skip')
+                continue
+
+        # loop over all orientations
+        grids = np.zeros((nPixels,nPixels,len(axes_set)), dtype='float32')
+
+        for j, axes in enumerate(axes_set):
+            # render and stamp
+            panels = [{}]
+            plotConfig = lambda: None
+            
+            grid_loc, config = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+            grids[:,:,j] = grid_loc
+
+        # save
+        with h5py.File(saveFilename,'a') as f:
+            f.create_dataset(gName, data=grids)
+
+            f.attrs['name'] = config['label']
+
+            f[gName].attrs['minmax_guess'] = config['vMM_guess']
+            f[gName].attrs['box_center'] = config['boxCenter']
+            f[gName].attrs['box_size'] = config['boxSizeImg']
+    
+    print('Done.')
+
+def xray_offsets():
+    """ Calculate offsets between X-ray peak location and galaxy positions. """
+    # config
+    path = '/virgotng/mpia/TNG-Cluster/L680n8192TNG/postprocessing/projections/'
+    filename = 'gas-xray_lum_0.5-2.0kev_099_r500_d=3r200.hdf5'
+
+    vmm = [37.0, 39.0] # for vis, unused
+
+    # load list of halos
+    with h5py.File(path + filename,'r') as f:
+        haloIDs = f['HaloIDs'][()]
+        subhaloIDs = f['SubhaloIDs'][()]
+        nproj = f['Halo_%d' % haloIDs[0]].shape[2]
+
+    def _find_peak(grid, method='center_of_light'):
+        """ Find peak location in a 2D grid using different methods. Return is in pixel coordinates. """
+        x = np.arange(grid.shape[0])
+        y = np.arange(grid.shape[1])
+
+        grid_linear = 10.0**grid.astype('float64')
+        grid_linear /= grid_linear.max()
+
+        xx, yy = np.meshgrid(x, y, indexing='xy')
+
+        if method == 'max_pixel':
+            # single maximum valued pixel
+            ind = np.argmax(grid)
+            xy_cen = np.unravel_index(ind, grid.shape)[::-1]
+
+        if method == 'center_of_light':
+            # center of light
+            xy_cen = np.average(xx, weights=grid_linear), np.average(yy, weights=grid_linear)
+
+        if method == 'shrinking_circle':
+            # iterative/shrinking circle
+            npx = grid.shape[0] * grid.shape[1]
+            rad = grid.shape[0] / 2
+            xy_cen = np.array([grid.shape[0]/2, grid.shape[1]/2], dtype='float32')
+            iter_count = 0
+
+            circ_cens = []
+            circ_rads = []
+
+            while npx > 100 and iter_count < 500:
+                dx = xx - xy_cen[0]
+                dy = yy - xy_cen[1]
+                rr = np.sqrt(dx**2 + dy**2)
+
+                ind = np.where(rr < rad)
+                npx = len(ind[0])
+
+                xy_cen = np.average(xx[ind], weights=grid_linear[ind]), np.average(yy[ind], weights=grid_linear[ind])
+                rad *= 0.95
+
+                iter_count += 1
+
+                #print(iter_count, npx, xy_cen, rad)
+                circ_cens.append(xy_cen)
+                circ_rads.append(rad)
+
+            return xy_cen, circ_cens, circ_rads
+
+        return xy_cen
+
+    # allocate
+    cen_pos_light = np.zeros((len(haloIDs), nproj, 2), dtype='float32')
+    offsets_px_light = np.zeros((len(haloIDs), nproj), dtype='float32')
+    offsets_code_light = np.zeros((len(haloIDs), nproj), dtype='float32')
+    cen_pos_shrinking = np.zeros((len(haloIDs), nproj, 2), dtype='float32')
+    offsets_px_shrinking = np.zeros((len(haloIDs), nproj), dtype='float32')
+    offsets_code_shrinking = np.zeros((len(haloIDs), nproj), dtype='float32')
+
+    # loop over all halos
+    count = 0
+
+    for haloInd, haloID in enumerate(haloIDs):
+        # load three projections
+        with h5py.File(path + filename,'r') as f:
+            proj = f['Halo_%d' % haloID][()]
+            box_size = f['Halo_%d' % haloID].attrs['box_size']
+
+        # visualize
+        for i in range(nproj):
+            print(haloID, i)
+            fig, ax = plt.subplots(figsize=(10,10))
+            ax.set_axis_off()
+
+            ax.imshow(proj[:,:,i], origin='lower', cmap='magma') #, vmin=vmm[0], vmax=vmm[1])
+
+            # mark galaxy position (SubhaloPos at center by definition)
+            xy_cen0 = proj.shape[0] / 2.0, proj.shape[1] / 2.0
+
+            ax.plot(xy_cen0[0], xy_cen0[1], 'X', color='black', ms=10, mew=2, fillstyle='none')
+
+            # find peak position (center of light)
+            xy_cen1 = _find_peak(proj[:,:,i])
+
+            ax.plot(xy_cen1[0], xy_cen1[1], 'o', color='black', ms=10, fillstyle='none', mec='black', mew=2, lw=2)
+
+            # find peak position (shrinking circle center of light)
+            xy_cen2, circ_cens, circ_rads = _find_peak(proj[:,:,i], method='shrinking_circle')
+
+            for circ_cen, circ_rad in zip(circ_cens[::5], circ_rads[::5]):
+                circ = plt.Circle(circ_cen, circ_rad, color='black', fill=False, lw=2, alpha=0.1)
+                ax.add_artist(circ)
+            
+            ax.plot(xy_cen2[0], xy_cen2[1], 'D', color='black', ms=10, fillstyle='none', mec='black', mew=2, lw=2)
+
+            #ax.legend(loc='upper right')
+            fig.savefig('%03d.png' % count)
+            plt.close(fig)
+            count += 1
+
+            # save
+            cen_pos_light[haloInd,i,:] = xy_cen1
+            offsets_px_light[haloInd,i] = np.sqrt((xy_cen0[0]-xy_cen1[0])**2 + (xy_cen0[1]-xy_cen1[1])**2)
+
+            cen_pos_shrinking[haloInd,i,:] = xy_cen2
+            offsets_px_shrinking[haloInd,i] = np.sqrt((xy_cen0[0]-xy_cen2[0])**2 + (xy_cen0[1]-xy_cen2[1])**2)
+            
+        # halo-dependent unit conversion
+        code_length_per_px = box_size[0] / proj.shape[0]
+        offsets_code_light[haloInd,:] = offsets_px_light[haloInd,:] * code_length_per_px
+        offsets_code_shrinking[haloInd,:] = offsets_px_shrinking[haloInd,:] * code_length_per_px
+
+    # save derived offsets
+    with h5py.File('offsets.hdf5','w') as f:
+        f['HaloIDs'] = haloIDs
+        f['SubhaloIDs'] = subhaloIDs
+        f['cen_pos_light'] = cen_pos_light
+        f['offsets_px_light'] = offsets_px_light
+        f['offsets_code_light'] = offsets_code_light
+        f['cen_pos_shrinking'] = cen_pos_shrinking
+        f['offsets_px_shrinking'] = offsets_px_shrinking
+        f['offsets_code_shrinking'] = offsets_code_shrinking
+
 def paperPlots():
     """ Plots for TNG-Cluster intro paper. """
     from ..util.simParams import simParams
@@ -1000,37 +1213,46 @@ def paperPlots():
     # figure 1 - mass function
     if 0:
         mass_function()
+        mass_function(secondaries=True)
 
     # figure 2 - samples
     if 0:
         sample_halomasses_vs_redshift(sPs)
 
-    # figure 3 - virtual full box vis
-    if 0:
-        for conf in [0,1,2,3,4,5]:
-            vis_fullbox_virtual(TNG_C, conf=conf)
-
-    # figure 4 - individual halo/gallery vis (x-ray)
+    # figures 3,4 - individual halo/gallery vis (x-ray)
     if 0:
         vis_gallery(TNG_C, conf=1, num=1) # single in xray
         for conf in [0,1]:
             vis_gallery(TNG_C, conf=conf, num=72) # gallery
 
-    # figure X - magnetic fields
+    # figure 5 - gas fractions
+    if 0:
+        gas_fraction_vs_halomass(sPs)
+
+    # figure 6 - magnetic fields
     if 0:
         redshifts = [0.0, 1.0, 2.0]
         bfield_strength_vs_halomass(sPs, redshifts)
 
-    # figure X - stellar mass contents
+    # figure 7 - sfr/cold gas mass
+    if 0:
+        sfr_vs_halomass(sPs)
+        # todo: cold gas mass
+        # todo: quenched fraction
+
+    # figure 8 - stellar mass contents
     if 0:
         for conf in [0,1]:
             stellar_mass_vs_halomass(sPs, conf=conf)
 
-    # figure X - gas fractions
+    # figure 9 - BCG stellar sizes
     if 0:
-        gas_fraction_vs_halomass(sPs)
+        from ..plot.sizes import galaxySizes
+        pdf = PdfPages('galaxy_stellar_sizes_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
+        galaxySizes(sPs, xlim=[11.0,13.0], ylim=[2,400], onlyRedData=True, scatterPoints=True, pdf=pdf)
+        pdf.close()
 
-    # figure X - black hole mass scaling relation
+    # figure 10 - black hole mass scaling relation
     if 0:
         from ..plot.globalComp import blackholeVsStellarMass
 
@@ -1046,29 +1268,35 @@ def paperPlots():
         blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, xlim=[13.9,15.4], ylim=[8.5,11], actualLargestBHMasses=True)
         pdf.close()
 
-    # figure X - BCG stellar sizes
-    if 0:
-        from ..plot.sizes import galaxySizes
-        pdf = PdfPages('galaxy_stellar_sizes_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        galaxySizes(sPs, xlim=[11.0,13.0], ylim=[2,400], onlyRedData=True, scatterPoints=True, pdf=pdf)
-        pdf.close()
-
-    # figure X - X-ray scaling relations
+    # figure 11 - X-ray scaling relations
     if 0:
         from ..plot.globalComp import haloXrayLum
         for sP in sPs: sP.setRedshift(0.3) # median of data at high-mass end
         haloXrayLum(sPs, xlim=[11.4,12.7], ylim=[41.6,45.7])
 
-    # figure X - halo synchrotron power
+    # figure 11b - Lx vs M500
+    if 0:
+        pass
+
+    # figure 12 - halo synchrotron power
     if 0:
         from ..plot.globalComp import haloSynchrotronPower
         haloSynchrotronPower(sPs, xlim=[14.0,15.3], ylim=[21.5,28.5])
 
+    # figure 13 - SZ-y vs mass
+    if 0:
+        pass
+
+    # appendix - virtual full box vis
+    if 0:
+        for conf in [0,1,2,3,4,5]:
+            vis_fullbox_virtual(TNG_C, conf=conf)
+
+    # appendix - contamination
+
     # satellite smhm
     # satellite radial number density
     # richness
-    # BCG SFR vs M* with quenched fraction indicators
+    # SPA relaxedness measures from X-ray SB maps (https://arxiv.org/abs/2303.10185) (https://arxiv.org/pdf/2006.10752.pdf)
 
-    # figure todo - dens/temp/entropy profiles stacked in 0.1 or 0.2 dex bins
-    # figure todo - Lx vs M500
-    # figure todo - SZ-y vs mass
+    # figure todo - kinematics overview (vel disp cold,warm,hot) (https://arxiv.org/abs/2304.08810)

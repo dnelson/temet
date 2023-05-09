@@ -135,20 +135,15 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
 
     return min_dist_lr, rVirFacs, counts, fracs, massfracs, rr, r_frac, r_massfrac
 
-def check_contamination():
-    """ Check level of low-resolution contamination (DM particles) in zoom run. """
-    hInd = 31619 # 10677 # 
-    zoomRes = 12
-    variant = 'TNG' # sf3
+def contamination_profile():
+    """ Check level of low-resolution contamination (DM particles) in zoom run. Plot radial profile. """
+    # config
+    hInd = 0 #31619 # 10677
+    zoomRes = 14
+    variant = 'sf3' # TNG
 
-    zoomRun = 'structures' #'tng_zoom' #'tng50_zoom_dm'
-    redshift = 3.0 # 0.0
-
-    #sP = simParams(res=2048,run='tng_dm',redshift=redshift) # parent box
-    sP = simParams(run='tng50-1', redshift=redshift)
-
-    # load parent box: halo
-    halo = sP.groupCatSingle(haloID=hInd)
+    zoomRun = 'tng_zoom' # 'tng50_zoom_dm', 'structures'
+    redshift = 0.0 # 3.0
 
     # load zoom: group catalog
     sPz = simParams(res=zoomRes, run=zoomRun, hInd=hInd, redshift=redshift, variant=variant)
@@ -157,6 +152,10 @@ def check_contamination():
     halos_zoom = sPz.groupCat(fieldsHalos=['GroupMass','GroupPos','Group_M_Crit200'])
     subs_zoom = sPz.groupCat(fieldsSubhalos=['SubhaloMass','SubhaloPos','SubhaloMassType'])
 
+    # load parent box
+    sP = sPz.sP_parent
+    halo = sP.groupCatSingle(haloID=hInd)
+
     print('parent halo pos: ', halo['GroupPos'])
     print('zoom halo cenrelpos: ', halo_zoom['GroupPos'] - sP.boxSize/2)
     print('parent halo mass: ',sP.units.codeMassToLogMsun([halo['Group_M_Crit200'],halo['GroupMass']]))
@@ -164,13 +163,13 @@ def check_contamination():
 
     # print/load contamination statistics
     min_dist_lr, _, _, _, _, rr, r_frac, r_massfrac = calculate_contamination(sPz, verbose=True)
+    min_dist_lr *= sPz.HubbleParam
 
     # plot contamination profiles
-    fig = plt.figure(figsize=(14,10))
-    ax = fig.add_subplot(111)
-    ylim = [-4.0, 0.0]
+    fig, ax = plt.subplots(figsize=figsize)
+    ylim = [-5.0, 0.0]
 
-    ax.set_xlabel('Distance [ckpc/h]')
+    ax.set_xlabel('Distance [%s]' % sPz.units.UnitLength_str)
     ax.set_ylabel('Low-res DM Contamination Fraction [log]')
     ax.xaxis.set_minor_locator(MultipleLocator(500))
     ax.set_xlim([0.0, rr.max()])
@@ -192,25 +191,23 @@ def check_contamination():
     fig.savefig('contamination_profile_%s_%d.pdf' % (sPz.simName,sPz.snap))
     plt.close(fig)
 
-def compare_contamination():
+def contamination_compare_profiles():
     """ Compare contamination radial profiles between runs. """
     zoomRes = 14
-    hInds = [50,79,84,102,107,136,155,156,179,202,205,210,217,224,239,280,282,361,390,1335,1919,3232,3693]
+    hInds = [0,50,79,84,102,107,1335,1919,3232,3693]
     variants = ['sf3'] #['sf2','sf3','sf4']
     run = 'tng_zoom'
 
     # start plot
-    fig = plt.figure(figsize=figsize)
-    ylim = [-4.0, 0.0]
-
-    ax = fig.add_subplot(111)
+    fig, ax = plt.subplots(figsize=figsize)
+    ylim = [-6.0, 0.0]
 
     ax.set_xlabel('Distance [$R_{\\rm 200,crit}$]')
     ax.set_ylabel('Low-res DM Contamination Fraction [log]')
     ax.set_xlim([0.0, 5.0])
     ax.set_ylim(ylim)
 
-    # loop over hInd/variant combination
+    # load: loop over hInd/variant combination
     for hInd in hInds:
         c = next(ax._get_lines.prop_cycler)['color']
 
@@ -230,7 +227,7 @@ def compare_contamination():
             l, = ax.plot(rr, logZeroNaN(r_frac), linestyles[j], color=c, lw=lw, label='h%d_%s' % (hInd,variant))
             #l, = ax.plot(rr, logZeroNaN(r_massfrac), '--', lw=lw, color=c)
 
-            ax.plot([min_dist_lr,min_dist_lr], [ylim[0],ylim[0]+0.5], linestyles[j], color=c, lw=lw, alpha=0.5)
+            ax.plot([min_dist_lr,min_dist_lr], [ylim[1]-0.3,ylim[1]], linestyles[j], color=c, lw=lw, alpha=0.5)
             print(hInd,variant,min_dist_lr)
 
     ax.plot([0,rr[-1]], [-1.0, -1.0], '-', color='#888888', lw=lw-1.0, alpha=0.4, label='10%')
@@ -239,7 +236,81 @@ def compare_contamination():
     ax.plot([2.0,2.0], ylim, '-', color='#bbbbbb', lw=lw-1.0, alpha=0.2)
 
     ax.legend(loc='upper left')
-    fig.savefig('contamination_comparison_L%d_h%s_%s.pdf' % (zoomRes,'-'.join([str(h) for h in hInds]),'-'.join(variants)))
+    fig.savefig('contamination_profiles_L%d_hN%d_%s.pdf' % (zoomRes,len(hInds),'-'.join(variants)))
+    plt.close(fig)
+
+def contamination_mindist():
+    """ Plot distribution of contamination minimum distances, and trend with halo mass. """
+    # config
+    zoomRes = 14
+    hInds = _halo_ids_run(onlyDone=True)
+    variant = 'sf3'
+    redshift = 0.0
+    run = 'tng_zoom'
+
+    frac_thresh = 1e-5
+
+    # load data
+    halo_mass = np.zeros(len(hInds), dtype='float32')
+    min_dists = np.zeros(len(hInds), dtype='float32')
+    min_dists_thresh = np.zeros(len(hInds), dtype='float32')
+
+    for i, hInd in enumerate(hInds):
+        if i % len(hInds)//10 == 0: print(f'{i*10:2d}% ')
+
+        sPz = simParams(res=zoomRes, run=run, hInd=hInd, redshift=redshift, variant=variant)
+        halo_zoom = sPz.groupCatSingle(haloID=0)
+        halo_mass[i] = sPz.units.codeMassToLogMsun(halo_zoom['Group_M_Crit200'])
+
+        min_dist_lr, _, _, _, _, rr, r_frac, r_massfrac = calculate_contamination(sPz)
+
+        # minimum distance to first LR particle
+        min_dist_lr /= sPz.units.codeLengthToMpc(halo_zoom['Group_R_Crit200'])
+        min_dists[i] = min_dist_lr
+
+        # distance at which fraction of LR/HR particles exceeds a threshold
+        w = np.where(r_frac > frac_thresh)[0]
+        min_dists_thresh[i] = rr[w].min() / halo_zoom['Group_R_Crit200']
+    
+    # plot distribution
+    xlim = [0.0, 6.0]
+    nbins = 40
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    ax.set_xlabel('Minimum Contamination Distance [$R_{\\rm 200,crit}$]')
+    ax.set_ylabel('Number of Halos')
+    ax.set_xlim(xlim)
+
+    ax.hist(min_dists, bins=nbins, range=xlim, lw=lw, alpha=0.7, label='first LR particle')
+    ax.hist(min_dists_thresh, bins=nbins, range=xlim, lw=lw, alpha=0.7, label='$f_{\\rm LR} > %.1e$' % frac_thresh)
+    ax.legend(loc='upper right')
+
+    ax.plot([1,1], ax.get_ylim(), '-', color='#bbbbbb', lw=lw, alpha=0.2)
+
+    fig.savefig('contamination_mindist_L%d_hN%d_%s.pdf' % (zoomRes,len(hInds),variant))
+    plt.close(fig)
+
+    # plot min dist vs mass trend
+    fig, ax = plt.subplots(figsize=figsize)
+
+    ax.set_xlabel('Halo Mass M$_{\\rm 200c}$ [ log $M_{\\odot}$ ]')
+    ax.set_ylabel('Minimum Contamination Distance [ $R_{\\rm 200,crit}$ ]')
+    ax.set_xlim([14.25, 15.4])
+    ax.set_ylim([0.0, 8.0])
+
+    for rr in np.arange(1,7):
+        ax.plot(ax.get_xlim(), [rr,rr], '-', color='#bbbbbb', lw=lw, alpha=0.2)
+    ax.plot(halo_mass, min_dists, 'o', label='first LR particle')
+    ax.plot(halo_mass, min_dists_thresh, 'o', label='$f_{\\rm LR} > %.1e$' % frac_thresh)
+
+    xm, ym, _ = running_median(halo_mass, min_dists, binSize=0.1)
+    xm2, ym2, _ = running_median(halo_mass, min_dists_thresh, binSize=0.1)
+    ax.plot(xm, ym, '--', lw=lw, color='black', label='median (first LR particle)')
+    ax.plot(xm2, ym2, '-', lw=lw, color='black', label='median ($f_{\\rm LR} > %.1e$)')
+
+    ax.legend(loc='upper left')
+    fig.savefig('contamination_mindist_vs_mass_L%d_hN%d_%s.pdf' % (zoomRes,len(hInds),variant))
     plt.close(fig)
 
 def sizefacComparison():
@@ -294,7 +365,7 @@ def sizefacComparison():
 
     num_lowres = []
     for result in results:
-        contam_rel = result['contam_min']/result['haloRvir']
+        contam_rel = result['contam_min']*sP.HubbleParam/result['haloRvir']
         num = result['contam_counts'][0] # 0=1rvir, 1=2rvir
 
         if contam_rel > 1.0:
@@ -341,7 +412,7 @@ def sizefacComparison():
         for result in results:
             xx = result['hInd'] if rowNum == 0 else result['haloMass']
             color = colors[ result['variant'] ]
-            ax.plot( xx, result['contam_min']/result['haloRvir'], 'o', color=color, label='')
+            ax.plot( xx, result['contam_min']*sP.HubbleParam/result['haloRvir'], 'o', color=color, label='')
 
         xlim = ax.get_xlim()
         for rVirFac in [5,2,1]:
