@@ -10,6 +10,8 @@ import numpy as np
 
 from .groupcat import catalog_field
 from ..util.helper import logZeroNaN
+from ..cosmo.color import gfmBands, vegaMagCorrections
+from ..plot.quantities import bandMagRange
 
 # -------------------- subhalos: meta -------------------------------------------------------------
 
@@ -136,7 +138,7 @@ def _rhalo_load(sim, partType, field, args):
 
     return rad
 
-@catalog_field(aliases=['rhalo_200_code','rhalo_200_parent','rhalo','r200','rvir'])
+@catalog_field(aliases=['rhalo_200_code','rhalo_200_parent','rhalo','r200','rhalo_200','rvir'])
 def rhalo_200(sim, partType, field, args):
     """ Parent halo virial radius (:math:`\\rm{R_{200,crit}}`).
     Only defined for centrals: satellites are assigned a value of nan (excluded by default)."""
@@ -147,7 +149,7 @@ rhalo_200.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_code' not in f else 'code_
 rhalo_200.limits = [1.0, 3.0]
 rhalo_200.log = True
 
-@catalog_field(aliases=['rhalo_500_code','rhalo_500_parent','r500'])
+@catalog_field(aliases=['rhalo_500_code','rhalo_500_parent','r500','rhalo_500'])
 def rhalo_500(sim, partType, field, args):
     """ Parent halo :math:`\\rm{R_{500,crit}}` radius.
     Only defined for centrals: satellites are assigned a value of nan (excluded by default)."""
@@ -193,6 +195,41 @@ halo_numsubs.label = r'$\rm{N_{sub}}$ in Halo'
 halo_numsubs.units = '' # dimensionless
 halo_numsubs.limits = [0.0, 2.0]
 halo_numsubs.log = True
+
+@catalog_field(alias='tvir')
+def virtemp(sim, partType, fields, args):
+    """ Virial temperature of the parent halo (satellites have NaN). """
+    mass = sim.groupCat(fieldsSubhalos=['mhalo_200_code'])
+    tvir = sim.units.codeMassToVirTemp(mass)
+    return tvir.astype('float32')
+
+virtemp.label = r'$\rm{T_{vir}}$'
+virtemp.units = r'$\rm{K}$'
+virtemp.limits = [4.0, 7.0]
+virtemp.log = True
+
+@catalog_field(aliases=['rdist_code','rdist','rdist_rvir','distance_code','distance_rvir'])
+def distance(sim, partType, field, args):
+    """ Radial distance of satellites to center of parent halo (centrals have zero). """
+    gc = sim.groupCat(fieldsHalos=['GroupPos','Group_R_Crit200'], 
+                      fieldsSubhalos=['SubhaloPos','SubhaloGrNr'])
+    
+    parInds = gc['subhalos']['SubhaloGrNr']
+    dist = sim.periodicDists(gc['halos']['GroupPos'][parInds,:], gc['subhalos']['SubhaloPos'])
+
+    if '_rvir' not in field and '_code' not in field:
+        dist = sim.units.codeLengthToKpc(dist)
+
+    if '_rvir' in field:
+        with np.errstate(invalid='ignore'):
+            dist /= gc['halos']['Group_R_Crit200'][parInds]
+
+    return dist
+
+distance.label = lambda sim,pt,f: r'Radial Distance' if '_rvir' not in f else r'R / R$_{\\rm vir,host}$'
+distance.units = lambda sim,pt,f: 'code_length' if '_code' in f else ('' if '_rvir' in f else r'$\rm{kpc}$')
+distance.limits = lambda sim,pt,f: [0.0, 2.0] if '_rvir' in f else [1.0, 3.5]
+distance.log = lambda sim,pt,f: True if '_rvir' not in f else False # linear for rvir normalized
 
 # -------------------- subhalos: masses -----------------------------------------------------------
 
@@ -467,7 +504,67 @@ sfr.units = r'$\rm{M_{sun} yr^{-1}}$'
 sfr.limits = [-2.5, 1.0]
 sfr.log = True
 
-# -------------------- subhalos -------------------------------------------------------------------
+@catalog_field
+def ssfr(sim, partType, field, args):
+    """ Galaxy specific star formation rate [1/yr] (sSFR, instantaneous, both SFR and M* within 2rhalfstars). """
+    sfr = sim.subhalos('SubhaloSFRinRad')
+    mstar = sim.subhalos('SubhaloMassInRadType')[:,sim.ptNum('stars')]
+
+    # set mstar==0 subhalos to nan
+    w = np.where(mstar == 0.0)[0]
+    if len(w):
+        mstar[w] = 1.0
+        sfr[w] = np.nan
+
+    ssfr = sfr / mstar
+    return ssfr
+
+ssfr.label = r'$\rm{sSFR_{<2r_{\star}}}$'
+ssfr.units = r'$\rm{yr^{-1}}$'
+ssfr.limits = [-12.0, -8.0]
+ssfr.log = True
+
+@catalog_field
+def ssfr_30pkpc(sim, partType, field, args):
+    """ Galaxy specific star formation rate [1/yr] (sSFR, instantaneous, SFR within 2rhalfstars, M* within 30kpc). """
+    sfr = sim.subhalos('SubhaloSFRinRad')
+    mstar = sim.subhalos('mstar_30pkpc')
+
+    # set mstar==0 subhalos to nan
+    w = np.where(mstar == 0.0)[0]
+    if len(w):
+        mstar[w] = 1.0
+        sfr[w] = np.nan
+
+    ssfr = sfr / mstar
+    return ssfr
+
+ssfr_30pkpc.label = r'$\rm{sSFR}$'
+ssfr_30pkpc.units = r'$\rm{yr^{-1}}$'
+ssfr_30pkpc.limits = [-12.0, -8.0]
+ssfr_30pkpc.log = True
+
+@catalog_field
+def ssfr_gyr(sim, partType, field, args):
+    """ Galaxy specific star formation rate [1/Gyr] (sSFR, instantaneous, both SFR and M* within 2rhalfstars). """
+    return sim.subhalos('ssfr') * 1e9
+
+ssfr_gyr.label = r'$\rm{sSFR_{<2r_{\star}}}$'
+ssfr_gyr.units = r'$\rm{Gyr^{-1}}$'
+ssfr_gyr.limits = [-3.0, 1.0]
+ssfr_gyr.log = True
+
+@catalog_field
+def ssfr_30pkpc_gyr(sim, partType, field, args):
+    """ Galaxy specific star formation rate [1/Gyr] (sSFR, instantaneous, SFR within 2rhalfstars, M* within 30kpc). """
+    return sim.subhalos('ssfr') * 1e9
+
+ssfr_30pkpc_gyr.label = r'$\rm{sSFR}$'
+ssfr_30pkpc_gyr.units = r'$\rm{Gyr^{-1}}$'
+ssfr_30pkpc_gyr.limits = [-3.0, 1.0]
+ssfr_30pkpc_gyr.log = True
+
+# -------------------- general subhalo properties  ------------------------------------------------
 
 @catalog_field(aliases=['vc','vmax'])
 def vcirc(sim, partType, field, args):
@@ -510,3 +607,62 @@ spinmag.units = r'$\rm{kpc km/s}$'
 spinmag.limits = [2.0, 4.0]
 spinmag.log = True
 
+@catalog_field(aliases=['rhalf_stars','size_stars_code','rhalf_stars_code'])
+def size_stars(sim, partType, field, args):
+    """ Stellar half mass radius. """
+    radtype = sim.subhalos('SubhaloHalfmassRadType')
+    rad = radtype[:,sim.ptNum('stars')]
+
+    if '_code' not in field:
+        rad = sim.units.codeLengthToKpc(rad)
+
+    return rad
+
+size_stars.label = r'r$_{\\rm 1/2,\star}$'
+size_stars.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
+size_stars.limits = lambda sim,pt,f: [0.0, 1.8] if sim.redshift < 1 else [-0.4, 1.4]
+size_stars.log = True
+
+# -------------------- subhalo photometrics  ------------------------------------------------------
+
+@catalog_field(aliases=['m_u','m_b'])
+def m_v(sim, partType, field, args):
+    """ V-band magnitude (StellarPhotometrics from snapshot). No dust. """
+    assert '_log' not in field
+    bandName = field.split('_')[1].upper()
+
+    vals = sim.subhalos('SubhaloStellarPhotometrics')
+    mags = vals[:,gfmBands[bandName]]
+
+    # fix zero values
+    w = np.where(mags > 1e10)
+    mags[w] = np.nan
+
+    # Vega corrections
+    if bandName in vegaMagCorrections:
+        mags += vegaMagCorrections[bandName]
+
+    return mags
+
+m_v.label = lambda sim,pt,f: r'M$_{\\rm %s}$' % f.split("_")[1].upper()
+m_v.units = 'abs AB mag'
+m_v.limits = [-24, -16]
+m_v.log = False
+
+@catalog_field(aliases=['color_vb'])
+def color_uv(sim, partType, field, args):
+    """ Integrated photometric/broadband galaxy colors, from snapshot. No dust. """
+    assert '_log' not in field
+    bandNames = field.split('color_')[1].upper()
+
+    mags_0 = sim.subhalos('M_' + bandNames[0])
+    mags_1 = sim.subhalos('M_' + bandNames[1])
+
+    colors = mags_0 - mags_1
+
+    return colors
+
+color_uv.label = lambda sim,pt,f: r'(%s-%s) color' % (f.split('color_')[1][0].upper(), f.split('color_')[1][1].upper())
+color_uv.units = 'mag'
+color_uv.limits = lambda sim,pt,f: bandMagRange(f.split('color_')[1], sim=sim)
+color_uv.log = False

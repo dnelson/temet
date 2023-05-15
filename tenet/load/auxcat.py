@@ -269,10 +269,17 @@ def _expand_partial(sP, r, field):
     if r['subhaloIDs'].size < nSubsTot:
         shape = np.array(r[field].shape)
         shape[0] = nSubsTot
-        new_data = np.zeros( shape, dtype=r[field].dtype )
-        new_data.fill(np.nan)
+        new_data = np.zeros(shape, dtype=r[field].dtype)
+
+        if not np.issubdtype(r[field].dtype, np.integer):
+            new_data.fill(np.nan)
+        else:
+            print('WARNING: [%s] has integer dtype [%s], filling with -1.' % (field,r[field].dtype))
+            new_data.fill(-1)
+
         new_data[r['subhaloIDs'],...] = r[field]
         print(' Auxcat Expanding [%d] to [%d] elements for [%s].' % (r[field].shape[0],new_data.shape[0],field))
+
         return new_data
 
 def _concatSplitFiles(sP, pSplit, field, datasetName, auxCatPath, auxCatPathSplit, pathStr2):
@@ -1112,6 +1119,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloCatNeighborQuant,quant=None,op='count',rad='2rvir',subRestrictions=[['mstar_30pkpc_log',8.0,np.inf]],cenSatSelect='cen'),
    'Subhalo_Env_Count_Mstar_Gt7_2rvir' : \
      partial(subhaloCatNeighborQuant,quant=None,op='count',rad='2rvir',subRestrictions=[['mstar_30pkpc_log',7.0,np.inf]],cenSatSelect='cen'),
+   'Subhalo_Env_Count_MstarRel_GtHalf_2rvir' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad='2rvir',subRestrictionsRel=[['mstar_30pkpc',0.5,np.inf]],cenSatSelect='cen'),
    'Subhalo_Env_Count_MstarRel_GtTenth_2rvir' : \
      partial(subhaloCatNeighborQuant,quant=None,op='count',rad='2rvir',subRestrictionsRel=[['mstar_30pkpc',0.1,np.inf]],cenSatSelect='cen'),
 
