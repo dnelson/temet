@@ -381,3 +381,271 @@ def gaia_dr_hdf5(dr='dr3'):
         fout.close()
 
     print('Done.')
+
+def xqr30():
+    """ Convert the original (E)XQR-30 (VLT/XShooter) survey fits files into a single HDF5 file.
+    Requires: git clone https://github.com/XQR-30/Spectra
+    Note: every quasar has two spectra, one in the VIS and one in the NIR. """
+
+    basepath = '/virgotng/mpia/obs/XQR-30/'
+
+    metadata = {}
+    metadata['dataset_name'] = 'XQR-30'
+    metadata['dataset_description'] = 'VLT-SHOOTER high-z quasar spectra survey (VIS and NIR separate for each target)'
+    metadata['dataset_reference'] = 'D\'Odorico+2023 (https://arxiv.org/abs/2305.05053)'
+
+    # get list of individual spectra
+    paths = np.sort(glob.glob(basepath + '*.fits'))
+    obj_names = []
+
+    # loop over each input spectrum, find master wavelength grids
+    wave = {}
+    max_nwave = {'VIS': 0, 'NIR': 0}
+
+    for i, path in enumerate(paths):
+        obj_name, spec_name = path.split('/')[-1].replace('.fits','').split('_')
+        with pyfits.open(path) as f:
+            wave_loc = np.squeeze(f[1].data['wave'])
+
+        if wave_loc.size > max_nwave[spec_name]:
+            wave[spec_name] = wave_loc
+            max_nwave[spec_name] = wave_loc.size
+
+    # allocate
+    nspec = int(len(paths)/2)
+
+    flux = {'VIS':np.zeros((nspec, max_nwave['VIS']), dtype='float32'),
+            'NIR':np.zeros((nspec, max_nwave['NIR']), dtype='float32')}
+    error = {'VIS':np.zeros((nspec, max_nwave['VIS']), dtype='float32'),
+             'NIR':np.zeros((nspec, max_nwave['NIR']), dtype='float32')}
+    
+    flux_nocorr = {'VIS':np.zeros((nspec, max_nwave['VIS']), dtype='float32'),
+                   'NIR':np.zeros((nspec, max_nwave['NIR']), dtype='float32')}
+    error_nocorr = {'VIS':np.zeros((nspec, max_nwave['VIS']), dtype='float32'),
+                    'NIR':np.zeros((nspec, max_nwave['NIR']), dtype='float32')}
+    
+    for spec_name in ['VIS','NIR']:
+        flux[spec_name].fill(np.nan)
+        error[spec_name].fill(np.nan)
+        flux_nocorr[spec_name].fill(np.nan)
+        error_nocorr[spec_name].fill(np.nan)
+
+    # loop over each input spectrum, load
+    prev_obj_name = ''
+    count = 0
+
+    for i, path in enumerate(paths):
+        # load
+        obj_name, spec_name = path.split('/')[-1].replace('.fits','').split('_')
+        print(f'[{i:3d} of {len(paths):3d}] {obj_name} {spec_name} [{count}]')
+
+        obj_names.append(obj_name)
+
+        with pyfits.open(path) as f:
+            data = f[1].data
+
+        # determine location in wavelength grid
+        dlambda = np.squeeze(data['wave'])[0] - wave[spec_name]
+        start_ind = np.argmin(np.abs(dlambda))
+        end_ind = start_ind + data['wave'].size
+
+        wave_diffs = np.abs(np.squeeze(data['wave']) - wave[spec_name][start_ind:end_ind])
+        assert wave_diffs.max() < 1e-6
+
+        # stamp
+        flux[spec_name][count,start_ind:end_ind] = np.squeeze(data['flux'])
+        error[spec_name][count,start_ind:end_ind] = np.squeeze(data['error'])
+        flux_nocorr[spec_name][count,start_ind:end_ind] = np.squeeze(data['flux_nocorr'])
+        error_nocorr[spec_name][count,start_ind:end_ind] = np.squeeze(data['error_nocorr'])
+
+        if i % 2 == 1:
+            assert obj_name == prev_obj_name # vis and nir alternate
+            count += 1
+        prev_obj_name = obj_name
+
+    # zero used as invalid/missing value in original data, also in our stamps, set to nan
+    for spec_name in ['VIS','NIR']:
+        flux[spec_name][flux[spec_name] == 0] = np.nan
+        error[spec_name][error[spec_name] == 0] = np.nan
+        flux_nocorr[spec_name][flux_nocorr[spec_name] == 0] = np.nan
+        error_nocorr[spec_name][error_nocorr[spec_name] == 0] = np.nan
+
+    # open output file
+    filename = basepath + '%s.hdf5' % metadata['dataset_name']
+    
+    with h5py.File(filename,'w') as fOut:
+    
+        # write header and metadata
+        head = fOut.create_group('Header')
+        for key, item in metadata.items():
+            head.attrs[key] = item
+
+        fOut['obj_names'] = np.array(obj_names, dtype='S')
+
+        # write VIS and NIR spectra separately
+        for spec_name in ['VIS','NIR']:
+            fOut['wave_'+spec_name] = wave[spec_name]
+            fOut['flux_'+spec_name] = flux[spec_name]
+            fOut['error_'+spec_name] = error[spec_name]
+            fOut['flux_nocorr_'+spec_name] = flux_nocorr[spec_name]
+            fOut['error_nocorr_'+spec_name] = error_nocorr[spec_name]
+
+            fOut['wave_'+spec_name].attrs['description'] = 'Wavelength in the vacuum-heliocentric system [angstrom]'
+            fOut['flux_'+spec_name].attrs['description'] = 'Flux density with the telluric features removed [erg/s/cm^2/angstrom]'
+            fOut['error_'+spec_name].attrs['description'] = 'Error of the flux density [erg/s/cm^2/angstrom]'
+            fOut['flux_nocorr_'+spec_name].attrs['description'] = 'Flux density with telluric features [erg/s/cm^2/angstrom]'
+            fOut['error_nocorr_'+spec_name].attrs['description'] = 'Error of flux_nocorr [erg/s/cm^2/angstrom]'
+
+    fOut.close()
+
+    print('Wrote: [%s]' % filename)
+
+def hsla():
+    """ Convert the original Hubble Spectroscopic Legacy Arhie (HLS) fits files into a single HDF5 file.
+    Requires: https://archive.stsci.edu/missions-and-data/hsla ("July 2018 update", "Entire COS .tar.gz")
+    Note: all spectra of a given grating (with same wavelength grid) are combined. 
+    Only 'all' lifetime spectra, individual LP1/2/3/4 spectra have been deleted first. """
+    import shlex
+
+    basepath = '/virgotng/mpia/obs/HST-COS/'
+
+    metadata = {}
+    metadata['dataset_name'] = 'HSLA-COS'
+    metadata['dataset_description'] = 'Hubble Spectroscopic Legacy Archive (HSLA) - All COS Data. ' + \
+                                      'Only ALL lifetime (LP combined) spectra included. ' + \
+                                      'Note: all spectra of a given grating (with same wavelength grid) are combined.'
+    metadata['dataset_reference'] = 'Peeples+2017 (https://archive.stsci.edu/missions-and-data/hsla)'
+
+    # get list of individual spectra
+    paths = glob.glob(basepath + '*')
+    paths = np.sort([p for p in paths if isdir(p)])
+
+    # loop over all targets
+    wave = {}
+    counts = {}
+
+    target_metadata = {'name':{}, 'ra':{}, 'dec':{}, 'type':{}, 'desc':{}}
+
+    for i, path in enumerate(paths):
+        # find all spectra of a given target and load
+        if i % 100 == 0: print(f'[{i:3d} of {len(paths):3d}] {path}')
+        target_name = path.split('/')[-1]
+
+        spectra = glob.glob(path + '/*.fits')
+        
+        for spec in spectra:
+            spec_name = spec.split('/')[-1].replace('.fits','')
+            _, _, grating, _, lifetime = spec_name.split('_')
+            assert lifetime == 'lpALL'
+
+            # load
+            with pyfits.open(spec) as f:
+                wave_loc = np.squeeze(f[1].data['wave'])
+
+            # FUVM is the splice of the G130M + G160M coadds, but these come in 3 flavors
+            if grating == 'FUVM':
+                if wave_loc.size >= 75000:
+                    # these are all variable size and not part of a common wavelength grid
+                    # we are skipping them for now
+                    continue
+                elif wave_loc.size == 58958: grating = 'FUVM5'
+                elif wave_loc.size == 35601: grating = 'FUVM3'
+                else: raise ValueError('Unknown FUVM size: %d' % wave_loc.size)
+
+            # save/check wavelength grid is consistent
+            if grating in wave:
+                assert np.array_equal(wave[grating], wave_loc)
+            else:
+                wave[grating] = wave_loc
+
+            # metadata
+            if grating in counts:
+                counts[grating] += 1
+            else:
+                counts[grating] = 1
+
+            with open(path + '/all_exposures.txt') as f:
+                allexp = shlex.split(f.readlines()[1])
+
+            meta_loc = {'name':target_name, 'ra':float(allexp[3]), 'dec':float(allexp[4]), 
+                        'desc':allexp[-1], 'type':allexp[-1].split(';')[0]}
+
+            for key in target_metadata:
+                if grating in target_metadata[key]:
+                    target_metadata[key][grating].append(meta_loc[key])
+                else:
+                    target_metadata[key][grating] = [meta_loc[key]]
+
+    for grating in wave.keys():
+        print(f'[{grating}] has [{wave[grating].size:6d}] wavelength points, [{counts[grating]:3d}] spectra.')
+
+    # allocate
+    flux = {}
+    error = {}
+    
+    for grating in wave.keys():
+        flux[grating] = np.zeros((counts[grating], wave[grating].size), dtype='float32')
+        error[grating] = np.zeros((counts[grating], wave[grating].size), dtype='float32')
+
+    # load
+    for grating in counts.keys():
+        counts[grating] = 0
+
+    for i, path in enumerate(paths):
+        # load
+        if i % 100 == 0: print(f'[{i:3d} of {len(paths):3d}] {path}')
+        spectra = glob.glob(path + '/*.fits')
+        
+        for spec in spectra:
+            _, _, grating, _, lifetime = spec.split('_')
+
+            # load flux and error arrays
+            with pyfits.open(spec) as f:
+                flux_loc = np.squeeze(f[1].data['flux'])
+                error_loc = np.squeeze(f[1].data['error'])
+                wave_loc_size = f[1].data['wave'].size
+
+            # FUVM is the splice of the G130M + G160M coadds, but these come in 3 flavors
+            if grating == 'FUVM':
+                if wave_loc_size >= 75000:
+                    continue
+                elif wave_loc_size == 58958: grating = 'FUVM5'
+                elif wave_loc_size == 35601: grating = 'FUVM3'
+
+            # stamp
+            count = counts[grating]
+            flux[grating][count,:] = flux_loc
+            error[grating][count,:] = error_loc
+
+            counts[grating] += 1
+
+    # open output file
+    filename = basepath + '%s.hdf5' % metadata['dataset_name']
+    
+    with h5py.File(filename,'w') as fOut:
+    
+        # write header and metadata
+        head = fOut.create_group('Header')
+        for key, item in metadata.items():
+            head.attrs[key] = item
+
+        # write spectra for each grating separately
+        for grating in wave.keys():
+            g = fOut.create_group(grating)
+            g['wave'] = wave[grating]
+            g['flux'] = flux[grating]
+            g['error'] = error[grating]
+
+            g['wave'].attrs['description'] = 'Wavelength, corresponding to raw pixels with no binning [angstrom]'
+            g['flux'].attrs['description'] = 'Flux [erg/s/cm^2/angstrom]'
+            g['error'].attrs['description'] = 'Error on the flux [erg/s/cm^2/angstrom]'
+
+            g['target_name'] = np.array(target_metadata['name'][grating], dtype='S')
+            g['target_desc'] = np.array(target_metadata['desc'][grating], dtype='S')
+            g['target_type'] = np.array(target_metadata['type'][grating], dtype='S')
+            g['target_ra']   = np.array(target_metadata['ra'][grating], dtype='float32')
+            g['target_dec']  = np.array(target_metadata['dec'][grating], dtype='float32')
+
+    fOut.close()
+
+    print('Wrote: [%s]' % filename)
