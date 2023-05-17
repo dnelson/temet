@@ -777,7 +777,7 @@ class simParams:
         # AURIGA
         if run in ['auriga','auriga_dm']:
             assert hInd is not None
-            assert self.variant == 'None'
+            assert self.variant in ['None','CGM_2kpc','CGM_1kpc','CGM_500pc']
 
             self.validResLevels = [2,3,4,5,6] # auriga/aquarius levels
             self.groupOrdered   = True
@@ -807,6 +807,7 @@ class simParams:
 
             # paths
             vStr = '_DM' if '_dm' in run else '_MHD'
+            if self.variant != 'None': vStr += '_%s' % self.variant
             dirStr = 'h%d_L%d%s' % (self.hInd,self.res,vStr)
 
             self.arepoPath  = self.basePath + 'sims.auriga/' + dirStr + '/'

@@ -4,10 +4,12 @@ Misc plots related to cosmological boxes.
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+import glob
 from matplotlib.backends.backend_pdf import PdfPages
 from os.path import isfile, isdir, expanduser
 from os import mkdir
 from scipy.signal import savgol_filter
+from scipy.stats import binned_statistic
 
 from .cosmoGeneral import addRedshiftAxis
 from ..cosmo.util import snapNumToRedshift
@@ -738,55 +740,230 @@ def simHydroResolutionComparison():
     fig.savefig('sim_comparison_res_zooms.pdf')
     plt.close(fig)
 
-    # plot (D) - Ramesh+23c (change global style)
-    import matplotlib as mpl
-    mpl.rcParams.update(mpl.rcParamsDefault)
+def simHydroResolutionProfileComparison():
+    """ Meta plot: compare radial profiles of resolution (cell size) between simulations. """
 
-    #mpl.rcParams['axes.prop_cycle'] = cycler(color=['k', 'r', 'g', 'b', 'c', 'm', 'y'])
-    style = {'font.size':11, 'figure.autolayout':True, 'figure.dpi':100, 'savefig.dpi':300,
-             'xtick.labelsize':'medium', 'ytick.labelsize':'medium', 'xtick.major.size':8,
-             'ytick.major.size':8, 'xtick.minor.size':3, 'ytick.minor.size':3,
-             'xtick.major.width':1.25, 'ytick.major.width':1.25, 'xtick.minor.width':1.25,
-             'ytick.minor.width':1.25, 'xtick.top':True, 'ytick.right':True, 'ytick.minor.visible':True,
-             'xtick.minor.visible':True, 'xtick.direction':'in', 'ytick.direction':'in',
-             'lines.markersize':4, 'lines.linewidth':1, 'lines.markeredgewidth':0,
-             'path.simplify':True, 'axes.linewidth':1.25, 'axes.labelsize':'large',
-             'legend.numpoints':1, 'legend.frameon':False, 'legend.handletextpad':0.3, 
-             'legend.scatterpoints':1, 'legend.handlelength':2, 'legend.handleheight':0.75,
-             'text.usetex':True, 'text.latex.preamble': r'\usepackage[T1]{fontenc}\usepackage{cmbright}'}
+    def _load_profile(sP, nbins=40, radmin=0.0, radmax=1.0):
+        # helper: derive new dataset for a simulation we have (rad in units of r200c)
+        if not isdir(sP.derivPath + 'cache/'):
+            mkdir(sP.derivPath + 'cache/')
+        saveFile = sP.derivPath + 'cache/cellsize_radprof_%d.hdf5' % sP.snap
 
-    for k,v in style.items():
-        mpl.rcParams[k] = v
+        if isfile(saveFile):
+            with h5py.File(saveFile,'r') as f:
+                rad_rvir_cen = f['rad_rvir_cen'][()]
+                res_pkpc = f['res_pkpc'][()]
+            return rad_rvir_cen, res_pkpc
+        
+        # zoom vs full box
+        if sP.isZoom:
+            cellsize = sP.gas('cellrad_kpc') # pkpc
+            pos = sP.gas('pos') # code
+            halo = sP.halo(0)
 
-    fig = plt.figure(figsize=[7,4])
+            rad = sP.periodicDists(halo['GroupPos'], pos)
+            rad /= halo['Group_R_Crit200']
+        else:
+            # make halo mass selection
+            mhalo = sP.subhalos('m200_log')
+            subhaloIDs = np.where((mhalo>11.9) & (mhalo<12.1))[0]
+            rng = np.random.default_rng(424242)
+            subhaloIDs = rng.choice(subhaloIDs, size=20, replace=False)
+
+            GroupLenGas = sP.halos('GroupLenType')[:,sP.ptNum('gas')]
+            haloIDs = sP.subhalos('SubhaloGrNr')[subhaloIDs]
+            # allocate
+            cellsize = np.zeros(np.sum(GroupLenGas[haloIDs]), dtype='float32')
+            rad = np.zeros(np.sum(GroupLenGas[haloIDs]), dtype='float32')
+
+            # loop over halos and stack
+            offset = 0
+            for haloID in haloIDs:
+                print('Stacking halo %d' % haloID)
+                cellsize_loc = sP.snapshotSubset('gas', 'cellrad_kpc', haloID=haloID) # pkpc
+                rad_rvir_loc = sP.snapshotSubset('gas', 'rad_rvir', haloID=haloID) # pkpc
+
+                cellsize[offset:offset+cellsize_loc.size] = cellsize_loc
+                rad[offset:offset+cellsize_loc.size] = rad_rvir_loc
+                offset += cellsize_loc.size
+
+        # median profile
+        res_pkpc, rad_rvir_edges, _ = binned_statistic(rad, cellsize, statistic='median', bins=nbins, range=[radmin, radmax])
+        rad_rvir_cen = rad_rvir_edges[:-1] + (radmax - radmin)/nbins/2.0 # bin centers
+
+        with h5py.File(saveFile,'w') as f:
+            f['rad_rvir_cen'] = rad_rvir_cen
+            f['rad_rvir_edges'] = rad_rvir_edges
+            f['res_pkpc'] = res_pkpc
+        print('Saved: [%s]' % saveFile)
+
+        return rad_rvir_cen, res_pkpc
+
+    def _compute_fire_profile(path, nbins=40, radmin=0.0, radmax=1.0):
+        """ Helper: stack and compute radial profile for FIRE-2 (original data). """
+        paths = glob.glob(path)
+
+        saveFile = 'cellsize_radprof_fire.hdf5'
+
+        if isfile(saveFile):
+            with h5py.File(saveFile,'r') as f:
+                rad_rvir_cen = f['rad_rvir_cen'][()]
+                res_pkpc = f['res_pkpc'][()]
+            return rad_rvir_cen, res_pkpc
+
+        rad = []
+        cellsize = []
+
+        for sim_path in paths:
+            print(sim_path)
+            # load all positions and hsml
+            filename = sim_path + '/output/snapdir_600/snapshot_600.0.hdf5'
+            with h5py.File(filename,'r') as f:
+                attrs = dict(f['Header'].attrs)
+                pos = f['PartType0']['Coordinates'][()]
+                hsml = f['PartType0']['SmoothingLength'][()]
+                pot = f['PartType0']['Potential'][()]
+
+            hsml *= attrs['Time'] / attrs['HubbleParam'] # ckpc/h -> pkpc
+
+            if 0:
+                # load positions of halos
+                filename = sim_path + '/halo/rockstar_dm/catalog_hdf5/halo_600.hdf5'
+                with h5py.File(filename,'r') as f:
+                    # does not work, offset from particle positions, todo: fix
+                    halo_pos = f['position'][()]
+                    halo_pos2 = f['position.offset'][()]
+                    halo_m200c = f['mass.200c'][()]
+                    halo_rvir = f['radius'][()] # r200m!
+
+                    mass = f['mass'][()]
+                    mass_lowres = f['mass.lowres'][()]
+
+                haloIDs_nocontam = np.where(mass_lowres == 0)[0]
+                haloID = np.argmax(halo_m200c)
+                halo_cen = halo_pos[haloID] 
+                halo_rvir = halo_rvir[haloID]
+            else:
+                halo_cen = pos[np.argmin(pot)]
+                halo_rvir = 218.0 # ckpc/h from TNG100-1 for 12.0<m200c_log<12.1
+
+            rr = np.sqrt((pos[:,0]-halo_cen[0])**2 + (pos[:,1]-halo_cen[1])**2 + (pos[:,2]-halo_cen[2])**2)
+            rr /= halo_rvir
+
+            rad.append(rr) # r/rvir
+            cellsize.append(hsml) # pkpc
+
+        rad = np.concatenate(rad)
+        cellsize = np.concatenate(cellsize)
+
+        # median profile
+        res_pkpc, rad_rvir_edges, _ = binned_statistic(rad, cellsize, statistic='median', bins=nbins, range=[radmin, radmax])
+        rad_rvir_cen = rad_rvir_edges[:-1] + (radmax - radmin)/nbins/2.0 # bin centers
+
+        with h5py.File(saveFile,'w') as f:
+            f['rad_rvir_cen'] = rad_rvir_cen
+            f['rad_rvir_edges'] = rad_rvir_edges
+            f['res_pkpc'] = res_pkpc
+        print('Saved: [%s]' % saveFile)
+
+        return rad_rvir_cen, res_pkpc
+
+    # boxes (stack at Milky Way mass scale)
+    boxes = [{'sP':simParams(run='tng50-1',redshift=0.0)},
+             {'sP':simParams(run='tng100-1',redshift=0.0)},
+             {'sP':simParams(run='tng300-1',redshift=0.0)}]
+
+    # zooms (all lines are single halo)
+    zooms = [{'sP':simParams(run='auriga',hInd=6,res=3,redshift=0.0), 'name': 'Auriga (L3)'},
+             {'sP':simParams(run='auriga',hInd=6,res=2,redshift=0.0), 'name': 'Auriga (L2)'},
+             #{'sP':simParams(run='zooms2_josh',res=11,hInd=2,variant='FPorig',redshift=2.2), 'name':'Suresh+19 (L11)'},
+             #{'sP':simParams(run='zooms2_josh',res=11,hInd=2,variant='FP',redshift=2.2), 'name':'Suresh+19 (L12)'},
+             {'name':'FIRE-2', 'path':'/virgotng/mpia/FIRE-2/core_FIRE-2_runs/m12?_res7100'},
+             {'sP':simParams(run='auriga',hInd=6,res=4,redshift=0.0,variant='CGM_2kpc'), 'name':'vDv+19 (2 kpc)'},
+             {'sP':simParams(run='auriga',hInd=6,res=4,redshift=0.0,variant='CGM_1kpc'), 'name':'vDv+19 (1 kpc)'},
+             {'sP':simParams(run='auriga',hInd=6,res=4,redshift=0.0,variant='CGM_500pc'), 'name':'vDv+19 (500 pc)'},
+             {'sP':simParams(run='gible',res=8,hInd=201,redshift=0.0), 'name':'GIBLE (RF8)'},
+             {'sP':simParams(run='gible',res=64,hInd=201,redshift=0.0), 'name':'GIBLE (RF64)'},
+             {'sP':simParams(run='gible',res=512,hInd=201,redshift=0.0), 'name':'GIBLE (RF512)'}]
+
+    # idealized (constant resolution dx in pkpc, total volume in pMpc^3, all lines sum over all runs)
+    ideals = [{'name':'CGOLS', 'res_pkpc':[4.88e-3], 'rad':[0.06]}, # [A,B,C]-2048, Schneider+2018 Table 1 (20 pkpc -> rvir frac)
+              {'name':'FOGGIE', 'res_pkpc':[0.27,0.27,0.54], 'rad':[0.15,0.15,1.0]}] # 380/h cpc and 190/h cpc -> pkpc
+
+    # Ramesh+23c (change global style)
+    if 1:
+        figsize = [7,5]
+        import matplotlib as mpl
+        mpl.rcParams.update(mpl.rcParamsDefault)
+
+        #mpl.rcParams['axes.prop_cycle'] = cycler(color=['k', 'r', 'g', 'b', 'c', 'm', 'y'])
+        style = {'font.size':11, 'figure.autolayout':True, 'figure.dpi':100, 'savefig.dpi':300,
+                'xtick.labelsize':'medium', 'ytick.labelsize':'medium', 'xtick.major.size':8,
+                'ytick.major.size':8, 'xtick.minor.size':3, 'ytick.minor.size':3,
+                'xtick.major.width':1.25, 'ytick.major.width':1.25, 'xtick.minor.width':1.25,
+                'ytick.minor.width':1.25, 'xtick.top':True, 'ytick.right':True, 'ytick.minor.visible':True,
+                'xtick.minor.visible':True, 'xtick.direction':'in', 'ytick.direction':'in',
+                'lines.markersize':4, 'lines.linewidth':1, 'lines.markeredgewidth':0,
+                'path.simplify':True, 'axes.linewidth':1.25, 'axes.labelsize':'large',
+                'legend.numpoints':1, 'legend.frameon':False, 'legend.handletextpad':0.3, 
+                'legend.scatterpoints':1, 'legend.handlelength':2, 'legend.handleheight':0.75,
+                'text.usetex':True, 'text.latex.preamble': r'\usepackage[T1]{fontenc}\usepackage{cmbright}'}
+
+        for k,v in style.items():
+            mpl.rcParams[k] = v
+
+    # plot
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
+    
+    ax.set_xlim([0.0, 1.0])
+    ax.set_ylim([0.003, 20])
 
-    ax.set_xlim([10, 0.001])
-    ax.set_ylim([8e-7, 1e10])
-
-    ax.set_xscale('log')
     ax.set_yscale('log')
-    ax.set_xlabel('Spatial Resolution $\Delta x$')
-    ax.set_ylabel('Simulated Volume with $\leq \Delta x$ [kpc$^3$]')
+    ax.set_ylabel('Median Gas Cell Radius [pkpc]')
+    ax.set_xlabel('Halocentric Distance / R$_{200c}$')
 
-    # 'disk volume'
-    vol_disk = np.pi * (10)**2 * 1 # disk radius=10kpc, height=1kpc [pMpc^3]
-    xx = [ ax.get_xlim()[0], ax.get_xlim()[1] ]
-    ax.plot(xx, [vol_disk,vol_disk], '-', lw=18, color='#ccc')
-    ax.text(xx[0]*0.88, vol_disk, 'Disk Galaxy', va='center', color='#aaa')
+    # plot boxes
+    for sim in boxes:
+        # calculated/cached
+        dx, vol = _load_profile(sim['sP'])
+        name = '%s' % sim['sP'].simName
 
-    ax.set_xticks([10, 1, 0.1, 0.01, 0.001])
-    ax.set_xticklabels(['10 kpc','1 kpc','100 pc', '10 pc', '1 pc'])
+        l, = ax.plot(dx, vol, ls='dashed', lw=lw, label=name)
+        ax.plot([dx[-1], 1e10], [vol[-1],vol[-1]], ls=ls, lw=lw, alpha=0.2, color=l.get_color())
 
-    _plot_zooms(ax, unitfac=1e9, ls='dashed')
+    # plot zooms
+    for sim in zooms:
+        # calculated or hard-coded data?
+        if 'sP' in sim:
+            rad_rvir, res_pkpc = _load_profile(sim['sP'])
+            name = '%s (z=%d)' % (sim['sP'].simName, sim['sP'].redshift)
+            if 'name' in sim: name = sim['name']
+        elif 'FIRE' in sim['name']:
+            rad_rvir, res_pkpc = _compute_fire_profile(sim['path'])
+            name = sim['name']
+        else:
+            rad_rvir, res_pkpc, name = sim['dx'], sim['vol'], sim['name']
 
-    ax.set_prop_cycle(None) # reset color cycle
-    _plot_idealized(ax, unitfac=1e9, ls='dotted')
+        # add horizontal line to the left, and vertical line at max res
+        xx = np.hstack([0.0, rad_rvir])
+        yy = np.hstack([res_pkpc[0], res_pkpc])
 
-    legParams = {'ncol':2, 'columnspacing':1.0, 'fontsize':9, 'markerscale':0.6}
-    legend = ax.legend(loc='upper right', **legParams)
+        lw_loc = lw
+        if 'sP' in sim and 'GIBLE' in sim['sP'].simName: lw_loc *= 1.5
+        l, = ax.plot(xx, yy, ls='solid', lw=lw_loc, label=name)
 
-    fig.savefig('sim_comparison_res_ramesh.pdf')
+    # plot idealized
+    for ideal in ideals:
+        # res_pkpc is one/a few constant number(s), rad are the corresponding radii
+        xx = np.hstack([0, ideal['rad'], ideal['rad'][-1]])
+        yy = np.hstack([ideal['res_pkpc'], ideal['res_pkpc'][-1], 1e-16])
+        l, = ax.plot(xx, yy, ls='dotted', lw=lw, label=ideal['name'])
+
+    legParams = {'ncol':3, 'columnspacing':1.1, 'fontsize':11, 'markerscale':0.6}
+    legend = ax.legend(loc='lower right', **legParams)
+
+    fig.savefig('sim_comparison_res_profiles.pdf')
     plt.close(fig)
 
 def plotClumpsEvo():
