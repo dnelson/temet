@@ -434,6 +434,19 @@ cellsize_kpc.limits = [-2.0, 3.0]
 cellsize_kpc.limits_halo = [-2.0, 1.0]
 cellsize_kpc.log = True
 
+@snap_field(alias='cellrad_ckpc')
+def cellsize_ckpc(sim, partType, field, args):
+    """ Gas cell size [comoving kpc]. """
+    rcell = sim.snapshotSubset(partType, 'cellsize', **args)
+
+    return sim.units.codeLengthToComovingKpc(rcell)
+
+cellsize_ckpc.label = 'Gas Cell Size'
+cellsize_ckpc.units = r'$\rm{ckpc}$'
+cellsize_ckpc.limits = [-2.0, 3.0]
+cellsize_ckpc.limits_halo = [-2.0, 1.0]
+cellsize_ckpc.log = True
+
 @snap_field
 def hsml(sim, partType, field, args):
     """ Smoothing length i.e. characteristic size, possibly for visualization purposes. """

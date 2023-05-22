@@ -61,14 +61,12 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
     cacheFile = sPzoom.derivPath + 'contamination_stats.hdf5'
 
     # check for existence of cache
-    fields = ['min_dist_lr','rVirFacs','counts','fracs','massfracs','rr','r_frac','r_massfrac']
-
     if isfile(cacheFile):
         r = {}
         with h5py.File(cacheFile,'r') as f:
-            for key in fields:
+            for key in f:
                 r[key] = f[key][()]
-        return [r[key] for key in fields]
+        return r
 
     # load and calculate now
     halo = sPzoom.groupCatSingle(haloID=0)
@@ -114,7 +112,7 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
 
     # calculate radial profiles
     rlim  = [0.0, np.max(rVirFacs)*r200]
-    nbins = 30
+    nbins = 50
 
     r_count_hr, rr = np.histogram(dists_hr, bins=nbins, range=rlim)
     r_count_lr, _  = np.histogram(dists_lr, bins=nbins, range=rlim)
@@ -125,15 +123,22 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
     r_frac     = r_count_lr / r_count_hr
     r_massfrac = r_mass_lr / r_mass_hr
 
+    r_frac_cum  = np.cumsum(r_count_lr) / np.cumsum(r_count_hr)
+    r_massfrac_cum = np.cumsum(r_mass_lr) / np.cumsum(r_mass_hr)
+
     rr = rr[:-1] + (rlim[1]-rlim[0])/nbins # bin midpoints
 
     # save cache
+    r = {'min_dist_lr':min_dist_lr, 'rVirFacs':rVirFacs, 'counts':counts, 'fracs':fracs, 
+         'massfracs':massfracs, 'rr':rr, 'r_frac':r_frac, 'r_massfrac':r_massfrac,
+         'r_massfrac_cum':r_massfrac_cum, 'r_frac_cum':r_frac_cum}
+
     with h5py.File(cacheFile,'w') as f:
-        for key in fields:
-            f[key] = locals()[key]
+        for key in r:
+            f[key] = r[key]
     print('Saved: [%s]' % cacheFile)
 
-    return min_dist_lr, rVirFacs, counts, fracs, massfracs, rr, r_frac, r_massfrac
+    return r
 
 def contamination_profile():
     """ Check level of low-resolution contamination (DM particles) in zoom run. Plot radial profile. """
@@ -162,8 +167,8 @@ def contamination_profile():
     print('zoom halo mass: ',sP.units.codeMassToLogMsun([halo_zoom['Group_M_Crit200'],halo_zoom['GroupMass']]))
 
     # print/load contamination statistics
-    min_dist_lr, _, _, _, _, rr, r_frac, r_massfrac = calculate_contamination(sPz, verbose=True)
-    min_dist_lr *= sPz.HubbleParam
+    contam = calculate_contamination(sPz, verbose=True)
+    min_dist_lr = contam['min_dist_lr'] * sPz.HubbleParam
 
     # plot contamination profiles
     fig, ax = plt.subplots(figsize=figsize)
@@ -172,19 +177,19 @@ def contamination_profile():
     ax.set_xlabel('Distance [%s]' % sPz.units.UnitLength_str)
     ax.set_ylabel('Low-res DM Contamination Fraction [log]')
     ax.xaxis.set_minor_locator(MultipleLocator(500))
-    ax.set_xlim([0.0, rr.max()])
+    ax.set_xlim([0.0, contam['rr'].max()])
     ax.set_ylim(ylim)
 
-    ax.plot([0,rr[-1]], [-1.0, -1.0], '-', color='#888888', lw=lw, alpha=0.5, label='10%')
-    ax.plot([0,rr[-1]], [-2.0, -2.0], '-', color='#bbbbbb', lw=lw, alpha=0.2, label='1%')
-    ax.plot(rr, logZeroNaN(r_frac), '-', lw=lw, label='by number')
-    ax.plot(rr, logZeroNaN(r_massfrac), '-', lw=lw, label='by mass')
+    ax.plot([0,contam['rr'][-1]], [-1.0, -1.0], '-', color='#888888', lw=lw, alpha=0.5, label='10%')
+    ax.plot([0,contam['rr'][-1]], [-2.0, -2.0], '-', color='#bbbbbb', lw=lw, alpha=0.2, label='1%')
+    ax.plot(contam['rr'], logZeroNaN(contam['r_frac']), '-', lw=lw, label='by number')
+    ax.plot(contam['rr'], logZeroNaN(contam['r_massfrac']), '-', lw=lw, label='by mass')
 
     ax.plot([min_dist_lr,min_dist_lr], ylim, ':', color='#555555', lw=lw, alpha=0.5, label='closest LR' )
 
     ax2 = ax.twiny()
     ax2.set_xlabel('Distance [$R_{\\rm 200,crit}$]')
-    ax2.set_xlim([0.0, rr.max()/halo_zoom['Group_R_Crit200']])
+    ax2.set_xlim([0.0, contam['rr'].max()/halo_zoom['Group_R_Crit200']])
     ax2.xaxis.set_minor_locator(MultipleLocator(1))
 
     ax.legend(loc='lower right')
@@ -220,12 +225,12 @@ def contamination_compare_profiles():
             subs_zoom = sPz.groupCat(fieldsSubhalos=['SubhaloMass','SubhaloPos','SubhaloMassType'])
 
             # load contamination statistics and plot
-            min_dist_lr, _, _, _, _, rr, r_frac, r_massfrac = calculate_contamination(sPz)
-            rr /= halo_zoom['Group_R_Crit200']
-            min_dist_lr /= sPz.units.codeLengthToMpc( halo_zoom['Group_R_Crit200'] )
+            contam = calculate_contamination(sPz, verbose=True)
+            rr = contam['rr'] / halo_zoom['Group_R_Crit200']
+            min_dist_lr = contam['min_dist_lr'] / sPz.units.codeLengthToMpc( halo_zoom['Group_R_Crit200'] )
 
-            l, = ax.plot(rr, logZeroNaN(r_frac), linestyles[j], color=c, lw=lw, label='h%d_%s' % (hInd,variant))
-            #l, = ax.plot(rr, logZeroNaN(r_massfrac), '--', lw=lw, color=c)
+            l, = ax.plot(rr, logZeroNaN(contam['r_frac']), linestyles[j], color=c, lw=lw, label='h%d_%s' % (hInd,variant))
+            #l, = ax.plot(rr, logZeroNaN(contam['r_massfrac']), '--', lw=lw, color=c)
 
             ax.plot([min_dist_lr,min_dist_lr], [ylim[1]-0.3,ylim[1]], linestyles[j], color=c, lw=lw, alpha=0.5)
             print(hInd,variant,min_dist_lr)
@@ -248,7 +253,7 @@ def contamination_mindist():
     redshift = 0.0
     run = 'tng_zoom'
 
-    frac_thresh = 1e-5
+    frac_thresh = 1e-6
 
     # load data
     halo_mass = np.zeros(len(hInds), dtype='float32')
@@ -262,19 +267,21 @@ def contamination_mindist():
         halo_zoom = sPz.groupCatSingle(haloID=0)
         halo_mass[i] = sPz.units.codeMassToLogMsun(halo_zoom['Group_M_Crit200'])
 
-        min_dist_lr, _, _, _, _, rr, r_frac, r_massfrac = calculate_contamination(sPz)
+        #min_dist_lr, _, _, _, _, rr, r_frac, r_massfrac = calculate_contamination(sPz)
+        contam = calculate_contamination(sPz)
 
         # minimum distance to first LR particle
-        min_dist_lr /= sPz.units.codeLengthToMpc(halo_zoom['Group_R_Crit200'])
+        min_dist_lr = contam['min_dist_lr'] / sPz.units.codeLengthToMpc(halo_zoom['Group_R_Crit200'])
         min_dists[i] = min_dist_lr
 
-        # distance at which fraction of LR/HR particles exceeds a threshold
-        w = np.where(r_frac > frac_thresh)[0]
-        min_dists_thresh[i] = rr[w].min() / halo_zoom['Group_R_Crit200']
+        # distance at which cumulative fraction of LR/HR particles exceeds a threshold (linear interp)
+        #min_ind = np.where(contam['r_frac_cum'] > frac_thresh)[0].min()
+        #min_dists_thresh[i] = contam['rr'][min_ind] / halo_zoom['Group_R_Crit200']
+        min_dists_thresh[i] = np.interp(frac_thresh, contam['r_frac_cum'], contam['rr']) / halo_zoom['Group_R_Crit200']   
     
     # plot distribution
     xlim = [0.0, 6.0]
-    nbins = 40
+    nbins = 60
 
     fig, ax = plt.subplots(figsize=figsize)
 
@@ -282,8 +289,10 @@ def contamination_mindist():
     ax.set_ylabel('Number of Halos')
     ax.set_xlim(xlim)
 
-    ax.hist(min_dists, bins=nbins, range=xlim, lw=lw, alpha=0.7, label='first LR particle')
-    ax.hist(min_dists_thresh, bins=nbins, range=xlim, lw=lw, alpha=0.7, label='$f_{\\rm LR} > %.1e$' % frac_thresh)
+    label1 = 'Single Closest LR Particle'
+    label2 = 'Low-Resolution Fraction $f_{\\rm LR} > 10^{%d}$' % np.log10(frac_thresh)
+    ax.hist(min_dists, bins=nbins, range=xlim, lw=lw, alpha=0.7, label=label1)
+    ax.hist(min_dists_thresh, bins=nbins, range=xlim, lw=lw, alpha=0.7, label=label2)
     ax.legend(loc='upper right')
 
     ax.plot([1,1], ax.get_ylim(), '-', color='#bbbbbb', lw=lw, alpha=0.2)
@@ -301,13 +310,14 @@ def contamination_mindist():
 
     for rr in np.arange(1,7):
         ax.plot(ax.get_xlim(), [rr,rr], '-', color='#bbbbbb', lw=lw, alpha=0.2)
-    ax.plot(halo_mass, min_dists, 'o', label='first LR particle')
-    ax.plot(halo_mass, min_dists_thresh, 'o', label='$f_{\\rm LR} > %.1e$' % frac_thresh)
+    ax.plot(halo_mass, min_dists, 'o', label=label1)
+    ax.plot(halo_mass, min_dists_thresh, 'o', label=label2)
 
     xm, ym, _ = running_median(halo_mass, min_dists, binSize=0.1)
     xm2, ym2, _ = running_median(halo_mass, min_dists_thresh, binSize=0.1)
-    ax.plot(xm, ym, '--', lw=lw, color='black', label='median (first LR particle)')
-    ax.plot(xm2, ym2, '-', lw=lw, color='black', label='median ($f_{\\rm LR} > %.1e$)')
+    ym = savgol_filter(ym, sKn, sKo)
+    ax.plot(xm, ym, '--', lw=lw*2, color='black', alpha=0.7, label='Median (Closest LR particle)')
+    ax.plot(xm2, ym2, '-', lw=lw*2, color='black', label='Median ($f_{\\rm LR} > 10^{%d}$)' % np.log10(frac_thresh))
 
     ax.legend(loc='upper left')
     fig.savefig('contamination_mindist_vs_mass_L%d_hN%d_%s.pdf' % (zoomRes,len(hInds),variant))
@@ -346,16 +356,17 @@ def sizefacComparison():
 
             _, _, _, cpuHours = getCpuTxtLastTimestep(sP.simPath + '/txt-files/cpu.txt')
 
-            min_dist_lr, rVirFacs, counts, fracs, massfracs, _, _, _ = calculate_contamination(sP)
+            contam = calculate_contamination(sP, verbose=True)
 
             halo = sP.groupCatSingle(haloID=0)
             haloMass = sP.units.codeMassToLogMsun( halo['Group_M_Crit200'] )
             haloRvir = sP.units.codeLengthToMpc( halo['Group_R_Crit200'] )
 
-            print('Load hInd=%4d variant=%s minDist=%5.2f' % (hInd,variant,min_dist_lr))
+            print('Load hInd=%4d variant=%s minDist=%5.2f' % (hInd,variant,contam['min_dist_lr']))
 
             r = {'hInd':hInd, 'variant':variant, 'cpuHours':cpuHours, 'haloMass':haloMass, 'haloRvir':haloRvir, 
-                 'contam_min':min_dist_lr, 'contam_rvirfacs':rVirFacs, 'contam_counts':counts}
+                 'contam_min':contam['min_dist_lr'], 'contam_rvirfacs':contam['rVirFacs'], 
+                 'contam_counts':contam['counts']}
             results.append(r)
 
     # print some stats

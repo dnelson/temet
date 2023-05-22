@@ -1,7 +1,6 @@
 """
 Metadata for (original) snapshot fields.
 """
-import numpy as np
 from .snapshot import snapshot_fields
 
 # --- general/all particle types ---

@@ -504,7 +504,7 @@ def periodic_slurm_status(machine='vera',nosave=False):
         (cluster_load,cpu_load_allocnodes_mean,cpu_load_allnodes_mean))
 
     # time series data file: create if it doesn't exist already
-    nSavePts = 100000
+    nSavePts = 1000000
     saveDataFields = ['cluster_load','cpu_load_allocnodes_mean','n_jobs_running','n_jobs_pending',
                       'n_nodes_down','n_nodes_idle','n_nodes_alloc']
 
