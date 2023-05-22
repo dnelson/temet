@@ -6,6 +6,7 @@ import h5py
 import matplotlib.pyplot as plt
 import glob
 from matplotlib.backends.backend_pdf import PdfPages
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from os.path import isfile, isdir, expanduser
 from os import mkdir
 from scipy.signal import savgol_filter
@@ -14,7 +15,7 @@ from scipy.stats import binned_statistic
 from .cosmoGeneral import addRedshiftAxis
 from ..cosmo.util import snapNumToRedshift
 from ..util import simParams
-from ..util.helper import running_median, logZeroNaN
+from ..util.helper import running_median, logZeroNaN, loadColorTable
 from ..plot.config import *
 
 def plotRedshiftSpacings():
@@ -740,14 +741,17 @@ def simHydroResolutionComparison():
     fig.savefig('sim_comparison_res_zooms.pdf')
     plt.close(fig)
 
-def simHydroResolutionProfileComparison():
+def simHydroResolutionProfileComparison(onlyCold=False, ckpc=False):
     """ Meta plot: compare radial profiles of resolution (cell size) between simulations. """
 
     def _load_profile(sP, nbins=40, radmin=0.0, radmax=1.0):
         # helper: derive new dataset for a simulation we have (rad in units of r200c)
         if not isdir(sP.derivPath + 'cache/'):
             mkdir(sP.derivPath + 'cache/')
-        saveFile = sP.derivPath + 'cache/cellsize_radprof_%d.hdf5' % sP.snap
+        saveFile = sP.derivPath + 'cache/cellsize_radprof_%d%s%s.hdf5' % \
+            (sP.snap,'_cold' if onlyCold else '','_ckpc' if ckpc else '')
+
+        res_field = 'cellrad_kpc' if not ckpc else 'cellrad_ckpc'
 
         if isfile(saveFile):
             with h5py.File(saveFile,'r') as f:
@@ -757,12 +761,18 @@ def simHydroResolutionProfileComparison():
         
         # zoom vs full box
         if sP.isZoom:
-            cellsize = sP.gas('cellrad_kpc') # pkpc
+            cellsize = sP.gas(res_field) # pkpc
             pos = sP.gas('pos') # code
             halo = sP.halo(0)
 
             rad = sP.periodicDists(halo['GroupPos'], pos)
             rad /= halo['Group_R_Crit200']
+
+            if onlyCold:
+                temp = sP.gas('temp_log')
+                w = np.where(temp <= 4.5)
+                cellsize = cellsize[w]
+                rad = rad[w]
         else:
             # make halo mass selection
             mhalo = sP.subhalos('m200_log')
@@ -780,11 +790,17 @@ def simHydroResolutionProfileComparison():
             offset = 0
             for haloID in haloIDs:
                 print('Stacking halo %d' % haloID)
-                cellsize_loc = sP.snapshotSubset('gas', 'cellrad_kpc', haloID=haloID) # pkpc
+                cellsize_loc = sP.snapshotSubset('gas', res_field, haloID=haloID) # pkpc
                 rad_rvir_loc = sP.snapshotSubset('gas', 'rad_rvir', haloID=haloID) # pkpc
 
                 cellsize[offset:offset+cellsize_loc.size] = cellsize_loc
                 rad[offset:offset+cellsize_loc.size] = rad_rvir_loc
+
+                if onlyCold:
+                    temp = sP.snapshotSubset('gas', 'temp_log', haloID=haloID)
+                    w = np.where(temp > 4.5)
+                    rad[offset:offset+cellsize_loc.size][w] = radmax * 2 # outside of profile i.e. ignore completely
+
                 offset += cellsize_loc.size
 
         # median profile
@@ -803,7 +819,8 @@ def simHydroResolutionProfileComparison():
         """ Helper: stack and compute radial profile for FIRE-2 (original data). """
         paths = glob.glob(path)
 
-        saveFile = 'cellsize_radprof_fire.hdf5'
+        saveFile = 'cellsize_radprof_fire%s%s.hdf5' % \
+            ('_cold' if onlyCold else '','_ckpc' if ckpc else '')
 
         if isfile(saveFile):
             with h5py.File(saveFile,'r') as f:
@@ -824,7 +841,22 @@ def simHydroResolutionProfileComparison():
                 hsml = f['PartType0']['SmoothingLength'][()]
                 pot = f['PartType0']['Potential'][()]
 
-            hsml *= attrs['Time'] / attrs['HubbleParam'] # ckpc/h -> pkpc
+                # determine a halo center and size
+                halo_cen = pos[np.argmin(pot)]
+                halo_rvir = 218.0 # ckpc/h from TNG100-1 for 12.0<m200c_log<12.1
+
+                if onlyCold:
+                    xe = f['PartType0']['ElectronAbundance'][()]
+                    u = f['PartType0']['InternalEnergy'][()]
+                    sP_loc = simParams(run='tng50-1',redshift=0.0) # just for units
+                    temp = sP_loc.units.UToTemp(u, xe, log=True)
+                    w = np.where(temp <= 4.5)
+                    pos = pos[w]
+                    hsml = hsml[w]
+
+            hsml *= attrs['Time'] # ckpc/h -> ckpc
+            if not ckpc:
+                hsml /= attrs['HubbleParam'] # ckpc -> pkpc
 
             if 0:
                 # load positions of halos
@@ -843,9 +875,6 @@ def simHydroResolutionProfileComparison():
                 haloID = np.argmax(halo_m200c)
                 halo_cen = halo_pos[haloID] 
                 halo_rvir = halo_rvir[haloID]
-            else:
-                halo_cen = pos[np.argmin(pot)]
-                halo_rvir = 218.0 # ckpc/h from TNG100-1 for 12.0<m200c_log<12.1
 
             rr = np.sqrt((pos[:,0]-halo_cen[0])**2 + (pos[:,1]-halo_cen[1])**2 + (pos[:,2]-halo_cen[2])**2)
             rr /= halo_rvir
@@ -876,19 +905,19 @@ def simHydroResolutionProfileComparison():
     # zooms (all lines are single halo)
     zooms = [{'sP':simParams(run='auriga',hInd=6,res=3,redshift=0.0), 'name': 'Auriga (L3)'},
              {'sP':simParams(run='auriga',hInd=6,res=2,redshift=0.0), 'name': 'Auriga (L2)'},
-             #{'sP':simParams(run='zooms2_josh',res=11,hInd=2,variant='FPorig',redshift=2.2), 'name':'Suresh+19 (L11)'},
-             #{'sP':simParams(run='zooms2_josh',res=11,hInd=2,variant='FP',redshift=2.2), 'name':'Suresh+19 (L12)'},
+             {'sP':simParams(run='zooms2_josh',res=11,hInd=2,variant='FPorig',redshift=2.2), 'name':'Suresh+19 (L11)'},
+             {'sP':simParams(run='zooms2_josh',res=11,hInd=2,variant='FP',redshift=2.2), 'name':'Suresh+19 (L12)'},
              {'name':'FIRE-2', 'path':'/virgotng/mpia/FIRE-2/core_FIRE-2_runs/m12?_res7100'},
              {'sP':simParams(run='auriga',hInd=6,res=4,redshift=0.0,variant='CGM_2kpc'), 'name':'vDv+19 (2 kpc)'},
              {'sP':simParams(run='auriga',hInd=6,res=4,redshift=0.0,variant='CGM_1kpc'), 'name':'vDv+19 (1 kpc)'},
-             {'sP':simParams(run='auriga',hInd=6,res=4,redshift=0.0,variant='CGM_500pc'), 'name':'vDv+19 (500 pc)'},
+             #{'sP':simParams(run='auriga',hInd=6,res=4,redshift=0.0,variant='CGM_500pc'), 'name':'vDv+19 (500 pc)'},
              {'sP':simParams(run='gible',res=8,hInd=201,redshift=0.0), 'name':'GIBLE (RF8)'},
              {'sP':simParams(run='gible',res=64,hInd=201,redshift=0.0), 'name':'GIBLE (RF64)'},
              {'sP':simParams(run='gible',res=512,hInd=201,redshift=0.0), 'name':'GIBLE (RF512)'}]
 
-    # idealized (constant resolution dx in pkpc, total volume in pMpc^3, all lines sum over all runs)
+    # idealized
     ideals = [{'name':'CGOLS', 'res_pkpc':[4.88e-3], 'rad':[0.06]}, # [A,B,C]-2048, Schneider+2018 Table 1 (20 pkpc -> rvir frac)
-              {'name':'FOGGIE', 'res_pkpc':[0.27,0.27,0.54], 'rad':[0.15,0.15,1.0]}] # 380/h cpc and 190/h cpc -> pkpc
+              {'name':'FOGGIE', 'res_pkpc':[0.14,0.14,0.27], 'rad':[0.15,0.15,1.0]}] # 190/h and 380/h [cpc dx -> ckpc rad]
 
     # Ramesh+23c (change global style)
     if 1:
@@ -917,10 +946,10 @@ def simHydroResolutionProfileComparison():
     ax = fig.add_subplot(111)
     
     ax.set_xlim([0.0, 1.0])
-    ax.set_ylim([0.003, 20])
+    ax.set_ylim([0.003, 10])
 
     ax.set_yscale('log')
-    ax.set_ylabel('Median Gas Cell Radius [pkpc]')
+    ax.set_ylabel('Median Gas Cell Radius [%s]' % ('pkpc' if not ckpc else 'ckpc'))
     ax.set_xlabel('Halocentric Distance / R$_{200c}$')
 
     # plot boxes
@@ -930,24 +959,24 @@ def simHydroResolutionProfileComparison():
         name = '%s' % sim['sP'].simName
 
         l, = ax.plot(dx, vol, ls='dashed', lw=lw, label=name)
-        ax.plot([dx[-1], 1e10], [vol[-1],vol[-1]], ls=ls, lw=lw, alpha=0.2, color=l.get_color())
+        ax.plot([dx[-1], 1e10], [vol[-1],vol[-1]], ls='dashed', lw=lw, alpha=0.2, color=l.get_color())
 
     # plot zooms
     for sim in zooms:
         # calculated or hard-coded data?
         if 'sP' in sim:
-            rad_rvir, res_pkpc = _load_profile(sim['sP'])
+            rad_rvir, res_kpc = _load_profile(sim['sP'])
             name = '%s (z=%d)' % (sim['sP'].simName, sim['sP'].redshift)
             if 'name' in sim: name = sim['name']
         elif 'FIRE' in sim['name']:
-            rad_rvir, res_pkpc = _compute_fire_profile(sim['path'])
+            rad_rvir, res_kpc = _compute_fire_profile(sim['path'])
             name = sim['name']
         else:
-            rad_rvir, res_pkpc, name = sim['dx'], sim['vol'], sim['name']
+            rad_rvir, res_kpc, name = sim['dx'], sim['vol'], sim['name']
 
         # add horizontal line to the left, and vertical line at max res
         xx = np.hstack([0.0, rad_rvir])
-        yy = np.hstack([res_pkpc[0], res_pkpc])
+        yy = np.hstack([res_kpc[0], res_kpc])
 
         lw_loc = lw
         if 'sP' in sim and 'GIBLE' in sim['sP'].simName: lw_loc *= 1.5
@@ -963,7 +992,7 @@ def simHydroResolutionProfileComparison():
     legParams = {'ncol':3, 'columnspacing':1.1, 'fontsize':11, 'markerscale':0.6}
     legend = ax.legend(loc='lower right', **legParams)
 
-    fig.savefig('sim_comparison_res_profiles.pdf')
+    fig.savefig('sim_comparison_res_profiles%s%s.pdf' % ('_cold' if onlyCold else '','_ckpc' if ckpc else ''))
     plt.close(fig)
 
 def plotClumpsEvo():
