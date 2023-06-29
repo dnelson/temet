@@ -188,32 +188,35 @@ def rotationMatricesFromInertiaTensor(I):
 
     return r
 
-def rotationMatrixFromVec(vec, target_vec=(0,0,1)):
-    """ Calculate 3x3 rotation matrix to align input vec with a target vector. By default this is the 
-    z-axis, such that with vec the angular momentum vector of the galaxy, an (x,y) projection will 
-    yield a face on view, and an (x,z) projection will yield an edge on view. """
+def rotationMatrixFromVec(i_v_in, target_vec=None):
+    if target_vec is None:
+        target_vec = np.asarray([1.0, 0.0, 0.0])
+    # Normalize vector length
+    i_v = np.copy(i_v_in)
+    i_v /= np.linalg.norm(i_v)
 
-    # verify we have unit vectors
-    vec /= np.linalg.norm(vec,2)
-    target_vec /= np.linalg.norm(target_vec,2)
+    # Get axis
+    uvw = np.cross(i_v, target_vec)
 
-    I = np.identity(3)
+    # compute trig values - no need to go through arccos and back
+    rcos = np.dot(i_v, target_vec)
+    rsin = np.linalg.norm(uvw)
 
-    if np.array_equal(vec, target_vec):
-        # identity rotation
-        return np.asmatrix(I)
+    #normalize and unpack axis
+    if not np.isclose(rsin, 0):
+        uvw /= rsin
+    u, v, w = uvw
 
-    v = np.cross(vec,target_vec)
-    s = np.linalg.norm(v,2)
-    c = np.dot(vec,target_vec)
-
-    # v_x is the skew-symmetric cross-product matrix of v
-    v_x = np.asmatrix( np.array( [ [0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0] ] ) )
-
-    # R * (x,y,z)_unrotated == (x,y,z)_rotated
-    R = I + v_x + v_x**2 * (1-c/s**2.0)
-
-    return R.astype('float32')
+    # Compute rotation matrix - re-expressed to show structure
+    return (
+        rcos * np.eye(3) +
+        rsin * np.array([
+            [ 0, -w,  v],
+            [ w,  0, -u],
+            [-v,  u,  0]
+        ]) +
+        (1.0 - rcos) * uvw[:,None] * uvw[None,:]
+    )
 
 def rotationMatrixFromAngleDirection(angle, direction):
     """ Calculate 3x3 rotation matrix for input angle about an axis defined by the input direction 
