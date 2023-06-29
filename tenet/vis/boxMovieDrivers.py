@@ -258,6 +258,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         mm8 = [-200,200]
         mm9 = [-170,170]
         mm10 = [37.0, 40.7]
+        mm11 = [4.8, 6.8]
 
     if gal == 'two':
         # second movie, massive elliptical (sbSnaps 0 - 3600)
@@ -275,6 +276,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         mm8 = [-400,400]
         mm9 = [-500,500]
         mm10 = [37.5, 41.0]
+        mm11 = [5.3, 7.4]
 
     if gal == 'three':
         # third movie, Milky Way (sbSnaps 0 - ...)
@@ -372,8 +374,8 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
 
     axes = [0,1] # x,y
 
-    labelScale = False #'physical' #'lightyears'
-    labelZ     = False #True #'tage'
+    labelScale = 'physical' #'lightyears'
+    labelZ     = True #'tage'
     plotHalos  = False
 
     nPixels   = [1920,1080] #[3840,2160]
@@ -390,13 +392,15 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     boxCenter = subhalo_pos[sbSnapNum,:]
 
     # panel config    
-    if conf in ['one','six','seven','eight','nine','ten','eleven','fifteen']:
+    if conf in ['one','six','seven','eight','nine','ten','eleven','fifteen','nineteen']:
         # main panel: gas density on intermediate scales
         boxSizeImg = [int(boxSizeLg * aspect), boxSizeLg, boxSizeLg]
         loc = [0.003, 0.26]
 
         if conf in ['one','fifteen']:
             panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'ctName':'magma', 'valMinMax':mm1, 'legendLoc':loc} )
+        if conf in ['nineteen']:
+            panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'ctName':'cubehelix', 'valMinMax':mm11, 'legendLoc':loc} )
         if conf == 'six':
             panels.append( {'partType':'gas', 'partField':'metal_solar', 'valMinMax':mm6, 'legendLoc':loc} )
         if conf == 'seven':
@@ -416,7 +420,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
             panels.append( {'partType':'gas', 'partField':'bmag_uG', 'valMinMax':[-1.0,1.6], 'legendLoc':loc} )
 
         # add custom label of subbox time resolution galaxy properties if extended info is available
-        if conf == 'one' and 'SubhaloStars_Mass' in cat:
+        if conf == 'one' and 'SubhaloStars_Mass' in cat and 0: # disabled
             import locale
             x = locale.setlocale(locale.LC_ALL, 'de_DE.utf-8')
             aperture_num = 0 # 0= 30 pkpc, 1= 30 ckpc/h, 2= 50 ckpc/h
@@ -534,6 +538,9 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
 
             panels[0]['f_post'] = func_post
 
+    if conf == 'nineteen':
+        ptRestrictions = {'temp_log':['gt',5.5]}
+
     if 0:
         # SWR
         nPixels = [1200,1200] # square
@@ -548,7 +555,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     # render
     frameSaveNum = sbSnapNum if frameNum is None else frameNum
     class plotConfig:
-        saveFilename = savePathBase + 'frame_%s_%d%s.png' % (conf,frameSaveNum,rotStr)
+        saveFilename = savePathBase + 'frame_%s_%04d%s.png' % (conf,frameSaveNum,rotStr)
         plotStyle = 'edged_black'
         rasterPx  = nPixels
         colorbars = False
@@ -588,11 +595,13 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
     # pre-load subbox cat (optional, must be correct for gal!)
     cat = None
     if 1:
-        assert gal == 'two'
-        cat = subboxSubhaloCat(simParams(run='tng50-1',redshift=0.0), sbNum=2)
+        assert gal == 'one' #'two'
+        cat = subboxSubhaloCat(simParams(run='tng50-1',redshift=0.0), sbNum=0) #2)
 
     # normal render
     for i, sbSnapNum in enumerate(sbSnapNums):
+        #if i not in [0,519,919,1319,1639,1959,2319,2679,2967]:
+        #    continue
         #if isfile(savePathBase + '2160sb0_s90_sh440389/frame_%s_%d.png' % (conf,i)):
         #    print('skip ', i)
         #    continue

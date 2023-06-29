@@ -56,6 +56,8 @@ version, tagged on the date near the finalization of the paper.
 
 [Nelson et al. (2021) - TNG50 MgII emission](http://arxiv.org/abs/2106.09023) - `projects.mg2emission.paperPlots()`
 
+[Nelson et al. (2023a) - OVII X-ray Scattering](https://arxiv.org/abs/2306.05453) - `projects.xray_scattering.paperPlots()`
+
 
 Contributing
 ------------
@@ -71,6 +73,7 @@ Additional code contributions, fixes, and suggestions to this package have been 
 * Andres Aramburo Garcia
 * Martin Glatzle
 * Annalisa Pillepich
+* Rahul Ramesh
 
 
 License

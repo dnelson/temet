@@ -112,7 +112,7 @@ def mass_ovi(sim, partType, field, args):
     """ Total gas mass in sub-species: OVI. """
     # todo: could generalize to e.g. all ions
     acField = 'Subhalo_Mass_OVI'
-    ac = sP.auxCat(fields=[acField])
+    ac = sim.auxCat(fields=[acField])
 
     return sim.units.codeMassToMsun(ac[acField])
 
@@ -125,7 +125,7 @@ mass_ovi.log = True
 def mass_ovii(sim, partType, field, args):
     """ Total gas mass in sub-species: OVII. """
     acField = 'Subhalo_Mass_OVII'
-    ac = sP.auxCat(fields=[acField])
+    ac = sim.auxCat(fields=[acField])
 
     return sim.units.codeMassToMsun(ac[acField])
 
@@ -138,7 +138,7 @@ mass_ovii.log = True
 def mass_oviii(sim, partType, field, args):
     """ Total gas mass in sub-species: OVIII. """
     acField = 'Subhalo_Mass_OVIII'
-    ac = sP.auxCat(fields=[acField])
+    ac = sim.auxCat(fields=[acField])
 
     return sim.units.codeMassToMsun(ac[acField])
 
@@ -151,7 +151,7 @@ mass_oviii.log = True
 def mass_o(sim, partType, field, args):
     """ Total gas mass in sub-species: O. """
     acField = 'Subhalo_Mass_AllGas_Oxygen'
-    ac = sP.auxCat(fields=[acField])
+    ac = sim.auxCat(fields=[acField])
 
     return sim.units.codeMassToMsun(ac[acField])
 
@@ -164,7 +164,7 @@ mass_o.log = True
 def mass_z(sim, partType, field, args):
     """ Total gas mass in sub-species: Z. """
     acField = 'Subhalo_Mass_AllGas_Metal'
-    ac = sP.auxCat(fields=[acField])
+    ac = sim.auxCat(fields=[acField])
 
     return sim.units.codeMassToMsun(ac[acField])
 
@@ -177,7 +177,7 @@ mass_z.log = True
 def mass_halogas(sim, partType, field, args):
     """ Total halo (0.15 < r/rvir < 1.0) gas mass. """
     acField = 'Subhalo_Mass_HaloGas'
-    ac = sP.auxCat(fields=[acField])
+    ac = sim.auxCat(fields=[acField])
 
     return sim.units.codeMassToMsun(ac[acField])
 
@@ -190,7 +190,7 @@ mass_halogas.log = True
 def mass_halogasfof(sim, partType, field, args):
     """ Total halo (0.15 < r/rvir < 1.0) gas mass. FoF-scope, centrals only. """
     acField = 'Subhalo_Mass_HaloGasFoF'
-    ac = sP.auxCat(fields=[acField])
+    ac = sim.auxCat(fields=[acField])
 
     return sim.units.codeMassToMsun(ac[acField])
 
@@ -203,7 +203,7 @@ mass_halogasfof.log = True
 def mass_halogas_cold(sim, partType, field, args):
     """ Total halo (0.15 < r/rvir < 1.0) gas mass. Only cold (log T < 4.5 K), star-forming gas at eEOS temp. """
     acField = 'Subhalo_Mass_HaloGas_Cold'
-    ac = sP.auxCat(fields=[acField])
+    ac = sim.auxCat(fields=[acField])
 
     return sim.units.codeMassToMsun(ac[acField])
 
@@ -216,7 +216,7 @@ mass_halogas_cold.log = True
 def mass_halogas_sfcold(sim, partType, field, args):
     """ Total halo (0.15 < r/rvir < 1.0) gas mass. Only cold (log T < 4.5 K), star-forming gas at cold temp. """
     acField = 'Subhalo_Mass_HaloGas_SFCold'
-    ac = sP.auxCat(fields=[acField])
+    ac = sim.auxCat(fields=[acField])
 
     return sim.units.codeMassToMsun(ac[acField])
 
@@ -229,7 +229,7 @@ mass_halogas_sfcold.log = True
 def mass_halogasfof_sfcold(sim, partType, field, args):
     """ Total halo (0.15 < r/rvir < 1.0) gas mass. FoF-scope, centrals only. Only cold (log T < 4.5 K), star-forming gas at cold temp. """
     acField = 'Subhalo_Mass_HaloGasFoF_SFCold'
-    ac = sP.auxCat(fields=[acField])
+    ac = sim.auxCat(fields=[acField])
 
     return sim.units.codeMassToMsun(ac[acField])
 
@@ -237,6 +237,24 @@ mass_halogasfof_sfcold.label = r'$\rm{M_{halo,gas,sfcold}}$'
 mass_halogasfof_sfcold.units = r'$\rm{M_{sun}}$'
 mass_halogasfof_sfcold.limits = [7.0, 13.0]
 mass_halogasfof_sfcold.log = True
+
+# ---------------------------- auxcat: gas observables --------------------------------------------
+
+@catalog_field
+def szy_r500c_3d(sim, partType, field, args):
+    """ Sunyaev Zeldovich y-parameter within r500c (3d). """
+    acField = 'Subhalo_SZY_R500c_3D'
+    ac = sim.auxCat(fields=[acField])
+
+    # unit conversion [kpc^2] -> [Mpc^2]
+    vals = ac[acField] * 1e-6
+
+    return vals
+
+szy_r500c_3d.label = r'$\rm{Y_{SZ,r500c}^{3d}}$'
+szy_r500c_3d.units = r'$\rm{Mpc^2}$'
+szy_r500c_3d.limits = [-6.0, -3.0]
+szy_r500c_3d.log = True
 
 # ---------------------------- auxcat: other ------------------------------------------------------
 

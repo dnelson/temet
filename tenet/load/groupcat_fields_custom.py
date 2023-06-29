@@ -81,7 +81,7 @@ def _mhalo_load(sim, partType, field, args):
 
     return mhalo
 
-@catalog_field(aliases=['mhalo_200_code','mhalo_200_parent','m200'])
+@catalog_field(aliases=['mhalo_200_code','mhalo_200_parent','m200','m200c'])
 def mhalo_200(sim, partType, field, args):
     """ Parent halo total mass (:math:`\\rm{M_{200,crit}}`).
     Only defined for centrals: satellites are assigned a value of nan (excluded by default), 
@@ -94,7 +94,7 @@ mhalo_200.units = lambda sim,pt,f: r'$\rm{M_{sun}}$' if '_code' not in f else 'c
 mhalo_200.limits = mhalo_lim
 mhalo_200.log = True
 
-@catalog_field(aliases=['mhalo_500_code','mhalo_500_parent','m500'])
+@catalog_field(aliases=['mhalo_500_code','mhalo_500_parent','m500','m500c'])
 def mhalo_500(sim, partType, field, args):
     """ Parent halo total mass (:math:`\\rm{M_{500,crit}}`).
     Only defined for centrals: satellites are assigned a value of nan (excluded by default)."""

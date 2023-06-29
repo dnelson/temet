@@ -1023,7 +1023,7 @@ def magicCGMEmissionMaps():
     sP = simParams(run='tng50-1',redshift=0.3)
 
     lines = ['H--1-1215.67A','H--1-1025.72A','C--4-1550.78A','C--4-1548.19A','O--6-1037.62A','O--6-1031.91A',
-             'S--4-1404.81A','S--4-1423.84A','S--4-1398.04A'] # (not NV, SiIV, SiIII)
+             'S--4-1404.81A','S--4-1423.84A','S--4-1398.04A'] # (not NV, SiIV, SiIII, HeII)
     #dataField = 'Mg II'
     #label = 'Median Mg II Column Density [log cm$^{-2}$]'
 
@@ -1093,7 +1093,7 @@ def magicCGMEmissionMaps():
     # loop over mass bins
     stacks = []
 
-    for i, massBin in enumerate([[10.8,11.2]]): #enumerate(massBins):
+    for i, massBin in enumerate([massBins[1]]): #enumerate(massBins):
 
         # select subhalos
         with np.errstate(invalid='ignore'):
@@ -1139,7 +1139,7 @@ def magicCGMEmissionMaps():
                 plotConfig.saveFilename = './%s-s%d-sh%d.pdf' % (sP.simName,sP.snap,subhaloInd)
                 panels = []
 
-                for j, line in enumerate(lines[:5]):
+                for j, line in enumerate(lines[:6]):
                     field = 'sb_' + line + '_ergs'
                     panels.append({'partField':field, #'contour':['gas',field], 
                                    'labelHalo':(j==0), 'labelSim':(j==2), 'labelZ':(j==2)})
