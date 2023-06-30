@@ -182,7 +182,7 @@ def _constructTree(pos,boxSizeSim,next_node,length,center,suns,sibling,nextnode)
                     # may have particles at identical locations, in which case randomize the subnode 
                     # index to put the particle into a different leaf (happens well below the 
                     # gravitational softening scale)
-                    subnode = np.int(np.random.rand())
+                    subnode = int(np.random.rand())
                     subnode = max(subnode,7)
 
                 suns[subnode,ind2] = no
@@ -517,7 +517,7 @@ def _treeSearchNearestSingle(xyz,pos,boxSizeSim,next_node,length,center,sibling,
         h *= 2.0
         iter_num += 1
 
-        if iter_num > 1000:
+        if iter_num > 10000:
             print('ERROR: Failed to converge.')
             break
 
@@ -546,6 +546,15 @@ def _treeSearchHsmlIterate(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
         numNgbInH, numNgbWeightedInH, dummy = _treeSearch(xyz,h_guess,NumPart,boxSizeSim,pos,
                                                           next_node,length,center,sibling,nextnode,
                                                           dummy_in2,dummy_in)
+
+        if iter_num > 990:
+            print('Convergence failure in _treeSearchHsmlIterate()', iter_num, xyz, h_guess, numNgbInH, left, right)
+
+        if iter_num == 999:
+            # TNG-Cluster snap == 77 have e.g. 39 stars at 'identical' positions [558761.75 , 555277.75 ,  16362.459]
+            print(' break')
+            h_guess = 0.01
+            break
 
         # looking for h enclosing the SPH kernel weighted number, instead of the actual number?
         if weighted_num:
@@ -634,7 +643,7 @@ def _treeSearchNearestIterate(posSearch,ind0,ind1,boxSizeSim,pos,posMask,
             h_guess *= 2.0
             iter_num += 1
 
-            if iter_num > 1000:
+            if iter_num > 10000:
                 print('ERROR: Failed to converge.')
                 break
 
@@ -684,7 +693,7 @@ def buildFullTree(pos, boxSizeSim, treePrec=None, verbose=False):
     # tree allocation and construction (iterate in case we need to re-allocate for larger number of nodes)
     for num_iter in range(10):
         # allocate
-        MaxNodes = np.int( (num_iter**2+0.7)*NumPart ) + 1
+        MaxNodes = int( (num_iter**2+0.7)*NumPart ) + 1
         if MaxNodes < 1000: MaxNodes = 1000
 
         assert MaxNodes < np.iinfo(intType).max, 'Too many points to make tree with int32 dtype.'

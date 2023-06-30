@@ -227,7 +227,7 @@ def parse_apetool_output_cat(source='liu', param_eef=0.9):
 
         # (A) compute medians/errors in mstar bins
         binSize = 0.5
-        nBins = np.int(np.ceil((xlim[1] - xlim[0]) / binSize))
+        nBins = int(np.ceil((xlim[1] - xlim[0]) / binSize))
 
         lum_percsA = np.zeros((nBins,3), dtype='float32')
         lum_percsB = np.zeros((nBins,3), dtype='float32')

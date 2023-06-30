@@ -904,7 +904,7 @@ def _constructTree(P,boxSizeSim,xyzMin,xyzMax,extent,next_node,tree_nodes,ForceS
                     # may have particles at identical locations, in which case randomize the subnode 
                     # index to put the particle into a different leaf (happens well below the 
                     # gravitational softening scale)
-                    subnode = np.int(np.random.rand())
+                    subnode = int(np.random.rand())
                     subnode = max(subnode,7)
 
                 tree_nodes[ind2]['suns'][subnode] = no
@@ -1068,7 +1068,7 @@ def buildFullTree(P, boxSizeSim, xyzMin, xyzMax, extent, ForceSoftening):
     for num_iter in range(10):
 
         # allocate
-        MaxNodes = np.int( (num_iter+1.1)*NumPart ) + 1
+        MaxNodes = int( (num_iter+1.1)*NumPart ) + 1
         if MaxNodes < 100: MaxNodes = 100
 
         TreeNodes = np.zeros( MaxNodes, dtype=node_dtype )
@@ -1312,7 +1312,7 @@ def subfind_unbind(P, SphP, PS, ud, num, vel_to_phys, H_of_a, G, atime, boxsize,
         # sort by binding energy, largest first
         bnd_energy = np.sort(bnd_energy)[::-1]
 
-        quarter_ind = np.int(np.floor(0.25*num))
+        quarter_ind = int(np.floor(0.25*num))
         energy_limit = bnd_energy[quarter_ind]
         unbound = 0
 
@@ -1359,7 +1359,7 @@ def subfind_unbind(P, SphP, PS, ud, num, vel_to_phys, H_of_a, G, atime, boxsize,
                 phaseflag = 1
 
             # note: this earlier termination is an optimization not in the original subfind
-            if central_flag and unbound < np.int(unbind_percent_threshold * num):
+            if central_flag and unbound < int(unbind_percent_threshold * num):
                 break
         else:
             if unbound == 0:
@@ -1421,7 +1421,7 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
 
     for i in range(N):
         # find neighbors, note: returned neighbors are already sorted by distance (ascending)
-        #if i % np.int(N/10) == 0: print(' ',np.round(float(i)/N*100),'%')
+        #if i % int(N/10) == 0: print(' ',np.round(float(i)/N*100),'%')
         pos = P[i]['Pos']
         h_guess = PS[i]['Hsml']
 

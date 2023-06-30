@@ -46,7 +46,7 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclina
             if rotation is not None:
                 raise Exception('Cannot use rotation (or any group-ordered load) prior to mpb start.')
 
-            fitSize = np.max( [np.int(mpb['SnapNum'].size * 0.02), 3] )
+            fitSize = np.max( [int(mpb['SnapNum'].size * 0.02), 3] )
             fitN = 1 # polynomial order, 1=linear, 2=quadratic
 
             fitX = mpb['SnapNum'][-fitSize:]

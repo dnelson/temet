@@ -1913,7 +1913,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
     # add random noise level/floor, e.g. sky background level
     if randomNoise is not None:
-        seed = np.int(hashval[::2], base=16)
+        seed = int(hashval[::2], base=16)
         np.random.seed(seed)
 
         noise_vals = np.random.normal(loc=0.0, scale=randomNoise, size=grid_master.shape) # pos and neg

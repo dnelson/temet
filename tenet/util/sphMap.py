@@ -138,8 +138,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         y = (np.floor( pos1 / pixelSizeY ) + 0.5) * pixelSizeY
 
         # number of pixels covered by particle
-        nx = np.int(np.floor(h / pixelSizeX + 1))
-        ny = np.int(np.floor(h / pixelSizeY + 1))
+        nx = int(np.floor(h / pixelSizeX + 1))
+        ny = int(np.floor(h / pixelSizeY + 1))
 
         # if particle contained in one cell, dump everything into it
         if nx * ny == 1:
@@ -148,8 +148,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
             yyy = _NEAREST_POS(y, boxSizeSim[1])
 
             # pixel array indices
-            i = np.int(xxx / pixelSizeX)
-            j = np.int(yyy / pixelSizeY)
+            i = int(xxx / pixelSizeX)
+            j = int(yyy / pixelSizeY)
 
             # skip if desired pixel is out of bounds
             if i < 0 or i >= nPixels[0] or j < 0 or j >= nPixels[1]:
@@ -198,8 +198,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
                 yyy = _NEAREST_POS(y + dy * pixelSizeY, boxSizeSim[1])
 
                 # pixel array indices
-                i = np.int(xxx / pixelSizeX)
-                j = np.int(yyy / pixelSizeY)
+                i = int(xxx / pixelSizeX)
+                j = int(yyy / pixelSizeY)
 
                 # skip if desired pixel is out of bounds
                 if i < 0 or i >= nPixels[0] or j < 0 or j >= nPixels[1]:
@@ -303,9 +303,9 @@ def _calcSphGrid(pos, hsml, mass, quant, dens_out, quant_out,
         # if particle contained in one cell, dump everything into it
         if nx*ny*nz == 1:
             # pixel array indices
-            i = np.int(x / pixelSizeX)
-            j = np.int(y / pixelSizeY)
-            k = np.int(z / pixelSizeZ)
+            i = int(x / pixelSizeX)
+            j = int(y / pixelSizeY)
+            k = int(z / pixelSizeZ)
             # skip if desired pixel is out of bounds
             if i < 0 or i >= nPixels[0] or \
                j < 0 or j >= nPixels[1] or \
@@ -362,9 +362,9 @@ def _calcSphGrid(pos, hsml, mass, quant, dens_out, quant_out,
                     zzz = _NEAREST_POS(z + dz * pixelSizeZ, boxSizeSim[2])
 
                     # pixel array indices
-                    i = np.int(xxx / pixelSizeX)
-                    j = np.int(yyy / pixelSizeY)
-                    k = np.int(zzz / pixelSizeZ)
+                    i = int(xxx / pixelSizeX)
+                    j = int(yyy / pixelSizeY)
+                    k = int(zzz / pixelSizeZ)
 
                     # skip if desired pixel is out of bounds
                     if i < 0 or i >= nPixels[0] or \
@@ -505,8 +505,8 @@ def _calcSphMapPixelRel(pos,hsml,mass,quant,dens_out,quant_out,ref_grid,
                 yyy = _NEAREST_POS(y + dy * pixelSizeY, boxSizeSim[1])
 
                 # pixel array indices
-                i = np.int(xxx / pixelSizeX)
-                j = np.int(yyy / pixelSizeY)
+                i = int(xxx / pixelSizeX)
+                j = int(yyy / pixelSizeY)
 
                 # skip if desired pixel is out of bounds
                 if i < 0 or i >= nPixels[0] or j < 0 or j >= nPixels[1]:
@@ -633,8 +633,8 @@ def _calcSphMapAsymmetric(pos,hsml_0,hsml_1,mass,quant,dens_out,quant_out,
                 yyy = _NEAREST_POS(y + dy * pixelSizeY, boxSizeSim[1])
 
                 # pixel array indices
-                i = np.int(xxx / pixelSizeX)
-                j = np.int(yyy / pixelSizeY)
+                i = int(xxx / pixelSizeX)
+                j = int(yyy / pixelSizeY)
 
                 # skip if desired pixel is out of bounds
                 if i < 0 or i >= nPixels[0] or j < 0 or j >= nPixels[1]:
@@ -683,8 +683,8 @@ def _gridInterp(posTarget,kT,axes,boxCen,boxSizeImg,boxSizeSim,
     pos1T = _NEAREST_POS( p1T - (boxCen[1] - 0.5*boxSizeImg[1]), boxSizeSim[1] )
 
     # pixel coordinates (lower-left) of projected target position
-    i0 = np.int(np.floor(pos0T / pixelSizeX))
-    j0 = np.int(np.floor(pos1T / pixelSizeY))
+    i0 = int(np.floor(pos0T / pixelSizeX))
+    j0 = int(np.floor(pos1T / pixelSizeY))
     i1 = i0 + 1
     j1 = j0 + 1
 
@@ -699,8 +699,8 @@ def _gridInterp(posTarget,kT,axes,boxCen,boxSizeImg,boxSizeSim,
         xxx = _NEAREST_POS(x, boxSizeSim[0])
         yyy = _NEAREST_POS(y, boxSizeSim[1])
 
-        i = np.int(xxx / pixelSizeX)
-        j = np.int(yyy / pixelSizeY)
+        i = int(xxx / pixelSizeX)
+        j = int(yyy / pixelSizeY)
 
         dens_interp = dens_grid[i,j]
         quant_interp = quant_grid[i,j]
@@ -881,8 +881,8 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
                 yyy = _NEAREST_POS(y + dy * pixelSizeY, boxSizeSim[0])
 
                 # pixel array indices
-                i = np.int(xxx / pixelSizeX)
-                j = np.int(yyy / pixelSizeY)
+                i = int(xxx / pixelSizeX)
+                j = int(yyy / pixelSizeY)
 
                 # skip if desired pixel is out of bounds
                 if i < 0 or i >= nPixels[0] or j < 0 or j >= nPixels[1]:

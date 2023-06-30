@@ -617,7 +617,7 @@ def varconvolve(arr, kernel):
     arr_conv = np.zeros(arr.size, dtype=arr.dtype)
 
     # discrete: number of pixels on each side of central kernel value
-    kernel_halfsize = np.int(kernel.shape[1]/2)
+    kernel_halfsize = int(kernel.shape[1]/2)
 
     # loop over each element of arr
     for i in range(arr.size):

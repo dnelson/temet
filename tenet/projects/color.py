@@ -230,7 +230,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
 
                     if j == 0 or (cenOnly and j == loopInds[0]):
                         # set normalization (such that integral of PDF is one) based on 'all galaxies'
-                        nBins[i] = np.max( [16, np.int( np.sqrt( len(wBin[0] )) * 1.4)] ) # adaptive
+                        nBins[i] = np.max( [16, np.int32( np.sqrt( len(wBin[0] )) * 1.4)] ) # adaptive
                         binSize[i] = (mag_range[1]-mag_range[0]) / nBins[i]
                         normFacs[i] = 1.0 / (binSize[i] * len(wBin[0]))
 

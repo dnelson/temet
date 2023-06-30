@@ -406,7 +406,7 @@ class simParams:
             res_L35  = [270, 540, 1080, 2160]
             res_L75  = [455, 910, 1820]
             res_L205 = [625, 1250, 2500]
-            res_L680 = [2048, 6144, 8192] # DM-parent, virtual-old, virtual
+            res_L680 = [2048, 8192] # DM-parent, virtual
             res_L500 = [512] if 'local' in run else [] # CF3 test
 
             self.validResLevels = res_L25 + res_L35 + res_L75 + res_L205 + res_L680
@@ -421,7 +421,6 @@ class simParams:
             if res in res_L500: self.gravSoft = 6.0 / (res/2048)
 
             if res in res_L680: self.gravSoft = 16.0 / (res/1024)
-            if res == 6144: self.gravSoft = 16.0 / (8192/1024) # 2.0, e.g. as if run was 8192^3
 
             if res in res_L25:  self.targetGasMass = 1.57032e-4 * (8 ** np.log2(512/res))
             if res in res_L35:  self.targetGasMass = 5.73879e-6 * (8 ** np.log2(2160/res))
@@ -586,7 +585,6 @@ class simParams:
 
                 self.simName = '%s%d-%d' % (runStr,boxSizeName,resInd)
 
-                if res == 6144: self.simName = 'TNG-Cluster-Old'
                 if res == 8192: self.simName = 'TNG-Cluster'
                 if '_dm' in run: self.simName += '-Dark'
                 if res == 2048: self.simName = 'L680n2048TNG_DM'
@@ -1218,7 +1216,7 @@ class simParams:
         if self.variant != 'None' and 'subbox' in self.variant:
             # intentionally cause exceptions if we don't recognize sbNum
             try:
-                sbNum  = np.int(self.variant[6:])
+                sbNum  = int(self.variant[6:])
                 sbCen  = self.subboxCen[sbNum]
                 sbSize = self.subboxSize[sbNum]
             except:
