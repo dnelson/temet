@@ -189,8 +189,12 @@ def rotationMatricesFromInertiaTensor(I):
     return r
 
 def rotationMatrixFromVec(i_v_in, target_vec=None):
+    """ Calculate 3x3 rotation matrix to align input vec with a target vector. By default this is the 
+    z-axis, such that with vec the angular momentum vector of the galaxy, an (x,y) projection will 
+    yield a face on view, and an (x,z) projection will yield an edge on view. """
     if target_vec is None:
-        target_vec = np.asarray([1.0, 0.0, 0.0])
+        target_vec = np.asarray([0.0, 0.0, 1.0])
+
     # Normalize vector length
     i_v = np.copy(i_v_in)
     i_v /= np.linalg.norm(i_v)
@@ -202,13 +206,13 @@ def rotationMatrixFromVec(i_v_in, target_vec=None):
     rcos = np.dot(i_v, target_vec)
     rsin = np.linalg.norm(uvw)
 
-    #normalize and unpack axis
+    # normalize and unpack axis
     if not np.isclose(rsin, 0):
         uvw /= rsin
     u, v, w = uvw
 
     # Compute rotation matrix - re-expressed to show structure
-    return (
+    mat = (
         rcos * np.eye(3) +
         rsin * np.array([
             [ 0, -w,  v],
@@ -217,6 +221,8 @@ def rotationMatrixFromVec(i_v_in, target_vec=None):
         ]) +
         (1.0 - rcos) * uvw[:,None] * uvw[None,:]
     )
+
+    return mat
 
 def rotationMatrixFromAngleDirection(angle, direction):
     """ Calculate 3x3 rotation matrix for input angle about an axis defined by the input direction 
