@@ -77,11 +77,13 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp', ptWeight=None, subhalo
     # loop over simulations
     for i, sP in enumerate(sPs):
         # loop over halo/subhalo IDs
+        sP_objIDs = [-1] # fullbox
         if subhaloIDs is not None or haloIDs is not None:
             if not oneObjPerRun:
                 sP_objIDs = objIDs[i] # list
             else:
                 sP_objIDs = [objIDs[i]]
+            yy_save = np.zeros( (nBins,len(sP_objIDs)), dtype='float32' )
 
         if ctName is not None:
             #colors = sampleColorTable(ctName, len(sP_objIDs), bounds=[0.1,0.9])
@@ -89,8 +91,6 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp', ptWeight=None, subhalo
             if subhaloIDs is not None: cmap_props = sP.subhalos(ctProp)[sP_objIDs]
             cmap = loadColorTable(ctName, fracSubset=[0.2,0.9])
             cmap = plt.cm.ScalarMappable(norm=Normalize(vmin=cmap_props.min(), vmax=cmap_props.max()), cmap=cmap)
-
-        yy_save = np.zeros( (nBins,len(sP_objIDs)), dtype='float32' )
 
         for j, objID in enumerate(sP_objIDs):
             # load
@@ -145,7 +145,8 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp', ptWeight=None, subhalo
 
             if ylog: yy = logZeroNaN(yy)
 
-            yy_save[:,j] = yy
+            if subhaloIDs is not None or haloIDs is not None:
+                yy_save[:,j] = yy
 
             # plot
             if xx.size > sKn:
