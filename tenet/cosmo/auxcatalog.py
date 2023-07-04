@@ -1152,7 +1152,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
             continue # zero length of this type
 
         # use squared radii and sq distance function
-        validMask = np.ones( i1-i0, dtype=np.bool )
+        validMask = np.ones( i1-i0, dtype='bool' )
 
         rr = None
         if 'Coordinates' in particles:
@@ -1512,7 +1512,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                     continue # zero length of this type
                 
                 # radius restriction: use squared radii and sq distance function
-                validMask = np.ones( i1-i0, dtype=np.bool )
+                validMask = np.ones( i1-i0, dtype='bool' )
                 if rad is not None:
                     assert radSqMax.ndim == 1 # otherwise generalize like below for '_res'
                     rr = sP.periodicDistsSq( gc['SubhaloPos'][subhaloID,:], stars['Coordinates'][i0:i1,:] )
@@ -1651,7 +1651,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                 continue # zero length of this type
             
             # radius restriction: use squared radii and sq distance function
-            validMask = np.ones( i1-i0, dtype=np.bool )
+            validMask = np.ones( i1-i0, dtype='bool' )
 
             if rad is not None:
                 if not radRestrictIn2D:
@@ -2005,7 +2005,11 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
 
     # allocate return, NaN indicates not computed (e.g. not in tree at sP.snap)
     r = np.zeros( nSubsTot, dtype=dtype )
-    r.fill(np.nan)
+
+    if np.issubdtype(dtype, np.integer):
+        r.fill(-1)
+    else:
+        r.fill(np.nan)
 
     # load all trees at once
     mpbs = sP.loadMPBs(ids, fields=fields, treeName=treeName)
@@ -2421,7 +2425,7 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
     gc = sP.subhalos(fieldsLoad)
 
     # start all valid mask for search targets
-    validMask = np.ones(nSubsTot, dtype=np.bool)
+    validMask = np.ones(nSubsTot, dtype='bool')
 
     # if we will apply (locally variable) restrictions
     if subRestrictionsRel is not None:
@@ -3543,7 +3547,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                 particles_pos, _ = rotateCoordinateArray(sP, particles_pos, rotMatrix, shPos)
 
             # use squared radii and sq distance function
-            validMask = np.ones( particles_pos.shape[0], dtype=np.bool )
+            validMask = np.ones( particles_pos.shape[0], dtype='bool' )
 
             if proj2D is None:
                 # apply in 3D

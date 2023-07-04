@@ -281,7 +281,7 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
             if numRealizations > 1: print(' [%2d] [' % gal_num,end='')
             for realization in range(numRealizations):
                 # subset of absolutely consistent simulated systems (i.e. handle limits)
-                mask = np.ones( sim_props[propList[0]].size, dtype=np.bool )
+                mask = np.ones( sim_props[propList[0]].size, dtype='bool' )
                 if numRealizations > 1: print('.',end='')
 
                 for propName in propList:

@@ -772,7 +772,7 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
     if posSearch is None:
         posSearch = pos # set search coordinates as a view onto the same pos used to make the tree
     if posMask is None:
-        posMask = np.ones(pos.shape[0], dtype=np.bool)
+        posMask = np.ones(pos.shape[0], dtype='bool')
 
     if posSearch.shape[0] < nThreads:
         nThreads = 1
@@ -1040,7 +1040,7 @@ def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, posMask=None, tr
     NumPart = pos.shape[0]
 
     if posMask is None:
-        posMask = np.ones(pos.shape[0], dtype=np.bool)
+        posMask = np.ones(pos.shape[0], dtype='bool')
 
     result = _treeSearchIndices(posSearch,hsmlSearch,NumPart,boxSizeSim,pos,posMask,NextNode,length,center,sibling,nextnode)
 

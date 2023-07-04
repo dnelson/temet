@@ -52,7 +52,7 @@ def match(ar1, ar2, uniq=False):
 
     # tuning: special case for small B arrays (significantly faster than the full sort)
     if len(ar2) < 10 * len(ar1) ** 0.145:
-        mask = np.zeros(len(ar1), dtype=np.bool)
+        mask = np.zeros(len(ar1), dtype='bool')
         for a in ar2:
             mask |= (ar1 == a)
         return mask
