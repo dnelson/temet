@@ -29,7 +29,7 @@ savePathBase = expanduser("~") + "/data/frames/" # for large outputs
 # configure certain behavior types
 volDensityFields  = ['density']
 colDensityFields  = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented',
-                     'xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet','xray_lum_0.5-2.0kev',
+                     'xray','xray_lum','xray_lum_05-2kev','xray_lum_0.5-2.0kev','xray_lum_0.5-5.0kev',
                      'p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha',
                      'H2_BR','H2_GK','H2_KMT','HI_BR','HI_GK','HI_KMT']
 totSumFields      = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','tau0_LyB','sz_yparam']
@@ -532,6 +532,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         mass = sP.dmParticleMass
     else:
         mass = sP.snapshotSubsetP(partType, weightField, indRange=indRange).astype('float32')
+        massTot = mass.sum() # for checks
 
     # neutral hydrogen mass model (do column densities)
     if partField in ['HI','HI_segmented']:
@@ -568,7 +569,8 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         mass[mass < 0] = 0.0 # clip -eps values to 0.0
 
     # other total sum fields (replace mass)
-    if partField in ['xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet','xray_lum_0.5-2.0kev']:
+    # todo: should generalize such that we automatically load any such field
+    if 'xray' in partField:
         # xray: replace 'mass' with x-ray luminosity [10^-30 erg/s], which is then accumulated into a 
         # total Lx [erg/s] per pixel, and normalized by spatial pixel size into [erg/s/kpc^2]
         mass = sP.snapshotSubsetP(partType, partField, indRange=indRange)
@@ -580,6 +582,9 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         mass = sP.snapshotSubsetP(partType, 'sfr_halpha', indRange=indRange)
 
     if 'tau0_' in partField:
+        mass = sP.snapshotSubsetP(partType, partField, indRange=indRange)
+
+    if partField in ['sz_yparam']:
         mass = sP.snapshotSubsetP(partType, partField, indRange=indRange)
 
     # flux/surface brightness (replace mass)
@@ -681,6 +686,9 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
       'stellarBandObsFrame-' in partFieldLoad or 'sb_' in partFieldLoad:
         # distribute 'mass' and calculate column/volume density grid
         quant = None
+
+        if partField != 'mass':
+            assert mass.sum() != massTot, 'Error! Mass array not replaced by [%s]!' % partField
 
         if partFieldLoad in volDensityFields+colDensityFields or \
         (' ' in partFieldLoad and 'mass' not in partFieldLoad and 'frac' not in partFieldLoad):
@@ -890,19 +898,17 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
             config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
             config['ctName'] = 'viridis' #'HI_segmented'
 
-    if partField in ['xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet','xray_lum_0.5-2.0kev']:
+    if partField in ['xray','xray_lum','xray_lum_05-2kev','xray_lum_0.5-2.0kev','xray_lum_0.5-5.0kev']:
         grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
         gridOffset = 30.0 # add 1e30 factor
+        config['ctName'] = 'cubehelix'
 
         if 'xray_lum_05-2kev' == partField:
             xray_label = 'L$_{\\rm X, 0.5-2 keV}$'
-            config['ctName'] = 'cubehelix'
-        elif '05-2kev_nomet' in partField:
-            xray_label = 'L$_{\\rm X, 0.5-2 keV, no-Z}$'
-            config['ctName'] = 'cubehelix'
         elif '0.5-2.0kev' in partField:
             xray_label = 'L$_{\\rm X, 0.5-2 keV, APEC}$'
-            config['ctName'] = 'cubehelix'
+        elif '0.5-5.0kev' in partField:
+            xray_label = 'L$_{\\rm X, 0.5-5 keV, APEC}$'
         else:
             xray_label = 'Bolometric L$_{\\rm X}$'
             config['ctName'] = 'inferno'
@@ -921,7 +927,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['ctName'] = 'perula'
 
     if partField in ['sz_yparam']:
-        # per-cell yparam has [kpc^2] units, normalize by pixel area
+        # 'per-cell yparam' has [kpc^2] units, normalize by pixel area -> dimensionless
         pxSizesCode = [boxSizeImg[0] / nPixels[0], boxSizeImg[1] / nPixels[1]]
         pxAreaKpc2 = np.prod(sP.units.codeLengthToKpc(pxSizesCode))
         grid /= pxAreaKpc2
@@ -2524,8 +2530,11 @@ def addBoxMarkers(p, conf, ax, pExtent):
         if 'mhalo' in str(p['labelHalo']):
             # just Mhalo
             legend_labels.append( str1 )
-        if 'haloid' in str(p['labelHalo']):
-            legend_labels.append( 'HaloID %d' % subhalo['SubhaloGrNr'] )
+        if 'haloidorig' in str(p['labelHalo']):
+            assert p['sP'].simName == 'TNG-Cluster' # Halo ID from parent DMO box
+            legend_labels.append('HaloID %d (#%d)' % (subhalo['SubhaloGrNr'],halo['GroupOrigHaloID']))
+        elif 'haloid' in str(p['labelHalo']):
+            legend_labels.append('HaloID %d' % subhalo['SubhaloGrNr'])
         elif 'id' in str(p['labelHalo']):
             legend_labels.append( 'ID %d' % p['sP'].subhaloInd )
             #legend_labels.append( 'ID %d' % subhalo['SubhaloGrNr'] )
@@ -3049,7 +3058,7 @@ def renderMultiPanel(panels, conf):
         def _heightfac():
             """ Helper. Used later to define height of colorbar. """
             heightFac = np.clip(1.0*(nCols/nRows)**0.3, 0.35, 2.5)
-            #heightFac /= (conf.rasterPx[0]/1000) # todo: does this make sense for vector output?
+            heightFac /= (conf.rasterPx[0]/850) # todo: does this make sense for vector output?
 
             heightFac += 0.002*(conf.fontsize-min_fontsize) # larger for larger fonts, and vice versa (needs tuning)
 
@@ -3069,7 +3078,7 @@ def renderMultiPanel(panels, conf):
                 hOffset = -0.5
             if nRows >= 4:
                 heightFac *= 0.65
-
+                
             return heightFac
         
         # check uniqueness of panel (partType,partField,valMinMax)'s
