@@ -1333,9 +1333,12 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     else:
         # will we use a complete load or a subset particle load?
         indRange = None
+        indRange2 = None
         boxSizeSim = sP.boxSize
         boxSizeImgMap = boxSizeImg
         boxCenterMap = boxCenter
+
+        nChunks = 1
 
         # non-zoom simulation and subhaloInd specified (plotting around a single halo): do FoF restricted load
         if not sP.isZoom and sP.subhaloInd is not None and '_global' not in method:
@@ -1378,9 +1381,14 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 offsets = f['OriginalZooms/GroupsSnapOffsetByType'][()]
                 lengths = f['OriginalZooms/GroupsTotalLengthByType'][()]
 
+                offsets2 = f['OriginalZooms/OuterFuzzSnapOffsetByType'][()]
+                lengths2 = f['OriginalZooms/OuterFuzzTotalLengthByType'][()]
+
             origZoomID = sP.groupCatSingle(subhaloID=sP.subhaloInd)['SubhaloOrigHaloID']
             origZoomInd = np.where(origIDs == origZoomID)[0][0]
             indRange = [offsets[origZoomInd,pt], offsets[origZoomInd,pt]+lengths[origZoomInd,pt]]
+            indRange2 = [offsets2[origZoomInd,pt], offsets2[origZoomInd,pt]+lengths2[origZoomInd,pt]]
+            nChunks = 2
 
         if indRange is not None and indRange[1] - indRange[0] < 1:
             return emptyReturn()
@@ -1394,15 +1402,14 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             refGrid, _, _ = gridBox(sP, method, partType, partFieldRef, nPixels, axes, projType, projParamsLoc, 
                                     boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, smoothFWHM=smoothFWHM)
 
-        # if indRange is still None (full snapshot load), we will proceed chunked, unless we need
-        # a full tree construction to calculate hsml values
+        # allocate
         grid_dens  = np.zeros( nPixels[::-1], dtype='float32' )
         grid_quant = np.zeros( nPixels[::-1], dtype='float32' )
-        nChunks = 1
 
         # if doing a minimum intensity projection, pre-fill grid_quant with infinity as we 
         # accumulate per chunk by using a minimum reduction between the master grid and each chunk grid
-        if '_minIP' in method: grid_quant.fill(np.inf)
+        if '_minIP' in method:
+            grid_quant.fill(np.inf)
 
         disableChunkLoad = (sP.isPartType(partType,'dm') and not sP.snapHasField(partType, 'SubfindHsml') and method != 'histo')
         disableChunkLoad |= sP.isPartType(partType,'stars') # use custom CalcHsml always for stars now
@@ -1413,6 +1420,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             disableChunkLoad = True
             sP.data['nThreads'] = 1 # disable parallel snapshot loading
 
+        # if indRange is still None (full snapshot load), we will proceed chunked, unless we need
+        # a full tree construction to calculate hsml values
         if indRange is None and sP.subbox is None and not disableChunkLoad:
             nChunks = np.max( [1, int(h['NumPart'][sP.ptNum(partType)]**(1.0/3.0) / 10.0)] )
             chunkSize = int(h['NumPart'][sP.ptNum(partType)] / nChunks)
@@ -1421,12 +1430,17 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
         for chunkNum in np.arange(nChunks):
             # only if nChunks>1 do we here modify indRange
-            if nChunks > 1:
+            if nChunks > 1 and indRange2 is None:
                 # calculate load indices (snapshotSubset is inclusive on last index) (make sure we get to the end)
                 indRange = [chunkNum*chunkSize, (chunkNum+1)*chunkSize-1]
                 if chunkNum == nChunks-1: indRange[1] = h['NumPart'][sP.ptNum(partType)]-1
                 if nChunks > 50:
                     print('  [%2d] %11d - %d' % (chunkNum,indRange[0],indRange[1]))
+
+            if indRange2 is not None and chunkNum == 1:
+                # support for second range load in second iteration (e.g. for TNG-Cluster)
+                assert nChunks == 2
+                indRange = indRange2
 
             # load: 3D positions
             pos = sP.snapshotSubsetP(partType, 'pos', indRange=indRange)
