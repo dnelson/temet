@@ -151,7 +151,8 @@ def contamination_profile():
     redshift = 0.0 # 3.0
 
     # load zoom: group catalog
-    sPz = simParams(res=zoomRes, run=zoomRun, hInd=hInd, redshift=redshift, variant=variant)
+    #sPz = simParams(res=zoomRes, run=zoomRun, hInd=hInd, redshift=redshift, variant=variant)
+    sPz = simParams(run='tng50_zoom', hInd=11, res=11, variant='sf8', redshift=6.0)
 
     halo_zoom = sPz.groupCatSingle(haloID=0)
     halos_zoom = sPz.groupCat(fieldsHalos=['GroupMass','GroupPos','Group_M_Crit200'])
@@ -447,8 +448,9 @@ def sizefacComparison():
     fig.savefig('sizefac_comparison.pdf')
     plt.close(fig)
 
-def parentBoxVisualComparison(haloID, variant='sf3', conf=0, snap=99):
-    """ Make a visual comparison (density projection images) between halos in the parent box and their zoom realizations.
+def parentBoxVisualComparison(haloID, conf=0):
+    """ Make a visual comparison (density projection images) between halos in the parent box 
+    and their zoom realizations.
     
     Args:
       haloID (int): the zoom halo ID, at the final redshift (z=0).
@@ -456,10 +458,7 @@ def parentBoxVisualComparison(haloID, variant='sf3', conf=0, snap=99):
       conf (int): the plotting configuration.
       snap (int): if not the final snapshot, plot at some redshift other than z=0.
     """
-
-    #sPz = simParams(run='tng_zoom', res=13, hInd=haloID, redshift=0.0, variant=variant)
-    #sPz = simParams(run='tng100_zoom_dm', res=11, hInd=haloID, snap=snap, variant='sf4')
-    sPz = simParams(run='tng50_zoom_dm', res=11, hInd=haloID, snap=snap, variant=None)
+    sPz = simParams(run='tng50_zoom', res=11, hInd=haloID, redshift=6.0, variant='sf8')
 
     # render config
     rVirFracs  = [1.0] #[0.5, 1.0] # None
@@ -472,9 +471,9 @@ def parentBoxVisualComparison(haloID, variant='sf3', conf=0, snap=99):
     labelHalo  = True
     relCoords  = True
 
-    #size       = 6000.0
+    #size       = 500.0
     #sizeType   = 'kpc'
-    size        = 3.0
+    size        = 4.0
     sizeType    = 'rVirial'
 
     # setup panels
@@ -484,19 +483,27 @@ def parentBoxVisualComparison(haloID, variant='sf3', conf=0, snap=99):
     if conf == 1:
         # gas column density
         p = {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 8.0]}
+    if conf == 2:
+        # stellar density
+        p = {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 8.0]}
 
     panel_zoom = p.copy()
     panel_parent = p.copy()
 
-    # load MPB of this halo
-    haloMPB = sPz.sP_parent.loadMPB( sPz.sP_parent.groupCatSingle(haloID=haloID)['GroupFirstSub'] )
-    assert sPz.snap in haloMPB['SnapNum']
+    # sPz at a different redshift than the parent volume?
+    if np.abs(sPz.redshift - sPz.sP_parent.redshift) > 0.1:
+        # load MPB of this halo
+        haloMPB = sPz.sP_parent.loadMPB( sPz.sP_parent.groupCatSingle(haloID=haloID)['GroupFirstSub'] )
+        assert sPz.snap in haloMPB['SnapNum']
 
-    # locate subhaloID at requested snapshot (could be z=0 or z>0)
-    parSubID = haloMPB['SubfindID'][ list(haloMPB['SnapNum']).index(sPz.snap) ]
+        # locate subhaloID at requested snapshot (could be z=0 or z>0)
+        parSubID = haloMPB['SubfindID'][ list(haloMPB['SnapNum']).index(sPz.snap) ]
+    else:
+        # same redshift
+        parSubID = sPz.sP_parent.halo(haloID)['GroupFirstSub']
 
-    panel_zoom.update( {'run':sPz.run, 'res':sPz.res, 'redshift':sPz.redshift, 'variant':sPz.variant, 'hInd':haloID})
-    panel_parent.update( {'run':sPz.sP_parent.run, 'res':sPz.sP_parent.res, 'redshift':sPz.sP_parent.redshift, 'hInd':parSubID})
+    panel_zoom.update( {'sP':sPz})
+    panel_parent.update( {'sP':sPz.sP_parent, 'subhaloInd':parSubID})
 
     panels = [panel_zoom, panel_parent]
 
@@ -535,17 +542,18 @@ def zoomBoxVis(sPz=None, conf=0):
 
     if sPz.isZoom:
         # zoom 5405 (fixed vis in box coordinates around the object)
-        zoomFac = 5000.0 / sPz.boxSize # show 1 cMpc/h size region around location
-        relCenPos = None
+        zoomFac = 3000.0 / sPz.boxSize # show 1 cMpc/h size region around location
+        relCenPos = [0.5,0.5,0.5]
 
-        absCenPos = [3.6e4+1000, 75000/2-3000, 75000/2] # axes = [1,2] order
         sliceFac = 10000.0 / sPz.boxSize # 1000 ckpc/h depth
-        print('Centering on: ', absCenPos)
+        #absCenPos = [3.6e4+1000, 75000/2-3000, 75000/2] # axes = [1,2] order
+        absCenPos = None
+        #print('Centering on: ', absCenPos)
 
     # setup panels
     if conf == 0:
         # dm column density
-        p = {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':[4.0, 8.0]}
+        p = {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 9.0]}
     if conf == 1:
         # gas column density
         p = {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 8.0]}

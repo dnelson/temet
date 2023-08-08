@@ -27,7 +27,7 @@ def plotUsersData():
               "Number of Downloads: LHaloTree","Number of Downloads: Sublink",
               "Cutout Requests: Subhalos","Cutout Requests: Sublink"]
 
-    pStyle = 'white' # 'white', 'black'
+    pStyle = 'black' # 'white', 'black'
     fac2 = 1.05
 
     # load

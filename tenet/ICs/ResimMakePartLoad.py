@@ -541,9 +541,16 @@ def generate_set():
     if 0:
         # TNG100 group zooms (Reza)
         sP = simParams(run='tng100-2', redshift=0.0)
+        zoomFac = 1 # 1=L10, 2=L11
+        haloIDs = [88,129,151,147,153,160,167,172,189,164,177,184,192,191,199]
+        sizeFac = 4.0
+
+    if 1:
+        # TNG50-1 z=6 bubble candidates (Joe)
+        sP = simParams(run='tng50-1', redshift=6.0)
         zoomFac = 1
-        haloIDs = [135,177] #[88,129,151,147,153,160,167,172,189,164,177,184,192,191,199]
-        sizeFac = 8.0 # 4.0, 27.0, 125.0
+        haloIDs = [11]
+        sizeFac = 32.0
 
     if 0:
         # TNG50 dwarf zooms (STRUCTURES/MCS/Byrohl)

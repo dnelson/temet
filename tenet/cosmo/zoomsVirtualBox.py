@@ -693,8 +693,10 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
             Nsubhalos = f['Header'].attrs['Nsubgroups_ThisFile']
             Nhalos = f['Header'].attrs['Ngroups_ThisFile']
 
-            f['Group']['GroupOffsetType'] = offsets['snapOffsetsGroup'][w_offset_halos:w_offset_halos+Nhalos]
-            f['Subhalo']['SubhaloOffsetType'] = offsets['snapOffsetsSubhalo'][w_offset_subs:w_offset_subs+Nsubhalos]
+            if Nhalos > 0:
+                f['Group']['GroupOffsetType'] = offsets['snapOffsetsGroup'][w_offset_halos:w_offset_halos+Nhalos]
+            if Nsubhalos > 0:
+                f['Subhalo']['SubhaloOffsetType'] = offsets['snapOffsetsSubhalo'][w_offset_subs:w_offset_subs+Nsubhalos]
 
             w_offset_halos += Nhalos
             w_offset_subs += Nsubhalos

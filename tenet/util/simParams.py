@@ -627,6 +627,9 @@ class simParams:
                 self.validResLevels = [11]
                 self.zoomLevel = self.res # L11 (TNG50-1)
                 self.sP_parent = simParams(res=parentRes, run='tng', redshift=0.0)
+                if self.redshift >= 6.0:
+                    # hacky: joe lewis reionization zooms
+                    self.sP_parent = simParams(res=parentRes, run='tng', redshift=6.0)
                 # note: sP_parent is z=0.5 for Nelson+20 LRG noMHD resimulations
 
                 self.gravSoft = 0.390 / (res-10)
