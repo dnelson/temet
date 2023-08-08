@@ -62,12 +62,18 @@ def singleHaloImage(sP, subhaloInd=440839, conf=0):
 
 def _get_dist_theta_grid(size, nPixels):
     """ Compute impact parameter and angle for every pixel. """
-    pxSize = size / nPixels[0] # pkpc
+
+    # pixel size: [pkpc] if size in [pkpc], else units of size
+    if isinstance(nPixels, int):
+        nPixels = [nPixels, nPixels]
+
+    pxSize = size / nPixels[0] 
 
     xx, yy = np.mgrid[0:nPixels[0], 0:nPixels[1]]
-    xx = xx.astype('float64') - nPixels[0]/2
-    yy = yy.astype('float64') - nPixels[1]/2
+    xx = xx.astype('float64') - nPixels[0]/2 + 0.5
+    yy = yy.astype('float64') - nPixels[1]/2 + 0.5
     dist = np.sqrt( xx**2 + yy**2 ) * pxSize
+
     theta = np.rad2deg(np.arctan2(xx,yy)) # 0 and +/- 180 is major axis, while +/- 90 is minor axis
     theta = np.abs(theta) # 0 -> 90 -> 180 is major -> minor -> major
 

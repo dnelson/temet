@@ -251,10 +251,43 @@ def szy_r500c_3d(sim, partType, field, args):
 
     return vals
 
-szy_r500c_3d.label = r'$\rm{Y_{SZ,r500c}^{3d}}$'
+szy_r500c_3d.label = r'$\rm{Y_{SZ,r500}^{3d}}$'
 szy_r500c_3d.units = r'$\rm{Mpc^2}$'
 szy_r500c_3d.limits = [-6.0, -3.0]
 szy_r500c_3d.log = True
+
+@catalog_field
+def szy_r500c_2d(sim, partType, field, args):
+    """ Sunyaev Zeldovich y-parameter within r500c (2d). """
+    acField = 'Subhalo_SZY_R500c_2D_d=r200'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+    
+    vals = 10.0**ac[acField] * 1e-6 # log pkpc^2 -> linear pMpc^2
+
+    vals = vals[:,0] # select first view direction
+
+    return vals
+
+szy_r500c_2d.label = r'$\rm{Y_{SZ,r500}^{2d}}$'
+szy_r500c_2d.units = r'$\rm{Mpc^2}$'
+szy_r500c_2d.limits = [-6.0, -3.0]
+szy_r500c_2d.log = True
+
+@catalog_field
+def xraylum_r500c_2d(sim, partType, field, args):
+    """ X-ray luminosity (0.5-2.0 keV) within r500c (2d). """
+    acField = 'Subhalo_XrayLum_0.5-2.0kev_R500c_2D_d=r200'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+    
+    vals = 10.0**ac[acField].astype('float64')  # log erg/s -> linear erg/s
+    vals = vals[:,0] # select first view direction
+
+    return vals
+
+xraylum_r500c_2d.label = r'$\rm{L_{X,r500}^{2d}}$'
+xraylum_r500c_2d.units = r'$\rm{erg/s}$'
+xraylum_r500c_2d.limits = [41.0, 46.0]
+xraylum_r500c_2d.log = True
 
 # ---------------------------- auxcat: other ------------------------------------------------------
 

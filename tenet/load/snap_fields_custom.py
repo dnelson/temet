@@ -335,6 +335,21 @@ bmag_ug.limits = [-9.0, 3.0]
 bmag_ug.limits_halo = [-3.0, 2.0]
 bmag_ug.log = True
 
+@snap_field
+def b2(sim, partType, field, args):
+    """ Magnitude squared of the gas magnetic field 3-vector (in code units). """
+    b = sim.snapshotSubset(partType, 'MagneticField', **args)
+
+    b2 = b[:,0]*b[:,0] + b[:,1]*b[:,1] + b[:,2]*b[:,2]
+
+    return b2
+
+b2.label = 'Magnetic Field Squared'
+b2.units = 'code units'
+b2.limits = [-3.0, 9.0]
+b2.limits_halo = [-3.0, 5.0]
+b2.log = True
+
 @snap_field(alias='vel_alfven')
 def va(sim, partType, field, args):
     """ Magnetic Alfven-wave velocity. """
@@ -918,7 +933,8 @@ xray_lum.log = True
 
 @snap_field(aliases=['xray_lum_05-2kev','xray_flux_05-2kev','xray_lum_05-2kev_nomet','xray_flux_05-2kev_nomet',
                      'xray_counts_erosita','xray_counts_chandra',
-                     'xray_lum_0.5-2.0kev','xray_lum_0.3-7.0kev','xray_lum_0.5-8.0kev','xray_lum_2.0-10.0kev'])
+                     'xray_lum_0.5-2.0kev','xray_lum_0.3-7.0kev','xray_lum_0.5-5.0kev',
+                     'xray_lum_0.5-8.0kev','xray_lum_2.0-10.0kev'])
 def xray_lum_apec(sim, partType, field, args):
     """ X-ray luminosity/flux/counts (the latter for a given instrumental configuration).
     If a decimal point '.' in field, using my APEC-based tables, otherwise using XSPEC-based tables (from Nhut). """
@@ -961,7 +977,9 @@ def xray_lum_apec_metadata(sim, pt, f, ret):
     if '0.5-2.0kev' in f:
         label = 'X, 0.5-2 keV, APEC'
     if '0.3-7.0kev' in f:
-        label = 'X, 0.5-8 keV, APEC'
+        label = 'X, 0.3-7 keV, APEC'
+    if '0.5-5.0kev' in f:
+        label = 'X, 0.5-5 keV, APEC'
     if '0.5-8.0kev' in f:
         label = 'X, 0.5-8 keV, APEC'
     if '2.0-10.0kev' in f:
@@ -1893,8 +1911,6 @@ vel_rel_mag.log = False
 @snap_field(aliases=['halo_rad','rad_r500','rad_rvir','halo_rad_r500','halo_rad_rvir'])
 def rad(sim, partType, field, args):
     """ 3D radial distance from (parent) halo center. """
-    assert args['haloID'] is not None or args['subhaloID'] is not None
-
     if sim.isZoom:
         subhaloID = sim.zoomSubhaloID
         print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
@@ -1904,12 +1920,18 @@ def rad(sim, partType, field, args):
     if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
     
     # get (host) halo center position
-    haloID = args['haloID']
-    if args['subhaloID'] is not None:
-        haloID = sim.subhalo(args['subhaloID'])['SubhaloGrNr']
+    if args['haloID'] is None and args['subhaloID'] is None:
+        assert sim.refPos is not None
+        print(f'WARNING: Using refPos in non-zoom run to compute [{field}]!')
+        haloPos = sim.refPos
+        halo = sim.halo(sim.refSubhalo['SubhaloGrNr'])
+    else:
+        haloID = args['haloID']
+        if args['subhaloID'] is not None:
+            haloID = sim.subhalo(args['subhaloID'])['SubhaloGrNr']
 
-    halo = sim.halo(haloID)
-    haloPos = halo['GroupPos'] # note: is identical to SubhaloPos of GroupFirstSub
+        halo = sim.halo(haloID)
+        haloPos = halo['GroupPos'] # note: is identical to SubhaloPos of GroupFirstSub
 
     rr = sim.periodicDists(haloPos, pos)
     
@@ -1946,6 +1968,41 @@ rad_kpc.units = r'$\rm{kpc}$'
 rad_kpc.limits = lambda sim,pt,f: [0.0, 5.0] if '_linear' not in f else [0.0, 5000]
 rad_kpc.limits_halo = lambda sim,pt,f: [0.0, 3.0] if '_linear' not in f else [0.0, 800]
 rad_kpc.log = lambda sim,pt,f: True if '_linear' not in f else False
+
+@snap_field(aliases=['dist_2dz_r200','dist_2dz_r500'])
+def dist_2dz(sim, partType, field, args):
+    """ 2D distance (i.e. impact parameter), projecting along z-hat, from (parent) halo center. """
+    if sim.isZoom:
+        subhaloID = sim.zoomSubhaloID
+        print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
+
+    pos = sim.snapshotSubset(partType, 'pos', **args)
+    pos = pos[:,0:2]
+
+    if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
+    
+    # get (host) halo center position, or position of reference
+    if args['haloID'] is None and args['subhaloID'] is None:
+        assert sim.refPos is not None
+        print(f'WARNING: Using refPos in non-zoom run to compute [{field}]!')
+        haloPos = sim.refPos[0:2]
+        halo = sim.halo(sim.refSubhalo['SubhaloGrNr'])
+    else:
+        haloID = args['haloID']
+        if args['subhaloID'] is not None:
+            haloID = sim.subhalo(args['subhaloID'])['SubhaloGrNr']
+
+        halo = sim.halo(haloID)
+        haloPos = halo['GroupPos'] # note: is identical to SubhaloPos of GroupFirstSub
+        haloPos = haloPos[0:2]
+
+    rr = sim.periodicDists2D(haloPos, pos)
+    
+    # what kind of distance?
+    if '_rvir' in field: rr /= halo['Group_R_Crit200']
+    if '_r500' in field: rr /= halo['Group_R_Crit500']
+
+    return rr
 
 @snap_field(aliases=['halo_vrad','radvel','halo_radvel','vrad_vvir','halo_vrad_vvir','halo_radvel_vvir'])
 def vrad(sim, partType, field, args):

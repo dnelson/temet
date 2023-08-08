@@ -562,6 +562,48 @@ def periodicDists(pt, vecs, sP, chebyshev=False, xyzMin=False):
 
     return dists
 
+def periodicDists2D(pt, vecs, sP, chebyshev=False, xyzMin=False):
+    """ Calculate 2D distances correctly taking into account periodic boundary conditions.
+
+    Args:
+      pt (list[2] or [N,2]): if pt is one point, distance from pt to all vecs.
+        if pt is several points, distance from each pt to each vec (must have same number of points as vecs).
+      vecs (list[2,N]): position array in periodic 3D space.
+      sP (:py:class:`~util.simParams`): simulation instance.
+      chebyshev (bool): use Chebyshev distance metric (greatest difference in positions along any one axis)
+    """
+    assert not (chebyshev and xyzMin), 'At most one.'
+    assert vecs.ndim in [1,2]
+    assert pt.ndim in [1,2]
+
+    if vecs.ndim == 1:
+        # vecs.shape == [3], e.g. single 3-vector
+        assert vecs.size == 2
+        vecs = np.reshape(vecs, (1,2))
+
+    # distances from one point (x,y,z) to a vector of other points [N,3]
+    if pt.ndim == 1:
+        xDist = vecs[:,0] - pt[0]
+        yDist = vecs[:,1] - pt[1]
+
+    # distances from a vector of points [N,3] to another vector of other points [N,3]
+    if pt.ndim == 2:
+        assert vecs.shape[0] == pt.shape[0]
+        xDist = vecs[:,0] - pt[:,0]
+        yDist = vecs[:,1] - pt[:,1]
+
+    correctPeriodicDistVecs(xDist, sP)
+    correctPeriodicDistVecs(yDist, sP)
+
+    if chebyshev:
+        dists = np.abs(xDist)
+        wy = np.where(np.abs(yDist) > dists)
+        dists[wy] = np.abs(yDist[wy])
+    else:
+        dists = np.sqrt(xDist*xDist + yDist*yDist)
+
+    return dists
+
 def periodicDistsSq(pt, vecs, sP):
     """ As cosmo.util.periodicDists() but specialized, without error checking, and no sqrt. 
     Works either for 2D or 3D, where the dimensions of pt and vecs should correspond. """

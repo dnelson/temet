@@ -19,6 +19,7 @@ from ..cosmo.auxcatalog import fofRadialSumType, subhaloRadialReduction, subhalo
 
 from ..projects.outflows_analysis import instantaneousMassFluxes, massLoadingsSN, outflowVelocities
 from ..projects.rshock import healpixThresholdedRadius
+from ..projects.tngcluster import summarize_projection_2d
 
 # save these as separate datasets, if present
 largeAttrNames = ['subhaloIDs','partInds','wavelength']
@@ -638,6 +639,12 @@ fieldComputeFunctionMapping = \
    'Subhalo_XrayLum_05-2kev_2rhalfstars' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum_05-2kev',op='sum',rad='2rhalfstars'),
 
+   'Subhalo_LX_05-2keV_R500c_3D' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum_0.5-2.0kev',op='sum',rad='r500crit',scope='fof',cenSatSelect='cen',minHaloMass=12.0),
+
+   'Subhalo_XrayLum_0.5-2.0kev_R500c_2D_d=r200' : \
+     partial(summarize_projection_2d,quantity='xray_lum_0.5-2.0kev',projConf='2r200_d=r200', aperture='r500'),
+
    'Subhalo_OVIIr_GalaxyLum_1rstars' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O  7 21.6020A lum2phase',op='sum',rad='1rhalfstars',ptRestrictions=sfrgt0),
    'Subhalo_OVIIr_DiffuseLum_1rstars' : \
@@ -790,6 +797,10 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='0.5r500crit',weighting='mass',scope='fof',cenSatSelect='cen',minHaloMass='10000dm'),
    'Subhalo_Bmag_fof_halfr500_volWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='0.5r500crit',weighting='volume',scope='fof',cenSatSelect='cen',minHaloMass='10000dm'),
+   'Subhalo_B2_volWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='b2',op='mean',rad=None,weighting='volume'),
+   'Subhalo_B2_2rhalfstars_volWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='b2',op='mean',rad='2rhalfstars',weighting='volume'),
 
    # CGM gas properties
    'Subhalo_Temp_halo_massWt' : \
@@ -824,6 +835,17 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='p_gas',op='sum',rad='r015_1rvir_halo'),
    'Subhalo_Ptot_B_halo' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='p_b',op='sum',rad='r015_1rvir_halo'),
+
+   'Subhalo_SZY_R500c_3D' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='sz_yparam',op='sum',rad='r500crit',scope='fof',cenSatSelect='cen',minHaloMass=12.0),
+   'Subhalo_SZY_R500c_2D_d=r200' : \
+     partial(summarize_projection_2d,quantity='sz_yparam',projConf='2r200_d=r200', aperture='r500'),
+   'Subhalo_SZY_R500c_2D_d=3r200' : \
+     partial(summarize_projection_2d,quantity='sz_yparam',projConf='2r200_d=3r200', aperture='r500'),
+   'Subhalo_SZY_R500c_2D' : \
+     partial(summarize_projection_2d,quantity='sz_yparam',projConf='r500_d=r500', aperture='r500'),
+   'Subhalo_SZY_R200c_2D' : \
+     partial(summarize_projection_2d,quantity='sz_yparam',projConf='2r200_d=r200', aperture='r200'),
 
    # light: rest-frame/absolute
    'Subhalo_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 

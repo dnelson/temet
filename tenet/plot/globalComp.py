@@ -6,7 +6,6 @@ the stellar mass function (SMF), and so on.
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from ..load.data import *
 from ..util.helper import running_median, running_histogram, logZeroNaN, iterable
@@ -439,12 +438,12 @@ def sfrdVsRedshift(sPs, pdf, xlog=True, addSubhalosOnly=False):
 
 def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass=False, 
                            actualBHMasses=False, actualLargestBHMasses=True, simRedshift=0.0,
-                           xlim=None, ylim=None):
+                           sizefac=1.0, xlim=None, ylim=None):
     """ Black hole mass vs. stellar (bulge) mass relation at z=0. """
     assert twiceR or vsHaloMass or vsBulgeMass
 
     # plot setup
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac))
     ax = fig.add_subplot(111)
 
     xlim_def = [8.5, 13.0]
@@ -490,7 +489,7 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
         l1, = ax.plot(k['M_bulge'], k['M_BH'], '-', color='#333333')
         ax.fill_between(k['M_bulge'], k['errorDown'], k['errorUp'], color='#333333', interpolate=True, alpha=0.3)
 
-        legend1 = ax.legend([l1,l2,l3], [k['label'], m['label'], m['pts']['label']], loc='upper left')
+        legend1 = ax.legend([l1,l2,l3], [k['label'], m['label'], m['pts']['label']], loc='lower right')
         ax.add_artist(legend1)
 
     # loop over each fullbox run
@@ -577,7 +576,7 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
                 ax.fill_between(xm[:-1], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.2)
 
     # second legend
-    legend2 = ax.legend(loc='lower right')
+    legend2 = ax.legend(loc='upper left')
 
     pdf.savefig()
     plt.close(fig)
@@ -2266,7 +2265,7 @@ def plots():
     #sPs.append( simParams(run='tng100-1', redshift=2.0) )
     #sPs.append( simParams(run='tng100-1', redshift=4.0) )
 
-    for variant in ['0000','5010','5014','5015','5017']:
+    for variant in ['0000','5018']: #'5010','5014','5015','5017']:
         sPs.append( simParams(res=512, run='tng', variant=variant) )
     #for variant in ['','0000','4503']:
     #    sPs.append( simParams(res=625, run='tng', variant=variant) )
@@ -2362,6 +2361,5 @@ def plots():
     # todo: other metal CDDFs (e.g. Schaye Fig 17) (Bird 2016 Fig 6 Carbon) (HI z=0.1 Gurvich2016)
     # todo: Omega_X(z) (e.g. Bird? Fig ?)
     # todo: B/T distributions in Mstar bins, early/late fraction vs Mstar (kinematic)
-    # todo: other cluster observables: SZ
 
     pdf.close()

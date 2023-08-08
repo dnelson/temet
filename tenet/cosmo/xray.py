@@ -91,7 +91,7 @@ def apec_convert_tables():
 
     master_grid = np.logspace(-3.5, 1.5, n_energy_bins+1) # 0.0003 to 32 keV (EDGES)
     redshifts = [0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.5,2.0,3.0,4.0,5.0,6.0]
-    bands = [ [0.5,2.0], [0.3,7.0], [0.5,8.0], [2.0,10.0] ] # keV
+    bands = [ [0.5,2.0], [0.3,7.0], [0.5,5.0], [0.5,8.0], [2.0,10.0] ] # keV
 
     de = np.diff(master_grid) # == master_grid[1:] - master_grid[:-1]
     master_grid_mid = (master_grid[1:] + master_grid[:-1]) / 2 # midpoints
@@ -493,7 +493,7 @@ def plotXrayEmissivities():
     emis_label  = 'Emissivity [ log erg cm$^3$ s$^{-1}$ ]'
 
     # data config, and load full table
-    bands = ['0.5-2.0kev', '0.3-7.0kev', '0.5-8.0kev', '2.0-10.0kev']
+    bands = ['0.5-2.0kev', '0.3-7.0kev', '0.5-5.0kev', '0.5-8.0kev', '2.0-10.0kev']
 
     redshift = 0.0
 

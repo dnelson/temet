@@ -697,7 +697,7 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
                              f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
                              scatterPoints=None, markersize=6.0, maxPointsPerDex=None, scatterColor=None, ctName=None, 
                              markSubhaloIDs=None, cRel=None, mark1to1=False, drawMedian=True, medianLabel=None, 
-                             extraMedians=None, legendLoc='best', xlim=None, ylim=None, clim=None, cbarticks=None,
+                             extraMedians=None, legendLoc='best', labelSims=True, xlim=None, ylim=None, clim=None, cbarticks=None,
                              filterFlag=False, colorbarInside=False, fig_subplot=[None,None], pdf=None):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, load a set of quantities 
@@ -746,7 +746,8 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
       drawMedian (bool): include median line and 1-sigma band.
       medianLabel (str): if not None, then override the median label with this string.
       extraMedians (list[str]): if not None, add more median lines for these (y-axis) quantities as well.
-      legendLoc (str): override 'best' default location.
+      legendLoc (str): override 'best' default location. None to disable legend.
+      labelSims (bool): if True, then label each simulation (of sPs) in the legend.
       xlim (list[float][2]): if not None, override default x-axis limits.
       ylim (list[float][2]): if not None, override default y-axis limits.
       clim (list[float][2]): if not None, override default colorbar limits.
@@ -1121,6 +1122,7 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
                     zIsInt = np.abs(sP.redshift-int(sP.redshift)) < 0.01
                     zStr = ' z=%d' % sP.redshift if zIsInt else ' z=%.1f' % sP.redshift
                     label = (sP.simName + zStr) if len(sPs) > 1 else ''
+                    if not labelSims: label = '' # do not add to legend (may contain other items)
                     if drawMedian: label = '' # only if median lines are not already labeled
                     sc = ax.scatter(xx, yy, s=markersize, alpha=alpha, **opts, label=label, zorder=0)
 
@@ -1142,7 +1144,7 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
         if f_post is not None:
             f_post(ax)
 
-        if i == 0:
+        if i == 0 and legendLoc is not None:
             handles, labels = ax.get_legend_handles_labels()
             handlesO = []
             labelsO = []

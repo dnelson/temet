@@ -212,7 +212,7 @@ class simParams:
 
         # attach various functions pre-specialized to this sP, for convenience
         from ..cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicPairwiseDists, \
-            periodicDistsSq, \
+            periodicDistsSq, periodicDists2D, \
             validSnapList, cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs, \
             correctPeriodicPosBoxWrap
         from ..cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs, \
@@ -235,6 +235,7 @@ class simParams:
         self.periodicDists = partial(periodicDists, sP=self)
         self.periodicDistsSq = partial(periodicDistsSq, sP=self)
         self.periodicPairwiseDists = partial(periodicPairwiseDists, sP=self)
+        self.periodicDists2D = partial(periodicDists2D, sP=self)
         self.periodicDistsN = partial(periodicDistsN, BoxSize=self.boxSize)
         self.periodicDistsIndexed = partial(periodicDistsIndexed, BoxSize=self.boxSize)
         self.validSnapList = partial(validSnapList, sP=self)
@@ -585,9 +586,8 @@ class simParams:
 
                 self.simName = '%s%d-%d' % (runStr,boxSizeName,resInd)
 
-                if res == 8192: self.simName = 'TNG-Cluster'
+                if res in [2048,8192]: self.simName = 'TNG-Cluster'
                 if '_dm' in run: self.simName += '-Dark'
-                if res == 2048: self.simName = 'L680n2048TNG_DM'
                 if 'NR' in self.variant: self.simName = 'TNG%d-%d-%s' % (boxSizeName,resInd,self.variant)
 
             if res in res_L25:

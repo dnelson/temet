@@ -13,7 +13,7 @@ from ..util import simParams
 from ..util.helper import running_median, logZeroNaN
 from ..plot.config import *
 
-def galaxySizes(sPs, vsHaloMass=False, simRedshift=0.0, addHalfLightRad=None, onlyRedData=False, 
+def galaxySizes(sPs, vsHaloMass=False, simRedshift=0.0, addHalfLightRad=None, onlyRedData=False, sizefac=1.0, 
                 scatterPoints=False, markersize=12.0, xlim=None, ylim=None, fig_subplot=[None,None], pdf=None):
     """ Galaxy sizes (half mass radii) vs stellar mass or halo mass, compared to data.
 
@@ -37,7 +37,7 @@ def galaxySizes(sPs, vsHaloMass=False, simRedshift=0.0, addHalfLightRad=None, on
 
     # plot setup
     if fig_subplot[0] is None:
-        fig = plt.figure(figsize=figsize)
+        fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac))
         ax = fig.add_subplot(111)
     else:
         # add requested subplot to existing figure

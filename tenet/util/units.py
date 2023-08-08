@@ -549,6 +549,10 @@ class units(object):
         area *= self.scalefac**2 # comoving -> physical
 
         return area
+    
+    def codeAreaToMpc2(self, x):
+        """ Convert an area [length^2] in code units to physical Mpc^2. """
+        return self.codeAreaToKpc2(x) / 1000.0**2
 
     def codeVolumeToCm3(self, x):
         """ Convert a volume [length^3] in code units to physical cm^3 (cgs). """

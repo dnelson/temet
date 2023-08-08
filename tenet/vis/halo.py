@@ -31,6 +31,7 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclina
 
         sP.refPos = sh['SubhaloPos']
         sP.refVel = sh['SubhaloVel']
+        sP.refSubhalo = sh
 
         haloVirRad = gr['Group_R_Crit200']
         haloR500 = gr['Group_R_Crit500']

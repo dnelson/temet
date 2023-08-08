@@ -249,7 +249,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     # property name is complex / contains a free-form parameter?
     for search_key in custom_cat_multi_fields:
-        if search_key in prop:
+        if prop.startswith(search_key): #if search_key in prop: # error: e.g. matches 'mag_' for 'bmag_halfr500_volwt'
             # prop is e.g. 'delta_temp', convert to 'delta_'
             prop = search_key
 
@@ -1726,9 +1726,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         #if tight: minMax = [38, 45]
 
     if quantname in ['xray_05-2kev_r500','xray_0.5-2.0kev_r500','xray_0.5-2.0kev_r500_halo']:
-        # x-ray luminosity from APEC (no '.' in name) or XPEC (if '.' in name, from Nhut) tables
+        # x-ray luminosity from APEC ('.' in name) or XPEC ('.' not in name, from Nhut) tables
         eStr = '0.5-2 keV'
-        label = 'L$_{\\rm X,%s}$ [ log erg/s ]' % eStr
+        label = 'L$_{\\rm X,r500}^{\\rm %s}$ [ log erg/s ]' % eStr
 
         acStr = quantname.replace('xray_','').replace('_r500','').replace('_halo','')
         acField = 'Subhalo_XrayLum_%s' % acStr

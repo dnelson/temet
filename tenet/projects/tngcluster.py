@@ -8,348 +8,13 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from scipy.optimize import leastsq
 from scipy.interpolate import interp1d
-from os.path import isfile, isdir
+from os.path import isfile
 
+from ..cosmo.zooms import contamination_mindist
 from ..plot.cosmoGeneral import quantMedianVsSecondQuant
 from ..plot.config import *
 from ..util.helper import logZeroNaN, running_median
-
-def clusterEntropyCores():
-    """ Plot radial profiles of cluster entropy and measure CC/NCC central entropy values. """
-    from ..util.simParams import simParams
-
-    # config
-    sP = simParams(res=2500, run='tng', redshift=0.4)
-    haloIDs = np.arange(250)#[4,5]
-
-    nBins = 40
-    radMinMax = [0.3,3.0] # log(pKpc)
-
-    nBins_lin = 60
-    radMinMax_lin = [0.5, 1000] # pKpc
-
-    # helper functions
-    def plaw(x, params):
-        """ Powerlaw of Cavagnolo+ (2009) Eqn. 5. """
-        (alpha, K100) = params
-        y = K100 * (x/100.0)**alpha
-        return y
-    def plaw_error(params, x, y):
-        y_fit = plaw(x, params)
-        return y_fit - y
-
-    def plaw_cored(x, params):
-        """ Powerlaw with core of Cavagnolo+ (2009) Eqn. 4. """
-        (alpha, K100, K0) = params
-        y = K0 + K100 * (x/100.0)**alpha
-        return y
-    def plaw_cored_error(params, x, y):
-        y_fit = plaw_cored(x, params)
-        return y_fit - y
-
-    # check existence of temporary save?
-    saveFilename = 'save2_entr_%s_%d_halos=%d.hdf5' % (sP.simName,sP.snap,len(haloIDs))
-
-    if isfile(saveFilename):
-        print('Loading: [%s]' % saveFilename)
-        with h5py.File(saveFilename,'r') as f:
-            cenVals = f['cenVals'][()]
-            cenVals2 = f['cenVals2'][()]
-            cenVals3 = f['cenVals3'][()]
-            K0s = f['K0s'][()]
-            K0s_lin = f['K0s_lin'][()]
-            radProfiles = f['radProfiles'][()]
-            radProfiles_lin = f['radProfiles_lin'][()]
-            rad = f['rad'][()]
-            rad_lin = f['rad_lin'][()]
-    else:
-        # allocate
-        cenVals = np.zeros( len(haloIDs), dtype='float32' )
-        cenVals2 = np.zeros( len(haloIDs), dtype='float32' )
-        cenVals3 = np.zeros( len(haloIDs), dtype='float32' )
-        K0s = np.zeros( len(haloIDs), dtype='float32' )
-        K0s_lin = np.zeros( len(haloIDs), dtype='float32' )
-        radProfiles = np.zeros( (nBins,len(haloIDs)), dtype='float32' )
-        radProfiles_lin = np.zeros( (nBins_lin,len(haloIDs)), dtype='float32' )
-
-        # loop over halo selection
-        for i, haloID in enumerate(haloIDs):
-            # load
-            halo = sP.groupCatSingle(haloID=haloID)
-            pos = sP.snapshotSubset('gas', 'pos', haloID=haloID)
-
-            rr = sP.periodicDists(halo['GroupPos'], pos)
-            rr = sP.units.codeLengthToKpc(rr)
-            rr = np.log10(rr)
-
-            # load entropy, note: xray version: K(r) = k * T_x(r) * n_e(r)^{-2/3}
-            yvals = sP.snapshotSubset('gas', 'entr', haloID=haloID)
-            yvals = yvals / sP.units.boltzmann_keV # [K cm^2] -> [keV cm^2]
-
-            # exclude sfr>0 and log(T)<5.8 gas
-            sfr = sP.snapshotSubset('gas', 'sfr', haloID=haloID)
-            temp = sP.snapshotSubset('gas', 'temp_log', haloID=haloID)
-
-            w = np.where( (sfr == 0.0) & (temp >= 5.8) )
-            rr = rr[w]
-            yvals = yvals[w]
-
-            # plot radial profile
-            yy_mean = np.zeros( nBins, dtype='float32' ) + np.nan
-            yy_med  = np.zeros( nBins, dtype='float32' ) + np.nan
-            yy_mean_lin = np.zeros( nBins_lin, dtype='float32' ) + np.nan
-            yy_med_lin  = np.zeros( nBins_lin, dtype='float32' ) + np.nan
-            rad     = np.zeros( nBins, dtype='float32' )
-            rad_lin = np.zeros( nBins_lin, dtype='float32' )
-
-            binSize = (radMinMax[1]-radMinMax[0])/nBins
-            binSize_lin = (radMinMax_lin[1]-radMinMax_lin[0])/nBins_lin
-
-            for j in range(nBins):
-                # log
-                binStart = radMinMax[0] + j*binSize
-                binEnd   = radMinMax[0] + (j+1)*binSize
-                if j == 0: binStart = -0.5 # ~0.5 pKpc
-
-                ww = np.where((rr >= binStart) & (rr < binEnd))
-                rad[j] = 10.0**( (binStart+binEnd)/2.0 )
-
-                if len(ww[0]) > 0:
-                    yy_mean[j] = np.mean(yvals[ww])
-                    yy_med[j]  = np.median(yvals[ww])
-
-            rr_lin = 10.0**rr
-            for j in range(nBins_lin):
-                # linear
-                binStart = radMinMax_lin[0] + j*binSize_lin
-                binEnd   = radMinMax_lin[0] + (j+1)*binSize_lin
-                if j == 0: binStart = 0.0 # 0.0 pKpc
-
-                ww = np.where((rr_lin >= binStart) & (rr_lin < binEnd))
-                rad_lin[j] = (binStart+binEnd)/2.0
-
-                if len(ww[0]) > 0:
-                    yy_mean_lin[j] = np.mean(yvals[ww])
-                    yy_med_lin[j]  = np.median(yvals[ww])
-
-            # fit profile with a powerlaw / calculate a central value
-            r200 = sP.units.codeLengthToKpc(halo['Group_R_Crit200'])
-            print('[%d] Halo r200: %.1f [pKpc]' % (haloID,r200))
-
-            # central value
-            w = np.where(rad <= 0.05 * r200)
-            cenVal_mean = np.nanmean( yy_mean[w] )
-            cenVal_med  = np.nanmean( yy_med[w] )
-
-            w = np.where(rad <= 30.0)
-            cenVal_mean2 = np.nanmean( yy_mean[w] )
-
-            # central value without fit
-            w = np.where(rr_lin <= 20.0)
-            cenVal_mean3 = np.nanmean( yvals[w] )
-
-            print(' Central value: %.2f (%.2f) %.2f %.2f' % (cenVal_mean,cenVal_med,cenVal_mean2,cenVal_mean3))
-
-            # data points for fit
-            w = np.where( (rad <= 0.5 * r200) & np.isfinite(yy_mean) )
-            x_data = rad[w]
-            y_data = yy_mean[w]
-
-            # fit powerlaw and cored powerlaws
-            params_best, _, _, _, _ = leastsq(plaw_error, [1.0, 100.0], 
-                                              args=(x_data,y_data), full_output=True)
-            params_best_cored, _, _, _, _ = leastsq(plaw_cored_error, [1.0, 100.0, 100.0], 
-                                                    args=(x_data,y_data), full_output=True)
-
-            print(' Best fit powerlaw:  K100 = %.1f  alpha = %.2f' % (params_best[1],params_best[0]))
-            print(' Best fit coredplaw: K100 = %.1f  alpha = %.2f  K0 = %.1f' % \
-                (params_best_cored[1],params_best_cored[0],params_best_cored[2]))
-
-            # fit cored to linear
-            w = np.where( (rad_lin <= 0.5 * r200) & np.isfinite(yy_mean_lin) )
-            x_data = rad_lin[w]
-            y_data = yy_mean_lin[w]
-
-            params_best_cored_lin, _, _, _, _ = leastsq(plaw_cored_error, [1.0, 100.0, 100.0], 
-                                                    args=(x_data,y_data), full_output=True)
-            print(' Best fit cored_lin: K100 = %.1f  alpha = %.2f  K0 = %.1f' % \
-                (params_best_cored_lin[1],params_best_cored_lin[0],params_best_cored_lin[2]))
-
-            # store values
-            cenVals[i] = cenVal_mean
-            cenVals2[i] = cenVal_mean2
-            cenVals3[i] = cenVal_mean3
-            K0s[i] = params_best_cored[2]
-            K0s_lin[i] = params_best_cored_lin[2]
-            radProfiles[:,i] = yy_mean
-            radProfiles_lin[:,i] = yy_mean_lin
-
-        # save data
-        with h5py.File(saveFilename,'w') as f:
-            f['cenVals'] = cenVals
-            f['cenVals2'] = cenVals2
-            f['cenVals3'] = cenVals3
-            f['K0s'] = K0s
-            f['K0s_lin'] = K0s_lin
-            f['radProfiles'] = radProfiles
-            f['radProfiles_lin'] = radProfiles_lin
-            f['rad'] = rad
-            f['rad_lin'] = rad_lin
-        print('Saved [%s]' % saveFilename)
-
-    # start pdf
-    pdf = PdfPages('entr2_%s_%d_halos=%d.pdf' % (sP.simName,sP.snap,len(haloIDs)))
-
-    # Voit+ (2002) 'pure cooling model' approximated
-    voit_x = [2.8, 1800] # kpc
-    voit_y = [1e0, 3e3] # [keV cm^2]
-
-    # Cavagnolo+ (2009) K0 histogram
-    yy_cavagnolo = [1,2,2,3,0,7,18,20,25,19,9,10,21,23,27,21,16,7,2]
-    xx_cavagnolo = 0.0 + 0.15 * np.arange(len(yy_cavagnolo))
-
-    # (A) start histogram plot
-    if 1:
-        K0_minmax = np.log10( [0.4, 700] )
-        K0_nBins = 20
-
-        # (A1) fractional histograms
-        fig = plt.figure(figsize=(14,10))
-        ax = fig.add_subplot(111)
-
-        ax.set_xlabel('Fraction of Clusters')
-        ax.set_xlabel('Central Entropy [ keV cm$^2$ ]')
-        ax.set_xlim(10.0**K0_minmax)
-        ax.set_xscale('log')
-
-        # plot histogram of cenEntr (1)
-        yy, xx = np.histogram(np.log10(cenVals), bins=K0_nBins, range=K0_minmax)
-        yy = np.array(yy) / float(np.sum(yy))
-        xx = xx[:-1] + 0.5*(K0_minmax[1]-K0_minmax[0])/K0_nBins
-
-        ax.plot(10.0**xx, yy, '-', drawstyle='steps-mid', lw=3.0, label='Central Entropy (1)')
-
-        # plot histogram of cenEntr (2)
-        yy, xx = np.histogram(np.log10(cenVals2), bins=K0_nBins, range=K0_minmax)
-        yy = np.array(yy) / float(np.sum(yy))
-        xx = xx[:-1] + 0.5*(K0_minmax[1]-K0_minmax[0])/K0_nBins
-
-        ax.plot(10.0**xx, yy, '-', drawstyle='steps-mid', lw=3.0, label='Central Entropy (2)')
-
-        # plot histogram of cenEntr (3)
-        yy, xx = np.histogram(np.log10(cenVals3), bins=K0_nBins, range=K0_minmax)
-        yy = np.array(yy) / float(np.sum(yy))
-        xx = xx[:-1] + 0.5*(K0_minmax[1]-K0_minmax[0])/K0_nBins
-
-        ax.plot(10.0**xx, yy, '-', drawstyle='steps-mid', lw=3.0, label='Central Entropy (3)')
-
-        # plot histogram of K0
-        w = np.where(K0s > 0.0)
-        yy, xx = np.histogram(np.log10(K0s[w]), bins=K0_nBins, range=K0_minmax)
-        yy = np.array(yy) / float(np.sum(yy))
-        xx = xx[:-1] + 0.5*(K0_minmax[1]-K0_minmax[0])/K0_nBins
-
-        ax.plot(10.0**xx, yy, '-', drawstyle='steps-mid', lw=3.0, label='Central K$_0$')
-
-        # plot histogram of K0_lin
-        w = np.where(K0s_lin > 0.0)
-        yy, xx = np.histogram(np.log10(K0s_lin[w]), bins=K0_nBins, range=K0_minmax)
-        yy = np.array(yy) / float(np.sum(yy))
-        xx = xx[:-1] + 0.5*(K0_minmax[1]-K0_minmax[0])/K0_nBins
-
-        ax.plot(10.0**xx, yy, '-', drawstyle='steps-mid', lw=3.0, label='Central K$_0$ linear')
-
-        # plot K0 histogram from Cavagnolo+ (2009)
-        yy = np.array(yy_cavagnolo) / float(np.sum(yy_cavagnolo))
-        ax.plot(10.0**xx_cavagnolo, yy, '-', drawstyle='steps-mid', 
-                color='black', lw=3.0, label='Cavagnolo+ (2009) K$_0$')
-
-        ax.legend(loc='best')
-
-        # finish
-        pdf.savefig()
-        plt.close(fig)
-
-    # (B) all rad profiles (log)
-    if 1:
-        fig = plt.figure(figsize=(14,10))
-        ax = fig.add_subplot(111)
-
-        ax.set_title('%s z=%.1f [log]' % (sP.simName,sP.redshift))
-        ax.set_xlabel('Radius [ pKpc ]')
-        ax.set_xlim([0.2, 2000])
-        ax.set_xscale('log')
-
-        ax.set_ylabel('Entropy [ keV cm$^2$ ]')
-        ax.set_ylim([1, 3000])
-        ax.set_yscale('log')
-
-        ax.plot(voit_x, voit_y, color='black', label='Voit+ (2002) pure cooling model')
-
-        for i, haloID in enumerate(haloIDs):
-            yy = np.squeeze( radProfiles[:,i] )
-            ax.plot(rad, yy, '-')
-
-        # finish plot
-        ax.legend(loc='best')
-        pdf.savefig()
-        plt.close(fig)
-
-    # (C) all rad profiles (linear)
-    if 1:
-        fig = plt.figure(figsize=(14,10))
-        ax = fig.add_subplot(111)
-
-        ax.set_title('%s z=%.1f [linear]' % (sP.simName,sP.redshift))
-        ax.set_xlabel('Radius [ pKpc ]')
-        ax.set_xlim([0.2, 2000])
-        ax.set_xscale('log')
-
-        ax.set_ylabel('Entropy [ keV cm$^2$ ]')
-        ax.set_ylim([1, 3000])
-        ax.set_yscale('log')
-
-        ax.plot(voit_x, voit_y, color='black', label='Voit+ (2002) pure cooling model')
-
-        for i, haloID in enumerate(haloIDs):
-            yy = np.squeeze( radProfiles_lin[:,i] )
-            ax.plot(rad_lin, yy, '-')
-
-        # finish plot
-        ax.legend(loc='best')
-        pdf.savefig()
-        plt.close(fig)
-
-    # (D) individual rad profiles
-    if 1:
-        for i, haloID in enumerate(haloIDs):
-            #halo = sP.groupCatSingle(haloID=haloID)
-            fig = plt.figure(figsize=(14,10))
-            ax = fig.add_subplot(111)
-
-            ax.set_title('%s z=%.1f haloID=%d' % (sP.simName,sP.redshift,haloID))
-            ax.set_xlabel('Radius [ pKpc ]')
-            ax.set_xlim([0.2, 2000])
-            ax.set_xscale('log')
-
-            ax.set_ylabel('Entropy [ keV cm$^2$ ]')
-            ax.set_ylim([1, 3000])
-            ax.set_yscale('log')
-
-            ax.plot(voit_x, voit_y, color='black')
-
-            yy = np.squeeze( radProfiles[:,i] )
-            yy_lin = np.squeeze( radProfiles_lin[:,i] )
-
-            ax.plot(rad, yy, '-', label='cenVal = %.1f cenVal2 = %.1f K0 = %.1f' % (cenVals[i], cenVals2[i], K0s[i]))
-            ax.plot(rad_lin, yy_lin, ':', label='linear cenVal3 = %.1f  K0 = %.1f' % (cenVals3[i], K0s_lin[i]))
-
-            # finish plot
-            ax.legend(loc='best')
-            pdf.savefig()
-            plt.close(fig) 
-
-    pdf.close()
+from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
 
 def vis_fullbox_virtual(sP, conf=0):
     """ Visualize the entire virtual reconstructed box. """
@@ -364,7 +29,7 @@ def vis_fullbox_virtual(sP, conf=0):
     # halo plotting
     plotHalos  = False
 
-    if conf in [0,1,2,3,4]:
+    if conf in [0,1,2,3,4,5]:
         pri = sP.groups('GroupPrimaryZoomTarget')
         plotHaloIDs = np.where(pri == 1)[0]
 
@@ -372,30 +37,41 @@ def vis_fullbox_virtual(sP, conf=0):
     if conf == 0:
         method = 'sphMap_globalZoom'
         panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,7.1]}]
+
     if conf == 1:
         method = 'sphMap' # is global, overlapping coarse cells
         panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[9.1,9.6]}]
+
     if conf == 2:
         method = 'sphMap_globalZoom'
         panels = [{'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.0]}]
+
     if conf == 3:
         method = 'sphMap' # is global
         panels = [{'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.0]}]
-    if conf == 4:
-        method = 'sphMap' # is global
-        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.8,7.2]}]
-        numBufferLevels = 3 # 2 or 3, free parameter
 
+    if conf in [4,5]:
+        method = 'sphMap' # is global
+        
+        if conf == 4:
+            panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.8,7.2]}]
+            numBufferLevels = 3 # 2 or 3, free parameter
+        if conf == 5:
+            panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.2,7.6]}]
+            numBufferLevels = 4
+            
         maxGasCellMass = sP.targetGasMass
         if numBufferLevels >= 1:
-            # first buffer level is 27x mass, then 8x mass for each subsequent level
-            maxGasCellMass *= 27 * np.power(8,numBufferLevels-1)
+            # first buffer level is 27x mass (TODO CHECK STILL?), then 8x mass for each subsequent level
+            #maxGasCellMass *= 27 * np.power(8,numBufferLevels-1)
+            # TEST:
+            maxGasCellMass *= np.power(8,numBufferLevels)
             # add padding for x2 Gaussian distribution
             maxGasCellMass *= 3
 
         ptRestrictions = {'Masses':['lt',maxGasCellMass]}
 
-    if conf == 5:
+    if conf == 6:
         from ..util.simParams import simParams
         sP = simParams(run='tng_dm',res=2048,redshift=0.0) # parent box
         method = 'sphMap'
@@ -403,9 +79,9 @@ def vis_fullbox_virtual(sP, conf=0):
 
     class plotConfig:
         plotStyle  = 'edged' # open, edged
-        rasterPx   = [nPixels,nPixels]
+        rasterPx   = [1400,1400]
         colorbars  = True
-        fontsize   = 32
+        fontsize   = 22
 
         saveFilename = './boxImage_%s_%s-%s_%s_conf%d.pdf' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],sP.snap,conf)
@@ -776,7 +452,7 @@ def bfield_strength_vs_halomass(sPs, redshifts):
     quantMedianVsSecondQuant(sPs_in, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_pre=_draw_data, f_post=_draw_data2, legendLoc='lower right', pdf=None)
+                             f_pre=_draw_data, f_post=_draw_data2, legendLoc='lower right', labelSims=False, pdf=None)
 
 def stellar_mass_vs_halomass(sPs, conf=0):
     """ Plot various stellar mass quantities vs halo mass. """
@@ -795,7 +471,7 @@ def stellar_mass_vs_halomass(sPs, conf=0):
     if conf == 0:
         yQuant = 'mstar_30pkpc'
         ylabel = 'BCG Stellar Mass [ log M$_{\\rm sun}$ ]'
-        ylim = [10.9, 13.1]
+        ylim = [10.9, 12.8]
         scatterColor = None #'massfrac_exsitu2' (TODO: can re-enable)
 
         def _draw_data(ax):
@@ -823,7 +499,7 @@ def stellar_mass_vs_halomass(sPs, conf=0):
     if conf == 1:
         yQuant = 'mstar_r500'
         ylabel = 'Total Halo Stellar Mass [ log M$_{\\rm sun}$ ]' # BCG+SAT+ICL (e.g. <r500c)
-        ylim = [11.9, 13.5]
+        ylim = [11.9, 13.4]
         scatterColor = None #'massfrac_exsitu' (TODO: can re-enable)
 
         def _draw_data(ax):
@@ -968,31 +644,35 @@ def sfr_vs_halomass(sPs):
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                              f_pre=_draw_data, legendLoc='upper left', pdf=None)
 
-def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0):
+def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0, saveImages=False):
     """ Generate projections for a given configuration, save results into a single postprocessing file. """
     from ..vis.halo import renderSingleHalo
 
     axes_set   = [[0,1],[0,2],[1,2]]
     nPixels    = 2000
-    depthType  = 'rVirial'
+    depthType  = 'rVirial' # r200c
 
     if conf == 0:
-        sizeType = 'rVirial' # r200c
-        size     = 4.0 # +/- 2 rvir in extent
-        depthFac = 0.5 # +/- 1 rvir in depth
-        confStr  = '2r200'
+        sizeType  = 'rVirial' # r200c
+        size      = 4.0 # +/- 2 rvir in extent
+        depth     = 2.0 # +/- 1 rvir in depth
+        confStr   = '2r200_d=r200'
     if conf == 1:
         sizeType  = 'r500'
         size      = 1.0 # +/- 0.5 r500 in extent
         depth     = 2.0 # +/- 1 rvir in depth
-        depthType = 'rVirial' # r200c
-        confStr   = 'r500'
+        confStr   = '0.5r500_d=r200'
     if conf == 2:
         sizeType  = 'r500'
-        size      = 1.0
-        depth     = 6.0
-        depthType = 'rVirial'
-        confStr   = 'r500_d=3r200'
+        size      = 1.0 # +/- 0.5 r500 in extent
+        depth     = 6.0 # +/- 3 rvir in depth
+        confStr   = '0.5r500_d=3r200'
+    if conf == 3:
+        sizeType  = 'r500'
+        depthType = 'r500'
+        size      = 2.0 # +/- r500 in extent
+        depth     = 2.0 # +/- r500 in depth
+        confStr   = 'r500_d=r500'
 
     method = 'sphMap_globalZoomOrig' # all particles of original zoom run only
 
@@ -1004,8 +684,43 @@ def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0
     subhaloIDs = subhaloIDs[w]
     haloIDs = sP.subhalos('SubhaloGrNr')[subhaloIDs]
 
-    # start save
-    saveFilename = '%s-%s_%03d_%s.hdf5' % (partType, partField, sP.snap, confStr)
+    r200c = sP.subhalos('r200')[subhaloIDs]
+    r500c = sP.subhalos('r500')[subhaloIDs]
+
+    # render images?
+    if saveImages:
+        # plot config
+        class plotConfig:
+            plotStyle  = 'edged' # open, edged
+            rasterPx   = [800,800]
+            colorbars  = True
+            fontsize   = 14
+
+        labelHalo = 'mhalo,haloidorig'
+        labelSim = True
+        labelZ = True
+        labelScale = True
+
+        # loop over all halos
+        for subhaloInd, haloID in zip(subhaloIDs, haloIDs):
+            # loop over all projection directions
+            for axes in axes_set:
+                # render and stamp
+                panels = [{}]
+
+                projAxis = ['x','y','z'][3-np.sum(axes)]
+                saveStr = '%s-%s_%s_%s' % (partType,partField,confStr,projAxis)
+                labelCustom = [confStr.replace('_',' ') + ' ($\hat{%s}$)' % projAxis]
+                plotConfig.saveFilename = '%s.%d.%08d.%s.png' % (sP.simName,sP.snap,subhaloInd,saveStr)
+                
+                renderSingleHalo(panels, plotConfig, locals()) #, skipExisting=False)
+
+        print('Done.')
+        return
+
+    # save projections (instead of rendering images): start save file
+    savePath = sP.postPath + 'projections/'
+    saveFilename = savePath + '%s-%s_%03d_%s.hdf5' % (partType, partField, sP.snap, confStr)
 
     with h5py.File(saveFilename,'a') as f:
         f.attrs['axes_set'] = axes_set
@@ -1017,16 +732,19 @@ def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0
         f.attrs['partField'] = partField
         f.attrs['simName'] = sP.simName
         f.attrs['snap'] = sP.snap
-
-        if conf == 0:
-            f.attrs['depthFac'] = depthFac
-        if conf == 1:
-            f.attrs['depth'] = depth
-            f.attrs['depthType'] = depthType
+        f.attrs['depth'] = depth
+        f.attrs['depthType'] = depthType
 
         if 'HaloIDs' not in f:
             f['HaloIDs'] = haloIDs
             f['SubhaloIDs'] = subhaloIDs
+            f['r200c'] = r200c
+            f['r500c'] = r500c
+
+            dist, theta = _get_dist_theta_grid(size, nPixels)
+
+            f['grid_dist'] = dist
+            f['grid_angle'] = theta
 
     # loop over all halos
     for i, haloID in enumerate(haloIDs):
@@ -1059,146 +777,135 @@ def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0
             f.attrs['name'] = config['label']
 
             f[gName].attrs['minmax_guess'] = config['vMM_guess']
-            f[gName].attrs['box_center'] = config['boxCenter']
-            f[gName].attrs['box_size'] = config['boxSizeImg']
+            f[gName].attrs['box_center'] = config['boxCenter'] # code
+            f[gName].attrs['box_size'] = config['boxSizeImg'] # code, multiply by grid_dist to have px dists in code units for this halo
     
     print('Done.')
 
-def xray_offsets():
-    """ Calculate offsets between X-ray peak location and galaxy positions. """
+def summarize_projection_2d(sim, pSplit=None, quantity='sz_yparam', projConf='2r200_d=r200', aperture='r500'):
+    """ Calculate summary statistic(s) from existing projections in 2D, e.g. Y_{r500,2D} for SZ. """
     # config
-    path = '/virgotng/mpia/TNG-Cluster/L680n8192TNG/postprocessing/projections/'
-    filename = 'gas-xray_lum_0.5-2.0kev_099_r500_d=3r200.hdf5'
-
-    vmm = [37.0, 39.0] # for vis, unused
+    assert pSplit is None
+    path = sim.postPath + 'projections/'
+    filename = 'gas-%s_%03d_%s.hdf5' % (quantity,sim.snap,projConf)
 
     # load list of halos
     with h5py.File(path + filename,'r') as f:
         haloIDs = f['HaloIDs'][()]
         subhaloIDs = f['SubhaloIDs'][()]
         nproj = f['Halo_%d' % haloIDs[0]].shape[2]
-
-    def _find_peak(grid, method='center_of_light'):
-        """ Find peak location in a 2D grid using different methods. Return is in pixel coordinates. """
-        x = np.arange(grid.shape[0])
-        y = np.arange(grid.shape[1])
-
-        grid_linear = 10.0**grid.astype('float64')
-        grid_linear /= grid_linear.max()
-
-        xx, yy = np.meshgrid(x, y, indexing='xy')
-
-        if method == 'max_pixel':
-            # single maximum valued pixel
-            ind = np.argmax(grid)
-            xy_cen = np.unravel_index(ind, grid.shape)[::-1]
-
-        if method == 'center_of_light':
-            # center of light
-            xy_cen = np.average(xx, weights=grid_linear), np.average(yy, weights=grid_linear)
-
-        if method == 'shrinking_circle':
-            # iterative/shrinking circle
-            npx = grid.shape[0] * grid.shape[1]
-            rad = grid.shape[0] / 2
-            xy_cen = np.array([grid.shape[0]/2, grid.shape[1]/2], dtype='float32')
-            iter_count = 0
-
-            circ_cens = []
-            circ_rads = []
-
-            while npx > 100 and iter_count < 500:
-                dx = xx - xy_cen[0]
-                dy = yy - xy_cen[1]
-                rr = np.sqrt(dx**2 + dy**2)
-
-                ind = np.where(rr < rad)
-                npx = len(ind[0])
-
-                xy_cen = np.average(xx[ind], weights=grid_linear[ind]), np.average(yy[ind], weights=grid_linear[ind])
-                rad *= 0.95
-
-                iter_count += 1
-
-                #print(iter_count, npx, xy_cen, rad)
-                circ_cens.append(xy_cen)
-                circ_rads.append(rad)
-
-            return xy_cen, circ_cens, circ_rads
-
-        return xy_cen
+        name = f.attrs['name']
 
     # allocate
-    cen_pos_light = np.zeros((len(haloIDs), nproj, 2), dtype='float32')
-    offsets_px_light = np.zeros((len(haloIDs), nproj), dtype='float32')
-    offsets_code_light = np.zeros((len(haloIDs), nproj), dtype='float32')
-    cen_pos_shrinking = np.zeros((len(haloIDs), nproj, 2), dtype='float32')
-    offsets_px_shrinking = np.zeros((len(haloIDs), nproj), dtype='float32')
-    offsets_code_shrinking = np.zeros((len(haloIDs), nproj), dtype='float32')
+    rr = np.zeros((len(haloIDs), nproj), dtype='float32')
+
+    # load distance grid
+    with h5py.File(path + filename,'r') as f:
+        dist = f['grid_dist'][()]
 
     # loop over all halos
-    count = 0
-
     for haloInd, haloID in enumerate(haloIDs):
+        # status
+        if haloInd % 10 == 0: print(' %4.1f%%' % (float(haloInd+1)*100.0/len(haloIDs)))
+
         # load three projections
         with h5py.File(path + filename,'r') as f:
             proj = f['Halo_%d' % haloID][()]
             box_size = f['Halo_%d' % haloID].attrs['box_size']
-
-        # visualize
-        for i in range(nproj):
-            print(haloID, i)
-            fig, ax = plt.subplots(figsize=(10,10))
-            ax.set_axis_off()
-
-            ax.imshow(proj[:,:,i], origin='lower', cmap='magma') #, vmin=vmm[0], vmax=vmm[1])
-
-            # mark galaxy position (SubhaloPos at center by definition)
-            xy_cen0 = proj.shape[0] / 2.0, proj.shape[1] / 2.0
-
-            ax.plot(xy_cen0[0], xy_cen0[1], 'X', color='black', ms=10, mew=2, fillstyle='none')
-
-            # find peak position (center of light)
-            xy_cen1 = _find_peak(proj[:,:,i])
-
-            ax.plot(xy_cen1[0], xy_cen1[1], 'o', color='black', ms=10, fillstyle='none', mec='black', mew=2, lw=2)
-
-            # find peak position (shrinking circle center of light)
-            xy_cen2, circ_cens, circ_rads = _find_peak(proj[:,:,i], method='shrinking_circle')
-
-            for circ_cen, circ_rad in zip(circ_cens[::5], circ_rads[::5]):
-                circ = plt.Circle(circ_cen, circ_rad, color='black', fill=False, lw=2, alpha=0.1)
-                ax.add_artist(circ)
             
-            ax.plot(xy_cen2[0], xy_cen2[1], 'D', color='black', ms=10, fillstyle='none', mec='black', mew=2, lw=2)
+        # halo-specific aperture [code units]
+        if aperture == 'r500':
+            aperture_rad = sim.halo(haloID)['Group_R_Crit500']
+        if aperture == 'r200':
+            aperture_rad = sim.halo(haloID)['Group_R_Crit200']
 
-            #ax.legend(loc='upper right')
-            fig.savefig('%03d.png' % count)
-            plt.close(fig)
-            count += 1
+        assert aperture_rad < box_size[0] / 2.0 + 1e-6
 
-            # save
-            cen_pos_light[haloInd,i,:] = xy_cen1
-            offsets_px_light[haloInd,i] = np.sqrt((xy_cen0[0]-xy_cen1[0])**2 + (xy_cen0[1]-xy_cen1[1])**2)
-
-            cen_pos_shrinking[haloInd,i,:] = xy_cen2
-            offsets_px_shrinking[haloInd,i] = np.sqrt((xy_cen0[0]-xy_cen2[0])**2 + (xy_cen0[1]-xy_cen2[1])**2)
-            
         # halo-dependent unit conversion
-        code_length_per_px = box_size[0] / proj.shape[0]
-        offsets_code_light[haloInd,:] = offsets_px_light[haloInd,:] * code_length_per_px
-        offsets_code_shrinking[haloInd,:] = offsets_px_shrinking[haloInd,:] * code_length_per_px
+        assert box_size[0] == box_size[1] and proj.shape[0] == proj.shape[1]
+        dists_code_loc = dist * (box_size[0]/2)
 
-    # save derived offsets
-    with h5py.File('offsets.hdf5','w') as f:
-        f['HaloIDs'] = haloIDs
-        f['SubhaloIDs'] = subhaloIDs
-        f['cen_pos_light'] = cen_pos_light
-        f['offsets_px_light'] = offsets_px_light
-        f['offsets_code_light'] = offsets_code_light
-        f['cen_pos_shrinking'] = cen_pos_shrinking
-        f['offsets_px_shrinking'] = offsets_px_shrinking
-        f['offsets_code_shrinking'] = offsets_code_shrinking
+        pxSize_code = box_size[0] / proj.shape[0]
+        pxSize_Kpc = sim.units.codeLengthToKpc(pxSize_code)
+        pxArea_Kpc = pxSize_Kpc**2
+
+        # select spatial region
+        w = np.where(dists_code_loc < aperture_rad)
+
+        # loop over each projection direction
+        for i in range(nproj):
+            # linear map [e.g. dimensionless for SZY, erg/s/kpc^2 for LX]
+            proj_loc = 10.0**(proj[:,:,i]).astype('float64')
+
+            # integrate within aperture
+            quant_sum = np.nansum(proj_loc[w])
+            
+            # multiply by total area in [pKpc^2]
+            # e.g. for SZ, this is [dimensionless] -> [pKpc^2]
+            # e.g. for LX, this is [erg/s/kpc^2] -> [erg/s]
+            quant_sum *= pxArea_Kpc
+
+            rr[haloInd,i] = np.log10(quant_sum)
+
+    # return quantities for save, as expected by load.auxCat()
+    units = name.split('[')[-1].split(']')[0] + ' pkpc^2'
+    desc = 'Sum of [%s] in 2D projection (%s) [%s].' % (quantity,projConf,units)
+    select = 'TNG-Cluster primary zoom targets only.'
+
+    attrs = {'Description' : desc.encode('ascii'),
+             'Selection'   : select.encode('ascii'),
+             'ptType'      : 'gas'.encode('ascii'),
+             'subhaloIDs'  : subhaloIDs}
+
+    return rr, attrs
+
+def szy_vs_halomass(sPs):
+    """ Plot SZ y-parameter vs halo mass. """
+    xQuant = 'mhalo_500_log'
+    cenSatSelect = 'cen'
+
+    xlim = [14.0, 15.3]
+    scatterPoints = True
+    drawMedian = False
+    markersize = 40.0
+    sizefac = 0.8 # for single column figure
+
+    yQuant = 'szy_r500c_3d' # 2D: 'szy_r500c_2d' (only for TNG-Cluster)
+    ylim = [-5.8, -3.5]
+    scatterColor = None
+
+    def _draw_data(ax):
+        # observational points
+        pass
+
+    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                             xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                             f_post=_draw_data, legendLoc='upper left', pdf=None)
+
+def XrayLum_vs_halomass(sPs):
+    """ Plot X-ray luminosity vs halo mass. """
+    xQuant = 'mhalo_500_log'
+    cenSatSelect = 'cen'
+
+    xlim = [14.0, 15.3]
+    scatterPoints = True
+    drawMedian = False
+    markersize = 40.0
+    sizefac = 0.8 # for single column figure
+
+    yQuant = 'xray_0.5-2.0kev_r500_halo' # 2D: 'xraylum_r500c_2d' (only for TNG-Cluster)
+    ylim = [42.8, 46.0]
+    scatterColor = None
+
+    def _draw_data(ax):
+        # observational points
+        pass
+
+    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                             xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                             f_post=_draw_data, legendLoc='upper left', pdf=None)
 
 def paperPlots():
     """ Plots for TNG-Cluster intro paper. """
@@ -1219,84 +926,98 @@ def paperPlots():
     if 0:
         sample_halomasses_vs_redshift(sPs)
 
-    # figures 3,4 - individual halo/gallery vis (x-ray)
+    # figure 3 - simulation meta-comparison
+    if 0:
+        pass
+
+    # figures 4,5 - individual halo/gallery vis (x-ray)
     if 0:
         vis_gallery(TNG_C, conf=1, num=1) # single in xray
-        for conf in [0,1]:
-            vis_gallery(TNG_C, conf=conf, num=72) # gallery
+        vis_gallery(TNG_C, conf=1, num=72) # gallery
 
-    # figure 5 - gas fractions
+    # figure 6 - gas fractions
     if 0:
         gas_fraction_vs_halomass(sPs)
 
-    # figure 6 - magnetic fields
+    # figure 7 - magnetic fields
     if 0:
         redshifts = [0.0, 1.0, 2.0]
         bfield_strength_vs_halomass(sPs, redshifts)
 
-    # figure 7 - sfr/cold gas mass
-    if 0:
-        sfr_vs_halomass(sPs)
-        # todo: cold gas mass
-        # todo: quenched fraction
-
-    # figure 8 - stellar mass contents
-    if 0:
-        for conf in [0,1]:
-            stellar_mass_vs_halomass(sPs, conf=conf)
-
-    # figure 9 - BCG stellar sizes
-    if 0:
-        from ..plot.sizes import galaxySizes
-        pdf = PdfPages('galaxy_stellar_sizes_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        galaxySizes(sPs, xlim=[11.0,13.0], ylim=[2,400], onlyRedData=True, scatterPoints=True, pdf=pdf)
-        pdf.close()
-
-    # figure 10 - black hole mass scaling relation
-    if 0:
-        from ..plot.globalComp import blackholeVsStellarMass
-
-        pdf = PdfPages('blackhole_masses_vs_mstar_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        blackholeVsStellarMass(sPs, pdf, twiceR=True, xlim=[11,13.0], ylim=[7.5,11], actualLargestBHMasses=True)
-        pdf.close()
-
-        pdf = PdfPages('blackhole_masses_vs_mbulge_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, xlim=[11.5,13.0], ylim=[8.5,11], actualLargestBHMasses=True)
-        pdf.close()
-
-        pdf = PdfPages('blackhole_masses_vs_mhalo_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, xlim=[13.9,15.4], ylim=[8.5,11], actualLargestBHMasses=True)
-        pdf.close()
-
-    # figure 11 - X-ray scaling relations
+    # figure 8a - X-ray scaling relations
     if 0:
         from ..plot.globalComp import haloXrayLum
-        for sP in sPs: sP.setRedshift(0.3) # median of data at high-mass end
-        haloXrayLum(sPs, xlim=[11.4,12.7], ylim=[41.6,45.7])
+        sPs_loc = [sP.copy() for sP in sPs]
+        for sP in sPs_loc: sP.setRedshift(0.3) # median of data at high-mass end
+        haloXrayLum(sPs_loc, xlim=[11.4,12.7], ylim=[41.6,45.7])
 
-    # figure 11b - Lx vs M500
+    # figure 8b - Lx vs M500
     if 0:
         pass
 
-    # figure 12 - halo synchrotron power
+    # figure 9 - halo synchrotron power
     if 0:
         from ..plot.globalComp import haloSynchrotronPower
         haloSynchrotronPower(sPs, xlim=[14.0,15.3], ylim=[21.5,28.5])
 
-    # figure 13 - SZ-y vs mass
+    # figure 10 - SZ-y and X-ray vs mass scaling relations
     if 0:
-        pass
+        szy_vs_halomass(sPs)
+        XrayLum_vs_halomass(sPs)
+
+    # figure 11 - sfr/cold gas mass
+    if 0:
+        sfr_vs_halomass(sPs)
+        # todo: cold gas mass (https://arxiv.org/abs/2305.12750 Fig 8)
+        # todo: quenched fraction
+
+    # figure 12 - stellar mass contents
+    if 0:
+        stellar_mass_vs_halomass(sPs, conf=0)
+        stellar_mass_vs_halomass(sPs, conf=1)
+
+    # figure 13 - BCG stellar sizes
+    if 0:
+        from ..plot.sizes import galaxySizes
+        pdf = PdfPages('galaxy_stellar_sizes_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
+        galaxySizes(sPs, xlim=[11.0,13.0], ylim=[2,400], onlyRedData=True, scatterPoints=True, sizefac=0.8, pdf=pdf)
+        pdf.close()
+
+    # figure 14 - black hole mass scaling relation
+    if 0:
+        from ..plot.globalComp import blackholeVsStellarMass
+
+        pdf = PdfPages('blackhole_masses_vs_mstar_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
+        blackholeVsStellarMass(sPs, pdf, twiceR=True, xlim=[11,13.0], ylim=[7.5,11], sizefac=0.8)
+        pdf.close()
+
+        pdf = PdfPages('blackhole_masses_vs_mbulge_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
+        blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, xlim=[11.5,13.0], ylim=[8.5,11], sizefac=0.8)
+        pdf.close()
+
+        pdf = PdfPages('blackhole_masses_vs_mhalo_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
+        blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, xlim=[13.9,15.4], ylim=[8.5,11], sizefac=0.8)
+        pdf.close()
+
+        # todo: add vs sigma
+        # https://arxiv.org/abs/2308.01800
 
     # appendix - virtual full box vis
     if 0:
-        for conf in [0,1,2,3,4,5]:
+        for conf in [0,1,2,3,4,5,6]:
             vis_fullbox_virtual(TNG_C, conf=conf)
 
     # appendix - contamination
+    if 0:
+        contamination_mindist()
 
     # satellite smhm
-    # satellite radial number density
-    # richness
+    # satellite radial number density (https://arxiv.org/abs/2305.09629 Fig 11)
+    # richness (N_sat), see Pakmor MTNG paper (also https://arxiv.org/abs/2307.08749)
     # SPA relaxedness measures from X-ray SB maps (https://arxiv.org/abs/2303.10185) (https://arxiv.org/pdf/2006.10752.pdf)
+    # members: L_X vs velocity dispersion relation (Kirkpatrick,C.+2020 SPIDERS), 'cosmo constraints with the velocity dispersion function'
+    # TODO: https://arxiv.org/abs/2111.13071 (M_SZ vs M_dyn from PSZ2)
+
+    # ex-situ fractions, or radial profiles of ex-situ stacked in mass (or similar)
 
     # figure todo - kinematics overview (vel disp cold,warm,hot) (https://arxiv.org/abs/2304.08810)
