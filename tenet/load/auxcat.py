@@ -444,6 +444,8 @@ fieldComputeFunctionMapping = \
      partial(fofRadialSumType,ptProperty='xray_lum_05-2kev',ptType='gas',rad='Group_R_Crit500'),
    'Group_XrayLum_0.5-2.0kev_Crit500' : \
      partial(fofRadialSumType,ptProperty='xray_lum_0.5-2.0kev',ptType='gas',rad='Group_R_Crit500'),
+   'Group_XrayLum_0.1-2.4kev_Crit500' : \
+     partial(fofRadialSumType,ptProperty='xray_lum_0.1-2.4kev',ptType='gas',rad='Group_R_Crit500'),
 
    # subhalo: masses
    'Subhalo_Mass_5pkpc_Stars' : \

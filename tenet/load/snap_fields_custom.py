@@ -933,8 +933,8 @@ xray_lum.log = True
 
 @snap_field(aliases=['xray_lum_05-2kev','xray_flux_05-2kev','xray_lum_05-2kev_nomet','xray_flux_05-2kev_nomet',
                      'xray_counts_erosita','xray_counts_chandra',
-                     'xray_lum_0.5-2.0kev','xray_lum_0.3-7.0kev','xray_lum_0.5-5.0kev',
-                     'xray_lum_0.5-8.0kev','xray_lum_2.0-10.0kev'])
+                     'xray_lum_0.1-2.4kev','xray_lum_0.5-2.0kev','xray_lum_0.3-7.0kev',
+                     'xray_lum_0.5-5.0kev','xray_lum_0.5-8.0kev','xray_lum_2.0-10.0kev'])
 def xray_lum_apec(sim, partType, field, args):
     """ X-ray luminosity/flux/counts (the latter for a given instrumental configuration).
     If a decimal point '.' in field, using my APEC-based tables, otherwise using XSPEC-based tables (from Nhut). """
@@ -974,6 +974,8 @@ def xray_lum_apec_metadata(sim, pt, f, ret):
         label = 'X, 0.5-2 keV'
     if '05-2kev_nomet' in f:
         label = 'X, 0.5-2 keV, no-Z'
+    if '0.1-2.4kev' in f:
+        label = 'X, 0.5-2 keV, APEC'
     if '0.5-2.0kev' in f:
         label = 'X, 0.5-2 keV, APEC'
     if '0.3-7.0kev' in f:

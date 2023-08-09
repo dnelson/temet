@@ -885,6 +885,8 @@ def szy_vs_halomass(sPs):
 
 def XrayLum_vs_halomass(sPs):
     """ Plot X-ray luminosity vs halo mass. """
+    from ..load.data import pratt09, vikhlinin09, mantz16, bulbul19
+
     xQuant = 'mhalo_500_log'
     cenSatSelect = 'cen'
 
@@ -900,7 +902,24 @@ def XrayLum_vs_halomass(sPs):
 
     def _draw_data(ax):
         # observational points
-        pass
+        p09 = pratt09()
+        v09 = vikhlinin09()
+        m16 = mantz16()
+        b19 = bulbul19()
+
+        markers = ['p','D','*','s']
+
+        ax.plot(p09['M500'], p09['L05_2'], markers[0], color='#000000', ms=6, alpha=0.7)
+        ax.plot(v09['M500_Y'], v09['LX'], markers[1], color='#000000', ms=6, alpha=0.7)
+        ax.plot(m16['M500'], m16['LX'], markers[2], color='#000000', ms=9, alpha=0.7)
+        ax.plot(b19['M500'], b19['LX'], markers[3], color='#000000', ms=6, alpha=0.7)
+
+        labels = [p09['label'],v09['label'],m16['label'],b19['label']]
+
+        # second legend
+        handles = [plt.Line2D((0,1), (0,0), color='black', lw=0, marker=m) for m in markers]
+        legend2 = ax.legend(handles, labels, borderpad=0.4, loc='lower right')
+        ax.add_artist(legend2)
 
     quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,

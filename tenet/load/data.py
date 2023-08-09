@@ -17,7 +17,6 @@ logOHp12_solar = 8.69 # Asplund+ (2009) Table 1
 
 dataBasePath = os.path.join(Path(__file__).parent.parent.absolute(),"data/")
 
-
 def behrooziSMHM(sP, logHaloMass=None, redshift=0.1):
     """ Load from data files: Behroozi+ (2013) abundance matching, stellar mass / halo mass relation. """
     basePath = dataBasePath + 'behroozi/release-sfh_z0_z8_052913/smmr/'
@@ -2858,6 +2857,104 @@ def zhu13mgii():
          'dNdz'  : dNdz, # unitless
          'z'     : z, # redshift
          'label' : 'Zhu+13'}
+
+    return r
+
+def pratt09():
+    """ Load observational data points from Pratt+ (2009), REXCESS X-ray cluster survey. """
+    path = dataBasePath + 'pratt/p09_table_b1.txt'
+
+    data = np.genfromtxt(path,comments='#',dtype=None,encoding=None)
+
+    r = {'name'      : [d[0] for d in data],
+         'z'         : np.array([d[1] for d in data]), # redshift
+         'T500'      : np.array([d[2] for d in data]), # spectroscopic temperature (R<R500) [keV]
+         'L01_24'    : np.log10(np.array([d[3] for d in data])*1e44), # LX 0.1-2.4 keV (R<R500) [log erg/s]
+         'L05_2'     : np.log10(np.array([d[4] for d in data])*1e44), # LX 0.5-2.0 keV (R<R500) [log erg/s]
+         'T500_ce'   : np.array([d[5] for d in data]), # spectroscopic temperature (0.15<R<R500) [keV]
+         'L01_24_ce' : np.log10(np.array([d[6] for d in data])*1e44), # LX 0.1-2.4 keV (0.15<R<R500) [log erg/s]
+         'L05_2_ce'  : np.log10(np.array([d[7] for d in data])*1e44), # LX 0.5-2.0 keV (0.15<R<R500) [log erg/s]
+         'YX'        : np.array([d[8] for d in data]), # YX [1e13 Msun keV]
+         'R500'      : np.array([d[9] for d in data]), # R500 [kpc]
+         'CC_flag'   : np.array([d[10] for d in data]), # cool core?
+         'dist_flag' : np.array([d[11] for d in data]), # disturbed?
+         'label'     : 'Pratt+ (2009)'}
+
+    # compute M500 as in the paper (Eqn 1) - based on the empirical M500-YX relation (from Arnaud+07)
+    hz = np.sqrt(0.3*(1 + r['z'])**3 + 0.7)
+    r['M500'] = np.log10(10.0**14.556 * (r['YX'] * 1e13 / 2e14)**(0.548) / hz**(2/5)) # log Msun
+
+    return r
+
+def vikhlinin09():
+    """ Load observational data points from Vikhlinin+ (2009), Chandra/ROSAT X-ray cluster survey. """
+    path = dataBasePath + 'vikhlinin/v09.txt'
+
+    data = np.genfromtxt(path,comments='#',dtype=None,encoding=None)
+
+    r = {'name'        : [d[0] for d in data],
+         'f_x'         : np.array([d[1] for d in data]), # flux [1e-11 cgs]
+         'z'           : np.array([d[2] for d in data]), # redshift
+         'LX'          : np.log10(np.array([d[3] for d in data])), # LX 0.5-2.0 keV (R<R500) [log erg/s]
+         'TX'          : np.array([d[4] for d in data]), # TX from spectrum (in 0.15<R<R500) [keV]
+         'TX_err'      : np.array([d[5] for d in data]), # uncertainty on above
+         'M500_Y'      : np.log10(np.array([d[6] for d in data])*1e14), # M500 estimated from Y_X [log msun]
+         'M500_Y_err'  : np.log10(np.array([d[7] for d in data])*1e14), # uncertainty on above
+         'M500_G'      : np.log10(np.array([d[8] for d in data])*1e14), # M500 estimated from gas mass [log msun]
+         'M500_G_err'  : np.log10(np.array([d[9] for d in data])*1e14), # uncertainty on above
+         'M500_T'      : np.log10(np.array([d[8] for d in data])*1e14), # M500 estimated from Mtot-TX relation [log msun]
+         'M500_T_err'  : np.log10(np.array([d[9] for d in data])*1e14), # uncertainty on above
+         'merger_flag' : np.array([d[10] for d in data]), # merger? 1=yes, 0=no
+         'label'       : 'Vikhlinin+ (2009)'}
+
+    return r
+
+def bulbul19():
+    """ Load observational data points from Bulbul+ (2019), XMM X-ray obs of SPT-SZ selected clusters. """
+    path = dataBasePath + 'bulbul/b19_table3.txt'
+
+    data = np.genfromtxt(path,comments='#',dtype=None,encoding=None)
+
+    r = {'name'      : [d[0] for d in data],
+         'R500'      : np.array([d[1] for d in data]), # R500 [kpc]
+         'LX'        : np.log10(np.array([d[2] for d in data])*1e44), # Lx (R<R500) soft-band lum [log erg/s]
+         'LX_bol'    : np.log10(np.array([d[4] for d in data])*1e44), # Lx (R<R500) bolometric lum [log erg/s]
+         'TX'        : np.array([d[6] for d in data]), # emission-weighted mean temperature 'core-included' [keV]
+         'Z'         : np.array([d[9] for d in data]), # emission-weighted mean metallicity 'core-included' [Zsun]
+         'LX_ce'     : np.log10(np.array([d[12] for d in data])*1e44), # Lx (0.15<R<R500) soft-band lum [log erg/s]
+         'LX_ce_bol' : np.log10(np.array([d[14] for d in data])*1e44), # Lx (0.15<R<R500) bolometric lum [log erg/s]
+         'TX_ce'     : np.array([d[16] for d in data]), # emission-weighted mean temperature core-excised [keV]
+         'Z_ce'      : np.array([d[19] for d in data]), # emission-weighted mean metallicity core-excised [Zsun]
+         'M_ICM'     : np.log10(np.array([d[22] for d in data])*1e13), # measured ICM mass [log msun]
+         'YX'        : np.array([d[22] for d in data]), # X-ray derived integrated Compton-y [1e14 msun keV]
+         'M500'      : np.log10(np.array([d[22] for d in data])*1e14), # halo mass M500 determined from the SZE observations [log msun]
+         'label'     : 'Bulbul+ (2019)'}
+
+    return r
+
+def mantz16():
+    """ Load observational data points from Mantz+ (2016) "Weighing the Giants" X-ray clusters. """
+    path = dataBasePath + 'mantz/m16_erratum_table2.txt'
+
+    data = np.genfromtxt(path,comments='#',dtype=None,encoding=None)
+
+    r = {'name'     : [d[0] for d in data],
+         'z'        : np.array([d[1] for d in data]), # redshift
+         'R500'     : np.array([d[2] for d in data])*1e3, # scale radius r500 [Mpc -> kpc]
+         'M_gas'    : np.log10(np.array([d[4] for d in data])*1e14), # gas mass R<R500 [log msun]
+         'TX'       : np.array([d[6] for d in data]), # projected temperature 0.15<R<R500 [keV]
+         'LX_01_24' : np.log10(np.array([d[8] for d in data])*1e44), # LX 0.1-2.4 keV intrinsic, rest-frame luminosity R<R500 [log erg/s]
+         'M500'     : np.array([d[10] for d in data])*1e15, # M500, gravitating mass from weak lensing [log msun, below]
+         'label'    : 'Mantz+ (2016)'}
+
+    # log masses, silently converting 0.0 missing values (most entries) to NaN (skip in plots)
+    with np.errstate(divide='ignore'):
+        r['M500'] = np.log10(r['M500'])
+
+    # convert 0.1-2.4 keV luminosity to more standard 0.5-2.5 keV band
+    # source: mean ratio of LX_500^{0.1-2.4} / LX_500^{0.5-2.0} for the TNG-Cluster sample at z=0
+    band_ratio = 1.66
+    r['LX'] = np.log10(10.0**r['LX_01_24'] / band_ratio)
 
     return r
 

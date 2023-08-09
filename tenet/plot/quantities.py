@@ -1725,7 +1725,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [37, 42]
         #if tight: minMax = [38, 45]
 
-    if quantname in ['xray_05-2kev_r500','xray_0.5-2.0kev_r500','xray_0.5-2.0kev_r500_halo']:
+    if quantname in ['xray_05-2kev_r500','xray_0.5-2.0kev_r500','xray_0.5-2.0kev_r500_halo','xray_0.1-2.4kev_r500_halo']:
         # x-ray luminosity from APEC ('.' in name) or XPEC ('.' not in name, from Nhut) tables
         eStr = '0.5-2 keV'
         label = 'L$_{\\rm X,r500}^{\\rm %s}$ [ log erg/s ]' % eStr
