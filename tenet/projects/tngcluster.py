@@ -260,7 +260,7 @@ def mass_function(secondaries=False):
 
 def sample_halomasses_vs_redshift(sPs):
     """ Compare simulation vs observed cluster samples as a function of (redshift,mass). """
-    from ..load.data import rossetti17planck, pintoscastro19, hilton20act, adami18xxl
+    from ..load.data import rossetti17planck, pintoscastro19, hilton21act, adami18xxl
     from ..load.data import bleem20spt, piffaretti11rosat
 
     redshifts = np.linspace(0.0, 0.6, 13) #[0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
@@ -284,7 +284,7 @@ def sample_halomasses_vs_redshift(sPs):
     # plot obs samples
     r17 = rossetti17planck()
     pc19 = pintoscastro19(sPs[0])
-    h20 = hilton20act()
+    h21 = hilton21act()
     a18 = adami18xxl()
     b20 = bleem20spt(sPs[0])
     p11 = piffaretti11rosat()
@@ -293,7 +293,7 @@ def sample_halomasses_vs_redshift(sPs):
 
     d2 = ax.scatter(pc19['z'], pc19['m500'], s=msize+8, c='#222222', marker='*', alpha=alpha, label=pc19['label'], zorder=0)
 
-    d3 = ax.scatter(h20['z'], h20['m500'], s=msize-9, c='#222222', marker='p', alpha=alpha-0.3, label=h20['label'], zorder=0)
+    d3 = ax.scatter(h21['z'], h21['m500'], s=msize-9, c='#222222', marker='p', alpha=alpha-0.3, label=h21['label'], zorder=0)
 
     d4 = ax.scatter(a18['z'], a18['m500'], s=msize+8, c='#222222', marker='D', alpha=alpha, label=a18['label'], zorder=0)
 
@@ -680,8 +680,11 @@ def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0
     subhaloIDs = sP.cenSatSubhaloIndices(cenSatSelect='cen')
     m200c = sP.subhalos('mhalo_200_log')[subhaloIDs]
 
-    w = np.where(m200c > 14.0)[0]
-    subhaloIDs = subhaloIDs[w]
+    if sP.simName != 'TNG-Cluster':
+        # include low-mass progenitors at high redshift
+        w = np.where(m200c > 14.0)[0]
+        subhaloIDs = subhaloIDs[w]
+
     haloIDs = sP.subhalos('SubhaloGrNr')[subhaloIDs]
 
     r200c = sP.subhalos('r200')[subhaloIDs]
@@ -861,6 +864,8 @@ def summarize_projection_2d(sim, pSplit=None, quantity='sz_yparam', projConf='2r
 
 def szy_vs_halomass(sPs):
     """ Plot SZ y-parameter vs halo mass. """
+    from ..load.data import hilton21act, planck13xx, bleem15spt, nagarajan18
+
     xQuant = 'mhalo_500_log'
     cenSatSelect = 'cen'
 
@@ -874,14 +879,66 @@ def szy_vs_halomass(sPs):
     ylim = [-5.8, -3.5]
     scatterColor = None
 
-    def _draw_data(ax):
-        # observational points
+    def _draw_data_pre(ax):
         pass
+
+    def _draw_data(ax):
+        # create second ghost axis (to hold a second legend)
+        ax2 = ax.twinx()
+        ax2.set_ylim(ax.get_ylim())
+        ax2.set_axis_off()
+
+        # (1) observational shaded bands
+
+        # lines from Jimeno+18 (Fig 7) for Planck (red)
+        xx = np.log10([8.012e13, 3.0e15]) # 1.655e15
+        y_lower = np.log10([7.818e-7, 0.00052325]) # 1.798e-4
+        y_upper = np.log10([1.578e-6, 0.00106515]) # 3.655e-4
+
+        ax2.fill_between(xx, y_lower, y_upper, color='#000000', alpha=0.2, zorder=-4, label='Planck XX (2013)')
+
+        # lines from Jimeno+18 (Fig 7) for that work (blue)
+        xx = np.log10([8.012e13, 3.0e15])
+        y_lower = np.log10([8.244e-7, 0.000380666])
+        y_upper = np.log10([1.447e-6, 0.000658573])
+
+        # Jimeno+ (2018) https://arxiv.org/abs/1706.00395 (Eqn. 30)
+        #M500 = 10.0**np.array(ax.get_xlim()) # msun
+        #mass_bias = 0.82
+        #Y500 = 10.0**(-0.35) * (mass_bias*M500 / 6e14)**(1.70)
+        #Y500 = np.log10(Y500 * 1e-4) # convert to pMpc^2
+        #ax.plot(np.log10(M500), Y500, '-', color='#000000', alpha=0.7, label='Jimeno+ (2018) Planck')
+
+        ax2.fill_between(xx, y_lower, y_upper, color='#000000', alpha=0.3, zorder=-3, label='Jimeno+ (2018) Planck')
+
+        # self-similar slope
+        M500 = np.array([3e14, 9e14])
+        Y500 = np.log10(1e-5 * (M500/5e14)**(5/3))
+
+        ax2.plot(np.log10(M500), Y500, '--', color='#000000', alpha=0.7, label='$\\rm{Y_{500} \propto M_{500}^{5/3}}$')
+
+        # (2) observational pointsets
+        #b15 = bleem15spt(sPs[0])
+        #h21 = hilton21act()
+        #p13 = planck13xx()
+        n18 = nagarajan18()
+
+        #ax.plot(h21['m500'], h21['sz_y'], 'p', color='#000000', ms=6, alpha=0.7)
+        #ax.plot(p13['M500'], p13['Y500'], '*', color='#000000', ms=6, alpha=0.7)
+        #ax.plot(b15['M500'], b15['Y'], 's', color='#000000', ms=6, alpha=0.7)
+
+        xerr = np.vstack((n18['M500_errdown'],n18['M500_errup']))
+        yerr = np.vstack((n18['Y_errup'],n18['Y_errdown']))
+        ax2.errorbar(n18['M500'], n18['Y'], xerr=xerr, yerr=yerr, fmt='D', zorder=-2, 
+                     color='#aaaaaa', ms=6, alpha=0.7, label=n18['label'])
+
+        # second legend
+        ax2.legend(loc='lower right')
 
     quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_post=_draw_data, legendLoc='upper left', pdf=None)
+                             f_pre=_draw_data_pre, f_post=_draw_data, legendLoc='upper left', pdf=None)
 
 def XrayLum_vs_halomass(sPs):
     """ Plot X-ray luminosity vs halo mass. """

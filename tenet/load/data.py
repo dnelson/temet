@@ -1630,8 +1630,9 @@ def pintoscastro19(sP):
 
     return r
 
-def hilton20act():
-    """ Load the ACT cluster sample from Hilton+2020. (https://astro.ukzn.ac.za/~mjh/ACTDR5/v1.0b3/)"""
+def hilton21act():
+    """ Load the ACT cluster sample from Hilton+2021. (https://astro.ukzn.ac.za/~mjh/ACTDR5/v1.0b3/)
+    Official: https://lambda.gsfc.nasa.gov/product/act/actpol_dr5_szcluster_catalog_get.html """
     path = dataBasePath + 'hilton/DR5_cluster-catalog_v1.0b3.txt'
 
     # load
@@ -1643,9 +1644,10 @@ def hilton20act():
         if line[0] != '#': nLines += 1
 
     # allocate
-    z     = np.zeros( nLines, dtype='float32' )
-    m200  = np.zeros( nLines, dtype='float32' )
-    m500  = np.zeros( nLines, dtype='float32' )
+    z     = np.zeros(nLines, dtype='float32')
+    yc    = np.zeros(nLines, dtype='float32')
+    m200  = np.zeros(nLines, dtype='float32')
+    m500  = np.zeros(nLines, dtype='float32')
 
     # parse
     i = 0
@@ -1654,14 +1656,31 @@ def hilton20act():
         # # name, redshift, yc [1e-4], m500c [1e14 msun], m500c_cal [1e14 msun], m200m [1e14 msun]
         line    = line.split("\t")
         z[i]    = float(line[1])
+        yc[i]   = float(line[2]) # 1e-4
         m500[i] = float(line[3]) # 1e14 msun
         m200[i] = float(line[5]) # 1e14 msun
         i += 1
 
     r = {'z'     : z,
+         'sz_y'  : np.log10(yc * 1e-4), # log
          'm500'  : np.log10(m500 * 1e14), # 1e14 msun -> log[msun]
          'm200'  : np.log10(m200 * 1e14), # 1e14 msun -> log[msun]
-         'label' : 'ACT-SZ DR5 (Hilton+20)'}
+         'label' : 'ACT-SZ DR5 (Hilton+21)'}
+
+    # note: need to convert yc 'central comptonization parameter' to Y500
+    # see Sec 3.3.4 of https://edoc.ub.uni-muenchen.de/17255/1/Liu_Jiayi.pdf
+
+    return r
+
+def planck13xx():
+    """ Load the Y500-M500 data points from Planck2013 XX (arXiv 1303.5080) """
+    path = dataBasePath + 'planck/p13_XX_table_a1.txt'
+
+    data = np.genfromtxt(path,comments='#',delimiter=',',dtype=None,encoding=None)
+
+    r = {'Y500'  : np.log10(np.array([d[1] for d in data])), # log pMpc^2
+         'M500'  : np.log10(np.array([d[0] for d in data])), # log msun
+         'label' : 'Planck-XMM (2013)'}
 
     return r
 
@@ -1698,6 +1717,40 @@ def adami18xxl():
     r = {'z'     : z,
          'm500'  : np.log10(m500 * 1e13), # 1e13 msun -> log[msun]
          'label' : 'XMM-Newton XXL 365 (Adami+18)'}
+
+    return r
+
+def bleem15spt(sP):
+    """ Load the Y500-M500 data points from Bleem+ (2015) fiducial SPT-SZ 2500d sample. """
+    path = dataBasePath + 'bleem/sptsz_2500d.txt'
+
+    data = np.genfromtxt(path,comments='#',dtype=None,encoding=None)
+
+    r = {'name'  : [d[0] for d in data],
+         'z'     : np.array([d[1] for d in data]),
+         'M500'  : np.array([d[2] for d in data])*1e14, # msun
+         'Y_arcmin2' : np.array([d[3] for d in data]), # arcmin^2
+         'label' : 'Bleem+ (2015) SPT-SZ'}
+
+    # log masses
+    with np.errstate(divide='ignore'):
+        r['M500'] = np.log10(r['M500'])
+
+    # correct for redshift evolution assuming self-similar
+    #Ez = np.sqrt(sP.omega_m*(1.0+r['z'])**3 + sP.omega_L)
+    #r['Y_arcmin2'] *= Ez**(-2/3)
+
+    # convert Y_SZ [note: is within 0.75 arcmin aperture] to pMpc^2
+    r['Y'] = np.zeros(r['Y_arcmin2'].size, dtype='float32')
+    r['Y'].fill(np.nan) # signify missing
+
+    for i in range(r['Y_arcmin2'].size):
+        if r['z'][i] == 0.0: continue # missing
+        arcmin_to_kpc = sP.units.arcsecToAngSizeKpcAtRedshift(60.0, r['z'][i])
+        r['Y'][i] = r['Y_arcmin2'][i] * arcmin_to_kpc**2 # arcmin^2 -> kpc^2
+
+    r['Y'] /= 1e6 # pkpc^2 -> pMpc^2
+    r['Y'] = np.log10(r['Y']) # log pMpc^2
 
     return r
 
@@ -2956,6 +3009,34 @@ def mantz16():
     band_ratio = 1.66
     r['LX'] = np.log10(10.0**r['LX_01_24'] / band_ratio)
 
+    return r
+
+def nagarajan18():
+    """ Load observational data points from Nagarajan+ (2018) Y500 vs M500. """
+    path = dataBasePath + 'nagarajan/n18_table2.txt'
+
+    data = np.genfromtxt(path,comments='#',dtype=None,encoding=None)
+
+    r = {'name'         : [d[0] for d in data],
+         'z'            : np.array([d[3] for d in data]), # redshift
+         'Y'            : np.array([d[4] for d in data])*1e-5, # Y500 [pMpc^2]
+         'Y_err'        : np.array([d[5] for d in data])*1e-5, # Y500 uncertainty
+         'M500'         : np.array([d[6] for d in data])*1e14, # M500 [msun]
+         'M500_errup'   : np.array([d[7] for d in data])*1e14, # M500 err up
+         'M500_errdown' : np.array([d[8] for d in data])*1e14, # M500 err down
+         'LX'           : np.array([d[9] for d in data])*1e44, # LX 0.1-2.4 kev [erg/s]
+         'label'        : 'Nagarajan+ (2018)'}
+    
+    with np.errstate(invalid='ignore'):
+        r['M500_errup'] = np.log10(r['M500_errup'] + r['M500']) - np.log10(r['M500'])
+        r['M500_errdown'] = np.log10(r['M500']) - np.log10(r['M500'] - r['M500_errdown'])
+
+        r['Y_errup'] = np.log10(r['Y_err'] + r['Y']) - np.log10(r['Y'])
+        r['Y_errdown'] = np.log10(r['Y']) - np.log10(r['Y'] - r['Y_err'])
+
+        r['Y'] = np.log10(r['Y'])
+        r['M500'] = np.log10(r['M500'])
+    
     return r
 
 def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
