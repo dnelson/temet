@@ -613,7 +613,7 @@ def sfr_vs_halomass(sPs):
 
     yQuant = 'sfr_30pkpc'
     ylim = [-3.5, 4.0]
-    scatterColor = None #'massfrac_exsitu2'
+    scatterColor = None
 
     def _draw_data(ax):
         # observational points
@@ -785,10 +785,62 @@ def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0
     
     print('Done.')
 
-def summarize_projection_2d(sim, pSplit=None, quantity='sz_yparam', projConf='2r200_d=r200', aperture='r500'):
+def _find_peak(grid, method='center_of_light'):
+    """ Find peak location in a 2D grid using different methods. Return is in pixel coordinates. """
+    x = np.arange(grid.shape[0])
+    y = np.arange(grid.shape[1])
+
+    grid_norm = grid / grid.max()
+
+    xx, yy = np.meshgrid(x, y, indexing='xy')
+
+    if method == 'max_pixel':
+        # single maximum valued pixel
+        ind = np.argmax(grid)
+        xy_cen = np.unravel_index(ind, grid.shape)[::-1]
+
+    if method == 'center_of_light':
+        # center of light
+        xy_cen = np.average(xx, weights=grid_norm), np.average(yy, weights=grid_norm)
+
+    if method == 'shrinking_circle':
+        # iterative/shrinking circle
+        npx = grid.shape[0] * grid.shape[1]
+        rad = grid.shape[0] / 2
+        xy_cen = np.array([grid.shape[0]/2, grid.shape[1]/2], dtype='float32')
+        iter_count = 0
+
+        circ_cens = []
+        circ_rads = []
+
+        while npx > 100 and iter_count < 500:
+            dx = xx - xy_cen[0]
+            dy = yy - xy_cen[1]
+            rr = np.sqrt(dx**2 + dy**2)
+
+            ind = np.where(rr < rad)
+            npx = len(ind[0])
+
+            xy_cen = np.average(xx[ind], weights=grid_norm[ind]), np.average(yy[ind], weights=grid_norm[ind])
+            rad *= 0.95
+
+            iter_count += 1
+
+            #print(iter_count, npx, xy_cen, rad)
+            circ_cens.append(xy_cen)
+            circ_rads.append(rad)
+
+        return xy_cen, circ_cens, circ_rads
+
+    return xy_cen
+
+def summarize_projection_2d(sim, pSplit=None, quantity='sz_yparam', projConf='2r200_d=r200', 
+                            op='sum', aperture='r500'):
     """ Calculate summary statistic(s) from existing projections in 2D, e.g. Y_{r500,2D} for SZ. """
     # config
     assert pSplit is None
+    assert op in ['sum','peak_offset']
+
     path = sim.postPath + 'projections/'
     filename = 'gas-%s_%03d_%s.hdf5' % (quantity,sim.snap,projConf)
 
@@ -815,16 +867,8 @@ def summarize_projection_2d(sim, pSplit=None, quantity='sz_yparam', projConf='2r
         with h5py.File(path + filename,'r') as f:
             proj = f['Halo_%d' % haloID][()]
             box_size = f['Halo_%d' % haloID].attrs['box_size']
-            
-        # halo-specific aperture [code units]
-        if aperture == 'r500':
-            aperture_rad = sim.halo(haloID)['Group_R_Crit500']
-        if aperture == 'r200':
-            aperture_rad = sim.halo(haloID)['Group_R_Crit200']
 
-        assert aperture_rad < box_size[0] / 2.0 + 1e-6
-
-        # halo-dependent unit conversion
+        # halo-dependent unit conversions
         assert box_size[0] == box_size[1] and proj.shape[0] == proj.shape[1]
         dists_code_loc = dist * (box_size[0]/2)
 
@@ -832,27 +876,52 @@ def summarize_projection_2d(sim, pSplit=None, quantity='sz_yparam', projConf='2r
         pxSize_Kpc = sim.units.codeLengthToKpc(pxSize_code)
         pxArea_Kpc = pxSize_Kpc**2
 
-        # select spatial region
-        w = np.where(dists_code_loc < aperture_rad)
+        if op == 'sum':
+            # halo-specific aperture [code units]
+            if aperture == 'r500':
+                aperture_rad = sim.halo(haloID)['Group_R_Crit500']
+            if aperture == 'r200':
+                aperture_rad = sim.halo(haloID)['Group_R_Crit200']
+
+            assert aperture_rad < box_size[0] / 2.0 + 1e-6
+
+            # select spatial region
+            w_px_spatial = np.where(dists_code_loc < aperture_rad)
 
         # loop over each projection direction
         for i in range(nproj):
             # linear map [e.g. dimensionless for SZY, erg/s/kpc^2 for LX]
             proj_loc = 10.0**(proj[:,:,i]).astype('float64')
 
-            # integrate within aperture
-            quant_sum = np.nansum(proj_loc[w])
-            
-            # multiply by total area in [pKpc^2]
-            # e.g. for SZ, this is [dimensionless] -> [pKpc^2]
-            # e.g. for LX, this is [erg/s/kpc^2] -> [erg/s]
-            quant_sum *= pxArea_Kpc
+            if op == 'sum':
+                # integrate within aperture
+                quant_sum = np.nansum(proj_loc[w_px_spatial])
+                
+                # multiply by total area in [pKpc^2]
+                # e.g. for SZ, this is [dimensionless] -> [pKpc^2]
+                # e.g. for LX, this is [erg/s/kpc^2] -> [erg/s]
+                quant_sum *= pxArea_Kpc
 
-            rr[haloInd,i] = np.log10(quant_sum)
+                rr[haloInd,i] = np.log10(quant_sum)
+
+            if op == 'peak_offset':
+                # mark galaxy position (SubhaloPos at center by definition)
+                xy_cen0 = proj.shape[0] / 2.0, proj.shape[1] / 2.0
+
+                xy_cen2, circ_cens, circ_rads = _find_peak(proj_loc, method='shrinking_circle')
+                offsets_px = np.sqrt((xy_cen0[0]-xy_cen2[0])**2 + (xy_cen0[1]-xy_cen2[1])**2)
+                offsets_code = offsets_px * pxSize_code
+
+                rr[haloInd,i] = offsets_code
 
     # return quantities for save, as expected by load.auxCat()
-    units = name.split('[')[-1].split(']')[0] + ' pkpc^2'
-    desc = 'Sum of [%s] in 2D projection (%s) [%s].' % (quantity,projConf,units)
+    if op == 'sum':
+        units = name.split('[')[-1].split(']')[0] + ' pkpc^2'
+        desc = 'Sum of [%s] in 2D projection (%s) [%s].' % (quantity,projConf,units)
+    if op == 'peak_offset':
+        units = 'code_length'
+        desc = 'Spatial offset of peak [%s] in 2D projection (%s) [%s].' % (quantity,projConf,units)
+
     select = 'TNG-Cluster primary zoom targets only.'
 
     attrs = {'Description' : desc.encode('ascii'),
@@ -910,6 +979,14 @@ def szy_vs_halomass(sPs):
         #ax.plot(np.log10(M500), Y500, '-', color='#000000', alpha=0.7, label='Jimeno+ (2018) Planck')
 
         ax2.fill_between(xx, y_lower, y_upper, color='#000000', alpha=0.3, zorder=-3, label='Jimeno+ (2018) Planck')
+
+        # Hill+ 2018
+        #M500 = np.array([1.0e12, 1.0e13, 6.63e13, 2.44e14, 5.59e14, 1.0e15])
+        #Y500 = np.array([2.845e-9, 5.687e-7, 5.381e-5, 5.179e-4, 2.218e-3, 6.074e-3]) # arcmin^2 at z=0.15
+        #Y500 *= 3600 # arcsec^2
+        #Y500 *= sPs[0].units.arcsecToAngSizeKpcAtRedshift(1.0, 0.15)**2 / 1e6 # convert to pMpc^2
+
+        #ax2.plot(np.log10(M500), np.log10(Y500), ':', color='#000000', alpha=0.7, label='Hill+ (2018) CB')
 
         # self-similar slope
         M500 = np.array([3e14, 9e14])
@@ -1043,8 +1120,7 @@ def paperPlots():
 
     # figure 11 - sfr/cold gas mass
     if 0:
-        sfr_vs_halomass(sPs)
-        # todo: cold gas mass (https://arxiv.org/abs/2305.12750 Fig 8)
+        #sfr_vs_halomass(sPs)
         # todo: quenched fraction
 
     # figure 12 - stellar mass contents

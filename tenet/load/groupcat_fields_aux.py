@@ -289,6 +289,36 @@ xraylum_r500c_2d.units = r'$\rm{erg/s}$'
 xraylum_r500c_2d.limits = [41.0, 46.0]
 xraylum_r500c_2d.log = True
 
+@catalog_field(aliases=['xray_peak_offset_2d_rvir','xray_peak_offset_2d_r500'])
+def xray_peak_offset_2d(sim, partType, field, args):
+    """ Spatial offset between X-ray (0.5-2.0 keV) emission peak and galaxy (SubhaloPos). In 2D projection. """
+    acField = 'Subhalo_XrayOffset_2D'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+    
+    vals = ac[acField][:,0] # select first view direction
+
+    # what kind of distance?
+    if '_rvir' in field or '_r500' in field:
+        rField = 'Group_R_Crit500' if '500' in field else 'Group_R_Crit500'
+
+        halos = sim.groupCat(fieldsHalos=[rField,'GroupFirstSub'])
+        GrNr = sim.subhalos('SubhaloGrNr')
+
+        rad = halos[rField][GrNr]
+
+        vals /= rad # linear, relative to halo radius
+    else:
+        vals = sim.units.codeLengthToKpc(vals) # code -> pkpc
+    
+    return vals
+
+xray_peak_offset_2d.label = lambda sim,pt,f: r'$\rm{\Delta_{X-ray,galaxy}^{2d}}$' if f.endswith('_2d') \
+    else (r'$\rm{\Delta_{X-ray,galaxy} / R_{vir}}$' if f.endswith('_rvir') else \
+        r'$\rm{\Delta_{X-ray,galaxy} / R_{500}}$')
+xray_peak_offset_2d.units = lambda sim,pt,f: r'$\rm{kpc}$' if f.endswith('_2d') else '' # linear dimensionless
+xray_peak_offset_2d.limits = lambda sim,pt,f: [0.0, 2.5] if f.endswith('_2d') else [-2.0, 0.0]
+xray_peak_offset_2d.log = True
+
 # ---------------------------- auxcat: other ------------------------------------------------------
 
 @catalog_field
