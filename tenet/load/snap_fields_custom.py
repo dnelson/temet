@@ -975,17 +975,17 @@ def xray_lum_apec_metadata(sim, pt, f, ret):
     if '05-2kev_nomet' in f:
         label = 'X, 0.5-2 keV, no-Z'
     if '0.1-2.4kev' in f:
-        label = 'X, 0.5-2 keV, APEC'
+        label = 'X, 0.5-2 keV'
     if '0.5-2.0kev' in f:
-        label = 'X, 0.5-2 keV, APEC'
+        label = 'X, 0.5-2 keV'
     if '0.3-7.0kev' in f:
-        label = 'X, 0.3-7 keV, APEC'
+        label = 'X, 0.3-7 keV'
     if '0.5-5.0kev' in f:
-        label = 'X, 0.5-5 keV, APEC'
+        label = 'X, 0.5-5 keV'
     if '0.5-8.0kev' in f:
-        label = 'X, 0.5-8 keV, APEC'
+        label = 'X, 0.5-8 keV'
     if '2.0-10.0kev' in f:
-        label = 'X, 2-10 keV, APEC'
+        label = 'X, 2-10 keV'
 
     if 'lum_' in f:
         label = r'$\rm{L_{' + label + '}}$'

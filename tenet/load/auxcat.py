@@ -636,6 +636,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum_05-2kev',op='sum',rad=None), 
    'Subhalo_XrayLum_0.5-2.0kev' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum_0.5-2.0kev',op='sum',rad=None), 
+   'Subhalo_XrayLum_0.5-2.0kev_halo' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum_0.5-2.0kev',op='sum',scope='fof',cenSatSelect='cen',rad='r015_1rvir_halo'),
    'Subhalo_XrayBolLum_2rhalfstars' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad='2rhalfstars'),
    'Subhalo_XrayLum_05-2kev_2rhalfstars' : \

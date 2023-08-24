@@ -213,7 +213,7 @@ def haloMassesVsDMOMatched():
     fig.savefig('haloMassRatioVsDMO_L75.pdf')
     plt.close(fig)
 
-def simClustersComparison(masslimit='14'):
+def simClustersComparison(masslimit='15'):
     """ Meta plot: place TNG-Cluster into its context of (N_clusters,resolution) for similar projects.
 
     Args:
@@ -221,13 +221,10 @@ def simClustersComparison(masslimit='14'):
     """
     from matplotlib.patches import FancyArrowPatch
 
-    msize = 10.0 # marker size
+    msize = 14.0 # marker size
     fs1 = 14 # diagonal lines, cost labels
     fs2 = 17 # sim name labels, upper right arrow label
-    fs3 = 11  # legend
-    lw = 1.5 # connecting lines
-    alpha1 = 0.05 # connecting lines
-    alpha2 = 0.2  # secondary markers
+    fs3 = 14  # legend
 
     def _volumeToNcluster(Lbox_cMpch):
         """ Convert a box side-length [cMpc/h] into N_cluster (z=0,M_halo>10^masslimit Msun) using 
@@ -238,37 +235,42 @@ def simClustersComparison(masslimit='14'):
         return tng300_nobj * vol_ratio
 
     # plot setup
-    fig = plt.figure(figsize=[figsize[0]*0.8, figsize[1]])
+    fig = plt.figure(figsize=[figsize[0]*0.7, figsize[1]*0.9])
     ax = fig.add_subplot(111)
     
-    ax.set_xlim([0.6,3e4])
-    ax.set_ylim([1e10,1e4])
+    ax.set_xlim([0.3,3e3])
+    ax.set_ylim([1e10,1e6])
     ax.set_xscale('log')
     ax.set_yscale('log')
 
     ax.set_ylabel('Baryon Mass Resolution [ M$_{\odot}$ ]')
-    ax.set_xlabel('Number of Clusters ($M_{\\rm halo} \geq 10^{%.1f}$ M$_{\odot}$)' % float(masslimit))
+    ax.set_xlabel('Number of Massive Clusters ($M_{\\rm halo} \geq 10^{%s}$ M$_{\odot}$)' % masslimit)
 
     # set simulation data (N_cl criterion: Mhalo > {1e14,1e14.5,1e15} at z=0)
-    # note: values of 0.1 are actually zero, placed off the plot (x-log)
-    boxes = [{'name':'TNG50',                  'N_14':2,   'N_14.5':0.1, 'N_15':0.1, 'm_gas':8.0e4, 'Lbox_cMpch':35},
-             {'name':'TNG100$\,/\,$Illustris', 'N_14':14,  'N_14.5':3,   'N_15':0.1, 'm_gas':1.4e6, 'Lbox_cMpch':75},
+    boxes = [{'name':'TNG50',                  'N_14':2,   'N_14.5':0,   'N_15':0,   'm_gas':8.0e4, 'Lbox_cMpch':35},
+             {'name':'TNG100$\,/\,$Illustris', 'N_14':14,  'N_14.5':3,   'N_15':0,   'm_gas':1.4e6, 'Lbox_cMpch':75},
              {'name':'TNG300',                 'N_14':280, 'N_14.5':41,  'N_15':4,   'm_gas':1.1e7, 'Lbox_cMpch':205},
-             {'name':'Eagle',                  'N_14':7,   'N_14.5':1,   'N_15':0.1, 'm_gas':1.8e6, 'Lbox_cMpch':67.8},
-             {'name':'SIMBA',                  'N_14':38,  'N_14.5':7,   'N_15':1,   'm_gas':1.8e7, 'Lbox_cMpch':100},
+             {'name':'Eagle',                  'N_14':7,   'N_14.5':1,   'N_15':0,   'm_gas':1.8e6, 'Lbox_cMpch':67.8},
+             {'name':'MTNG',                   'N_14':-1,  'N_14.5':-1,  'N_15':-1,  'm_gas':3.1e7, 'Lbox_cMpch':500},
+             {'name':'SLOW',                   'N_14':-1,  'N_14.5':-1,  'N_15':-1,  'm_gas':6e8,   'Lbox_cMpch':500}, # m_gas approx, is 1576^3 in 500Mpc/h
+             #{'name':'SIMBA',                  'N_14':38,  'N_14.5':7,   'N_15':1,   'm_gas':1.8e7, 'Lbox_cMpch':100},
+             {'name':'Bahamas',                'N_14':-1,  'N_14.5':-1,  'N_15':-1,  'm_gas':1.2e9, 'Lbox_cMpch':410}, # off the bottom edge)
+             {'name':'cosmo-OWLS',             'N_14':-1,  'N_14.5':-1,  'N_15':-1,  'm_gas':1.2e9, 'Lbox_cMpch':390}, # offset from Bahamas (same params)
              {'name':'Magneticum-2hr',         'N_14':-1,  'N_14.5':-1,  'N_15':-1,  'm_gas':2.0e8, 'Lbox_cMpch':352},
              {'name':'Magneticum-1mr',         'N_14':-1,  'N_14.5':-1,  'N_15':-1,  'm_gas':3.7e9, 'Lbox_cMpch':896}, # (off the bottom edge)
-             {'name':'Bahamas',                'N_14':-1,  'N_14.5':-1,  'N_15':-1,  'm_gas':1.2e9, 'Lbox_cMpch':400}, # off the bottom edge)
-             {'name':'Horizon-AGN',            'N_14':-1,  'N_14.5':-1,  'N_15':-1,  'm_gas':2.0e6, 'Lbox_cMpch':100}] # 'initial' m_gas=1e7, m_star=2e6
+             {'name':'Horizon-AGN',            'N_14':-1,  'N_14.5':-1,  'N_15':-1,  'm_gas':2.0e6, 'Lbox_cMpch':100}, # 'initial' m_gas=1e7, m_star=2e6
+             {'name':'FLAMINGO L1.0',          'N_14':-1,  'N_14.5':-1,  'N_15':-1,  'm_gas':1.3e8, 'Lbox_cMpch':677},
+             {'name':'FLAMINGO L2.8',          'N_14':-1,  'N_14.5':-1,  'N_15':-1,  'm_gas':1.1e9, 'Lbox_cMpch':1900}]
 
     # set simulation data (for zoom projects)
     zooms = [{'name':'TNG-Cluster',            'N_14':356,  'N_14.5':299, 'N_15':92,  'm_gas':1.2e7},
              {'name':'MACSIS',                 'N_14':390,  'N_14.5':300, 'N_15':300, 'm_gas':1.1e9},
              {'name':'Hydrangea/C-Eagle',      'N_14':30,   'N_14.5':18,  'N_15':7,   'm_gas':1.8e6},
-             {'name':'Rhapsody-G',             'N_14':10,   'N_14.5':10,  'N_15':10,  'm_gas':250000000},
+             {'name':'Rhapsody-G',             'N_14':10,   'N_14.5':10,  'N_15':10,  'm_gas':2.5e8},
+             {'name':'Rhapsody-C',             'N_14':9,    'N_14.5':9,   'N_15':9,   'm_gas':1.7e7},
              {'name':'FABLE',                  'N_14':19,   'N_14.5':13,  'N_15':4,   'm_gas':1.5e7},
-             {'name':'300 Project',            'N_14':324,  'N_14.5':324, 'N_15':324, 'm_gas':3.5e8}, # Gadget-X + Gizmo-Simba suites (324 each)
-             {'name':'Romulus-C',              'N_14':1,    'N_14.5':0.1, 'N_15':0.1, 'm_gas':2.1e5},
+             {'name':'Three Hundred Project',  'N_14':324,  'N_14.5':324, 'N_15':324, 'm_gas':3.5e8}, # Gadget-X + Gizmo-Simba suites (324 each)
+             {'name':'Romulus-C',              'N_14':1,    'N_14.5':0,   'N_15':0,   'm_gas':2.1e5},
              {'name':'Dianoga HR',             'N_14':12,   'N_14.5':7,   'N_15':7,   'm_gas':2.2e7},
              {'name':'MUSIC',                  'N_14':617,  'N_14.5':282, 'N_15':282, 'm_gas':2.7e8}] # N_14.5 unclear?
 
@@ -280,45 +282,73 @@ def simClustersComparison(masslimit='14'):
         if box[k] == -1:
             box[k] = _volumeToNcluster(box['Lbox_cMpch'])
 
+    # plot lines of constant number of particles
+    for i, N in enumerate([512,1024,2048,4096,8192]):
+        sim = simParams(run='tng100-1',redshift=0.0) # for units
+        xx = []
+        yy = []
+        for Lbox in [1e0, 1e4]: # cMpc/h
+            m_gas = sim.units.particleCountToMass(N, boxLength=Lbox)
+            n_gal = _volumeToNcluster(Lbox)
+
+            xx.append(n_gal)
+            yy.append(m_gas)
+
+        if N <= 1024:
+            continue
+        color = '#aaaaaa'
+        ax.plot(xx, yy, lw=lw, linestyle=':', alpha=0.4, color=color)
+        m = (yy[1] - yy[0]) / (xx[1] - xx[0])
+        x_target = 8e2
+        y_target = m * x_target + xx[0]
+        ax.text(x_target, y_target*1.05, '$%d^3$' % N, color=color, alpha=0.5, rotation=-45.0, fontsize=fs1, va='center', ha='right')
+
     # plot arrows of computational work
     if 1:
         color = '#aaaaaa' 
-        arrowstyle ='simple, head_width=8, head_length=8, tail_width=2'
+        arrowstyle ='simple, head_width=12, head_length=12, tail_width=3'
         textOpts = {'color':color, 'fontsize':fs1, 'va':'top', 'ha':'left', 'multialignment':'center'}
-        p1 = FancyArrowPatch(posA=[7e2,1.0e5], posB=[7e2, 1.0e5/8], arrowstyle=arrowstyle, alpha=1.0, color=color)
-        p2 = FancyArrowPatch(posA=[7e2,1.0e5], posB=[7e2*8, 1.0e5], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        xx = 6e2
+        yy = 6.0e6
+        p1 = FancyArrowPatch(posA=[xx,yy*1.05], posB=[xx, yy/4], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        p2 = FancyArrowPatch(posA=[xx*0.95,yy], posB=[xx*4, yy], arrowstyle=arrowstyle, alpha=1.0, color=color)
         ax.add_artist(p1)
-        ax.text(6.7e2, 4.9e4, 'x20 cost', color=color, rotation=90.0, fontsize=fs1, horizontalalignment='right', verticalalignment='center')
+        ax.text(xx*0.86, yy*0.49, 'x10 cost', color=color, rotation=90.0, fontsize=fs1, ha='right', va='center')
         ax.add_artist(p2)
-        ax.text(1.5e3, 1.2e5, 'x10 cost', color=color, rotation=0.0, fontsize=fs1, horizontalalignment='center', verticalalignment='top')
+        ax.text(xx*1.9, yy*1.2, 'x5 cost', color=color, rotation=0.0, fontsize=fs1, ha='center', va='top')
+        ax.text(xx*2.2, yy*0.4, '(x4 mass res\nor x4 volume)', color=color, rotation=45.0, fontsize=fs1-2, ha='center', va='center')
 
     # plot boxes
     for sim in boxes:
-        l, = ax.plot(sim[k], sim['m_gas'], linestyle='None', marker='o', markersize=msize, label=sim['name'])
+        if sim[k] < 1:
+            continue
+
+        l, = ax.plot(sim[k], sim['m_gas'], ls='None', marker='o', ms=msize, label=sim['name'])
 
         if 'TNG-Cluster' in sim['name']: # enlarge marker
             fac = 1.7 if sim['name'] == 'TNG-Cluster' else 1.3
-            ax.plot(sim[k], sim['m_gas'], linestyle='None', marker='o', markersize=msize*fac, color=l.get_color())
-
-        if 'TNG' in sim['name'] and sim['name'] not in ['TNG50']: # label certain runs only
-            if 'TNG100' in sim['name'] and masslimit == '15':
-                continue
-            fontsize = fs2 * 1.4 if sim['name'] == 'TNG-Cluster' else fs2
-            fontoff = 2.5 if sim['name'] == 'TNG300' else 0.8
-            textOpts = {'color':l.get_color(), 'fontsize':fs2, 'ha':'center', 'va':'bottom'}
-            ax.text(sim[k], sim['m_gas']*fontoff, sim['name'], **textOpts)
+            ax.plot(sim[k], sim['m_gas'], ls='None', marker='o', ms=msize*fac, color=l.get_color())
 
     # plot zooms
     ax.set_prop_cycle(None) # reset color cycle
     for sim in zooms:
-        l, = ax.plot(sim[k], sim['m_gas'], linestyle='None', marker='D', markersize=msize, label=sim['name'])
+        if sim[k] < 1:
+            continue
+
+        msize_loc = msize if sim['name'] != 'TNG-Cluster' else msize*1.3
+        l, = ax.plot(sim[k], sim['m_gas'], ls='None', marker='D', ms=msize_loc, label=sim['name'])
 
         if 'TNG' in sim['name'] : # label certain runs only
             textOpts = {'color':l.get_color(), 'fontsize':fs2*1.4, 'ha':'center', 'va':'bottom'}
             ax.text(sim[k], sim['m_gas']*0.7, sim['name'], **textOpts)
 
+        # demarcate suites with variants which increase the total numbers significantly
+        if sim['name'] == 'Three Hundred Project':
+            l, = ax.plot(sim[k]*2, sim['m_gas'], ls='None', marker='D', color=l.get_color(), ms=msize, alpha=0.4)
+            ax.plot([sim[k],sim[k]*2],[sim['m_gas'],sim['m_gas']], ls='-', color=l.get_color(), lw=1.5, alpha=0.4)
+
     # legend and finish
-    legParams = {'ncol':2, 'columnspacing':1.0, 'fontsize':fs3, 'markerscale':0.6} #, 'frameon':1, 'framealpha':0.9, 'fancybox':False}
+    legParams = {'ncol':1, 'columnspacing':1.0, 'fontsize':fs3, 'markerscale':0.6} #, 'frameon':1, 'framealpha':0.9, 'fancybox':False}
     legend = ax.legend(loc='lower left', **legParams)
 
     fig.savefig('sim_comparison_clusters_%s.pdf' % masslimit)

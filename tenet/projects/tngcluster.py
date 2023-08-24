@@ -12,9 +12,11 @@ from os.path import isfile
 
 from ..cosmo.zooms import contamination_mindist
 from ..plot.cosmoGeneral import quantMedianVsSecondQuant
+from ..plot.cosmoMisc import simClustersComparison
 from ..plot.config import *
 from ..util.helper import logZeroNaN, running_median
 from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
+from ..tracer.tracerMC import match3
 
 def vis_fullbox_virtual(sP, conf=0):
     """ Visualize the entire virtual reconstructed box. """
@@ -95,8 +97,8 @@ def vis_gallery(sP, conf=0, num=20):
     rVirFracs  = [1.0]
     axes       = [0,1] # x,y
     labelZ     = False
-    labelScale = False
-    labelHalo  = True
+    labelScale = 'physical' if conf == 1 and num == 1 else False
+    labelHalo  = 'mhalo,id' if conf == 1 and num == 1 else False
     rotation   = None # random
     nPixels    = 600
     size       = 3.0
@@ -104,20 +106,48 @@ def vis_gallery(sP, conf=0, num=20):
 
     if num == 1:
         # for single halo showcase image
-        nPixels = [1920, 1080]
+        nPixels = [1920, 1080] if conf == 1 else [960,540]
         size = 4.0
-        print('TODO: add insets of other properties, including zooms onto BCG')
 
     method = 'sphMap_globalZoomOrig' # all particles of original zoom run only
 
+    # panel
+    partType = 'gas'
+    valMinMax = None # auto
+
     if conf == 0:
-        partType = 'gas'
         partField = 'coldens_msunkpc2'
         valMinMax = [5.8, 7.8]
     if conf == 1:
-        partType = 'gas'
-        partField = 'xray'
+        # main panel
+        partField = 'xray_lum_0.5-2.0kev' #'xray'
         valMinMax = [34.0, 39.5]
+    if conf == 2:
+        partType = 'dm'
+        partField = 'coldens_msunkpc2'
+        valMinMax = [5.5, 9.3]
+    if conf == 3:
+        partType = 'stars'
+        partField = 'coldens_msunkpc2'
+        valMinMax = [4.0, 7.0]
+    if conf == 4:
+        partField = 'sz_yparam'
+    if conf == 5:
+        partField = 'bmag_uG'
+    if conf == 6:
+        partField = 'Z_solar'
+    if conf == 7:
+        partField = 'HI_segmented'
+        valMinMax = [12.0, 21.0]
+        plotSubhalos = 100
+    if conf == 8:
+        partField = 'temp'
+        valMinMax = [7.0, 7.8]
+    if conf == 9:
+        partField = 'vrad'
+        valMinMax = [-1200,1200]
+    if conf == 10:
+        partField = 'velsigma_los'
 
     # targets
     pri_target = sP.groups('GroupPrimaryZoomTarget')
@@ -134,13 +164,11 @@ def vis_gallery(sP, conf=0, num=20):
     for subID in subIDs:
         panels.append( {'subhaloInd':subID} )
 
-    panels[0]['labelScale'] = 'physical'
-
     class plotConfig:
         plotStyle  = 'edged' # open, edged
         rasterPx   = nPixels
-        colorbars  = True if num > 1 and num < 72 else False
-        fontsize   = 24
+        colorbars  = True if num == 1 else False
+        fontsize   = 24 if conf == 1 else 26
         nCols      = int(np.floor(np.sqrt(num)))
         nRows      = int(np.ceil(num/nCols))
 
@@ -173,7 +201,7 @@ def mass_function(secondaries=False):
     ax = fig.add_subplot(1,1,1)
     ax.set_xlim(mass_range)
     ax.set_xticks(np.arange(mass_range[0],mass_range[1],0.1))
-    ax.set_xlabel('Halo Mass M$_{\\rm 200,crit}$ [ log M$_{\\rm sun}$ ]')
+    ax.set_xlabel('Halo Mass M$_{\\rm 200c}$ [ log M$_{\\rm sun}$ ]')
     ax.set_ylabel('Number of Halos [%.1f dex$^{-1}$]' % binSize)
     ax.set_yscale('log')
     ax.yaxis.set_ticks_position('both')
@@ -263,23 +291,112 @@ def sample_halomasses_vs_redshift(sPs):
     from ..load.data import rossetti17planck, pintoscastro19, hilton21act, adami18xxl
     from ..load.data import bleem20spt, piffaretti11rosat
 
-    redshifts = np.linspace(0.0, 0.6, 13) #[0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
-    zspread = (redshifts[1]-redshifts[0]) / 3 # add random noise along redshift axis
-    alpha = 0.6 # for data
+    zrange = [0.0, 0.8]
+    alpha = 1.0 # for data
     msize = 30 # scatter() default is 20
 
-    np.random.seed(424242)
-
     # start plot
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=(figsize[0]*1.2, figsize[1]*1.2))
     ax = fig.add_subplot(111)
     ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
     ax.set_xlabel('Redshift')
-    ax.set_ylabel('Halo Mass M$_{\\rm 500,crit}$ [log M$_{\\rm sun}$]')
+    ax.set_ylabel('Halo Mass M$_{\\rm 500c}$ [log M$_{\\rm sun}$]')
 
-    ax.set_xlim([redshifts[0]-zspread*1.01, redshifts[-1]+zspread*1.01])
-    ax.set_ylim([14.0, 15.6])
+    ax.set_xlim(zrange)
+    ax.set_ylim([13.97, 15.5])
+
+    rng = np.random.default_rng()
+
+    # load simulations and plot
+    for i, sP in enumerate(sPs):
+        # cache file
+        cache_file = sP.derivPath + 'cache/clusters_m500_evo.hdf5'
+
+        if isfile(cache_file):
+            print('Loading [%s]' % cache_file)
+            with h5py.File(cache_file,'r') as f:
+                z = f['z'][()]
+                m500 = f['m500'][()]
+                subid = f['subid'][()]
+        else:
+            # TNG300: all halos with M200c > 14.0, TNG-Cluster: all primary zoom targets
+            subhaloIDs = sP.cenSatSubhaloIndices(cenSatSelect='cen')
+            m200c = sP.subhalos('mhalo_200_log')[subhaloIDs]
+
+            if sP.simName != 'TNG-Cluster':
+                # include low-mass progenitors at high redshift
+                w = np.where(m200c > 14.0)[0]
+                subhaloIDs = subhaloIDs[w]
+
+            # allocate
+            snaps = sP.validSnapList()
+            nsnaps = len(snaps)
+
+            z = np.zeros(nsnaps, dtype='float32')
+            subid = np.zeros((subhaloIDs.size,nsnaps), dtype='int32')
+            m500 = np.zeros((subhaloIDs.size,nsnaps), dtype='float32')
+
+            subid.fill(-1)
+            m500.fill(np.nan)
+
+            z = sP.snapNumToRedshift(snaps)
+
+            # loop over each cluster
+            for j in range(len(subhaloIDs)):
+                # load the MPB
+                mpb = sP.loadMPB(subhaloIDs[j], fields=['SubfindID','SnapNum'])
+
+                # match to master snapshot list
+                inds, _ = match3(snaps, mpb['SnapNum'])
+                subid[j,inds] = mpb['SubfindID']
+
+            # loop over each snapshot
+            for j, snap in enumerate(snaps):
+                # load m500 values
+                sP.setSnap(snap)
+                m500_loc = sP.subhalos('m500_log') # log msun
+
+                # index to our subset of interest and stamp
+                w = np.where(subid[:,j] >= 0)[0]
+                m500[w,j] = m500_loc[subid[w,j]]
+
+            # save
+            with h5py.File(cache_file,'w') as f:
+                f['z'] = z
+                f['m500'] = m500
+                f['subid'] = subid
+
+        # draw evolution lines
+        color = next(ax._get_lines.prop_cycler)['color']
+
+        for j in range(subid.shape[0]):
+            label = sP.simName if j == 0 else ''
+
+            # interpolate to fill any nan values for display
+            m500_loc = m500[j,:]
+
+            w_nan = np.where(np.isnan(m500_loc))[0]
+            if len(w_nan) > 0:
+                w_finite = np.where(~np.isnan(m500_loc))[0]
+                new_m500_values = np.interp(z[w_nan], z[w_finite][::-1], m500_loc[w_finite][::-1])
+                m500_loc[w_nan] = new_m500_values
+
+            # decide an alpha which decreases with decreasing z=0 mass
+            if sP.simName == 'TNG-Cluster':
+                alpha_loc = 0.2 + 1.0*(m500_loc[-1] - 14.2)
+                zorder = rng.integers(-500, high=-2, size=1) #-2
+            else:
+                alpha_loc = 0.2 + 0.5*(m500_loc[-1] - 13.4)
+                zorder = rng.integers(-500, high=-2, size=1) #-3
+            alpha_loc = np.clip(alpha_loc, 0.2, 0.9)
+
+            ax.plot(z, m500_loc, lw=lw, c=color, alpha=alpha_loc, zorder=zorder, label=label)
+            #ax.plot(z[-1], m500_loc[-1], 'o', c=color, alpha=alpha_loc, zorder=zorder, ms=4)
+
+    # first legend
+    legend1 = ax.legend(loc='upper left')
+    ax.add_artist(legend1)
 
     # plot obs samples
     r17 = rossetti17planck()
@@ -290,47 +407,18 @@ def sample_halomasses_vs_redshift(sPs):
     p11 = piffaretti11rosat()
 
     d1 = ax.scatter(r17['z'], r17['m500'], s=msize+8, c='#000000', marker='s', alpha=alpha, label=r17['label'], zorder=0)
-
     d2 = ax.scatter(pc19['z'], pc19['m500'], s=msize+8, c='#222222', marker='*', alpha=alpha, label=pc19['label'], zorder=0)
-
-    d3 = ax.scatter(h21['z'], h21['m500'], s=msize-9, c='#222222', marker='p', alpha=alpha-0.3, label=h21['label'], zorder=0)
-
+    d3 = ax.scatter(h21['z'], h21['m500'], s=msize-9, c='#222222', marker='p', alpha=alpha-0.1, label=h21['label'], zorder=0)
     d4 = ax.scatter(a18['z'], a18['m500'], s=msize+8, c='#222222', marker='D', alpha=alpha, label=a18['label'], zorder=0)
-
     d5 = ax.scatter(b20['z'], b20['m500'], s=msize+8, c='#222222', marker='X', alpha=alpha, label=b20['label'], zorder=0)
-
-    d6 = ax.scatter(p11['z'], p11['m500'], s=msize-4, c='#222222', marker='h', alpha=alpha-0.3, label=p11['label'], zorder=0)
+    d6 = ax.scatter(p11['z'], p11['m500'], s=msize-4, c='#222222', marker='h', alpha=alpha-0.1, label=p11['label'], zorder=0)
 
     # add first legend
-    legend1 = ax.legend(loc='upper right', frameon=True)
-    legend1.get_frame().set_edgecolor('#bbbbbb')
-    legend1.get_frame().set_linewidth(1.0)
-    ax.add_artist(legend1)
-
-    # load simulations and plot
-    for i, sP in enumerate(sPs):
-        color = next(ax._get_lines.prop_cycler)['color']
-
-        for j, redshift in enumerate(redshifts):
-            print(sP.simName, redshift)
-            sP.setRedshift(redshift)
-            m500 = sP.subhalos('mhalo_500_log')
-            pri_target = sP.halos('GroupPrimaryZoomTarget')[ sP.subhalos('SubhaloGrNr') ]
-                
-            with np.errstate(invalid='ignore'):
-                w = np.where((m500 > ax.get_ylim()[0]) & (pri_target == 1))
-
-            # scatterplot
-            xx = np.random.uniform(low=-zspread, high=zspread, size=len(w[0])) + redshift
-            label = sP.simName if j == 0 else ''
-
-            ax.scatter(xx, m500[w], s=msize, c=color, marker='o', alpha=1.0, label=label)
-
-    # second legend
     handles, labels = ax.get_legend_handles_labels()
-    legend2 = ax.legend(handles[-2:], labels[-2:], loc='upper left', frameon=True)
+    legend2 = ax.legend(handles[len(sPs):], labels[len(sPs):], loc='upper right', frameon=True)
     legend2.get_frame().set_edgecolor('#bbbbbb')
     legend2.get_frame().set_linewidth(1.0)
+    ax.add_artist(legend2)
 
     # plot coma cluster
     def _plot_single_cluster(m500_msun, m500_err_up, m500_err_down, redshift, name):
@@ -341,29 +429,48 @@ def sample_halomasses_vs_redshift(sPs):
         error_upper = m500[1] - m500[0]
         yerr = np.reshape( [error_lower, error_upper], (2,1) )
 
-        d4 = ax.errorbar(redshift, m500[0], yerr=yerr, color='#000000', marker='H')
-        ax.text(redshift+0.005, m500[0]+0.02, name, fontsize=14)
+        color = '#ffffff' if name not in ['Bullet','El Gordo'] else '#000000'
+        zoff = 0.01 if name != 'El Gordo' else -0.01
+        ha = 'left' if name != 'El Gordo' else 'right'
+        d4 = ax.errorbar(redshift, m500[0], yerr=yerr, color=color, marker='H')
+        t = ax.text(redshift+zoff, m500[0], name, fontsize=14, va='center', ha=ha, color='#ffffff')
+        t.set_bbox(dict(facecolor='#000000', alpha=0.2 if color == '#ffffff' else 0.4, linewidth=0))
 
     # plot coma cluster (Okabe+2014 Table 8, g+ profile)
     coma_z = 0.0231
     coma_m500 = np.array([3.89, 3.89+1.04, 3.89-0.76]) * 1e14 / sP.HubbleParam
-
     _plot_single_cluster(coma_m500[0], coma_m500[1], coma_m500[2], coma_z, 'Coma')
 
     # plot pheonix cluster
     pheonix_z = 0.597 # currently off edge of plot
     pheonix_m500 = 2.34e15 # msun, Tozzi+15 (Section 3)
     m500_err = 0.71e15 # msun
-
     _plot_single_cluster(pheonix_m500, pheonix_m500+m500_err, pheonix_m500-m500_err, pheonix_z, 'Pheonix')
 
-    # plot perseus cluster (note: virgo, fornax m500<1e14)
+    # plot el gordo cluster
+    elgordo_z = 0.795 # true z = 0.870, moved for visibility
+    elgordo_m500 = 8.8e14 # msun (Botteon+16)
+    elgordo_m500_err = 1.2e14 # msun
+    _plot_single_cluster(elgordo_m500, elgordo_m500+elgordo_m500_err, elgordo_m500-elgordo_m500_err, elgordo_z, 'El Gordo')
+
+    # plot bullet cluster
+    bullet_z = 0.296
+    bullet_m500 = 1.1e15 # msun, Clowe+2006
+    m500_err = 0.2e15 # msun
+    _plot_single_cluster(bullet_m500, bullet_m500+m500_err, bullet_m500-m500_err, bullet_z, 'Bullet')
+
+    # plot perseus cluster
     perseus_z = 0.0183
     perseus_m500 = sP.units.m200_to_m500(6.65e14) # Simionescu+2011
     perseus_m500_errup = sP.units.m200_to_m500(6.65e14 + 0.43e14)
     perseus_m500_errdown = sP.units.m200_to_m500(6.65e14 - 0.46e14)
-
     _plot_single_cluster(perseus_m500, perseus_m500_errup, perseus_m500_errdown, perseus_z, 'Perseus')
+
+    # plot virgo cluster (note: fornax m500<1e14)
+    virgo_z = 0.01
+    virgo_m500 = 1.01e14 # 0.8e14 msun is true value (Simionescu+2017), moved up for visibility
+    virgo_m500_err = 0.05e14 # msun
+    _plot_single_cluster(virgo_m500, virgo_m500+virgo_m500_err, virgo_m500-virgo_m500_err, virgo_z, 'Virgo')
 
     # plot eROSITA completeness goal
     erosita_minhalo = [0.20,0.32,0.47,0.65,0.86,1.12,1.44,1.87,2.33,2.91,3.46,4.19,4.86,5.80,6.68,7.33,7.79]
@@ -371,9 +478,10 @@ def sample_halomasses_vs_redshift(sPs):
 
     erosita_minhalo = np.log10(sP.units.m200_to_m500(np.array(erosita_minhalo) * 1e14)) # log msun
 
-    l, = ax.plot(erosita_z, erosita_minhalo, '-', lw=lw, alpha=alpha, color='#000000')
-    ax.arrow(erosita_z[6], erosita_minhalo[6]+0.02, 0.0, 0.1, lw=lw, head_length=0.008, color=l.get_color())
-    ax.text(erosita_z[7]-0.04, 14.02, 'eROSITA All-Sky Complete', color=l.get_color(), fontsize=14, rotation=21)
+    l, = ax.plot(erosita_z, erosita_minhalo, '-', lw=lw, alpha=alpha, color='#ffffff')
+    #ax.arrow(erosita_z[6], erosita_minhalo[6]+0.02, 0.0, 0.1, lw=lw, head_length=0.008, color=l.get_color())
+    t = ax.text(erosita_z[8]-0.04, 14.22, 'eROSITA All-Sky Complete', color=l.get_color(), fontsize=14, rotation=21)
+    t.set_bbox(dict(facecolor='#000000', alpha=0.3, linewidth=0))
 
     fig.savefig('sample_halomass_vs_redshift.pdf')
     plt.close(fig)
@@ -554,7 +662,7 @@ def gas_fraction_vs_halomass(sPs):
     xQuant = 'mhalo_500_log'
     cenSatSelect = 'cen'
 
-    xlim = [13.8, 15.4]
+    xlim = [13.9, 15.3]
     clim = [-0.4, 0.0] # log fraction
     scatterPoints = True
     drawMedian = False
@@ -643,6 +751,48 @@ def sfr_vs_halomass(sPs):
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                              f_pre=_draw_data, legendLoc='upper left', pdf=None)
+
+def mhi_vs_halomass(sPs):
+    """ Plot cold gas mass (M_HI) vs halo mass. """
+    from ..load.data import obuljen2019
+    from scipy.signal import savgol_filter
+
+    xQuant = 'mhalo_200_log'
+    cenSatSelect = 'cen'
+
+    xlim = [14.0, 15.4]
+    scatterPoints = True
+    drawMedian = False
+    markersize = 40.0
+    sizefac = 0.8 # for single column figure
+
+    # TODO: we should perhaps do 2d projection within r200, over a pretty good depth (to match ALFALFA beam)
+    yQuant = 'mhi_halo'
+    ylim = [9.9, 12.0]
+    scatterColor = None #'xray_peak_offset_2d_r500'
+    clim = [-2.0, -1.0] # log fraction
+
+    def _draw_data(ax):
+        # observational points
+        o18 = obuljen2019()
+
+        color = '#222222'
+        l1, = ax.plot(o18['Mhalo'], o18['mHI'], color=color)
+        ax.fill_between(o18['Mhalo'], savgol_filter(o18['mHI_low'],sKn,sKo), savgol_filter(o18['mHI_high'],sKn,sKo), color=color, alpha=0.2)
+
+        ax.errorbar(o18['pts_M_halo'], o18['pts_MHI'], yerr=[o18['pts_MHI_errdown'],o18['pts_MHI_errup']], 
+                    fmt='D', zorder=2, color='#000000', alpha=0.7, label=o18['label']) # ms=6
+
+        # TODO: cold gas mass (https://arxiv.org/abs/2305.12750 Fig 8)
+
+        # TODO: add virgo
+        # https://arxiv.org/pdf/2209.07691.pdf (Fig 8)
+
+
+    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                             xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                             f_pre=_draw_data, legendLoc='upper left', pdf=None)                
 
 def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0, saveImages=False):
     """ Generate projections for a given configuration, save results into a single postprocessing file. """
@@ -1073,7 +1223,7 @@ def paperPlots():
     # figure 1 - mass function
     if 0:
         mass_function()
-        mass_function(secondaries=True)
+        #mass_function(secondaries=True)
 
     # figure 2 - samples
     if 0:
@@ -1081,12 +1231,14 @@ def paperPlots():
 
     # figure 3 - simulation meta-comparison
     if 0:
-        pass
+        simClustersComparison()
 
     # figures 4,5 - individual halo/gallery vis (x-ray)
-    if 0:
-        vis_gallery(TNG_C, conf=1, num=1) # single in xray
-        vis_gallery(TNG_C, conf=1, num=72) # gallery
+    if 1:
+        #for conf in range(10):
+        #    vis_gallery(TNG_C, conf=conf, num=1) # single
+        vis_gallery(TNG_C, conf=10, num=1) # single
+        #vis_gallery(TNG_C, conf=1, num=72) # gallery
 
     # figure 6 - gas fractions
     if 0:
@@ -1097,21 +1249,17 @@ def paperPlots():
         redshifts = [0.0, 1.0, 2.0]
         bfield_strength_vs_halomass(sPs, redshifts)
 
-    # figure 8a - X-ray scaling relations
+    # figure 8 - halo synchrotron power
+    if 0:
+        from ..plot.globalComp import haloSynchrotronPower
+        haloSynchrotronPower(sPs, xlim=[14.0,15.3], ylim=[21.5,28.5])
+
+    # figure 9 - X-ray scaling relations
     if 0:
         from ..plot.globalComp import haloXrayLum
         sPs_loc = [sP.copy() for sP in sPs]
         for sP in sPs_loc: sP.setRedshift(0.3) # median of data at high-mass end
         haloXrayLum(sPs_loc, xlim=[11.4,12.7], ylim=[41.6,45.7])
-
-    # figure 8b - Lx vs M500
-    if 0:
-        pass
-
-    # figure 9 - halo synchrotron power
-    if 0:
-        from ..plot.globalComp import haloSynchrotronPower
-        haloSynchrotronPower(sPs, xlim=[14.0,15.3], ylim=[21.5,28.5])
 
     # figure 10 - SZ-y and X-ray vs mass scaling relations
     if 0:
@@ -1121,19 +1269,13 @@ def paperPlots():
     # figure 11 - sfr/cold gas mass
     if 0:
         #sfr_vs_halomass(sPs)
+        mhi_vs_halomass([TNG_C])
         # todo: quenched fraction
 
     # figure 12 - stellar mass contents
     if 0:
         stellar_mass_vs_halomass(sPs, conf=0)
         stellar_mass_vs_halomass(sPs, conf=1)
-
-    # figure 13 - BCG stellar sizes
-    if 0:
-        from ..plot.sizes import galaxySizes
-        pdf = PdfPages('galaxy_stellar_sizes_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        galaxySizes(sPs, xlim=[11.0,13.0], ylim=[2,400], onlyRedData=True, scatterPoints=True, sizefac=0.8, pdf=pdf)
-        pdf.close()
 
     # figure 14 - black hole mass scaling relation
     if 0:

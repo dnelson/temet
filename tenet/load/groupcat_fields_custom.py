@@ -89,7 +89,7 @@ def mhalo_200(sim, partType, field, args):
     the same host halo mass as their central."""
     return _mhalo_load(sim, partType, field, args)
 
-mhalo_200.label = lambda sim,pt,f: r'Halo Mass $\rm{M_{200,crit%s}}$' % (',parent' if '_parent' in f else '')
+mhalo_200.label = lambda sim,pt,f: r'Halo Mass $\rm{M_{200c%s}}$' % (',parent' if '_parent' in f else '')
 mhalo_200.units = lambda sim,pt,f: r'$\rm{M_{sun}}$' if '_code' not in f else 'code_mass'
 mhalo_200.limits = mhalo_lim
 mhalo_200.log = True
@@ -100,7 +100,7 @@ def mhalo_500(sim, partType, field, args):
     Only defined for centrals: satellites are assigned a value of nan (excluded by default)."""
     return _mhalo_load(sim, partType, field, args)
 
-mhalo_500.label = lambda sim,pt,f: r'Halo Mass $\rm{M_{500,crit%s}}$' % (',parent' if '_parent' in f else '')
+mhalo_500.label = lambda sim,pt,f: r'Halo Mass $\rm{M_{500c%s}}$' % (',parent' if '_parent' in f else '')
 mhalo_500.units = lambda sim,pt,f: r'$\rm{M_{sun}}$' if '_code' not in f else 'code_mass'
 mhalo_500.limits = mhalo_lim
 mhalo_500.log = True
@@ -265,6 +265,17 @@ mstar2.label = r'$\rm{M_{\star}}$' # (<2r_{\star,1/2})
 mstar2.units = r'$\rm{M_{sun}}$'
 mstar2.limits = lambda sim,pt,f: [9.0, 11.0] if sim.boxSize > 50000 else [8.0, 11.5]
 mstar2.log = True
+
+@catalog_field
+def mstar_tot(sim, partType, field, args):
+    """ Galaxy stellar mass, total subhalo/subfind value. """
+    mass = sim.subhalos('SubhaloMassType')[:,sim.ptNum('stars')]
+    return sim.units.codeMassToMsun(mass)
+
+mstar_tot.label = r'$\rm{M_{\star}}$' # (subfind)
+mstar_tot.units = r'$\rm{M_{sun}}$'
+mstar_tot.limits = lambda sim,pt,f: [9.0, 11.5] if sim.boxSize > 50000 else [8.0, 12.0]
+mstar_tot.log = True
 
 @catalog_field
 def mgas1(sim, partType, field, args):
@@ -478,6 +489,19 @@ mhi_30pkpc.units = r'$\rm{M_{sun}}$'
 mhi_30pkpc.limits = lambda sim,pt,f: [8.0, 11.5] if sim.boxSize > 50000 else [7.0, 10.5]
 mhi_30pkpc.log = True
 mhi_30pkpc.auxcat = True
+
+@catalog_field
+def mhi_halo(sim, partType, field, args):
+    """ Halo-scale atomic HI gas mass (BR06 molecular H2 model), measured within each FoF. """
+    acField = 'Subhalo_Mass_FoF_HI'
+    mass = sim.auxCat(acField)[acField]
+    return sim.units.codeMassToMsun(mass)
+
+mhi_halo.label = r'$\rm{M_{HI, halo}}$'
+mhi_halo.units = r'$\rm{M_{sun}}$'
+mhi_halo.limits = lambda sim,pt,f: [8.0, 11.5] if sim.boxSize > 50000 else [7.0, 10.5]
+mhi_halo.log = True
+mhi_halo.auxcat = True
 
 # -------------------- star formation rates -------------------------------------------------------
 

@@ -906,9 +906,9 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         if 'xray_lum_05-2kev' == partField:
             xray_label = 'L$_{\\rm X, 0.5-2 keV}$'
         elif '0.5-2.0kev' in partField:
-            xray_label = 'L$_{\\rm X, 0.5-2 keV, APEC}$'
+            xray_label = 'L$_{\\rm X, 0.5-2 keV}$'
         elif '0.5-5.0kev' in partField:
-            xray_label = 'L$_{\\rm X, 0.5-5 keV, APEC}$'
+            xray_label = 'L$_{\\rm X, 0.5-5 keV}$'
         else:
             xray_label = 'Bolometric L$_{\\rm X}$'
             config['ctName'] = 'inferno'
@@ -3060,7 +3060,7 @@ def renderMultiPanel(panels, conf):
         aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf,'rasterPx') else 1.0
         barAreaHeight = (0.07 / nRows) / aspect / (conf.rasterPx[0]/1000)
         if conf.fontsize > min_fontsize:
-            barAreaHeight += 0.002*(conf.fontsize-min_fontsize)
+            barAreaHeight += 0.003*(conf.fontsize-min_fontsize)
         if conf.fontsize == min_fontsize:
             barAreaHeight += 0.03
         barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, 0.2)
@@ -3078,7 +3078,7 @@ def renderMultiPanel(panels, conf):
             heightFac += 0.002*(conf.fontsize-min_fontsize) # larger for larger fonts, and vice versa (needs tuning)
 
             if nRows == 1:
-                heightFac /= np.sqrt(aspect) # reduce
+                heightFac /= aspect # increase
             if nRows == 2 and not varRowHeights and barAreaTop == 0.0:
                 heightFac *= 1.3 # increase
             if nRows == 1 and nCols == 1: # required for 'Visualize Galaxies and Halo' tool proper sizing
