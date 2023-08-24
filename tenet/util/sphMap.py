@@ -1036,6 +1036,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     if (maxIntProj or minIntProj) and posTarget is not None:
         raise Exception('MIP not yet supported with posTarget.')
     if refGrid is not None:
+        refGrid = np.transpose(refGrid) # expect input to be a previous output of sphMap()
         assert refGrid.shape[0] == nPixels[0] and refGrid.shape[1] == nPixels[1]
         assert refGrid.dtype in [np.float32,np.float64]
         assert hsml_1 is None # not supported

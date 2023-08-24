@@ -1744,10 +1744,11 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 #    return np.sqrt(var)
                 if partField == 'velsigma_los':
                     assert nChunks == 1 # otherwise not supported
-                    # refGrid loaded but not used, we let np.std() re-compute the per pixel mean
-                    grid_q, binx, biny, inds = binned_statistic_2d(xvals, yvals, quant, np.std, bins=nPixels, range=[xMinMax,yMinMax])
-                    grid_q = grid_q.T
-                    grid_q *= grid_d # pre-emptively undo normalization below == unweighted stddev(los_vel)
+                    # refGrid loaded but not used, we let np.var() re-compute the per pixel mean (var->stddev below)
+                    grid_q, binx, biny, inds = binned_statistic_2d(xvals, yvals, quant, np.var, bins=nPixels, range=[xMinMax,yMinMax])
+                    grid_q = grid_q.T # convention
+                    grid_q *= grid_d # pre-emptively undo normalization below == unweighted var(los_vel)
+                    grid_q[np.isnan(grid_q)] = 0.0 # NaN not allowed in final map, but returned by binned_statistic_2d() for empty bins
                 else:
                     assert refGrid is None # not supported except for this one field
 
