@@ -780,14 +780,14 @@ def giodini2009(sP):
     # Table 2 (masses are M500/h_72 [Msun]) (errors are symmetric, stddev of the mean)
     M500h72Msun   = np.array([2.1e13, 5.1e13, 1.2e14, 3.0e14, 7.1e14])
 
-    r = {'m500_logMsun'  : np.log10( M500h72Msun/(0.72/sP.HubbleParam) ),
+    r = {'m500'          : np.log10( M500h72Msun/(0.72/sP.HubbleParam) ),
          'fStars500'     : np.array([0.062, 0.045, 0.036, 0.021, 0.019]),
          'fStars500Err'  : np.array([0.005, 0.002, 0.004, 0.002, 0.002]),
          'fGas500'       : np.array([0.074, 0.068, 0.080, 0.103, 0.123]),
          'fGas500Err'    : np.array([0.028, 0.005, 0.003, 0.008, 0.007]),
          'fBaryon500'    : np.array([0.136, 0.113, 0.116, 0.124, 0.141]),
          'fBaryon500Err' : np.array([0.028, 0.005, 0.005, 0.009, 0.007]),
-         'label'         : 'Giodini+ (2009) z<0.2' }
+         'label'         : 'Giodini+ (2009)' } # z<0.2
 
     return r
 
@@ -810,20 +810,76 @@ def lovisari2015(sP):
     m500_gas_Msun     = m500_gas * 1e12 / (0.70/sP.HubbleParam)
     m500_gas_Msun_err = m500_gas_err * 1e12 / (0.70/sP.HubbleParam)
 
-    frac_500_gas = m500_gas_Msun / m500_tot_Msun
+    m500_err1 = np.log10(m500_tot_Msun_err + m500_tot_Msun) - np.log10(m500_tot_Msun)
+    m500_err2 = np.log10(m500_tot_Msun) - np.log10(m500_tot_Msun - m500_tot_Msun_err)
 
-    # maximal error estimate:
-    #frac_500_gas_errUp   = (m500_gas_Msun+m500_gas_Msun_err) / (m500_tot_Msun-m500_tot_Msun_err)
-    #frac_500_gas_errDown = (m500_gas_Msun-m500_gas_Msun_err) / (m500_tot_Msun+m500_tot_Msun_err)
-    #frac_500_gas_err = (frac_500_gas_errUp + frac_500_gas_errDown) / 2.0
-    frac_500_gas_err = (m500_gas_Msun+m500_gas_Msun_err) / m500_tot_Msun
+    fgas500 = m500_gas_Msun / m500_tot_Msun
 
-    r = { 'name'             : np.array([d[0] for d in data]), 
-          'm500_logMsun'     : np.log10(m500_tot_Msun),
-          'm500_logMsun_err' : np.log10(m500_tot_Msun_err),
-          'fGas500'          : frac_500_gas,
-          'fGas500Err'       : frac_500_gas_err,
-          'label'            : 'Losivari+ (2015) z<0.04' }
+    # error estimate (standard error propagation):
+    m500_relerror = m500_tot_Msun_err/ m500_tot_Msun
+    m500gas_relerror = m500_gas_Msun_err/ m500_gas_Msun
+    fgas500_relerr = np.sqrt(m500_relerror**2 + m500gas_relerror**2)
+    fgas500_err = fgas500_relerr * fgas500
+
+    r = { 'name'         : np.array([d[0] for d in data]), 
+          'm500'         : np.log10(m500_tot_Msun), # log msun
+          'm500_err1'    : m500_err1, # dex
+          'm500_err2'    : m500_err2, # dex
+          'fgas500'      : fgas500, # linear dimensionless
+          'fgas500_err'  : fgas500_err, # linear dimensionless
+          'label'        : 'Losivari+ (2015)' } # z<0.04
+
+    return r
+
+def lovisari2020():
+    """ Load observational data points (gas/total mass within r500c) from Lovisari+ (2020). """
+    path = dataBasePath + 'lovisari/lovisari2020_tableA1.txt'
+
+    data = np.genfromtxt(path, dtype=None, encoding=None)
+
+    m500 = np.array([d[2] for d in data]) * 1e14
+    m500_err1 = np.log10(np.array([d[3] for d in data]) * 1e14 + m500) - np.log10(m500)
+    m500_err2 = np.log10(m500) - np.log10(m500 - np.array([d[4] for d in data]) * 1e14)
+    m500_gas = np.array([d[5] for d in data]) * 1e13
+    m500_gas_err1 = np.log10(np.array([d[6] for d in data]) * 1e13 + m500_gas) - np.log10(m500_gas)
+    m500_gas_err2 = np.log10(m500_gas) - np.log10(m500_gas - np.array([d[6] for d in data]) * 1e13)
+
+    LX = np.array([d[14] for d in data]) * 1e44
+    LX_err1 = np.array([d[15] for d in data]) * 1e44
+    LX_err2 = np.array([d[16] for d in data]) * 1e44
+
+    # convert 0.1-2.4 keV luminosity to more standard 0.5-2.5 keV band
+    # source: mean ratio of LX_500^{0.1-2.4} / LX_500^{0.5-2.0} for the TNG-Cluster sample at z=0
+    band_ratio = 1.66
+    LX /= band_ratio
+    LX_err1 /= band_ratio
+    LX_err2 /= band_ratio
+
+    LX_err1 = np.log10(LX_err1) - np.log10(LX)
+    LX_err2 = np.log10(LX) - np.log10(LX_err2)
+
+    # compute gas fractions and errors
+    fgas500 = m500_gas / m500
+
+    m500_relerror = (np.array([d[3] for d in data]) * 1e14) / m500
+    m500gas_relerror = (np.array([d[6] for d in data]) * 1e13) / m500_gas
+    fgas500_relerr = np.sqrt(m500_relerror**2 + m500gas_relerror**2) # standard error propagation
+    fgas500_err = fgas500_relerr * fgas500
+
+    r = { 'name'        : np.array([d[0] for d in data]), 
+          'z'           : np.array([d[1] for d in data]),
+          'm500'        : np.log10(m500), # log msun
+          'm500_err1'   : m500_err1, # dex
+          'm500_err2'   : m500_err2, # dex
+          'm500g'       : np.log10(m500_gas), # log msun
+          'm500g_err1'  : m500_gas_err1, # dex
+          'm500g_err2'  : m500_gas_err2, # dex
+          'LX'          : np.log10(LX), # log erg/s
+          'LX_err1'     : LX_err1, # dex
+          'LX_err2'     : LX_err2, # dex
+          'fgas500'     : fgas500, # linear dimensionless
+          'fgas500_err' : fgas500_err, # linear dimensionless
+          'label'       : 'Losivari+ (2020)' }
 
     return r
 
@@ -2791,12 +2847,27 @@ def fluetsch18(ionized=False):
 
     return r
 
-def obuljen2018():
-    """ Load observational fits to M_HI/M_halo relation from Obuljen+ (2018). Fig 8 / Eqn 1. """
+def obuljen2019():
+    """ Load observational fits to M_HI/M_halo relation from Obuljen+ (2019). Fig 8 / Eqn 1. """
     x_pts = np.log10(10.0**np.array([10.563, 10.757, 11.000, 11.314, 14.359, 15.004]) / 0.7) # log msun
     y_low = np.log10(10.0**np.array([5.517, 6.967, 8.138, 8.994, 10.801, 11.047]) / 0.7) # log msun
     y_mid = np.log10(10.0**np.array([7.045, 7.901, 8.599, 9.127, 10.883, 11.164]) / 0.7) # log msun
     y_hi  = np.log10(10.0**np.array([7.943, 8.419, 8.821, 9.212, 10.959, 11.287]) / 0.7) # log msun
+
+    # Figure 8 points
+    if 1:
+        pts_M_halo = np.array([12.683, 13.045, 13.408, 13.768, 14.131, 14.494, 14.856])
+        pts_MHI = np.array([10.389, 10.370, 10.474, 10.601, 10.693, 10.988, 11.334])
+        pts_MHI_errdown = np.array([10.197, 10.259, 10.412, 10.539, 10.574, 10.873, 11.142])
+        pts_MHI_errup = np.array([10.578, 10.485, 10.531, 10.658, 10.808, 11.108, 11.499])
+
+        # remove little h factors
+        h = 0.7
+
+        pts_M_halo = np.log10(10.0**pts_M_halo / h)
+        pts_MHI = np.log10(10.0**pts_MHI / h)
+        pts_MHI_errdown = pts_MHI - np.log10(10.0**pts_MHI_errdown / h)
+        pts_MHI_errup = np.log10(10.0**pts_MHI_errup / h) - pts_MHI
 
     Mmin = 10.0**11.27 / 0.7 # msun
     Mmin_1 = 10.0**(11.27+0.24) / 0.7 # msun, upper 1sigma
@@ -2813,8 +2884,9 @@ def obuljen2018():
     #m_HI_1 = M0 * (x/Mmin)**alpha_1 * np.exp(-Mmin/x)
     #m_HI_0 = M0 * (x/Mmin)**alpha_0 * np.exp(-Mmin/x)
 
-    mhalo = np.log10(x)
-    mHI   = np.log10(m_HI)
+    with np.errstate(divide='ignore'):
+        mhalo = np.log10(x)
+        mHI   = np.log10(m_HI)
 
     yy = interpolate.interp1d(x_pts, y_mid, kind='slinear', fill_value='extrapolate')(mhalo)
     yy_low = interpolate.interp1d(x_pts, y_low, kind='slinear', fill_value='extrapolate')(mhalo)
@@ -2823,12 +2895,16 @@ def obuljen2018():
     yy_low = mHI - (yy-yy_low)
     yy_high = mHI + (yy_high-yy)
 
-    r = {'label'    : 'Obuljen+ (2018) ALFALFA+SDSS',
+    r = {'label'    : 'Obuljen+ (2019) ALFALFA+SDSS',
          'Mhalo'    : mhalo,
          'mHI'      : mHI,
          'mHI2'     : yy,
          'mHI_low'  : yy_low,
-         'mHI_high' : yy_high}
+         'mHI_high' : yy_high,
+         'pts_M_halo'      : pts_M_halo, # log msun
+         'pts_MHI'         : pts_MHI, # log msun
+         'pts_MHI_errdown' : pts_MHI_errdown, # log msun
+         'pts_MHI_errup'   : pts_MHI_errup} # log msun
     return r
 
 def decia2018():

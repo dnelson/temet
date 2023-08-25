@@ -1703,6 +1703,16 @@ class simParams:
         return header['Nsubhalos_Total']
 
     @property
+    def subhaloIndsCen(self):
+        """ Return indices of central subhalos in the group catalog at this sP.snap. """
+        return self.cenSatSubhaloIndices(cenSatSelect='cen')
+    
+    @property
+    def subhaloIndsSat(self):
+        """ Return indices of satellite subhalos in the group catalog at this sP.snap. """
+        return self.cenSatSubhaloIndices(cenSatSelect='sat')
+
+    @property
     def numPart(self):
         """ Return number of particles/cells of all types at this sP.snap. """
         return self.snapshotHeader()['NumPart']

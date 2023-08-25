@@ -1195,7 +1195,7 @@ def HIvsHaloMass(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
     ax.set_ylabel('M$_{\\rm HI}$ [ log M$_{\\rm sun}$ ]')
 
     # observational points (Obuljen+ 2018)
-    o18 = obuljen2018()
+    o18 = obuljen2019()
 
     color = '#222222'
     l1, = ax.plot(o18['Mhalo'], o18['mHI'], color=color)
@@ -1601,16 +1601,16 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
     g = giodini2009(sPs[0])
     l = lovisari2015(sPs[0])
 
-    l1,_,_ = ax.errorbar(g['m500_logMsun'], g['fGas500'], yerr=g['fGas500Err'],
+    l1,_,_ = ax.errorbar(g['m500'], g['fGas500'], yerr=g['fGas500Err'],
                          color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, 
                          fmt=markers[0]+linestyles[0])
-    l2,_,_ = ax.errorbar(g['m500_logMsun'], g['fStars500'], yerr=g['fStars500Err'],
+    l2,_,_ = ax.errorbar(g['m500'], g['fStars500'], yerr=g['fStars500Err'],
                          color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, 
                          fmt=markers[1]+linestyles[1])
-    l3,_,_ = ax.errorbar(g['m500_logMsun'], g['fBaryon500'], yerr=g['fBaryon500Err'],
+    l3,_,_ = ax.errorbar(g['m500'], g['fBaryon500'], yerr=g['fBaryon500Err'],
                          color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, 
                          fmt=markers[2]+linestyles[2])
-    l4,_,_ = ax.errorbar(l['m500_logMsun'], l['fGas500'], #yerr=l['fGas500Err'],
+    l4,_,_ = ax.errorbar(l['m500'], l['fgas500'], yerr=l['fgas500_err'],
                          color='#555555', ecolor='#555555', alpha=0.9, capsize=0.0, 
                          marker=markers[0],linestyle='')
 
@@ -1684,15 +1684,6 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
                 #if fracType == 'gas':
                 #    ax.fill_between(xm[:-1], ym2[:-1]-sm[:-1], ym2[:-1]+sm[:-1], 
                 #                    color=c, interpolate=True, alpha=0.3)
-
-    # zoom legend
-    # setup the 'iClusters' line with 3 different symbols simultaneously
-    # todo: http://nbviewer.jupyter.org/gist/leejjoon/5603703
-    #p0 = plt.Line2D( (0,1),(0,0),color=colors[0],lw=3.0,marker=markers[0],linestyle='')
-    #p1 = plt.Line2D( (0,1),(0,0),color=colors[0],lw=3.0,marker=markers[1],linestyle='')
-    #p2 = plt.Line2D( (0,1),(0,1),color=colors[0],lw=3.0,marker=markers[2],linestyle='')
-    #sExtra = [(p0,p1,p2)]
-    #lExtra = ['iClusters']
 
     # f_labels legend
     sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]

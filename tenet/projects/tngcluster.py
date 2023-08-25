@@ -657,12 +657,12 @@ def stellar_mass_vs_halomass(sPs, conf=0):
 
 def gas_fraction_vs_halomass(sPs):
     """ Plot f_gas vs halo mass. """
-    from ..load.data import giodini2009, lovisari2015
+    from ..load.data import giodini2009, lovisari2015, lovisari2020
 
     xQuant = 'mhalo_500_log'
     cenSatSelect = 'cen'
 
-    xlim = [13.9, 15.3]
+    xlim = [14.0, 15.3]
     clim = [-0.4, 0.0] # log fraction
     scatterPoints = True
     drawMedian = False
@@ -670,41 +670,43 @@ def gas_fraction_vs_halomass(sPs):
     sizefac = 0.8 # for single column figure
 
     yQuant = 'fgas_r500'
-    ylim = [0.05, 0.18]
+    ylim = [0.03, 0.18]
     scatterColor = None #'massfrac_exsitu2'
 
     def _draw_data(ax):
         # observational points
-        g = giodini2009(sPs[0])
-        l = lovisari2015(sPs[0])
+        g09 = giodini2009(sPs[0])
+        l15 = lovisari2015(sPs[0])
+        l20 = lovisari2020()
 
-        ax.errorbar(g['m500_logMsun'], g['fGas500'], yerr=g['fGas500Err'],
-                             color='#999999', alpha=0.9, 
-                             fmt=markers[0]+linestyles[0],label=g['label'])
-        ax.errorbar(l['m500_logMsun'], l['fGas500'], #yerr=l['fGas500Err'],
-                             color='#555555', alpha=0.9, 
-                             marker=markers[0],linestyle='',label=l['label'])
+        l1 = ax.errorbar(g09['m500'], g09['fGas500'], yerr=g09['fGas500Err'],
+                         color='#555555', alpha=0.9, fmt=markers[1])
+        l2 = ax.errorbar(l15['m500'], l15['fgas500'], yerr=l15['fgas500_err'], 
+                         xerr=[l15['m500_err1'],l15['m500_err2']],
+                         color='#555555', alpha=0.9, marker=markers[2], linestyle='')
+        l3 = ax.errorbar(l20['m500'], l20['fgas500'], xerr=[l20['m500_err1'],l20['m500_err2']],
+                         yerr=l20['fgas500_err'], color='#888888', alpha=1.0, zorder=-2,
+                         marker=markers[3], linestyle='')
 
         # Tanimura+2020 (https://arxiv.org/abs/2007.02952) (xerr assumed)
-        ax.errorbar( np.log10(0.9e14/0.6774), 0.13, xerr=0.1, yerr=0.03, marker='D', alpha=0.9, 
-                     color='#333333', label='Tanimura+ (2020) z~0.4')
+        t20_label = 'Tanimura+ (2020)'
+        t20_m500 = np.log10(0.9e14/0.6774)
+        t20_fgas = 0.13
+        l4 = ax.errorbar(t20_m500, t20_fgas, xerr=0.1, yerr=0.03, marker=markers[4], alpha=0.9, color='#333333')
 
         # universal baryon fraction line
         OmegaU = sPs[0].omega_b / sPs[0].omega_m
         ax.plot( xlim, [OmegaU,OmegaU], '--', lw=1.0, color='#444444', alpha=0.3)
-        ax.text( xlim[1]-0.2, OmegaU+0.003, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', size='large', alpha=0.3)
+        ax.text( xlim[1]-0.13, OmegaU+0.003, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', size='large', alpha=0.3)
 
         # second legend
-        plt.gca().set_prop_cycle(None) # reset color cycle
-        colors = [next(ax._get_lines.prop_cycler)['color'] for i in range(len(sPs))]
-        handles = [ plt.Line2D( (0,1), (0,0), color=colors[i], lw=0, marker='o') for i in range(len(sPs)) ]
-        legend2 = ax.legend(handles, [sP.simName for sP in sPs], loc='upper left')
-        ax.add_artist(legend2)
+        legend = ax.legend([l1,l2,l3,l4], [g09['label'],l15['label'],l20['label'],t20_label], loc='lower right')
+        ax.add_artist(legend)
 
     quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_post=_draw_data, legendLoc='lower right', pdf=None)
+                             f_post=_draw_data, legendLoc='upper left', pdf=None)
 
 def sfr_vs_halomass(sPs):
     """ Plot star formation rate vs halo mass. """
@@ -1102,7 +1104,7 @@ def szy_vs_halomass(sPs):
         pass
 
     def _draw_data(ax):
-        # create second ghost axis (to hold a second legend)
+        # create second ghost axis (to hold a second legend) (note: zorder only works within an axis)
         ax2 = ax.twinx()
         ax2.set_ylim(ax.get_ylim())
         ax2.set_axis_off()
@@ -1169,7 +1171,7 @@ def szy_vs_halomass(sPs):
 
 def XrayLum_vs_halomass(sPs):
     """ Plot X-ray luminosity vs halo mass. """
-    from ..load.data import pratt09, vikhlinin09, mantz16, bulbul19
+    from ..load.data import pratt09, vikhlinin09, mantz16, bulbul19, lovisari2020
 
     xQuant = 'mhalo_500_log'
     cenSatSelect = 'cen'
@@ -1190,15 +1192,17 @@ def XrayLum_vs_halomass(sPs):
         v09 = vikhlinin09()
         m16 = mantz16()
         b19 = bulbul19()
+        l20 = lovisari2020()
 
-        markers = ['p','D','*','s']
+        markers = ['p','D','*','s','H']
 
         ax.plot(p09['M500'], p09['L05_2'], markers[0], color='#000000', ms=6, alpha=0.7)
         ax.plot(v09['M500_Y'], v09['LX'], markers[1], color='#000000', ms=6, alpha=0.7)
         ax.plot(m16['M500'], m16['LX'], markers[2], color='#000000', ms=9, alpha=0.7)
         ax.plot(b19['M500'], b19['LX'], markers[3], color='#000000', ms=6, alpha=0.7)
+        ax.plot(l20['m500'], l20['LX'], markers[4], color='#000000', ms=6, alpha=0.7)
 
-        labels = [p09['label'],v09['label'],m16['label'],b19['label']]
+        labels = [p09['label'],v09['label'],m16['label'],b19['label'],l20['label']]
 
         # second legend
         handles = [plt.Line2D((0,1), (0,0), color='black', lw=0, marker=m) for m in markers]
@@ -1234,11 +1238,10 @@ def paperPlots():
         simClustersComparison()
 
     # figures 4,5 - individual halo/gallery vis (x-ray)
-    if 1:
-        #for conf in range(10):
-        #    vis_gallery(TNG_C, conf=conf, num=1) # single
-        vis_gallery(TNG_C, conf=10, num=1) # single
-        #vis_gallery(TNG_C, conf=1, num=72) # gallery
+    if 0:
+        for conf in range(10):
+            vis_gallery(TNG_C, conf=conf, num=1) # single
+        vis_gallery(TNG_C, conf=1, num=72) # gallery
 
     # figure 6 - gas fractions
     if 0:
