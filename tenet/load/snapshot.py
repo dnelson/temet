@@ -169,6 +169,10 @@ def snapHasField(sP, partType, field):
     if 'PartType' not in partType:
         gName = 'PartType' + str(sP.ptNum(partType))
 
+    # special cases (for efficiency)
+    if gName == 'PartType0' and field == 'Volume' and 'TNG' in sP.simName:
+        return False
+
     # the first chunk could not have the field but it could exist in a later chunk (e.g. sparse file 
     # contents of subboxes). to definitely return False, we have to check them all, but we can return 
     # an early True if we find a(ny) chunk containing the field
@@ -176,7 +180,7 @@ def snapHasField(sP, partType, field):
         fileName = snapPath(sP.simPath, sP.snap, chunkNum=i, subbox=sP.subbox)
 
         with h5py.File(fileName,'r') as f:
-            if gName in f and field in f[gName]:
+            if '%s/%s' % (gName,field) in f:
                 return True
 
     return False

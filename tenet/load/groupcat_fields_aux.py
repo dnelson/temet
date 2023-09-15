@@ -105,7 +105,7 @@ color_.units = 'mag' # AB
 color_.limits = [-0.4, 1.0]
 color_.log = False
 
-# ---------------------------- auxcat: masses -----------------------------------------------------
+# ---------------------------- auxcat: (gas) masses -----------------------------------------------------
 
 @catalog_field
 def mass_ovi(sim, partType, field, args):
@@ -238,6 +238,21 @@ mass_halogasfof_sfcold.units = r'$\rm{M_{sun}}$'
 mass_halogasfof_sfcold.limits = [7.0, 13.0]
 mass_halogasfof_sfcold.log = True
 
+# ---------------------------- auxcat: (other) masses -----------------------------------------------------
+
+@catalog_field
+def mass_smbh(sim, partType, field, args):
+    """ Largest SMBH mass in each subhalo. Avoids summing multiple SMBH masses, if more than one present. """
+    acField = 'Subhalo_BH_Mass_largest'
+    ac = sim.auxCat(fields=[acField])
+
+    return sim.units.codeMassToMsun(ac[acField])
+
+mass_smbh.label = r'$\rm{M_{SMBH}}$'
+mass_smbh.units = r'$\rm{M_{sun}}$'
+mass_smbh.limits = [6.0, 10.0]
+mass_smbh.log = True
+
 # ---------------------------- auxcat: gas observables --------------------------------------------
 
 @catalog_field
@@ -319,7 +334,7 @@ xray_peak_offset_2d.units = lambda sim,pt,f: r'$\rm{kpc}$' if f.endswith('_2d') 
 xray_peak_offset_2d.limits = lambda sim,pt,f: [0.0, 2.5] if f.endswith('_2d') else [-2.0, 0.0]
 xray_peak_offset_2d.log = True
 
-# ---------------------------- auxcat: other ------------------------------------------------------
+# ---------------------------- auxcat: virshock ------------------------------------------------------
 
 @catalog_field
 def rshock(sim, partType, field, args):
@@ -374,6 +389,22 @@ rshock_.label = lambda sim,pt,f: r'$\rm{R_{shock}' if '_kpc' in f else r'$\rm{R_
 rshock_.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_kpc' in f else '' # linear dimensionless
 rshock_.limits = lambda sim,pt,f: [1.6, 3.2] if '_kpc' in f else [0.0, 4.0]
 rshock_.log = lambda sim,pt,f: True if '_kpc' in f else False
+
+# ---------------------------- auxcat: other ------------------------------------------------------
+
+@catalog_field
+def zform(sim, partType, field, args):
+    """ Formation redshift, at which the subhalo had half of its current mass. """
+    acField = 'Subhalo_SubLink_zForm_mm5'
+    ac = sim.auxCat(fields=[acField])
+
+    return ac[acField]
+
+mass_smbh.label = r'$\rm{z_{form}}$'
+mass_smbh.units = '' # linear dimensionless
+mass_smbh.limits = [0.0, 4.0]
+mass_smbh.log = False
+
 
 # -------------------- postprocessing -------------------------------------------------------------
 
@@ -555,3 +586,20 @@ lgal_.label = lambda sim,pt,f: r'L-Galaxies (%s)' % (f.split('_', max=1)[1])
 lgal_.units = '' # variable (todo)
 lgal_.limits = [] # variable (todo)
 lgal_.log = False # variable (todo)
+
+@catalog_field
+def coolcore_flag(sim, partType, field, args):
+    """ Postprocessing/CCcriteria: flag (0=SCC, 1=WCC, 2=NCC) based on Lehle+23 central cool fiducial definition. """
+    filePath = sim.postPath + '/released/CCcriteria.hdf5'
+
+    with h5py.File(filePath,'r') as f:
+        HaloIDs = f['HaloIDs'][()]
+        flags = f['centralCoolingTime_flag'][:, sim.snap]
+
+    # expand from value per primary target to value per subhalo
+    vals = np.zeros(sim.numSubhalos, dtype='float32')
+    vals.fill(np.nan)
+
+    vals[sim.halos('GroupFirstSub')[HaloIDs]] = flags
+
+    return vals

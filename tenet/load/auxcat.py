@@ -650,6 +650,8 @@ fieldComputeFunctionMapping = \
      partial(summarize_projection_2d,quantity='xray_lum_0.5-2.0kev',projConf='2r200_d=r200', aperture='r500'),
    'Subhalo_XrayOffset_2D' : \
      partial(summarize_projection_2d,quantity='xray_lum_0.5-2.0kev',projConf='0.5r500_d=3r200', op='peak_offset'),
+   'Subhalo_SZOffset_2D' : \
+     partial(summarize_projection_2d,quantity='sz_yparam',projConf='0.5r500_d=3r200', op='peak_offset'),
 
    'Subhalo_OVIIr_GalaxyLum_1rstars' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O  7 21.6020A lum2phase',op='sum',rad='1rhalfstars',ptRestrictions=sfrgt0),

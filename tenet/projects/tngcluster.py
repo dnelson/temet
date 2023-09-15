@@ -832,7 +832,31 @@ def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0
     subhaloIDs = sP.cenSatSubhaloIndices(cenSatSelect='cen')
     m200c = sP.subhalos('mhalo_200_log')[subhaloIDs]
 
-    if sP.simName != 'TNG-Cluster':
+    if sP.simName == 'TNG-Cluster':
+        # for z>0, also include main progenitors of z==0 GroupPrimaryZoomTargets
+        if sP.redshift > 0:
+            subhaloIDs = list(subhaloIDs)
+            sP_z0 = sP.copy()
+            sP_z0.setRedshift(0.0)
+
+            # load GroupPrimaryZoomTargets at z=0, and their SubLink MPBs
+            subhaloIDs_z0 = sP_z0.cenSatSubhaloIndices(cenSatSelect='cen')
+            mpbs = sP_z0.loadMPBs(subhaloIDs_z0, fields=['SnapNum','SubfindID'])
+
+            # record any progenitors which are not HaloID==0 at this snap, in the original zooms
+            subhaloIDs_add = []
+            for subhaloID_z0 in subhaloIDs_z0:
+                mpb_loc = mpbs[subhaloID_z0]
+                w = np.where(mpb_loc['SnapNum'] == sP.snap)[0]
+                if len(w) == 0:
+                    print('NO PROG, SKIP!', subhaloID_z0)
+                    continue
+                subhaloID_cand = mpb_loc['SubfindID'][w][0]
+                if subhaloID_cand not in subhaloIDs:
+                    print('ADD: ', subhaloID_z0, subhaloID_cand)
+                    subhaloIDs.append(subhaloID_cand)
+            subhaloIDs = np.array(subhaloIDs, dtype='int32')
+    else:
         # include low-mass progenitors at high redshift
         w = np.where(m200c > 14.0)[0]
         subhaloIDs = subhaloIDs[w]
@@ -1060,7 +1084,7 @@ def summarize_projection_2d(sim, pSplit=None, quantity='sz_yparam', projConf='2r
                 # mark galaxy position (SubhaloPos at center by definition)
                 xy_cen0 = proj.shape[0] / 2.0, proj.shape[1] / 2.0
 
-                xy_cen2, circ_cens, circ_rads = _find_peak(proj_loc, method='shrinking_circle')
+                xy_cen2, _, _ = _find_peak(proj_loc, method='shrinking_circle')
                 offsets_px = np.sqrt((xy_cen0[0]-xy_cen2[0])**2 + (xy_cen0[1]-xy_cen2[1])**2)
                 offsets_code = offsets_px * pxSize_code
 
@@ -1214,6 +1238,59 @@ def XrayLum_vs_halomass(sPs):
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                              f_post=_draw_data, legendLoc='upper left', pdf=None)
 
+def halo_properties_table(sim):
+    """ Write out a latex table of primary target halo properties. """
+    filename = 'table.tex'
+    cc_str = {0 : 'CC', 1 : 'WCC', 2 : 'NCC'}
+
+    # TNG-Cluster: all primary zoom targets
+    subhaloIDs = sim.cenSatSubhaloIndices(cenSatSelect='cen')
+    haloIDs = sim.subhalos('SubhaloGrNr')[subhaloIDs]
+
+    # load
+    subhalos = sim.subhalos(['mhalo_200_log','mhalo_500_log','r200','mstar_30kpc_log','mhi_halo_log',
+                             'mass_smbh_log','szy_r500c_3d_log','zform','coolcore_flag'])
+
+    for field in ['fgas_r500','sfr_30pkpc_log','xray_0.5-2.0kev_r500_halo_log']:
+        quant, _, _, _ = sim.simSubhaloQuantity(field)
+        subhalos[field] = quant
+
+    halos = {'origID' : sim.halos('GroupOrigHaloID')}
+
+    # compute a richness
+    halos['richness'] = np.zeros(sim.numHalos, dtype='int32')
+    mstar_mask = subhalos['mstar_30kpc_log'] > 10.5
+    sub_haloIDs = sim.subhalos('SubhaloGrNr')
+    for haloID in haloIDs:
+        w = np.where(sub_haloIDs == haloID)[0]
+        halos['richness'][haloID] = np.sum(mstar_mask[w])
+
+    # take subset
+    for key in subhalos:
+        subhalos[key] = subhalos[key][subhaloIDs]
+    for key in halos:
+        halos[key] = halos[key][haloIDs]
+
+    # write
+    with open(filename,'w') as f:
+        for i in range(len(haloIDs)):
+            line = '    %4d & %8d & ' % (halos['origID'][i], haloIDs[i])
+            line += '%5.2f & %5.2f & %5.3f & %5.2f & %5.2f & ' % \
+                (subhalos['mhalo_200_log'][i],subhalos['mhalo_500_log'][i],subhalos['r200'][i]/1000, \
+                 subhalos['mstar_30kpc_log'][i],subhalos['mhi_halo_log'][i])
+            line += '%5.3f & %5.2f & %5.2f & ' % \
+                (subhalos['fgas_r500'][i],subhalos['sfr_30pkpc_log'][i],subhalos['mass_smbh_log'][i])
+            line += '%5.2f & %5.2f & %4.2f & %3d & %3s' % \
+                (subhalos['xray_0.5-2.0kev_r500_halo_log'][i],subhalos['szy_r500c_3d_log'][i],
+                 subhalos['zform'][i],halos['richness'][i],cc_str[int(subhalos['coolcore_flag'][i])])
+            line += ' \\\\\n'
+
+            line = line.replace(' nan ','  -- ') # zero SFRs
+
+            f.write(line)
+
+    print('Wrote [%s]' % filename)
+
 def paperPlots():
     """ Plots for TNG-Cluster intro paper. """
     from ..util.simParams import simParams
@@ -1308,13 +1385,15 @@ def paperPlots():
     if 0:
         contamination_mindist()
 
+    # appendix - halo properties table
+    if 0:
+        halo_properties_table(TNG_C)
+
     # satellite smhm
     # satellite radial number density (https://arxiv.org/abs/2305.09629 Fig 11)
     # richness (N_sat), see Pakmor MTNG paper (also https://arxiv.org/abs/2307.08749)
     # SPA relaxedness measures from X-ray SB maps (https://arxiv.org/abs/2303.10185) (https://arxiv.org/pdf/2006.10752.pdf)
     # members: L_X vs velocity dispersion relation (Kirkpatrick,C.+2020 SPIDERS), 'cosmo constraints with the velocity dispersion function'
     # TODO: https://arxiv.org/abs/2111.13071 (M_SZ vs M_dyn from PSZ2)
-
-    # ex-situ fractions, or radial profiles of ex-situ stacked in mass (or similar)
 
     # figure todo - kinematics overview (vel disp cold,warm,hot) (https://arxiv.org/abs/2304.08810)
