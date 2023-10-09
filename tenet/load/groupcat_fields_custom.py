@@ -424,7 +424,7 @@ mstar30pkpc_mhalo200_ratio.auxcat = True
 
 @catalog_field
 def mstar_r500(sim, partType, field, args):
-    """ Subhalo stellar mass, measured within :math:`\\rm{R_{500c}}`. """
+    """ Subhalo stellar mass (i.e. central+ICL, but no sats), measured within :math:`\\rm{R_{500c}}`. """
     acField = 'Subhalo_Mass_r500_Stars_FoF'
     mass = sim.auxCat(acField, expandPartial=True)[acField]
     return sim.units.codeMassToMsun(mass)
@@ -447,6 +447,19 @@ mgas_r500.units = r'$\rm{M_{sun}}$'
 mgas_r500.limits = [8.0, 12.0]
 mgas_r500.log = True
 mgas_r500.auxcat = True
+
+@catalog_field
+def mgas_halo(sim, partType, field, args):
+    """ Halo-scale gas mass, measured within each FoF. """
+    acField = 'Subhalo_Mass_FoF_Gas'
+    mass = sim.auxCatSplit(acField, expandPartial=True)[acField]
+    return sim.units.codeMassToMsun(mass)
+
+mgas_halo.label = r'$\rm{M_{gas, halo}}$'
+mgas_halo.units = r'$\rm{M_{sun}}$'
+mgas_halo.limits = lambda sim,pt,f: [11.0, 14.5] if sim.boxSize > 50000 else [10.0, 13.5]
+mgas_halo.log = True
+mgas_halo.auxcat = True
 
 @catalog_field
 def mhi(sim, partType, field, args):

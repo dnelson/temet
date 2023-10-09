@@ -480,6 +480,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad='2rhalfstars'),
    'Subhalo_Mass_FoF_HI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None,scope='fof',cenSatSelect='cen'),
+   'Subhalo_Mass_FoF_Gas' : \
+      partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad=None,scope='fof',cenSatSelect='cen'),
    'Subhalo_Mass_HI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None),
 
@@ -595,6 +597,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad='r500crit',scope='fof',cenSatSelect='cen',minHaloMass='10000dm'),
    'Subhalo_Mass_r500_Stars_FoF': \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='r500crit',scope='fof',cenSatSelect='cen',minHaloMass='10000dm'),
+   'Subhalo_Mass_r500_Stars': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='r500crit',cenSatSelect='cen',minHaloMass='10000dm'),
 
    'Subhalo_Mass_1pkpc_2D_Stars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='1pkpc_2d'),

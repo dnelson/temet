@@ -81,7 +81,7 @@ def vis_fullbox_virtual(sP, conf=0):
 
     class plotConfig:
         plotStyle  = 'edged' # open, edged
-        rasterPx   = [1400,1400]
+        rasterPx   = [1080,1080]
         colorbars  = True
         fontsize   = 22
 
@@ -182,16 +182,15 @@ def mass_function(secondaries=False):
     from ..util import simParams
     from ..cosmo.zooms import _halo_ids_run
     
-    mass_range = [14.0, 15.5] #if not secondaries else [13.0, 15.5]
+    mass_range = [14.0, 15.5]
     binSize = 0.1
     redshift = 0.0
     
     sP_tng300 = simParams(res=2500,run='tng',redshift=redshift)
-    sP_tngc = simParams(res=2048, run='tng_dm', redshift=redshift)
+    sP_tngc = simParams(res=2048, run='tng_dm', redshift=redshift) # TNG-Cluster-Dark!
 
     # load halos
     halo_inds = _halo_ids_run(onlyDone=True)
-    #print(len(halo_inds), halo_inds)
 
     # start figure
     fig = plt.figure(figsize=figsize)
@@ -205,8 +204,6 @@ def mass_function(secondaries=False):
     ax.set_ylabel('Number of Halos [%.1f dex$^{-1}$]' % binSize)
     ax.set_yscale('log')
     ax.yaxis.set_ticks_position('both')
-
-    yy_max = 1.0
 
     hh = []
     labels = []
@@ -225,36 +222,31 @@ def mass_function(secondaries=False):
 
         w = np.where(~np.isnan(masses))
         yy, xx = np.histogram(masses[w], bins=nBins, range=mass_range)
-        yy_max = np.nanmax([yy_max,np.nanmax(yy)])
 
         hh.append(masses[w])
         labels.append(label)
 
     # 'bonus': halos above 14.0 in the high-res regions of more massive zoom targets
     if secondaries:
+        # note: halo_inds is for TNG-Cluster_Dark, do not use for TNG-Cluster!
         sP = simParams('tng-cluster', redshift=redshift)
         masses = sP.units.codeMassToLogMsun(sP.halos('Group_M_Crit200'))
+        pri_target = sP.halos('GroupPrimaryZoomTarget') # exclude targeted halos
 
         # zero contamination
         contam_frac = sP.halos('GroupContaminationFracByMass')
-        w = np.where((masses > ax.get_xlim()[0]) & (contam_frac == 0))
-
-        w = np.array(list(set(w[0]) - set(halo_inds))) # exclude targeted halos
+        w = np.where((masses > ax.get_xlim()[0]) & (contam_frac == 0) & (pri_target == 0))
 
         yy, xx = np.histogram(masses[w], bins=nBins, range=mass_range)
-        yy_max = np.nanmax([yy_max,np.nanmax(yy)])
 
         hh.append(masses[w])
         labels.append('TNG-Cluster Bonus (no contamination)')
 
         # small contamination
         contam_thresh = 1e-2
-        w = np.where((masses > ax.get_xlim()[0]) & (contam_frac < contam_thresh) & (contam_frac != 0))
-
-        w = np.array(list(set(w[0]) - set(halo_inds))) # exclude targeted halos
+        w = np.where((masses > ax.get_xlim()[0]) & (contam_frac < contam_thresh) & (contam_frac != 0) & (pri_target == 0))
 
         yy, xx = np.histogram(masses[w], bins=nBins, range=mass_range)
-        yy_max = np.nanmax([yy_max,np.nanmax(yy)])
 
         hh.append(masses[w])
         labels.append('TNG-Cluster Bonus ($f_{\\rm contam} < %.1e$)' % contam_thresh)
@@ -564,7 +556,7 @@ def bfield_strength_vs_halomass(sPs, redshifts):
 
 def stellar_mass_vs_halomass(sPs, conf=0):
     """ Plot various stellar mass quantities vs halo mass. """
-    from ..load.data import behrooziSMHM, mosterSMHM, kravtsovSMHM
+    from ..load.data import behrooziSMHM, mosterSMHM, kravtsovSMHM, behrooziUM
 
     xQuant = 'mhalo_500_log'
     cenSatSelect = 'cen'
@@ -579,85 +571,169 @@ def stellar_mass_vs_halomass(sPs, conf=0):
     if conf == 0:
         yQuant = 'mstar_30pkpc'
         ylabel = 'BCG Stellar Mass [ log M$_{\\rm sun}$ ]'
-        ylim = [10.9, 12.8]
-        scatterColor = None #'massfrac_exsitu2' (TODO: can re-enable)
+        ylim = [10.7, 12.8]
+        scatterColor = None
 
         def _draw_data(ax):
-            # Kravtsov+ 2018 (Table 1 for M500crit + Table 4)
-            label = 'Kravtsov+18'
-            
-            m500c = np.log10(np.array([15.60, 10.30, 7.00, 5.34, 2.35, 1.86, 1.34, 0.46, 0.47]) * 1e14)
-            mstar_30pkpc = np.log10(np.array([5.18, 10.44, 7.12, 3.85, 3.67, 4.35, 4.71, 4.59, 6.76]) * 1e11)
-
-            ax.scatter(m500c, mstar_30pkpc, s=markersize+20, c='#000000', marker='D', alpha=1.0, label=label)
-
             # empirical SMHM relations
-            b = behrooziSMHM(sPs[0], redshift=0.0)
-            m = mosterSMHM(sPs[0], redshift=0.0)
-            k = kravtsovSMHM(sPs[0])
+            b13 = behrooziSMHM(sPs[0], redshift=0.0)
+            m13 = mosterSMHM(sPs[0], redshift=0.0)
+            k14 = kravtsovSMHM(sPs[0])
+            b19 = behrooziUM(sPs[0])
 
-            ax.plot(b['m500c'], b['mstar_mid'], color='#333333', label='Behroozi+ (2013)')
-            ax.fill_between(b['m500c'], b['mstar_low'], b['mstar_high'], color='#333333', interpolate=True, alpha=0.3)
+            w = np.where(b13['m500c'] < 14.8) # for visual clarity
+            l1 = ax.plot(b13['m500c'][w], b13['mstar_mid'][w], '--', lw=lw*1.2, color='#bbbbbb')
+            #ax.fill_between(b13['m500c'], b13['mstar_low'], b13['mstar_high'], color='#bbbbbb', interpolate=True, alpha=0.3)
 
-            ax.plot(m['m500c'], m['mstar_mid'], color='#dddddd', label='Moster+ (2013)')
-            ax.fill_between(m['m500c'], m['mstar_low'], m['mstar_high'], color='#dddddd', interpolate=True, alpha=0.3)
+            w = np.where(m13['m500c'] < 14.7) # for visual clarity
+            l2 = ax.plot(m13['m500c'][w], m13['mstar_mid'][w], '-.', lw=lw*1.2, color='#bbbbbb')
+            #ax.fill_between(m13['m500c'], m13['mstar_low'], m13['mstar_high'], color='#bbbbbb', interpolate=True, alpha=0.3)
 
-            ax.plot(k['m500c'], k['mstar_mid'], color='#888888', label='Kravtsov+ (2014)')
+            w = np.where(k14['m500c'] < 14.9) # for visual clarity
+            l3 = ax.plot(k14['m500c'][w], k14['mstar_mid'][w], lw=lw*1.2, color='#888888')
+
+            # UniverseMachine
+            l4 = ax.plot(b19['m500c'], b19['mstar_mid'], lw=lw*1.2, color='#333333')
+            #ax.fill_between(b19['m500c'], b19['mstar_low'], b19['mstar_high'], color='#333333', interpolate=True, alpha=0.3)
+            ax.fill_between(b19['m500c'], b19['mstar_mid']-0.15, b19['mstar_mid']+0.15, color='#333333', interpolate=True, alpha=0.3)
+
+            # direct points from Fig 10 (centrals only, good, but z=0.1?, not good)
+            #b19_mhalo = sPs[0].units.m200_to_m500(np.array([7.94e14, 6e13, 4e12]))
+            #b19_ratio = np.array([0.0012,0.0047,0.018])
+            #b19_ratio_down = np.array([0.0009,0.004,0.016])
+            #b19_ratio_up = np.array([0.00167,0.0053,0.0186])
+            #b19_mstar = np.log10(b19_ratio * b19_mhalo) # log msun
+            #b19_mstar_up = np.log10(b19_ratio_up * b19_mhalo) # log msun
+            #b19_mstar_down = np.log10(b19_ratio_down * b19_mhalo) # log msun
+            #b19_mhalo = np.log10(b19_mhalo)
+
+            # EMERGE
+            m19_label = 'Moster+ (2020)'
+            m19_mhalo = np.array([12.0, 13.0, 14.0, 15.0])
+            m19_mhalo = np.log10(sPs[0].units.m200_to_m500(10.0**m19_mhalo)) # note: actually virial, not m200
+            m19_mstar = np.array([10.51, 11.04, 11.53, 11.995]) # log msun
+
+            l5 = ax.plot(m19_mhalo, m19_mstar, color='#000000', lw=lw*1.2, alpha=0.5)
+
+            # Kravtsov+ 2018 (Table 1 for M500crit + Table 4 for M*<30kpc) - removed first point (in legend)
+            k18_label = 'Kravtsov+ (2018)'
+            m500c = np.log10(np.array([10.30, 7.00, 5.34, 2.35, 1.86, 1.34, 0.46, 0.47]) * 1e14) # 15.60, 
+            mstar_30pkpc = np.log10(np.array([10.44, 7.12, 3.85, 3.67, 4.35, 4.71, 4.59, 6.76]) * 1e11) # 5.18, 
+
+            l6 = ax.scatter(m500c, mstar_30pkpc, s=markersize+20, c='#222222', marker='D', alpha=1.0)
+
+            # Akino+ 2022 (HSC-XXL) - Fig 4, only complete above M500>14.0
+            a22_label = 'Akino+ (2022)'
+            a22_mhalo = [6.878e+14, 5.817e+14, 6.028e+14, 4.833e+14, 3.916e+14, 3.673e+14, 2.535e+14, 2.675e+14, 
+                        2.684e+14, 1.677e+14, 1.459e+14, 1.507e+14, 1.794e+14, 1.671e+14, 1.731e+14, 1.961e+14, 
+                        1.695e+14, 1.750e+14, 1.545e+14, 1.306e+14, 1.051e+14, 1.491e+14, 2.517e+14, 2.781e+14, 
+                        2.732e+14, 2.198e+14, 2.077e+14, 2.344e+14, 1.927e+14, 1.256e+14, 1.161e+14, 8.890e+13, 
+                        8.488e+13, 1.011e+14, 1.121e+14, 1.221e+14, 7.654e+13, 7.308e+13, 7.334e+13, 6.614e+13]
+
+            a22_mstar = [1.356e+12, 9.435e+11, 5.955e+11, 6.704e+11, 8.469e+11, 1.100e+12, 9.272e+11, 8.588e+11,
+                        7.953e+11, 8.528e+11, 8.093e+11, 7.496e+11, 6.918e+11, 6.081e+11, 5.477e+11, 4.649e+11,
+                        4.489e+11, 3.542e+11, 3.212e+11, 3.604e+11, 3.157e+11, 2.482e+11, 3.960e+11, 3.201e+11,
+                        2.975e+11, 2.456e+11, 9.884e+10, 1.451e+11, 1.721e+11, 1.627e+11, 1.965e+11, 4.814e+11,
+                        5.439e+11, 5.439e+11, 5.852e+11, 1.135e+12, 8.150e+11, 6.543e+11, 5.126e+11, 5.252e+11]
+            
+            l7 = ax.scatter(np.log10(a22_mhalo), np.log10(a22_mstar), s=markersize+20, c='#333333', marker='o', alpha=1.0)
+
+            # Dimaio+ 2020
+            d20_label = 'DeMaio+ (2020)'
+            d20_m500_lowz = [1.089e+14, 2.601e+14, 1.138e+14, 1.093e+14, 1.668e+14, 2.772e+14, 
+                        2.731e+14, 3.978e+14, 4.115e+14, 2.606e+14, 3.724e+14, 5.930e+14]
+
+            d20_mstar_lowz = [6.173e+11, 6.270e+11, 7.662e+11, 8.417e+11, 9.541e+11, 8.261e+11,
+                        8.906e+11, 9.046e+11, 9.661e+11, 9.798e+11, 1.160e+12, 1.021e+12]
+
+            d20_m500_midz = [3.804e+14, 2.085e+14, 2.042e+14, 2.299e+14, 2.754e+14, 2.629e+14, 3.149e+14, 3.669e+14, 
+                        3.399e+14, 2.256e+14, 6.096e+14, 7.058e+14, 9.383e+14, 5.447e+14, 3.600e+14, 7.950e+13, 
+                        6.006e+13, 6.539e+13, 4.940e+13, 3.307e+13, 3.321e+13, 3.630e+13]
+
+            d20_mstar_midz = [7.107e+11, 8.617e+11, 8.822e+11, 8.976e+11, 1.037e+12, 1.118e+12, 1.162e+12, 1.257e+12, 
+                        1.299e+12, 1.498e+12, 1.928e+12, 1.816e+12, 1.186e+12, 1.070e+12, 9.526e+11, 6.770e+11,
+                        6.739e+11, 5.463e+11, 3.716e+11, 3.474e+11, 5.753e+11, 6.369e+11]
+            
+            l8 = ax.scatter(np.log10(d20_m500_lowz), np.log10(d20_mstar_lowz), s=markersize+15, c='#333333', marker='s', alpha=1.0)
+            ax.scatter(np.log10(d20_m500_midz), np.log10(d20_mstar_midz), s=markersize+15, c='#333333', marker='s', alpha=1.0)
+
+            # second legend
+            handles = [l1[0],l2[0],l3[0],l4[0],l5[0],l6,l7,l8]
+            labels = [b13['label'],m13['label'],k14['label'],b19['label'],m19_label,k18_label,a22_label,d20_label]
+
+            legend = ax.legend(handles, labels, loc='lower right')
+            ax.add_artist(legend)
 
     if conf == 1:
         yQuant = 'mstar_r500'
-        ylabel = 'Total Halo Stellar Mass [ log M$_{\\rm sun}$ ]' # BCG+SAT+ICL (e.g. <r500c)
+        ylabel = 'Total Halo Stellar Mass [ log M$_{\\rm sun}$ ]' # BCG+ICL+SAT (e.g. fof-scope <r500c)
         ylim = [11.9, 13.4]
-        scatterColor = None #'massfrac_exsitu' (TODO: can re-enable)
+        scatterColor = None
 
         def _draw_data(ax):
-            # Kravtsov+ 2018 (Figure 7 for r500c, Figure 8 for satellites within r500c)
-            label = 'Kravtsov+18'
+            # Kravtsov+ 2018 (Figure 7 for M*tot(r<r500c), Figure 8 for M*sat(r<r500c))
+            k18_label = 'Kravtsov+ (2018)'
             m500c       = np.log10([5.31e13,5.68e13,1.29e14,1.79e14,2.02e14,5.40e14,5.87e14,8.59e14,1.19e15])
             mstar_r500c = np.log10([1.47e12,1.45e12,2.28e12,2.80e12,2.42e12,4.36e12,6.58e12,1.01e13,1.33e13])
             #mstar_sats  = np.log10([7.97e11,3.89e11,1.45e12,1.78e12,1.83e12,3.27e12,4.39e12,6.61e12,1.07e13])
 
-            ax.scatter(m500c, mstar_r500c, s=markersize+20, c='#000000', marker='s', alpha=1.0, label=label)
+            l1 = ax.scatter(m500c, mstar_r500c, s=markersize+20, c='#000000', marker='s', alpha=1.0)
 
             # Gonzalez+13 (Figure 7, mstar is <r500c, and msats is satellites within r500c)
-            label = 'Gonzalez+13'
+            g13_label = 'Gonzalez+ (2013)'
             m500c = [9.55e13,9.84e13,9.54e13,1.45e14,3.66e14,3.52e14,3.23e14,5.35e14,2.28e14,2.44e14,2.42e14,2.26e14]
             mstar = [2.82e12,3.21e12,4.18e12,3.06e12,4.99e12,6.07e12,7.53e12,7.04e12,5.95e12,5.95e12,5.56e12,5.50e12]
             #msats = [1.96e12,1.75e12,1.55e12,1.51e12,2.65e12,4.60e12,4.61e12,4.94e12,3.48e12,3.56e12,3.65e12,3.87e12]
 
-            ax.scatter(np.log10(m500c), np.log10(mstar), s=markersize+20, c='#000000', marker='D', alpha=1.0, label=label)
+            l2 = ax.scatter(np.log10(m500c), np.log10(mstar), s=markersize+20, c='#000000', marker='D', alpha=1.0)
 
             # Leauthaud+12 (obtained from Kravtsov+18 Fig 7)
-            label = 'Leauthaud+12'
+            l12_label = 'Leauthaud+ (2012)'
             m500c = [3e13, 4.26e14]
             mstar_r500c = [5.8e11, 5.6e12]
 
-            ax.plot(np.log10(m500c), np.log10(mstar_r500c), '-', color='#000000', alpha=1.0, label=label)
+            l3 = ax.plot(np.log10(m500c), np.log10(mstar_r500c), '-', color='#000000', alpha=1.0)
+
+            # Akino+ (2022) HSC-XXL (Fig 3) - only complete above M500>14.0
+            a22_label = 'Akino+ (2022)'
+            a22_m500 = [4.831e+14, 6.901e+14, 5.815e+14, 6.070e+14, 4.028e+14, 3.334e+14, 2.701e+14, 2.740e+14, 
+                        2.663e+14, 2.205e+14, 2.533e+14, 2.524e+14, 3.928e+14, 3.671e+14, 1.516e+14, 1.675e+14, 
+                        1.687e+14, 1.468e+14, 1.220e+14, 1.057e+14, 1.124e+14, 1.259e+14, 1.013e+14, 1.160e+14, 
+                        1.549e+14, 1.495e+14, 1.736e+14, 1.805e+14, 1.960e+14, 1.705e+14, 2.082e+14, 2.359e+14, 
+                        2.780e+14, 1.939e+14, 1.761e+14, 1.310e+14, 8.911e+13, 8.538e+13, 8.297e+13]
+
+            a22_mstar = [1.099e+13, 6.380e+12, 6.447e+12, 3.408e+12, 3.349e+12, 2.746e+12, 3.157e+12, 3.591e+12,
+                        4.551e+12, 4.551e+12, 6.077e+12, 7.568e+12, 7.386e+12, 6.606e+12, 6.447e+12, 4.663e+12,
+                        4.099e+12, 3.904e+12, 4.395e+12, 3.361e+12, 2.356e+12, 2.389e+12, 1.932e+12, 1.802e+12,
+                        2.236e+12, 2.708e+12, 2.699e+12, 2.873e+12, 1.972e+12, 1.771e+12, 1.600e+12, 1.407e+12,
+                        1.524e+12, 1.039e+12, 1.254e+12, 1.076e+12, 2.028e+12, 2.267e+12, 2.824e+12]
+            
+            l4 = ax.scatter(np.log10(a22_m500), np.log10(a22_mstar), s=markersize+20, c='#333333', marker='o', alpha=1.0)
 
             # Bahe+17 (Hydrangea sims, Fig 4 left) (arXiv:1703.10610)
-            label = 'Bahe+17 (sims)'
+            b17_label = 'Bahe+ (2017)'
             m500c = [13.83,13.92,13.88,13.97,14.04,14.07,14.29,14.31,14.35,14.40,14.42,14.48,14.55,14.58,
                      14.64,14.79,14.81,14.84,14.90,14.90,15.04,15.07] # 14.69,
             mstar = [12.02,12.14,12.21,12.25,12.32,12.29,12.47,12.53,12.49,12.60,12.66,12.69,12.71,12.76,
                      12.81,13.00,12.97,12.99,13.05,13.08,13.17,13.23] # 12.38,
 
-            ax.scatter(m500c, mstar, s=markersize+20, c='#000000', marker='*', alpha=1.0, label=label)
+            l5 = ax.scatter(m500c, mstar, s=markersize+20, c='#000000', marker='*', alpha=1.0)
 
-    if conf == 2:
-        yQuant = 'TODO'
-        ylabel = 'Stellar Mass <100 pkpc)[ log M$_{\\rm sun}$ ]'
+            # second legend
+            handles = [l1,l2,l3[0],l4,l5]
+            labels = [k18_label,g13_label,l12_label,a22_label,b17_label]
 
-        def _draw_data(ax):
-            pass
+            legend = ax.legend(handles, labels, loc='lower right')
+            ax.add_artist(legend)
 
     quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_post=_draw_data, ylabel=ylabel, legendLoc='lower right', pdf=None)
+                             f_post=_draw_data, ylabel=ylabel, legendLoc='upper left', pdf=None)
 
 def gas_fraction_vs_halomass(sPs):
     """ Plot f_gas vs halo mass. """
-    from ..load.data import giodini2009, lovisari2015, lovisari2020
+    from ..load.data import giodini2009, gonzalez2013, lovisari2015, lovisari2020
 
     xQuant = 'mhalo_500_log'
     cenSatSelect = 'cen'
@@ -678,6 +754,7 @@ def gas_fraction_vs_halomass(sPs):
         g09 = giodini2009(sPs[0])
         l15 = lovisari2015(sPs[0])
         l20 = lovisari2020()
+        g13 = gonzalez2013()
 
         l1 = ax.errorbar(g09['m500'], g09['fGas500'], yerr=g09['fGas500Err'],
                          color='#555555', alpha=0.9, fmt=markers[1])
@@ -687,12 +764,25 @@ def gas_fraction_vs_halomass(sPs):
         l3 = ax.errorbar(l20['m500'], l20['fgas500'], xerr=[l20['m500_err1'],l20['m500_err2']],
                          yerr=l20['fgas500_err'], color='#888888', alpha=1.0, zorder=-2,
                          marker=markers[3], linestyle='')
+        l4 = ax.errorbar(g13['m500'], g13['fgas'], xerr=g13['m500_err'],
+                         yerr=g13['fgas_err'], color='#333333', alpha=1.0, 
+                         marker=markers[5], linestyle='')
 
         # Tanimura+2020 (https://arxiv.org/abs/2007.02952) (xerr assumed)
         t20_label = 'Tanimura+ (2020)'
         t20_m500 = np.log10(0.9e14/0.6774)
         t20_fgas = 0.13
-        l4 = ax.errorbar(t20_m500, t20_fgas, xerr=0.1, yerr=0.03, marker=markers[4], alpha=0.9, color='#333333')
+        l5 = ax.errorbar(t20_m500, t20_fgas, xerr=0.1, yerr=0.03, marker=markers[4], alpha=0.9, color='#333333')
+
+        # Akino+2022 (HSC-XXL) - Fig 5
+        #a22_label = 'Akino+ (2022)'
+        #m500       = [1.0e13, 4.4e13, 1.48e14, 4.46e14, 1.0e15]
+        #fgas       = [0.039, 0.059, 0.081, 0.109, 0.139]
+        #fgas_lower = [0.028, 0.051, 0.073, 0.079, 0.070]
+        #fgas_upper = [0.050, 0.066, 0.089, 0.138, 0.198]
+
+        #l6 = ax.plot(np.log10(m500), fgas, '-', color='#333')
+        #ax.fill_between(np.log10(m500), fgas_lower, fgas_upper, color='#333', alpha=0.1)
 
         # universal baryon fraction line
         OmegaU = sPs[0].omega_b / sPs[0].omega_m
@@ -700,7 +790,10 @@ def gas_fraction_vs_halomass(sPs):
         ax.text( xlim[1]-0.13, OmegaU+0.003, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', size='large', alpha=0.3)
 
         # second legend
-        legend = ax.legend([l1,l2,l3,l4], [g09['label'],l15['label'],l20['label'],t20_label], loc='lower right')
+        handles = [l1,l2,l3,l4,l5]#,l6[0]]
+        labels = [g09['label'],l15['label'],l20['label'],g13['label'],t20_label]#,a22_label]
+
+        legend = ax.legend(handles, labels, loc='lower right')
         ax.add_artist(legend)
 
     quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
@@ -870,7 +963,7 @@ def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0
     if saveImages:
         # plot config
         class plotConfig:
-            plotStyle  = 'edged' # open, edged
+            plotStyle  = 'open' # open, edged
             rasterPx   = [800,800]
             colorbars  = True
             fontsize   = 14
@@ -1248,7 +1341,7 @@ def halo_properties_table(sim):
     haloIDs = sim.subhalos('SubhaloGrNr')[subhaloIDs]
 
     # load
-    subhalos = sim.subhalos(['mhalo_200_log','mhalo_500_log','r200','mstar_30kpc_log','mhi_halo_log',
+    subhalos = sim.subhalos(['mhalo_200_log','mhalo_500_log','r200','r500','mstar_30kpc_log','mhi_halo_log',
                              'mass_smbh_log','szy_r500c_3d_log','zform','coolcore_flag'])
 
     for field in ['fgas_r500','sfr_30pkpc_log','xray_0.5-2.0kev_r500_halo_log']:
@@ -1275,9 +1368,9 @@ def halo_properties_table(sim):
     with open(filename,'w') as f:
         for i in range(len(haloIDs)):
             line = '    %4d & %8d & ' % (halos['origID'][i], haloIDs[i])
-            line += '%5.2f & %5.2f & %5.3f & %5.2f & %5.2f & ' % \
+            line += '%5.2f & %5.2f & %5.3f & %5.3f & %5.2f & %5.2f & ' % \
                 (subhalos['mhalo_200_log'][i],subhalos['mhalo_500_log'][i],subhalos['r200'][i]/1000, \
-                 subhalos['mstar_30kpc_log'][i],subhalos['mhi_halo_log'][i])
+                 subhalos['r500'][i]/1000,subhalos['mstar_30kpc_log'][i],subhalos['mhi_halo_log'][i])
             line += '%5.3f & %5.2f & %5.2f & ' % \
                 (subhalos['fgas_r500'][i],subhalos['sfr_30pkpc_log'][i],subhalos['mass_smbh_log'][i])
             line += '%5.2f & %5.2f & %4.2f & %3d & %3s' % \
@@ -1306,58 +1399,72 @@ def paperPlots():
         mass_function()
         #mass_function(secondaries=True)
 
-    # figure 2 - samples
+    # fig 2 - virtual full box vis
+    if 0:
+        for conf in [0,1,2,3,4,5,6]:
+            vis_fullbox_virtual(TNG_C, conf=conf)
+
+    # figure 3 - samples
     if 0:
         sample_halomasses_vs_redshift(sPs)
 
-    # figure 3 - simulation meta-comparison
+    # figure 4 - simulation meta-comparison
     if 0:
         simClustersComparison()
 
-    # figures 4,5 - individual halo/gallery vis (x-ray)
+    # figures 5,6 - individual halo/gallery vis (x-ray)
     if 0:
         for conf in range(10):
             vis_gallery(TNG_C, conf=conf, num=1) # single
         vis_gallery(TNG_C, conf=1, num=72) # gallery
 
-    # figure 6 - gas fractions
+    # figure 7 - gas fractions
     if 0:
         gas_fraction_vs_halomass(sPs)
 
-    # figure 7 - magnetic fields
+    # figure 8 - magnetic fields
     if 0:
         redshifts = [0.0, 1.0, 2.0]
         bfield_strength_vs_halomass(sPs, redshifts)
 
-    # figure 8 - halo synchrotron power
+    # figure 9 - halo synchrotron power
     if 0:
         from ..plot.globalComp import haloSynchrotronPower
         haloSynchrotronPower(sPs, xlim=[14.0,15.3], ylim=[21.5,28.5])
-
-    # figure 9 - X-ray scaling relations
-    if 0:
-        from ..plot.globalComp import haloXrayLum
-        sPs_loc = [sP.copy() for sP in sPs]
-        for sP in sPs_loc: sP.setRedshift(0.3) # median of data at high-mass end
-        haloXrayLum(sPs_loc, xlim=[11.4,12.7], ylim=[41.6,45.7])
 
     # figure 10 - SZ-y and X-ray vs mass scaling relations
     if 0:
         szy_vs_halomass(sPs)
         XrayLum_vs_halomass(sPs)
 
-    # figure 11 - sfr/cold gas mass
+    # figure 11 - X-ray scaling relations
     if 0:
-        #sfr_vs_halomass(sPs)
-        mhi_vs_halomass([TNG_C])
-        # todo: quenched fraction
+        from ..plot.globalComp import haloXrayLum
+        sPs_loc = [sP.copy() for sP in sPs]
+        for sP in sPs_loc: sP.setRedshift(0.3) # median of data at high-mass end
+        haloXrayLum(sPs_loc, xlim=[11.4,12.7], ylim=[41.6,45.7])
 
-    # figure 12 - stellar mass contents
+    # figure N - metallicity radial profiles
     if 0:
+        pass
+
+    # figure 12 - sfr/cold gas mass
+    if 0:
+        sfr_vs_halomass(sPs)
+        mhi_vs_halomass([TNG_C])
+
+    # figure 13 - stellar mass contents
+    if 0:
+        #sPs_loc = [sP.copy() for sP in sPs]
+        #for sP in sPs_loc: sP.setRedshift(0.3) # median of data at high-mass end
         stellar_mass_vs_halomass(sPs, conf=0)
         stellar_mass_vs_halomass(sPs, conf=1)
 
-    # figure 14 - black hole mass scaling relation
+    # figure 14 - satellites
+    if 0:
+        pass
+
+    # figure 15 - black hole mass scaling relation
     if 0:
         from ..plot.globalComp import blackholeVsStellarMass
 
@@ -1376,11 +1483,6 @@ def paperPlots():
         # todo: add vs sigma
         # https://arxiv.org/abs/2308.01800
 
-    # appendix - virtual full box vis
-    if 0:
-        for conf in [0,1,2,3,4,5,6]:
-            vis_fullbox_virtual(TNG_C, conf=conf)
-
     # appendix - contamination
     if 0:
         contamination_mindist()
@@ -1390,10 +1492,12 @@ def paperPlots():
         halo_properties_table(TNG_C)
 
     # satellite smhm
-    # satellite radial number density (https://arxiv.org/abs/2305.09629 Fig 11)
+    # satellite radial number density (https://arxiv.org/abs/2305.09629 Fig 11) (https://arxiv.org/abs/1201.5491)
     # richness (N_sat), see Pakmor MTNG paper (also https://arxiv.org/abs/2307.08749)
     # SPA relaxedness measures from X-ray SB maps (https://arxiv.org/abs/2303.10185) (https://arxiv.org/pdf/2006.10752.pdf)
     # members: L_X vs velocity dispersion relation (Kirkpatrick,C.+2020 SPIDERS), 'cosmo constraints with the velocity dispersion function'
     # TODO: https://arxiv.org/abs/2111.13071 (M_SZ vs M_dyn from PSZ2)
+
+    # BCG SFR(z) - https://arxiv.org/pdf/2302.10943.pdf (Fig 4?)
 
     # figure todo - kinematics overview (vel disp cold,warm,hot) (https://arxiv.org/abs/2304.08810)

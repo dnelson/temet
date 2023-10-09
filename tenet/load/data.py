@@ -11,7 +11,7 @@ from scipy.signal import savgol_filter
 from collections import OrderedDict
 from pathlib import Path
 
-from ..util.helper import evenlySample, running_median
+from ..util.helper import evenlySample, running_median, closest
 
 logOHp12_solar = 8.69 # Asplund+ (2009) Table 1
 
@@ -30,7 +30,8 @@ def behrooziSMHM(sP, logHaloMass=None, redshift=0.1):
     r = { 'haloMass'  : data[:,0], 
           'smhmRatio' : data[:,1],
           'errorUp'   : data[:,2], 
-          'errorDown' : data[:,3] }
+          'errorDown' : data[:,3],
+          'label'     : 'Behroozi+ (2013)' }
 
     # if halo mass input, return the predicted stellar mass [log Msun] given the AM results
     if logHaloMass is not None:
@@ -102,6 +103,41 @@ def behrooziObsSFRD():
     r['errorDown'] = 10.0**r['sfrd'] - 10.0**(r['sfrd']-r['errorDown'])
     r['sfrd']      = 10.0**r['sfrd']
     r['label']     = 'Behroozi+ (2013 comp)'
+
+    return r
+
+def behrooziUM(sim):
+    """ Load from data files: Behroozi+ (2019) Universe Machine DR1. Stellar mass / halo mass relation. """
+    basePath = dataBasePath + 'behroozi/umachine-dr1/'
+    files = glob.glob(basePath + 'smhm*.dat')
+
+    scalefacs = np.array([float(file.split('smhm_a')[1].replace('.dat','')) for file in files])
+    redshifts = 1/scalefacs - 1
+
+    z_closest, fileind_closest = closest(redshifts, sim.redshift)
+    file = files[fileind_closest]
+
+    if np.abs(sim.redshift - z_closest) > 0.1:
+        print('WARNING: Selected redshift [%f] for requested [%f] UM DR1.' % (z_closest,sim.redshift))
+
+    # columns: halo mass [log msun], median M*/Mh ratio [log], err_up, err_down, ...
+    # note: this is for 'all', many other columns include: cen, cen_sf, cen_q, sat, all_sf, all_q, and 'true' values
+    data = np.loadtxt(file)
+
+    r = {'label'     : 'Behroozi+ (2019)',
+         'redshift'  : z_closest,
+         'haloMass'  : data[:,0], # log msun
+         'smhmRatio' : data[:,1], # log ratio
+         'errorUp'   : data[:,2]*4, # dex? (not clear, based on B+19 Fig 9 scale up ~5x for ~1 sigma values)
+         'errorDown' : data[:,3]*4} # dex? (errors are not yet reliable!)
+
+    r['smhmRatio'][r['smhmRatio'] == 0] = np.nan
+
+    # raw stellar masses
+    r['mstar_mid']  = np.log10( 10.0**r['smhmRatio'] * 10.0**r['haloMass']) # log msun
+    r['mstar_low']  = np.log10( 10.0**(r['smhmRatio']-r['errorDown']) * 10.0**r['haloMass'] ) # log msun
+    r['mstar_high'] = np.log10( 10.0**(r['smhmRatio']+r['errorUp']) * 10.0**r['haloMass'] ) # log msun
+    r['m500c'] = np.log10(sim.units.m200_to_m500(10.0**r['haloMass'])) # log msun
 
     return r
 
@@ -214,7 +250,7 @@ def mosterSMHM(sP, redshift=0.0):
         M1 = 10.0**log_M1
         return 2.0 * N[ind] / ( (mass/M1[ind])**(-beta[ind]) + (mass/M1[ind])**(gamma[ind])  )
 
-    r = {}
+    r = {'label':'Moster+ (2013)'}
     r['haloMass'] = np.linspace(10.5, 16.0, num=200)
     r['y_low']  = f2013( 10.0**r['haloMass'], ind=0, redshift=redshift ) / (sP.omega_b/sP.omega_m)
     r['y_mid']  = f2013( 10.0**r['haloMass'], ind=1, redshift=redshift ) / (sP.omega_b/sP.omega_m)
@@ -257,7 +293,7 @@ def kravtsovSMHM(sP):
                     f(0.0,alpha,delta,gamma)
         return (10.0**log_Mstar / mass)
 
-    r = {}
+    r = {'label':'Kravtsov+ (2014)'}
     r['haloMass'] = np.linspace(9.0, 16.0, num=200)
     #r['y_low']  = ( k2014( 10.0**r['haloMass'] )-10.0**0.05 ) / (sP.omega_b/sP.omega_m)
     r['y_mid']  = k2014( 10.0**r['haloMass'] ) / (sP.omega_b/sP.omega_m)
@@ -788,6 +824,38 @@ def giodini2009(sP):
          'fBaryon500'    : np.array([0.136, 0.113, 0.116, 0.124, 0.141]),
          'fBaryon500Err' : np.array([0.028, 0.005, 0.005, 0.009, 0.007]),
          'label'         : 'Giodini+ (2009)' } # z<0.2
+
+    return r
+
+def gonzalez2013():
+    """ Load observational data points (gas/stellar mass fractions) from Gonzalez+ (2013). """
+    # Table 6 (fgas, fstar, and fb for r<r500c for Planck cosmology)
+    names = ['A0122','A1651','A2401','A2721','A2811','A2955','A2984','A3112','A693','A4010','A84',
+             'A296','A478','A2029','A2390']
+    fgas      = [0.094, 0.139, 0.095, 0.134, 0.132, 0.071, 0.117, 0.142, 0.117, 0.127, 0.094, 0.081, 0.185, 0.139, 0.153]
+    fgas_err  = [0.013, 0.013, 0.014, 0.021, 0.011, 0.010, 0.015, 0.010, 0.014, 0.011, 0.012, 0.013, 0.017, 0.010, 0.025]
+    fstar     = [0.026, 0.012, 0.026, 0.016, 0.013, 0.031, 0.041, 0.022, 0.024, 0.023, 0.024, 0.020, np.nan, np.nan, np.nan]
+    fstar_err = [0.003, 0.001, 0.003, 0.002, 0.002, 0.004, 0.005, 0.002, 0.003, 0.003, 0.003, 0.003, np.nan, np.nan, np.nan]
+    fb        = [0.120, 0.151, 0.121, 0.150, 0.145, 0.103, 0.159, 0.163, 0.141, 0.150, 0.118, 0.101, np.nan, np.nan, np.nan]
+    fb_err    = [0.013, 0.013, 0.014, 0.021, 0.012, 0.011, 0.016, 0.010, 0.014, 0.012, 0.011, 0.014, np.nan, np.nan, np.nan]
+
+    # Table 7 (note: two m500==0.99 values shifted to 1.04/1.05for visibility)
+    redshift = [0.1134, 0.0845, 0.0571, 0.1144, 0.1079, 0.0943, 0.1042, 0.0750, 0.1237, 0.0963, 0.1100, 0.0696, 0.0881, 0.0773, 0.2329]
+    r500     = [0.93, 1.23, 0.71, 1.07, 1.08, 0.71, 0.70, 1.06, 0.93, 0.95, 0.94, 0.81, 1.33, 1.47, 1.53] # Mpc
+    m500     = [2.35, 5.37, 1.05, 3.60, 3.73, 1.03, 1.04, 3.37, 2.36, 2.51, 2.47, 1.51, 6.80, 9.01, 12.1] # 1e14 msun
+    m500_err = [0.20, 0.43, 0.11, 0.33, 0.29, 0.12, 0.10, 0.20, 0.24, 0.19, 0.25, 0.21, 0.39, 0.57, 1.8] # 1e14 msun
+
+    m500 = np.array(np.log10(np.array(m500)*1e14))
+
+    r = {'m500'       : m500, # log msun
+         'm500_err'   : np.array(np.log10(10.0**m500 + np.array(m500_err)*1e14)) - m500, # dex
+         'fstar'      : np.array(fstar),
+         'fstar_errr' : np.array(fstar_err),
+         'fgas'       : np.array(fgas),
+         'fgas_err'   : np.array(fgas_err),
+         'fb'         : np.array(fb),
+         'fb_errr'    : np.array(fb_err),
+         'label'      : 'Gonzalez+ (2013)' }
 
     return r
 
