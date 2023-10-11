@@ -741,6 +741,15 @@ fieldComputeFunctionMapping = \
    'Subhalo_EllipsoidShape_Gas_SFRgt0_2rhalfstars_shell' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='shape_ellipsoid',op='ufunc',weighting='mass',ptRestrictions=sfrgt0,rad=None),
 
+   'Subhalo_VelDisp3D_Stars_1rhalfstars' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='veldisp',op='ufunc',weighting='mass',rad='1rhalfstars'),
+   'Subhalo_VelDisp1D_Stars_1rhalfstars' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='veldisp1d',op='ufunc',weighting='mass',rad='1rhalfstars'),
+   'Subhalo_VelDisp1D_Stars_05rhalfstars' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='veldisp1d',op='ufunc',weighting='mass',rad='0.5rhalfstars'),
+   'Subhalo_VelDisp1D_Stars_10pkpc' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='veldisp1d',op='ufunc',weighting='mass',rad='10pkpc'),
+
    # stellar age/metallicity
    'Subhalo_StellarAge_NoRadCut_MassWt'       : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=None,weighting='mass'),

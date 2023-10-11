@@ -20,8 +20,8 @@ from ..util.rotation import rotateCoordinateArray, rotationMatrixFromVec, moment
 
 # todo: as soon as snapshotSubset() can handle halo-centric quantities for more than one halo, we can 
 # eliminate the entire specialized ufunc logic herein
-userCustomFields = ['Krot','radvel','losvel','losvel_abs','shape_ellipsoid','shape_ellipsoid_1r',
-                    'tff','tcool_tff']
+userCustomFields = ['Krot','radvel','losvel','losvel_abs','veldisp','veldisp1d',
+                    'shape_ellipsoid','shape_ellipsoid_1r','tff','tcool_tff']
 
 def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
     """ Compute total/sum of a particle property (e.g. mass) for those particles enclosed within one of 
@@ -285,11 +285,11 @@ def _radialRestriction(sP, nSubsTot, rad):
     if isinstance(rad, float):
         # constant scalar, convert [pkpc] -> [ckpc/h] (code units) at this redshift
         rad_code = sP.units.physicalKpcToCodeLength(rad)
-        radSqMax = np.zeros( nSubsTot, dtype='float32' ) 
+        radSqMax = np.zeros(nSubsTot, dtype='float32') 
         radSqMax += rad_code * rad_code
     elif rad is None:
         # no radial restriction (all particles in subhalo)
-        radSqMax = np.zeros( nSubsTot, dtype='float32' )
+        radSqMax = np.zeros(nSubsTot, dtype='float32')
         radSqMax += sP.boxSize**2.0
     elif rad == 'p10':
         # load group m200_crit values
@@ -309,9 +309,13 @@ def _radialRestriction(sP, nSubsTot, rad):
         ww = np.where(twiceStellarRHalf > rad_code)
         twiceStellarRHalf[ww] = rad_code
         radSqMax = twiceStellarRHalf**2.0
+    elif rad == '10pkpc':
+        # r < 10 pkpc
+        radSqMax = np.zeros(nSubsTot, dtype='float32') 
+        radSqMax += (sP.units.physicalKpcToCodeLength(10.0))**2
     elif rad == '10pkpc_shell':
         # shell at 10 +/- 2 pkpc
-        radSqMax = np.zeros( nSubsTot, dtype='float32' ) 
+        radSqMax = np.zeros(nSubsTot, dtype='float32') 
         radSqMax += (sP.units.physicalKpcToCodeLength(12.0))**2
         radSqMin += (sP.units.physicalKpcToCodeLength(8.0))**2
     elif rad == 'rvir_shell':
@@ -358,13 +362,19 @@ def _radialRestriction(sP, nSubsTot, rad):
     elif rad == '1rhalfstars':
         # inner galaxy definition, r < 1*r_{1/2,mass,stars}
         subHalfmassRadType = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])
-        twiceStellarRHalf = 1.0 * subHalfmassRadType[:,sP.ptNum('stars')]
+        stellarRHalf = 1.0 * subHalfmassRadType[:,sP.ptNum('stars')]
 
-        radSqMax = twiceStellarRHalf**2
+        radSqMax = stellarRHalf**2
+    elif rad == '0.5rhalfstars':
+        #  < 0.5*r_{1/2,mass,stars}
+        subHalfmassRadType = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])
+        stellarRHalf = 1.0 * subHalfmassRadType[:,sP.ptNum('stars')]
+
+        radSqMax = (stellarRHalf/2)**2
     elif rad == '1pkpc_2d':
         # 1 pkpc in 2D projection (e.g. for Sigma_1)
         rad_code = sP.units.physicalKpcToCodeLength(1.0)
-        radSqMax = np.zeros( nSubsTot, dtype='float32' ) 
+        radSqMax = np.zeros(nSubsTot, dtype='float32') 
         radSqMax += rad_code * rad_code
 
         radRestrictIn2D = True
@@ -387,7 +397,7 @@ def _radialRestriction(sP, nSubsTot, rad):
         # keep old 4pkpc 'fiber radius' approximation but with 2D
         rad_pkpc = sP.units.physicalKpcToCodeLength(4.0)
 
-        radSqMax = np.zeros( nSubsTot, dtype='float32' )
+        radSqMax = np.zeros(nSubsTot, dtype='float32')
         radSqMax += rad_pkpc * rad_pkpc
         radRestrictIn2D = True
     elif rad == 'legac_slit':
@@ -396,7 +406,7 @@ def _radialRestriction(sP, nSubsTot, rad):
         slit_kpc = sP.units.arcsecToAngSizeKpcAtRedshift(slit_arcsec, z=sP.redshift) # arcsec -> pkpc
         slit_code = sP.units.physicalKpcToCodeLength(slit_kpc) # pkpc -> ckpc/h
 
-        radSqMax = np.zeros( (nSubsTot,2), dtype='float32' ) # second dim: (x,y) in projection
+        radSqMax = np.zeros((nSubsTot,2), dtype='float32') # second dim: (x,y) in projection
         radSqMax[:,0] += (slit_code[0]/2.0)**2
         radSqMax[:,1] += (slit_code[1]/2.0)**2
         radRestrictIn2D = True
@@ -692,6 +702,29 @@ def _process_custom_func(sP,op,ptProperty,gc,subhaloID,particles,rr,i0,i1,wValid
         q, s, _, _ = ellipsoidfit(loc_val, loc_wt, scale_rad, ellipsoid_rin, ellipsoid_rout)
 
         return [q,s]
+
+    # 3d or 1d (from 3d) velocity dispersion
+    if ptProperty in ['veldisp','veldisp1d']:
+        loc_vel = particles['Velocities'][i0:i1][wValid]
+        loc_wt = particles['weights'][i0:i1][wValid]
+        #loc_rad = np.sqrt(rr[wValid]) # could add Hubble expansion correction
+
+        # mean velocity in each coordinate direction
+        loc_vel = sP.units.particleCodeVelocityToKms(loc_vel) # km/s
+        vel_mean = np.average(loc_vel, axis=0, weights=loc_wt)
+
+        for j in range(3):
+            loc_vel[:,j] -= vel_mean[j]
+
+        loc_vel_sq = np.sum(loc_vel**2, axis=1)
+
+        velvar = np.sum(loc_wt * loc_vel_sq) / np.sum(loc_wt)
+        veldisp = np.sqrt(velvar)
+
+        if op == 'veldisp1d':
+            veldisp /= np.sqrt(3)
+        
+        return veldisp
 
     # ufunc: 'half radius' (enclosing 50%) of the quantity, or 80%, etc
     if op == 'halfrad':
@@ -1019,6 +1052,10 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         gc['SubhaloRhalfStars'] = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])[:,sP.ptNum('stars')]
         fieldsLoad.append('pos')
         allocSize = (nSubsDo,2) # q,s
+
+    if ptProperty in ['veldisp','veldisp1d']:
+        fieldsLoad.append('vel')
+        allocSize = (nSubsDo,)
 
     opts = None # todo: can move to function argument
     if 'grid2d' in op:

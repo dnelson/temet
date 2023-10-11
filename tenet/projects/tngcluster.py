@@ -1258,25 +1258,39 @@ def szy_vs_halomass(sPs):
         #ax2.plot(np.log10(M500), np.log10(Y500), ':', color='#000000', alpha=0.7, label='Hill+ (2018) CB')
 
         # self-similar slope
-        M500 = np.array([3e14, 9e14])
-        Y500 = np.log10(1e-5 * (M500/5e14)**(5/3))
+        M500 = np.array([1.5e14, 5e14])
+        Y500 = np.log10(1e-4 * (M500/5e14)**(5/3))
 
         ax2.plot(np.log10(M500), Y500, '--', color='#000000', alpha=0.7, label='$\\rm{Y_{500} \propto M_{500}^{5/3}}$')
 
         # (2) observational pointsets
         #b15 = bleem15spt(sPs[0])
         #h21 = hilton21act()
-        #p13 = planck13xx()
+        p13 = planck13xx()
         n18 = nagarajan18()
 
         #ax.plot(h21['m500'], h21['sz_y'], 'p', color='#000000', ms=6, alpha=0.7)
-        #ax.plot(p13['M500'], p13['Y500'], '*', color='#000000', ms=6, alpha=0.7)
+        ax.plot(p13['M500'], p13['Y500'], '*', color='#000000', ms=6, alpha=0.7)
         #ax.plot(b15['M500'], b15['Y'], 's', color='#000000', ms=6, alpha=0.7)
 
         xerr = np.vstack((n18['M500_errdown'],n18['M500_errup']))
         yerr = np.vstack((n18['Y_errup'],n18['Y_errdown']))
         ax2.errorbar(n18['M500'], n18['Y'], xerr=xerr, yerr=yerr, fmt='D', zorder=-2, 
                      color='#aaaaaa', ms=6, alpha=0.7, label=n18['label'])
+        
+        # Adam+2023 XXL Survey - Fig 8 right panel (NIKA2 points, direct NFW mass modeling, also from other authors)
+        a22_label     = 'Adam+ (2023)'
+        a23_m500      = np.log10([1.16e+14, 1.96e+14, 2.47e+14, 3.79e+14, 5.79e+14, 6.12e+14, 7.45e+14, 1.24e+15])
+        a23_m500_err1 = np.log10([1.34e+14, 2.22e+14, 3.16e+14, 4.36e+14, 6.02e+14, 6.30e+14, 8.69e+14, 1.38e+15])
+        a23_m500_err2 = np.log10([9.79e+13, 1.71e+14, 1.77e+14, 3.22e+14, 5.58e+14, 5.94e+14, 6.49e+14, 1.09e+15])
+        a23_y500      = np.log10(np.array([7.84, 14.0, 12.3, 27.2, 73.4, 66.8, 92.7, 169]) / 1e6) # kpc^2 -> Mpc^2
+        a23_y500_err1 = np.log10(np.array([9.39, 16.1, 15.6, 30.0, 82.3, 116, 104, 179]) / 1e6)
+        a23_y500_err2 = np.log10(np.array([6.32, 11.9, 9.06, 24.4, 65.5, 43.5, 83.8, 157]) / 1e6)
+
+        xerr = np.vstack((a23_m500_err1 - a23_m500,a23_m500 - a23_m500_err2))
+        yerr = np.vstack((a23_y500_err1 - a23_y500,a23_y500 - a23_y500_err2))
+        #ax2.errorbar(a23_m500, a23_y500, xerr=xerr, yerr=yerr, fmt='s', zorder=-2, 
+        #             color='#444444', ms=6, alpha=0.7, label=a22_label)
 
         # second legend
         ax2.legend(loc='lower right')
@@ -1330,6 +1344,176 @@ def XrayLum_vs_halomass(sPs):
                              xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                              f_post=_draw_data, legendLoc='upper left', pdf=None)
+
+def smbh_mass_vs_veldisp(sPs):
+    """ Plot SMBH mass versus stellar velocity dispersion. """
+    from ..load.data import mcconnellMa2013, bogdan2018
+
+    xQuant = 'veldisp1d_10pkpc' # veldisp1d (1re), veldisp1d_05re
+    cenSatSelect = 'cen'
+
+    xlim = [2.3, 3.3] # 2.6
+    scatterPoints = True
+    drawMedian = False
+    markersize = 40.0
+    sizefac = 0.8 # for single column figure
+
+    yQuant = 'mass_smbh' # largest in subhalo
+    ylim = [8.1, 10.8] # 8.9
+    scatterColor = None
+
+    def _draw_data(ax):
+        # observational relations
+        xx = np.array([2.0, 3.6]) # km/s
+
+        # Kormendy+ (2013) Figure 17 / Eqn 3
+        sigma0 = 200.0
+        alpha = -0.510 + 9.0
+        beta = 4.377
+
+        log_mbh = alpha + beta * np.log10(10.0**xx / sigma0)
+
+        l1 = ax.plot(xx, log_mbh, '--', color='#666666', alpha=0.7)
+
+        # McConnell+ (2013) - Table 2 - Early-type
+        sigma0 = 200.0
+        alpha = 8.39
+        beta = 5.05
+
+        log_mbh = alpha + beta * np.log10(10.0**xx / sigma0)
+
+        l2 = ax.plot(xx, log_mbh, '--', color='#000000', alpha=0.7)
+
+        # McConnell+ (2013) individual points
+        m13 = mcconnellMa2013()
+
+        xerr = [m13['pts']['sigma_down'],m13['pts']['sigma_up']]
+        yerr = [m13['pts']['M_BH_down'],m13['pts']['M_BH_up']]
+        l2b = ax.errorbar(m13['pts']['sigma'], m13['pts']['M_BH'], xerr=xerr, yerr=yerr, color='#000', alpha=0.5, fmt='D')
+
+        # Bogdan+ (2018) individual points
+        b18 = bogdan2018()
+
+        xerr = [b18['sigma_errdown'], b18['sigma_errup']]
+        yerr = [b18['mbh_errdown'], b18['mbh_errup']]
+        l3 = ax.errorbar(b18['sigma'], b18['mbh'], xerr=xerr, yerr=yerr, color='#000', alpha=0.6, fmt='s')
+
+        # Caglar+ (2023) https://arxiv.org/abs/2308.01800
+        sigma0 = 200.0 # km/s
+        alpha = 8.04 # Table 3 (AV corrected)
+        alpha_err = 0.07
+        beta = 3.09
+        beta_err = 0.39
+
+        log_mbh = alpha + beta * np.log10(10.0**xx / sigma0)
+
+        # assume: totally uncorrelated uncertainties
+        log_mbh_up = (alpha + alpha_err) + (beta + beta_err) * np.log10(10.0**xx / sigma0)
+        log_mbh_down = (alpha - alpha_err) + (beta - beta_err) * np.log10(10.0**xx / sigma0)
+
+        # randomly sample on parameter uncertainties and compute 1sigma of resulting values
+        rng = np.random.default_rng(424242)
+        alpha_rnd = rng.normal(alpha, alpha_err, size=1000)
+        beta_rnd = rng.normal(beta, beta_err, size=1000)
+        log_mbh_std0 = np.std(alpha_rnd + beta_rnd * np.log10(10.0**xx[0] / sigma0))
+        log_mbh_std1 = np.std(alpha_rnd + beta_rnd * np.log10(10.0**xx[1] / sigma0))
+
+        log_mbh_up2 = [log_mbh[0] + log_mbh_std0, log_mbh[1] + log_mbh_std1]
+        log_mbh_down2 = [log_mbh[0] - log_mbh_std0, log_mbh[1] - log_mbh_std1]
+
+        l4 = ax.plot(xx, log_mbh, '-', color='#000000', alpha=0.7)
+        #ax.fill_between(xx, y1=log_mbh+alpha_err, y2=log_mbh-alpha_err, color='#000000', alpha=0.4)
+        #ax.fill_between(xx, y1=log_mbh_down, y2=log_mbh_up, color='#000000', alpha=0.2)
+        ax.fill_between(xx, y1=log_mbh_down2, y2=log_mbh_up2, color='#000000', alpha=0.2)
+
+        # second legend
+        handles = [l1[0],l2[0],l2b[0],l3[0],l4[0]]
+        labels = ['Kormendy+ (2013)', 'McConnell+ (2013)', 'McConnell+ (2013)', 'Bogdan+ (2018)', 'Caglar+ (2023)']
+        legend = ax.legend(handles, labels, loc='lower right')
+        ax.add_artist(legend)
+
+    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                             xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                             f_pre=_draw_data, legendLoc='upper left', pdf=None)
+
+def smbh_mass_vs_halomass(sPs):
+    """ Plot SMBH mass versus halo mass (m500c). """
+    from ..load.data import bogdan2018
+
+    xQuant = 'm500c'
+    cenSatSelect = 'cen'
+
+    xlim = [14.0, 15.3]
+    scatterPoints = True
+    drawMedian = False
+    markersize = 40.0
+    sizefac = 0.8 # for single column figure
+
+    yQuant = 'mass_smbh' # largest in subhalo
+    ylim = [8.9, 10.8] # 8.9
+    scatterColor = None
+
+    def _draw_data(ax):
+        # observational points: Bogdan+18
+        b18 = bogdan2018()
+
+        xerr = [b18['m500_errdown'], b18['m500_errup']]
+        yerr = [b18['mbh_errdown'], b18['mbh_errup']]
+        l1 = ax.errorbar(b18['m500'], b18['mbh'], xerr=xerr, yerr=yerr, color='#000', fmt='D')
+
+        # Gaspari+19, Figure 8
+        g19_m500      = np.log10([7.52e+14, 2.03e+14, 1.05e14, 1.02e+14, 1.05e14]) # two 9.44e13 values -> 1.05e14 for visual clarity
+        g19_m500_low  = np.log10([5.59e+14, 1.55e+14, 7.14e+13, 7.74e+13, 7.18e+13])
+        g19_m500_high = np.log10([1.01e+15, 2.64e+14, 1.25e+14, 1.32e+14, 1.25e+14])
+        g19_mbh       = np.log10([2.09e+10, 9.01e+9,  6.33e+9,  7.16e+9,  2.50e+9])
+        g19_mbh_low   = np.log10([7.55e+9,  6.55e+9,  5.59e+9,  5.16e+9,  2.19e+9])
+        g19_mbh_high  = np.log10([5.78e+10, 1.26e+10, 7.29e+9,  1.00e+10, 2.88e+9])
+
+        xerr = [g19_m500 - g19_m500_low, g19_m500_high - g19_m500]
+        yerr = [g19_mbh - g19_mbh_low, g19_mbh_high - g19_mbh]
+        l2 = ax.errorbar(g19_m500, g19_mbh, xerr=xerr, yerr=yerr, color='#000', fmt='s')
+
+        # Perseus
+        perseus_m500c = 6.1e14 # msun (Giacintucci+19 Table 6)
+        perseus_m500c_err = 0.6e14 # msun
+
+        perseus_mbh = 3.5e9 # msun (van den Emsellem+13)
+        perseus_mbh_err = 1.5e9 # msun
+        perseus_mbh2 = 1.7e10 # msun (van den Bosch+12)
+        perseus_mbh2_err = 0.3e10 # msun
+
+        x = np.log10(perseus_m500c)
+        y1 = np.log10(perseus_mbh)
+        y2 = np.log10(perseus_mbh2)
+
+        xerr = np.reshape([np.log10(perseus_m500c) - np.log10(perseus_m500c - perseus_m500c_err),
+                np.log10(perseus_m500c + perseus_m500c_err) - np.log10(perseus_m500c)], (2,1))
+        yerr1 = np.reshape([y1 - np.log10(perseus_mbh - perseus_mbh_err),
+                np.log10(perseus_mbh + perseus_mbh_err) - y1], (2,1))
+        yerr2 = np.reshape([y2 - np.log10(perseus_mbh2 - perseus_mbh2_err),
+                np.log10(perseus_mbh2 + perseus_mbh2_err) - y2], (2,1))
+        l3 = ax.errorbar(x, y1, xerr=xerr, yerr=yerr1, color='#000', fmt='H')
+        ax.errorbar(x, y2, xerr=xerr, yerr=yerr2, color='#000', fmt='H')
+
+        # Bassini+19 simulations (Table 2, X=M500, Y=MBH)
+        a = 0.45
+        b = 0.76
+        log_m500 = np.array(ax.get_xlim())
+        log_mbh = 9.0 + a + b * np.log10(10.0**log_m500 / 1e14)
+
+        l4 = ax.plot(log_m500, log_mbh, '--', color='#000', alpha=0.6)
+
+        # second legend
+        handles = [l1, l2, l3, l4[0]]
+        labels = ['Bogdan+ (2018)', 'Gaspari+ (2019)', 'Perseus (NGC1277)', 'Bassini+ (2019)']
+        legend = ax.legend(handles, labels, loc='lower right')
+        ax.add_artist(legend)
+
+    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                             xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                             f_pre=_draw_data, legendLoc='upper left', pdf=None)
 
 def halo_properties_table(sim):
     """ Write out a latex table of primary target halo properties. """
@@ -1448,40 +1632,30 @@ def paperPlots():
     if 0:
         pass
 
-    # figure 12 - sfr/cold gas mass
+    # figure 12 - black hole mass scaling relation
+    if 0:
+        #from ..plot.globalComp import blackholeVsStellarMass
+        #pdf = PdfPages('blackhole_masses_vs_mstar_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
+        #blackholeVsStellarMass(sPs, pdf, twiceR=True, xlim=[11,13.0], ylim=[7.5,11], sizefac=0.8)
+        #pdf.close()
+        smbh_mass_vs_veldisp(sPs)
+        smbh_mass_vs_halomass(sPs)
+
+    # figure 13 - sfr/cold gas mass
     if 0:
         sfr_vs_halomass(sPs)
         mhi_vs_halomass([TNG_C])
 
-    # figure 13 - stellar mass contents
+    # figure 14 - stellar mass contents
     if 0:
         #sPs_loc = [sP.copy() for sP in sPs]
         #for sP in sPs_loc: sP.setRedshift(0.3) # median of data at high-mass end
         stellar_mass_vs_halomass(sPs, conf=0)
         stellar_mass_vs_halomass(sPs, conf=1)
 
-    # figure 14 - satellites
+    # figure 15 - satellites
     if 0:
         pass
-
-    # figure 15 - black hole mass scaling relation
-    if 0:
-        from ..plot.globalComp import blackholeVsStellarMass
-
-        pdf = PdfPages('blackhole_masses_vs_mstar_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        blackholeVsStellarMass(sPs, pdf, twiceR=True, xlim=[11,13.0], ylim=[7.5,11], sizefac=0.8)
-        pdf.close()
-
-        pdf = PdfPages('blackhole_masses_vs_mbulge_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, xlim=[11.5,13.0], ylim=[8.5,11], sizefac=0.8)
-        pdf.close()
-
-        pdf = PdfPages('blackhole_masses_vs_mhalo_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
-        blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, xlim=[13.9,15.4], ylim=[8.5,11], sizefac=0.8)
-        pdf.close()
-
-        # todo: add vs sigma
-        # https://arxiv.org/abs/2308.01800
 
     # appendix - contamination
     if 0:

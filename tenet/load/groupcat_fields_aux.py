@@ -334,6 +334,61 @@ xray_peak_offset_2d.units = lambda sim,pt,f: r'$\rm{kpc}$' if f.endswith('_2d') 
 xray_peak_offset_2d.limits = lambda sim,pt,f: [0.0, 2.5] if f.endswith('_2d') else [-2.0, 0.0]
 xray_peak_offset_2d.log = True
 
+# ---------------------------- auxcat: stellar kinematics --------------------------------------------
+
+@catalog_field
+def veldisp(sim, partType, field, args):
+    """ Stellar velocity dispersion (3D), within the stellar half mass radius. """
+    acField = 'Subhalo_VelDisp3D_Stars_1rhalfstars'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+
+    return ac[acField]
+
+veldisp.label = r'$\rm{\sigma_{\star}}$'
+veldisp.units = r'$\rm{km/s}$'
+veldisp.limits = [1.0, 3.0]
+veldisp.log = True
+
+@catalog_field
+def veldisp1d(sim, partType, field, args):
+    """ Stellar velocity dispersion (1D), within the stellar half mass radius. """
+    acField = 'Subhalo_VelDisp1D_Stars_1rhalfstars'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+
+    return ac[acField]
+
+veldisp1d.label = r'$\rm{\sigma_{\star, 1D}}$'
+veldisp1d.units = r'$\rm{km/s}$'
+veldisp1d.limits = [1.0, 3.0]
+veldisp1d.log = True
+
+@catalog_field
+def veldisp1d_05re(sim, partType, field, args):
+    """ Stellar velocity dispersion (1D), within 0.5 times the stellar half mass radius. """
+    acField = 'Subhalo_VelDisp1D_Stars_05rhalfstars'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+
+    return ac[acField]
+
+veldisp1d_05re.label = r'$\rm{\sigma_{\star, 1D}}$'
+veldisp1d_05re.units = r'$\rm{km/s}$'
+veldisp1d_05re.limits = [1.0, 2.8]
+veldisp1d_05re.log = True
+
+@catalog_field
+def veldisp1d_10pkpc(sim, partType, field, args):
+    """ Stellar velocity dispersion (1D), within 10pkpc. """
+    acField = 'Subhalo_VelDisp1D_Stars_10pkpc'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+
+    return ac[acField]
+
+veldisp1d_10pkpc.label = r'$\rm{\sigma_{\star, 1D}}$'
+veldisp1d_10pkpc.units = r'$\rm{km/s}$'
+veldisp1d_10pkpc.limits = [1.0, 2.8]
+veldisp1d_10pkpc.log = True
+
+
 # ---------------------------- auxcat: virshock ------------------------------------------------------
 
 @catalog_field
@@ -400,11 +455,10 @@ def zform(sim, partType, field, args):
 
     return ac[acField]
 
-mass_smbh.label = r'$\rm{z_{form}}$'
-mass_smbh.units = '' # linear dimensionless
-mass_smbh.limits = [0.0, 4.0]
-mass_smbh.log = False
-
+zform.label = r'$\rm{z_{form}}$'
+zform.units = '' # linear dimensionless
+zform.limits = [0.0, 4.0]
+zform.log = False
 
 # -------------------- postprocessing -------------------------------------------------------------
 

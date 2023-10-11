@@ -548,11 +548,8 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
             # dynamical (particle masses)
             yy = gc['subhalos']['SubhaloMassType'][w,sP.ptNum('bhs')]
         if actualLargestBHMasses:
-            # load auxCat (fix this problem by using the most massive BH in each subhalo)
-            acField = 'Subhalo_BH_Mass_largest'
-            ac = sP.auxCat(fields=[acField])[acField]
-            ac[np.where(np.isnan(ac))] = 0.0 # set NaN to zero (consistent with groupcat)
-            yy = ac[w]
+            # load auxCat (the most massive BH in each subhalo)
+            yy = sP.subhalos('mass_smbh')[w]
 
         yy = sP.units.codeMassToLogMsun(yy)
         ww = np.where(yy > 0.0)

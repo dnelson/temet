@@ -343,20 +343,26 @@ def mcconnellMa2013():
     #          profile, reff (V), reff (I), reff (3.6)
     data = np.genfromtxt(path, dtype=None, encoding=None) # array of 20 lists
 
-    galName   = np.array([d[0] for d in data])
-    M_BH      = np.array([d[2] for d in data])
-    M_BH_down = np.array([d[3] for d in data])
-    M_BH_up   = np.array([d[4] for d in data])
-    M_bulge   = np.array([d[13] for d in data])
+    galName    = np.array([d[0] for d in data])
+    M_BH       = np.log10([d[2] for d in data])
+    M_BH_down  = np.log10([d[3] for d in data])
+    M_BH_up    = np.log10([d[4] for d in data])
+    sigma      = np.log10([d[6] for d in data])
+    sigma_down = np.log10([d[7] for d in data])
+    sigma_up   = np.log10([d[8] for d in data])
 
-    w = np.where(M_bulge > 0.0)
+    with np.errstate(divide='ignore'):
+        M_bulge = np.log10([d[13] for d in data])
 
-    r['pts'] = { 'galName'   : galName[w], 
-                 'M_BH'      : np.log10( M_BH[w] ),
-                 'M_BH_up'   : np.log10( M_BH_up[w] ) - np.log10( M_BH[w] ), 
-                 'M_BH_down' : np.log10( M_BH[w] ) - np.log10( M_BH_down[w] ),
-                 'M_bulge'   : np.log10( M_bulge[w] ),
-                 'label'     : 'McConnell & Ma (2013 comp)' }
+    r['pts'] = { 'galName'    : galName, 
+                 'M_BH'       : M_BH,
+                 'M_BH_up'    : M_BH_up - M_BH, 
+                 'M_BH_down'  : M_BH - M_BH_down,
+                 'sigma'      : sigma,
+                 'sigma_up'   : sigma_up - sigma,
+                 'sigma_down' : sigma - sigma_down,
+                 'M_bulge'    : M_bulge,
+                 'label'      : 'McConnell & Ma (2013)' }
 
     # fit: Table 2, M_BH - M_bulge relation, "Dynamical Masses" with Method MPFITEXY
     alpha     = 8.46
@@ -370,8 +376,8 @@ def mcconnellMa2013():
     log_M_BH  = alpha + beta * np.log10(M_bulge/M_0) # Msun, Eqn 10
 
     w = np.where(M_bulge > M_0)[0].min()
-    errorUp   = np.zeros( log_M_BH.size )
-    errorDown = np.zeros( log_M_BH.size )
+    errorUp   = np.zeros(log_M_BH.size)
+    errorDown = np.zeros(log_M_BH.size)
 
     # below characteristic mass
     errorUp[:w]   = alpha+alpha_err + (beta-beta_err) * np.log10(M_bulge[:w]/M_0) 
@@ -385,8 +391,40 @@ def mcconnellMa2013():
     r['M_BH']      = log_M_BH
     r['errorUp']   = errorUp
     r['errorDown'] = errorDown
-    r['label']     = 'McConnell & Ma (2013) M$_{\\rm BH}$-M$_{\\rm bulge}$'
+    r['label']     = 'McConnell & Ma (2013)'
 
+    return r
+
+def bogdan2018():
+    """ Load observational data points from Bogdan+ (2018), SMBH masses of BCGs. """
+    # Bogdan+ (2018) Table 1, MBH in [1e9 Msun], M500 in [1e13 Msun], sigma in [km/s]
+    mbh = np.array([3.74, 1.30, 2.48, 0.17, 1.47, 4.65, 3.87, 3.72, 0.33, 0.14, 9.09, 
+                        0.98, 6.15, 20.80, 0.61, 0.40, 2.30])
+    mbh_errup = np.array([0.42, 0.20, 0.48, 0.04, 0.141, 0.73, 0.61, 0.11, 0.15, 0.05, 
+                                2.34, 0.31, 0.38, 15.80, 0.20, 0.28, 1.15])
+    mbh_errdown = np.array([0.52, 0.19, 0.19, 0.03, 0.20, 0.41, 0.71, 0.51, 0.06, 0.05, 
+                                2.81, 0.31, 0.37, 15.90, 0.21, 0.16, 0.11])
+    
+    m500 = np.array([4.05, 2.68, 1.36, 1.73, 0.72, 2.76, 3.95, 1.83, 0.43, 0.082, 23.90, 1.31, 
+                            7.73, 78.90, 1.06, 1.66, 2.46])
+    m500_err = np.array([0.16, 0.03, 0.03, 0.02, 0.07, 0.25, 0.05, 0.04, 0.17, 0.07, 0.70, 
+                                0.05, 0.02, 0.60, 0.15, 0.08, 0.02])
+    
+    sigma = np.array([288, 322, 331, 226, 328, 276, 270, 297, 213, 229, 270, 242,
+                            324, 347, 290, 266, 292])
+    sigma_err = np.array([14, 16, 5, 9, 9, 2, 10, 12, 11, 11, 27, 12, 20, 5, 14, 13, 5])
+
+    r = {'mbh'           : np.log10(mbh * 1e9), # log msun
+         'mbh_errup'     : np.log10((mbh+mbh_errup)*1e9) - np.log10(mbh*1e9), # dex
+         'mbh_errdown'   : np.log10(mbh*1e9) - np.log10((mbh-mbh_errdown)*1e9), # dex
+         'm500'          : np.log10(m500 * 1e13), # log msun
+         'm500_errup'    : np.log10((m500+m500_err)*1e13) - np.log10(m500*1e13), # dex
+         'm500_errdown'  : np.log10(m500*1e13) - np.log10((m500-m500_err)*1e13), # dex
+         'sigma'         : np.log10(sigma), # log km/s
+         'sigma_errup'   : np.log10(sigma+sigma_err) - np.log10(sigma), # dex
+         'sigma_errdown' : np.log10(sigma) - np.log10(sigma-sigma_err), # dex
+         'label'         : 'Bogdan+ (2018)'}
+    
     return r
 
 def baldry2012SizeMass():
