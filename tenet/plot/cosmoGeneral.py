@@ -8,9 +8,7 @@ import warnings
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable, inset_locator
 from matplotlib.colors import Normalize, LogNorm, colorConverter
-from matplotlib.cm import ScalarMappable
 from matplotlib.backends.backend_pdf import PdfPages
-from os.path import isfile
 from getpass import getuser
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d
@@ -761,10 +759,10 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
     """
     assert cenSatSelect in ['all', 'cen', 'sat']
     if extraMedians is None: extraMedians = [] # avoid mutable keyword argument
-    if lowessSmooth: assert scatterPoints and scatterColor is not None, 'Only LOWESS smooth scattered points.'
     if sQuant is not None: assert sLowerPercs is not None and sUpperPercs is not None
     if scatterColor is not None: scatterPoints = True
-
+    if lowessSmooth: assert scatterPoints and scatterColor is not None, 'Only LOWESS smooth scattered points.'
+    
     yQuants = iterable(yQuants)
     sPs = iterable(sPs)
 

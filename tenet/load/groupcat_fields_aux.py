@@ -253,6 +253,19 @@ mass_smbh.units = r'$\rm{M_{sun}}$'
 mass_smbh.limits = [6.0, 10.0]
 mass_smbh.log = True
 
+@catalog_field
+def smbh_mdot(sim, partType, field, args):
+    """ Largest SMBH Mdot in each subhalo. Avoids summing multiple SMBHs, if more than one present. """
+    acField = 'Subhalo_BH_Mdot_largest'
+    ac = sim.auxCat(fields=[acField])
+
+    return sim.units.codeMassOverTimeToMsunPerYear(ac[acField])
+
+smbh_mdot.label = r'$\rm{\dot{M}_{SMBH}}$'
+smbh_mdot.units = r'$\rm{M_{sun} / yr}$'
+smbh_mdot.limits = [-4.0, 0.0]
+smbh_mdot.log = True
+
 # ---------------------------- auxcat: gas observables --------------------------------------------
 
 @catalog_field
@@ -351,7 +364,7 @@ veldisp.log = True
 
 @catalog_field
 def veldisp1d(sim, partType, field, args):
-    """ Stellar velocity dispersion (1D), within the stellar half mass radius. """
+    """ Stellar velocity dispersion (1D, from 3D), within the stellar half mass radius. """
     acField = 'Subhalo_VelDisp1D_Stars_1rhalfstars'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
 
@@ -364,7 +377,7 @@ veldisp1d.log = True
 
 @catalog_field
 def veldisp1d_05re(sim, partType, field, args):
-    """ Stellar velocity dispersion (1D), within 0.5 times the stellar half mass radius. """
+    """ Stellar velocity dispersion (1D, from 3D), within 0.5 times the stellar half mass radius. """
     acField = 'Subhalo_VelDisp1D_Stars_05rhalfstars'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
 
@@ -377,8 +390,8 @@ veldisp1d_05re.log = True
 
 @catalog_field
 def veldisp1d_10pkpc(sim, partType, field, args):
-    """ Stellar velocity dispersion (1D), within 10pkpc. """
-    acField = 'Subhalo_VelDisp1D_Stars_10pkpc'
+    """ Stellar velocity dispersion (1D, in z-direction), within 10pkpc. """
+    acField = 'Subhalo_VelDisp1Dz_Stars_10pkpc'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
 
     return ac[acField]
@@ -388,6 +401,33 @@ veldisp1d_10pkpc.units = r'$\rm{km/s}$'
 veldisp1d_10pkpc.limits = [1.0, 2.8]
 veldisp1d_10pkpc.log = True
 
+@catalog_field
+def veldisp1d_4pkpc2d(sim, partType, field, args):
+    """ Stellar velocity dispersion (1D, in z-direction), within 4pkpc (~SDSS fiber low-z) in 2D. """
+    acField = 'Subhalo_VelDisp1Dz_Stars_4pkpc2D'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+
+    return ac[acField]
+
+veldisp1d_4pkpc2d.label = r'$\rm{\sigma_{\star, 1D}}$'
+veldisp1d_4pkpc2d.units = r'$\rm{km/s}$'
+veldisp1d_4pkpc2d.limits = [1.0, 2.8]
+veldisp1d_4pkpc2d.log = True
+
+# ---------------------------- auxcat: gas kinematics --------------------------------------------
+
+@catalog_field
+def veldisp_gas_01r500c_xray(sim, partType, field, args):
+    """ Gas velocity dispersion (1D, in z-direction), weighted by 0.2-2 keV X-ray luminosity, within 0.1r500c. """
+    acField = 'Subhalo_VelDisp1Dz_XrayWt_010r500c'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+
+    return ac[acField]
+
+veldisp_gas_01r500c_xray.label = r'$\rm{\sigma_{gas, 1D, X-ray, <0.1\,r500c}}$'
+veldisp_gas_01r500c_xray.units = r'$\rm{km/s}$'
+veldisp_gas_01r500c_xray.limits = [100, 300] #[1.5, 3.0]
+veldisp_gas_01r500c_xray.log = False #True
 
 # ---------------------------- auxcat: virshock ------------------------------------------------------
 

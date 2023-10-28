@@ -5,8 +5,7 @@ TNG-Cluster: introduction paper.
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
-from scipy.optimize import leastsq
+import warnings
 from scipy.interpolate import interp1d
 from os.path import isfile
 
@@ -14,7 +13,7 @@ from ..cosmo.zooms import contamination_mindist
 from ..plot.cosmoGeneral import quantMedianVsSecondQuant
 from ..plot.cosmoMisc import simClustersComparison
 from ..plot.config import *
-from ..util.helper import logZeroNaN, running_median
+from ..util.helper import logZeroNaN, running_median, loadColorTable
 from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
 from ..tracer.tracerMC import match3
 
@@ -861,7 +860,7 @@ def mhi_vs_halomass(sPs):
     markersize = 40.0
     sizefac = 0.8 # for single column figure
 
-    # TODO: we should perhaps do 2d projection within r200, over a pretty good depth (to match ALFALFA beam)
+    # TODO: add 2d projection within r200 for TNG-C (from projections) (to match ALFALFA beam)
     yQuant = 'mhi_halo'
     ylim = [9.9, 12.0]
     scatterColor = None #'xray_peak_offset_2d_r500'
@@ -872,17 +871,23 @@ def mhi_vs_halomass(sPs):
         o18 = obuljen2019()
 
         color = '#222222'
-        l1, = ax.plot(o18['Mhalo'], o18['mHI'], color=color)
-        ax.fill_between(o18['Mhalo'], savgol_filter(o18['mHI_low'],sKn,sKo), savgol_filter(o18['mHI_high'],sKn,sKo), color=color, alpha=0.2)
+        #l1, = ax.plot(o18['Mhalo'], o18['mHI'], color=color)
+        #ax.fill_between(o18['Mhalo'], savgol_filter(o18['mHI_low'],sKn,sKo), savgol_filter(o18['mHI_high'],sKn,sKo), color=color, alpha=0.2)
 
-        ax.errorbar(o18['pts_M_halo'], o18['pts_MHI'], yerr=[o18['pts_MHI_errdown'],o18['pts_MHI_errup']], 
-                    fmt='D', zorder=2, color='#000000', alpha=0.7, label=o18['label']) # ms=6
+        l1 = ax.errorbar(o18['pts_M_halo'], o18['pts_MHI'], yerr=[o18['pts_MHI_errdown'],o18['pts_MHI_errup']], 
+                    fmt='D', ms=10, zorder=2, color='#000000', alpha=1.0)
 
         # TODO: cold gas mass (https://arxiv.org/abs/2305.12750 Fig 8)
 
         # TODO: add virgo
         # https://arxiv.org/pdf/2209.07691.pdf (Fig 8)
 
+        # second legend
+        handles = [l1]
+        labels = [o18['label']]
+
+        legend = ax.legend(handles, labels, loc='lower right')
+        ax.add_artist(legend)
 
     quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
@@ -1349,17 +1354,17 @@ def smbh_mass_vs_veldisp(sPs):
     """ Plot SMBH mass versus stellar velocity dispersion. """
     from ..load.data import mcconnellMa2013, bogdan2018
 
-    xQuant = 'veldisp1d_10pkpc' # veldisp1d (1re), veldisp1d_05re
+    xQuant = 'veldisp1d_10pkpc' # veldisp1d_4pkpc2d, veldisp1d (1re), veldisp1d_05re
     cenSatSelect = 'cen'
 
-    xlim = [2.3, 3.3] # 2.6
+    xlim = [2.2, 3.0]
     scatterPoints = True
     drawMedian = False
     markersize = 40.0
     sizefac = 0.8 # for single column figure
 
     yQuant = 'mass_smbh' # largest in subhalo
-    ylim = [8.1, 10.8] # 8.9
+    ylim = [8.4, 11.0] # 8.9
     scatterColor = None
 
     def _draw_data(ax):
@@ -1515,6 +1520,197 @@ def smbh_mass_vs_halomass(sPs):
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                              f_pre=_draw_data, legendLoc='upper left', pdf=None)
 
+def cluster_radial_profiles(sim, quant='Metallicity'):
+    """ Plot radial profiles for various quantities. """
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    from matplotlib.legend_handler import HandlerTuple
+    from matplotlib.colors import Normalize
+
+    # load
+    acField = 'Subhalo_RadProfile3D_Global_Gas_%s' % quant
+    ac = sim.auxCat(acField)
+
+    data = ac[acField]
+    attrs = ac[acField + '_attrs']
+    subhaloIDs = ac['subhaloIDs']
+
+    assert attrs['radRvirUnits'] == True # otherwise generalize
+    assert attrs['radBinsLog'] == True # otherwise generalize
+
+    rad_bin_edges = attrs['rad_bin_edges']
+    rad_bin_cen = (rad_bin_edges[1:] + rad_bin_edges[:-1]) / 2
+    rad_bin_cen[0] = 0.0 #rad_bin_edges[0]
+    rad_bin_cen[-1] = rad_bin_edges[-1]
+
+    # masses and color values
+    m200 = sim.subhalos('m200c_log')[subhaloIDs]
+
+    clabel = 'Halo Mass M$_{200c}$ [ log M$_\odot$ ]'
+    color_minmax = [14.4, 15.4]
+
+    #color_vals = (m200 - color_minmax[0]) / (color_minmax[1] - color_minmax[0])
+    #color_vals = np.clip(color_vals, 0.0, 1.0)
+    
+    # compute mass binned profiles
+    mass_bins = [[14.4,14.6], [14.6,14.8], [14.8,15.0], [15.0,15.2], [15.2,15.4]]
+
+    data_median = np.zeros((len(mass_bins), data.shape[1]), dtype='float32')
+    data_mean = np.zeros((len(mass_bins), data.shape[1]), dtype='float32')
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=RuntimeWarning)
+        for i, mass_bin in enumerate(mass_bins):
+            w = np.where((m200 >= mass_bin[0]) & (m200 < mass_bin[1]))[0]
+            data_median[i,:] = np.nanmedian(data[w,:], axis=0)
+            data_mean[i,:] = np.nanmean(data[w,:], axis=0)
+
+    # plot config
+    quant = quant.replace('_XrayWt','')
+
+    ctName = 'thermal'
+    xlim = [0.0, 1.5]
+
+    ylabel, _, ylog = sim.simParticleQuantity(attrs['ptType'], attrs['ptProperty'])
+    if quant == 'Metallicity':
+        ylabel = ylabel.replace('log ','')
+             
+    ylims = {'Metallicity' : [0.08, 0.82],
+             'Temp'        : [7.1, 8.4],
+             'ne'          : [-3.6, -0.5],
+             'Entropy'     : [8.3, 10.5]}
+    ylog = {'Metallicity' : False,
+            'Temp'        : True,
+            'ne'          : True,
+            'Entropy'     : True}
+
+    cmap = loadColorTable(ctName) #, fracSubset=[0.2,0.9])
+    cmap = plt.cm.ScalarMappable(norm=Normalize(vmin=color_minmax[0], vmax=color_minmax[1]), cmap=cmap)
+
+    if ylog[quant]:
+        data = logZeroNaN(data)
+        data_median = logZeroNaN(data_median)
+        data_mean = logZeroNaN(data_mean)
+
+    # start plot
+    xfac = 1.1 if quant == 'Metallicity' else 0.8
+    fig = plt.figure(figsize=(figsize[0]*xfac, figsize[1]*0.8))
+    ax = fig.add_subplot(111)
+    ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
+
+    ax.set_xlabel('Radius [R$_{\\rm 200c}$]')
+    ax.set_ylabel(ylabel)
+
+    ax.set_xlim(xlim)
+    ax.set_xticks([0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5])
+    ax.set_ylim(ylims[quant])
+
+    # plot
+    ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
+
+    for i in range(data.shape[0]):
+        color = cmap.to_rgba(m200[i])
+        # defaults
+        ls = '-'
+        alpha = 0.4
+        lw = 1.0
+
+        # temp: is value at 0<r<0.25 less than 0.75<r<1.0
+        if quant == 'Temp':
+            w1 = np.where((rad_bin_cen >= 0.0) & (rad_bin_cen < 0.25))[0]
+            w2 = np.where((rad_bin_cen >= 0.75) & (rad_bin_cen < 1.0))[0]
+            if np.nanmedian(data[i,w1]) < np.nanmedian(data[i,w2]):
+                ls = '-'
+                alpha = 1.0
+                lw = 1.0
+    
+        ax.plot(rad_bin_cen, data[i,:], ls=ls, color=color, lw=lw, alpha=alpha, zorder=0)
+
+    for i, mass_bin in enumerate(mass_bins):
+        color = cmap.to_rgba(np.mean(mass_bin))
+        ax.plot(rad_bin_cen, data_median[i,:], '-', color=color, lw=6, alpha=1.0, zorder=1)
+        if quant == 'Metallicity':
+            ax.plot(rad_bin_cen, data_mean[i,:], ':', color=color, lw=6, alpha=1.0, zorder=1)
+
+    # metallicity: obs data
+    if quant == 'Metallicity':
+        # Lovisari+19 (Table 1)
+        r_r500 = [0.025, 0.075, 0.125, 0.175, 0.225, 0.275, 0.35, 0.45, 0.6, 0.85]
+        data_obs_rel = [0.818,0.589,0.458,0.400,0.349,0.313,0.287,0.261,0.252,0.278]
+        data_err_rel = [0.236,0.158,0.110,0.103,0.087,0.093,0.095,0.120,0.122,0.093]
+        data_obs_dis = [0.486,0.447,0.417,0.393,0.361,0.348,0.322,0.285,0.266,0.286]
+        data_err_dis = [0.220,0.147,0.132,0.117,0.119,0.125,0.139,0.132,0.158,0.275]
+
+        # convert from Asplund+09 Z_solar
+        Z_solar_A09 = 0.0134
+        data_obs_rel = np.array(data_obs_rel) * (Z_solar_A09/sim.units.Z_solar)
+        data_obs_dis = np.array(data_obs_dis) * (Z_solar_A09/sim.units.Z_solar)
+        data_err_rel = np.array(data_err_rel) * (Z_solar_A09/sim.units.Z_solar)
+        data_err_dis = np.array(data_err_dis) * (Z_solar_A09/sim.units.Z_solar)
+
+        # convert from r500 -> r200
+        r200 = sim.subhalos('r200')[subhaloIDs]
+        r500 = sim.subhalos('r500')[subhaloIDs]
+
+        r500_to_r200 = np.median(r500/r200) # 0.65
+
+        r_r200 = np.array(r_r500) * r500_to_r200
+
+        # plot
+        p1 = ax.errorbar(r_r200, data_obs_rel, yerr=data_err_rel, fmt='o', color='#000000', ms=10, alpha=0.8, label='Lovisari+19 (rel)')
+        p2 = ax.errorbar(r_r200, data_obs_dis, yerr=data_err_dis, fmt='s', color='#000000', ms=10, alpha=0.8, label='Lovisari+19 (dis)')
+
+        # Leccardi+08 (from Lovisari+19 Fig 6)
+        xx = [0.032,0.098,0.180,0.240,0.345,0.450,0.623] # r500c
+        y_upper = [0.821,0.658,0.623,0.609,0.592,0.713,0.689]
+        y_lower = [0.561,0.323,0.239,0.178,0.081,0.015,0.0]
+
+        xx = np.array(xx) * r500_to_r200
+
+        # convert from Anders+89 Z_solar (note: 0.6 converts to Asplund+05 which is Z_solar=0.0122)
+        # since we take these curves from Lovisari+19, we assume they have already converted to Asplund+09
+        Z_solar_AG89 = 0.01941
+
+        y_upper = np.array(y_upper) * (Z_solar_A09/sim.units.Z_solar)
+        y_lower = np.array(y_lower) * (Z_solar_A09/sim.units.Z_solar)
+
+        p3 = ax.fill_between(xx, y_lower, y_upper, color='#000', alpha=0.2, label='Leccardi+08')
+
+        # Molendi+16 (from Lovisari+19 Fig 6)
+        # note: this is hardly a result from data, more of an assumption
+        xx = [0.5, 2.0] # arbitrary, 'near r180c' e.g. see Mernier+17 Fig 13
+        y_upper = 0.366 * (Z_solar_A09/sim.units.Z_solar)
+
+        p4 = ax.fill_between(xx, [0.0,0.0], [y_upper,y_upper], facecolor='#999', alpha=0.2, lw=2, edgecolor='#000', ls='--', label='Molendi+16')
+        #ax.plot([xx[0],xx[0]], [0.0,y_upper], '--', color='#000', alpha=0.4)
+        #ax.plot(xx, [y_upper,y_upper], '--', color='#000', alpha=0.4)
+
+        # Ghizzardi+21 XCOP - Table 2
+        r_r500 = [0.0, 0.025, 0.050, 0.075, 0.150, 0.225, 0.300, 0.375, 0.450, 0.525, 0.675, 0.875, 1.12]
+        r_r500 = (np.array(r_r500)[1:] + np.array(r_r500)[:-1]) / 2 # midpoints
+        Z_mean = [0.578, 0.432, 0.371, 0.317, 0.276, 0.243, 0.236, 0.245, 0.252, 0.250, 0.240, 0.200]
+        Z_mean_err = [0.193, 0.103, 0.066, 0.052, 0.042, 0.046, 0.042, 0.054, 0.064, 0.053, 0.047, 0.076]
+        Z_median = [0.440, 0.363, 0.293, 0.299, 0.275, 0.241, 0.249, 0.274, 0.263, 0.268, 0.240, 0.174]
+
+        r_r200 = np.array(r_r500) * r500_to_r200
+        Z_mean = np.array(Z_mean) * (Z_solar_AG89/sim.units.Z_solar)
+        Z_mean_err = np.array(Z_mean_err) * (Z_solar_AG89/sim.units.Z_solar)
+        Z_median = np.array(Z_median) * (Z_solar_AG89/sim.units.Z_solar)
+
+        #ax.errorbar(r_r200, Z_mean, yerr=Z_mean_err, fmt='H', color='#000000', ms=10, alpha=0.8, label='Ghizzardi+21')
+        p5, = ax.plot(r_r200, Z_mean, '-', color='#000', alpha=1.0, label='Ghizzardi+21')
+        p6 = ax.fill_between(r_r200, Z_mean-Z_mean_err, Z_mean+Z_mean_err, color='#000', alpha=0.5, label='Ghizzardi+21')
+
+        ax.legend([(p1,p2),p3,p4,(p5,p6)], ['Lovisari+19',p3.get_label(),p4.get_label(),p6.get_label()],
+                  handler_map={tuple: HandlerTuple(ndivide=None)}, loc='upper right')
+
+
+    # finish plot
+    cax = make_axes_locatable(ax).append_axes('right', size='3%' if quant=='Metallicity' else '4%', pad=0.2)
+    cb = plt.colorbar(cmap, label=clabel, cax=cax)
+
+    fig.savefig('rad_profiles_%s_%s_%d.pdf' % (sim.name, quant, sim.snap))
+    plt.close(fig)
+
 def halo_properties_table(sim):
     """ Write out a latex table of primary target halo properties. """
     filename = 'table.tex'
@@ -1628,11 +1824,16 @@ def paperPlots():
         for sP in sPs_loc: sP.setRedshift(0.3) # median of data at high-mass end
         haloXrayLum(sPs_loc, xlim=[11.4,12.7], ylim=[41.6,45.7])
 
-    # figure N - metallicity radial profiles
+    # figure 12 - radial profiles
     if 0:
-        pass
+        #TNG_C.setRedshift(0.2)
+        cluster_radial_profiles(TNG_C, quant='Temp')
+        cluster_radial_profiles(TNG_C, quant='Metallicity')
+        ###cluster_radial_profiles(TNG_C, quant='Metallicity_XrayWt')
+        cluster_radial_profiles(TNG_C, quant='Entropy')
+        cluster_radial_profiles(TNG_C, quant='ne')
 
-    # figure 12 - black hole mass scaling relation
+    # figure 13 - black hole mass scaling relation
     if 0:
         #from ..plot.globalComp import blackholeVsStellarMass
         #pdf = PdfPages('blackhole_masses_vs_mstar_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
@@ -1641,20 +1842,29 @@ def paperPlots():
         smbh_mass_vs_veldisp(sPs)
         smbh_mass_vs_halomass(sPs)
 
-    # figure 13 - sfr/cold gas mass
+    # figure 14 - sfr/cold gas mass
     if 0:
         sfr_vs_halomass(sPs)
-        mhi_vs_halomass([TNG_C])
+        mhi_vs_halomass(sPs)
 
-    # figure 14 - stellar mass contents
+    # figure 15 - stellar mass contents
     if 0:
         #sPs_loc = [sP.copy() for sP in sPs]
         #for sP in sPs_loc: sP.setRedshift(0.3) # median of data at high-mass end
         stellar_mass_vs_halomass(sPs, conf=0)
         stellar_mass_vs_halomass(sPs, conf=1)
 
-    # figure 15 - satellites
+    # figure 16 - satellites
     if 0:
+        # https://arxiv.org/abs/1201.5491
+        # colors for M_r cut running
+        # https://ui.adsabs.harvard.edu/abs/2022MNRAS.514.4676R/abstract
+        # satellite radial number density (https://arxiv.org/abs/2305.09629 Fig 11) (https://arxiv.org/abs/1201.5491)
+        # https://ui.adsabs.harvard.edu/abs/2014A%26A...561A..79V/abstract (Fig 6)
+        # https://ui.adsabs.harvard.edu/abs/2021MNRAS.507.5758S/abstract (Fig 5)
+        # https://ui.adsabs.harvard.edu/abs/2018MNRAS.475.4020W/abstract (Fig 3)
+        # https://ui.adsabs.harvard.edu/abs/2016MNRAS.462..830Z/abstract (Fig 2)
+        # cite: https://ui.adsabs.harvard.edu/abs/2014MNRAS.442.1363W/abstract
         pass
 
     # appendix - contamination
@@ -1665,13 +1875,7 @@ def paperPlots():
     if 0:
         halo_properties_table(TNG_C)
 
-    # satellite smhm
-    # satellite radial number density (https://arxiv.org/abs/2305.09629 Fig 11) (https://arxiv.org/abs/1201.5491)
-    # richness (N_sat), see Pakmor MTNG paper (also https://arxiv.org/abs/2307.08749)
+    # satellite smhm (Engler+2020)
     # SPA relaxedness measures from X-ray SB maps (https://arxiv.org/abs/2303.10185) (https://arxiv.org/pdf/2006.10752.pdf)
-    # members: L_X vs velocity dispersion relation (Kirkpatrick,C.+2020 SPIDERS), 'cosmo constraints with the velocity dispersion function'
-    # TODO: https://arxiv.org/abs/2111.13071 (M_SZ vs M_dyn from PSZ2)
-
     # BCG SFR(z) - https://arxiv.org/pdf/2302.10943.pdf (Fig 4?)
-
-    # figure todo - kinematics overview (vel disp cold,warm,hot) (https://arxiv.org/abs/2304.08810)
+    # kinematics (vel disp cold,warm,hot) (https://arxiv.org/abs/2304.08810)

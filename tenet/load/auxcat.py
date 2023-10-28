@@ -25,7 +25,7 @@ from ..projects.tngcluster import summarize_projection_2d
 largeAttrNames = ['subhaloIDs','partInds','wavelength']
 
 # threshold size of elements per subhalo such that we save a condensed (non-full) auxCat
-condThresh = 50
+condThresh = 25
 
 def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, indRange=None, 
            subhaloIDs=None, onlyMeta=False, expandPartial=False):
@@ -742,13 +742,20 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='shape_ellipsoid',op='ufunc',weighting='mass',ptRestrictions=sfrgt0,rad=None),
 
    'Subhalo_VelDisp3D_Stars_1rhalfstars' : \
-     partial(subhaloRadialReduction,ptType='stars',ptProperty='veldisp',op='ufunc',weighting='mass',rad='1rhalfstars'),
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='veldisp3d',op='ufunc',weighting='mass',rad='1rhalfstars'),
    'Subhalo_VelDisp1D_Stars_1rhalfstars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='veldisp1d',op='ufunc',weighting='mass',rad='1rhalfstars'),
    'Subhalo_VelDisp1D_Stars_05rhalfstars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='veldisp1d',op='ufunc',weighting='mass',rad='0.5rhalfstars'),
    'Subhalo_VelDisp1D_Stars_10pkpc' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='veldisp1d',op='ufunc',weighting='mass',rad='10pkpc'),
+   'Subhalo_VelDisp1Dz_Stars_10pkpc' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='veldisp_z',op='ufunc',weighting='mass',rad='10pkpc'),
+   'Subhalo_VelDisp1Dz_Stars_4pkpc2D' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='veldisp_z',op='ufunc',weighting='mass',rad='sdss_fiber_4pkpc'),
+
+   'Subhalo_VelDisp1Dz_XrayWt_010r500c' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='veldisp_z',op='ufunc',weighting='xray_lum_0.5-2.0kev',rad='0.1r500crit',cenSatSelect='cen'),
 
    # stellar age/metallicity
    'Subhalo_StellarAge_NoRadCut_MassWt'       : \
@@ -1314,6 +1321,18 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='temp_sfcold',op='mean',weighting='mass',scope='global_spatial',radMin=0.0,radMax=2.0,radNumBins=100,radRvirUnits=True,minHaloMass='1000dm'),
    'Subhalo_RadProfile3D_Global_Gas_Tcool' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='tcool',op='mean',weighting='mass',scope='global_spatial',radMin=0.0,radMax=2.0,radNumBins=100,radRvirUnits=True,minHaloMass='1000dm'),
+
+    # radial profiles (TNG-Cluster)
+    'Subhalo_RadProfile3D_Global_Gas_Metallicity' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='z_solar',op='mean',weighting='mass',radMin=-2.0, radMax=0.3, radNumBins=50, radBinsLog=True, radRvirUnits=True, scope='global_tngcluster'),
+    'Subhalo_RadProfile3D_Global_Gas_Metallicity_XrayWt' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='z_solar',op='mean',weighting='xray_lum_0.5-2.0kev',radMin=-2.0, radMax=0.3, radNumBins=50, radBinsLog=True, radRvirUnits=True, scope='global_tngcluster'),
+    'Subhalo_RadProfile3D_Global_Gas_Temp' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='temp',op='mean',weighting='mass',radMin=-2.0, radMax=0.3, radNumBins=50, radBinsLog=True, radRvirUnits=True, scope='global_tngcluster'),
+    'Subhalo_RadProfile3D_Global_Gas_Entropy' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='entropy',op='mean',weighting='mass',radMin=-2.0, radMax=0.3, radNumBins=50, radBinsLog=True, radRvirUnits=True, scope='global_tngcluster'),
+    'Subhalo_RadProfile3D_Global_Gas_ne' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='ne',op='mean',weighting='mass',radMin=-2.0, radMax=0.3, radNumBins=50, radBinsLog=True, radRvirUnits=True, scope='global_tngcluster'),
 
    # spherical sampling/healpix sightlines
    'Subhalo_SphericalSamples_Global_Gas_Temp_5rvir_400rad_16ns' : \

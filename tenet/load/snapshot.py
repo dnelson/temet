@@ -283,6 +283,30 @@ def haloOrSubhaloSubset(sP, haloID=None, subhaloID=None):
 
     return subset
 
+def _global_indices_zoomorig(sP, partType, origZoomID=None):
+    """ Helper function for TNG-Cluster to calculate indices for a global zoom original load. 
+    If origZoomID is None, then determine from sP.subhaloInd.
+    Returns two index ranges, one for the original zoom FoFs, and one for the outer fuzz. """
+    pt = sP.ptNum(partType)
+
+    with h5py.File(sP.postPath + 'offsets/offsets_%03d.hdf5' % sP.snap,'r') as f:
+        origIDs = f['OriginalZooms/HaloIDs'][()]
+        offsets = f['OriginalZooms/GroupsSnapOffsetByType'][()]
+        lengths = f['OriginalZooms/GroupsTotalLengthByType'][()]
+
+        offsets2 = f['OriginalZooms/OuterFuzzSnapOffsetByType'][()]
+        lengths2 = f['OriginalZooms/OuterFuzzTotalLengthByType'][()]
+
+    if origZoomID is None:
+        origZoomID = sP.groupCatSingle(subhaloID=sP.subhaloInd)['SubhaloOrigHaloID']
+    
+    origZoomInd = np.where(origIDs == origZoomID)[0][0]
+    
+    indRange = [offsets[origZoomInd,pt], offsets[origZoomInd,pt]+lengths[origZoomInd,pt]-1]
+    indRange2 = [offsets2[origZoomInd,pt], offsets2[origZoomInd,pt]+lengths2[origZoomInd,pt]-1]
+    
+    return indRange, indRange2
+
 def _haloOrSubhaloIndRange(sP, partType, haloID=None, subhaloID=None):
     """ Helper. """
     subset = haloOrSubhaloSubset(sP, haloID=haloID, subhaloID=subhaloID)

@@ -3001,7 +3001,7 @@ def obuljen2019():
     yy_low = mHI - (yy-yy_low)
     yy_high = mHI + (yy_high-yy)
 
-    r = {'label'    : 'Obuljen+ (2019) ALFALFA+SDSS',
+    r = {'label'    : 'Obuljen+ (2019)',
          'Mhalo'    : mhalo,
          'mHI'      : mHI,
          'mHI2'     : yy,

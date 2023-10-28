@@ -1372,23 +1372,11 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
         if method == 'sphMap_globalZoomOrig':
             # virtual box 'global original zoom' scope: all particles of a single original zoom
+            from ..load.snapshot import _global_indices_zoomorig
             assert not sP.isZoom and sP.subhaloInd is not None
 
-            pt = sP.ptNum(partType)
-
-            with h5py.File(sP.postPath + 'offsets/offsets_%03d.hdf5' % sP.snap,'r') as f:
-                origIDs = f['OriginalZooms/HaloIDs'][()]
-                offsets = f['OriginalZooms/GroupsSnapOffsetByType'][()]
-                lengths = f['OriginalZooms/GroupsTotalLengthByType'][()]
-
-                offsets2 = f['OriginalZooms/OuterFuzzSnapOffsetByType'][()]
-                lengths2 = f['OriginalZooms/OuterFuzzTotalLengthByType'][()]
-
-            origZoomID = sP.groupCatSingle(subhaloID=sP.subhaloInd)['SubhaloOrigHaloID']
-            origZoomInd = np.where(origIDs == origZoomID)[0][0]
-            indRange = [offsets[origZoomInd,pt], offsets[origZoomInd,pt]+lengths[origZoomInd,pt]-1]
-            indRange2 = [offsets2[origZoomInd,pt], offsets2[origZoomInd,pt]+lengths2[origZoomInd,pt]-1]
-            nChunks = 2
+            indRange, indRange2 = _global_indices_zoomorig(sP, partType, origZoomID=None)
+            nChunks = 2            
 
         if indRange is not None and indRange[1] - indRange[0] < 1:
             return emptyReturn()
