@@ -916,7 +916,7 @@ def lowess(x, y, x0, degree=1, l=1, robust=False):
         BtW = np.dot(B.T, W)
         # Get the params:
         beta = np.dot(np.dot(la.pinv(BtWB), BtW), y.T)
-        # We create a design matrix for this coordinat for back-predicting:
+        # We create a design matrix for this coordinate for back-predicting:
         B0 = [1]
         for d in range(1, degree+1):
             B0 = np.hstack([B0, this_x0 ** degree])

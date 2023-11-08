@@ -2528,11 +2528,14 @@ def addBoxMarkers(p, conf, ax, pExtent):
             # just Mstar
             str2 = "log M$_{\star}$ = %.1f" % stellarMass
             legend_labels.append( str2 )
-        if 'sfr' in str(p['labelHalo']):
-            legend_labels.append( 'SFR = %.1f M$_\odot$ yr$^{-1}$' % subhalo['SubhaloSFRinRad'])
         if 'mhalo' in str(p['labelHalo']):
             # just Mhalo
             legend_labels.append( str1 )
+        #if str1 not in legend_labels and str2 not in legend_labels:
+        #    # both Mhalo and Mstar
+        #    legend_labels.append( str1 )
+        #    if np.isfinite(stellarMass): legend_labels.append( str2 )
+
         if 'haloidorig' in str(p['labelHalo']):
             assert p['sP'].simName == 'TNG-Cluster' # Halo ID from parent DMO box
             legend_labels.append('HaloID %d (#%d)' % (subhalo['SubhaloGrNr'],halo['GroupOrigHaloID']))
@@ -2541,13 +2544,13 @@ def addBoxMarkers(p, conf, ax, pExtent):
         elif 'id' in str(p['labelHalo']):
             legend_labels.append( 'ID %d' % p['sP'].subhaloInd )
             #legend_labels.append( 'ID %d' % subhalo['SubhaloGrNr'] )
+
+        if 'sfr' in str(p['labelHalo']):
+            legend_labels.append( 'SFR = %.1f M$_\odot$ yr$^{-1}$' % subhalo['SubhaloSFRinRad'])
         if 'redshift' in str(p['labelHalo']):
             #legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,p['sP'].subhaloInd))
             legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,subhalo['SubhaloGrNr']))
-        if str1 not in legend_labels and str2 not in legend_labels:
-            # both Mhalo and Mstar
-            legend_labels.append( str1 )
-            if np.isfinite(stellarMass): legend_labels.append( str2 )
+
 
     if 'labelCustom' in p and p['labelCustom']:
         for label in p['labelCustom']:

@@ -581,12 +581,12 @@ def periodicDists2D(pt, vecs, sP, chebyshev=False, xyzMin=False):
         assert vecs.size == 2
         vecs = np.reshape(vecs, (1,2))
 
-    # distances from one point (x,y,z) to a vector of other points [N,3]
+    # distances from one point (x,y) to a vector of other points [N,2]
     if pt.ndim == 1:
         xDist = vecs[:,0] - pt[0]
         yDist = vecs[:,1] - pt[1]
 
-    # distances from a vector of points [N,3] to another vector of other points [N,3]
+    # distances from a vector of points [N,2] to another vector of other points [N,2]
     if pt.ndim == 2:
         assert vecs.shape[0] == pt.shape[0]
         xDist = vecs[:,0] - pt[:,0]

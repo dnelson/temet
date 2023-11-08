@@ -114,13 +114,15 @@ def subbox_movie_tng300fof0(curTask=0, numTasks=1):
     panels = []
 
     panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.7,8.0]} )
+    #panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[5.4,8.8]} )
+    #panels.append( {'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-2.0,-0.4]} )
 
     run     = 'tng'
     variant = 'subbox0'
     res     = 2500
     method  = 'sphMap'
     nPixels = [3840,2160]
-    axes    = [1,2] # x,y
+    axes    = [1,2] # x,y for original, y,z for TNG-Cluster
     labelZ  = True
     labelScale = 'physical'
 

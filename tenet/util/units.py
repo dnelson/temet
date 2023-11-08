@@ -573,6 +573,10 @@ class units(object):
         vol *= self.scalefac**3 # comoving -> physical
 
         return vol
+    
+    def codeVolumeToMpc3(self, x):
+        """ Convert a volume [length^3] in code units to physical Mpc^3. """
+        return self.codeVolumeToKpc3(x) / 1000.0**3
 
     def physicalKpcToCodeLength(self, x):
         """ Convert a length in [pkpc] to code units [typically ckpc/h]. """

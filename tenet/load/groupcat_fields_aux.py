@@ -100,10 +100,10 @@ def mag_(sim, partType, field, args):
     """ Photometric/broadband magnitudes (e.g. 'mag_C_g', 'mag_A_r'). """
     return loadColors(sim, field)
 
-color_.label = lambda sim,pt,f: r'$\rm{M_{%s}}$' % (f.split('_')[2])
-color_.units = 'mag' # AB
-color_.limits = [-0.4, 1.0]
-color_.log = False
+mag_.label = lambda sim,pt,f: r'$\rm{M_{%s}}$' % (f.split('_')[2])
+mag_.units = 'mag' # AB
+mag_.limits = [-19,-23]
+mag_.log = False
 
 # ---------------------------- auxcat: (gas) masses -----------------------------------------------------
 

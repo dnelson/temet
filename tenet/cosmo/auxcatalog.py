@@ -2389,7 +2389,7 @@ def tracerTracksQuant(sP, pSplit, quant, op, time, norm=None):
 
     return r, attrs
 
-def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=None, subRestrictionsRel=None, 
+def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, proj2D=None, subRestrictions=None, subRestrictionsRel=None, 
                             minStellarMass=None, minHaloMass=None, cenSatSelect=None):
     """ For every subhalo search for spatially nearby neighbors, using a tree, and compute some 
     reduction operation over them. In this case, the search radius is globally constant and/or 
@@ -2405,11 +2405,16 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
         the distance of the closest neighbor satisfying the requested restrictions. 'd[3,5,10]_rad' returns 
         the distance to the 3rd, 5th, or 10th nearest neighbor, respectively. 'closest_quant' 
         returns the quant of this closest neighbor. 'count' returns the number of identified neighbors.
-      rad (str or float): physical kpc if float, else a string as recognized by :py:func:`_radialRestriction`.
+      rad (str, float, or list): physical kpc if float, or a string as recognized by :py:func:`_radialRestriction`, 
+        or if a list/tuple, then we compute radial profiles for each subhalo instead of a single value, 
+        in which case the tuple provides the profile parameters {radMin,radMax,radNumBins,radBinsLog,radRvirUnits} as 
+        in subhaloRadialProfile().
+      proj2D (list or None): if not None, do 3D profiles, otherwise 2-tuple specifying (i) integer coordinate axis in 
+        [0,1,2] to project along or 'face-on' or 'edge-on', and (ii) depth in code units (None for full box). 
       subRestrictions (list): apply cuts to which subhalos are searched over. Each item in the list is a 
         3-tuple consisting of {field name, min value, max value}, where e.g. np.inf can be used as a 
         maximum to enforce a minimum threshold only.
-        This is the only which modifies the search target sample, as opposite to the search origin sample.
+        This is the only option which modifies the search target sample, as opposite to the search origin sample.
       subRestrictionsRel (dict): as above, but every field is understood to be relative to the current
         subhalo value, which is the normalization, e.g. {'gt':1.0} requires that neighbors have a strictly 
         larger value, while {'lt':0.5} requires neighbors have a value half as large or smaller.
@@ -2432,20 +2437,63 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
 
     if nSubsTot == 0:
         return np.nan, {} # e.g. snapshots so early there are no subhalos
+    
+    # radial profiles?
+    profiles = False
+    if isinstance(rad, (list,tuple)):
+        assert len(rad) == 5
+        radMin, radMax, radNumBins, radBinsLog, radRvirUnits = rad
+        assert not radRvirUnits # otherwise generalize
+        assert radBinsLog # otherwise generalize
+        profiles = True
 
-    # determine radial restriction for each subhalo
-    radRestrictIn2D, radSqMin, radSqMax, _ = _radialRestriction(sP, nSubsTot, rad)
+        # determine profile bins (radMin, radMax in log physical kpc)
+        radMin_code_log = np.log10(sP.units.physicalKpcToCodeLength(10.0**radMin))
+        radMax_code_log = np.log10(sP.units.physicalKpcToCodeLength(10.0**radMax))
 
+        rad_bin_edges = np.linspace(radMin_code_log,radMax_code_log,radNumBins+1) # bin edges, including inner and outer boundary
+
+        rbins_sq = (10.0**rad_bin_edges)**2 # we work in squared distances for speed
+        rad_bins_code = 0.5*(rad_bin_edges[1:] + rad_bin_edges[:-1]) # bin centers [log]
+        rad_bins_pkpc = sP.units.codeLengthToKpc(10.0**rad_bins_code)
+
+        radMaxCode = 10.0**radMax_code_log
+        radSqMax = radMaxCode**2
+
+        # bin (spherical shells in 3D, circular annuli in 2D) volumes/areas [code units]
+        r_outer = 10.0**rad_bin_edges[1:]
+        r_inner = 10.0**rad_bin_edges[:-1]
+
+        bin_volumes_code = 4.0/3.0 * np.pi * (r_outer**3.0 - r_inner**3.0)
+        bin_areas_code = np.pi * (r_outer**2.0 - r_inner**2.0) # 2D annuli e.g. if proj2D is not None
+    else:
+        # determine radial restriction for each subhalo
+        radRestrictIn2D, radSqMin, radSqMax, _ = _radialRestriction(sP, nSubsTot, rad)
+
+        assert not radRestrictIn2D # generalize below, currently everything in 3D
+        
     maxSearchRad = np.sqrt(radSqMax) # code units
 
-    if radRestrictIn2D:
-        assert 0 # generalize below, currently everything in 3D
-
+    if proj2D is not None:
+        assert profiles # otherwise generalize
+        axes2D = {0:[1,2], 1:[2,0], 2:[0,1]}[proj2D[0]]
+        
+        if proj2D[1] is None:
+            print('NOTE: override maxSearchRad = %g with full box depth for 2D projection.' % maxSearchRad)
+            maxSearchRad = sP.boxSize
+        else:
+            # max depth at the max projected distance is the radial search requirement
+            proj2DHalfDepth = proj2D[1] / 2.0 # code units
+            maxSearchRadReq = np.sqrt(proj2DHalfDepth**2 + rbins_sq[-1])
+            if maxSearchRadReq > maxSearchRad:
+                print('NOTE: override maxSearchRad = %g with %g for 2D projection.' % (maxSearchRad,maxSearchRadReq))
+                maxSearchRad = maxSearchRadReq
+    
     # task parallelism (pSplit): determine subhalo and particle index range coverage of this task
     subhaloIDsTodo, _, nSubsSelected = pSplitBounds(sP, pSplit, minStellarMass=minStellarMass, 
         minHaloMass=minHaloMass, cenSatSelect=cenSatSelect)
     nSubsDo = len(subhaloIDsTodo)
-
+        
     # info
     desc = "[%s] of quantity [%s] enclosed within a radius of [%s]." % (op,quant,rad)
     if subRestrictions is not None:
@@ -2481,7 +2529,7 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
             fieldsLoad.append(rField)
 
     fieldsLoad = list(set(fieldsLoad)) # make unique
-
+    
     gc = sP.subhalos(fieldsLoad)
 
     # start all valid mask for search targets
@@ -2489,14 +2537,13 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
 
     # if we will apply (locally variable) restrictions
     if subRestrictionsRel is not None:
-        # then the quantities must be non-nan and non-zero for the subhalos we are processing 
+        # then the quantities must be non-nan for the subhalos we are processing 
         # (efficiency improvement only)
         mask = np.ones( nSubsDo, dtype='bool' )
 
         for rField, _, _ in subRestrictionsRel:
             # mark invalid subhalos
             mask &= np.isfinite(gc[rField][subhaloIDsTodo])
-            mask &= (gc[rField][subhaloIDsTodo] != 0)
 
         wTodoValid = np.where(mask)
 
@@ -2527,7 +2574,7 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
     wValid = np.where(validMask)
 
     print(' After any subRestrictions, searching over [%d] of [%d] subhalos.' % (len(wValid[0]),nSubsTot))
-
+    
     # take subset
     gc_search = {}
 
@@ -2540,18 +2587,20 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
 
     # initial guess (iterative)
     if op in ['d3_rad','d5_rad','d10_rad']:
-        target_ngb_num = int(op.replace('_rad','')[1])
+        target_ngb_num = int(op.replace('_rad','')[1:])
         prevMaxSearchRad = 1000.0
 
     # allocate, NaN indicates not computed
     dtype = gc[quant].dtype if quant in gc.keys() else 'float32' # for custom
-    if op == 'count': dtype = 'int32'
 
     shape = [nSubsDo]
     if quant is not None and gc[quant].ndim > 1:
         shape.append(gc[quant].shape[1])
 
-    r = np.zeros( shape, dtype=dtype )
+    if profiles:
+        shape.append(radNumBins)
+    
+    r = np.zeros(shape, dtype=dtype)
     r.fill(np.nan) # set NaN value for un-processed subhalos
 
     # build tree
@@ -2561,10 +2610,8 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
     loc_search_mask = np.ones(gc_search['SubhaloPos'].shape[0], dtype='bool')
 
     # loop over subhalos
-    printFac = 100.0 if sP.res > 512 else 10.0
-
     for i, subhaloID in enumerate(subhaloIDsTodo):
-        if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo and username != 'wwwrun':
+        if i % np.max([1,int(nSubsDo/10.0)]) == 0 and i <= nSubsDo and username != 'wwwrun':
             print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo)) 
 
         loc_search_pos = gc_search['SubhaloPos']
@@ -2579,12 +2626,17 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
 
             # apply each requested restriction
             for rField, rFieldMin, rFieldMax in subRestrictionsRel:
-                # can contain nan (e.g. mstar_30pkpc_log), in which case we say this fails the restriction
-                with np.errstate(invalid='ignore'):
-                    # compute the relative value we apply the restriction on
-                    relative_val = gc_search[rField] / gc[rField][subhaloID]
+                if rField == 'SubhaloOrigHaloID':
+                    # TNG-Cluster: restrict to subhalos from the same original zoom sim
+                    assert rFieldMin == rFieldMax == 1 # otherwise not clear
+                    loc_search_mask &= (gc_search[rField] == gc[rField][subhaloID])
+                else:
+                    # can contain nan (e.g. mstar_30pkpc_log), in which case we say this fails the restriction
+                    with np.errstate(invalid='ignore'):
+                        # compute the relative value we apply the restriction on
+                        relative_val = gc_search[rField] / gc[rField][subhaloID]
 
-                    loc_search_mask &= ( (relative_val > rFieldMin) & (relative_val < rFieldMax) )
+                        loc_search_mask &= ( (relative_val > rFieldMin) & (relative_val < rFieldMax) )
 
             if np.count_nonzero(loc_search_mask) == 0:
                 continue # no subhalos satisfy this relative restriction
@@ -2657,7 +2709,7 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
 
         # standard reductions: tree search within given search radius
         loc_inds = calcParticleIndices(loc_search_pos, gc['SubhaloPos'][subhaloID,:], 
-                                       maxSearchRad[subhaloID], boxSizeSim=sP.boxSize, 
+                                       maxSearchRad, boxSizeSim=sP.boxSize, 
                                        posMask=loc_search_mask, tree=tree)
 
         if loc_inds is None:
@@ -2671,42 +2723,78 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
             # debug verify
             wValid = np.where(loc_search_mask)[0]
             loc_dists = sP.periodicDists(gc['SubhaloPos'][subhaloID,:], loc_search_pos[wValid])
-            loc_inds2 = np.where(loc_dists <= maxSearchRad[subhaloID])[0]
+            loc_inds2 = np.where(loc_dists <= maxSearchRad)[0]
             assert np.array_equal(np.sort(loc_inds),np.sort(wValid[loc_inds2]))
 
-        if op == 'count':
+        if op == 'count' and not profiles:
             r[i] = len(loc_inds) - 1 # do not count self
 
             continue
 
         # do not include this subhalo in any statistic
-        loc_vals = loc_search_quant.copy()
+        if quant is not None:
+            loc_vals = loc_search_quant.copy()
 
-        if gc_search_index[subhaloID] >= 0:
-            loc_vals[gc_search_index[subhaloID]] = np.nan
+            if gc_search_index[subhaloID] >= 0:
+                loc_vals[gc_search_index[subhaloID]] = np.nan
 
-        # take subset corresponding to identified neighbors
-        loc_vals = loc_vals[loc_inds]
+            # take subset corresponding to identified neighbors
+            loc_vals = loc_vals[loc_inds]
 
-        if np.count_nonzero(np.isfinite(loc_vals)) == 0:
-            continue
+            if np.count_nonzero(np.isfinite(loc_vals)) == 0:
+                continue
+        else:
+            assert op == 'count' # otherwise what are we doing?
+            loc_vals = np.zeros(len(loc_inds), dtype='float32') # dummy for profiles
 
         # store result
-        if op == 'sum':
-            r[i] = np.nansum(loc_vals)
-        if op == 'max':
-            r[i] = np.nanmax(loc_vals)
-        if op == 'min':
-            r[i] = np.nanmin(loc_vals)
-        if op == 'mean':
-            r[i] = np.nanmean(loc_vals)
-        if op == 'median':
-            r[i] = np.nanmedian(loc_vals)
+        if profiles:
+            # radial profile
+            if proj2D is not None:
+                # create 2d versions of the position arrays
+                sub_pos_2d = gc['SubhaloPos'][subhaloID][axes2D]
+                loc_search_pos_2d = loc_search_pos[loc_inds][:,axes2D]
+
+                # filter projection depth
+                proj_dist = loc_search_pos[loc_inds][:,proj2D[0]] - gc['SubhaloPos'][subhaloID][proj2D[0]]
+                sP.correctPeriodicDistVecs(proj_dist)
+                valid_inds = np.where(np.abs(proj_dist) <= proj2DHalfDepth)
+
+                # distances in 2d projection
+                dists = sP.periodicDistsSq(sub_pos_2d, loc_search_pos_2d[valid_inds])
+                loc_vals = loc_vals[valid_inds]
+            else:
+                # distances and profile in 3d
+                dists = sP.periodicDistsSq(gc['SubhaloPos'][subhaloID], loc_search_pos[loc_inds])
+
+            # note: includes self (at r=0)
+            result, _, _ = binned_statistic_weighted(dists, loc_vals, statistic=op, bins=rbins_sq) #, weights=loc_wt)
+            r[i] = result
+
+        else:
+            # single scalar reduction
+            if op == 'sum':
+                r[i] = np.nansum(loc_vals)
+            if op == 'max':
+                r[i] = np.nanmax(loc_vals)
+            if op == 'min':
+                r[i] = np.nanmin(loc_vals)
+            if op == 'mean':
+                r[i] = np.nanmean(loc_vals)
+            if op == 'median':
+                r[i] = np.nanmedian(loc_vals)
 
     attrs = {'Description' : desc.encode('ascii'),
              'Selection'   : select.encode('ascii'),
              'rad'         : str(rad).encode('ascii'),
              'subhaloIDs'  : subhaloIDsTodo}
+
+    if profiles:
+        attrs['rad_bin_edges'] = rad_bin_edges
+        attrs['rad_bins_code'] = rad_bins_code
+        attrs['rad_bins_pkpc'] = rad_bins_pkpc
+        attrs['bin_volumes_code'] = bin_volumes_code
+        attrs['bin_areas_code'] = bin_areas_code
 
     return r, attrs
 
@@ -3072,7 +3160,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         If ``scope=='global_tngcluster'``, then use the file structure of the reconstructed TNG-Cluster 
         simulation to achieve global scope profiles.
       weighting (str): if not None, then use this additional particle/cell property as the weight.
-      proj2D (bool): if not None, do 3D profiles, otherwise 2-tuple specifying (i) integer coordinate axis in 
+      proj2D (list or None): if not None, do 3D profiles, otherwise 2-tuple specifying (i) integer coordinate axis in 
         [0,1,2] to project along or 'face-on' or 'edge-on', and (ii) depth in code units (None for full box). 
       ptRestrictions (dict): apply cuts to which particles/cells are included. Each key,val pair in the dict 
         specifies a particle/cell field string in key, and a [min,max] pair in value, where e.g. np.inf can be 
@@ -3081,9 +3169,10 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
       radMin (int): minimum radius for profiles, should be [log] if radBinsLog == True, else [linear].
         should be [code units] if radRvirUnits == False, else [dimensionless rvir units].
       radMax (int): maximum radius for profiles, as above.
-      radBinsLog (bool): if True, use log-spaced bins, otherwise linear.
+      radBinsLog (bool): if True, input radMin and radMax are in log, otherwise linear.
       radNumBins (int): number of radial bins for profiles.
-      radRvirUnits (bool): if True, change radMin and radMax to be bins linear in units of rvir of each halo.
+      radRvirUnits (bool): if True, radMin and radMax are in units of rvir of each halo.
+        Note that in this case binning is always linear, whereas if False, binning is always logarithmic.
       Nside (int or None): if not None, should be a healpix parameter (2,4,8,etc). In this case, we do not 
         compute a spherically averaged radial profile per halo, but instead a spherical healpix sampled set of 
         shells/radial profiles, where the quantity sampling at each point uses a SPH-kernel with ``Nngb``.

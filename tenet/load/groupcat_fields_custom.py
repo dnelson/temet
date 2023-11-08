@@ -536,10 +536,10 @@ def sfr2(sim, partType, field, args):
     """ Galaxy star formation rate (instantaneous, within twice the stellar half mass radius). """
     return sim.subhalos('SubhaloSFRinRad') # units correct
 
-sfr.label = r'$\rm{SFR_{<2r_{\star}}}$'
-sfr.units = r'$\rm{M_{sun} yr^{-1}}$'
-sfr.limits = [-2.5, 1.0]
-sfr.log = True
+sfr2.label = r'$\rm{SFR_{<2r_{\star}}}$'
+sfr2.units = r'$\rm{M_{sun} yr^{-1}}$'
+sfr2.limits = [-2.5, 1.0]
+sfr2.log = True
 
 @catalog_field
 def ssfr(sim, partType, field, args):

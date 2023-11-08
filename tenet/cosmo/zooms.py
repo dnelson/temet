@@ -199,18 +199,19 @@ def contamination_profile():
 
 def contamination_compare_profiles():
     """ Compare contamination radial profiles between runs. """
-    zoomRes = 14
-    hInds = [0,50,79,84,102,107,1335,1919,3232,3693]
-    variants = ['sf3'] #['sf2','sf3','sf4']
-    run = 'tng_zoom'
+    zoomRes = 11
+    hInds = [11]
+    redshift = 6.0
+    variants = ['sf8','sf32']
+    run = 'tng50_zoom'
 
     # start plot
     fig, ax = plt.subplots(figsize=figsize)
-    ylim = [-6.0, 0.0]
+    ylim = [-5.0, 0.0]
 
     ax.set_xlabel('Distance [$R_{\\rm 200,crit}$]')
     ax.set_ylabel('Low-res DM Contamination Fraction [log]')
-    ax.set_xlim([0.0, 5.0])
+    ax.set_xlim([0.0, 10.0])
     ax.set_ylim(ylim)
 
     # load: loop over hInd/variant combination
@@ -219,7 +220,7 @@ def contamination_compare_profiles():
 
         for j, variant in enumerate(variants):
             # load zoom: group catalog
-            sPz = simParams(res=zoomRes, run=run, hInd=hInd, redshift=0.0, variant=variant)
+            sPz = simParams(res=zoomRes, run=run, hInd=hInd, redshift=redshift, variant=variant)
 
             halo_zoom = sPz.groupCatSingle(haloID=0)
             halos_zoom = sPz.groupCat(fieldsHalos=['GroupMass','GroupPos','Group_M_Crit200'])
@@ -228,13 +229,14 @@ def contamination_compare_profiles():
             # load contamination statistics and plot
             contam = calculate_contamination(sPz, verbose=True)
             rr = contam['rr'] / halo_zoom['Group_R_Crit200']
-            min_dist_lr = contam['min_dist_lr'] / sPz.units.codeLengthToMpc( halo_zoom['Group_R_Crit200'] )
+            halo_r200_pMpc = sPz.units.codeLengthToMpc(halo_zoom['Group_R_Crit200'])
+            min_dist_lr = contam['min_dist_lr'] / halo_r200_pMpc
 
             l, = ax.plot(rr, logZeroNaN(contam['r_frac']), linestyles[j], color=c, lw=lw, label='h%d_%s' % (hInd,variant))
             #l, = ax.plot(rr, logZeroNaN(contam['r_massfrac']), '--', lw=lw, color=c)
 
             ax.plot([min_dist_lr,min_dist_lr], [ylim[1]-0.3,ylim[1]], linestyles[j], color=c, lw=lw, alpha=0.5)
-            print(hInd,variant,min_dist_lr)
+            print(hInd,variant,min_dist_lr,halo_r200_pMpc)
 
     ax.plot([0,rr[-1]], [-1.0, -1.0], '-', color='#888888', lw=lw-1.0, alpha=0.4, label='10%')
     ax.plot([0,rr[-1]], [-2.0, -2.0], '-', color='#bbbbbb', lw=lw-1.0, alpha=0.4, label='1%')
@@ -254,7 +256,7 @@ def contamination_mindist():
     redshift = 0.0
     run = 'tng_zoom'
 
-    frac_thresh = 1e-6
+    frac_thresh = 1e-3
 
     # load data
     halo_mass = np.zeros(len(hInds), dtype='float32')
@@ -281,7 +283,7 @@ def contamination_mindist():
         min_dists_thresh[i] = np.interp(frac_thresh, contam['r_frac_cum'], contam['rr']) / halo_zoom['Group_R_Crit200']   
     
     # plot distribution
-    xlim = [0.0, 6.0]
+    xlim = [0.0, 10.0]
     nbins = 60
 
     fig, ax = plt.subplots(figsize=figsize)
@@ -307,7 +309,7 @@ def contamination_mindist():
     ax.set_xlabel('Halo Mass M$_{\\rm 200c}$ [ log $M_{\\odot}$ ]')
     ax.set_ylabel('Minimum Contamination Distance [ $R_{\\rm 200,crit}$ ]')
     ax.set_xlim([14.25, 15.4])
-    ax.set_ylim([0.0, 8.0])
+    ax.set_ylim([0.0, 10.0])
 
     for rr in np.arange(1,7):
         ax.plot(ax.get_xlim(), [rr,rr], '-', color='#bbbbbb', lw=lw, alpha=0.2)

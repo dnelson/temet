@@ -3193,8 +3193,8 @@ def mantz16():
 
     return r
 
-def nagarajan18():
-    """ Load observational data points from Nagarajan+ (2018) Y500 vs M500. """
+def nagarajan19():
+    """ Load observational data points from Nagarajan+ (2019) Y500 vs M500. """
     path = dataBasePath + 'nagarajan/n18_table2.txt'
 
     data = np.genfromtxt(path,comments='#',dtype=None,encoding=None)
@@ -3207,7 +3207,7 @@ def nagarajan18():
          'M500_errup'   : np.array([d[7] for d in data])*1e14, # M500 err up
          'M500_errdown' : np.array([d[8] for d in data])*1e14, # M500 err down
          'LX'           : np.array([d[9] for d in data])*1e44, # LX 0.1-2.4 kev [erg/s]
-         'label'        : 'Nagarajan+ (2018)'}
+         'label'        : 'Nagarajan+ (2019)'}
     
     with np.errstate(invalid='ignore'):
         r['M500_errup'] = np.log10(r['M500_errup'] + r['M500']) - np.log10(r['M500'])
@@ -3218,6 +3218,36 @@ def nagarajan18():
 
         r['Y'] = np.log10(r['Y'])
         r['M500'] = np.log10(r['M500'])
+    
+    return r
+
+def chiu18():
+    """ Load observational data points from Chiu+ (2018) SPT cluster properties. """
+    path = dataBasePath + 'chiu/c18_table2.txt'
+
+    data = np.genfromtxt(path,comments='#',dtype=None,encoding=None)
+
+    r = {'name'       : [d[0] for d in data],
+         'M500'       : np.array([d[2] for d in data])*1e14, # [msun]
+         'M500_err'   : np.array([d[3] for d in data])*1e14,
+         'M_ICM'      : np.array([d[4] for d in data])*1e13, # [msun]
+         'M_ICM_err'  : np.array([d[5] for d in data])*1e13,
+         'M_star'     : np.array([d[6] for d in data])*1e12, # [msun]
+         'M_star_err' : np.array([d[7] for d in data])*1e12,
+         'M_b'        : np.array([d[8] for d in data])*1e13, # [msun]
+         'M_b_err'    : np.array([d[9] for d in data])*1e13,
+         'f_cold'     : np.array([d[10] for d in data]), # [linear dimensionless]
+         'f_cold_err' : np.array([d[11] for d in data]),
+         'label'        : 'Chiu+ (2018)'}
+    
+    with np.errstate(invalid='ignore'):
+        r['M500_err'] = np.log10(r['M500_err'] + r['M500']) - np.log10(r['M500'])
+        r['M_star_err'] = np.log10(r['M_star_err'] + r['M_star']) - np.log10(r['M_star'])
+
+        r['M500'] = np.log10(r['M500'])
+        r['M_ICM'] = np.log10(r['M_ICM'])
+        r['M_star'] = np.log10(r['M_star'])
+        r['M_b'] = np.log10(r['M_b'])
     
     return r
 

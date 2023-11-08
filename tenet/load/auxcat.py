@@ -1174,6 +1174,32 @@ fieldComputeFunctionMapping = \
    'Subhalo_Env_Count_MstarRel_GtTenth_2rvir' : \
      partial(subhaloCatNeighborQuant,quant=None,op='count',rad='2rvir',subRestrictionsRel=[['mstar_30pkpc',0.1,np.inf]],cenSatSelect='cen'),
 
+   # subhalo neighbors: profiles
+   'Subhalo_CountProfile_Mstar_Gt10' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad=[1.0,4.0,20,True,False],subRestrictions=[['mstar_30pkpc_log',10.0,np.inf]],subRestrictionsRel=[['SubhaloOrigHaloID',1,1]],cenSatSelect='cen'),
+   'Subhalo_CountProfile_Mstar_Gt9_2D' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad=[1.0,4.0,20,True,False],subRestrictions=[['mstar_30pkpc_log',9.0,np.inf]],subRestrictionsRel=[['SubhaloOrigHaloID',1,1]],proj2D=[2,10000],cenSatSelect='cen'),
+   'Subhalo_CountProfile_Mstar_Gt10_2D' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad=[1.0,4.0,20,True,False],subRestrictions=[['mstar_30pkpc_log',10.0,np.inf]],subRestrictionsRel=[['SubhaloOrigHaloID',1,1]],proj2D=[2,10000],cenSatSelect='cen'),
+   'Subhalo_CountProfile_Mstar_Gt105_2D' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad=[1.0,4.0,20,True,False],subRestrictions=[['mstar_30pkpc_log',10.5,np.inf]],subRestrictionsRel=[['SubhaloOrigHaloID',1,1]],proj2D=[2,10000],cenSatSelect='cen'),
+   'Subhalo_CountProfile_Mstar_Gt115_2D' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad=[1.0,4.0,20,True,False],subRestrictions=[['mstar_30pkpc_log',11.5,np.inf]],subRestrictionsRel=[['SubhaloOrigHaloID',1,1]],proj2D=[2,10000],cenSatSelect='cen'),
+   'Subhalo_CountProfile_Mr_lt205_2D' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad=[1.0,4.0,20,True,False],subRestrictions=[['mag_C-30kpc-z_r',-np.inf,-20.5]],subRestrictionsRel=[['SubhaloOrigHaloID',1,1]],proj2D=[2,10000],cenSatSelect='cen'),
+   'Subhalo_CountProfile_Mr_lt205_2Dx' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad=[1.0,4.0,20,True,False],subRestrictions=[['mag_C-30kpc-z_r',-np.inf,-20.5]],subRestrictionsRel=[['SubhaloOrigHaloID',1,1]],proj2D=[0,10000],cenSatSelect='cen'),
+   'Subhalo_CountProfile_Mr_lt205_2Dy' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad=[1.0,4.0,20,True,False],subRestrictions=[['mag_C-30kpc-z_r',-np.inf,-20.5]],subRestrictionsRel=[['SubhaloOrigHaloID',1,1]],proj2D=[1,10000],cenSatSelect='cen'),
+   'Subhalo_CountProfile_Mr_lt205_2D_nodust' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad=[1.0,4.0,20,True,False],subRestrictions=[['mag_A_r',-np.inf,-20.5]],subRestrictionsRel=[['SubhaloOrigHaloID',1,1]],proj2D=[2,10000],cenSatSelect='cen'),
+   'Subhalo_CountProfile_Mr_lt205_2Dx_nodust' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad=[1.0,4.0,20,True,False],subRestrictions=[['mag_A_r',-np.inf,-20.5]],subRestrictionsRel=[['SubhaloOrigHaloID',1,1]],proj2D=[0,10000],cenSatSelect='cen'),
+   'Subhalo_CountProfile_Mr_lt205_2Dy_nodust' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad=[1.0,4.0,20,True,False],subRestrictions=[['mag_A_r',-np.inf,-20.5]],subRestrictionsRel=[['SubhaloOrigHaloID',1,1]],proj2D=[1,10000],cenSatSelect='cen'),
+   'Subhalo_CountProfile_Mr_lt205_2D_snap' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad=[1.0,4.0,20,True,False],subRestrictions=[['mag_snap_r',-np.inf,-20.5]],subRestrictionsRel=[['SubhaloOrigHaloID',1,1]],proj2D=[2,10000],cenSatSelect='cen'),
+
    # radial profiles: oxygen
    'Subhalo_RadProfile3D_Global_OVI_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='global'),
@@ -1327,6 +1353,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='z_solar',op='mean',weighting='mass',radMin=-2.0, radMax=0.3, radNumBins=50, radBinsLog=True, radRvirUnits=True, scope='global_tngcluster'),
     'Subhalo_RadProfile3D_Global_Gas_Metallicity_XrayWt' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='z_solar',op='mean',weighting='xray_lum_0.5-2.0kev',radMin=-2.0, radMax=0.3, radNumBins=50, radBinsLog=True, radRvirUnits=True, scope='global_tngcluster'),
+    'Subhalo_RadProfile3D_Global_Gas_Metallicity_XrayWt_2D' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='z_solar',op='mean',weighting='xray_lum_0.5-2.0kev',proj2D=[2,10000],radMin=-2.0, radMax=0.3, radNumBins=50, radBinsLog=True, radRvirUnits=True, scope='global_tngcluster'),
     'Subhalo_RadProfile3D_Global_Gas_Temp' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='temp',op='mean',weighting='mass',radMin=-2.0, radMax=0.3, radNumBins=50, radBinsLog=True, radRvirUnits=True, scope='global_tngcluster'),
     'Subhalo_RadProfile3D_Global_Gas_Entropy' : \

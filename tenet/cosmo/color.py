@@ -69,8 +69,11 @@ def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None,
 
     # compute colors
     if simColorsModel == 'snap':
-        assert len(bands) == 2 # otherwise handle within
-        gc_colors = stellarPhotToSDSSColor( colorData, bands )
+        if len(bands) == 1 and bands[0] in ['g','r','i','z']:
+            gc_colors = colorData[:,gfmBands[bands[0]]]
+        else:
+            assert len(bands) == 2 # otherwise handle (AB conversions)
+            gc_colors = stellarPhotToSDSSColor(colorData, bands)
     else:
         # which subhaloIDs do these colors correspond to? skip 'subhaloIDs' in colorData for legacy reasons
         gcH = sP.groupCatHeader()
