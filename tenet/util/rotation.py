@@ -332,6 +332,7 @@ def perspectiveProjection(n,f,l,r,b,t,pos,hsml):
         tPos[j][2] = pos[j][2]
         
         tHsml[j] = n * hsml[j] / (-pos[j][2])
+
     return(tPos, tHsml) 
 
 def ellipsoidfit(pos_in, mass, scalerad, rin, rout, weighted=False):
