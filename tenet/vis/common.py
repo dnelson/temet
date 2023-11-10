@@ -1260,9 +1260,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
             forceRecalculate=False, smoothFWHM=None, snapHsmlForStars=False, 
             alsoSFRgasForStars=False, excludeSubhaloFlag=False, skipCellIndices=None, 
-            ptRestrictions=None, weightField='mass', randomNoise=None, **kwargs):
+            ptRestrictions=None, weightField='mass', randomNoise=None, persParam=None, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
-    from ..util.rotation import rotateCoordinateArray
+    from ..util.rotation import rotateCoordinateArray, perspectiveProjection
     
     optionalStr = ''
     if projType != 'ortho':
@@ -1515,6 +1515,30 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                         mass[inds_snap] = 0.0
             if excludeSubhaloFlag and method != 'sphMap':
                 print('WARNING: excludeSubhaloFlag only implemented for method == sphMap!')
+                
+            if projType in ['perspective']:
+                assert persParam.size = 6 # 6 parameters for perspectiveProjection()
+                assert axes == [0,1] # perspectiveProjection() is hardcoded for this
+                
+                # shift pos to boxCenter
+                for i in range(3):
+                    pos[:,i] -= boxCenter[i]
+                sP.correctPeriodicDistVecs(pos)
+                
+                pos[:,2] -= boxSizeImg[2]/2 # switch to frame of camera
+                sP.correctPeriodicDistVecs(pos)
+                
+                n, f, l, r, b, t = persParam
+                
+                pos, hsml = perspectiveProjection(n,f,l,r,b,t,pos,hsml)
+                
+                pos[:,0] *= boxSizeImg[0]/2
+                pos[:,1] *= boxSizeImg[1]/2
+                pos[:,2] *= boxSizeImg[2]/2
+                pos[:,2] += boxSizeImg[2]/2
+                sP.correctPeriodicDistVecs(pos)
+                
+                boxCenterMap  = [0, 0, 0]
 
             # non-orthographic projection? project now, converting pos from a 3-vector into a 2-vector
             hsml_1 = None
@@ -3332,4 +3356,5 @@ def renderMultiPanel(panels, conf):
     fig.savefig(conf.saveFilename, format=conf.outputFmt, facecolor=fig.get_facecolor(), bbox_inches=0)
     plt.close(fig)
     plt.rcParams.update({'figure.autolayout':True})
+
 

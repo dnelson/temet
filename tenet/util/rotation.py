@@ -2,6 +2,7 @@
 Find rotation matrices (moment of inertia tensors) to place galaxies edge-on/face-on, do coordinate rotations.
 """
 import numpy as np
+from numba import jit, prange
 
 def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
     """ Calculate the 3-vector (x,y,z) of the mean angular momentum of either the star-forming gas 
@@ -292,6 +293,40 @@ def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter, shiftBack=True):
 
     return pos_in, extent
 
+@jit(nopython=True, parallel=True)
+def perspectiveProjection(n,f,l,r,b,t,pos,hsml):
+    """ 
+    Transforms coordinates and sizes using the Perspective Projection Matrix (http://www.songho.ca/opengl/gl_projectionmatrix.html).
+        
+    The truncated pyramid frustrum is defined by: 
+      n (float): The distance to the near plane along the line of sight direction.
+      f (float): The distance to the far plane along the line of sight direction.
+      [l, r] (float, float): The range of x-axis coordinates (along the near plane).
+      [b, t] (float, float): The range of y-axis coordinates (along the near plane).
+
+    The Perspective Projection Matrix computed from this set of parameters is thereafter used to transform:
+      pos (ndarray[float][N,3]): array of 3-coordinates for the particles; camera is situated at z=0.
+      hsml (ndarray[float][N]): smoothing lengths, using the ratio of similar triangles.
+
+    Returns:
+      ndarray[float][N,3]: Transformed coordinates.
+      ndarray[float][N]: Transformed hsml; equal to original hsml along the near plane, and scales inversely with projection distance farther away from camera. 
+      
+    Notes:
+      * The coordinate system in the frame of the camera is inverted along the projection directions, i.e. the values of tPos[:,2] are negative with respect to the 'standard' system.
+      * The tranformed values of hsml will be negative if the point is behind the camera.
+      * It is assumed that coordinates along the projection direction are stored in pos[:,2].
+    """
+    tPos = np.zeros(pos.shape, dtype=pos.dtype)
+    tHsml = np.zeros(hsml.shape, dtype=hsml.dtype)
+    for j in prange(pos.shape[0]):
+        tPos[j][0] = ((2*n) * (pos[j][0]) / (r-l) + (r+l) * (pos[j][2]) / (r-l)) / (-pos[j][2])
+        tPos[j][1] = ((2*n) * (pos[j][1]) / (t-b) + (t+b) * (pos[j][2]) / (t-b)) / (-pos[j][2])
+        tPos[j][2] = ((f+n) * (pos[j][2]) / (n-f) - (2*n*f) / (f-n)) / (-pos[j][2])
+        
+        tHsml[j] = n * hsml[j] / (-pos[j][2])
+    return(tPos, tHsml) 
+
 def ellipsoidfit(pos_in, mass, scalerad, rin, rout, weighted=False):
     """ Iterative algorithm to derive the shape (axes ratios) of a set of particles/cells given by pos_in and mass, 
     within a radial shell defined by rin, rout. Positions should be unitless, normalized by scalerad (a scaling factor, 
@@ -541,3 +576,4 @@ def ellipsoidfit_test_run():
     test(N,q=0.2,s=1.0,phi=45.0,theta=0.0,noise_frac=0.0)
     test(N,q=0.2,s=1.0,phi=45.0,theta=0.0,noise_frac=0.1)
     test(N,q=0.2,s=1.0,phi=30.0,theta=45.0,noise_frac=0.1)
+
