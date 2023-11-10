@@ -297,7 +297,7 @@ def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter, shiftBack=True):
 def perspectiveProjection(n,f,l,r,b,t,pos,hsml):
     """ 
     Transforms coordinates using the Perspective Projection Matrix and sizes using the ratio of similar triangles (http://www.songho.ca/opengl/gl_projectionmatrix.html).
-
+    
     The truncated pyramid frustrum is defined by: 
       n (float): The distance to the near plane along the line of sight direction.
       f (float): The distance to the far plane along the line of sight direction.
@@ -326,13 +326,13 @@ def perspectiveProjection(n,f,l,r,b,t,pos,hsml):
         x += (r+l)/2
         tPos[j][0] = x
         y = ((2*n) * (pos[j][1]) / (t-b) + (t+b) * (pos[j][2]) / (t-b)) / (-pos[j][2])
-        y *= (b-t)/2
-        y += (b+t)/2
+        y *= (t-b)/2
+        y += (t+b)/2
         tPos[j][1] = y
         tPos[j][2] = pos[j][2]
         
         tHsml[j] = n * hsml[j] / (-pos[j][2])
-        
+
     return(tPos, tHsml) 
 
 def ellipsoidfit(pos_in, mass, scalerad, rin, rout, weighted=False):
