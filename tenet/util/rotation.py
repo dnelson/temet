@@ -296,24 +296,27 @@ def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter, shiftBack=True):
 @jit(nopython=True, parallel=True)
 def perspectiveProjection(n,f,l,r,b,t,pos,hsml):
     """ 
-    Transforms coordinates and sizes using the Perspective Projection Matrix (http://www.songho.ca/opengl/gl_projectionmatrix.html).
+    Transforms coordinates using the Perspective Projection Matrix and sizes using the ratio of similar triangles (http://www.songho.ca/opengl/gl_projectionmatrix.html).
         
     The truncated pyramid frustrum is defined by: 
       n (float): The distance to the near plane along the line of sight direction.
       f (float): The distance to the far plane along the line of sight direction.
-      [l, r] (float, float): The range of x-axis coordinates (along the near plane).
-      [b, t] (float, float): The range of y-axis coordinates (along the near plane).
+      [l, r] ([float, float]): The range of x-axis coordinates along the near plane.
+      [b, t] ([float, float]): The range of y-axis coordinates along the near plane.
+      
+      (l,b)/(r,t) thus correspond to the bottom-left/top-right corners of the frustum projected onto the near plane.
 
     The Perspective Projection Matrix computed from this set of parameters is thereafter used to transform:
       pos (ndarray[float][N,3]): array of 3-coordinates for the particles; camera is situated at z=0.
-      hsml (ndarray[float][N]): smoothing lengths, using the ratio of similar triangles.
+      hsml (ndarray[float][N]): smoothing lengths.
 
     Returns:
-      ndarray[float][N,3]: Transformed coordinates.
-      ndarray[float][N]: Transformed hsml; equal to original hsml along the near plane, and scales inversely with projection distance farther away from camera. 
+      tPos (ndarray[float][N,3]): Transformed coordinates.
+      tHsml (ndarray[float][N]): Transformed hsml; equal to original hsml along the near plane, and scales inversely with projection distance farther away from camera. 
       
     Notes:
-      * The coordinate system in the frame of the camera is inverted along the projection directions, i.e. the values of tPos[:,2] are negative with respect to the 'standard' system.
+      * tPos is in 'clip coordinates', i.e. dimensionless and tranformed such that [l, r]/[b, t]/[n, f] all map to [-1, 1]. The function does not perform the required scaling+transformation; see also gridBox().
+      * Once scaled back, the coordinate system in the frame of the camera is inverted along the projection directions, i.e. the values of tPos[:,2] are negative with respect to the 'standard' system. This, however, makes no difference when using sphMap().
       * The tranformed values of hsml will be negative if the point is behind the camera.
       * It is assumed that coordinates along the projection direction are stored in pos[:,2].
     """
