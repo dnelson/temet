@@ -297,7 +297,7 @@ def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter, shiftBack=True):
 def perspectiveProjection(n,f,l,r,b,t,pos,hsml):
     """ 
     Transforms coordinates using the Perspective Projection Matrix and sizes using the ratio of similar triangles (http://www.songho.ca/opengl/gl_projectionmatrix.html).
-        
+
     The truncated pyramid frustrum is defined by: 
       n (float): The distance to the near plane along the line of sight direction.
       f (float): The distance to the far plane along the line of sight direction.
@@ -311,23 +311,28 @@ def perspectiveProjection(n,f,l,r,b,t,pos,hsml):
       hsml (ndarray[float][N]): smoothing lengths.
 
     Returns:
-      tPos (ndarray[float][N,3]): Transformed coordinates.
+      tPos (ndarray[float][N,3]): Transformed coordinates. Since the z-component is always mapped to the near plane in a perspective projection, only the x and y components are transformed here. The z component is left as is for use in, e.g., sphMap(). This, however, means that the transformed coordinates cannot be unprojected.
       tHsml (ndarray[float][N]): Transformed hsml; equal to original hsml along the near plane, and scales inversely with projection distance farther away from camera. 
       
     Notes:
-      * tPos is in 'clip coordinates', i.e. dimensionless and tranformed such that [l, r]/[b, t]/[n, f] all map to [-1, 1]. The function does not perform the required scaling+transformation; see also gridBox().
-      * Once scaled back, the coordinate system in the frame of the camera is inverted along the projection directions, i.e. the values of tPos[:,2] are negative with respect to the 'standard' system. This, however, makes no difference when using sphMap().
       * The tranformed values of hsml will be negative if the point is behind the camera.
       * It is assumed that coordinates along the projection direction are stored in pos[:,2].
     """
     tPos = np.zeros(pos.shape, dtype=pos.dtype)
     tHsml = np.zeros(hsml.shape, dtype=hsml.dtype)
     for j in prange(pos.shape[0]):
-        tPos[j][0] = ((2*n) * (pos[j][0]) / (r-l) + (r+l) * (pos[j][2]) / (r-l)) / (-pos[j][2])
-        tPos[j][1] = ((2*n) * (pos[j][1]) / (t-b) + (t+b) * (pos[j][2]) / (t-b)) / (-pos[j][2])
-        tPos[j][2] = ((f+n) * (pos[j][2]) / (n-f) - (2*n*f) / (f-n)) / (-pos[j][2])
+        x = ((2*n) * (pos[j][0]) / (r-l) + (r+l) * (pos[j][2]) / (r-l)) / (-pos[j][2])
+        x *= (r-l)/2
+        x += (r+l)/2
+        tPos[j][0] = x
+        y = ((2*n) * (pos[j][1]) / (t-b) + (t+b) * (pos[j][2]) / (t-b)) / (-pos[j][2])
+        y *= (b-t)/2
+        y += (b+t)/2
+        tPos[j][1] = y
+        tPos[j][2] = pos[j][2]
         
         tHsml[j] = n * hsml[j] / (-pos[j][2])
+        
     return(tPos, tHsml) 
 
 def ellipsoidfit(pos_in, mass, scalerad, rin, rout, weighted=False):

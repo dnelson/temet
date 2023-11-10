@@ -1526,20 +1526,15 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 sP.correctPeriodicDistVecs(pos)
                 
                 cameraShift = boxSizeImg[2]/2
-                pos[:,2] -=  cameraShift# switch to frame of camera; currently assumes that camera is exactly in front of the image domain, but maybe should be passed as an input parameter into gridBox()?
+                pos[:,2] -=  cameraShift # switch to camera-frame; currently assumes that camera is exactly in front of the image domain, but maybe should be passed as a parameter into gridBox()?
                 sP.correctPeriodicDistVecs(pos)
                 
                 n, f, l, r, b, t = persParam
                 
                 pos, hsml = perspectiveProjection(n,f,l,r,b,t,pos,hsml)
                 
-                # switch back from clip coordinates
-                pos[:,0] *= (r-l)/2
-                pos[:,0] += (r+l)/2
-                pos[:,1] *= (b-t)/2
-                pos[:,1] += (b+t)/2
-                pos[:,2] *= (f-n)/2
-                pos[:,2] += (f+n)/2 + (cameraShift-n)
+                # switch back from camera-frame
+                pos[:,2] +=  cameraShift
                 sP.correctPeriodicDistVecs(pos)
                 
                 boxCenterMap  = [0, 0, 0]
