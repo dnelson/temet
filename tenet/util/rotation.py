@@ -326,8 +326,8 @@ def perspectiveProjection(n,f,l,r,b,t,pos,hsml):
         x += (r+l)/2
         tPos[j][0] = x
         y = ((2*n) * (pos[j][1]) / (t-b) + (t+b) * (pos[j][2]) / (t-b)) / (-pos[j][2])
-        y *= (b-t)/2
-        y += (b+t)/2
+        y *= (t-b)/2
+        y += (t+b)/2
         tPos[j][1] = y
         tPos[j][2] = pos[j][2]
         
