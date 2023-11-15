@@ -138,6 +138,9 @@ def _sb_image(sim, photons, attrs, halo, size=250, nbins=200):
     # project photons
     x, y, lum = _photons_projected(sim, photons, attrs, halo)
 
+    x = sim.units.codeLengthToKpc(x)
+    y = sim.units.codeLengthToKpc(y)
+
     # histogram
     im, _, _= np.histogram2d(x, y, weights=lum, bins=nbins, range=extent)
 
