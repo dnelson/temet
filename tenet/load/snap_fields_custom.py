@@ -1699,6 +1699,8 @@ metalmass_.log = True
 def star_age(sim, partType, field, args):
     """ Age of stellar population (conversion of GFM_StellarFormationTime). """
     birthTime = sim.snapshotSubset(partType, 'birthtime', **args)
+    w = np.where(birthTime == 0) # anyways, wind particles only
+    birthTime[w] = 1e-30 # avoid divide by zero
     birthRedshift = 1.0/birthTime - 1.0
 
     age = sim.tage - sim.units.redshiftToAgeFlat(birthRedshift)

@@ -113,29 +113,114 @@ def subbox_movie_tng300fof0(curTask=0, numTasks=1):
     """ Render a movie of the TNG300 most massive cluster (1 field, 4K). """
     panels = []
 
-    panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.7,8.0]} )
-    #panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[5.4,8.8]} )
-    #panels.append( {'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-2.0,-0.4]} )
+    #panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.7,8.0]} )
+    panels.append( {'partType':'dm',    'partField':'coldens_msunckpc2', 'valMinMax':[5.8,7.8]} )
+    #panels.append( {'partType':'stars', 'partField':'coldens_msunckpc2', 'valMinMax':[2.8,7.6]} )
+    #panels.append( {'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-3.0,-0.4]} )
 
     run     = 'tng'
     variant = 'subbox0'
     res     = 2500
     method  = 'sphMap'
     nPixels = [3840,2160]
-    axes    = [1,2] # x,y for original, y,z for TNG-Cluster
+    axes    = [0,2] # [1,2] for original TNG300, [0,2] for TNG-Cluster
     labelZ  = True
     labelScale = 'physical'
 
     class plotConfig:
-        savePath  = savePathBase + '%s_%s/' % (run,variant)
+        savePath  = savePathBase + '%s_%s_%s_%s/' % (run,variant,panels[0]['partType'],panels[0]['partField'])
         plotStyle = 'edged_black'
         rasterPx  = nPixels
         colorbars = False #True
 
         # movie config
+        # note: dloga doubles for (final) frames 555-583 inclusive, fix in post with 0.5x speed
         minZ      = 0.0
-        maxZ      = 10.0 # tng subboxes start at a=0.02
-        maxNSnaps = 2100
+        maxZ      = 30.0 # 10 for TNG300, 20 for TNG-C # tng subboxes start at a=0.02
+        maxNSnaps = 2000
+
+    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+
+def subbox_movie_tng300fof0_persrot(curTask=0, numTasks=1):
+    """ Render a movie of the TNG300 most massive cluster (1 field, 4K). Perspective camera with rotation."""
+
+    panels = [{'partType':'gas', 'partField':'coldens_msunckpc2', 'valMinMax':[4.7,8.0]}]
+    #panels = [{'partType':'gas', 'partField':'bmag_uG', 'valMinMax':[-3.0,1.2], 'ctName':'afmhot'}]
+    #panels = [{'partType':'dm',    'partField':'coldens_msunckpc2', 'valMinMax':[5.8,7.8]}]
+    #panels = [{'partType':'gas', 'partField':'xray_lum_0.5-2.0kev', 'valMinMax':[34.0,39.0]}]
+    
+    run     = 'tng'
+    variant = 'subbox0'
+    res     = 2500
+    method  = 'sphMap'
+    nPixels = [3840,2160]
+    axes    = [0,1] # [1,2] for original TNG300, [0,2] for TNG-Cluster
+    labelZ  = True
+    labelAge = True
+    labelScale = 'physical' # semi-accurate in perspective
+    #weightField = 'dens'
+
+    # rotation
+    rotSequence = [360*4, [0.1,1.0,0.4]]
+
+    # perspective projection config
+    projType = 'perspective'
+    projParams = {}
+    projParams['n'] = 11000.0 # sets fov = 110 deg
+    projParams['f'] = 15000.0
+    projParams['l'] = -7500.0 * (16/9)
+    projParams['r'] = 7500.0 * (16/9)
+    projParams['b'] = -7500.0
+    projParams['t'] = 7500.0
+
+    class plotConfig:
+        savePath  = savePathBase + '%s_%s_persrot_%s_%s/' % (run,variant,panels[0]['partType'],panels[0]['partField'])
+        plotStyle = 'edged_black'
+        rasterPx  = nPixels
+        colorbars = False
+
+        # movie config
+        minZ      = 0.0
+        maxZ      = 30.0 # 10 for TNG300, 20 for TNG-C # tng subboxes start at a=0.02
+        maxNSnaps = 2000
+
+    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+
+def subbox_movie_tng300fof0_4x2(curTask=0, numTasks=1):
+    """ Render a movie comparing several quantities of a single subbox (4x2 panels, 4K). """
+    panels = []
+
+    # first row
+    panels.append( {'partType':'dm',    'partField':'coldens_msunckpc2', 'valMinMax':[5.0,8.5], 'labelScale':True} )
+    panels.append( {'partType':'gas',   'partField':'bmag_uG', 'valMinMax':[-3.0,1.0]} )
+    panels.append( {'partType':'gas',   'partField':'temp', 'valMinMax':[5.0,7.8]} )
+    panels.append( {'partType':'gas',   'partField':'xray_lum_0.5-2.0kev', 'valMinMax':[35.0,39.0], 'labelZ':True} )
+
+    # second row
+    panels.append( {'partType':'gas',   'partField':'coldens_msunckpc2', 'valMinMax':[4.2,7.2]} )
+    panels.append( {'partType':'stars', 'partField':'coldens_msunckpc2', 'valMinMax':[2.8,8.0]} )
+    panels.append( {'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-3.0,-0.4]} )
+    panels.append( {'partType':'gas',   'partField':'p_sync_ska', 'valMinMax':[14.0,20.0]} )
+
+    run     = 'tng'
+    variant = 'subbox0'
+    res     = 2500
+    method  = 'sphMap'
+    nPixels = 960
+    axes    = [0,2]
+
+    class plotConfig:
+        savePath = savePathBase + '%s_4x2/' % run
+        plotStyle = 'edged_black'
+        rasterPx  = 960
+        colorbars = True
+        colorbarsmall = True # place field names inside colorbar
+        fontsize = 24
+
+        # movie config
+        minZ      = 0.0
+        maxZ      = 30.0
+        maxNSnaps = 2000
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 

@@ -4,12 +4,14 @@ Visualizations for whole (cosmological) boxes.
 import numpy as np
 from datetime import datetime
 from os.path import isfile, isdir
+from os import makedirs
 from copy import deepcopy
 
 from ..vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac, gridBox
 from ..cosmo.util import multiRunMatchedSnapList
 from ..util.helper import iterable, pSplit
 from ..util.boxRemap import findCuboidRemapInds
+from ..util.rotation import rotationMatrixFromAngleDirection
 from ..util import simParams
 
 def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, nPixels, boxOffset, remapRatio, **kwargs):
@@ -211,6 +213,7 @@ def renderBoxFrames(panels_in, plotConfig, localVars, curTask=0, numTasks=1, ski
     projParams  = {}          # dictionary of parameters associated to this projection type
     rotMatrix   = None        # rotation matrix
     rotCenter   = None        # rotation center
+    rotSequence = None        # rotation sequence [numFramesPerRot, dirVec]
     remapRatio  = None        # [x,y,z] periodic->cuboid remapping ratios, or None
 
     # defaults (global plot configuration options)
@@ -240,8 +243,8 @@ def renderBoxFrames(panels_in, plotConfig, localVars, curTask=0, numTasks=1, ski
     if not isinstance(plotConfig.rasterPx,list): plotConfig.rasterPx = [plotConfig.rasterPx,plotConfig.rasterPx]
 
     if not isdir(plotConfig.savePath):
-        print(f'Note: save path [{plotConfig.savePath}] does not exist, saving to default [{savePathDefault}] instead.')
-        plotConfig.savePath = savePathDefault
+        print(f'Note: save path [{plotConfig.savePath}] does not exist, creating it.')
+        makedirs(plotConfig.savePath)
 
     # finalize panels list (do not modify below)
     for p in panels:
@@ -305,7 +308,14 @@ def renderBoxFrames(panels_in, plotConfig, localVars, curTask=0, numTasks=1, ski
             # e.g. update the upper bound of 'stellar_age' valMinMax, if set, to the current tAge [in Gyr]
             #if p['partField'] == 'stellar_age' and p['valMinMax'] is not None:
             #    p['valMinMax'][1] = np.max( [p['sP'].units.redshiftToAgeFlat(p['sP'].redshift), 3.0] )
-            
+
+            # update rotation matrix if we are rotating in time
+            if p['rotSequence'] is not None:
+                numFramesPerRot, dirVec = p['rotSequence']
+                rotAngleDeg = 360.0 * (frameNum/numFramesPerRot)
+                p['rotCenter'] = p['boxCenter']
+                p['rotMatrix'] = rotationMatrixFromAngleDirection(rotAngleDeg, dirVec)
+
         # request render and save
         plotConfig.saveFilename = plotConfig.savePath + plotConfig.saveFileBase + '_%04d.png' % (frameNum)
 

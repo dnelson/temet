@@ -28,7 +28,7 @@ savePathBase = expanduser("~") + "/data/frames/" # for large outputs
 
 # configure certain behavior types
 volDensityFields  = ['density']
-colDensityFields  = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented',
+colDensityFields  = ['coldens','coldens_msunkpc2','coldens_msunckpc2','coldens_sq_msunkpc2','HI','HI_segmented',
                      'xray','xray_lum','xray_lum_05-2kev','xray_lum_0.5-2.0kev','xray_lum_0.5-5.0kev',
                      'p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha',
                      'H2_BR','H2_GK','H2_KMT','HI_BR','HI_GK','HI_KMT']
@@ -43,7 +43,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
     # base fields
     fields = ['dens','density','mass',
               'masspart','particle_mass','sfr','sfr_msunyrkpc2',
-              'coldens','coldens_msunkpc2','coldens_msun_ster',
+              'coldens','coldens_msunkpc2','coldens_msunckpc2','coldens_msun_ster',
               'ionmassratio_OVI_OVII',# (generalize),
               'HI','HI_segmented','H2_BR','H2_GK','H2_KMT','HI_BR','HI_GK','HI_KMT',
               'xray','xray_lum','sz_yparam','sfr_halpha','halpha','p_sync_ska',
@@ -584,7 +584,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
     if 'tau0_' in partField:
         mass = sP.snapshotSubsetP(partType, partField, indRange=indRange)
 
-    if partField in ['sz_yparam']:
+    if partField in ['sz_yparam','p_sync_ska']:
         mass = sP.snapshotSubsetP(partType, partField, indRange=indRange)
 
     # flux/surface brightness (replace mass)
@@ -830,6 +830,17 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         if sP.isPartType(partType,'gas'):      config['ctName'] = 'magma' #'inferno' # 'gasdens_tng5' for old movies/TNG papers # 'perula' for methods2
         if sP.isPartType(partType,'stars'):    config['ctName'] = 'gray' # copper
 
+    if partField == 'coldens_msunckpc2':
+        # comoving area column density i.e. not enormous at high redshift
+        grid = sP.units.codeColDensToPhys(grid, msunKpc2=True)
+        grid *= sP.scalefac**2 # msun/pkpc^2 -> msun/ckpc^2
+
+        config['label']  = '%s Column Density [log M$_{\\rm sun}$ ckpc$^{-2}$]' % ptStr
+
+        if sP.isPartType(partType,'dm'):       config['ctName'] = 'dmdens_tng'
+        if sP.isPartType(partType,'gas'):      config['ctName'] = 'magma' #'inferno'
+        if sP.isPartType(partType,'stars'):    config['ctName'] = 'gray'
+
     if partField in ['coldens_msun_ster']:
         assert projType in ['equirectangular','azimuthalequidistant'] # otherwise generalize
         # grid is (code mass) / pixelArea where pixelArea is incorrectly constant as:
@@ -923,7 +934,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     if partField in ['p_sync_ska']:
         grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
-        config['label']  = 'Gas Synchrotron Emission, SKA [log W Hz$^{-1}$ kpc$^{-2}$]'
+        config['label']  = 'Gas P$_{\\rm synch}$ [log W Hz$^{-1}$ kpc$^{-2}$]'
         config['ctName'] = 'perula'
 
     if partField in ['sz_yparam']:
@@ -1260,7 +1271,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
             forceRecalculate=False, smoothFWHM=None, snapHsmlForStars=False, 
             alsoSFRgasForStars=False, excludeSubhaloFlag=False, skipCellIndices=None, 
-            ptRestrictions=None, weightField='mass', randomNoise=None, persParam=None, **kwargs):
+            ptRestrictions=None, weightField='mass', randomNoise=None, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
     from ..util.rotation import rotateCoordinateArray, perspectiveProjection
     
@@ -1296,6 +1307,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
     # if loaded/gridded data is the same, just processed differently, don't save twice
     partFieldSave = partField.replace(' fracmass',' mass')
+    partFieldSave = partField.replace('_msunckpc2','_msunkpc2')
     partFieldSave = partFieldSave.replace(' ','_') # convention for filenames
 
     saveFilename = sP.derivPath + 'grids/%s/%s.%s%d.%s.%s.%s.hdf5' % \
@@ -1517,27 +1529,48 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 print('WARNING: excludeSubhaloFlag only implemented for method == sphMap!')
                 
             if projType in ['perspective']:
-                assert persParam.size = 6 # 6 parameters for perspectiveProjection()
-                assert axes == [0,1] # perspectiveProjection() is hardcoded for this
+                assert len(projParams) == 6 # 6 parameters for perspectiveProjection()
+                assert projParams['n'] != 0.0
                 
+                # instead of specifying (l,r,b,t) could specify FOV
+                if 'fov' in projParams:
+                    assert 0 # check
+                    tangent = np.tan(np.deg2rad(projParams['fov']/2)) # tangent of half vertical FOV angle
+                    halfHeight = projParams['n'] * tangent # half height of near plane
+                    halfWidth = halfHeight * (nPixels[0]/nPixels[1]) # half width of near plane (ar = w/h)
+
+                    projParams['l'] = halfWidth
+                    projParams['r'] = -halfWidth
+                    projParams['t'] = halfHeight
+                    projParams['b'] = -halfHeight
+                else:
+                    tangent = (projParams['t'] - projParams['b']) / projParams['n']
+                    fov = np.rad2deg(np.arctan(tangent) * 2.0)
+                    #print('fov: %.1f' % fov)
+
                 # shift pos to boxCenter
-                for i in range(3):
-                    pos[:,i] -= boxCenter[i]
+                axis_proj = 3 - axes[0] - axes[1]
+
+                pos[:,axes[0]] -= boxCenter[0]
+                pos[:,axes[1]] -= boxCenter[1]
+                pos[:,axis_proj] -= boxCenter[2]
+
                 sP.correctPeriodicDistVecs(pos)
-                
+
                 cameraShift = boxSizeImg[2]/2
-                pos[:,2] -=  cameraShift # switch to camera-frame; currently assumes that camera is exactly in front of the image domain, but maybe should be passed as a parameter into gridBox()?
+                pos[:,axis_proj] -= cameraShift # switch to camera-frame; currently assumes that camera is exactly in front 
+                                                # of the image domain, but maybe should be passed in projParams?
                 sP.correctPeriodicDistVecs(pos)
-                
-                n, f, l, r, b, t = persParam
-                
-                pos, hsml = perspectiveProjection(n,f,l,r,b,t,pos,hsml)
+
+                pos, hsml = perspectiveProjection(projParams['n'],projParams['f'],projParams['l'],
+                                                  projParams['r'],projParams['b'],projParams['t'],
+                                                  pos,hsml,np.array(axes))
                 
                 # switch back from camera-frame
-                pos[:,2] +=  cameraShift
+                pos[:,axis_proj] += cameraShift
                 sP.correctPeriodicDistVecs(pos)
                 
-                boxCenterMap  = [0, 0, 0]
+                boxCenterMap = [0, 0, 0]
 
             # non-orthographic projection? project now, converting pos from a 3-vector into a 2-vector
             hsml_1 = None
@@ -2736,7 +2769,7 @@ def addContourOverlay(p, conf, ax):
     # load grid of contour quantity
     if field_name == p['partField']:
         # use current field
-        grid_c = p['grid']
+        grid_c = p['grid_data']
     else:
         smoothFWHM = p['smoothFWHM'] if 'smoothFWHM' in p else None
         hsmlFac = p['hsmlFac'] if p['partType'] == field_pt else defaultHsmlFac(field_pt)
@@ -2833,8 +2866,12 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     colorbar.outline.set_edgecolor(color2)
 
     # label, centered and below/above
-    t = cax.text(0.5, textTopY, config['label'], color=color2, transform=cax.transAxes, 
-                 size=conf.fontsize, ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
+    if hasattr(conf,'colorbarsmall') and conf.colorbarsmall:
+        t = cax.text(0.5, textMidY, config['label'], color=color2, transform=cax.transAxes, 
+                    size=conf.fontsize, ha='center', va='center')
+    else:
+        t = cax.text(0.5, textTopY, config['label'], color=color2, transform=cax.transAxes, 
+                    size=conf.fontsize, ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
 
     bb = t.get_window_extent(renderer=fig.canvas.get_renderer())
     if bb.y0 < 0:
@@ -2851,12 +2888,13 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
 
     cax.text(0.0+lOffset, textMidY, formatStr % (1.0*valLimits[0]+0.0*valLimits[1]), 
         color=colorsB[0], size=conf.fontsize, ha='left', va='center', transform=cax.transAxes)
-    cax.text(0.25, textMidY, formatStr % (0.75*valLimits[0]+0.25*valLimits[1]), 
-        color=colorsB[1], size=conf.fontsize, ha='center', va='center', transform=cax.transAxes)
-    cax.text(0.5, textMidY, formatStr % (0.5*valLimits[0]+0.5*valLimits[1]), 
-        color=colorsB[2], size=conf.fontsize, ha='center', va='center', transform=cax.transAxes)
-    cax.text(0.75, textMidY, formatStr % (0.25*valLimits[0]+0.75*valLimits[1]), 
-        color=colorsB[3], size=conf.fontsize, ha='center', va='center', transform=cax.transAxes)
+    if not hasattr(conf,'colorbarsmall') or not conf.colorbarsmall:
+        cax.text(0.25, textMidY, formatStr % (0.75*valLimits[0]+0.25*valLimits[1]), 
+            color=colorsB[1], size=conf.fontsize, ha='center', va='center', transform=cax.transAxes)
+        cax.text(0.5, textMidY, formatStr % (0.5*valLimits[0]+0.5*valLimits[1]), 
+            color=colorsB[2], size=conf.fontsize, ha='center', va='center', transform=cax.transAxes)
+        cax.text(0.75, textMidY, formatStr % (0.25*valLimits[0]+0.75*valLimits[1]), 
+            color=colorsB[3], size=conf.fontsize, ha='center', va='center', transform=cax.transAxes)
     cax.text(1.0-lOffset, textMidY, formatStr % (0.0*valLimits[0]+1.0*valLimits[1]), 
         color=colorsB[4], size=conf.fontsize, ha='right', va='center', transform=cax.transAxes)
 
@@ -2958,7 +2996,7 @@ def renderMultiPanel(panels, conf):
                 print('NOTE: Overriding computed image grid with input grid!')
                 grid = p['grid']
             else:
-                p['grid'] = grid # attach for later use
+                p['grid_data'] = grid # attach for later use
 
             # create this panel, and label axes and title
             ax = fig.add_subplot(nRows,nCols,i+1)
@@ -3079,8 +3117,8 @@ def renderMultiPanel(panels, conf):
             barAreaHeight += 0.03
         barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, 0.2)
 
-        if nCols >= 2:
-            barAreaHeight += 0.014*nCols
+        #if nCols >= 2: # disable for subbox_movie_tng300fof0_4x2()
+        #    barAreaHeight += 0.014*nCols
         if not conf.colorbars:
             barAreaHeight = 0.0
 
@@ -3089,7 +3127,8 @@ def renderMultiPanel(panels, conf):
             heightFac = np.clip(1.0*(nCols/nRows)**0.3, 0.35, 2.5)
             heightFac /= (conf.rasterPx[0]/850) # todo: does this make sense for vector output?
 
-            heightFac += 0.002*(conf.fontsize-min_fontsize) # larger for larger fonts, and vice versa (needs tuning)
+            # disable for subbox_movie_tng300fof0_4x2():
+            #heightFac += 0.002*(conf.fontsize-min_fontsize) # larger for larger fonts, and vice versa (needs tuning)
 
             if nRows == 1:
                 heightFac /= aspect # increase
@@ -3142,8 +3181,8 @@ def renderMultiPanel(panels, conf):
 
         if nRows == 2 and not oneGlobalColorbar:
             # two rows, special case, colors on top and bottom, every panel can be different
-            barAreaTop = 1.0 * barAreaHeight
-            barAreaBottom = 1.0 * barAreaHeight
+            barAreaTop = 0.5 * barAreaHeight
+            barAreaBottom = 0.5 * barAreaHeight
         else:
             # colorbars on the bottom of the plot, one per column (columns should be same field/valMinMax)
             barAreaTop = 0.0
@@ -3186,8 +3225,6 @@ def renderMultiPanel(panels, conf):
         width_in  = sizeFac[0] * np.ceil(nCols)
         height_in = sizeFac[1] * np.ceil(nRows)
 
-        rowHeight  = (1.0 - barAreaTop - barAreaBottom) / np.ceil(nRows)
-
         if varRowHeights:
             barAreaBottom /= np.sqrt(rowHeightRatio)
             assert nShortRows == nRows/2 # otherwise unexpected configuration
@@ -3197,13 +3234,13 @@ def renderMultiPanel(panels, conf):
             rowHeightShort = (1.0 - barAreaTop - barAreaBottom) * (rowHeightRatio/(1+rowHeightRatio)) / nShortRows
 
             height_in = sizeFac[1] * nTallRows + sizeFac[1] * nShortRows * rowHeightRatio
-            
+        
+        rowHeight  = (1.0 - barAreaTop - barAreaBottom) / np.ceil(nRows)
         height_in *= (1/(1.0-barAreaTop-barAreaBottom)) # account for colorbar areas
 
         # make sure pixel number in both width and height is even
         width_in = np.round(width_in*mpl.rcParams['savefig.dpi']/2)*2/mpl.rcParams['savefig.dpi']
         height_in = np.round(height_in*mpl.rcParams['savefig.dpi']/2)*2/mpl.rcParams['savefig.dpi']
-
         fig.set_size_inches(width_in, height_in)
 
         # for each panel: paths and render setup
@@ -3216,7 +3253,7 @@ def renderMultiPanel(panels, conf):
                 print('NOTE: Overriding computed image grid with input grid!')
                 grid = p['grid']
             else:
-                p['grid'] = grid # attach for later use
+                p['grid_data'] = grid # attach for later use
 
             # render tweaks
             if 'splitphase' in p:

@@ -140,6 +140,18 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=
         ranges = contiguousIntSubsets(ww)
         print('  identified contiguous snap ranges:',ranges)
 
+        if 0:
+            # debug plot
+            import matplotlib.pyplot as plt
+            fig = plt.figure(figsize=(8,6))
+            ax = fig.add_subplot(111)
+            ax.plot(redshifts, dloga, 'o-')
+            ax.set_xlabel('Redshift')
+            ax.set_ylabel('dloga')
+            ax.set_xlim([10,0])
+            fig.savefig('dloga_vs_redshift.pdf')
+            plt.close(fig)
+
         # override every other snapshot in these ranges with a redshift of -1 so it is filtered out below
         for range_start, range_stop in ranges:
             # the first entry here corresponds to the first subbox snapshot whose delta time since the 
@@ -203,7 +215,7 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=
 def multiRunMatchedSnapList(runList, method='expand', **kwargs):
     """ For an input runList of dictionaries containing a sP key corresponding to a simParams 
     for each run, produce a 'matched'/unified set of snapshot numbers, one set per run, with 
-    all the same length, e.g. for comparative analysis at matched shifts, or for rendering 
+    all the same length, e.g. for comparative analysis at matched redshifts, or for rendering 
     movie frames comparing runs at the same redshift. If method is 'expand', inflate the 
     snapshot lists of all runs to the size of the maximal (duplicates are then guaranteed). 
     If method is 'condense', shrink the snapshot lists of all runs to the size of the minimal 

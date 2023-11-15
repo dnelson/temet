@@ -294,44 +294,50 @@ def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter, shiftBack=True):
     return pos_in, extent
 
 @jit(nopython=True, parallel=True)
-def perspectiveProjection(n,f,l,r,b,t,pos,hsml):
+def perspectiveProjection(n,f,l,r,b,t,pos,hsml,axes):
     """ 
-    Transforms coordinates using the Perspective Projection Matrix and sizes using the ratio of similar triangles (http://www.songho.ca/opengl/gl_projectionmatrix.html).
+    Transforms coordinates using the Perspective Projection Matrix and sizes using the ratio of 
+    similar triangles (http://www.songho.ca/opengl/gl_projectionmatrix.html).
     
     The truncated pyramid frustrum is defined by: 
       n (float): The distance to the near plane along the line of sight direction.
       f (float): The distance to the far plane along the line of sight direction.
-      [l, r] ([float, float]): The range of x-axis coordinates along the near plane.
-      [b, t] ([float, float]): The range of y-axis coordinates along the near plane.
+      [l, r] ([float, float]): The range of "x-axis" coordinates along the near plane.
+      [b, t] ([float, float]): The range of "y-axis" coordinates along the near plane.
       
       (l,b)/(r,t) thus correspond to the bottom-left/top-right corners of the frustum projected onto the near plane.
 
     The Perspective Projection Matrix computed from this set of parameters is thereafter used to transform:
       pos (ndarray[float][N,3]): array of 3-coordinates for the particles; camera is situated at z=0.
       hsml (ndarray[float][N]): smoothing lengths.
+      axes (list[int][2]): the axis of the projection plane, e.g. [0,1] for a projection along the z-axis.
 
     Returns:
-      tPos (ndarray[float][N,3]): Transformed coordinates. Since the z-component is always mapped to the near plane in a perspective projection, only the x and y components are transformed here. The z component is left as is for use in, e.g., sphMap(). This, however, means that the transformed coordinates cannot be unprojected.
-      tHsml (ndarray[float][N]): Transformed hsml; equal to original hsml along the near plane, and scales inversely with projection distance farther away from camera. 
+      tPos (ndarray[float][N,3]): Transformed coordinates. Since the z-component is always mapped to the near 
+        plane in a perspective projection, only the x and y components are transformed here. The z component is 
+        left as is for use in, e.g., sphMap(). This, however, means that the transformed coordinates cannot be unprojected.
+      tHsml (ndarray[float][N]): Transformed hsml; equal to original hsml along the near plane, and scales 
+        inversely with projection distance farther away from camera. 
       
     Notes:
       * The tranformed values of hsml will be negative if the point is behind the camera.
-      * It is assumed that coordinates along the projection direction are stored in pos[:,2].
     """
     tPos = np.zeros(pos.shape, dtype=pos.dtype)
     tHsml = np.zeros(hsml.shape, dtype=hsml.dtype)
+    axis2 = 3 - axes[0] - axes[1] # axis corresponding to the projection direction
+
     for j in prange(pos.shape[0]):
-        x = ((2*n) * (pos[j][0]) / (r-l) + (r+l) * (pos[j][2]) / (r-l)) / (-pos[j][2])
+        x = ((2*n) * (pos[j][axes[0]]) / (r-l) + (r+l) * (pos[j][axis2]) / (r-l)) / (-pos[j][axis2])
         x *= (r-l)/2
         x += (r+l)/2
         tPos[j][0] = x
-        y = ((2*n) * (pos[j][1]) / (t-b) + (t+b) * (pos[j][2]) / (t-b)) / (-pos[j][2])
+        y = ((2*n) * (pos[j][axes[1]]) / (t-b) + (t+b) * (pos[j][axis2]) / (t-b)) / (-pos[j][axis2])
         y *= (t-b)/2
         y += (t+b)/2
         tPos[j][1] = y
-        tPos[j][2] = pos[j][2]
+        tPos[j][2] = pos[j][axis2]
         
-        tHsml[j] = n * hsml[j] / (-pos[j][2])
+        tHsml[j] = n * hsml[j] / (-pos[j][axis2])
 
     return(tPos, tHsml) 
 
@@ -579,9 +585,8 @@ def ellipsoidfit_test_run():
     """ Execute some tests. """
     N = 5000
 
-    test(N,q=1.0,s=1.0)
-    test(N,q=0.2,s=1.0,noise_frac=0.1)
-    test(N,q=0.2,s=1.0,phi=45.0,theta=0.0,noise_frac=0.0)
-    test(N,q=0.2,s=1.0,phi=45.0,theta=0.0,noise_frac=0.1)
-    test(N,q=0.2,s=1.0,phi=30.0,theta=45.0,noise_frac=0.1)
-
+    ellipsoidfit_test(N,q=1.0,s=1.0)
+    ellipsoidfit_test(N,q=0.2,s=1.0,noise_frac=0.1)
+    ellipsoidfit_test(N,q=0.2,s=1.0,phi=45.0,theta=0.0,noise_frac=0.0)
+    ellipsoidfit_test(N,q=0.2,s=1.0,phi=45.0,theta=0.0,noise_frac=0.1)
+    ellipsoidfit_test(N,q=0.2,s=1.0,phi=30.0,theta=45.0,noise_frac=0.1)
