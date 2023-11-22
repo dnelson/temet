@@ -4,6 +4,7 @@ Render specific fullbox (movie frame) visualizations.
 import numpy as np
 from datetime import datetime
 from os.path import isfile, expanduser
+from scipy.interpolate import interp1d
 
 from ..vis.common import savePathBase
 from ..vis.box import renderBox, renderBoxFrames
@@ -76,47 +77,13 @@ def subbox_2x1_movie(curTask=0, numTasks=1):
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
-def subbox_movie_tng300fof0_6panel(curTask=0, numTasks=1):
-    """ Render a 6-panel movie watching the evolution of Fof0 from TNG300. """
-    panels = []
-
-    panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[5.4,8.8], 'labelScale':True} )
-    panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.8]} )
-    panels.append( {'partType':'stars', 'partField':'stellarComp', 'labelZ':True} )
-    panels.append( {'partType':'gas',   'partField':'temp_sfcold', 'valMinMax':[4.4,7.6]} )
-    panels.append( {'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-2.0,-0.4]} )
-    panels.append( {'partType':'gas',   'partField':'sfr_halpha', 'valMinMax':[36.0,40.0]} )
-
-    run     = 'tng'
-    variant = 'subbox0'
-    res     = 2500
-    method  = 'sphMap'
-    nPixels = 1280 # 3*1280 = 3840, but too high with colorbars
-    axes    = [0,1] # x,y
-    #zoomFac = 0.1 # testing
-
-    class plotConfig:
-        savePath  = savePathBase + '%s%d_%s/' % (run,res,variant)
-        plotStyle = 'edged_black'
-        rasterPx  = nPixels
-        colorbars = True
-        fontsize  = 24
-
-        # movie config
-        minZ      = 0.0
-        maxZ      = 10.0 # tng subboxes start at a=0.02
-        maxNSnaps = None #2100 # 70 seconds at 30 fps, out of ~2400 total available
-
-    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
-
 def subbox_movie_tng300fof0(curTask=0, numTasks=1):
     """ Render a movie of the TNG300 most massive cluster (1 field, 4K). """
-    panels = []
 
-    #panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.7,8.0]} )
-    panels.append( {'partType':'dm',    'partField':'coldens_msunckpc2', 'valMinMax':[5.8,7.8]} )
-    #panels.append( {'partType':'stars', 'partField':'coldens_msunckpc2', 'valMinMax':[2.8,7.6]} )
-    #panels.append( {'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-3.0,-0.4]} )
+    #panels = [{'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.7,8.0]}]
+    panels = [{'partType':'dm',    'partField':'coldens_msunckpc2', 'valMinMax':[5.8,7.8]}]
+    #panels = [{'partType':'stars', 'partField':'coldens_msunckpc2', 'valMinMax':[2.8,7.6]}]
+    #panels = [{'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-3.0,-0.4]}]
 
     run     = 'tng'
     variant = 'subbox0'
@@ -158,7 +125,6 @@ def subbox_movie_tng300fof0_persrot(curTask=0, numTasks=1):
     labelZ  = True
     labelAge = True
     labelScale = 'physical' # semi-accurate in perspective
-    #weightField = 'dens'
 
     # rotation
     rotSequence = [360*4, [0.1,1.0,0.4]]
@@ -185,6 +151,191 @@ def subbox_movie_tng300fof0_persrot(curTask=0, numTasks=1):
         maxNSnaps = 2000
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+
+def subbox_movie_tng300fof0_tracking(conf=0, clean=False):
+    """ Use the subbox tracking catalog to create a movie highlighting the evolution of the TNG300 FoF0. """
+    # selection
+    sP = simParams(run='tng300-1', variant='subbox0', redshift=0.0)
+    
+    subhaloID = 0 # halo 0, snap 99
+
+    method     = 'sphMap'
+    axes       = [0,1] # x,y
+    labelScale = 'physical' # semi-accurate in perspective
+    labelZ     = True
+    plotHalos  = False
+    nPixels   = [3840,2160]
+
+    class plotConfig:
+        saveFilename = '' # set later
+        plotStyle = 'edged_black'
+        rasterPx  = nPixels
+        colorbars = False #True
+        colorbarOverlay = True
+
+    # render config
+    if conf == 0:
+        panels = [{'partType':'gas', 'partField':'coldens_msunckpc2', 'valMinMax':[5.0,8.0]}] # time constant
+    if conf == 1:
+        panels = [{'partType':'gas', 'partField':'temp_sfcold', 'valMinMax':[6.0,8.2]}] # time constant
+    if conf == 2:
+        panels = [{'partType':'gas', 'partField':'coldens_msunckpc2', 'valMinMax':[0.0,0.0]}] # time variable
+    if conf == 3:
+        panels = [{'partType':'gas', 'partField':'temp_sfcold', 'valMinMax':[0.0,0.0]}] # time variable
+    if conf == 4:
+        panels = [{'partType':'stars', 'partField':'coldens_msunckpc2', 'valMinMax':[4.8,8.0]}] # time constant (z=0 rot)
+        clean = True
+    if conf == 5:
+        panels = [{'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[35.0, 40.0]}] # time constant (z=0 rot)
+        weightField = 'dens'
+        method = 'histo' # or e.g. hsmlFac = 0.01 for point-like SPH
+        clean = True
+
+    # (time evolving) box size config
+    boxSizeLg_zi = 3000 # ckpc/h at z=30
+    boxSizeLg_z0 = 12000 # ckpc/h at z=0
+    aspect    = float(nPixels[0]) / nPixels[1]
+
+    # (time evolving) rotation config
+    numFramesPerRot = 360*4
+    rotDirVec = [0.0, 1.0, 0.0] # horizontal seeming spin
+
+    # frame config
+    maxNSnaps = 2000
+
+    sbSnapNums = sP.validSnapList(maxNum=maxNSnaps, minRedshift=0.0, maxRedshift=30.0)
+
+    # pre-load subbox cat, get time evolving positions
+    sP_par = simParams(run=sP.run, res=sP.res, redshift=sP.redshift)
+    cat = subboxSubhaloCat(sP_par, sbNum=sP.subbox)
+
+    assert cat['EverInSubboxFlag'][subhaloID]
+
+    w = np.where(cat['SubhaloIDs'] == subhaloID)[0]
+    assert len(w) == 1
+
+    subhalo_pos = cat['SubhaloPos'][w[0],:,:] # [nSubboxSnaps,3]
+    snap_start  = cat['SubhaloMinSBSnap'][w[0]]
+    snap_stop   = cat['SubhaloMaxSBSnap'][w[0]]
+
+    assert sbSnapNums.min() >= snap_start and sbSnapNums.max() <= snap_stop
+
+    # add frames for a final (time fixed) rotation at z=0
+    sbSnapNum_final = sbSnapNums.max()
+
+    sbSnapNums = np.hstack( (sbSnapNums,np.arange(sbSnapNum_final+1,sbSnapNum_final+360*3)))
+
+    # extra property calculations
+    cat_z = 1/cat['SubboxScaleFac'] - 1
+    mpb = sP_par.loadMPB(subhaloID)
+    mpb_z = sP_par.snapNumToRedshift(mpb['SnapNum'])
+
+    haloMass = np.interp(cat_z, mpb_z, mpb['Group_M_Crit200'])
+    haloR200 = np.interp(cat_z, mpb_z, mpb['Group_R_Crit200'])
+    haloR500 = np.interp(cat_z, mpb_z, mpb['Group_R_Crit500'])
+
+    # normal render
+    for frameNum, snap in enumerate(sbSnapNums):
+        if conf == 0 and snap < sbSnapNum_final - 300:
+            continue # only used for ending
+        if conf in [4,5] and snap < sbSnapNum_final:
+            continue # only used for z=0 rotations
+
+        # set snapshot for render
+        if snap > sbSnapNum_final: snap = sbSnapNum_final # rotation sequence at fixed z=0
+        sP.setSnap(snap)
+
+        # set image size and center at this time
+        boxSize_z = np.interp(snap, [sbSnapNums.min(),sbSnapNums.max()], [boxSizeLg_zi,boxSizeLg_z0])
+        boxSizeImg = [int(boxSize_z * aspect), boxSize_z, boxSize_z]
+
+        boxCenter = subhalo_pos[snap,:]
+
+        # set color bounds at this time
+        if conf == 2:
+            dens_min = 3.0 + 4.5 * sP.scalefac # reaches 5.0 at z=2
+            dens_max = 6.0 + 4.5 * sP.scalefac # reaches 7.0 at z=2
+            panels[0]['valMinMax'] = [dens_min, dens_max]
+        if conf == 3:
+            temp_min = 4.4 + 1.3 * sP.scalefac # 5.0 at z=2, 5.7 by z=0
+            temp_max = 7.1 + 1.3 * sP.scalefac # 7.5 at z=2, 8.2 by z=0
+            panels[0]['valMinMax'] = [temp_min, temp_max]
+
+        # perspective projection config
+        projType = 'perspective'
+        projParams = {}
+        projParams['n'] = 5000.0 #3000.0
+        projParams['f'] = 15000.0
+        projParams['l'] = -boxSize_z * aspect
+        projParams['r'] = boxSize_z * aspect
+        projParams['b'] = -boxSize_z
+        projParams['t'] = boxSize_z
+
+        # rotation
+        rotAngleDeg = 360.0 * (frameNum/numFramesPerRot)
+        rotCenter = boxCenter
+        rotMatrix = rotationMatrixFromAngleDirection(rotAngleDeg, rotDirVec)
+
+        # add custom label of subbox time resolution galaxy properties
+        if not clean:
+            aperture_num = 0 # 0= 30 pkpc, 1= 30 ckpc/h, 2= 50 ckpc/h
+            stellarMass = sP_par.units.codeMassToLogMsun(np.squeeze(cat['SubhaloStars_Mass'][w[0],aperture_num,snap]))
+            SFR = np.squeeze(cat['SubhaloGas_SFR'][w[0],aperture_num,snap])
+            M200c = sP_par.units.codeMassToLogMsun(haloMass[snap])
+            R200c = sP.units.codeLengthToMpc(haloR200[snap]) # pMpc
+            labelCustom = []
+            labelCustom.append(r'$\rm{t_{age}}$ = %5.2f Gyr' % sP.tage)
+            labelCustom.append(r"log $\rm{M_{200c}} = %.2f$ ($\rm{R_{200c} = %.2f \,Mpc}$)" % (M200c,R200c))
+            labelCustom.append(r"log $\rm{M_{\star}} = %.2f$ (SFR = %.1f $\rm{M_\odot \,yr^{-1}}$)" % (stellarMass,SFR))
+
+            aperture_num = 0 # 0= 30 pkpc, 1= 30 ckpc/h, 2= 50 ckpc/h
+            bhMass = sP.units.codeMassToLogMsun(np.squeeze(cat['SubhaloBH_Mass'][w[0],aperture_num,snap]))
+            bhMdot = np.log10(sP.units.codeMassOverTimeToMsunPerYear(np.squeeze(cat['SubhaloBH_Mdot'][w[0],aperture_num,snap])))
+            labelCustom.append(r'log $\rm{M_{BH}} = %.2f$ (log $\rm{\dot{M}_{BH}}$ = %.1f $\rm{M_\odot \,yr^{-1}}$)' % (bhMass,bhMdot))
+
+        def func_post(parent_ax):
+            """ Custom post-render hook to draw (i) virial radii circles, and (ii) BH Mdot vs time plot. """ 
+            import matplotlib.pyplot as plt
+            from .common import setAxisColors
+            from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+            # draw BH Mdot vs time plot
+            ax = inset_axes(parent_ax, width="20%", height="20%", loc=4, borderpad=4.5) # lower right corner
+
+            ax.set_xlabel('Redshift', size=30)
+            ax.set_ylabel(r'$\rm{\dot{M}_{BH} \,[log \,M_\odot/yr}]$', size=30)
+            ax.set_xlim([6.0, 0.0])
+            ax.set_ylim([-4.2,0.5])
+            for tick in ax.get_xticklabels() + ax.get_yticklabels():
+                tick.set_fontsize(24)
+
+            ax.set_facecolor('None')
+            setAxisColors(ax, 'white')
+
+            xx = 1/cat['SubboxScaleFac'] - 1
+            yy = logZeroNaN(np.squeeze(cat['SubhaloBH_Mdot'][w[0],aperture_num,:]))
+
+            ax.plot(xx, yy, '-', lw=1.5, color='white', alpha=0.5)
+            ax.plot(xx[snap], yy[snap], 'o', ms=14, color='white')
+
+            # draw r200c and r500c circles
+            xy_cen = [boxCenter[0], boxCenter[1]]
+
+            c200 = plt.Circle(xy_cen, haloR200[snap], color='#fff', linewidth=1.5, fill=False, alpha=0.4)
+            c500 = plt.Circle(xy_cen, haloR500[snap], color='#fff', linewidth=1.5, fill=False, alpha=0.4)
+            parent_ax.add_artist(c200)
+            parent_ax.add_artist(c500)
+
+        panels[0]['f_post'] = func_post if not clean else None
+
+        extent = [ boxCenter[0] - 0.5*boxSizeImg[0], boxCenter[0] + 0.5*boxSizeImg[0], 
+                   boxCenter[1] - 0.5*boxSizeImg[1], boxCenter[1] + 0.5*boxSizeImg[1]]
+        
+        # render
+        plotConfig.saveFilename = savePathBase + 'tng300_conf%s_tracking%s/frame_%04d.png' % \
+         (conf,'_clean' if clean else '',frameNum)
+
+        renderBox(panels, plotConfig, locals())
 
 def subbox_movie_tng300fof0_4x2(curTask=0, numTasks=1):
     """ Render a movie comparing several quantities of a single subbox (4x2 panels, 4K). """
@@ -654,8 +805,6 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
 
 def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
     """ Control creation of individual frames using the above function. """
-    from ..cosmo.util import validSnapList
-
     # movie config
     minZ = 0.0
 
@@ -677,7 +826,7 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
     # get snapshot list
     sP = simParams(res=2160,run='tng',snap=90,variant='subbox0')
 
-    sbSnapNums = validSnapList(sP, maxNum=maxNSnaps, minRedshift=minZ, maxRedshift=maxZ)
+    sbSnapNums = sP.validSnapList(maxNum=maxNSnaps, minRedshift=minZ, maxRedshift=maxZ)
 
     # pre-load subbox cat (optional, must be correct for gal!)
     cat = None
@@ -687,12 +836,6 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
 
     # normal render
     for i, sbSnapNum in enumerate(sbSnapNums):
-        #if i not in [0,519,919,1319,1639,1959,2319,2679,2967]:
-        #    continue
-        #if isfile(savePathBase + '2160sb0_s90_sh440389/frame_%s_%d.png' % (conf,i)):
-        #    print('skip ', i)
-        #    continue
-
         subbox_movie_tng_galaxyevo_frame(sbSnapNum=sbSnapNum, gal=gal, conf=conf, frameNum=i, cat=cat)
 
 def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):

@@ -1463,6 +1463,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 pos, _ = remapPositions(sP, pos, remapRatio, nPixels)
 
             # load: sizes (hsml) and manipulate as needed
+            hsml = None
             if (method != 'histo') and ('voronoi' not in method):
                 if 'stellarBand-' in partField or (partType == 'stars' and 'coldens' in partField):
                     hsml = getHsmlForPartType(sP, partType, indRange=indRange, nNGB=32, 
@@ -1561,6 +1562,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 pos[:,axis_proj] -= cameraShift # switch to camera-frame; currently assumes that camera is exactly in front 
                                                 # of the image domain, but maybe should be passed in projParams?
                 sP.correctPeriodicDistVecs(pos)
+
+                if hsml is None:
+                    hsml = np.zeros(pos.shape[0], dtype='float32') # dummy (e.g. method == histo)
 
                 pos, hsml = perspectiveProjection(projParams['n'],projParams['f'],projParams['l'],
                                                   projParams['r'],projParams['b'],projParams['t'],

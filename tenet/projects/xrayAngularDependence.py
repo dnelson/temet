@@ -2,7 +2,7 @@
 Angular dependence/anisotropy of x-ray emission of the CGM/ICM (Troung+21, TNG50).
 https://arxiv.org/abs/2109.06884
 OVII and OVIII emission (Troung+22).
-https://arxiv.org/abs/xxxx.xxxxx
+https://arxiv.org/abs/2307.01277
 """
 import numpy as np
 import h5py

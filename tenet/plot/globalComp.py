@@ -382,6 +382,8 @@ def sfrdVsRedshift(sPs, pdf, xlog=True, addSubhalosOnly=False):
                          yerr=[en['sfrd_errDown'],en['sfrd_errUp']], 
                          color='#666666', ecolor='#666666', alpha=0.9, capsize=0.0, fmt='s')
 
+    # todo: https://arxiv.org/abs/2311.08975
+
     legend1 = ax.legend([l1,l2,l3], [be['label'], bo['label'], en['label']], loc='upper right')
     ax.add_artist(legend1)
 

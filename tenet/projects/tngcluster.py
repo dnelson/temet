@@ -1,6 +1,6 @@
 """
 TNG-Cluster: introduction paper.
-(in prep)
+https://arxiv.org/abs/2311.06338
 """
 import numpy as np
 import h5py
@@ -814,6 +814,13 @@ def gas_fraction_vs_halomass(sPs):
         
         ax.plot(xx, yy, '-', color='#3fa716', lw=lw, alpha=0.8)
         ax.text(xx[5]+0.05, yy[5]-0.013, 'MTNG', color='#3fa716', alpha=0.8, fontsize=14, ha='center', rotation=15)
+
+        # TNG-Cluster fit line (sent to Elena Rasia)
+        #bin_cen = [14.03, 14.08, 14.16, 14.22, 14.30, 14.36, 14.43, 14.50, 14.57, 14.63, 14.70, 
+        #           14.76, 14.82, 14.90, 14.97, 15.04, 15.10, 15.18]
+        #median_f500 = [0.124, 0.127, 0.130, 0.132, 0.134, 0.135, 0.138, 0.139, 0.140, 0.140, 0.140, 
+        #               0.140, 0.140, 0.141, 0.141, 0.142, 0.143, 0.145]
+        #ax.plot(bin_cen, median_f500, '-', color='#130268', lw=lw*2, alpha=0.8)
 
         # https://arxiv.org/pdf/2110.02228.pdf (Fig 2)
         # https://arxiv.org/abs/2206.08591 (Figure 7)
@@ -2054,9 +2061,9 @@ def paperPlots():
         smbh_mass_vs_halomass(sPs)
 
     # figure 14 - sfr/cold gas mass
-    if 1:
+    if 0:
         sfr_vs_halomass(sPs)
-        #mhi_vs_halomass(sPs)
+        mhi_vs_halomass(sPs)
 
     # figure 15 - stellar mass contents
     if 0:
@@ -2078,5 +2085,6 @@ def paperPlots():
         halo_properties_table(TNG_C)
 
     # BCG SFR(z) - https://arxiv.org/pdf/2302.10943.pdf (Fig 4?)
+    # and https://arxiv.org/abs/2311.04867
     # in general: redshift evolution/buildup of some of the properties?
     # satellite property profiles (radial color trends?)

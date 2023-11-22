@@ -3238,7 +3238,7 @@ def chiu18():
          'M_b_err'    : np.array([d[9] for d in data])*1e13,
          'f_cold'     : np.array([d[10] for d in data]), # [linear dimensionless]
          'f_cold_err' : np.array([d[11] for d in data]),
-         'label'        : 'Chiu+ (2018)'}
+         'label'      : 'Chiu+ (2018)'}
     
     with np.errstate(invalid='ignore'):
         r['M500_err'] = np.log10(r['M500_err'] + r['M500']) - np.log10(r['M500'])

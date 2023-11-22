@@ -1,5 +1,6 @@
 """
 Resonant scattering of x-ray line emission (e.g. OVII) for LEM.
+https://arxiv.org/abs/2306.05453
 """
 import numpy as np
 import h5py

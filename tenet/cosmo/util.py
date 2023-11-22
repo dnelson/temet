@@ -127,28 +127,65 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=
         dloga[0] = dloga[1] # corrupted by roll
 
         dloga_target = np.median(dloga) #np.median( dloga[ int(dloga.size*(2.0/4)):int(dloga.size*(3.0/4)) ])
-        print(' validSnapList(): subbox auto detect dloga_target = %f' % dloga_target)
+        print('validSnapList(): subbox auto detect dloga_target = %f' % dloga_target)
 
         ww = np.where(dloga < 0.8 * dloga_target)[0]
-        print('  number snaps below target [%d] spanning [%d-%d]' % (len(ww),ww.min(),ww.max()))
+        #print('  number snaps below target [%d] spanning [%d-%d]' % (len(ww),ww.min(),ww.max()))
         ww2 = np.where(dloga < 0.8 * 0.5 * dloga_target)[0]
 
         #assert len(ww2) == 0 # number of timesteps even one jump lower
-        if len(ww2) > 0: print('  WARNING: %d snaps even one timestep below target' % len(ww2))
+        if len(ww2) > 0: print(' WARNING: %d snaps even one timestep below target' % len(ww2))
 
         # detect contiguous snapshot subsets in this list of integers
         ranges = contiguousIntSubsets(ww)
-        print('  identified contiguous snap ranges:',ranges)
+        #print(' identified contiguous snap ranges:',ranges)
+
+        # find also ranges with the same dloga, but surrounded by larger regions of different dloga
+        # (e.g. dips/spikes), currently unused
+        ddloga = dloga - np.roll(dloga, 1)
+        ddloga[0] = ddloga[1] # corrupted by roll
+        ww_const = np.where(np.abs(ddloga) < dloga_target/10)[0]
+
+        ranges2 = contiguousIntSubsets(ww_const)
+
+        for i, loc_range in enumerate(ranges2):
+            if i == 0: continue
+            if loc_range[1] - loc_range[0] > 50: continue # skip large contiguous ranges
+            cur_dloga = np.mean(dloga[loc_range[0]:loc_range[1]])
+            prev_dloga = np.mean(dloga[ranges2[i-1][0]:ranges2[i-1][1]])
+            next_dloga = np.mean(dloga[ranges2[i+1][0]:ranges2[i+1][1]])
+
+            if cur_dloga < prev_dloga and cur_dloga > next_dloga:
+                # monotonic, ok
+                continue
+            #print(i, loc_range, redshifts[loc_range[0]], redshifts[loc_range[1]], cur_dloga, prev_dloga, next_dloga)
+            #ranges_global.append([])
+
+        # custom modifications by sim (independent of sbNum)
+        ranges_global = []
+        if sP.run == 'tng' and sP.res == 2500:
+            ranges_global.append((1092,1099))
+            ranges_global.append((1177,1180))
+            if ranges[-1] == (68,274): ranges.pop() # allow z<0.1 to switch to dloga_target/2
 
         if 0:
             # debug plot
             import matplotlib.pyplot as plt
             fig = plt.figure(figsize=(8,6))
             ax = fig.add_subplot(111)
-            ax.plot(redshifts, dloga, 'o-')
+            ax.plot(redshifts, dloga, 'o-', label='original')
             ax.set_xlabel('Redshift')
             ax.set_ylabel('dloga')
-            ax.set_xlim([10,0])
+            ax.set_xlim([6,0.0])
+            ax.plot(ax.get_xlim(), [dloga_target,dloga_target], '--', color='black', alpha=0.5, label='target')
+            redshifts_loc = redshifts.copy()
+            for range_start, range_stop in ranges:
+                snap_inds = ww[range_start : range_stop : 2]
+                redshifts_loc[snap_inds] = np.nan
+            for range_start, range_stop in ranges_global:
+                redshifts_loc[range_start:range_stop:2] = np.nan
+            ax.plot(redshifts_loc, dloga, 's-', ms=4, label='corrected')
+            ax.legend(loc='upper right')
             fig.savefig('dloga_vs_redshift.pdf')
             plt.close(fig)
 
@@ -157,9 +194,11 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=
             # the first entry here corresponds to the first subbox snapshot whose delta time since the 
             # previous is half of our target, so start removing here so that the dt across this gap 
             # becomes constant
-            snap_inds = ww[ range_start : range_stop : 2 ]
+            snap_inds = ww[range_start : range_stop : 2]
             redshifts[snap_inds] = -1.0
-            print('  in range [%d to %d] filter out %d snaps' % (range_start,range_stop,snap_inds.size))
+            #print(' in range [%d to %d] filter out %d snaps' % (range_start,range_stop,snap_inds.size))
+        for range_start, range_stop in ranges_global:
+            redshifts[range_start:range_stop:2] = -1.0
 
     w = np.where((redshifts >= minRedshift) & (redshifts < maxRedshift))[0]
 
@@ -939,7 +978,7 @@ def subboxSubhaloCat(sP, sbNum):
         return r
 
     r = {}
-
+    
     # calculate new
     if not isdir(fileBase):
         mkdir(fileBase)
