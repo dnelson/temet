@@ -203,7 +203,7 @@ def profiles_multiple_lines(plotTau=True):
 
 def profiles_multiple_lines_coldens():
     """ Deposit Voigt absorption profiles for a number of transitions and N values: create spectrum and plot.
-    Celine Peroux JWST cycle 2 proposal. """
+    Celine Peroux JWST cycle 2/3 proposal. """
     rng = np.random.default_rng(424244)
 
     # transition, instrument, and spectrum type
@@ -211,14 +211,14 @@ def profiles_multiple_lines_coldens():
     instrument = 'NIRSpec'
 
     # physical config
-    Nvals = [12.5, 13.0, 13.5] # log 1/cm^2
+    Nvals = [11.5, 12.0, 12.5] # log 1/cm^2
     b = 5.0 # km/s
-    SNR = 10.0
+    SNR = 100.0
 
     z_cosmo = 0.9 # observed frame ~ 1.1 micron
     vel_los = 0.0 #1000.0 # km/s
 
-    ylim = [-0.1, 1.3]
+    ylim = None# [0.7, 1.05]
     xlim = None
 
     _, lsf, _ = lsf_matrix(instrument)
@@ -273,7 +273,7 @@ def profiles_multiple_lines_coldens():
         master_mid /= 10000 # ang -> micron
         inst_mid /= 10000 # ang -> micron
         #ax.plot(master_mid, flux_master, '-', lw=lw)
-        ax.plot(inst_mid, flux_inst, '-', color='black', lw=lw)
+        ax.plot(inst_mid, flux_inst, '-', color='black', lw=lw, drawstyle='steps')
 
     lineStr = '-'.join([line.replace(' ','') for line in lineNames])
     fig.savefig('spectrum_multi_%s_N%d_SNR%d_b%d.pdf' % (lineStr,len(Nvals),SNR,b))

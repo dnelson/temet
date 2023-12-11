@@ -235,6 +235,8 @@ lines = {'HI 1215'    : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion'
          'ZnII 2062'  : {'f':2.46e-1,  'gamma':3.86e8,  'wave0':2062.0012, 'ion':'Zn II'},
          'ZnII 2025'  : {'f':5.01e-1,  'gamma':4.07e8,  'wave0':2025.4845, 'ion':'Zn II'}}
 
+# TODO: check linelist from Philipp Richter (sisyphos_igm_line_list.dat email)
+
 # instrument characteristics (all wavelengths in angstroms)
 # R = lambda/dlambda = c/dv
 # EW_restframe = W_obs / (1+z_abs)
@@ -388,6 +390,8 @@ def lsf_matrix(instrument):
 
     inst = instruments[instrument]
     lsf_mode = 0
+    lsf = 0
+    lsf_dlambda = 0
 
     # get the instrumental wavelength grid
     wave_mid, wave_edges, _ = create_wavelength_grid(instrument=instrument)
@@ -412,7 +416,7 @@ def lsf_matrix(instrument):
         lsf = _generate_lsf_matrix(wave_mid, lsf_dlambda, dwave)
         print(f'Created LSF matrix with shape {lsf.shape} from [{fname}].')
 
-    if 'R' in inst:
+    if 'R' in inst and inst['R'] is not None:
         # constant R, independent of wavelength
         lsf_mode = 1
 
