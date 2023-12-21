@@ -1,0 +1,100 @@
+This package contains UV/X-ray background (UVB) model data in electronic form from the paper
+"A Cosmic UV/X-ray Background Model Update" by C.-A. Faucher-Giguere
+(https://arxiv.org/abs/1903.08657).
+
+NB regarding FG19 vs. FG20. The FG20 model corresponds to the model version published by MNRAS
+and is the recommended version. The FG19 is a similar model, which was described in v1 of the arXiv
+preprint at https://arxiv.org/abs/1903.08657. The FG20 version improves upon FG19 by using the
+Shen et al. (2020) AGN luminosity function, an improved AGN spectral treatment, and an improved
+model for the IGM column density distribution. The FG19 model is provided here only as a reference
+for studies which may have used FG19 before FG20 became available. For updates on the FG UVB models,
+see https://galaxies.northwestern.edu/uvb.
+
+
+Two types of files are provided and identified by the file names:
+
+ - *_treecool_*.dat: Photoionization rates and photoheating rates in a table that can be
+                     directly used with the GADGET, GIZMO, and Arepo codes (possibly others).
+
+                     Simply replace the file TREECOOL in your code directory to use the model
+                     in a simulation.
+
+                     Files ending '_thin.dat' correspond to rates computed directly from a
+                     UVB model obtained by solving the cosmological radiative transfer
+                     equation for a spatially-homogeneous UVB (incorrect assumption prior to
+                     reionization).
+
+                     Files ending in '_eff_*.dat' correspond to modified TREECOOL files that
+                     use "effective" photoionization and photoheating rates prior to
+                     reionization (see the paper for details).
+
+                     The 'fg20_treecool_eff_default.dat' file corresponds to the
+                     fiducial FG20 UVB model with the default reionization history parameters
+                     used in the paper.
+
+                     *RECOMMENDED* The 'fg20_treecool_eff_rescaled_heating_rates_068.dat' file
+                     is the same fiducial FG20 UVB model with effective heating rates to model
+                     reionization events, but with all the photoheating rates (HI, HeI, and HeII)
+                     rescaled by a factor of 0.68. This is to match the "rescaled" FG20 model
+                     shown in Gaikwad et al. (2020; https://arxiv.org/abs/2009.00016) to result
+                     in a better match to the measured temperature evolution of the IGM at z>=2.
+
+                     We thank Prakash Gaikwad and collaborators for calibrating these rescaled
+                     heating rates to the empirical measurements.
+
+                     The columns in TREECOOL files are:
+
+  log(1+z), Gamma_HI, Gamma_HeI, Gamma_HeII, qdot_HI, qdot_HeI, qdot_HeII
+
+  where 'Gamma' is a photoionization rate and 'qdot' is a photoheating rate.
+
+  The Gamma's are in units of s^-1, and the qdot's are in units of erg s^-1.
+
+ - *_spec_lambda.dat: Full UVB spectrum as a function of wavelength and redshift. Same ASCII
+                      file format as used to distribute the HM12 UVB model
+                      (see http://www.ucolick.org/~pmadau/CUBA/DOWNLOADS.html).
+
+
+  line 1 contains fields identifying the sampling redshifts, from 0 to 10.
+
+  lines 2 through [end of file]: the first field in each column is the rest-frame wavelength
+  in Angstroms and fields 2 through [end of line] give the background intensity J in units of
+  ergs/s/cm^2/Hz/sr at the different sampling redshifts.
+
+  - *_spec_nu.dat: Similar format as *_spec_lambda.dat, but frequencies in unit of Ry instead
+                   of wavelengths in A, and spectrum J in units of 10^-21 ergs/s/cm^2/Hz/sr.
+
+  - fg20_cloudy.ascii: Full UVB spectrum vs. wavelength and redshift, in a format that can
+                       be directly used by the Cloudy photoionization code
+                       (https://trac.nublado.org).
+
+                       The first 10 lines are meta-data, which identify e.g. the code
+                       version and specify the number of redshifts (line 5) and
+                       wavelengths (line 6) for which the UVB spectrum is tabulated.
+
+                       Line 11 is the line of redshifts sampled
+                       Line 12 is the line of wavelengths sampled
+
+                       Each subsequent line lists Jnu (in ergs/s/cm^2/Hz/sr) for a redshift
+                       (in the order of line 11) and for the wavelengths sampled (in the
+                       order of line 12).
+
+                       This file is formatted such that this it can replace the HM12 model
+                       in Cloudy. I.e., if you replace the Cloudy data file
+                       'hm12_galaxy.ascii' in Cloudy's 'data' subdirectory with this
+                       file, then the commands normally employed to use the HM12 model
+                       in Cloudy will instead use the FG20 model.
+
+                       NB: The first line contains a date in the numerical format YYYYMMDD,
+                       e.g. 20060612.' This must match the date expected by Cloudy, which
+                       may differ depending on the Cloudy version you are used. If you get an
+                       error, replace the first line in fg20_cloudy.ascii by the date at the
+                       top of your hm12_galaxy.ascii file.
+
+                       This is provided for convenience until a separate command to use
+                       the FG20 model is added to Cloudy.
+
+
+
+The full spectrum files are only provided for the background models computed in the
+homogeneous approximation (there are no 'effective' spectra defined before reionization).
