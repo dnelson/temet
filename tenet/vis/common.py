@@ -18,7 +18,8 @@ from ..util.treeSearch import calcHsml
 from ..util.voronoiRay import rayTrace
 from ..util.helper import loadColorTable, logZeroMin, logZeroNaN, pSplitRange
 from ..util.boxRemap import remapPositions
-from ..cosmo.cloudy import cloudyIon, cloudyEmission, getEmissionLines
+from ..cosmo.cloudy import cloudyIon, cloudyEmission
+from ..cosmo.cloudyGrid import getEmissionLines
 from ..cosmo.stellarPop import sps
 from ..cosmo.spectrum import create_spectra_from_traced_rays
 
@@ -986,7 +987,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         lineName = lineName.replace(" alpha","-$\\alpha$").replace(" beta","$\\beta$")
         if lineName[-1] == 'A': lineName = lineName[:-1] + '$\AA$' # Angstrom
         config['label']  = '%s %s %s]' % (lineName,eLabel,uLabel)
-        config['ctName'] = 'inferno' # 'cividis'
+        config['ctName'] = 'inferno' # 'magma_gray' # 'cividis'
 
     if 'EW_' in partField:
         # equivalent width maps via synthetic spectra
@@ -3001,6 +3002,10 @@ def renderMultiPanel(panels, conf):
                 grid = p['grid']
             else:
                 p['grid_data'] = grid # attach for later use
+
+            if 'colorbarlabel' in p:
+                config['label'] = p['colorbarlabel']
+                print('NOTE: Overriding colorbar label with input label.')
 
             # create this panel, and label axes and title
             ax = fig.add_subplot(nRows,nCols,i+1)

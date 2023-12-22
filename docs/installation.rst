@@ -99,7 +99,7 @@ and install the Roboto font used by default
     wget https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Light.ttf
     wget https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-LightItalic.ttf
 
-7. Several large tabulated data files are used to compute e.g. stellar luminosities (from FSPS), ion abundances and emissivities (from CLOUDY), and x-ray emission (from XPSEC). For convenience these can be downloaded as
+7. Several large tabulated data files are used to compute e.g. stellar luminosities (from FSPS), ion abundances and emissivities (from CLOUDY), and X-ray emission (from APEC/XPSEC). For convenience these can be downloaded as
 
 .. code-block:: bash
 
@@ -155,7 +155,7 @@ add the following line to your ``~/.bashrc`` file
 
     export SPS_HOME=$HOME/code/fsps/
 
-2. Although the x-ray emission tables have been pre-computed, the creation of new tables requires the `AtomDB APEC <http://www.atomdb.org/>`_ files.
+2. Although the X-ray emission tables have been pre-computed, the creation of new tables requires the `AtomDB APEC <http://www.atomdb.org/>`_ files.
 
 .. code-block:: bash
 

@@ -10,7 +10,7 @@ from scipy.ndimage.filters import gaussian_filter
 from scipy.stats import binned_statistic
 from numba import jit
 
-# --- root path (e.g. '/home/dnelson/python/') ----
+# --- root path (e.g. '/home/dnelson/tenet/') ----
 from os.path import dirname, abspath
 rootPath = abspath(dirname(__file__) + '/../') + '/'
 
@@ -1340,7 +1340,7 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
     if ctName == 'magma_gray':
         # discontinuous colormap: magma on the upper half, grayscale on the lower half, split at 1e-16 (e.g. surface brightness)
         assert valMinMax is not None # need for placing discontinuities at correct physical locations
-        valCut = 13.0 #-15.0 #np.log10(1e14) #-17.0
+        valCut = -18.0 # 13.0 #-15.0 #np.log10(1e14) #-17.0
 
         fCut = (valCut-valMinMax[0]) / (valMinMax[1]-valMinMax[0])
         if fCut <= 0 or fCut >= 1:

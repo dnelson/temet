@@ -344,8 +344,8 @@ def paperPlots():
     ions = ['HI','MgII','FeII','SiII','NV','CIV','OVI','CaII','ZnII'] # CaII and ZnII with solar abunds
 
     # {1M-uni} 4MOST-HRS    SDSS-BOSS    KECK-HIRES     COS          DESI          XSHOOTER (something NIR/high-z)
-    # {4M-rnd} ---------    ---------    ----------     ---          ----          --------
-    # HI       [ ]          [ ] 2-5      [X] 1.5-5      [ ]          [ ]           [ ] 
+    #          ---------    ---------    ----------     ---          ----          --------
+    # HI       [ ]          [.] 2-5      [X] 1.5-5      [ ]          [ ]           [ ] 
     # MgII     [ ]          [X] 0.3-2    [X] 0.1-2      [ ]          [ ]           [ ] 
     # FeII     [ ]          [ ]          [ ]            [ ]          [ ]           [ ] 
     # SiII     [ ]          [X] 1.5-5    [X] 1-5        [ ]          [ ]           [ ] 
@@ -357,6 +357,7 @@ def paperPlots():
     # OVI      [ ]          [X] 3-5      [X] 2-5        [ ]          [ ]           [ ] 
     # CaII     [ ]          [ ]          [ ]            [ ]          [ ]           [ ] 
     # ZnII     [ ]          [ ]          [ ]            [ ]          [ ]           [ ] 
+    # future: {4M-rnd} ?
 
     # fig 1: individual spectra galleries
     if 0:

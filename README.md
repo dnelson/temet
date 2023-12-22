@@ -1,7 +1,7 @@
 tenet
 =====
 
-A python toolkit for the execution, analysis, and visualization of numerical simulations. Specifically, hydrodynamical simulations run with the [AREPO](https://wwwmpa.mpa-garching.mpg.de/~volker/arepo/) moving mesh code, as well as codes producing similarly structured outputs including [GADGET-4](https://wwwmpa.mpa-garching.mpg.de/gadget4/), [GIZMO](http://www.tapir.caltech.edu/~phopkins/Site/GIZMO.html) and [SWIFT](http://swift.dur.ac.uk/).
+A python toolkit for the preparation, analysis, and visualization of astrophysical numerical simulations. Specifically, hydrodynamical simulations run with the [AREPO](https://wwwmpa.mpa-garching.mpg.de/~volker/arepo/) moving mesh code, as well as codes producing similarly structured outputs including [GADGET-4](https://wwwmpa.mpa-garching.mpg.de/gadget4/), [GIZMO](http://www.tapir.caltech.edu/~phopkins/Site/GIZMO.html) and [SWIFT](http://swift.dur.ac.uk/).
 
 In addition, this codebase is focused on cosmological simulations for large-scale structure and galaxy formation, particularly those processed with a substructure identification algorithm (halo finder) such as `subfind`, including [Illustris](https://www.illustris-project.org), [IllustrisTNG](https://www.tng-project.org/), EAGLE, and so on. Generally speaking, any simulation data available from the TNG public data release platform can be directly analyzed with this toolkit.
 
@@ -46,18 +46,13 @@ inside the `projects/` directory. Note that in practice some analyses are costly
 done) by splitting into many parallel jobs on a cluster. Also note that exact reproduction may require use of an (older) code 
 version, tagged on the date near the finalization of the paper.
 
-[Nelson et al. (2018a) - TNG colors](http://arxiv.org/abs/1707.03395) - `projects.color.paperPlots()`
-
-[Nelson et al. (2018b) - TNG oxygen](http://arxiv.org/abs/1712.00016) - `projects.oxygen.paperPlots()`
-
-[Nelson et al. (2019b) - TNG50 outflows](http://arxiv.org/abs/1902.05554) - `projects.outflows.paperPlots()`
-
-[Nelson et al. (2020) - TNG50 small-scale CGM](http://arxiv.org/abs/2005.09654) - `projects.lrg.paperPlots()`
-
-[Nelson et al. (2021) - TNG50 MgII emission](http://arxiv.org/abs/2106.09023) - `projects.mg2emission.paperPlots()`
-
-[Nelson et al. (2023a) - OVII X-ray Scattering](https://arxiv.org/abs/2306.05453) - `projects.xray_scattering.paperPlots()`
-
+* [Nelson et al. (2018a) - TNG colors](http://arxiv.org/abs/1707.03395) - `projects.color.paperPlots()`
+* [Nelson et al. (2018b) - TNG oxygen](http://arxiv.org/abs/1712.00016) - `projects.oxygen.paperPlots()`
+* [Nelson et al. (2019b) - TNG50 outflows](http://arxiv.org/abs/1902.05554) - `projects.outflows.paperPlots()`
+* [Nelson et al. (2020) - TNG50 small-scale CGM](http://arxiv.org/abs/2005.09654) - `projects.lrg.paperPlots()`
+* [Nelson et al. (2021) - TNG50 MgII emission](http://arxiv.org/abs/2106.09023) - `projects.mg2emission.paperPlots()`
+* [Nelson et al. (2023) - OVII X-ray Scattering](https://arxiv.org/abs/2306.05453) - `projects.xray_scattering.paperPlots()`
+* [Nelson et al. (2024) - Introducing TNG-Cluster](https://arxiv.org/abs/2311.06338) - `projects.tngcluster.paperPlots()`
 
 Contributing
 ------------

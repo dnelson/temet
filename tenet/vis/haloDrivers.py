@@ -1192,6 +1192,46 @@ def benedetta_vis_sample():
 
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
+def gible_vis():
+    """ Example visualization of a GIBLE halo. """
+    res        = 4096 # 8, 64, 512, 4096
+    hInd       = 201
+    redshift   = 0.15
+    run        = 'gible'
+
+    rVirFracs  = [1.0]
+    method     = 'sphMap_global'
+    nPixels    = [1000,1000]
+    size       = 2.5
+    axes       = [0,1]
+    sizeType   = 'rVirial'
+    axesUnits  = 'arcsec'
+    labelHalo  = 'mstar,mhalo'
+    rotation   = 'edge-on'
+
+    subhaloInd = 0
+
+    panels = [{'partType':'gas', 'partField':'sb_OVI_ergs', 'valMinMax':[-22.0,-18.0]}]
+    panels2 = [{'partType':'gas', 'partField':'sb_O--6-1037.62A_ergs', 'valMinMax':[-22.0,-18.0]}]
+    #panels = [{'partType':'gas', 'partField':'coldens_msunkpc2'}]
+
+    class plotConfig:
+        plotStyle = 'open'
+        rasterPx  = 800
+        colorbars = True
+        saveFilename = 'gible_h%d_RF%d_%s.pdf' % (hInd,res,panels[0]['partField'])
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+    # render 1032+1038 doublet combined
+    grid1, config1 = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+    grid2, config2 = renderSingleHalo(panels2, plotConfig, locals(), returnData=True)
+
+    panels[0]['grid'] = np.log10(10.0**grid1 + 10.0**grid2)
+    panels[0]['colorbarlabel'] = config1['label'].replace('OVI SB','OVI 1032+1038$\AA$ SB')
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
 def annalisa_tng50_presentation(setNum=0, stars=False):
     """ TNG50 presentation paper: face-on + edge-on combination, 5x5 systems. """
     panels = []

@@ -3,25 +3,24 @@ Diagnostic and production plots based on CLOUDY photo-ionization models.
 """
 import numpy as np
 import h5py
-import glob
-import subprocess
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
 
 from ..util.helper import contourf, evenlySample, sampleColorTable, closest
-from ..cosmo.cloudy import loadFG11UVB, loadHM12UVB, loadP18UVB, cloudyIon
+from ..cosmo.cloudyGrid import loadFG11UVB, loadFG20UVB, loadHM12UVB, loadP18UVB
+from ..cosmo.cloudy import cloudyIon
 from ..plot.config import *
 
 def plotUVB(uvbName='fg11'):
     """ Debug plots of the UVB(nu) as a function of redshift. """
 
     # config
-    redshifts = [0.0, 2.0, 4.0, 6.0]
-    nusRyd = [0.9,1.1,8.0,10.0] #[0.9,1.1,3.9,4.1,20.0]
+    redshifts = [0.0, 2.0, 4.0, 6.0, 7.0, 8.0, 9.0]
+    nusRyd = [0.9,1.1,1.7,1.9,5.0,10.0,100.0] #[0.9,1.1,3.9,4.1,20.0]
 
     freq_range = [5e-1,4e3]
-    Jnu_range  = [-35,-18]
+    Jnu_range  = [-30,-18]
     Jnu_rangeB = [-26,-18]
     z_range    = [0.0,10.0]
 
@@ -29,6 +28,9 @@ def plotUVB(uvbName='fg11'):
     if uvbName == 'fg11':
         uvbs = loadFG11UVB(redshifts)
         uvbs_all = loadFG11UVB()
+    if uvbName == 'fg20':
+        uvbs = loadFG20UVB(redshifts)
+        uvbs_all = loadFG20UVB()
     if uvbName == 'hm12':
         uvbs = loadHM12UVB(redshifts)
         uvbs_all = loadHM12UVB()
@@ -49,9 +51,9 @@ def plotUVB(uvbName='fg11'):
     ax.set_ylabel('log J$_{\\nu}(\\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]')
 
     for uvb in uvbs:
-        ax.plot( uvb['freqRyd'], uvb['J_nu'], label='z = '+str(uvb['redshift']) )
+        ax.plot(uvb['freqRyd'], uvb['J_nu'], lw=lw, label='z = '+str(uvb['redshift']))
 
-        val, w = closest( uvb['freqRyd'], 8.0 )
+        val, w = closest(uvb['freqRyd'], 8.0)
         print(uvbName,uvb['redshift'],8.0,val,uvb['J_nu'][w])
 
     ax.legend()
@@ -71,10 +73,10 @@ def plotUVB(uvbName='fg11'):
 
         for uvb in uvbs_all:
             _, ind = closest(uvb['freqRyd'],nuRyd)
-            xx.append( uvb['redshift'] )
-            yy.append( uvb['J_nu'][ind] )
+            xx.append(uvb['redshift'])
+            yy.append(uvb['J_nu'][ind])
 
-        ax.plot( xx, yy, label='$\\nu$ = ' + str(nuRyd) + ' Ryd')
+        ax.plot(xx, yy, lw=lw, label='$\\nu$ = ' + str(nuRyd) + ' Ryd')
 
     ax.legend(loc='lower left')
 
@@ -288,10 +290,174 @@ def plotIonAbundances(res='lg_c17', elements=['Magnesium']):
 
         pdf.close()
 
+def grackleTable():
+    """ Plot Grackle cooling table. """
+    filepath = '/u/dnelson/sims.structures/grackle/grackle_data_files/input/'
+    filename1 = 'CloudyData_UVB=FG2011.h5' # orig
+    filename2 = 'CloudyData_UVB=FG11.hdf5' # my new version (testing)
+    #filename2 = 'CloudyData_UVB=FG2011_shielded.h5' # orig
+
+    # https://github.com/brittonsmith/cloudy_cooling_tools
+    # https://github.com/aemerick/cloudy_tools/blob/master/FG_files/FG_shielded/grackle_cooling_curves.py
+    # https://github.com/grackle-project/grackle_data_files/issues/7
+
+    # load
+    def _load_grackle_table(fpath):
+        """ Load the grackle cooling table. """
+        d = {}
+        with h5py.File(fpath,'r') as f:
+            for k1 in f['CoolingRates']:
+                d[k1] = {}
+                for k2 in f['CoolingRates'][k1]:
+                    d[k1][k2] = f['CoolingRates'][k1][k2][()]
+
+            # constant
+            a = dict(f['CoolingRates']['Metals']['Cooling'].attrs)
+
+        return d, a
+
+    data1, attrs = _load_grackle_table(filepath + filename1) # unshielded
+    data2, attrs2 = _load_grackle_table(filepath + filename2) # shielded
+
+    # check all attrs/param grids are the same
+    #for k in attrs:
+    #    if isinstance(attrs[k], np.ndarray):
+    #        assert np.array_equal(attrs[k],attrs2[k])
+    #        continue
+    #    assert attrs[k] == attrs2[k]
+
+    # table dimensions [29, 23, 161] = [nH, z, T]
+    hdens = attrs['Parameter1'] # log cm^-3
+    redshift = attrs['Parameter2']
+    temp = np.log10(attrs['Temperature']) # log K
+
+    # plot config
+    lambdanet_range = [-32,-15]
+    temp_range = [1.0, 9.0]
+
+    metallicity = 0.01 # multiplies metal cooling rates below...
+
+    # unshielded and shielded separately
+    for filename, data in zip([filename1,filename2],[data1,data2]):
+        # plot book
+        pdf = PdfPages('grackle_%s.pdf' % filename)
+        
+        # (A) - plot vs. temperature, lines for different dens, pages for different redshifts
+        gridSize = 6 # 5*6=30 to cover 29 different densities
+
+        for redshift_ind, z in enumerate(redshift[0:1]): # redshift
+            fig = plt.figure(figsize=(36,22))
+            print('[%2d of %2d] z = %.1f (%s)' % (redshift_ind,redshift.size,z,filename))
+
+            # look for strange values
+            for k1 in ['Metals','Primordial']:
+                for k2 in ['Cooling','Heating']:
+                    w1 = np.where(data[k1][k2][:,redshift_ind,:] == 0.0)
+                    assert np.count_nonzero(~np.isfinite(data[k1][k2])) == 0
+                    minval = data[k1][k2][:,redshift_ind,:].min()
+                    maxval = data[k1][k2][:,redshift_ind,:].max()
+                    meanval = data[k1][k2][:,redshift_ind,:].mean()
+                    print('[%s %s] min = %.5g max = %.5g mean = %.5g numzeros = %d' % (k1,k2,minval,maxval,meanval,w1[0].size))
+
+            for j, nh in enumerate(hdens):
+                ax = fig.add_subplot(gridSize,gridSize-1,j+1)
+                title = 'z=%.2f Z=%.2f n=%.1f' % (z,metallicity,nh)
+                #ax.set_title(title)
+                ax.set_xlim(temp_range)
+                ax.set_ylim(lambdanet_range)
+                ax.set_xlabel('Temperature [log K]')
+                ax.set_ylabel('$\Lambda$')
+
+                # derive values and net rates
+                cool_z = data['Metals']['Cooling'][j,redshift_ind,:]
+                cool_prim = data['Primordial']['Cooling'][j,redshift_ind,:]
+                heat_z = data['Metals']['Heating'][j,redshift_ind,:]
+                heat_prim = data['Primordial']['Heating'][j,redshift_ind,:]
+
+                cool_z *= metallicity
+                heat_z *= metallicity
+
+                total_cool = cool_z + cool_prim
+                total_heat = heat_z + heat_prim
+
+                total_net_cool = np.zeros(total_cool.size, dtype='float32')
+                total_net_heat = np.zeros(total_cool.size, dtype='float32')
+                total_net_cool.fill(np.nan)
+                total_net_heat.fill(np.nan)
+
+                w_cooling = np.where(total_cool >= total_heat)
+                w_heating = np.where(total_cool < total_heat)
+                total_net_cool[w_cooling] = total_cool[w_cooling] - total_heat[w_cooling]
+                total_net_heat[w_heating] = total_cool[w_heating] - total_heat[w_heating]
+
+                # plot
+                l, = ax.plot(temp, np.log10(total_heat), lw=lw, label='Total Heating')
+                ax.plot(temp, np.log10(heat_z), lw=lw, ls='--', color=l.get_color(), label='Metal Heating')
+                ax.plot(temp, np.log10(heat_prim), lw=lw, ls=':', color=l.get_color(), label='Prim Heating')
+
+                l, = ax.plot(temp, np.log10(total_cool), lw=lw, label='Total Cooling')
+                ax.plot(temp, np.log10(cool_z), lw=lw, ls='--', color=l.get_color(), label='Metal Cooling')
+                ax.plot(temp, np.log10(cool_prim), lw=lw, ls=':', color=l.get_color(), label='Prim Cooling')
+
+                ax.plot(temp, np.log10(total_net_cool), ls='-', lw=lw, color='#000', label='Net = Cool - Heat')
+                ax.plot(temp, np.log10(-total_net_heat), ls=':', lw=lw, color='#000', label='Net (Heating)')
+
+                handles, labels = ax.get_legend_handles_labels()
+                ax.legend([plt.Line2D((0,1),(0,0),lw=0,marker='',)], [title], borderpad=0, loc='upper right')
+
+            # one extra panel for legend
+            ax = fig.add_subplot(gridSize,gridSize-1,j+2)
+            ax.set_axis_off()
+            ax.legend(handles, labels, borderpad=0, ncols=2, fontsize=22, loc='best')
+
+            pdf.savefig()
+            plt.close(fig)
+
+        pdf.close()
+
+    # shielded vs unshielded ratios
+    prim_cool_ratio = data2['Primordial']['Cooling'] / data1['Primordial']['Cooling']
+    prim_heat_ratio = data2['Primordial']['Heating'] / data1['Primordial']['Heating']
+    metal_cool_ratio = data2['Metals']['Cooling'] / data1['Metals']['Cooling']
+    metal_heat_ratio = data2['Metals']['Heating'] / data1['Metals']['Heating']
+
+    pdf = PdfPages('grackle_ratio.pdf')
+    for redshift_ind, z in enumerate(redshift[0:1]): # redshift
+        fig = plt.figure(figsize=(26,16))
+        print('[%2d of %2d] z = %.1f (%s)' % (redshift_ind,redshift.size,z,filename))
+
+        for j, nh in enumerate(hdens):
+            ax = fig.add_subplot(gridSize,gridSize-1,j+1)
+            ax.set_title('z=%.2f n=%.1f' % (z,nh))
+            ax.set_xlim(temp_range)
+            #ax.set_ylim(lambdanet_range)
+            ax.set_xlabel('Temperature [log K]')
+            ax.set_ylabel('S/UnS')
+
+            # plot
+            l, = ax.plot(temp, prim_cool_ratio[j,redshift_ind,:], lw=lw, label='Prim Cooling')
+            ax.plot(temp, prim_heat_ratio[j,redshift_ind,:], lw=lw, ls='--', color=l.get_color(), label='Prim Heating')
+            l, = ax.plot(temp, metal_cool_ratio[j,redshift_ind,:], lw=lw, ls=':', label='Metal Cooling')
+            ax.plot(temp, metal_heat_ratio[j,redshift_ind,:], lw=lw, ls='-.', color=l.get_color(), label='Metal Heating')
+
+            handles, labels = ax.get_legend_handles_labels()
+
+        # one extra panel for legend
+        ax = fig.add_subplot(gridSize,gridSize-1,j+2)
+        ax.set_axis_off()
+        ax.legend(handles, labels, borderpad=0, ncols=2, loc='best')
+
+        pdf.savefig()
+        plt.close(fig)
+
+    pdf.close()
+
+    import pdb; pdb.set_trace()
+
+
 def ionAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshift=0.0, metal=-1.0):
     """ Plot 2D histograms of ion abundance fraction in (density,temperature) space at one Z,z. 
     Metal is metallicity in [log Solar]. """
-    from ..plot.config import figsize
     from ..util.simParams import simParams
     
     # visual config

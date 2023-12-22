@@ -549,8 +549,8 @@ def generate_set():
         # TNG50-1 z=6 bubble candidates (Joe)
         sP = simParams(run='tng50-1', redshift=6.0)
         zoomFac = 1
-        haloIDs = [11]
-        sizeFac = 32.0
+        haloIDs = [21] #[11]
+        sizeFac = 256.0
 
     if 0:
         # TNG50 dwarf zooms (STRUCTURES/MCS/Byrohl)
