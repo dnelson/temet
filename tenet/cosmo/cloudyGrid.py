@@ -7,13 +7,15 @@ import glob
 import subprocess
 
 from functools import partial
-from os.path import isfile, isdir, getsize
+from os.path import isfile, isdir, getsize, expanduser
 from os import mkdir, remove
+from scipy.interpolate import interpn
 
 from ..cosmo import hydrogen
 from ..util.helper import closest, logZeroNaN, rootPath
 
 basePath = rootPath + "tables/cloudy/"
+basePathTemp = expanduser("~") + "/data/cloudy_tables/"
 
 # proposed emission lines to record:
 lineList = """
@@ -206,12 +208,12 @@ def loadFG20UVB(redshifts=None):
 
     return r
 
-def _loadExternalUVB(redshifts=None, hm12=False, puchwein18=False):
+def _loadExternalUVB(redshifts=None, hm12=False, puchwein19=False):
     """ Load UVB from an external file. """
     if hm12:
         filePath = rootPath + 'data/haardt.madau/hm2012.uvb.txt'
-    if puchwein18:
-        filePath = rootPath + '/data/puchwein/p18.uvb.txt'
+    if puchwein19:
+        filePath = rootPath + '/data/puchwein/p19.uvb.txt'
 
     from ..util.simParams import simParams
     sP = simParams(res=1820,run='tng') # for units
@@ -250,37 +252,94 @@ def _loadExternalUVB(redshifts=None, hm12=False, puchwein18=False):
 
     return r
 
-def loadHM12UVB(redshifts=None):
-    """ Load the Haardt-Madau (2012) UVB at one or more redshifts and convert to CLOUDY units. """
-    return _loadExternalUVB(redshifts=redshifts, hm12=True)
+def loadUVB(uvb='FG11', redshifts=None):
+    """ Load the UVB at one or more redshifts. """
+    uvb = uvb.replace('_unshielded','')
 
-def loadP18UVB(redshifts=None):
-    """ Load the Puchwein+ (2018) UVB at one or more redshifts and convert to CLOUDY units. """
-    return _loadExternalUVB(redshifts=redshifts, puchwein18=True)
+    if uvb == 'FG11':
+        return loadFG11UVB(redshifts=redshifts)
+    if uvb == 'FG20':
+        return loadFG20UVB(redshifts=redshifts)
+    if uvb == 'HM12':
+        return _loadExternalUVB(redshifts=redshifts, hm12=True)
+    if uvb == 'P19':
+        return _loadExternalUVB(redshifts=redshifts, puchwein19=True)
 
-def cloudyUVBInputAttenuated(gv, attenuateUVB=True):
-    """ Generate the cloudy input string for the UVB, using the FG11 tables and with the 
-        self-shielding attenuation (at >= 13.6 eV) with the Rahmati+ (2013) fitting formula.
+def loadUVBRates(uvb='FG11'):
+    """ Load the photoionization [1/s] and photoheating [erg/s] rates for a given UVB. """
+    from ..util.simParams import simParams
+    sP = simParams(run='tng100-1') # for units
+
+    if uvb == 'FG11':
+        filePath = rootPath + '/data/faucher.giguere/UVB_fg11/'
+        fileName = 'TREECOOL_fg_dec11'
+    if uvb == 'FG20':
+        filePath = rootPath + '/data/faucher.giguere/UVB_fg20/'
+        fileName = 'fg20_treecool_eff_rescaled_heating_rates_068.dat'
+    if uvb == 'P19':
+        filePath = rootPath + '/data/puchwein/'
+        fileName = 'TREECOOL_p19'
+    if uvb == 'HM12':
+        filePath = rootPath + '/data/haardt.madau/'
+        fileName = 'hm2012.photorates.out.txt'
+
+    with open(filePath + fileName,'r') as f:
+        lines = f.readlines()
+        lines = [line for line in lines if line[0:2] != ' #' and line.strip() != '']
+
+    # TREECOOL format
+    if uvb in ['FG11','FG20','P19']:
+        # redshift
+        z = [float(line.split()[0]) for line in lines]
+        z = 10.0**np.array(z) - 1 # TREECOOL first column is log(1+z)
+
+        # photoionization rates [1/s]
+        gamma_HI = np.array([float(line.split()[1]) for line in lines])
+        gamma_HeI = np.array([float(line.split()[2]) for line in lines])
+        gamma_HeII = np.array([float(line.split()[3]) for line in lines])
+
+        # photoheating rates [erg/s -> eV/s]
+        heat_HI = np.array([float(line.split()[4]) for line in lines]) / sP.units.eV_in_erg
+        heat_HeI = np.array([float(line.split()[5]) for line in lines]) / sP.units.eV_in_erg
+        heat_HeII = np.array([float(line.split()[6]) for line in lines]) / sP.units.eV_in_erg
+
+    if uvb in ['HM12']:
+        # redshift
+        z = np.array([float(line.split()[0]) for line in lines])
+
+        # photoionization rates [1/s]
+        gamma_HI = np.array([float(line.split()[1]) for line in lines])
+        gamma_HeI = np.array([float(line.split()[3]) for line in lines])
+        gamma_HeII = np.array([float(line.split()[5]) for line in lines])
+
+        # photoheating rates [eV/s]
+        heat_HI = np.array([float(line.split()[2]) for line in lines])
+        heat_HeI = np.array([float(line.split()[4]) for line in lines])
+        heat_HeII = np.array([float(line.split()[6]) for line in lines])
+        heat_compton = np.array([float(line.split()[7]) for line in lines])
+
+    return z, gamma_HI, gamma_HeI, gamma_HeII, heat_HI, heat_HeI, heat_HeII
+
+def cloudyUVBInput(gv):
+    """ Generate the cloudy input string for a given UVB, by default with the 
+        self-shielding attenuation (at >= 13.6 eV) using the Rahmati+ (2013) fitting formula.
     """
     # load UVB at this redshift
-    if gv['uvb'] == 'FG11':
-        uvb = loadFG11UVB(redshifts=[gv['redshift']])
-    if gv['uvb'] == 'FG20':
-        uvb = loadFG20UVB(redshifts=[gv['redshift']])
+    uvb = loadUVB(gv['uvb'])
 
     highFreqJnuVal = -35.0 # value to mimic essentially zero at low (or high) frequencies
 
     # attenuate the UVB by an amount dependent on the hydrogen: compute adjusted UVB table
-    if attenuateUVB:
-        hi_cs = hydrogen.photoCrossSec(13.6*uvb['freqRyd'], atom='H')
-        hi_cs /= hydrogen.photoCrossSec(np.array([13.6]), atom='H')
+    if '_unshielded' not in gv['uvb']:
+        hi_cs = hydrogen.photoCrossSec(13.6*uvb['freqRyd'], ion='H I')
+        hi_cs /= hydrogen.photoCrossSec(np.array([13.6]), ion='H I')
 
         ind = np.where(hi_cs > 0)
         atten,_ = hydrogen.uvbPhotoionAtten(gv['hydrogenDens']+np.log10(hi_cs[ind]), 
                                             gv['temperature'], 
                                             gv['redshift'])
 
-        uvb['J_nu'][ind] += np.log10( atten ) # add in log to multiply by attenuation factor
+        uvb['J_nu'][ind] += np.log10(atten) # add in log to multiply by attenuation factor
 
     # write configuration lines
     uvbLines = []
@@ -326,7 +385,7 @@ def makeCloudyConfigFile(gridVals):
         #confLines.append("save heating \"" + gridVals['outputFileName'] + "\"") # save heating/cooling rates [erg/s/cm^3]
 
     # UV background specification (grid point in redshift/incident radiation field)
-    for uvbLine in cloudyUVBInputAttenuated(gridVals):
+    for uvbLine in cloudyUVBInput(gridVals):
         confLines.append(uvbLine)
 
     # grid point in (density,metallicity,temperature)
@@ -374,7 +433,8 @@ def runCloudySim(gv, temp):
     rc = subprocess.call( ['cloudy', '-r', gv['inputFileName']], cwd=gv['basePath'] )
 
     if rc != 0:
-        raise Exception('We should stop, cloudy is misbehaving.')
+        print('FAIL: ', gv['inputFileName'])
+        #raise Exception('We should stop, cloudy is misbehaving [%s].' % gv['inputFileName'])
 
     # erase the input file
     remove( gv['inputFileNameAbs'] + '.in' )
@@ -397,7 +457,7 @@ def runCloudySim(gv, temp):
     with open( gv['outputFileName'],'w' ) as f:
         f.write(outputLines)
 
-def _getRhoTZzGrid(res):
+def _getRhoTZzGrid(res, uvb):
     """ Get the pre-set spacing of grid points in density, temperature, metallicity, redshift.
         Density: log total hydrogen number density. Temp: log Kelvin. Z: log solar. """
     eps = 0.0001
@@ -425,10 +485,17 @@ def _getRhoTZzGrid(res):
         densities = np.arange(-10.0, 4.0+eps, 0.5)
         temps     = np.arange(1.0, 9.0+eps,0.05)
         metals    = np.array([-8.0, 0.0]) 
-        # note: 7.98, 8.02 to bracket rapid changes from z=8 to z=8.02 (in FG20, these files missing in FG11)
+        # note: 8.02 to bracket rapid changes from z=8 to z=8.02 (in FG20, z=8.02 not present in FG11)
         redshifts = np.array([0.0,0.1,0.2,0.3,0.4,0.6,0.8,1.0,1.2,1.4,1.6,1.8,2.0,2.2,
-                              2.5,2.8,3.1,3.5,4.0,4.5,5.0,6.0,7.0,7.98,8.0,8.02,9.0,10.0])
-        #redshifts = np.array([0.0]) # testing
+                              2.5,2.8,3.1,3.5,4.0,4.5,5.0,6.0,7.0,8.0,8.02,9.0,10.0])
+        if uvb in ['FG11','FG11_unshielded']:
+            redshifts = np.delete(redshifts, np.where(redshifts == 8.02))
+
+    if res == 'grackle2':
+        densities = np.array([2.0])
+        temps     = np.array([4.5])
+        metals    = np.array([0.0]) 
+        redshifts = np.array([0.0])
     
     densities[np.abs(densities) < eps] = 0.0
     metals[np.abs(metals) < eps] = 0.0
@@ -440,14 +507,14 @@ def runGrid(redshiftInd, nThreads=71, res='lg', uvb='FG11'):
     import multiprocessing as mp
 
     # config
-    densities, temps, metals, redshifts = _getRhoTZzGrid(res=res)
+    densities, temps, metals, redshifts = _getRhoTZzGrid(res=res, uvb=uvb)
 
     # init
     gv = {}
     gv['res'] = res
     gv['uvb'] = uvb
     gv['redshift'] = redshifts[redshiftInd]
-    gv['basePath']  = basePath + 'redshift_%04.2f_%s/' % (gv['redshift'],gv['uvb'])
+    gv['basePath']  = basePathTemp + 'redshift_%04.2f_%s/' % (gv['redshift'],gv['uvb'])
 
     if not isdir(gv['basePath']):
         mkdir(gv['basePath'])
@@ -487,11 +554,11 @@ def collectOutputs(res='lg', uvb='FG11'):
     # config
     maxNumIons = 99    # keep at most the N lowest ions per element
     zeroValLog = -30.0 # what Cloudy reports log(zero fraction) as
-    densities, temps, metals, redshifts = _getRhoTZzGrid(res=res)
+    densities, temps, metals, redshifts = _getRhoTZzGrid(res=res, uvb=uvb)
 
     def parseCloudyIonFile(basePath,r,d,Z,T,maxNumIons=99):
         """ Construct file path to a given Cloudy output, load and parse. """
-        basePath = basePath + 'redshift_%04.2f_%s/' % (r,uvb)
+        basePath = basePathTemp + 'redshift_%04.2f_%s/' % (r,uvb)
         fileNameStr = "z%.1f_n%.1f_Z%.1f_T%s" % (r,d,Z,np.round(T*100)/100)
         path = basePath + 'output_' + fileNameStr + '.txt'
 
@@ -563,11 +630,11 @@ def collectOutputs(res='lg', uvb='FG11'):
 def collectEmissivityOutputs(res='lg', uvb='FG11'):
     """ Combine all CLOUDY (line emissivity) outputs for a grid into a master HDF5 table. """
     zeroValLog = -60.0 # place absolute zeros to 10^-60, as we will log
-    densities, temps, metals, redshifts = _getRhoTZzGrid(res=res)
+    densities, temps, metals, redshifts = _getRhoTZzGrid(res=res, uvb=uvb)
 
     def parseCloudyEmisFile(basePath,r,d,Z,T):
         """ Construct file path to a given Cloudy output, load and parse. """
-        basePath = basePath + 'redshift_%04.2f_%s/' % (r,uvb)
+        basePath = basePathTemp + 'redshift_%04.2f_%s/' % (r,uvb)
         fileNameStr = "z" + str(r) + "_n" + str(d) + "_Z" + str(Z) + "_T" + str(T)
         path = basePath + 'output_em_' + fileNameStr + '.txt'
 
@@ -641,7 +708,7 @@ def collectEmissivityOutputs(res='lg', uvb='FG11'):
 
 def collectCoolingOutputs(res='grackle', uvb='FG11'):
     """ Combine all CLOUDY (cooling function) outputs for a grid into a master HDF5 table. """
-    densities, temps, metals, redshifts = _getRhoTZzGrid(res=res)
+    densities, temps, metals, redshifts = _getRhoTZzGrid(res=res, uvb=uvb)
     assert metals[0] < -6.0 and metals[1] == 0.0 # primordial and solar runs
 
     # in the stdout "input*.out" file:
@@ -649,7 +716,7 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
     #    <a>:1.44E-13  erdeFe1.5E+34  Tcompt3.28E+20  Tthr7.09E+19  <Tden>: 5.62E+08  <dens>:7.18E-34  <MolWgt>6.04E-01
     def parseCloudyOutputFile(basePath,r,d,Z,T):
         """ Construct file path to a given Cloudy output, load and parse. """
-        path = basePath + "redshift_%04.2f_%s/input_z%.1f_n%.1f_Z%s_T%.2f.out" % (r,uvb,r,d,Z,np.round(T*100)/100)
+        path = basePathTemp + "redshift_%04.2f_%s/input_z%s_n%.1f_Z%s_T%.2f.out" % (r,uvb,r,d,Z,np.round(T*100)/100)
 
         with open(path,'r') as f:
             lines = f.readlines()
@@ -671,13 +738,13 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
     
     # allocate
     shape = (densities.size,redshifts.size,temps.size)
-    lambda_cool_Z = np.zeros(shape, dtype='float32')
-    lambda_heat_Z = np.zeros(shape, dtype='float32')
-    mmw_Z = np.zeros(shape, dtype='float32')
+    lambda_cool_Z = np.zeros(shape, dtype='float64')
+    lambda_heat_Z = np.zeros(shape, dtype='float64')
+    mmw_Z = np.zeros(shape, dtype='float64')
 
-    lambda_cool_p = np.zeros(shape, dtype='float32')
-    lambda_heat_p = np.zeros(shape, dtype='float32')
-    mmw_p = np.zeros(shape, dtype='float32')
+    lambda_cool_p = np.zeros(shape, dtype='float64')
+    lambda_heat_p = np.zeros(shape, dtype='float64')
+    mmw_p = np.zeros(shape, dtype='float64')
 
     # loop over all outputs
     for i, r in enumerate(redshifts):
@@ -685,41 +752,64 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
 
         for j, d in enumerate(densities):
             print( ' [' + str(j+1).zfill(3) + ' of ' + str(densities.size).zfill(3) + '] dens = ' + str(d))
+            norm = 1/(10.0**d)**2 # normalize by n_H^2
 
             for k, T in enumerate(temps):
                 # load and parse (for solar metallicity runs)
                 cool, heat, mu = parseCloudyOutputFile(basePath,r,d,metals[1],T)
-
-                lambda_cool_Z[j,i,k] = cool
-                lambda_heat_Z[j,i,k] = heat
+                
+                lambda_cool_Z[j,i,k] = cool * norm
+                lambda_heat_Z[j,i,k] = heat * norm
                 mmw_Z[j,i,k] = mu
 
                 # load and parse (for primordial runs)
                 cool, heat, mu = parseCloudyOutputFile(basePath,r,d,metals[0],T)
 
-                lambda_cool_p[j,i,k] = cool
-                lambda_heat_p[j,i,k] = heat
+                lambda_cool_p[j,i,k] = cool * norm
+                lambda_heat_p[j,i,k] = heat * norm
                 mmw_p[j,i,k] = mu
     
     # compute metal contribution alone
-    lambda_cool_Z_only = lambda_cool_Z.astype('float64') - lambda_cool_p.astype('float64')
-    lambda_heat_Z_only = lambda_heat_Z.astype('float64') - lambda_heat_p.astype('float64')
+    lambda_cool_Z_only = lambda_cool_Z - lambda_cool_p
+    lambda_heat_Z_only = lambda_heat_Z - lambda_heat_p
+
+    # Z_*_only is zero if Z == p (occurs rarely at z=10)
+    # Z_heat_only is negative in some cases e.g. at z=0, -0.5 < d < 3.5 and 4.4 < T < 4.8 (seem strange)
+    minval = lambda_heat_Z_only[lambda_heat_Z_only > 0].min() / 10
+    lambda_heat_Z_only[lambda_heat_Z_only <= 0] = minval
+
+    minval = lambda_cool_Z_only[lambda_cool_Z_only > 0].min() / 10
+    lambda_cool_Z_only[lambda_cool_Z_only <= 0] = minval
 
     # sanity checks
-    assert np.count_nonzero(lambda_cool_Z_only < 0.0) == 0
-    assert np.count_nonzero(lambda_heat_Z_only < 0.0) == 0
-
-    assert np.count_nonzero(lambda_cool_p < 0.0) == 0
-    assert np.count_nonzero(lambda_heat_p < 0.0) == 0
+    assert np.count_nonzero(lambda_cool_Z_only <= 0.0) == 0 and np.count_nonzero(~np.isfinite(lambda_cool_Z_only)) == 0
+    assert np.count_nonzero(lambda_heat_Z_only <= 0.0) == 0 and np.count_nonzero(~np.isfinite(lambda_heat_Z_only)) == 0
+    assert np.count_nonzero(lambda_cool_Z <= 0.0) == 0 and np.count_nonzero(~np.isfinite(lambda_cool_Z)) == 0
+    assert np.count_nonzero(lambda_heat_Z <= 0.0) == 0 and np.count_nonzero(~np.isfinite(lambda_heat_Z)) == 0
+    assert np.count_nonzero(lambda_cool_p <= 0.0) == 0 and np.count_nonzero(~np.isfinite(lambda_cool_p)) == 0
+    assert np.count_nonzero(lambda_heat_p <= 0.0) == 0 and np.count_nonzero(~np.isfinite(lambda_heat_p)) == 0
 
     assert mmw_Z.min() > 0.5 and mmw_Z.max() < 1.3
     assert mmw_p.min() > 0.5 and mmw_p.max() < 1.3
+    
+    # load UVB photoheating rates
+    uvb_z, _, _, _, uvb_Q_HI, uvb_Q_HeI, uvb_Q_HeII = loadUVBRates(uvb=uvb.replace('_unshielded',''))
 
-    assert np.count_nonzero(lambda_cool_Z == 0) == 0 and np.count_nonzero(~np.isfinite(lambda_cool_Z)) == 0
-    assert np.count_nonzero(lambda_heat_Z == 0) == 0 and np.count_nonzero(~np.isfinite(lambda_heat_Z)) == 0
-    assert np.count_nonzero(lambda_cool_p == 0) == 0 and np.count_nonzero(~np.isfinite(lambda_cool_p)) == 0
-    assert np.count_nonzero(lambda_heat_p == 0) == 0 and np.count_nonzero(~np.isfinite(lambda_heat_p)) == 0
-                    
+    # compute gray cross sections
+    uvbs = loadUVB(uvb)
+    assert np.array_equal([u['redshift'] for u in uvbs], uvb_z)
+
+    cs_HI = np.zeros(uvb_z.size, dtype='float32')
+    cs_HeI = np.zeros(uvb_z.size, dtype='float32')
+    cs_HeII = np.zeros(uvb_z.size, dtype='float32')
+    
+    for i, u in enumerate(uvbs):
+        J_loc = 10.0**u['J_nu'].astype('float64') # linear
+
+        cs_HI[i] = hydrogen.photoCrossSecGray(u['freqRyd'], J_loc, ion='H I')
+        cs_HeI[i] = hydrogen.photoCrossSecGray(u['freqRyd'], J_loc, ion='He I')
+        cs_HeII[i] = hydrogen.photoCrossSecGray(u['freqRyd'], J_loc, ion='He II')
+
     # save grid to HDF5 with grackle structure
     saveFile = basePath + 'CloudyData_UVB=%s.hdf5' % uvb
     print('Write: ' + saveFile)
@@ -745,7 +835,19 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
                 f['CoolingRates'][k1][k2].attrs['Rank'] = np.array(len(shape))
                 f['CoolingRates'][k1][k2].attrs['Temperature'] = 10.0**temps # linear
 
-        # UVB rates
-        # TODO
+        # UVB rates [eV/s]
+        f['UVBRates/Info'] = str(uvb)
+        f['UVBRates/z'] = uvb_z
+        f['UVBRates/Photoheating/piHI'] = uvb_Q_HI
+        f['UVBRates/Photoheating/piHeI'] = uvb_Q_HeI
+        f['UVBRates/Photoheating/piHeII'] = uvb_Q_HeII
+
+        # Cross sections [cgs] (needed only if self_shielding_method > 0, i.e. if GrackleSelfShieldingMethod > 0)
+        f['UVBRates/CrossSections/hi_avg_crs'] = cs_HI
+        f['UVBRates/CrossSections/hei_avg_crs'] = cs_HeI
+        f['UVBRates/CrossSections/heii_avg_crs'] = cs_HeII
+
+        # k-values (needed only if primordial_chemistry > 1, i.e. if GRACKLE_D or GRACKLE_H2 defined)
+        # --- not needed for our purposes, but could be added if desired
 
     print('Done.')

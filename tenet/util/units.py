@@ -116,6 +116,7 @@ class units(object):
     ang_in_cm     = 1.0e-8     # cm / angstrom (1 angstrom in cm)
     erg_in_J      = 1e-7       # 1 erg in joules
     erg_in_kev    = 6.2415e8   # 1 erg in keV
+    eV_in_erg     = 1.602e-12  # 1 eV in erg
 
     # derived unit conversions
     s_in_kyr      = None

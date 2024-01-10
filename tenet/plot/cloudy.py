@@ -8,11 +8,11 @@ from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
 
 from ..util.helper import contourf, evenlySample, sampleColorTable, closest
-from ..cosmo.cloudyGrid import loadFG11UVB, loadFG20UVB, loadHM12UVB, loadP18UVB
+from ..cosmo.cloudyGrid import loadUVB
 from ..cosmo.cloudy import cloudyIon
 from ..plot.config import *
 
-def plotUVB(uvbName='fg11'):
+def plotUVB(uvb='FG11'):
     """ Debug plots of the UVB(nu) as a function of redshift. """
 
     # config
@@ -25,18 +25,8 @@ def plotUVB(uvbName='fg11'):
     z_range    = [0.0,10.0]
 
     # load
-    if uvbName == 'fg11':
-        uvbs = loadFG11UVB(redshifts)
-        uvbs_all = loadFG11UVB()
-    if uvbName == 'fg20':
-        uvbs = loadFG20UVB(redshifts)
-        uvbs_all = loadFG20UVB()
-    if uvbName == 'hm12':
-        uvbs = loadHM12UVB(redshifts)
-        uvbs_all = loadHM12UVB()
-    if uvbName == 'p18':
-        uvbs = loadP18UVB(redshifts)
-        uvbs_all = loadP18UVB()
+    uvbs = loadUVB(uvb, redshifts)
+    uvbs_all = loadUVB(uvb)
 
     # (A) start plot: J_nu(nu) at a few specific redshifts
     fig = plt.figure(figsize=(26,10))
@@ -50,11 +40,11 @@ def plotUVB(uvbName='fg11'):
     ax.set_xlabel('$\\nu$ [ Ryd ]')
     ax.set_ylabel('log J$_{\\nu}(\\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]')
 
-    for uvb in uvbs:
-        ax.plot(uvb['freqRyd'], uvb['J_nu'], lw=lw, label='z = '+str(uvb['redshift']))
+    for u in uvbs:
+        ax.plot(u['freqRyd'], u['J_nu'], lw=lw, label='z = '+str(u['redshift']))
 
-        val, w = closest(uvb['freqRyd'], 8.0)
-        print(uvbName,uvb['redshift'],8.0,val,uvb['J_nu'][w])
+        val, w = closest(u['freqRyd'], 8.0)
+        print(uvb,u['redshift'],8.0,val,u['J_nu'][w])
 
     ax.legend()
 
@@ -71,10 +61,10 @@ def plotUVB(uvbName='fg11'):
         xx = []
         yy = []
 
-        for uvb in uvbs_all:
-            _, ind = closest(uvb['freqRyd'],nuRyd)
-            xx.append(uvb['redshift'])
-            yy.append(uvb['J_nu'][ind])
+        for u in uvbs_all:
+            _, ind = closest(u['freqRyd'],nuRyd)
+            xx.append(u['redshift'])
+            yy.append(u['J_nu'][ind])
 
         ax.plot(xx, yy, lw=lw, label='$\\nu$ = ' + str(nuRyd) + ' Ryd')
 
@@ -96,8 +86,8 @@ def plotUVB(uvbName='fg11'):
     XX, YY = np.meshgrid(x, y, indexing='ij')
 
     z = np.zeros( (x.size, y.size), dtype='float32' )
-    for i, uvb in enumerate(uvbs_all):
-        z[:,i] = uvb['J_nu']
+    for i, u in enumerate(uvbs_all):
+        z[:,i] = u['J_nu']
     z = np.clip(z, Jnu_range[0], Jnu_range[1])
 
     # render as filled contour
@@ -107,7 +97,7 @@ def plotUVB(uvbName='fg11'):
     cb.ax.set_ylabel('log J$_{\\nu}(\\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]')
 
     # finish
-    fig.savefig('uvb_%s.pdf' % uvbName)
+    fig.savefig('uvb_%s.pdf' % uvb)
     plt.close(fig)
 
 def plotIonAbundances(res='lg_c17', elements=['Magnesium']):
@@ -433,6 +423,7 @@ def grackleTable():
             #ax.set_ylim(lambdanet_range)
             ax.set_xlabel('Temperature [log K]')
             ax.set_ylabel('S/UnS')
+            ax.set_yscale('log')
 
             # plot
             l, = ax.plot(temp, prim_cool_ratio[j,redshift_ind,:], lw=lw, label='Prim Cooling')
@@ -454,6 +445,68 @@ def grackleTable():
 
     import pdb; pdb.set_trace()
 
+def gracklePhotoCrossSec(uvb='FG11'):
+    """ Plot the photo-ionization cross sections from Grackle. Compare to new derivation. """
+    filepath = '/u/dnelson/sims.structures/grackle/grackle_data_files/input/'
+    
+    filename = None
+    if uvb == 'FG11': filename = 'CloudyData_UVB=FG2011_shielded.h5' # orig
+    if uvb == 'HM12': filename = 'CloudyData_UVB=HM2012_shielded.h5' # orig
+
+    # load
+    if filename is not None:
+        with h5py.File(filepath + filename,'r') as f:
+            z = f['UVBRates']['z'][()]
+            hei_avg_crs = np.log10(f['UVBRates/CrossSections/hei_avg_crs'][()])
+            heii_avg_crs = np.log10(f['UVBRates/CrossSections/heii_avg_crs'][()])
+            hi_avg_crs = np.log10(f['UVBRates/CrossSections/hi_avg_crs'][()])
+
+    # compute new cross-sections
+    from ..cosmo.hydrogen import photoCrossSecGray
+    from ..cosmo.cloudyGrid import loadUVB
+
+    uvbs = loadUVB(uvb)
+
+    z_new = np.array([u['redshift'] for u in uvbs])
+    cs_new = {}
+    for ion in ['H I','He I', 'He II']:
+        cs_new[ion] = np.zeros(z_new.size, dtype='float32')
+
+    for i, u in enumerate(uvbs):
+        J_loc = 10.0**u['J_nu'].astype('float64') # linear
+        
+        for ion in ['H I','He I', 'He II']:
+            cs_new[ion][i] = photoCrossSecGray(u['freqRyd'], J_loc, ion=ion)
+
+    # plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel('Cross Section [ log cm$^2$ ]')
+    ax.set_xlim([-0.5,11.0])
+    ax.set_ylim([-18.0,-17.1])
+
+    if filename is not None:
+        # comparison of old (grackle included) and new
+        l, = ax.plot(z, hi_avg_crs, lw=lw, label='H I')
+        ax.plot(z_new, np.log10(cs_new['H I']), ls='--', lw=lw, color=l.get_color(), label='H I (new)')
+
+        l, = ax.plot(z, hei_avg_crs, lw=lw, label='He I')
+        ax.plot(z_new, np.log10(cs_new['He I']), ls='--', lw=lw, color=l.get_color(), label='He I (new)')
+
+        l, = ax.plot(z, heii_avg_crs, lw=lw, label='He II')
+        ax.plot(z_new, np.log10(cs_new['He II']), ls='--', lw=lw, color=l.get_color(), label='He II (new)')
+    else:
+        # just new
+        ax.plot(z_new, np.log10(cs_new['H I']), ls='--', lw=lw, label='H I (new)')
+        ax.plot(z_new, np.log10(cs_new['He I']), ls='--', lw=lw, label='He I (new)')
+        ax.plot(z_new, np.log10(cs_new['He II']), ls='--', lw=lw, label='He II (new)')
+
+    ax.legend(loc='upper right')
+
+    fig.savefig('grackle_photocs_%s.pdf' % uvb)
+    plt.close(fig)
 
 def ionAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshift=0.0, metal=-1.0):
     """ Plot 2D histograms of ion abundance fraction in (density,temperature) space at one Z,z. 

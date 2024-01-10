@@ -4,40 +4,63 @@ Also full box or halo based analysis of hydrogen/metal content.
 """
 import numpy as np
 
-def photoCrossSec(freq, atom='H'):
-    """ Find photoionisation cross-section (for hydrogen) in cm^2 as a function of frequency.
-    This is zero for energies less than 13.6 eV = 1 Ryd, and then falls off like E^-3
-    Normalized to 1 Ryd, where the radiative transfer was calculated originally.
+def photoCrossSec(freq, ion='H I'):
+    """ Find photoionisation cross-section (for a given ion) in cm^2 as a function of frequency.
+    This is zero for energies less than nuthr (13.6 eV = 1 Ryd, for HI), and then falls off like E^-3.
     From Verner+ (1996), the Opacity Project, values are from Table 1 of astro-ph/9601009.
 
     Args:
       freq (ndarray[float]): frequency in eV (must be numpy array).
-      atom (str): specify coefficients.
+      ion (str): specify coefficients.
 
     Returns:
       ndarray[float]: cross-section [cm^2].
     """
-    if atom == 'H':
+    if ion == 'H I':
         nuthr  = 13.6
         nu0    = 0.4298
-        sigma0 = 1e-18 * 5.475e+4 # convert from Mb to cm^2
+        sigma0 = 5.475e+4
         ya     = 32.88
         Pp     = 2.963
         yw     = 0.0
         y0     = 0.0
         y1     = 0.0
 
-    if atom == 'Si':
+    if ion == 'He I':
+        nuthr  = 24.59
+        nu0    = 13.61
+        sigma0 = 9.492e+2
+        ya     = 1.469
+        Pp     = 3.188
+        yw     = 2.039
+        y0     = 0.4434
+        y1     = 2.136
+
+    if ion == 'He II':
+        nuthr  = 54.42
+        nu0    = 1.720
+        sigma0 = 1.369e+4
+        ya     = 32.88
+        Pp     = 2.963
+        yw     = 0.0
+        y0     = 0.0
+        y1     = 0.0
+
+    if ion == 'Si II':
         nuthr  = 16.35
         nu0    = 2.556
-        sigma0 = 1e-18 * 4.140 # convert from Mb to cm^2
+        sigma0 = 4.140
         ya     = 13.37
         Pp     = 11.91
         yw     = 1.56
         y0     = 6.634
         y1     = 0.1272
 
+    sigma0 *= 1e-18 # convert from Mb to cm^2
+
     cross = np.zeros_like(freq)
+
+    # Verner+96 Eqn. 1
     x = freq / nu0 - y0
     y = np.sqrt(x**2 + y1**2)
     Ff = ((x-1)**2 + yw**2) * y**(0.5*Pp-5.5) * (1+np.sqrt(y/ya))**(-Pp)
@@ -46,6 +69,43 @@ def photoCrossSec(freq, atom='H'):
     cross[ind] = sigma0 * Ff[ind]
 
     return cross
+
+def photoCrossSecGray(freq, J_nu, ion):
+    """ Compute a gray i.e. frequency/spectrum-averaged cross section.
+    Args:
+      freq (ndarray[float]): frequency i.e. energy [Rydberg].
+      J_nu (ndarray[float]): uvb intensity [linear erg/s/cm^2/Hz/sr].
+      ion (str): specify coefficients.
+
+    Returns:
+      float: cross-section [cm^2].
+    """
+    cs = photoCrossSec(13.6 * freq, ion=ion)
+
+    #if ion == 'H I':
+    #    cs = 6.3e-18 * freq**(-3) # HI only approximation
+    #    cs[freq < 1.0] = 0.0 # no ionization below 1 Ryd
+
+    if ion in ['H I','He I']:
+        freq_max = 4.0 # HeII ionization edge, i.e. neglect more energetic photons
+    else:
+        freq_max = 4.5 # for HeII have to go beyond... but not to +inf?
+
+    # integral bounds: from the ionization energy of this ion to the HeII edge
+    ind = np.where((cs > 0) & (freq <= freq_max))
+
+    # see Rahmati+13 Eqn. 4
+    freq_hz = freq * 3.28984e15
+    dfreq_hz = np.diff(freq_hz)
+    dfreq_hz = np.hstack((dfreq_hz,dfreq_hz[-1]))
+
+    # J_nu has units of [erg/s/cm^2/Hz]
+    int1 = np.sum(J_nu[ind] / freq_hz[ind] * cs[ind] * dfreq_hz[ind])
+    int2 = np.sum(J_nu[ind] / freq_hz[ind] * dfreq_hz[ind])
+
+    sigma_gray = int1 / int2
+
+    return sigma_gray
 
 def uvbPhotoionAtten(log_hDens, log_temp, redshift):
     """ Compute the reduction in the photoionisation rate at an energy of 13.6 eV at a given 
