@@ -107,6 +107,53 @@ def photoCrossSecGray(freq, J_nu, ion):
 
     return sigma_gray
 
+def photoRate(freq, J_nu, ion):
+    """ Compute the photoionization rate of (H, HeI, HeII) given the UVB intensity.
+    Args:
+      freq (ndarray[float]): frequency i.e. energy [Rydberg].
+      J_nu (ndarray[float]): uvb intensity [linear erg/s/cm^2/Hz/sr].
+      ion (str): specify coefficients.
+
+    Returns:
+      float: rate [1/s].
+    """
+
+    # threshold and freq-dependent cross section
+    if ion in ['H I', 'He I', 'He II']:
+        if ion == 'H I': nu_thresh = 13.6
+        if ion == 'He I': nu_thresh = 24.6
+        if ion == 'He II': nu_thresh = 54.4
+
+        sigma = photoCrossSec(freq, ion=ion)
+
+    if ion == 'k24':
+        # H_2 + gamma --> H_2^+ + e^- (see Abel+96 Table 4 Entry 24) [cm^2]
+        sigma = np.zeros(freq.size, dtype='float32')
+        nu_thresh = 15.42
+        freq_eV = freq * 13.6
+
+        ind1 = np.where((freq_eV >= 15.42) & (freq_eV < 16.50))
+        sigma[ind1] = 6.2e-18 * freq_eV[ind1] - 9.4e-17
+        ind2 = np.where((freq_eV >= 16.50) & (freq_eV < 17.7))
+        sigma[ind2] = 1.4e-18 * freq_eV[ind2] - 1.48e-17
+        ind3 = np.where(freq_eV >= 17.7)
+        sigma[ind3] = 2.5e-14 * freq_eV[ind3]**(-2.71)
+
+    # see Abel+96 Eqn. 7
+    # integral of (4*pi*sigma*J_nu / h / nu) dv from nu_thresh to +inf
+    freq_hz = freq * 3.28984e15
+    dfreq_hz = np.diff(freq_hz)
+    dfreq_hz = np.hstack((dfreq_hz,dfreq_hz[-1]))
+
+    planck_erg_s = 6.626e-27
+    ind = np.where(freq >= nu_thresh)
+
+    integrand = 4.0*np.pi*sigma[ind]*J_nu[ind] / (planck_erg_s*freq_hz[ind]) # [1/s^2]
+
+    rate = np.sum(integrand * dfreq_hz[ind]) # np.trapz(integrand, freq_hz[ind])
+
+    return rate
+
 def uvbPhotoionAtten(log_hDens, log_temp, redshift):
     """ Compute the reduction in the photoionisation rate at an energy of 13.6 eV at a given 
     density [log cm^-3] and temperature [log K], using the Rahmati+ (2012) fitting formula.

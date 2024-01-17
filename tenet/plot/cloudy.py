@@ -5,9 +5,10 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.colors import Normalize
 from datetime import datetime
 
-from ..util.helper import contourf, evenlySample, sampleColorTable, closest
+from ..util.helper import contourf, evenlySample, sampleColorTable, closest, logZeroNaN, loadColorTable
 from ..cosmo.cloudyGrid import loadUVB
 from ..cosmo.cloudy import cloudyIon
 from ..plot.config import *
@@ -282,10 +283,14 @@ def plotIonAbundances(res='lg_c17', elements=['Magnesium']):
 
 def grackleTable():
     """ Plot Grackle cooling table. """
-    filepath = '/u/dnelson/sims.structures/grackle/grackle_data_files/input/'
-    filename1 = 'CloudyData_UVB=FG2011.h5' # orig
-    filename2 = 'CloudyData_UVB=FG11.hdf5' # my new version (testing)
-    #filename2 = 'CloudyData_UVB=FG2011_shielded.h5' # orig
+    #filepath = '/u/dnelson/sims.structures/grackle/grackle_data_files/input/'
+    #filename1 = 'CloudyData_UVB=FG2011.h5' # orig
+    #filename2 = 'grid_cooling_UVB=FG11.hdf5' # my new version (testing)
+    ##filename2 = 'CloudyData_UVB=FG2011_shielded.h5' # orig
+
+    filepath = '/u/dnelson/tenet/tenet/tables/cloudy/'
+    filename1 = 'grid_cooling_UVB=FG11_unshielded.hdf5'
+    filename2 = 'grid_cooling_UVB=FG11.hdf5'
 
     # https://github.com/brittonsmith/cloudy_cooling_tools
     # https://github.com/aemerick/cloudy_tools/blob/master/FG_files/FG_shielded/grackle_cooling_curves.py
@@ -324,6 +329,7 @@ def grackleTable():
     # plot config
     lambdanet_range = [-32,-15]
     temp_range = [1.0, 9.0]
+    dens_range = [-10.0, 4.0]
 
     metallicity = 0.01 # multiplies metal cooling rates below...
 
@@ -405,12 +411,19 @@ def grackleTable():
 
         pdf.close()
 
-    # shielded vs unshielded ratios
-    prim_cool_ratio = data2['Primordial']['Cooling'] / data1['Primordial']['Cooling']
-    prim_heat_ratio = data2['Primordial']['Heating'] / data1['Primordial']['Heating']
-    metal_cool_ratio = data2['Metals']['Cooling'] / data1['Metals']['Cooling']
-    metal_heat_ratio = data2['Metals']['Heating'] / data1['Metals']['Heating']
+    # (shielded/unshielded) ratios
+    prim_cool_ratio = logZeroNaN(data2['Primordial']['Cooling'] / data1['Primordial']['Cooling'])
+    prim_heat_ratio = logZeroNaN(data2['Primordial']['Heating'] / data1['Primordial']['Heating'])
+    metal_cool_ratio = logZeroNaN(data2['Metals']['Cooling'] / data1['Metals']['Cooling'])
+    metal_heat_ratio = logZeroNaN(data2['Metals']['Heating'] / data1['Metals']['Heating'])
 
+    prim_net_ratio = logZeroNaN((data2['Primordial']['Cooling'] - data2['Primordial']['Heating']) / \
+                                (data1['Primordial']['Cooling'] - data1['Primordial']['Heating']))
+    
+    metal_net_ratio = logZeroNaN((data2['Metals']['Cooling'] - data2['Metals']['Heating']) / \
+                                 (data1['Metals']['Cooling'] - data1['Metals']['Heating']))
+
+    # gallery of 1d ratio lines
     pdf = PdfPages('grackle_ratio.pdf')
     for redshift_ind, z in enumerate(redshift[0:1]): # redshift
         fig = plt.figure(figsize=(26,16))
@@ -423,7 +436,6 @@ def grackleTable():
             #ax.set_ylim(lambdanet_range)
             ax.set_xlabel('Temperature [log K]')
             ax.set_ylabel('S/UnS')
-            ax.set_yscale('log')
 
             # plot
             l, = ax.plot(temp, prim_cool_ratio[j,redshift_ind,:], lw=lw, label='Prim Cooling')
@@ -437,6 +449,105 @@ def grackleTable():
         ax = fig.add_subplot(gridSize,gridSize-1,j+2)
         ax.set_axis_off()
         ax.legend(handles, labels, borderpad=0, ncols=2, loc='best')
+
+        pdf.savefig()
+        plt.close(fig)
+
+    pdf.close()
+
+    # 2D: shielded vs unshielded
+    extent = [temp_range[0],temp_range[1],dens_range[0],dens_range[1]]
+    mm_ratio = [-3.0, 3.0]
+    cmap = loadColorTable('balance0', valMinMax=mm_ratio)
+    norm = Normalize(vmin=mm_ratio[0], vmax=mm_ratio[1], clip=False)
+
+    mm = [-30, -17]
+    norm2 = Normalize(vmin=mm[0], vmax=mm[1], clip=False)
+
+    opts_ratio = {'extent':extent, 'norm':norm, 'origin':'lower', 'interpolation':'nearest', 'aspect':'auto', 'cmap':cmap}
+    opts = {'extent':extent, 'norm':norm2, 'origin':'lower', 'interpolation':'nearest', 'aspect':'auto'}
+            
+    pdf = PdfPages('grackle_ratio2d.pdf')
+    for redshift_ind, z in enumerate(redshift[0:1]): # redshift
+
+        # unshielded only
+        for iter in [0,1]:
+            fig = plt.figure(figsize=(26,16))
+            print('[%2d of %2d] z = %.1f (%s)' % (redshift_ind,redshift.size,z,filename))
+
+            if iter == 0:
+                data = data2
+                label0 = 'Shielded'
+            else:
+                data = data1
+                label0 = 'Unshielded'
+
+            for j in range(6):
+                ax = fig.add_subplot(2,3,j+1)
+                ax.set_xlabel('Temperature [log K]')
+                ax.set_ylabel('Density [log cm$^{-3}$]')
+
+                # select
+                if j == 0:
+                    d = logZeroNaN(data['Primordial']['Cooling'][:,redshift_ind,:])
+                    label = 'Prim Cool (%s)' % label0
+                if j == 1:
+                    d = logZeroNaN(data['Primordial']['Heating'][:,redshift_ind,:])
+                    label = 'Prim Heat (%s)' % label0
+                if j == 2:
+                    d = logZeroNaN(data['Primordial']['Cooling'][:,redshift_ind,:] - data['Primordial']['Heating'][:,redshift_ind,:])
+                    label = 'Prim Net (%s)' % label0
+                if j == 3:
+                    d = logZeroNaN(data['Metals']['Cooling'][:,redshift_ind,:])
+                    label = 'Metal Cool (%s)' % label0
+                if j == 4:
+                    d = logZeroNaN(data['Metals']['Heating'][:,redshift_ind,:])
+                    label = 'Metal Heat (%s)' % label0
+                if j == 5:
+                    d = logZeroNaN(data['Metals']['Cooling'][:,redshift_ind,:] - data['Metals']['Heating'][:,redshift_ind,:])
+                    label = 'Metal Net (%s)' % label0
+
+                im = ax.imshow(d, **opts)
+                cb = fig.colorbar(im)
+                cb.ax.set_ylabel('%s [log]' % label)
+
+            pdf.savefig()
+            plt.close(fig)
+
+        # ratio
+        fig = plt.figure(figsize=(26,16))
+        print('[%2d of %2d] z = %.1f (%s)' % (redshift_ind,redshift.size,z,filename))
+
+        for j in range(6):
+            ax = fig.add_subplot(2,3,j+1)
+            ax.set_xlabel('Temperature [log K]')
+            ax.set_ylabel('Density [log cm$^{-3}$]')
+
+            # select
+            if j == 0:
+                data = prim_cool_ratio[:,redshift_ind,:]
+                label = 'Prim Cool'
+            if j == 1:
+                data = prim_heat_ratio[:,redshift_ind,:]
+                label = 'Prim Heat'
+            if j == 2:
+                data = prim_net_ratio[:,redshift_ind,:]
+                label = 'Prim Net'
+            if j == 3:
+                data = metal_cool_ratio[:,redshift_ind,:]
+                label = 'Metal Cool'
+            if j == 4:
+                data = metal_heat_ratio[:,redshift_ind,:]
+                label = 'Metal Heat'
+            if j == 5:
+                data = metal_net_ratio[:,redshift_ind,:]
+                label = 'Metal Net'
+
+            # mask zero (ratio is unity), show as white color
+            h2d = np.ma.masked_where(data == 0, data)
+            im = ax.imshow(h2d, **opts_ratio)
+            cb = fig.colorbar(im)
+            cb.ax.set_ylabel('%s (S/UnS log Ratio)' % label)
 
         pdf.savefig()
         plt.close(fig)
@@ -507,6 +618,62 @@ def gracklePhotoCrossSec(uvb='FG11'):
 
     fig.savefig('grackle_photocs_%s.pdf' % uvb)
     plt.close(fig)
+
+def grackleReactionRates():
+    """ Plot the photo-ionization cross sections from Grackle. Compare to new derivation. """
+    filepath = '/u/dnelson/sims.structures/grackle/grackle_data_files/input/'
+    
+    filenames = ['CloudyData_UVB=FG2011_shielded.h5', # FG11 orig
+                 'grid_cooling_UVB=FG11.hdf5', # FG2011 my new version
+                 'CloudyData_UVB=HM2012_shielded.h5', # HM12 orig
+                 'grid_cooling_UVB=FG20.hdf5'] # FG20 my new version
+
+    # load
+    data = {}
+
+    for filename in filenames:
+        with h5py.File(filepath + filename,'r') as f:
+            z = f['UVBRates']['z'][()]
+            k24 = np.log10(f['UVBRates/Chemistry/k24'][()])
+            k25 = np.log10(f['UVBRates/Chemistry/k25'][()])
+            k26 = np.log10(f['UVBRates/Chemistry/k26'][()])
+
+        
+
+        uvb = filename.split('UVB=')[1].split('_')[0].split('.')[0]
+        data[uvb] = z, k24, k25, k26
+        print(uvb)
+
+        if uvb == 'FG20': k25[k25 == -40.0] = -26.0 # just for plotting (enlarges y-range too much)
+        if uvb == 'FG11': k24 += 0.1 # just for plotting (exactly on top of FG2011)
+        if uvb == 'FG11': k26 += 0.1 # just for plotting (exactly on top of FG2011)
+
+    # plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel('Photoionization i.e. Reaction Rate [$s^{-1}$]')
+    ax.set_xlim([-0.5,11.0])
+    #ax.set_ylim([-18.0,-17.1])
+
+    # k24
+    for i, uvb in enumerate(data.keys()):
+        z, k24, k25, k26 = data[uvb]
+        if i == 0:
+            l24, = ax.plot(z, k24, lw=lw, label='k24 (%s)' % uvb)
+            l25, = ax.plot(z, k25, lw=lw, label='k25 (%s)' % uvb)
+            l26, = ax.plot(z, k26, lw=lw, label='k26 (%s)' % uvb)
+        else:
+            ax.plot(z, k24, ls=linestyles[i], lw=lw, color=l24.get_color(), label='k24 (%s)' % uvb)
+            ax.plot(z, k25, ls=linestyles[i], lw=lw, color=l25.get_color(), label='k25 (%s)' % uvb)
+            ax.plot(z, k26, ls=linestyles[i], lw=lw, color=l26.get_color(), label='k26 (%s)' % uvb)
+
+    ax.legend(loc='lower left')
+
+    fig.savefig('grackle_chemistryk.pdf')
+    plt.close(fig)
+
 
 def ionAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshift=0.0, metal=-1.0):
     """ Plot 2D histograms of ion abundance fraction in (density,temperature) space at one Z,z. 

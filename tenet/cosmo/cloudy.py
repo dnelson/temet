@@ -163,7 +163,7 @@ class cloudyIon():
         self.redshiftInterp = redshiftInterp
         self.order = order # quadcubic interpolation by default (1 = quadlinear)
 
-        with h5py.File(basePath + 'grid_' + res + '.hdf5','r') as f:
+        with h5py.File(basePath + 'grid_ions_' + res + '.hdf5','r') as f:
             # load 5D ion abundance tables
             if el is not None:
                 elements = self._resolveElementNames(el)

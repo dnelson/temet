@@ -490,12 +490,6 @@ def _getRhoTZzGrid(res, uvb):
                               2.5,2.8,3.1,3.5,4.0,4.5,5.0,6.0,7.0,8.0,8.02,9.0,10.0])
         if uvb in ['FG11','FG11_unshielded']:
             redshifts = np.delete(redshifts, np.where(redshifts == 8.02))
-
-    if res == 'grackle2':
-        densities = np.array([2.0])
-        temps     = np.array([4.5])
-        metals    = np.array([0.0]) 
-        redshifts = np.array([0.0])
     
     densities[np.abs(densities) < eps] = 0.0
     metals[np.abs(metals) < eps] = 0.0
@@ -611,7 +605,7 @@ def collectOutputs(res='lg', uvb='FG11'):
                         data[element][0:abunds[elemNum].size,i,j,k,l] = abunds[elemNum]
 
     # save grid to HDF5
-    saveFile = basePath + 'grid_' + res + '_complete.hdf5'
+    saveFile = basePath + 'grid_ions_' + res + '.hdf5'
     print('Write: ' + saveFile)
 
     with h5py.File(saveFile,'w') as f:
@@ -789,19 +783,16 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
     assert np.count_nonzero(lambda_cool_p <= 0.0) == 0 and np.count_nonzero(~np.isfinite(lambda_cool_p)) == 0
     assert np.count_nonzero(lambda_heat_p <= 0.0) == 0 and np.count_nonzero(~np.isfinite(lambda_heat_p)) == 0
 
-    assert mmw_Z.min() > 0.5 and mmw_Z.max() < 1.3
-    assert mmw_p.min() > 0.5 and mmw_p.max() < 1.3
+    assert mmw_Z.min() > 0.5 and mmw_Z.max() < 2.5 # mu > 1.3 at z~10 for FG20
+    assert mmw_p.min() > 0.5 and mmw_p.max() < 2.5
     
-    # load UVB photoheating rates
-    uvb_z, _, _, _, uvb_Q_HI, uvb_Q_HeI, uvb_Q_HeII = loadUVBRates(uvb=uvb.replace('_unshielded',''))
-
     # compute gray cross sections
     uvbs = loadUVB(uvb)
-    assert np.array_equal([u['redshift'] for u in uvbs], uvb_z)
+    uvbs_z = np.array([u['redshift'] for u in uvbs])
 
-    cs_HI = np.zeros(uvb_z.size, dtype='float32')
-    cs_HeI = np.zeros(uvb_z.size, dtype='float32')
-    cs_HeII = np.zeros(uvb_z.size, dtype='float32')
+    cs_HI = np.zeros(uvbs_z.size, dtype='float64')
+    cs_HeI = np.zeros(uvbs_z.size, dtype='float64')
+    cs_HeII = np.zeros(uvbs_z.size, dtype='float64')
     
     for i, u in enumerate(uvbs):
         J_loc = 10.0**u['J_nu'].astype('float64') # linear
@@ -810,8 +801,20 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
         cs_HeI[i] = hydrogen.photoCrossSecGray(u['freqRyd'], J_loc, ion='He I')
         cs_HeII[i] = hydrogen.photoCrossSecGray(u['freqRyd'], J_loc, ion='He II')
 
+    # load UVB photoheating rates, interpolate to spectra redshifts
+    uvb_rates = loadUVBRates(uvb=uvb.replace('_unshielded',''))
+    uvb_Q_z, uvb_Gamma_HI, uvb_Gamma_HeI, uvb_Gamma_HeII, uvb_Q_HI, uvb_Q_HeI, uvb_Q_HeII = uvb_rates
+
+    uvb_Q_HI = np.interp(uvbs_z, uvb_Q_z, uvb_Q_HI)
+    uvb_Q_HeI = np.interp(uvbs_z, uvb_Q_z, uvb_Q_HeI)
+    uvb_Q_HeII = np.interp(uvbs_z, uvb_Q_z, uvb_Q_HeII)
+
+    uvb_Gamma_HI = np.interp(uvbs_z, uvb_Q_z, uvb_Gamma_HI)
+    uvb_Gamma_HeI = np.interp(uvbs_z, uvb_Q_z, uvb_Gamma_HeI)
+    uvb_Gamma_HeII = np.interp(uvbs_z, uvb_Q_z, uvb_Gamma_HeII)
+
     # save grid to HDF5 with grackle structure
-    saveFile = basePath + 'CloudyData_UVB=%s.hdf5' % uvb
+    saveFile = basePath + 'grid_cooling_UVB=%s.hdf5' % uvb
     print('Write: ' + saveFile)
 
     with h5py.File(saveFile,'w') as f:
@@ -836,8 +839,8 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
                 f['CoolingRates'][k1][k2].attrs['Temperature'] = 10.0**temps # linear
 
         # UVB rates [eV/s]
-        f['UVBRates/Info'] = str(uvb)
-        f['UVBRates/z'] = uvb_z
+        f['UVBRates/Info'] = np.array(str(uvb).encode('ascii'), dtype=h5py.string_dtype('ascii',len(str(uvb))))
+        f['UVBRates/z'] = uvbs_z
         f['UVBRates/Photoheating/piHI'] = uvb_Q_HI
         f['UVBRates/Photoheating/piHeI'] = uvb_Q_HeI
         f['UVBRates/Photoheating/piHeII'] = uvb_Q_HeII
@@ -847,7 +850,13 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
         f['UVBRates/CrossSections/hei_avg_crs'] = cs_HeI
         f['UVBRates/CrossSections/heii_avg_crs'] = cs_HeII
 
-        # k-values (needed only if primordial_chemistry > 1, i.e. if GRACKLE_D or GRACKLE_H2 defined)
+        # k24 (HI+p --> HII+e), k25 (HeIII+p --> HeII+e) (typo?), k26 (HeI+p --> HeII+e) rate coefficients [cgs?]
+        # note: k{N} are supposed to match to Abel+96, but they do not (offset by 3 - these are just Gamma_H,HeI,HeII)
+        f['UVBRates/Chemistry/k24'] = uvb_Gamma_HI
+        f['UVBRates/Chemistry/k25'] = uvb_Gamma_HeII
+        f['UVBRates/Chemistry/k26'] = uvb_Gamma_HeI
+
+        # k27-31 values (needed only if primordial_chemistry > 1, i.e. if GRACKLE_D or GRACKLE_H2 defined)
         # --- not needed for our purposes, but could be added if desired
 
     print('Done.')
