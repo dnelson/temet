@@ -376,7 +376,10 @@ def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
     idType = 'int64' # int64 == LONGIDS, otherwise int32
 
     basePath = path.expanduser("~") + "/sims.TNG_zooms/ICs/output/"
-    saveFilename = basePath + 'partload_%s_halo%d_L%d_sf%.1f.hdf5' % (sP.simName, fofID, MaxLevel+(ZoomFactor-1), EnlargeHighResFactor)
+    ZoomLevel = np.log2(ZoomFactor)
+    assert ZoomLevel == int(ZoomLevel), 'Unusual that ZoomFactor is not a power of 2. Check! Generalize filename.'
+    
+    saveFilename = basePath + 'partload_%s_halo%d_L%d_sf%.1f.hdf5' % (sP.simName, fofID, MaxLevel+ZoomLevel, EnlargeHighResFactor)
 
     if path.isfile(saveFilename):
         print('skip [%s], already exists...' % saveFilename)
