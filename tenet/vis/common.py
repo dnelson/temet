@@ -33,7 +33,7 @@ colDensityFields  = ['coldens','coldens_msunkpc2','coldens_msunckpc2','coldens_s
                      'xray','xray_lum','xray_lum_05-2kev','xray_lum_0.5-2.0kev','xray_lum_0.5-5.0kev',
                      'p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha',
                      'H2_BR','H2_GK','H2_KMT','HI_BR','HI_GK','HI_KMT']
-totSumFields      = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','tau0_LyB','sz_yparam']
+totSumFields      = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','tau0_LyB','sz_yparam','ksz_yparam']
 velLOSFieldNames  = ['vel_los','velsigma_los']
 velCompFieldNames = ['vel_x','vel_y','vel_z','bfield_x','bfield_y','bfield_z']
 haloCentricFields = ['tff','tcool_tff','menc','specangmom_mag','vrad','vrel','delta_rho']
@@ -47,7 +47,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
               'coldens','coldens_msunkpc2','coldens_msunckpc2','coldens_msun_ster',
               'ionmassratio_OVI_OVII',# (generalize),
               'HI','HI_segmented','H2_BR','H2_GK','H2_KMT','HI_BR','HI_GK','HI_KMT',
-              'xray','xray_lum','sz_yparam','sfr_halpha','halpha','p_sync_ska',
+              'xray','xray_lum','sz_yparam','ksz_yparam','sfr_halpha','halpha','p_sync_ska',
               'temp','temperature','temp_sfcold',
               'ent','entr','entropy',
               'bmag','bmag_uG','bfield_x','bfield_y','bfield_z',
@@ -585,7 +585,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
     if 'tau0_' in partField:
         mass = sP.snapshotSubsetP(partType, partField, indRange=indRange)
 
-    if partField in ['sz_yparam','p_sync_ska']:
+    if partField in ['sz_yparam','ksz_yparam','p_sync_ska']:
         mass = sP.snapshotSubsetP(partType, partField, indRange=indRange)
 
     # flux/surface brightness (replace mass)
@@ -944,8 +944,31 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         pxAreaKpc2 = np.prod(sP.units.codeLengthToKpc(pxSizesCode))
         grid /= pxAreaKpc2
         
-        config['label'] = 'Thermal Sunyaev-Zeldovich y-parameter [log]'
+        config['label'] = 'Thermal Sunyaev-Zeldovich y-param [log]'
         config['ctName'] = 'turbo'
+
+    if partField in ['ksz_yparam']:
+        # 'per-cell kinetic yparam' has [kpc^2] units, normalize by pixel area -> dimensionless
+        pxSizesCode = [boxSizeImg[0] / nPixels[0], boxSizeImg[1] / nPixels[1]]
+        pxAreaKpc2 = np.prod(sP.units.codeLengthToKpc(pxSizesCode))
+        grid /= pxAreaKpc2
+        
+        config['label'] = 'Kinetic Sunyaev-Zeldovich y-param'
+        config['ctName'] = 'Spectral' # diverging
+
+        if 1:
+            # custom +/- log scale (note: values are small << 1.0, e.g. 1e-4 -> 4.0, -1e-4 -> -4.0)
+            w_neg = np.where(grid <= 0.0)
+            w_pos = np.where(grid > 0.0)
+            grid[w_pos] = -logZeroMin( grid[w_pos] )
+            grid[w_neg] = logZeroMin( -grid[w_neg] )
+            config['label'] += ' [$\pm$log]'
+        if 0:
+            # asinh scale (similar to symlog)
+            grid = np.arcsinh(grid)
+            config['label'] += ' [asinh]'
+
+        logMin = False
 
     if 'metals_' in partField:
         # all of GFM_Metals as well as GFM_MetalsTagged (projected as column densities)
@@ -2093,6 +2116,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         grid_master = logZeroMin( 10.0**grid_master / 10.0**grid_totmass )
         data_grid = logZeroMin( 10.0**data_grid / 10.0**data_grid_totmass )
 
+    # temporary: protect kSZ LOS
+    if partField == 'ksz_yparam': assert axes[0] == 0 and axes[1] == 1
+
     # temporary: ayromlou baryon fraction map by summing gas+stars coldens, then normalizing by gas+stars+DM
     if 0 and partField == 'coldens' and partType == 'gas':
         print('NOTE: Converting gas coldens map to baryon fraction map!')
@@ -2890,6 +2916,7 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     colorsB = ['white','white','white','black','black']
 
     formatStr = "%.1f" if np.max(np.abs(valLimits)) < 100.0 else "%d"
+    if np.max(np.abs(valLimits)) < 0.01: formatStr = '%.0e'
 
     cax.text(0.0+lOffset, textMidY, formatStr % (1.0*valLimits[0]+0.0*valLimits[1]), 
         color=colorsB[0], size=conf.fontsize, ha='left', va='center', transform=cax.transAxes)

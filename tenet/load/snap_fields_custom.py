@@ -822,7 +822,7 @@ metaldens_.log = True
 
 @snap_field(aliases=['sz_yparam','yparam'])
 def sz_y(sim, partType, field, args):
-    """ Sunyaev-Zeldovich y-parameter (per gas cell). """
+    """ (Thermal) Sunyaev-Zeldovich y-parameter (per gas cell). """
     temp = sim.snapshotSubset(partType, 'temp_sfcold', **args)
     xe   = sim.snapshotSubset(partType, 'ElectronAbundance', **args)
     mass = sim.snapshotSubset(partType, 'Masses', **args)
@@ -834,6 +834,24 @@ sz_y.units = r'$\rm{kpc^2}$'
 sz_y.limits = [-12.0, -4.0]
 sz_y.limits_halo = [-10.0, -4.0]
 sz_y.log = True
+
+@snap_field(aliases=['ksz_yparam','ksz_y'])
+def ksz_y(sim, partType, field, args):
+    """ (Kinetic) Sunyaev-Zeldovich y-parameter (per gas cell). """
+    xe   = sim.snapshotSubset(partType, 'ElectronAbundance', **args)
+    mass = sim.snapshotSubset(partType, 'Masses', **args)
+    vel_los = sim.snapshotSubset(partType, 'vel_z', **args)
+
+    if sim.refVel is not None:
+        vel_los -= sim.refVel[2] # move into halo center of motion frame
+
+    return sim.units.calcKineticSZYParam(mass, xe, vel_los)
+
+ksz_y.label = 'Kinetic SZ y-parameter'
+ksz_y.units = r'$\rm{kpc^2/g}$'
+ksz_y.limits = [-12.0, -4.0]
+ksz_y.limits_halo = [-10.0, -4.0]
+ksz_y.log = True
 
 @snap_field(aliases=['frm_y','frm_z'])
 def frm_x(sim, partType, field, args):

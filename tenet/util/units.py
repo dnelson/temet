@@ -1202,7 +1202,7 @@ class units(object):
         return csnd
 
     def calcSunyaevZeldovichYparam(self, mass, xe, temp):
-        """ Calculate per-cell SZ y-parameter (e.g. McCarthy+2014 Eqn 2, Roncarelli+2007 Eqn 5, Kay+2012 Eqn 12).
+        """ Calculate per-cell (thermal) SZ y-parameter (e.g. McCarthy+2014 Eqn 2, Roncarelli+2007 Eqn 5, Kay+2012 Eqn 12).
 
         Args:
           mass (ndarray[float]): gas cell masses [code units].
@@ -1220,13 +1220,38 @@ class units(object):
         consts = self.boltzmann * self.sigma_thomson / (self.mass_electron * self.c_cgs**2)
 
         # mass * ne/rho [dimensionless]
-        massfac = self.hydrogen_massfrac * xe * mass * (self.UnitMass_in_g / self.mass_proton)
+        massfac = self.hydrogen_massfrac * xe * mass * (self.UnitMass_in_g / self._sP.HubbleParam / self.mass_proton)
         #massfac = mass * (self.UnitMass_in_g / self.mass_proton) / 1.14 # essentially identical
 
         Y = consts * temp * massfac # cm^2
         Y /= (self.kpc_in_km * self.km_in_cm)**2 # kpc^2
 
         return Y
+
+    def calcKineticSZYParam(self, mass, xe, vel_los):
+        """ Calculate per-cell kinetic SZ y-parameter (e.g. Dolag+16 Eqn. 4, Altamura+23 Eqn. 2).
+
+        Args:
+            mass (ndarray[float]): gas cell masses [code units].
+            xe (ndarray[float]): gas electron number density fraction [code units, i.e. dimensionless linear].
+            vel_los (ndarray[float]): line-of-sight velocity [km/s].
+
+        Return:
+            ndarray[float]: y-parameter in units of area [pkpc^2].
+        """
+        # Y_i = -sigma_T / (c * m_p) * (m_i / mu_e / m_H) * v_los_i
+
+        # prefactor: [cm^2 / cm * s] = [cm s]
+        consts = -1.0 * self.sigma_thomson / self.c_cgs
+
+        # n_e [dimensionless]
+        massfac = self.hydrogen_massfrac * xe * mass * (self.UnitMass_in_g / self._sP.HubbleParam / self.mass_proton)
+
+        vel_los_cms = self.particleCodeVelocityToKms(vel_los) * 1e5 # km/s -> cm/s
+        Y_kSZ = consts * massfac * vel_los_cms
+
+        Y_kSZ /= (self.kpc_in_km * self.km_in_cm)**2 # [cm^2] -> [kpc^2]
+        return Y_kSZ
 
     def codeDensToCritRatio(self, rho, baryon=False, log=False, redshiftZero=False):
         """ Normalize code density by the critical (total/baryonic) density at some redshift. 
@@ -1475,12 +1500,12 @@ class units(object):
         return flux / solid_angle
 
     def synchrotronPowerPerFreq(self, gas_B, gas_vol, watts_per_hz=True, log=False, 
-          telescope='SKA',   # telescope/observing configurations from Vazza+ (2015) as below
-          eta = 1.0,         # radio between the u_dens in relativistic particles and the magnetic u_dens
-          k = 10,            # energy density ratio between (relativistic) protons and electrons
-          gamma_min = 300,   # lower limit for the Lorentz factor of the electrons
-          gamma_max = 15000, # upper limit for the Lorentz factor of the electrons
-          alpha = 1.7):      # spectral index
+            telescope='SKA',   # telescope/observing configurations from Vazza+ (2015) as below
+            eta = 1.0,         # radio between the u_dens in relativistic particles and the magnetic u_dens
+            k = 10,            # energy density ratio between (relativistic) protons and electrons
+            gamma_min = 300,   # lower limit for the Lorentz factor of the electrons
+            gamma_max = 15000, # upper limit for the Lorentz factor of the electrons
+            alpha = 1.7):      # spectral index
         """ Return synchrotron power per unit frequency for gas cells with inputs gas_B and gas_vol 
         the magnetic field 3-vector and volume, both in code units. Output units [Watts/Hz]. 
         Default model parameter assumptions of Xu+ (2012)/Marinacci+ (2017). """
@@ -1488,9 +1513,9 @@ class units(object):
 
         # v0 [Mhz], delta_nu [Mhz], beam [arcsec], rms noise [mJy/beam] 
         telParams = {'VLA'   : [1400, 25, 35, 0.1],
-                     'LOFAR' : [120, 32, 25, 0.25],
-                     'ASKAP' : [1400, 300, 10, 0.01],
-                     'SKA'   : [120, 32, 10, 0.02]}
+                        'LOFAR' : [120, 32, 25, 0.25],
+                        'ASKAP' : [1400, 300, 10, 0.01],
+                        'SKA'   : [120, 32, 10, 0.02]}
 
         nu0, delta_nu, beam, rms = telParams[telescope]
 

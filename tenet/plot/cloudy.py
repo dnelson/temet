@@ -289,8 +289,8 @@ def grackleTable():
     ##filename2 = 'CloudyData_UVB=FG2011_shielded.h5' # orig
 
     filepath = '/u/dnelson/tenet/tenet/tables/cloudy/'
-    filename1 = 'grid_cooling_UVB=FG11_unshielded.hdf5'
-    filename2 = 'grid_cooling_UVB=FG11.hdf5'
+    filename1 = 'grid_cooling_UVB=FG20_unshielded.hdf5'
+    filename2 = 'grid_cooling_UVB=FG20.hdf5'
 
     # https://github.com/brittonsmith/cloudy_cooling_tools
     # https://github.com/aemerick/cloudy_tools/blob/master/FG_files/FG_shielded/grackle_cooling_curves.py
@@ -673,7 +673,6 @@ def grackleReactionRates():
 
     fig.savefig('grackle_chemistryk.pdf')
     plt.close(fig)
-
 
 def ionAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshift=0.0, metal=-1.0):
     """ Plot 2D histograms of ion abundance fraction in (density,temperature) space at one Z,z. 

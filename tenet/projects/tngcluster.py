@@ -158,6 +158,13 @@ def vis_gallery(sP, conf=0, num=20):
         size = 400.0
         sizeType = 'kpc'
         labelScale = True
+    if conf == 12:
+        partField = 'sz_yparam'
+        valMinMax = [-8.0, -4.5]
+        contourLevels = [-7.0,7.0]
+        contourSmooth = 2
+        size = 6.0 # times rvir
+        nPixels = 1000 # square aspect ratio
 
     # targets
     pri_target = sP.groups('GroupPrimaryZoomTarget')
@@ -184,6 +191,23 @@ def vis_gallery(sP, conf=0, num=20):
         nRows      = int(np.ceil(num/nCols))
 
         saveFilename = './gallery_%s_%d_%s-%s_n%d.pdf' % (sP.simName,sP.snap,partType,partField,num)
+
+    if conf == 12:
+        # tSZ and kSZ side-by-side
+        ksz_vmm = [-9.0,9.0] # [-5e-6,5e-6] # linear vs +/-log
+        panels.append({'partField':'ksz_yparam', 'subhaloInd':subID, 'valMinMax':ksz_vmm})
+
+        plotConfig.nCols = 2
+
+        panels[0]['contour'] = ['gas','sz_yparam']
+        panels[1]['contour'] = ['gas','ksz_yparam']
+
+        panels[0]['labelHalo'] = 'mhalo,id'
+        panels[0]['labelSim'] = True
+        panels[1]['labelScale'] = True
+        panels[1]['labelZ'] = True
+
+        #plotConfig.plotStyle = 'open'
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -1310,12 +1334,12 @@ def szy_vs_halomass(sPs):
         ax2.fill_between(xx, y_lower, y_upper, color='#000000', alpha=0.3, zorder=-3, label='Jimeno+ (2018) Planck')
 
         # Hill+ 2018
-        #M500 = np.array([1.0e12, 1.0e13, 6.63e13, 2.44e14, 5.59e14, 1.0e15])
-        #Y500 = np.array([2.845e-9, 5.687e-7, 5.381e-5, 5.179e-4, 2.218e-3, 6.074e-3]) # arcmin^2 at z=0.15
-        #Y500 *= 3600 # arcsec^2
-        #Y500 *= sPs[0].units.arcsecToAngSizeKpcAtRedshift(1.0, 0.15)**2 / 1e6 # convert to pMpc^2
+        M500 = np.array([1.0e12, 1.0e13, 6.63e13, 2.44e14, 5.59e14, 1.0e15])
+        Y500 = np.array([2.845e-9, 5.687e-7, 5.381e-5, 5.179e-4, 2.218e-3, 6.074e-3]) # arcmin^2 at z=0.15
+        Y500 *= 3600 # arcsec^2
+        Y500 *= sPs[0].units.arcsecToAngSizeKpcAtRedshift(1.0, 0.15)**2 / 1e6 # convert to pMpc^2
 
-        #ax2.plot(np.log10(M500), np.log10(Y500), ':', color='#000000', alpha=0.7, label='Hill+ (2018) CB')
+        ax2.plot(np.log10(M500), np.log10(Y500), ':', color='#000000', alpha=0.7, label='Hill+ (2018) CB')
 
         # self-similar slope
         M500 = np.array([1.5e14, 5e14])
@@ -1330,13 +1354,13 @@ def szy_vs_halomass(sPs):
         n19 = nagarajan19()
 
         #ax.plot(h21['m500'], h21['sz_y'], 'p', color='#000000', ms=6, alpha=0.7)
-        #ax.plot(p13['M500'], p13['Y500'], '*', color='#000000', ms=6, alpha=0.7)
+        ax.plot(p13['M500'], p13['Y500'], '*', color='#000000', ms=6, alpha=0.7)
         #ax.plot(b15['M500'], b15['Y'], 's', color='#000000', ms=6, alpha=0.7)
 
         xerr = np.vstack((n19['M500_errdown'],n19['M500_errup']))
         yerr = np.vstack((n19['Y_errup'],n19['Y_errdown']))
         ax2.errorbar(n19['M500'], n19['Y'], xerr=xerr, yerr=yerr, fmt='D', zorder=-2, 
-                     color='#aaaaaa', ms=6, alpha=0.7, label=n19['label'])
+                     color='#888888', ms=6, alpha=0.7, label=n19['label'])
         
         # Adam+2023 XXL Survey - Fig 8 right panel (NIKA2 points, direct NFW mass modeling, also from other authors)
         a22_label     = 'Adam+ (2023)'
@@ -1349,8 +1373,8 @@ def szy_vs_halomass(sPs):
 
         xerr = np.vstack((a23_m500_err1 - a23_m500,a23_m500 - a23_m500_err2))
         yerr = np.vstack((a23_y500_err1 - a23_y500,a23_y500 - a23_y500_err2))
-        #ax2.errorbar(a23_m500, a23_y500, xerr=xerr, yerr=yerr, fmt='s', zorder=-2, 
-        #             color='#444444', ms=6, alpha=0.7, label=a22_label)
+        ax2.errorbar(a23_m500, a23_y500, xerr=xerr, yerr=yerr, fmt='s', zorder=-2, 
+                     color='#444444', ms=6, alpha=0.7, label=a22_label)
 
         # second legend
         ax2.legend(loc='lower right')
@@ -2017,6 +2041,7 @@ def paperPlots():
         for conf in range(11):
             vis_gallery(TNG_C, conf=conf, num=1) # single
         vis_gallery(TNG_C, conf=1, num=72) # gallery
+        #vis_gallery(TNG_C, conf=12, num=1) # AtLAST White Paper for Aurora
 
     # figure 7 - gas fractions
     if 0:
