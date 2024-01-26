@@ -96,6 +96,7 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      'tng50-4-dark':['tng_dm',270],
                      'tng-cluster':['tng',8192],
                      'tng-cluster-dark':['tng_dm',2048],
+                     'cosmostng':['cosmostng',1],
                      'mtng':['mtng',4320],
                      'mtng-dark':['mtng_dm',4320],
                      'tng-local-dark':['tng_dm_local',512],
@@ -729,9 +730,9 @@ class simParams:
         # STRUCTURES
         if run in ['structures']:
             assert hInd is not None
-            assert self.variant in ['DM','SN','SNPIPE','TNG','ST']
+            assert self.variant in ['DM','SN','SNU1','SNU2','SNU3','SNU4','SNPIPE','TNG','ST']
 
-            self.validResLevels = [11,12,14,18,26]
+            self.validResLevels = [11,12,13,14,15]
             self.groupOrdered = True
 
             # TNG50-1 zooms to z=3
@@ -774,6 +775,41 @@ class simParams:
             self.icsPath    = self.basePath + 'sims.structures/ICs/output/' + icsStr
             self.arepoPath  = self.basePath + 'sims.structures/' + dirStr + '/'
             self.simName    = 'h%d_L%d_%s' % (self.hInd,self.zoomLevel,self.variant)
+
+        # COSMOSTNG
+        if run in ['cosmostng']:
+             # 8 small-scale power variations (hydro), and DMO variats
+            assert self.variant in ['A','B','C','D','E','F','G','H',
+                                    'DM-A','DM-B','DM-C','DM-D','DM-E','DM-F','DM-G','DM-H']
+
+            self.validResLevels = [1,2,3] # "1" is cosmosTNG-1 (TNG100-1), -2 is TNG100-2, -3 is TNG100-3
+            self.groupOrdered = True
+
+            self.gravSoft = 1.0 * 2**(res-1)
+            if self.variant != 'DM':
+                self.targetGasMass = 9.43950e-5 * 8**(res-1)
+            self.boxSize = 512000.0 # ckpc/h (constrained high-res region is in the center)
+
+            # common: Planck2015 TNG cosmology
+            self.omega_m     = 0.3089
+            self.omega_L     = 0.6911
+            self.omega_b     = 0.0486
+            self.HubbleParam = 0.6774
+
+            # physics
+            if self.variant == 'TNG':
+                self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,0,-1,-1,-1,-1,-1] # LastStarTime only
+                self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
+                self.winds = 2
+                self.BHs   = 2
+
+            # paths
+            dirStr = 'cosmosTNG-%d-%s' % (self.res,self.variant)
+            icsStr = '' # todo
+
+            self.icsPath    = self.basePath + 'sims.cosmosTNG/InitialConditions/' + icsStr
+            self.arepoPath  = self.basePath + 'sims.cosmosTNG/' + dirStr + '/'
+            self.simName    = 'cosmosTNG-%d-%s' % (self.res,self.variant)
 
         # AURIGA
         if run in ['auriga','auriga_dm']:
