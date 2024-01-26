@@ -154,6 +154,32 @@ def photoRate(freq, J_nu, ion):
 
     return rate
 
+def uvbEnergyDensity(freq, J_nu, eV_min=6.0, eV_max=13.6):
+    """ Compute the energy density of the UVB between eV_min and eV_max.
+    Args:
+      freq (ndarray[float]): frequency i.e. energy [Rydberg].
+      J_nu (ndarray[float]): uvb intensity [linear erg/s/cm^2/Hz/sr].
+      eV_min (float): minimum energy [eV].
+      eV_max (float): maximum energy [eV].
+
+    Returns:
+      float: energy density U [erg/cm^3].
+    """
+    # integral of (J_nu / c) dnu from eV_min to eV_max
+    freq_hz = freq * 3.28984e15
+    dfreq_hz = np.diff(freq_hz)
+    dfreq_hz = np.hstack((dfreq_hz,dfreq_hz[-1]))
+
+    c_cm_s = 2.9979e10
+    freq_eV = 13.6 * freq
+    ind = np.where((freq_eV > eV_min) & (freq_eV <= eV_max))
+
+    integrand = J_nu[ind] / c_cm_s # [erg/cm^3/Hz]
+
+    energy_dens = np.trapz(integrand, freq_hz[ind]) # np.sum(integrand * dfreq_hz[ind]) 
+    
+    return energy_dens
+
 def uvbPhotoionAtten(log_hDens, log_temp, redshift):
     """ Compute the reduction in the photoionisation rate at an energy of 13.6 eV at a given 
     density [log cm^-3] and temperature [log K], using the Rahmati+ (2012) fitting formula.

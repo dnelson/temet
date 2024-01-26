@@ -638,8 +638,6 @@ def grackleReactionRates():
             k25 = np.log10(f['UVBRates/Chemistry/k25'][()])
             k26 = np.log10(f['UVBRates/Chemistry/k26'][()])
 
-        
-
         uvb = filename.split('UVB=')[1].split('_')[0].split('.')[0]
         data[uvb] = z, k24, k25, k26
         print(uvb)
@@ -672,6 +670,79 @@ def grackleReactionRates():
     ax.legend(loc='lower left')
 
     fig.savefig('grackle_chemistryk.pdf')
+    plt.close(fig)
+
+def uvbEnergyDens():
+    """ Plot the UVB energy density as a function of redshift, integrating  """
+    from ..cosmo.hydrogen import uvbEnergyDensity
+    from ..cosmo.cloudyGrid import loadUVB
+    from datetime import datetime
+    from scipy.interpolate import interp1d
+
+    # config
+    uvb_names = ['HM12','P19','FG11','FG20']
+    eV_min = 6.0
+    eV_max = 13.6
+
+    # load
+    uvbs_z = []
+    uvbs_u = []
+
+    for uvb in uvb_names:
+        uvbs = loadUVB(uvb)
+
+        z_local = np.array([u['redshift'] for u in uvbs])
+        u_local = np.zeros(z_local.size, dtype='float32')
+
+        for i, u in enumerate(uvbs):
+            J_loc = 10.0**u['J_nu'].astype('float64') # linear
+            
+            u_local[i] = np.log10(uvbEnergyDensity(u['freqRyd'], J_loc, eV_min=eV_min, eV_max=eV_max))
+
+        # fix 7<z<10 oscillations in FG11
+        if uvb == 'FG11':
+            bad_inds = [144, 145, 149, 150, 151, 155, 156, 157, 161, 162, 163, 167, 168, 
+                         169, 174, 175, 176, 181, 182, 183, 188, 189, 190, 191, 196, 197, 
+                         198, 203, 204, 205, 206, 212]
+            good_mask = np.zeros(z_local.size, dtype='int32')
+            good_mask[bad_inds] = 1
+            good_inds = np.where(good_mask == 0)
+
+            f_interp = interp1d(z_local[good_inds], u_local[good_inds], kind='linear')
+            u_local[bad_inds] = f_interp(z_local[bad_inds])
+
+        uvbs_z.append(z_local)
+        uvbs_u.append(u_local)
+
+    # write HDF5 file (used for MCST i.e. SFR_MCS model project)
+    with h5py.File('uvb_energydens.hdf5','w') as f:
+        for i, uvb_name in enumerate(uvb_names):
+            f['%s/Redshift' % uvb_name] = uvbs_z[i].astype('float32')
+            f['%s/EnergyDensity' % uvb_name] = uvbs_u[i]
+            f['%s' % uvb_name].attrs['eV_min'] = eV_min
+            f['%s' % uvb_name].attrs['eV_max'] = eV_max
+            f['%s' % uvb_name].attrs['created_by'] = 'dnelson'.encode('ascii')
+            f['%s' % uvb_name].attrs['created_on'] = datetime.now().strftime("%d-%m-%Y").encode('ascii')
+
+    # plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel('UVB Energy Density %.1f-%.1f eV [ log erg cm$^{-3}$ ]' % (eV_min,eV_max))
+    ax.set_xlim([-0.5,11.0])
+    ax.set_ylim([-19.0,-13.0])
+
+    for i, uvb_name in enumerate(uvb_names):
+        ax.plot(uvbs_z[i], uvbs_u[i], lw=lw, label=uvb_name)
+        #if uvb_name == 'FG11':
+        #    ax.plot(uvbs_z[i][bad_inds], uvbs_u[i][bad_inds], 's', lw=lw, color='black')
+
+    ax.plot([0.0], np.log10(1.71e-16), marker='o', color='black', label='HM12 (old z=0 value)')
+
+    ax.legend(loc='lower left')
+
+    fig.savefig('uvb_energydens.pdf')
     plt.close(fig)
 
 def ionAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshift=0.0, metal=-1.0):

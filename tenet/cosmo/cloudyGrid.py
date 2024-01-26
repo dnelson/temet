@@ -228,6 +228,10 @@ def _loadExternalUVB(redshifts=None, hm12=False, puchwein19=False):
     wavelength = data[1:,0] # first column of each line after the first, rest-frame angstroms
     J_lambda = data[1:,1:-1] # remaining columns of each line after the first, erg/s/cm^2/Hz/sr
 
+    # put in ascending frequency, to be consistent with FG11/FG20
+    wavelength = wavelength[::-1]
+    J_lambda = J_lambda[::-1,:]
+
     # convert zeros to negligible non-zeros
     w = np.where(J_lambda == 0.0)
     J_lambda[w] = np.nan
@@ -325,7 +329,7 @@ def cloudyUVBInput(gv):
         self-shielding attenuation (at >= 13.6 eV) using the Rahmati+ (2013) fitting formula.
     """
     # load UVB at this redshift
-    uvb = loadUVB(gv['uvb'])
+    uvb = loadUVB(gv['uvb'], redshifts=[gv['redshift']])
 
     highFreqJnuVal = -35.0 # value to mimic essentially zero at low (or high) frequencies
 
@@ -378,11 +382,17 @@ def makeCloudyConfigFile(gridVals):
     #confLines.append("no Compton effect")         # disable Compton heating/cooling
 
     if gridVals['res'] == 'grackle':
-        #confLines.append("no molecules")             # only atomic cooling processes (use for H2)
         confLines.append("set WeakHeatCool -30.0")   # by default is 0.05 i.e. do not output small rates
         confLines.append("CMB redshift " + str(gridVals['redshift'])) # set CMB temperature
-        #confLines.append("cosmic rays background -16.0 log") # include (MW-like) CR background
-        #confLines.append("save heating \"" + gridVals['outputFileName'] + "\"") # save heating/cooling rates [erg/s/cm^3]
+        confLines.append("no H2 molecules")          # disable H2 molecular chemistry (equil timescales are not realistic)
+
+        # include CR background: take Indriolo+07 value (2e-16 s^-1) at nH_0 ~ 2e2 cm^-3, scale with nH^1
+        #gamma_cr0 = 2e-16
+        #gamma_cr_nh0 = 2e2
+        #gamma_cr = np.log10(gamma_cr0 * 10.0**gridVals['hydrogenDens']/gamma_cr_nh0)
+        #confLines.append("cosmic rays background %.3f log" % gamma_cr) # include CR background
+
+        #confLines.append("save heating \"" + gridVals['outputFileName'] + "\"") # save details of heating/cooling rates
 
     # UV background specification (grid point in redshift/incident radiation field)
     for uvbLine in cloudyUVBInput(gridVals):
@@ -490,6 +500,12 @@ def _getRhoTZzGrid(res, uvb):
                               2.5,2.8,3.1,3.5,4.0,4.5,5.0,6.0,7.0,8.0,8.02,9.0,10.0])
         if uvb in ['FG11','FG11_unshielded']:
             redshifts = np.delete(redshifts, np.where(redshifts == 8.02))
+
+        # TEST: just do one point
+        #densities = np.array([2.0])
+        #temps = np.array([3.0])
+        #metals = np.array([-8.0, 0.0]) 
+        #redshifts = np.array([0.0])
     
     densities[np.abs(densities) < eps] = 0.0
     metals[np.abs(metals) < eps] = 0.0
