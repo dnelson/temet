@@ -118,6 +118,9 @@ dt.log = True
 @snap_field(alias='temperature')
 def temp(sim, partType, field, args):
     """ Gas temperature. """
+    if sim.snapHasField(partType, 'GrackleTemperature'):
+        return sim.snapshotSubset(partType, 'GrackleTemperature', **args)
+    
     u  = sim.snapshotSubset(partType, 'u', **args)
     xe = sim.snapshotSubset(partType, 'xe', **args)
 
@@ -1868,6 +1871,7 @@ def pos_rel(sim, partType, field, args):
     if sim.refPos is not None:
         haloPos = sim.refPos # allow override
 
+    # compute
     for j in range(3):
         pos[:,j] -= haloPos[j]
 
@@ -1888,11 +1892,15 @@ pos_rel.log = False
 @snap_field(aliases=['vrel','halo_vrel','halo_relvel','relative_vel'])
 def vel_rel(sim, partType, field, args):
     """ 3D (xyz) velocity, relative to the halo/subhalo motion. """
-    if sim.isZoom:
-        subhaloID = sim.zoomSubhaloID
-        print(f'WARNING: Using {sim.zoomSubhaloID =} for zoom run to compute [{field}]!')
+    vel = sim.snapshotSubset(partType, 'vel', **args)
+
+    if isinstance(vel, dict) and vel['count'] == 0: return vel # no particles of type, empty return
 
     # get reference velocity
+    if sim.isZoom:
+        args['subhaloID'] = sim.zoomSubhaloID
+        print(f'WARNING: Using {sim.zoomSubhaloID =} for zoom run to compute [{field}]!')
+
     if args['haloID'] is None and args['subhaloID'] is None:
         assert sim.refVel is not None
         print(f'WARNING: Using refVel in non-zoom run to compute [{field}]!')
@@ -1905,10 +1913,6 @@ def vel_rel(sim, partType, field, args):
 
     if sim.refVel is not None:
         refVel = sim.refVel # allow override
-
-    vel = sim.snapshotSubset(partType, 'vel', **args)
-
-    if isinstance(vel, dict) and vel['count'] == 0: return vel # no particles of type, empty return
 
     return sim.units.particleRelativeVelInKmS(vel, refVel)
 
@@ -1933,15 +1937,15 @@ vel_rel_mag.log = False
 @snap_field(aliases=['halo_rad','rad_r500','rad_rvir','halo_rad_r500','halo_rad_rvir'])
 def rad(sim, partType, field, args):
     """ 3D radial distance from (parent) halo center. """
-    if sim.isZoom:
-        subhaloID = sim.zoomSubhaloID
-        print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
-
     pos = sim.snapshotSubset(partType, 'pos', **args)
 
     if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
     
     # get (host) halo center position
+    if sim.isZoom:
+        args['subhaloID'] = sim.zoomSubhaloID
+        print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
+
     if args['haloID'] is None and args['subhaloID'] is None:
         assert sim.refPos is not None
         print(f'WARNING: Using refPos in non-zoom run to compute [{field}]!')
@@ -1955,6 +1959,7 @@ def rad(sim, partType, field, args):
         halo = sim.halo(haloID)
         haloPos = halo['GroupPos'] # note: is identical to SubhaloPos of GroupFirstSub
 
+    # compute
     rr = sim.periodicDists(haloPos, pos)
     
     # what kind of distance?
@@ -1994,16 +1999,16 @@ rad_kpc.log = lambda sim,pt,f: True if '_linear' not in f else False
 @snap_field(aliases=['dist_2dz_r200','dist_2dz_r500'])
 def dist_2dz(sim, partType, field, args):
     """ 2D distance (i.e. impact parameter), projecting along z-hat, from (parent) halo center. """
-    if sim.isZoom:
-        subhaloID = sim.zoomSubhaloID
-        print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
-
     pos = sim.snapshotSubset(partType, 'pos', **args)
     pos = pos[:,0:2]
 
     if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
     
     # get (host) halo center position, or position of reference
+    if sim.isZoom:
+        args['subhaloID'] = sim.zoomSubhaloID
+        print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
+
     if args['haloID'] is None and args['subhaloID'] is None:
         assert sim.refPos is not None
         print(f'WARNING: Using refPos in non-zoom run to compute [{field}]!')
@@ -2018,6 +2023,7 @@ def dist_2dz(sim, partType, field, args):
         haloPos = halo['GroupPos'] # note: is identical to SubhaloPos of GroupFirstSub
         haloPos = haloPos[0:2]
 
+    # compute
     rr = sim.periodicDists2D(haloPos, pos)
     
     # what kind of distance?
@@ -2030,11 +2036,16 @@ def dist_2dz(sim, partType, field, args):
 def vrad(sim, partType, field, args):
     """ Radial velocity, relative to the central subhalo and its motion, including hubble correction.
     Optionally normalized by the halo virial velocity. Convention: negative = in, positive = out. """
-    if sim.isZoom:
-        subhaloID = sim.zoomSubhaloID
-        print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
+    pos = sim.snapshotSubset(partType, 'pos', **args)
+    vel = sim.snapshotSubset(partType, 'vel', **args)
+
+    if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
 
     # get position and velocity of reference
+    if sim.isZoom:
+        args['subhaloID'] = sim.zoomSubhaloID
+        print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
+
     if args['haloID'] is None and args['subhaloID'] is None:
         if sim.refPos is not None and sim.refVel is not None:
             print(f'WARNING: Using refPos and refVel in non-zoom run to compute [{field}]!')
@@ -2066,11 +2077,7 @@ def vrad(sim, partType, field, args):
         refPos = firstSub['SubhaloPos']
         refVel = firstSub['SubhaloVel']
 
-    pos = sim.snapshotSubset(partType, 'pos', **args)
-    vel = sim.snapshotSubset(partType, 'vel', **args)
-
-    if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
-
+    # compute
     vv = sim.units.particleRadialVelInKmS(pos, vel, refPos, refVel)
 
     if '_vvir' in field:
@@ -2092,10 +2099,6 @@ def angmom(sim, partType, field, args):
     either the 3-vector or the specific magnitude (if field contains '_mag'). """
     assert args['haloID'] is not None or args['subhaloID'] is not None
 
-    if sim.isZoom:
-        subhaloID = sim.zoomSubhaloID
-        print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
-
     pos = sim.snapshotSubset(partType, 'pos', **args)
     vel = sim.snapshotSubset(partType, 'vel', **args)
     mass = sim.snapshotSubset(partType, 'mass', **args)
@@ -2103,6 +2106,10 @@ def angmom(sim, partType, field, args):
     if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
 
     # reference position and velocity
+    if sim.isZoom:
+        args['subhaloID'] = sim.zoomSubhaloID
+        print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
+
     shID = args['subhaloID']
     if shID is None:
         shID = sim.halo(args['haloID'])['GroupFirstSub']
@@ -2111,6 +2118,7 @@ def angmom(sim, partType, field, args):
     refPos = firstSub['SubhaloPos']
     refVel = firstSub['SubhaloVel']
 
+    # compute
     if '_mag' in field:
         return sim.units.particleSpecAngMomMagInKpcKmS(pos, vel, mass, refPos, refVel)
 
