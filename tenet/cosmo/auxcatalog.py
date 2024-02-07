@@ -3225,8 +3225,9 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
     radDesc = 'code units' if not radRvirUnits else 'rvir units'
     radDesc = 'log ' + radDesc if radBinsLog else 'linear ' + radDesc
-    desc = "Quantity [%s] radial profile for [%s] from [%.1f - %.1f] %s, with [%d] bins." % \
-        (ptProperty,ptType,radMin,radMax,radDesc,radNumBins)
+    desc = "Quantity [%s] (%s) radial profile" % (ptProperty,op) if op != 'count' else '[Count] radial profile'
+    desc += " for [%s] from [%.1f - %.1f] %s, with [%d] bins." % (ptType,radMin,radMax,radDesc,radNumBins)
+
     if not radRvirUnits:
         desc += " Note: first/inner-most bin is extra, and extends from r=0 to r=%.1f." % radMin
     if Nside is not None:
@@ -3333,14 +3334,13 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     if Nside is None:
         # normal radial profiles
         radMin_log = radMin if radBinsLog else np.log10(radMin)
-        radMax_log = radMax if radBinsLog else np.log10(radMax)
         radMin_linear = 10.0**radMin_log
+        radMax_log = radMax if radBinsLog else np.log10(radMax)
         radMax_linear = 10.0**radMax_log
 
         if radRvirUnits:
             # radMin, radMax in rvir units
             rad_bin_edges = np.linspace(radMin_linear, radMax_linear, radNumBins+1) # bin edges, including inner and outer boundary
-            rbins_sq = rad_bin_edges**2
 
             # load virial radii (code units)
             gc['Subhalo_Rvir'] = sP.subhalos('rhalo_200_code')
@@ -3352,7 +3352,6 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             rad_bin_edges = np.linspace(radMin_log,radMax_log,radNumBins+1) # bin edges, including inner and outer boundary
             rad_bin_edges = np.hstack([radMin_log-1.0,rad_bin_edges]) # include an inner bin complete to r=0
 
-            rbins_sq = np.log10( (10.0**rad_bin_edges)**2 ) # we work in squared distances for speed
             rad_bins_code = 0.5*(rad_bin_edges[1:] + rad_bin_edges[:-1]) # bin centers [log]
             rad_bins_pkpc = sP.units.codeLengthToKpc( 10.0**rad_bins_code )
 
@@ -3740,7 +3739,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
             if proj2D is None:
                 # apply in 3D
-                rr = sP.periodicDistsSq(gc['SubhaloPos'][subhaloID,:], particles_pos)
+                rr = sP.periodicDists(gc['SubhaloPos'][subhaloID,:], particles_pos)
             else:
                 # apply in 2D projection, along the specified axis
                 pt_2d = gc['SubhaloPos'][subhaloID,:]
@@ -3749,7 +3748,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                 vecs_2d[:,0] = particles_pos[:,p_inds[0]]
                 vecs_2d[:,1] = particles_pos[:,p_inds[1]]
 
-                rr = sP.periodicDistsSq(pt_2d, vecs_2d) # handles 2D
+                rr = sP.periodicDists(pt_2d, vecs_2d) # handles 2D
 
                 # enforce depth restriction
                 if proj2Ddepth is not None:
@@ -3838,7 +3837,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             # weighted histogram (or other op) of rr_log distances
             if scope in ['global','global_fof']:
                 # (1) all
-                result, _, _ = binned_statistic_weighted(loc_rr, loc_val, statistic=op, bins=rbins_sq, weights=loc_wt)
+                result, _, _ = binned_statistic_weighted(loc_rr, loc_val, statistic=op, bins=rad_bin_edges, weights=loc_wt)
                 r[i,:,0] += result
 
                 # (2) self-halo
@@ -3861,14 +3860,14 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
                 if len(w[0]):
                     # this subhalo at least partially in the currently loaded data
-                    result, _, _ = binned_statistic_weighted(loc_rr[w], loc_val[w], statistic=op, bins=rbins_sq, weights=loc_wt, weights_w=w)
+                    result, _, _ = binned_statistic_weighted(loc_rr[w], loc_val[w], statistic=op, bins=rad_bin_edges, weights=loc_wt, weights_w=w)
                     r[i,:,1] += result
 
                 # (3) other-halo
                 w = np.where(loc_mask == 1)
 
                 if len(w[0]):
-                    result, _, _ = binned_statistic_weighted(loc_rr[w], loc_val[w], statistic=op, bins=rbins_sq, weights=loc_wt, weights_w=w)
+                    result, _, _ = binned_statistic_weighted(loc_rr[w], loc_val[w], statistic=op, bins=rad_bin_edges, weights=loc_wt, weights_w=w)
                     r[i,:,2] += result
 
                 if restoreSelf:
@@ -3878,11 +3877,11 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                 w = np.where(loc_mask == 0)
 
                 if len(w[0]):
-                    result, _, _ = binned_statistic_weighted(loc_rr[w], loc_val[w], statistic=op, bins=rbins_sq, weights=loc_wt, weights_w=w)
+                    result, _, _ = binned_statistic_weighted(loc_rr[w], loc_val[w], statistic=op, bins=rad_bin_edges, weights=loc_wt, weights_w=w)
                     r[i,:,3] += result
             else:
                 # subhalo/fof/global_spatial scope, only compute the self-term, or 'subfind_global' technique
-                result, _, _ = binned_statistic_weighted(loc_rr, loc_val, statistic=op, bins=rbins_sq, weights=loc_wt)
+                result, _, _ = binned_statistic_weighted(loc_rr, loc_val, statistic=op, bins=rad_bin_edges, weights=loc_wt)
                 r[i,:] += result
 
     # return
