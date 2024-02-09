@@ -585,6 +585,19 @@ def periodicDists(pt, vecs, sP, chebyshev=False, xyzMin=False):
         assert vecs.size == 3
         vecs = np.reshape(vecs, (1,3))
 
+    if len(pt) == 2:
+        assert vecs.shape[1] == 2
+        assert not chebyshev
+
+        xDist = vecs[:,0] - pt[0]
+        yDist = vecs[:,1] - pt[1]
+
+        if not sP.isSubbox:
+            correctPeriodicDistVecs(xDist, sP)
+            correctPeriodicDistVecs(yDist, sP)
+
+        return np.sqrt(xDist*xDist + yDist*yDist)
+
     # distances from one point (x,y,z) to a vector of other points [N,3]
     if pt.ndim == 1:
         xDist = vecs[:,0] - pt[0]

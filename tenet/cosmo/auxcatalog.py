@@ -3340,27 +3340,35 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
         if radRvirUnits:
             # radMin, radMax in rvir units
-            rad_bin_edges = np.linspace(radMin_linear, radMax_linear, radNumBins+1) # bin edges, including inner and outer boundary
+            # bin edges (always linear), including inner and outer boundary
+            if radBinsLog:
+                rad_bin_edges = 10.0**np.linspace(radMin_log, radMax_log, radNumBins+1)
+            else:
+                rad_bin_edges = np.linspace(radMin_linear, radMax_linear, radNumBins+1) 
 
             # load virial radii (code units)
             gc['Subhalo_Rvir'] = sP.subhalos('rhalo_200_code')
 
             radMaxCode = gc['Subhalo_Rvir'][subhaloIDsTodo].max() * radMax_linear
-            radMaxSqCode = radMaxCode**2
         else:
             # radMin, radMax in code units
-            rad_bin_edges = np.linspace(radMin_log,radMax_log,radNumBins+1) # bin edges, including inner and outer boundary
-            rad_bin_edges = np.hstack([radMin_log-1.0,rad_bin_edges]) # include an inner bin complete to r=0
+            # bin edges (always linear), including inner and outer boundary
+            if radBinsLog:
+                rad_bin_edges = np.linspace(radMin_log,radMax_log,radNumBins+1) 
+                rad_bin_edges = np.hstack([radMin_log-1.0,rad_bin_edges]) # include an inner bin complete to r=0
+                rad_bin_edges = 10.0**rad_bin_edges
+            else:
+                rad_bin_edges = np.linspace(radMin_linear,radMax_linear,radNumBins+1) 
+                rad_bin_edges = np.hstack([0.0,rad_bin_edges]) # include an inner bin complete to r=0
 
-            rad_bins_code = 0.5*(rad_bin_edges[1:] + rad_bin_edges[:-1]) # bin centers [log]
-            rad_bins_pkpc = sP.units.codeLengthToKpc( 10.0**rad_bins_code )
+            rad_bins_code = 0.5*(rad_bin_edges[1:] + rad_bin_edges[:-1]) # bin centers
+            rad_bins_pkpc = sP.units.codeLengthToKpc(rad_bins_code)
 
-            radMaxCode = 10.0**radMax_log
-            radMaxSqCode = radMaxCode**2
+            radMaxCode = radMax_linear
 
             # bin (spherical shells in 3D, circular annuli in 2D) volumes/areas [code units]
-            r_outer = 10.0**rad_bin_edges[1:]
-            r_inner = 10.0**rad_bin_edges[:-1]
+            r_outer = rad_bin_edges[1:]
+            r_inner = rad_bin_edges[:-1]
             r_inner[0] = 0.0
 
             bin_volumes_code = 4.0/3.0 * np.pi * (r_outer**3.0 - r_inner**3.0)
@@ -3421,7 +3429,6 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             else:
                 # radMax in linear rvir units
                 radMaxCode = np.nanmax(gc['Subhalo_Rvir'][subhaloIDsTodo]) * radMax * 1.05
-                radMaxSqCode = radMaxCode**2
                 maxdist = extent / 2 + radMaxCode
 
             w_spatial = np.where(np.abs(dists) > maxdist)
@@ -3743,7 +3750,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             else:
                 # apply in 2D projection, along the specified axis
                 pt_2d = gc['SubhaloPos'][subhaloID,:]
-                pt_2d = [pt_2d[p_inds[0]], pt_2d[p_inds[1]]]
+                pt_2d = np.array([pt_2d[p_inds[0]], pt_2d[p_inds[1]]])
                 vecs_2d = np.zeros((particles_pos.shape[0], 2), dtype=particles_pos.dtype)
                 vecs_2d[:,0] = particles_pos[:,p_inds[0]]
                 vecs_2d[:,1] = particles_pos[:,p_inds[1]]
@@ -3761,7 +3768,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                 # do not self count, we are accumulating the other-halo term
                 validMask[subhaloID] = 0
 
-            validMask &= (rr <= radMaxSqCode)
+            validMask &= (rr <= radMaxCode)
 
             # apply particle-level restrictions
             if ptRestrictions is not None:
@@ -3781,15 +3788,11 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                 continue # zero length of particles satisfying radial cut and restriction
 
             if radRvirUnits:
-                # distance, in units of rvir
+                # distance, in units of rvir [dimensionless linear]
                 loc_rr = rr[wValid] / gc['Subhalo_Rvir'][subhaloID]
             else:
-                # distance, in code units
+                # distance, in code units [linear]
                 loc_rr = rr[wValid]
-
-            if radBinsLog:
-                # log(code) or log(r/rvir), with any zero value set to small (included in first bin)
-                loc_rr = logZeroSafe(loc_rr, zeroVal=radMin-1.0)
 
             loc_wt = particles['weights'][loc_inds][wValid] if weighting is not None else None
 

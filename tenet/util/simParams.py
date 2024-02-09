@@ -730,7 +730,7 @@ class simParams:
         # STRUCTURES
         if run in ['structures']:
             assert hInd is not None
-            assert self.variant in ['DM','SN','SNU1','SNU2','SNU3','SNU4','SNPIPE','TNG','ST']
+            #assert self.variant in ['DM','SN','SNU1','SNU2','SNPIPE','TNG','ST','ST2'] # too many
 
             self.validResLevels = [11,12,13,14,15]
             self.groupOrdered = True
@@ -1576,8 +1576,8 @@ class simParams:
     def ptNum(self, partType):
         """ Return particle type number (in snapshots) for input partType string. 
         Allows different simulations to use arbitrary numbers for each type (so far they do not). """
-        if partType in ['dm_lowres','dm_coarse']:
-            assert self.isZoom
+        if partType in ['dmlowres','dmcoarse']:
+            assert self.isZoom or self.simName == 'TNG-Cluster'
             return 2 # sims.zooms, sims.zooms2 ICs configuration
 
         if 'PartType' in str(partType):

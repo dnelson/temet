@@ -270,7 +270,6 @@ def contamination_mindist():
         halo_zoom = sPz.groupCatSingle(haloID=0)
         halo_mass[i] = sPz.units.codeMassToLogMsun(halo_zoom['Group_M_Crit200'])
 
-        #min_dist_lr, _, _, _, _, rr, r_frac, r_massfrac = calculate_contamination(sPz)
         contam = calculate_contamination(sPz)
 
         # minimum distance to first LR particle
@@ -324,6 +323,92 @@ def contamination_mindist():
 
     ax.legend(loc='upper left')
     fig.savefig('contamination_mindist_vs_mass_L%d_hN%d_%s.pdf' % (zoomRes,len(hInds),variant))
+    plt.close(fig)
+
+def contamination_mindist2():
+    """ For a virtual box, plot contamination min dist histograms and trends. """
+    # config
+    sim = simParams(run='tng-cluster', redshift=0.0) # 7.0
+    
+    frac_thresh = 1e-3
+
+    acField_lr = 'Subhalo_RadProfile3D_Global_LowResDM_Count'
+    acField_hr = 'Subhalo_RadProfile3D_Global_HighResDM_Count'
+
+    # load data
+    ac_lr = sim.auxCat(acField_lr)
+    ac_hr = sim.auxCat(acField_hr)
+
+    # gather
+    profiles_lr = ac_lr[acField_lr]
+    profiles_hr = ac_hr[acField_hr]
+
+    subhaloIDs = ac_lr['subhaloIDs']
+    rad_bin_edges = ac_lr[acField_lr + '_attrs']['rad_bin_edges']
+    rad_bins = (rad_bin_edges[:-1] + rad_bin_edges[1:]) / 2
+
+    assert np.array_equal(ac_lr['subhaloIDs'], ac_hr['subhaloIDs'])
+    assert np.array_equal(ac_lr[acField_lr + '_attrs']['rad_bin_edges'], 
+                          ac_hr[acField_hr + '_attrs']['rad_bin_edges'])
+
+    halo_mass = sim.subhalos('mhalo_200_log')[subhaloIDs]
+    min_dists = np.zeros(len(subhaloIDs), dtype='float32')
+    min_dists_thresh = np.zeros(len(subhaloIDs), dtype='float32')
+
+    for i, hInd in enumerate(subhaloIDs):
+        # minimum distance to first LR particle
+        min_dist_ind = np.where(profiles_lr[i,:] > 0)[0]
+        if len(min_dist_ind) == 0:
+            min_dists[i] = rad_bins.max()
+        else:
+            min_dists[i] = rad_bins[min_dist_ind.min()]
+
+        # distance at which cumulative fraction of LR/HR particles exceeds a threshold (linear interp)
+        r_frac_cum  = np.cumsum(profiles_lr[i,:]) / np.cumsum(profiles_hr[i,:])
+        min_dists_thresh[i] = np.interp(frac_thresh, r_frac_cum, rad_bins)
+    
+    # plot distribution
+    xlim = [0.0, 10.0]
+    nbins = 60
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    ax.set_xlabel('Minimum Contamination Distance [$R_{\\rm 200,crit}$]')
+    ax.set_ylabel('Number of Halos')
+    ax.set_xlim(xlim)
+
+    label1 = 'Single Closest LR Particle'
+    label2 = 'Low-Resolution Fraction $f_{\\rm LR} > 10^{%d}$' % np.log10(frac_thresh)
+    ax.hist(min_dists, bins=nbins, range=xlim, lw=lw, alpha=0.7, label=label1)
+    ax.hist(min_dists_thresh, bins=nbins, range=xlim, lw=lw, alpha=0.7, label=label2)
+    ax.legend(loc='upper right')
+
+    ax.plot([1,1], ax.get_ylim(), '-', color='#bbbbbb', lw=lw, alpha=0.2)
+
+    fig.savefig('contamination_mindist_%s_%d.pdf' % (sim.simName,sim.snap))
+    plt.close(fig)
+
+    # plot min dist vs mass trend
+    fig, ax = plt.subplots(figsize=figsize)
+
+    ax.set_xlabel('Halo Mass M$_{\\rm 200c}$ [ log $M_{\\odot}$ ]')
+    ax.set_ylabel('Minimum Contamination Distance [ $R_{\\rm 200,crit}$ ]')
+    ax.set_xlim([14.25, 15.4])
+    ax.set_ylim([0.0, 10.0])
+
+    for rr in np.arange(1,7):
+        ax.plot(ax.get_xlim(), [rr,rr], '-', color='#bbbbbb', lw=lw, alpha=0.2)
+    ax.plot(halo_mass, min_dists, 'o', label=label1)
+    ax.plot(halo_mass, min_dists_thresh, 'o', label=label2)
+
+    xm, ym, _ = running_median(halo_mass, min_dists, binSize=0.1)
+    xm2, ym2, _ = running_median(halo_mass, min_dists_thresh, binSize=0.1)
+    ym = savgol_filter(ym, sKn, sKo)
+    ax.plot(xm, ym, '--', lw=lw*2, color='black', alpha=0.7, label='Median (Closest LR particle)')
+    ax.plot(xm2, ym2, '-', lw=lw*2, color='black', label='Median ($f_{\\rm LR} > 10^{%d}$)' % np.log10(frac_thresh))
+
+    ax.legend(loc='upper left')
+    fig.savefig('contamination_mindist_vs_mass_%s_%d.pdf' % (sim.simName,sim.snap))
     plt.close(fig)
 
 def sizefacComparison():
@@ -526,31 +611,22 @@ def zoomBoxVis(sPz=None, conf=0):
     # render config
     method     = 'sphMap_global'
     nPixels    = [1000,1000] #[1920,1920]
-    axes       = [1,2]
+    axes       = [0,1]
     labelZ     = True
     labelScale = True
     labelSim   = True
     plotHalos  = 20
 
-    if not sPz.isZoom:
-        # full box (fixed vis in box coordinates)
-        sPz = simParams(res=1820,run='tng',snap=sPz.snap)
-        zoomFac = 5000.0 / sPz.boxSize # show 1 cMpc/h size region around location
+    # size?
+    region_size_cMpc = 1.0 # show 5 cMpc size region around location
+
+    zoomFac = region_size_cMpc * 1000 * sPz.HubbleParam / sPz.boxSize 
+    sliceFac = region_size_cMpc * 1000 * sPz.HubbleParam / sPz.boxSize
+
+    if 1:
+        # center on zoom halo
+        absCenPos = sPz.subhalo(sPz.zoomSubhaloID)['SubhaloPos']
         relCenPos = None
-        absCenPos = [3.64e4, 3.9e4, 0.0] # from Shy's movie
-        absCenPos = [3.9e4, 0.0, 3.64e4] # axes = [1,2] order
-        sliceFac = 5000.0 / sPz.boxSize # 1000 ckpc/h depth
-        print('Centering on: ', absCenPos)
-
-    if sPz.isZoom:
-        # zoom 5405 (fixed vis in box coordinates around the object)
-        zoomFac = 3000.0 / sPz.boxSize # show 1 cMpc/h size region around location
-        relCenPos = [0.5,0.5,0.5]
-
-        sliceFac = 10000.0 / sPz.boxSize # 1000 ckpc/h depth
-        #absCenPos = [3.6e4+1000, 75000/2-3000, 75000/2] # axes = [1,2] order
-        absCenPos = None
-        #print('Centering on: ', absCenPos)
 
     # setup panels
     if conf == 0:
@@ -558,10 +634,13 @@ def zoomBoxVis(sPz=None, conf=0):
         p = {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 9.0]}
     if conf == 1:
         # gas column density
-        p = {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 8.0]}
+        p = {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5, 7.5]}
     if conf == 2:
+        # gas temp
+        p = {'partType':'gas', 'partField':'temp', 'valMinMax':[3.5, 5.0]}
+    if conf == 3:
         # stars
-        p = {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[4.8,7.8]}
+        p = {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[4.0, 8.0]}
 
     panel_zoom = p.copy()
     #panel_parent = p.copy()
@@ -575,7 +654,7 @@ def zoomBoxVis(sPz=None, conf=0):
         plotStyle    = 'open'
         rasterPx     = nPixels[0]
         colorbars    = True
-        saveFilename = './zoomBoxVis_%s_%s_snap%d.pdf' % (sPz.simName,p['partType'],sPz.snap)
+        saveFilename = './zoomBoxVis_%s_%s-%s_snap%d.png' % (sPz.simName,p['partType'],p['partField'],sPz.snap)
 
     renderBox(panels, plotConfig, locals(), skipExisting=False)
 
@@ -689,11 +768,10 @@ def mstarVsMhaloEvo():
     """ Plot galaxy stellar mass vs halo mass evolution/relation, comparison between runs. 
     """
     # config simulations and field
-    variants = ['SN','SNPIPE','TNG','ST']
-    res = [11, 12, 14, 18, 26]
-    hInd = 1242 #10677 #31619
+    variants = ['SN','SNU1','SNU2'] #'SNPIPE','TNG','ST']
+    res = [11, 12, 13]#, 14, 15]
+    hInd = 31619 #1242 #10677
     redshift = 3.0
-    mpbBased = True # if True, use SubLink MPB for SFH, else use histogram of stellar zform
 
     # add all simulations which exist, skipping those which do not
     sims = []

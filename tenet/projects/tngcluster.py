@@ -192,7 +192,7 @@ def vis_gallery(sP, conf=0, num=20):
 
         saveFilename = './gallery_%s_%d_%s-%s_n%d.pdf' % (sP.simName,sP.snap,partType,partField,num)
 
-    if conf == 12:
+    if 0 and conf == 12:
         # tSZ and kSZ side-by-side
         ksz_vmm = [-9.0,9.0] # [-5e-6,5e-6] # linear vs +/-log
         panels.append({'partField':'ksz_yparam', 'subhaloInd':subID, 'valMinMax':ksz_vmm})
@@ -209,7 +209,14 @@ def vis_gallery(sP, conf=0, num=20):
 
         #plotConfig.plotStyle = 'open'
 
-    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+    ret = renderSingleHalo(panels, plotConfig, locals(), skipExisting=False, returnData=True)
+
+    with h5py.File('%s.hdf5' % partField, 'w') as f:
+        f['grid'] = ret[0]
+        for key in ret[1]:
+            f['grid'].attrs[key] = ret[1][key]
+
+    import pdb; pdb.set_trace()
 
 def mass_function(secondaries=False):
     """ Plot halo mass function from the parent box (TNG300) and the zoom sample. 
@@ -1298,7 +1305,7 @@ def szy_vs_halomass(sPs):
     sizefac = 0.8 # for single column figure
 
     yQuant = 'szy_r500c_3d' # 2D: 'szy_r500c_2d' (only for TNG-Cluster)
-    ylim = [-5.8, -3.5]
+    ylim = [-5.6, -3.4]
     scatterColor = None
 
     def _draw_data_pre(ax):
@@ -1312,17 +1319,19 @@ def szy_vs_halomass(sPs):
 
         # (1) observational shaded bands
 
-        # lines from Jimeno+18 (Fig 7) for Planck (red)
-        xx = np.log10([8.012e13, 3.0e15]) # 1.655e15
-        y_lower = np.log10([7.818e-7, 0.00052325]) # 1.798e-4
-        y_upper = np.log10([1.578e-6, 0.00106515]) # 3.655e-4
+        # could add: https://arxiv.org/abs/2402.04006
 
-        ax2.fill_between(xx, y_lower, y_upper, color='#000000', alpha=0.2, zorder=-4, label='Planck XX (2013)')
+        # lines from Jimeno+18 (Fig 7) for Planck (red)
+        #xx = np.log10([8.012e13, 3.0e15]) # 1.655e15
+        #y_lower = np.log10([7.818e-7, 0.00052325]) # 1.798e-4
+        #y_upper = np.log10([1.578e-6, 0.00106515]) # 3.655e-4
+
+        #ax2.fill_between(xx, y_lower, y_upper, color='#000000', alpha=0.2, zorder=-4, label='Planck XX (2013)')
 
         # lines from Jimeno+18 (Fig 7) for that work (blue)
-        xx = np.log10([8.012e13, 3.0e15])
-        y_lower = np.log10([8.244e-7, 0.000380666])
-        y_upper = np.log10([1.447e-6, 0.000658573])
+        #xx = np.log10([8.012e13, 3.0e15])
+        #y_lower = np.log10([8.244e-7, 0.000380666])
+        #y_upper = np.log10([1.447e-6, 0.000658573])
 
         # Jimeno+ (2018) https://arxiv.org/abs/1706.00395 (Eqn. 30)
         #M500 = 10.0**np.array(ax.get_xlim()) # msun
@@ -1331,7 +1340,7 @@ def szy_vs_halomass(sPs):
         #Y500 = np.log10(Y500 * 1e-4) # convert to pMpc^2
         #ax.plot(np.log10(M500), Y500, '-', color='#000000', alpha=0.7, label='Jimeno+ (2018) Planck')
 
-        ax2.fill_between(xx, y_lower, y_upper, color='#000000', alpha=0.3, zorder=-3, label='Jimeno+ (2018) Planck')
+        #ax2.fill_between(xx, y_lower, y_upper, color='#000000', alpha=0.3, zorder=-3, label='Jimeno+ (2018) Planck')
 
         # Hill+ 2018
         M500 = np.array([1.0e12, 1.0e13, 6.63e13, 2.44e14, 5.59e14, 1.0e15])
@@ -1339,13 +1348,14 @@ def szy_vs_halomass(sPs):
         Y500 *= 3600 # arcsec^2
         Y500 *= sPs[0].units.arcsecToAngSizeKpcAtRedshift(1.0, 0.15)**2 / 1e6 # convert to pMpc^2
 
-        ax2.plot(np.log10(M500), np.log10(Y500), ':', color='#000000', alpha=0.7, label='Hill+ (2018) CB')
+        ax2.plot(np.log10(M500), np.log10(Y500), '--', lw=lw, color='#000000', alpha=0.7, label='Hill+ (2018) CB')
 
         # self-similar slope
         M500 = np.array([1.5e14, 5e14])
-        Y500 = np.log10(1e-4 * (M500/5e14)**(5/3))
+        Y500 = np.log10(2e-5 * (M500/5e14)**(5/3))
 
-        ax2.plot(np.log10(M500), Y500, '--', color='#000000', alpha=0.7, label='$\\rm{Y_{500} \propto M_{500}^{5/3}}$')
+        ax.plot(np.log10(M500), Y500, ':', color='#000000', alpha=0.7, label='$\\rm{Y_{500} \propto M_{500}^{5/3}}$')
+
 
         # (2) observational pointsets
         #b15 = bleem15spt(sPs[0])
@@ -1354,13 +1364,13 @@ def szy_vs_halomass(sPs):
         n19 = nagarajan19()
 
         #ax.plot(h21['m500'], h21['sz_y'], 'p', color='#000000', ms=6, alpha=0.7)
-        ax.plot(p13['M500'], p13['Y500'], '*', color='#000000', ms=6, alpha=0.7)
+        ax2.plot(p13['M500'], p13['Y500'], '*', color='#000000', ms=10, alpha=0.7, label='Planck XX (2013)')
         #ax.plot(b15['M500'], b15['Y'], 's', color='#000000', ms=6, alpha=0.7)
 
         xerr = np.vstack((n19['M500_errdown'],n19['M500_errup']))
         yerr = np.vstack((n19['Y_errup'],n19['Y_errdown']))
         ax2.errorbar(n19['M500'], n19['Y'], xerr=xerr, yerr=yerr, fmt='D', zorder=-2, 
-                     color='#888888', ms=6, alpha=0.7, label=n19['label'])
+                     color='#555555', ms=6, alpha=0.7, label=n19['label'])
         
         # Adam+2023 XXL Survey - Fig 8 right panel (NIKA2 points, direct NFW mass modeling, also from other authors)
         a22_label     = 'Adam+ (2023)'
@@ -1374,7 +1384,13 @@ def szy_vs_halomass(sPs):
         xerr = np.vstack((a23_m500_err1 - a23_m500,a23_m500 - a23_m500_err2))
         yerr = np.vstack((a23_y500_err1 - a23_y500,a23_y500 - a23_y500_err2))
         ax2.errorbar(a23_m500, a23_y500, xerr=xerr, yerr=yerr, fmt='s', zorder=-2, 
-                     color='#444444', ms=6, alpha=0.7, label=a22_label)
+                     color='#444444', ms=10, alpha=0.7, label=a22_label)
+        
+        # Planck+16 as compiled in McCarthy+17 (for <5r500)!
+        #m17_xx = [14.18, 14.26, 14.36, 14.45, 14.56, 14.64, 14.75, 14.85, 14.94]
+        #m17_yy = [-4.87, -4.66, -4.48, -4.39, -4.17, -4.06, -3.89, -3.73, -3.56]
+        #m17_yy_lower = [-5.04, -4.87, -4.76, -4.53, -4.35, -4.19, -4.03, -3.87, -3.70]
+        #m17_yy_upper = [-4.60, -4.47, -4.27, -4.17, -4.00, -3.89, -3.75, -3.62, -3.43]
 
         # second legend
         ax2.legend(loc='lower right')
@@ -1616,11 +1632,11 @@ def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
     subhaloIDs = ac['subhaloIDs']
 
     assert attrs['radRvirUnits'] == True # otherwise generalize
-    assert attrs['radBinsLog'] == True # otherwise generalize (although bins are actually linear)
+    assert attrs['radBinsLog'] == True # otherwise generalize
 
     rad_bin_edges = attrs['rad_bin_edges']
     rad_bin_cen = (rad_bin_edges[1:] + rad_bin_edges[:-1]) / 2
-    rad_bin_cen[0] = 0.0 #rad_bin_edges[0]
+    rad_bin_cen[0] = rad_bin_edges[0]
     rad_bin_cen[-1] = rad_bin_edges[-1]
 
     # masses and color values
@@ -1644,16 +1660,16 @@ def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
 
     # plot config
     ctName = 'thermal'
-    xlim = [0.0, 1.5]
+    xlim = [0.01, 1.5]
 
     ylabel, _, ylog = sim.simParticleQuantity(attrs['ptType'], attrs['ptProperty'])
     if quant == 'Metallicity':
         ylabel = ylabel.replace('log ','')
              
-    ylims = {'Metallicity' : [0.08, 0.82],
-             'Temp'        : [7.1, 8.4],
+    ylims = {'Metallicity' : [0.04, 1.12],
+             'Temp'        : [7.1, 8.2],
              'ne'          : [-3.6, -0.5],
-             'Entropy'     : [8.3, 10.5]}
+             'Entropy'     : [8.1, 11.0]}
     ylog = {'Metallicity' : False,
             'Temp'        : True,
             'ne'          : True,
@@ -1677,7 +1693,8 @@ def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
     ax.set_ylabel(ylabel)
 
     ax.set_xlim(xlim)
-    ax.set_xticks([0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5])
+    ax.set_xscale('log')
+    #ax.set_xticks([0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5])
     ax.set_ylim(ylims[quant])
 
     # plot
@@ -1689,13 +1706,13 @@ def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
         lw = 1.0
 
         # temp: is value at 0<r<0.25 less than 0.75<r<1.0
-        if quant == 'Temp':
-            w1 = np.where((rad_bin_cen >= 0.0) & (rad_bin_cen < 0.25))[0]
-            w2 = np.where((rad_bin_cen >= 0.75) & (rad_bin_cen < 1.0))[0]
-            if np.nanmedian(data[i,w1]) < np.nanmedian(data[i,w2]):
-                ls = '-'
-                alpha = 1.0
-                lw = 1.0
+        #if quant == 'Temp':
+        #    w1 = np.where((rad_bin_cen >= 0.0) & (rad_bin_cen < 0.25))[0]
+        #    w2 = np.where((rad_bin_cen >= 0.75) & (rad_bin_cen < 1.0))[0]
+        #   if np.nanmedian(data[i,w1]) < np.nanmedian(data[i,w2]):
+        #        ls = '-'
+        #        alpha = 1.0
+        #        lw = 1.0
     
         ax.plot(rad_bin_cen, data[i,:], ls=ls, color=color, lw=lw, alpha=alpha, zorder=0)
 
@@ -2027,6 +2044,8 @@ def paperPlots():
     if 0:
         for conf in [0,1,2,3,4,5,6]:
             vis_fullbox_virtual(TNG_C, conf=conf)
+        #TNG_C.setRedshift(7.0)
+        #vis_fullbox_virtual(TNG_C, conf=5)
 
     # figure 3 - samples
     if 0:
@@ -2072,9 +2091,10 @@ def paperPlots():
     # figure 12 - radial profiles
     if 0:
         cluster_radial_profiles(TNG_C, quant='Temp')
-        cluster_radial_profiles(TNG_C, quant='Metallicity') # weight='_XrayWt', weight='_XrayWt_2D')
+        cluster_radial_profiles(TNG_C, quant='Metallicity')
+        #cluster_radial_profiles(TNG_C, quant='Metallicity', weight='_XrayWt') #'_XrayWt_2D'
         cluster_radial_profiles(TNG_C, quant='Entropy')
-        #cluster_radial_profiles(TNG_C, quant='ne')
+        ##cluster_radial_profiles(TNG_C, quant='ne')
 
     # figure 13 - black hole mass scaling relation
     if 0:

@@ -1362,6 +1362,11 @@ fieldComputeFunctionMapping = \
     'Subhalo_RadProfile3D_Global_Gas_ne' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='ne',op='mean',weighting='mass',radMin=-2.0, radMax=0.3, radNumBins=50, radBinsLog=True, radRvirUnits=True, scope='global_tngcluster'),
 
+    'Subhalo_RadProfile3D_Global_HighResDM_Count' : \
+     partial(subhaloRadialProfile,ptType='dm',ptProperty='mass',op='count',radMin=0.0, radMax=10.0, radNumBins=50, radBinsLog=False, radRvirUnits=True, scope='global_tngcluster'),
+    'Subhalo_RadProfile3D_Global_LowResDM_Count' : \
+     partial(subhaloRadialProfile,ptType='dmlowres',ptProperty='mass',op='count',radMin=0.0, radMax=10.0, radNumBins=50, radBinsLog=False, radRvirUnits=True, scope='global_tngcluster'),
+
    # spherical sampling/healpix sightlines
    'Subhalo_SphericalSamples_Global_Gas_Temp_5rvir_400rad_16ns' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='temp',minHaloMass='10000dm',**sphericalSamplesOpts),
