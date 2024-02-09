@@ -424,7 +424,7 @@ def grackleTable():
                                  (data1['Metals']['Cooling'] - data1['Metals']['Heating']))
 
     # gallery of 1d ratio lines
-    pdf = PdfPages('grackle_ratio.pdf')
+    pdf = PdfPages('grackle_ratio_%s.pdf' % filename2)
     for redshift_ind, z in enumerate(redshift[0:1]): # redshift
         fig = plt.figure(figsize=(26,16))
         print('[%2d of %2d] z = %.1f (%s)' % (redshift_ind,redshift.size,z,filename))
@@ -467,7 +467,7 @@ def grackleTable():
     opts_ratio = {'extent':extent, 'norm':norm, 'origin':'lower', 'interpolation':'nearest', 'aspect':'auto', 'cmap':cmap}
     opts = {'extent':extent, 'norm':norm2, 'origin':'lower', 'interpolation':'nearest', 'aspect':'auto'}
             
-    pdf = PdfPages('grackle_ratio2d.pdf')
+    pdf = PdfPages('grackle_ratio2d_%s.pdf' % filename2)
     for redshift_ind, z in enumerate(redshift[0:1]): # redshift
 
         # unshielded only

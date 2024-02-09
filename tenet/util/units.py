@@ -1239,7 +1239,7 @@ class units(object):
         Return:
             ndarray[float]: y-parameter in units of area [pkpc^2].
         """
-        # Y_i = -sigma_T / (c * m_p) * (m_i / mu_e / m_H) * v_los_i
+        # Y_i = -sigma_T / c * n_e_i * v_los_i
 
         # prefactor: [cm^2 / cm * s] = [cm s]
         consts = -1.0 * self.sigma_thomson / self.c_cgs
@@ -1248,7 +1248,7 @@ class units(object):
         massfac = self.hydrogen_massfrac * xe * mass * (self.UnitMass_in_g / self._sP.HubbleParam / self.mass_proton)
 
         vel_los_cms = self.particleCodeVelocityToKms(vel_los) * 1e5 # km/s -> cm/s
-        Y_kSZ = consts * massfac * vel_los_cms
+        Y_kSZ = consts * massfac * vel_los_cms # [cm^2]
 
         Y_kSZ /= (self.kpc_in_km * self.km_in_cm)**2 # [cm^2] -> [kpc^2]
         return Y_kSZ

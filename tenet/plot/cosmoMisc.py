@@ -1385,7 +1385,7 @@ def depletionVsDynamicalTimescale():
 
         # 2d histo
         zz, xc, yc = np.histogram2d(t_dyn, t_dep, bins=[nBinsX, nBinsY], 
-                                    range=[tDynMinMax,tDepMinMax], normed=True)
+                                    range=[tDynMinMax,tDepMinMax], density=True)
         zz = np.transpose(zz)
         zz = np.log10(zz)
 
@@ -1422,7 +1422,7 @@ def depletionVsDynamicalTimescale():
 
         # 2d histo
         zz, xc, yc = np.histogram2d(m_star, t_dyn/t_dep, bins=[nBinsX, nBinsY], 
-                                    range=[mStarMinMax,ratioMinMax], normed=True)
+                                    range=[mStarMinMax,ratioMinMax], density=True)
         zz = np.transpose(zz)
         zz = np.log10(zz)
 
@@ -1459,7 +1459,7 @@ def depletionVsDynamicalTimescale():
 
         # 2d histo
         zz, xc, yc = np.histogram2d(m_star, t_dep, bins=[nBinsX, nBinsY], 
-                                    range=[mStarMinMax,tDepMinMax], normed=True)
+                                    range=[mStarMinMax,tDepMinMax], density=True)
         zz = np.transpose(zz)
         zz = np.log10(zz)
 

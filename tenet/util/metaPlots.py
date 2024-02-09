@@ -152,7 +152,7 @@ def plotNumPublicationsVsTime():
     from ..plot.config import figsize, lw
 
     num_start = 10 # align 'time=0' after this number of publications have appeared
-    xlim = [-0.6, 5.0] # years, [-3.2, 4.0] for num_start=100
+    xlim = [-0.6, 7.0] # years, [-3.2, 7.0] for num_start=100
 
     # load Illustris and TNG
     pub_sets = {

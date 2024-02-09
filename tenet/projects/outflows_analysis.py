@@ -613,7 +613,7 @@ def _getHaloEvoDataOneSnap(snap, sP, haloInds, minSnap, maxSnap, centerPos, scal
                 if color == 'massfrac':
                     # mass distribution in this 2D plane
                     weight = x_local['mass']
-                    zz, _, _ = np.histogram2d(xvals, yvals, bins=[histoNbins, histoNbins], range=[xlim,ylim], normed=True, weights=weight)
+                    zz, _, _ = np.histogram2d(xvals, yvals, bins=[histoNbins, histoNbins], range=[xlim,ylim], density=True, weights=weight)
                 else:
                     # each pixel colored according to its mean value of a third quantity
                     weight = vals[color]
@@ -1315,7 +1315,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
                 sample[:,k] = p_local[field]
 
             # multi-D histogram and stamp
-            hh, _ = np.histogramdd(sample, bins=h_bins[j], normed=False, weights=massflux)
+            hh, _ = np.histogramdd(sample, bins=h_bins[j], density=False, weights=massflux)
             rr[j][i,...] = hh
 
     # final unit handling: masses code->msun, and normalize out shell thicknesses

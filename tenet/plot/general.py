@@ -251,7 +251,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     If normContourQuantColMax, same but for a specified contourQuant.
     If f_pre, f_post are not None, then these are 'custom' functions accepting the axis as a single argument, which 
     are called before and after the rest of plotting, respectively.
-    If addHistX and/or addHistY, then specifies the number of bins to add marginalized 1D histogram(s).
+    If addHistX and/or addHistY, then int, specifies the number of bins to add marginalized 1D histogram(s).
     If hideBelow, then pixel values below clim[0] are left pure white. 
     If colorEmpty, then empty/unoccupied pixels are colored at the bottom of the cmap.
     If smoothSigma is not zero, gaussian smooth contours at this level. 
@@ -305,12 +305,12 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
     # arbitrary property restriction(s)?
     if qRestrictions is not None:
-        mask = np.zeros( xvals.size, dtype='int16' )
+        mask = np.zeros(xvals.size, dtype='int16')
         for rFieldName, rFieldMin, rFieldMax in qRestrictions:
             # load and update mask
             r_vals = _load_all_halos(sP, partType, rFieldName, haloIDs)
 
-            wRestrict = np.where( (r_vals < rFieldMin) | (r_vals > rFieldMax) )
+            wRestrict = np.where((r_vals < rFieldMin) | (r_vals > rFieldMax))
             mask[wRestrict] = 1
             print(' restrict [%s] eliminated [%d] of [%d] = %.2f%%' % \
                 (rFieldName,len(wRestrict[0]),mask.size,len(wRestrict[0])/mask.size*100))
@@ -375,7 +375,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         else:
             # plot 2D histogram image, optionally weighted
             zz, _, _ = np.histogram2d(xvals, yvals, bins=nBins2D, range=[xlim,ylim], 
-                                      normed=True, weights=weight)
+                                      density=True, weights=weight)
             zz = zz.T
 
             if normColMax:
@@ -415,7 +415,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
                 if contourQuant == 'mass':
                     zz, xc, yc = np.histogram2d(xvals, yvals, bins=[nBins2D[0]/2, nBins2D[1]/2], range=[xlim,ylim], 
-                                              normed=True, weights=contourq)
+                                              density=True, weights=contourq)
                 else:
                     zz, xc, yc, _ = binned_statistic_2d(xvals, yvals, contourq, 'mean',
                                                         bins=[nBins2D[0]/4, nBins2D[1]/4], range=[xlim,ylim])
@@ -438,7 +438,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
                     if clog: zz = logZeroNaN(zz)
                 else:
                     zz, xc, yc = np.histogram2d(xvals, yvals, bins=[nBins2D[0]/4, nBins2D[1]/4], range=[xlim,ylim], 
-                                                normed=True, weights=weight)
+                                                density=True, weights=weight)
                     zz = logZeroNaN(zz)
 
             XX, YY = np.meshgrid(xc[:-1], yc[:-1], indexing='ij')
@@ -503,7 +503,6 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         # horizontal histogram on the top
         fig.tight_layout()
         fig.set_tight_layout(False)
-
 
         rect = ax.get_position().bounds # [left,bottom,width,height]
         ax.set_position([rect[0],rect[1],rect[2],rect[3]-height-hpad*2])
@@ -575,6 +574,17 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         cb = plt.colorbar(im, cax=cbar_ax)
         if not binnedStat: wtStr = 'Relative ' + wtStr + ' [ log ]'
         cb.ax.set_ylabel(wtStr)
+
+    # info legend
+    if qRestrictions is not None:
+        qLabels = []
+        for rFieldName, rFieldMin, rFieldMax in qRestrictions:
+            #rLabel, _, _ = simParticleQuantity(sP, partType, rFieldName)
+            qLabels.append('%g < %s < %g' % (rFieldMin,rFieldName,rFieldMax))
+
+        handles = [plt.Line2D( (0,1), (0,0), lw=0) for i in range(len(qLabels)) ]
+        legend = ax.legend(handles, qLabels, borderpad=0.4, loc='upper right')
+        ax.add_artist(legend)
 
     # save
     if pdf is not None:
@@ -1355,66 +1365,41 @@ def compareRuns_PhaseDiagram():
 
     pdf.close()
 
-def compareVariants_NO_OH_stellar():
-    """ Driver. Igor. """
-    import glob
-    from matplotlib.backends.backend_pdf import PdfPages
-
-    # config
-    partType = 'stars'
-    yQuant = 'N_O_massratio'
-    ylim   = [-3.5,0.0]
-    xQuant = 'O_H_massratio'
-    xlim   = [-5.5,-0.5]
-    redshift = 0.0
-
-    # variants
-    sP = simParams(res=512,run='tng',redshift=redshift,variant='0000')
-    dirs = glob.glob(sP.arepoPath + '../L25n512_*')
-    variants = sorted([d.rsplit("_",1)[1] for d in dirs])
-
-    # start PDF, add one page per run
-    pdf = PdfPages('compareRuns_x=%s_y=%s_%s.pdf' % (xQuant,yQuant,partType))
-
-    for variant in variants:
-        sP = simParams(res=512,run='tng',redshift=redshift,variant=variant)
-        if sP.simName in ['L25n512_0020','L25n512_0030']: continue
-        print(variant,sP.simName)
-        plotPhaseSpace2D(sP, partType=partType, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, pdf=pdf)
-
-    pdf.close()
-
-def oneRun_PhaseDiagram(snaps=None):
+def oneRun_PhaseDiagram(redshift=None, snaps=None, res=11, variant='SN'):
     """ Driver. """
     from matplotlib.backends.backend_pdf import PdfPages
 
     # config
-    sP = simParams(res=1080,run='tng')
+    sim = simParams(run='structures',hInd=31619,res=res,variant=variant,redshift=redshift)
+
     yQuant = 'temp'
     xQuant = 'nh'
 
-    zoom = False
-
-    if zoom:
-        xlim = [-6.0, -0.5]
-        ylim = [2.0, 4.5]
+    if sim.isZoom:
+        xlim = [-7.0, 5.0]
+        ylim = [1.0, 7.0]
+        haloIDs = None #[0]
+        qRestrictions = None # [['rad_rvir',0.0,5.0]]
+        clim = [-2.0, -0.2]
     else:
         xlim = [-9.0, 2.0]
         ylim = [2.0, 8.5]
-    clim   = [-6.0,-0.2]
+        clim = [-6.0,-0.2]
+        haloIDs = None # full box
     
-    if snaps is None:
-        #snaps = sP.validSnapList()[::2] # [99]
-        snaps = [0,10,17,18,19,20,30,40,50,60,70,80,90,99]
+    # single snapshot, or multiple?
+    if redshift is None and snaps is None:
+        snaps = sim.validSnapList()[::10] # [99]
+    if redshift is not None:
+        snaps = [sim.snap]
 
     # start PDF, add one page per snapshot
     for snap in snaps:
-        sP.setSnap(snap)
-        print(snap)
+        sim.setSnap(snap)
 
-        pdf = PdfPages('phaseDiagram_%s_%s%s_%d.pdf' % (yQuant,sP.simName,'_zoom' if zoom else '',snap))
+        pdf = PdfPages('phaseDiagram_%s_%s_%d.pdf' % (yQuant,sim.simName,snap))
 
-        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, #meancolors=[cQuant], weights=weights, 
+        plotPhaseSpace2D(sim, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs, qRestrictions=qRestrictions,
             xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, pdf=pdf)
 
         pdf.close()
@@ -1426,8 +1411,6 @@ def oneRun_tempcheck():
     # config
     sP = simParams(run='tng50-1')
     xQuant = 'nh'
-
-    zoom = False
 
     xlim = [-9.0, 3.0]
     ylim = [1.0, 8.5]
@@ -1448,7 +1431,6 @@ def oneRun_tempcheck():
             xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, pdf=pdf)
 
         pdf.close()
-
 
 def compareRuns_RadProfiles():
     """ Driver. Compare median radial profile of a quantity, differentiating between two runs. """

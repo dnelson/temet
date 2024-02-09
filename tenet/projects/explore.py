@@ -1093,7 +1093,7 @@ def magicCGMEmissionMaps():
     # loop over mass bins
     stacks = []
 
-    for i, massBin in enumerate([massBins[1]]): #enumerate(massBins):
+    for i, massBin in enumerate([massBins[5]]): #enumerate(massBins):
 
         # select subhalos
         with np.errstate(invalid='ignore'):
@@ -1161,8 +1161,6 @@ def magicCGMEmissionMaps():
         #panels[0]['grid'] = grid_stacked # override
         #panels[0]['subhaloInd'] = sub_inds[int(len(sub_inds)/2)] # dummy
         #renderSingleHalo(panels, plotConfig, locals())
-
-    import pdb; pdb.set_trace()
 
     # make final plot
     labelScale = 'physical'
