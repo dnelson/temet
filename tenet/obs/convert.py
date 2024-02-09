@@ -649,3 +649,159 @@ def hsla():
     fOut.close()
 
     print('Wrote: [%s]' % filename)
+
+def sdss_dr17_spectra():
+    """ Convert the individual FITS files for all spectra from SDSS DR17 (galaxies, stars, and QSOs) 
+    into a single HDF5 file (both SDSS and BOSS instruments).
+
+    https://dr17.sdss.org/optical/spectrum/search (rsync download all)
+    """
+
+    basepath = '/virgotng/mpia/obs/SDSS/spectra/*/*/'
+
+    metadata = {}
+    metadata['dataset_name'] = 'SDSS-DR17-SPECTRA'
+    metadata['dataset_description'] = 'Sloan Digital Sky Survey (SDSS) DR17. ' + \
+                                      'All (final) spectra from SDSS and BOSS instruments. ' + \
+                                      'Includes all targets: galaxies, stars, and quasars.'
+    
+    metadata['dataset_reference'] = 'Accetta+2022 (https://www.sdss4.org/dr17/)'
+
+    # instruments, object classes, datasets and attributes to store
+    # https://data.sdss.org/datamodel/files/BOSS_SPECTRO_REDUX/RUN2D/spectra/PLATE4/spec.html
+    instruments = ['BOSS','SDSS']
+    classes = ['GALAXY','STAR','QSO']
+
+    dset_names = ['flux','ivar','model'] # in HDU1 (loglam is unified and stored once)
+    attr_names = {'SPECOBJID':'uint64',
+                  'CLASS':'int8', # special case, index into classes
+                  'INSTRUMENT':'int8', # special case, index into instruments
+                  'Z':'float32',
+                  'Z_ERR':'float32',
+                  'VDISP':'float32',
+                  'RA':'float32',
+                  'DEC':'float32',
+                  'AIRMASS':'float32',
+                  'EXTINCTION':'float32',
+                  'SN_MEDIAN_ALL':'float32'}
+
+    # get list of individual spectra
+    paths = glob.glob(basepath + '*.fits')
+
+    print(f'Found: {len(paths)} individual FITS spectra.', flush=True)
+
+    # establish master wavelength grid (from prior inspection)
+    wave = np.arange(3.5480, 4.0180, 0.0001) # dloglam = 0.0001 always (3531 - 10324 Ang)
+    nwave = wave.size
+
+    # allocate
+    nspec = len(paths)
+
+    dsets = {}
+    attrs = {}
+
+    for name in dset_names:
+        dsets[name] = np.zeros((nspec, nwave), dtype='float32')
+        dsets[name].fill(np.nan)
+
+    for name, dtype in attr_names.items():
+        attrs[name] = np.zeros(nspec, dtype=dtype)
+        if dtype == 'float32':
+            attrs[name].fill(np.nan)
+        elif dtype in ['int8', 'int16', 'int32', 'int64']:
+            attrs[name].fill(-1)
+        
+    # loop over each input spectrum, load
+    for i, path in enumerate(paths):
+        # load
+        if i % int(np.max([1,len(paths)/10000])) == 0:
+            spec_name = path.split('/')[-1].replace('.fits','')
+            print(f'[{i/len(paths)*100:5.2f}%] [{i:6d} of {len(paths):d}] {spec_name}')
+
+        with pyfits.open(path) as f:
+            header = dict(f[0].header)
+            data = f[1].data
+            data_a = f[2].data
+
+        # determine location in wavelength grid
+        dlambda = np.squeeze(data['loglam'])[0] - wave
+        start_ind = np.argmin(np.abs(dlambda))
+        end_ind = start_ind + data['loglam'].size
+
+        wave_diffs = np.abs(np.squeeze(data['loglam']) - wave[start_ind:end_ind])
+        assert wave_diffs.max() < 1e-6
+
+        # stamp datasets
+        for name in dset_names:
+            dsets[name][i, start_ind:end_ind] = np.squeeze(data[name])
+
+        # single-values per spectrum
+        for name in attr_names:
+            if name in ['CLASS','INSTRUMENT','RA','DEC']:
+                continue
+            if name in ['AIRMASS','EXTINCTION'] and name not in data_a.names:
+                continue
+
+            if data_a[name].size == 1:
+                attrs[name][i] = data_a[name][0]
+            else:
+                attrs[name][i] = np.mean(data_a[name])
+
+        if 'RA' in data_a.names:
+            attrs['RA'][i] = data_a['RA'][0]
+            attrs['DEC'][i] = data_a['DEC'][0]
+        else:
+            attrs['RA'][i] = header['PLUG_RA']
+            attrs['DEC'][i] = header['PLUG_DEC']
+
+        attrs['CLASS'][i] = classes.index(data_a['CLASS'][0])
+        inst = data_a['INSTRUMENT'][0] if 'INSTRUMENT' in data_a.names else 'BOSS'
+        attrs['INSTRUMENT'][i] = instruments.index(inst)
+
+    # open output file
+    filename = basepath + '%s.hdf5' % metadata['dataset_name']
+    
+    with h5py.File(filename,'w') as fOut:
+    
+        # write header and metadata
+        head = fOut.create_group('Header')
+        for key, item in metadata.items():
+            head.attrs[key] = item
+
+        # write datasets
+        fOut['wave'] = 10.0**wave
+        fOut['loglam'] = wave
+
+        for name in dset_names:
+            fOut[name] = dsets[name]
+
+        # write dataset metadata
+        fOut['wave'].attrs['description'] = 'Wavelength [angstrom]'
+        fOut['loglam'].attrs['description'] = 'log10(Wavelength) [log10(angstrom)]'
+
+        fOut['flux'].attrs['description'] = 'Coadded calibrated flux [10^-17 erg/s/cm^2/angstrom]'
+        fOut['ivar'].attrs['description'] = 'Inverse variance of the flux'
+        fOut['model'].attrs['description'] = 'Pipeline best model fit used for classification and redshift'
+
+        # write attributes
+        for name in attr_names:
+            fOut[name.lower()] = attrs[name]
+
+        # write attribute metadata
+        fOut['specobjid'].attrs['description'] = 'Spectroscopic object ID based on PLATE, MJD, FIBER, (RERUN).'
+        fOut['instrument'].attrs['description'] = ', '.join(['%d=%s' % (i,inst) for i,inst in enumerate(instruments)])
+        fOut['class'].attrs['description'] = ', '.join(['%d=%s' % (i,cls) for i,cls in enumerate(classes)])
+        fOut['z'].attrs['description'] = 'Redshift'
+        fOut['z_err'].attrs['description'] = 'Redshift error based upon fit to chi^2 minimum; negative for invalid fit'
+        fOut['vdisp'].attrs['description'] = 'Velocity dispersion [km/s]'
+        fOut['ra'].attrs['description'] = 'J2000 Right Ascension [deg]'
+        fOut['dec'].attrs['description'] = 'J2000 Declination [deg]'
+        fOut['airmass'].attrs['description'] = 'Mean airmass in the 5 SDSS bands'
+        fOut['extinction'].attrs['description'] = 'Galactic extinction (SFD), mean in the 5 SDSS bands [mag]'
+        fOut['sn_median_all'].attrs['description'] = 'Median S/N for all good pixels'
+
+    fOut.close()
+
+    print('Wrote: [%s]' % filename)
+
+    
