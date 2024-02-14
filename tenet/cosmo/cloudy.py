@@ -523,6 +523,7 @@ class cloudyEmission():
                           'OVII'        : 'O  7 22.1012A',
                           'OVIII'       : 'O  8 18.9709A',
                           'CVI'         : 'C  6 33.7372A',
+                          'CIII'        : 'C  3 977.020A',
                           'NVII'        : 'N  7 24.7807A'}
 
     def __init__(self, sP, line=None, res='lg', redshiftInterp=False, order=3):
