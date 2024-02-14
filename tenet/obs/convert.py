@@ -6,7 +6,9 @@ import h5py
 from os.path import isdir, isfile
 import glob
 import matplotlib.pyplot as plt
+import multiprocessing as mp
 
+from ..util.helper import reportMemory
 from astropy.io import fits as pyfits
 from ..plot.config import *
 
@@ -650,6 +652,15 @@ def hsla():
 
     print('Wrote: [%s]' % filename)
 
+def _sdss_dr17_spectra_load(i, path):
+    """ Helper function for multiprocessing in sdss_dr17_spectra() below. """
+    with pyfits.open(path, memmap=False) as f:
+        header = dict(f[0].header)
+        data = f[1].data
+        data_a = f[2].data
+
+    return (i, header, data, data_a)
+
 def sdss_dr17_spectra():
     """ Convert the individual FITS files for all spectra from SDSS DR17 (galaxies, stars, and QSOs) 
     into a single HDF5 file (both SDSS and BOSS instruments).
@@ -666,6 +677,8 @@ def sdss_dr17_spectra():
                                       'Includes all targets: galaxies, stars, and quasars.'
     
     metadata['dataset_reference'] = 'Accetta+2022 (https://www.sdss4.org/dr17/)'
+
+    filename = '/virgotng/mpia/obs/SDSS/%s.hdf5' % metadata['dataset_name']
 
     # instruments, object classes, datasets and attributes to store
     # https://data.sdss.org/datamodel/files/BOSS_SPECTRO_REDUX/RUN2D/spectra/PLATE4/spec.html
@@ -710,18 +723,15 @@ def sdss_dr17_spectra():
             attrs[name].fill(np.nan)
         elif dtype in ['int8', 'int16', 'int32', 'int64']:
             attrs[name].fill(-1)
-        
-    # loop over each input spectrum, load
-    for i, path in enumerate(paths):
-        # load
-        if i % int(np.max([1,len(paths)/10000])) == 0:
-            spec_name = path.split('/')[-1].replace('.fits','')
-            print(f'[{i/len(paths)*100:5.2f}%] [{i:6d} of {len(paths):d}] {spec_name}')
+            
+    # async callback approach
+    def _callback(local_data): #(i, header, data, data_a):
 
-        with pyfits.open(path) as f:
-            header = dict(f[0].header)
-            data = f[1].data
-            data_a = f[2].data
+        i, header, data, data_a = local_data
+
+        if i % int(np.max([1,len(paths)/100])) == 0:
+            spec_name = paths[i].split('/')[-1].replace('.fits','')
+            print(f'[{i/len(paths)*100:5.2f}%] [{i:7d} of {len(paths):d}] {spec_name} [mem = {reportMemory():.2f} GB]', flush=True)
 
         # determine location in wavelength grid
         dlambda = np.squeeze(data['loglam'])[0] - wave
@@ -758,9 +768,16 @@ def sdss_dr17_spectra():
         inst = data_a['INSTRUMENT'][0] if 'INSTRUMENT' in data_a.names else 'BOSS'
         attrs['INSTRUMENT'][i] = instruments.index(inst)
 
+    # multiprocessing async w/ callback approach
+    pool = mp.Pool(32)
+
+    for i, path in enumerate(paths):
+        pool.apply_async(_sdss_dr17_spectra_load, args=(i, path), callback=_callback)
+
+    pool.close()
+    pool.join()
+
     # open output file
-    filename = basepath + '%s.hdf5' % metadata['dataset_name']
-    
     with h5py.File(filename,'w') as fOut:
     
         # write header and metadata
