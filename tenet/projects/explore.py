@@ -1016,7 +1016,7 @@ def arjenMasses5kpc():
     pdf.close()
 
 def magicCGMEmissionMaps():
-    """ Emission maps for MAGIC-II proposal. """
+    """ Emission maps (single, or in stacked M* bins) for MAGIC-II proposal. """
     from os import path
     import hashlib
 
@@ -1024,8 +1024,6 @@ def magicCGMEmissionMaps():
 
     lines = ['H--1-1215.67A','H--1-1025.72A','C--4-1550.78A','C--4-1548.19A','O--6-1037.62A','O--6-1031.91A',
              'S--4-1404.81A','S--4-1423.84A','S--4-1398.04A'] # (not NV, SiIV, SiIII, HeII)
-    #dataField = 'Mg II'
-    #label = 'Median Mg II Column Density [log cm$^{-2}$]'
 
     massBins = [ [8.48,8.52], [8.97,9.03], [9.45,9.55], [9.97, 10.03], [10.4,10.6], [10.8,11.2] ]
     distRvir = True
@@ -1133,7 +1131,7 @@ def magicCGMEmissionMaps():
                     # stamp
                     grid_global[:,:,j] = grid
 
-            if 1:
+            if 0:
                 # TESTING ONLY - render multiple views of first subhalo
                 subhaloInd = sub_inds[0]
                 plotConfig.saveFilename = './%s-s%d-sh%d.pdf' % (sP.simName,sP.snap,subhaloInd)
@@ -1184,3 +1182,38 @@ def magicCGMEmissionMaps():
         panels.append(p)
 
     renderSingleHalo(panels, plotConfig, locals())
+
+def magicCGMEmissionTrends():
+    """ Emission summary statisics (auxCat-based) as a function of galaxy properties, for MAGIC-II proposal. """
+    from os import path
+    from ..plot.cosmoGeneral import quantMedianVsSecondQuant
+
+    sim = simParams(run='tng50-1',redshift=0.3)
+
+    lines = ['H--1-1215.67A','H--1-1025.72A','C--4-1550.78A','C--4-1548.19A','O--6-1037.62A','O--6-1031.91A',
+             'S--4-1404.81A','S--4-1423.84A','S--4-1398.04A'] # (not NV, SiIV, SiIII, HeII)
+
+    fields = ['lum_civ1551_outercgm','lum_civ1551_innercgm']
+
+    # plot config
+    xQuant = 'mstar_30pkpc'
+    cenSatSelect = 'cen'
+
+    xlim = [9.0, 11.5]
+    clim = [-9.0, -10.5] # log sSFR
+    scatterPoints = True
+    drawMedian = False
+    markersize = 40.0
+    sizefac = 0.8 # for single column figure
+    maxPointsPerDex = 200
+
+    ylim = [35.5, 46]
+    scatterColor = 'ssfr_30pkpc'
+
+    # plot
+    for field in fields:
+        quantMedianVsSecondQuant([sim], yQuants=[field], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                                xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                                scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                                maxPointsPerDex=maxPointsPerDex, legendLoc='upper left', pdf=None)
+

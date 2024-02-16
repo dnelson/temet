@@ -657,6 +657,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_SZOffset_2D' : \
      partial(summarize_projection_2d,quantity='sz_yparam',projConf='0.5r500_d=3r200', op='peak_offset'),
 
+   # emission (cloudy-based)
    'Subhalo_OVIIr_GalaxyLum_1rstars' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O  7 21.6020A lum2phase',op='sum',rad='1rhalfstars',ptRestrictions=sfrgt0),
    'Subhalo_OVIIr_DiffuseLum_1rstars' : \
@@ -670,18 +671,23 @@ fieldComputeFunctionMapping = \
    'Subhalo_OVIIr_DiffuseLum_30pkpc' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O  7 21.6020A lum2phase',op='sum',rad=30.0,ptRestrictions=sfreq0),
 
-   # emission
-   'Subhalo_S850um' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='s850um_flux',op='sum',rad=None),
-   'Subhalo_S850um_25pkpc' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='s850um_flux',op='sum',rad=25.0),
-
    'Subhalo_MgII_Lum_DustDepleted' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='sum',rad=None),
    'Subhalo_MgII_LumSize_DustDepleted' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='halfrad',rad=None),
    'Subhalo_MgII_LumConcentration_DustDepleted' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='concentration',rad=None),
+
+   'Subhalo_CIV1551_Lum_InnerCGM' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='C  4 1550.78A lum2phase',op='sum',rad='20pkpc_halfrvir',cenSatSelect='cen',scope='fof'),
+   'Subhalo_CIV1551_Lum_OuterCGM' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='C  4 1550.78A lum2phase',op='sum',rad='halfrvir_rvir',cenSatSelect='cen',scope='fof'),
+
+   # emission (other)
+   'Subhalo_S850um' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='s850um_flux',op='sum',rad=None),
+   'Subhalo_S850um_25pkpc' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='s850um_flux',op='sum',rad=25.0),
 
    'Subhalo_SynchrotronPower_SKA' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='p_sync_ska',op='sum',rad=None),

@@ -332,6 +332,18 @@ def _radialRestriction(sP, nSubsTot, rad):
 
         radSqMax = (1.00 * parentR200)**2
         radSqMin = (0.15 * parentR200)**2
+    elif rad == '20pkpc_halfrvir':
+        # 'inner halo' definition: from 20 pkpc to 0.5 r200c (must be centrals only to avoid nans)
+        parentR200 = sP.subhalos('rhalo_200_code')
+
+        radSqMax = (0.5 * parentR200)**2
+        radSqMin += (sP.units.physicalKpcToCodeLength(20.0))**2
+    elif rad == 'halfrvir_rvir':
+        # 'outer halo' definition: from 0.5 r200c to r200c (centrals only)
+        parentR200 = sP.subhalos('rhalo_200_code')
+
+        radSqMax = (1.0 * parentR200)**2
+        radSqMin = (0.5 * parentR200)**2
     elif rad in ['r200crit','rvir']:
         # within the virial radius (r200,crit definition) (centrals only)
         gcLoad = sP.groupCat(fieldsHalos=['Group_R_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
@@ -1024,6 +1036,9 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     subhaloIDsTodo, indRange, nSubsSelected = pSplitBounds(sP, pSplit, minStellarMass=minStellarMass, 
         minHaloMass=minHaloMass, cenSatSelect=cenSatSelect)
     nSubsDo = len(subhaloIDsTodo)
+
+    assert np.count_nonzero(np.isnan(radSqMin[subhaloIDsTodo])) == 0, 'Radial selection requires centrals only?'
+    assert np.count_nonzero(np.isnan(radSqMax[subhaloIDsTodo])) == 0, 'Radial selection requires centrals only?'
 
     if ptType not in indRange:
         return np.nan, {} # e.g. snapshots so early there are no stars
