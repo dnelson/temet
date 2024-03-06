@@ -323,7 +323,7 @@ def mass_function(secondaries=False):
 def sample_halomasses_vs_redshift(sPs):
     """ Compare simulation vs observed cluster samples as a function of (redshift,mass). """
     from ..load.data import rossetti17planck, pintoscastro19, hilton21act, adami18xxl
-    from ..load.data import bleem20spt, piffaretti11rosat
+    from ..load.data import bleem20spt, piffaretti11rosat, arnaud21chexmate
 
     zrange = [0.0, 0.8]
     alpha = 1.0 # for data
@@ -439,6 +439,7 @@ def sample_halomasses_vs_redshift(sPs):
     a18 = adami18xxl()
     b20 = bleem20spt(sPs[0])
     p11 = piffaretti11rosat()
+    a21 = arnaud21chexmate()
 
     d1 = ax.scatter(r17['z'], r17['m500'], s=msize+8, c='#000000', marker='s', alpha=alpha, label=r17['label'], zorder=0)
     d2 = ax.scatter(pc19['z'], pc19['m500'], s=msize+8, c='#222222', marker='*', alpha=alpha, label=pc19['label'], zorder=0)
@@ -446,10 +447,11 @@ def sample_halomasses_vs_redshift(sPs):
     d4 = ax.scatter(a18['z'], a18['m500'], s=msize+8, c='#222222', marker='D', alpha=alpha, label=a18['label'], zorder=0)
     d5 = ax.scatter(b20['z'], b20['m500'], s=msize+8, c='#222222', marker='X', alpha=alpha, label=b20['label'], zorder=0)
     d6 = ax.scatter(p11['z'], p11['m500'], s=msize-4, c='#222222', marker='h', alpha=alpha-0.1, label=p11['label'], zorder=0)
+    d7 = ax.scatter(a21['z'], a21['m500'], s=msize+10, c='#222222', marker='x', alpha=alpha, label=a21['label'], zorder=0)
 
     # add first legend
     handles, labels = ax.get_legend_handles_labels()
-    legend2 = ax.legend(handles[len(sPs):], labels[len(sPs):], loc='upper right', frameon=True)
+    legend2 = ax.legend(handles[len(sPs):], labels[len(sPs):], loc='upper right', frameon=True, fontsize=15)
     legend2.get_frame().set_edgecolor('#bbbbbb')
     legend2.get_frame().set_linewidth(1.0)
     ax.add_artist(legend2)
@@ -2048,7 +2050,7 @@ def paperPlots():
         #vis_fullbox_virtual(TNG_C, conf=5)
 
     # figure 3 - samples
-    if 0:
+    if 1:
         sample_halomasses_vs_redshift(sPs)
 
     # figure 4 - simulation meta-comparison
@@ -2060,7 +2062,7 @@ def paperPlots():
         for conf in range(11):
             vis_gallery(TNG_C, conf=conf, num=1) # single
         vis_gallery(TNG_C, conf=1, num=72) # gallery
-        #vis_gallery(TNG_C, conf=12, num=1) # AtLAST White Paper for Aurora
+        #vis_gallery(TNG_C, conf=12, num=1) # AtLAST White Paper for Aurora/Luca
 
     # figure 7 - gas fractions
     if 0:
@@ -2090,9 +2092,11 @@ def paperPlots():
 
     # figure 12 - radial profiles
     if 0:
+        #TNG_C.setRedshift(0.2)
         cluster_radial_profiles(TNG_C, quant='Temp')
         cluster_radial_profiles(TNG_C, quant='Metallicity')
-        #cluster_radial_profiles(TNG_C, quant='Metallicity', weight='_XrayWt') #'_XrayWt_2D'
+        cluster_radial_profiles(TNG_C, quant='Metallicity', weight='_XrayWt')
+        cluster_radial_profiles(TNG_C, quant='Metallicity', weight='_XrayWt_2D')
         cluster_radial_profiles(TNG_C, quant='Entropy')
         ##cluster_radial_profiles(TNG_C, quant='ne')
 

@@ -1994,6 +1994,41 @@ def piffaretti11rosat():
 
     return r
 
+def arnaud21chexmate():
+    """ Load the CHEX-MATE cluster sample from Arnaud+2011 (https://arxiv.org/abs/2010.11972)"""
+    path = dataBasePath + 'arnaud/chexmate.txt'
+
+    # load
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    z    = np.zeros(nLines, dtype='float32')
+    m500 = np.zeros(nLines, dtype='float32')
+    snr  = np.zeros(nLines, dtype='float32')
+    tier = np.zeros(nLines, dtype='int32')
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line    = line.split("&")
+        z[i]    = float(line[3])
+        m500[i] = float(line[4]) # 1e14 msun
+        snr[i]  = float(line[5])
+        tier[i] = int(line[6])
+        i += 1
+
+    r = {'z'     : z,
+         'm500'  : np.log10(m500 * 1e14), # log[msun]
+         'label' : 'CHEX-MATE (2021)'}
+
+    return r
+
 def cassano13():
     """ Load observational data points from Cassano+ (2013) Tables 1 and 2, radio/x-ray/SZ clusters. """
     path1 = dataBasePath + 'cassano/C13_table1.txt'
