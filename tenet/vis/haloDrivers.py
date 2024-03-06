@@ -1192,68 +1192,6 @@ def benedetta_vis_sample():
 
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def gible_vis(conf=1):
-    """ Example visualization of a GIBLE halo. """
-    res        = 4096 # 8, 64, 512, 4096
-    hInd       = 201
-    redshift   = 0.15
-    run        = 'gible'
-
-    rVirFracs  = [1.0]
-    method     = 'sphMap_global'
-    nPixels    = [1000,1000]
-    size       = 2.5
-    axes       = [0,1]
-    sizeType   = 'rVirial'
-    axesUnits  = 'arcsec'
-    labelHalo  = 'mstar,mhalo'
-    rotation   = 'edge-on'
-
-    subhaloInd = 0
-
-    class plotConfig:
-        plotStyle = 'open'
-        rasterPx  = 800
-        colorbars = True
-        saveFilename = 'gible_h%d_RF%d_%s.pdf' % (hInd,res,conf)
-
-    if conf == 0:
-        # render 1032+1038 doublet combined
-        panels = [{'partType':'gas', 'partField':'sb_OVI_ergs', 'valMinMax':[-22.0,-18.0]}]
-        grid1, config1 = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-
-        panels = [{'partType':'gas', 'partField':'sb_O--6-1037.62A_ergs', 'valMinMax':[-22.0,-18.0]}]        
-        grid2, config2 = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-
-        panels[0]['grid'] = np.log10(10.0**grid1 + 10.0**grid2)
-        panels[0]['colorbarlabel'] = config1['label'].replace('OVI SB','OVI 1032+1038$\AA$ SB')
-
-    if conf == 1:
-        # CIII 
-        panels = [{'partType':'gas', 'partField':'sb_CIII_ergs', 'valMinMax':[-22.0,-18.0]}]
-
-    if conf == 2:
-        # render CIII/OVI doublet ratio
-        panels = [{'partType':'gas', 'partField':'sb_CIII_ergs', 'valMinMax':[-22.0,-18.0]}]
-        grid_CIII, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-
-        panels[0]['partField'] = 'sb_OVI_ergs'
-        grid_OVI1032, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-        panels[0]['partField'] = 'sb_O--6-1037.62A_ergs'
-        grid_OVI1038, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-
-        grid_ratio = np.log10(10.0**grid_CIII / (10.0**grid_OVI1032 + 10.0**grid_OVI1038))
-                              
-        panels[0]['grid'] = grid_ratio
-        panels[0]['valMinMax'] = [-1.0, 1.0]
-        panels[0]['colorbarlabel'] = '(CIII/OVI) Surface Brightness Ratio [log]'
-        panels[0]['ctName'] = 'curl'
-
-    if conf == 3:
-        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2'}]
-
-    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
-
 def annalisa_tng50_presentation(setNum=0, stars=False):
     """ TNG50 presentation paper: face-on + edge-on combination, 5x5 systems. """
     panels = []

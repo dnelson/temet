@@ -563,6 +563,10 @@ def subsampleRandomSubhalos(sP, maxPointsPerDex, mstarMinMax, mstar=None, cenOnl
     stellar mass. """
     rng = np.random.default_rng(424242)
     binsize = 0.1 # dex
+    numPerBin = np.max([1,int(maxPointsPerDex*binsize)])
+
+    if maxPointsPerDex < 10:
+        print('Note: subsampleRandomSubhalos() returning at least %d per %.1f dex bin.' % (numPerBin,binsize))
 
     if mstar is None:
         mstar = sP.subhalos('mstar_30pkpc_log')
@@ -580,11 +584,11 @@ def subsampleRandomSubhalos(sP, maxPointsPerDex, mstarMinMax, mstar=None, cenOnl
         with np.errstate(invalid='ignore'):
             w = np.where( (mstar >= xbin) & (mstar < xbin+binsize))[0]
 
-        if len(w) < maxPointsPerDex*binsize:
+        if len(w) < numPerBin:
             inds[count:count + len(w)] = w
             count += len(w)
         else:
-            inds_loc = rng.choice(w, int(maxPointsPerDex*binsize), replace=False)
+            inds_loc = rng.choice(w, numPerBin, replace=False)
             inds[count:count+inds_loc.size] = inds_loc
             count += inds_loc.size
 

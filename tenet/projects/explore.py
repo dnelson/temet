@@ -4,6 +4,7 @@
 import numpy as np
 import h5py
 
+from os.path import isfile
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from scipy.signal import savgol_filter
@@ -1200,15 +1201,19 @@ def magicCGMEmissionTrends():
     cenSatSelect = 'cen'
 
     xlim = [9.0, 11.5]
-    clim = [-9.0, -10.5] # log sSFR
+    ylim = [35.5, 46]
     scatterPoints = True
     drawMedian = False
     markersize = 40.0
     sizefac = 0.8 # for single column figure
     maxPointsPerDex = 200
 
-    ylim = [35.5, 46]
-    scatterColor = 'ssfr_30pkpc'
+    #scatterColor = 'l_agn'
+    #clim = [40.5, 43.5]
+    scatterColor = 'mass_smbh'
+    clim = [6.5, 8.5]
+    #scatterColor = 'ssfr_30pkpc'
+    #clim = [-9.0, -10.5] # log sSFR
 
     # plot
     for field in fields:
@@ -1217,3 +1222,182 @@ def magicCGMEmissionTrends():
                                 scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                                 maxPointsPerDex=maxPointsPerDex, legendLoc='upper left', pdf=None)
 
+def hubbleMCT_gibleVis(conf=1):
+    """ Visualization of CGM emission from a GIBLE halo. """
+    res        = 4096 # 8, 64, 512, 4096
+    hInd       = 201
+    redshift   = 0.15
+    run        = 'gible'
+
+    rVirFracs  = [1.0]
+    method     = 'sphMap_global'
+    nPixels    = [1000,1000]
+    size       = 2.5
+    axes       = [0,1]
+    sizeType   = 'rVirial'
+    axesUnits  = 'arcsec'
+    labelHalo  = 'mstar,mhalo'
+    rotation   = 'edge-on'
+
+    subhaloInd = 0
+
+    class plotConfig:
+        plotStyle = 'open'
+        rasterPx  = 800
+        colorbars = True
+        saveFilename = 'gible_h%d_RF%d_%s.pdf' % (hInd,res,conf)
+
+    if conf == 0:
+        # render 1032+1038 doublet combined
+        panels = [{'partType':'gas', 'partField':'sb_OVI_ergs', 'valMinMax':[-22.0,-18.0]}]
+        grid1, config1 = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+
+        panels = [{'partType':'gas', 'partField':'sb_O--6-1037.62A_ergs', 'valMinMax':[-22.0,-18.0]}]        
+        grid2, config2 = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+
+        panels[0]['grid'] = np.log10(10.0**grid1 + 10.0**grid2)
+        panels[0]['colorbarlabel'] = config1['label'].replace('OVI SB','OVI 1032+1038$\AA$ SB')
+
+    if conf == 1:
+        # CIII 
+        panels = [{'partType':'gas', 'partField':'sb_CIII_ergs', 'valMinMax':[-22.0,-18.0]}]
+
+    if conf == 2:
+        # render CIII/OVI doublet ratio
+        panels = [{'partType':'gas', 'partField':'sb_CIII_ergs', 'valMinMax':[-22.0,-18.0]}]
+        grid_CIII, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+
+        panels[0]['partField'] = 'sb_OVI_ergs'
+        grid_OVI1032, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+        panels[0]['partField'] = 'sb_O--6-1037.62A_ergs'
+        grid_OVI1038, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+
+        grid_ratio = np.log10(10.0**grid_CIII / (10.0**grid_OVI1032 + 10.0**grid_OVI1038))
+                              
+        panels[0]['grid'] = grid_ratio
+        panels[0]['valMinMax'] = [-1.0, 1.0]
+        panels[0]['colorbarlabel'] = '(CIII/OVI) Surface Brightness Ratio [log]'
+        panels[0]['ctName'] = 'curl'
+
+    if conf == 3:
+        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2'}]
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+def hubbleMCT_emissionTrends(simname='tng50-1'):
+    """ Hubble MST Proposal 2024 of Kate Rubin. """
+    from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
+    from ..vis.halo import subsampleRandomSubhalos
+
+    sim = simParams(simname, redshift=0.36) # tng50-1, eagle, simba
+
+    # grid config
+    method    = 'sphMap' # sphMap_global
+    nPixels   = [1000,1000]
+    axes      = [0,1]
+    size      = 180.0 # 35 arcsec @ z=0.36 (SBC field of view is 35"x31")
+    sizeType  = 'kpc'
+
+    sim.createCloudyCache = True if '_global' in method else False
+
+    # config
+    fields = ['sb_OVI_ergs','sb_O--6-1037.62A_ergs','sb_CIII_ergs']
+    percs = [25,50,75]
+    distBins = [[20,30], [45,55]] # pkpc
+
+    # sample
+    mstar_min = 9.0
+    mstar_max = 11.0
+    num_per_dex = 100
+
+    subInds, mstar = subsampleRandomSubhalos(sim, num_per_dex, [mstar_min,mstar_max], cenOnly=True)
+
+    dist, theta = _get_dist_theta_grid(size, nPixels)
+    
+    # check for existence of cache
+    grids = {}
+    sb_percs = {}
+    cacheFile = sim.derivPath + 'cache/hstmst_grids.hdf5'
+
+    if isfile(cacheFile):
+        # load cached result
+        with h5py.File(cacheFile,'r') as f:
+            for field in fields:
+                grids[field] = f[field][()]
+            for key in f['sb_percs']:
+                sb_percs[key] = f['sb_percs/%s' % key][()]
+
+            assert np.array_equal(subInds, f['subInds'][()])
+            assert np.array_equal(percs, f['percs'][()])
+            assert np.array_equal(distBins, f['distBins'][()])
+        print('Loaded: [%s]' % cacheFile)
+    else:
+        # compute now: allocate
+        for field in fields:
+            grids[field] = np.zeros((nPixels[0],nPixels[1],len(subInds)), dtype='float32')
+
+        sb_percs['OVI'] = np.zeros((len(subInds),len(distBins),len(percs)), dtype='float32')
+        sb_percs['CIII'] = np.zeros((len(subInds),len(distBins),len(percs)), dtype='float32')
+
+        # loop over subhalos
+        class plotConfig:
+            saveFilename = 'dummy'
+
+        for i, subhaloInd in enumerate(subInds):
+            print(f'[{i:3d}] of [{len(subInds):3d}] {subhaloInd = }', flush=True)
+
+            for field in fields:
+                # project
+                sP = sim
+                panels = [{'partType':'gas', 'partField':field}]
+                grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+
+                # stamp
+                grids[field][:,:,i] = grid
+
+            # compute statistics
+            for j, distBin in enumerate(distBins):
+                # pixels in this annulus
+                w = np.where((dist >= distBin[0]) & (dist < distBin[1]))
+
+                # OVI doublet map and CIII map separately
+                OVI_map = np.log10(10.0**grids['sb_OVI_ergs'][:,:,i] + 10.0**grids['sb_O--6-1037.62A_ergs'][:,:,i])
+                CIII_map = grids['sb_CIII_ergs'][:,:,i]
+
+                sb_percs['OVI'][i,j,:] = np.percentile(OVI_map[w], percs)
+                sb_percs['CIII'][i,j,:] = np.percentile(CIII_map[w], percs)
+
+        # save cache
+        with h5py.File(cacheFile,'w') as f:
+            for field in fields:
+                f[field] = grids[field]
+            for key in sb_percs.keys():
+                f['sb_percs/%s' % key] = sb_percs[key]
+            f['subInds'] = subInds
+            f['percs'] = percs
+            f['distBins'] = distBins
+
+        print('Saved: [%s]' % cacheFile)
+
+    # start figure
+    fig, ax = plt.subplots(figsize=figsize)
+
+    ax.set_xlabel('Galaxy Stellar Mass [ log M$_\odot$ ]')
+    ax.set_ylabel('Surface Brightness [ log erg/s/cm$^2$/arcsec$^2$ ]')
+    ax.set_xlim([mstar_min,mstar_max])
+
+    # plot
+    for i, distBin in enumerate(distBins):
+
+        for line, label in zip(['OVI','CIII'], ['OVI 1032+1038','CIII 977']):
+            y_mid = sb_percs[line][:,i,1]
+            y_err_lo = sb_percs[line][:,i,1] - sb_percs[line][:,i,0]
+            y_err_hi = sb_percs[line][:,i,2] - sb_percs[line][:,i,1]
+
+            ax.errorbar(mstar, y_mid, yerr=[y_err_lo, y_err_hi], fmt='o', label='%s (%d kpc)' % (label,np.mean(distBin)))
+
+    # finish and save plot
+    ax.legend(loc='best')
+    fig.savefig('mst_OVI_CIII_annuli_vs_mstar_%s.pdf' % sim.simName)
+    plt.close(fig)
+    

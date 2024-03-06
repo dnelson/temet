@@ -7,16 +7,12 @@ import h5py
 import hashlib
 import itertools
 from os import path
-
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from scipy.signal import savgol_filter
 
 from ..util import simParams
 from ..util.helper import loadColorTable, logZeroNaN, running_median, sampleColorTable
 from ..plot.config import *
 from ..vis.halo import renderSingleHalo
-from ..vis.box import renderBox
 
 def singleHaloImage(sP, subhaloInd=440839, conf=0):
     """ Metallicity distribution in CGM image. """
@@ -182,7 +178,6 @@ def metallicityVsVradProjected(sP, shIDs=[440839], directCells=False, clean=Fals
         ax.plot([0,0],ax.get_ylim(),'-',color='black', alpha=0.5)
 
         # colorbar
-        #cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
         cax = fig.add_axes([0.80,0.2,0.04,0.54])
         cb = plt.colorbar(s, cax=cax)
         cb.ax.set_ylabel(clabel)
