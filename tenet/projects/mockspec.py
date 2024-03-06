@@ -364,48 +364,61 @@ def paperPlots():
         # Mg II
         sim = simParams(run='tng50-1', redshift=0.5)
         inst = 'SDSS-BOSS' #'4MOST-HRS'
-        solar = False
-        num = 10
+        opts = {'ion':'Mg II', 'instrument':inst, 'num':10, 'solar':False, 'SNR':20}
 
-        opts = {'instrument':inst, 'num':num, 'solar':solar}
-        spectra_gallery_indiv(sim, ion='Mg II', EW_minmax=[0.1, 5.0], mode='evenly', SNR=20, **opts)
-        spectra_gallery_indiv(sim, ion='Mg II', EW_minmax=[0.01, 0.4], mode='evenly', SNR=50, **opts)
-        spectra_gallery_indiv(sim, ion='Mg II', EW_minmax=[3.0, 6.0], mode='random', SNR=20, **opts)
+        spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='evenly', **opts)
+        spectra_gallery_indiv(sim, EW_minmax=[0.01, 0.4], mode='evenly', **opts)
+        spectra_gallery_indiv(sim, EW_minmax=[3.0, 6.0], mode='random', **opts)
 
-    if 0:
+    if 1:
         # C IV
         sim = simParams(run='tng50-1', redshift=2.0)
-        inst = '4MOST-HRS'
-        num = 10
+        inst = 'SDSS-BOSS' #'KECK-HIRES-B14'
+        opts = {'ion':'C IV', 'instrument':inst, 'num':10, 'SNR':50, 'dv':True, 'xlim':[-900,900]} # 'auto'
 
-        spectra_gallery_indiv(sim, ion='C IV', instrument=inst, EW_minmax=[0.1, 5.0], num=num, mode='evenly', SNR=20)
-        spectra_gallery_indiv(sim, ion='C IV', instrument=inst, EW_minmax=[0.01, 0.4], num=num, mode='evenly', SNR=50)
-        spectra_gallery_indiv(sim, ion='C IV', instrument=inst, EW_minmax=[3.0, 6.0], num=num, mode='random', SNR=20)
+        spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='evenly', **opts)
+        spectra_gallery_indiv(sim, EW_minmax=[0.01, 0.4], mode='evenly', **opts)
+        spectra_gallery_indiv(sim, EW_minmax=[3.0, 6.0], mode='random', **opts)
 
     if 0:
         # Fe II
         sim = simParams(run='tng50-1', redshift=2.0)
         inst = '4MOST-HRS'
-        num = 10
+        opts = {'ion':'Fe II', 'instrument':inst, 'num':10, 'SNR':None}
 
-        spectra_gallery_indiv(sim, ion='Fe II', instrument=inst, EW_minmax=[0.1, 5.0], num=num, mode='evenly', SNR=None)
-        spectra_gallery_indiv(sim, ion='Fe II', instrument=inst, EW_minmax=[0.01, 0.4], num=num, mode='evenly', SNR=None)
-        spectra_gallery_indiv(sim, ion='Fe II', instrument=inst, EW_minmax=[3.0, 6.0], num=num, mode='random', SNR=None)
+        spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='evenly', **opts)
+        spectra_gallery_indiv(sim, EW_minmax=[0.01, 0.4], mode='evenly', **opts)
+        spectra_gallery_indiv(sim, EW_minmax=[3.0, 6.0], mode='random', **opts)
+
+    # fig 1b: (dense) spectra galleries
+    if 0:
+        pass
 
     # fig 2: 2d spectra visualization
     if 0:
         pass
 
-    # fig 3: EW distribution functions vs. data
+    # fig 3: MgII EW distribution functions vs. data
     if 0:
         sim = simParams(run='tng50-1')
         line = 'MgII 2796'
-        inst = 'SDSS-BOSS' # '4MOST-HRS' #
-        redshifts = [0.5, 0.7, 1.0] #2.0]
-        solar = False
-        log = False
+        inst = '4MOST-HRS'
+        redshifts = [0.5, 0.7, 1.0]
+        indivEWs = False
+        opts = {'xlim':[0,8], 'solar':False, 'log':False}
 
-        EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, solar=solar, indivEWs=False, log=log)
+        EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, indivEWs=False, **opts)
+
+    # fig 3b: CIV EW distribution
+    if 0:
+        sim = simParams(run='tng50-1')
+        line = 'CIV 1548'
+        inst = 'SDSS-BOSS'
+        redshifts = [1.5, 2.0, 3.0, 4.0, 5.0]
+        indivEWs = False
+        opts = {'xlim':[0,3], 'solar':False, 'log':False}
+
+        EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, indivEWs=indivEWs, **opts)
 
     # fig 4: dN/dz (absorber incidence s a function of redshift) vs. data
     if 0:

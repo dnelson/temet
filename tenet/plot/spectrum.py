@@ -448,7 +448,7 @@ def _spectrum_debug_plot(line, plotName, master_mid, tau_master, master_dens, ma
     plt.close(fig)
 
 def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0.1,1.0], 
-                          num=10, mode='random', inds=None, solar=False, SNR=None, xlim=None):
+                          num=10, mode='random', inds=None, solar=False, SNR=None, dv=False, xlim=None):
     """ Plot a gallery of individual absorption profiles within a given EW range.
 
     Args:
@@ -462,7 +462,8 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
       solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
         use the (constant) solar value.
       SNR (float): if not None, then add noise to achieve this signal to noise ratio.
-      xlim (str, list[float]): either 'full' or a 2-tuple of [min,max], or automatic if None (default)
+      dv (bool): if False, x-axis in wavelength, else in velocity.
+      xlim (str, list[float]): either 'full', a 2-tuple of [min,max], or automatic if None (default)
     """
     assert mode in ['random','evenly','inds']
     if mode == 'inds': assert inds is not None
@@ -537,6 +538,28 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         lines_wavemin = np.clip(lines_wavemin, lines[line]['wave0'], np.inf)
         lines_wavemax = np.clip(lines_wavemax, 0, lines[line]['wave0'])
         
+    # x-axis in velocity space?
+    if dv:
+        # center each absorption line at its tau-weighted mean wavelength, and convert to dv
+        wave_dv = np.zeros((num, wave.size), dtype='float32')
+
+        for i in range(num):
+            flux_loc = flux[i,:]
+            flux_loc[flux_loc < 1e-4] = 1e-4 # avoid log(0)
+            tau = -np.log(flux_loc)
+
+            wave_mean = np.average(wave, weights=tau)
+            dlambda = wave - wave_mean
+            wave_dv[i,:] = dlambda / wave_mean * units.c_km_s
+
+            # re-compute in a fixed dv window to avoid other nearby absorption features
+            dv_window = 500.0 # km/s, TODO should depend on transition, maybe inst
+
+            w = np.where( (wave_dv[i,:] > -dv_window) & (wave_dv[i,:] <= dv_window) )[0]
+            wave_mean = np.average(wave[w], weights=tau[w])
+            dlambda = wave - wave_mean
+            wave_dv[i,:] = dlambda / wave_mean * units.c_km_s
+
     # determine wavelength (x-axis) bounds
     if str(xlim) == 'full':
         xlim = [np.min(wave), np.max(wave)]
@@ -545,19 +568,27 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         pass
     else:
         # automatic
-        xlim = [np.inf, 0]
+        xlim = [np.inf, -np.inf]
 
         for i in range(num):
             w = np.where(flux[i,:] < 0.99)[0]
-            w_min = wave[w].min()
-            w_max = wave[w].max()
+            if len(w) == 0:
+                continue
 
-            if w_min < xlim[0]: xlim[0] = w_min
-            if w_max > xlim[1]: xlim[1] = w_max
+            xx = wave_dv[i,:] if dv else wave
+            xx_min = xx[w].min()
+            xx_max = xx[w].max()
 
-        dwave = (xlim[1] - xlim[0]) * 0.01
-        xlim[0] = np.floor((xlim[0]-dwave)/10) * 10
-        xlim[1] = np.ceil((xlim[1]+dwave)/10) * 10
+            if xx_min < xlim[0]: xlim[0] = xx_min
+            if xx_max > xlim[1]: xlim[1] = xx_max
+
+        dx = (xlim[1] - xlim[0]) * 0.01
+        xlim[0] = np.floor((xlim[0]-dx)/10) * 10
+        xlim[1] = np.ceil((xlim[1]+dx)/10) * 10
+
+    if dv:
+        # symmetrize
+        xlim = [-np.max(np.abs(xlim)), np.max(np.abs(xlim))]
 
     # determine flux (y-axis) bounds
     spacingFac = 1.0
@@ -566,7 +597,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
             spacingFac = 0.5
         if np.max(EW_minmax) > 0.8:
             spacingFac = 1.2
-    ylim = [-spacingFac/2, num*spacingFac + spacingFac/2]
+    ylim = [+spacingFac/2, num*spacingFac + spacingFac/5]
 
     # add noise? ("signal" is now 1.0)
     if SNR is not None:
@@ -576,13 +607,19 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         flux = np.clip(flux, 0, np.inf) # clip negative values at zero
 
     # plot
-    fig = plt.figure(figsize=figsize)
+    figsize_loc = [figsize[0]*0.6, figsize[1]*1.5*np.sqrt(num/10)]
+
+    fig = plt.figure(figsize=figsize_loc)
     ax = fig.add_subplot(111)
+
+    xlabel = '$\Delta v$ [ km/s ]' if dv else 'Wavelength [ Ang ]'
+    ylabel = 'Relative Flux'
+    if num > 1: ylabel += ' (+ constant offset)'
 
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
-    ax.set_xlabel('Wavelength [ Ang ]')
-    ax.set_ylabel('Relative Flux (+ constant offset)')
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
 
     ax.set_yticks(np.arange(num+1)*spacingFac)
     if spacingFac >= 1.0:
@@ -595,19 +632,22 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
     for i in range(num):
         # vertical offset by 1.0 for each spectrum
         y_offset = (i+1)*spacingFac - 1
-        ax.step(wave, flux[i,:]+y_offset, '-', color=colors[i], where='mid', lw=lw)
+
+        xx = wave_dv[i,:] if dv else wave
+        ax.step(xx, flux[i,:]+y_offset, '-', color=colors[i], where='mid', lw=lw)
 
         # label
-        text_x = xlim[0] + (xlim[1]-xlim[0])/100
+        text_x = xlim[0] + (xlim[1]-xlim[0])/50
         text_y = y_offset + 1.0 - (num/50) * spacingFac
         if SNR is not None: text_y -= (num/50) * (5/SNR)
         label = 'EW = %.2f$\AA$' % EW[i]
 
-        ax.text(text_x, text_y, label, color=colors[i], alpha=0.6, ha='left', va='top')
+        ax.text(text_x, text_y, label, color=colors[i], alpha=0.6, fontsize=18, ha='left', va='top')
 
     # finish plot
-    label = r'%s ($\rm{z \simeq %.1f}$)' % (ion,sim.redshift)
-    ax.legend([plt.Line2D((0,1),(0,0),lw=0,marker='')], [label], loc='lower right')
+    label = r'%s ($\rm{z \simeq %.1f}$) %s' % (ion,sim.redshift,instrument)
+    #ax.legend([plt.Line2D((0,1),(0,0),lw=0,marker='')], [label], fontsize=20, loc='upper right')
+    ax.set_title(label)
 
     snrStr = '_snr%d' % SNR if SNR is not None else ''
     ewStr = '_%.1f-%.1f' % (EW_minmax[0],EW_minmax[1]) if EW_minmax is not None else ''
@@ -616,7 +656,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
     plt.close(fig)
 
 def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=[0.5,0.7,1.0], 
-                    solar=False, indivEWs=False, log=False):
+                    xlim=None, solar=False, indivEWs=False, log=False):
     """ Plot the EW distribution (dN/dWdz) of a given absorption line.
 
     Args:
@@ -624,6 +664,7 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
       line (str): string specifying the line transition.
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
       redshifts (list[float]): list of redshifts to overplot.
+      xlim (list[float]): min and max EW [Ang], or None for default.
       solar (bool): use the (constant) solar value instead of simulation-tracked metal abundances.
       indivEWs (bool): if True, then use/create absorber catalog, to handle multiple absorbers per sightline, 
         otherwise use the available 'global' EWs, one per sightline.
@@ -632,10 +673,12 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
     sim = sim_in.copy()
 
     # plot config
-    EW_min = 1e-3 # rest-frame ang
+    EW_min = 1e-2 # rest-frame ang
 
-    xlim = [0, 8] # ang
-    if log: xlim = [-1.0, 1.4] # log[ang]
+    if xlim is None:
+        xlim = [0, 8] # ang
+        if log: xlim = [-1.0, 1.4] # log[ang]
+        
     nBins = 80
 
     # load: loop over requested redshifts
