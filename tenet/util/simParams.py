@@ -1710,8 +1710,25 @@ class simParams:
 
     @property
     def zoomSubhaloID(self):
-        #print('Warning: zoomSubhaloID hard-coded to always be the first! ['+self.simName+'].')
-        return 0 # could be individually verified, or else generalized, depending on zoom suite
+        """ Return the subhalo ID of the target subhalo in the zoom suite. In general, not known, and may not be zero. """
+        targetSubhaloID = 0
+
+        mstar = self.subhalos('mstar2')
+        contam_frac = self.subhalos('contam_frac')
+        cen_flag = self.subhalos('cen_flag')
+
+        # target must be a central and have low contamination
+        cand_inds = np.where(cen_flag & (contam_frac < 0.1))[0]
+        
+        # select from these candidates: the one with the largest stellar mass
+        cand_ind = cand_inds[np.argmax(mstar[cand_inds])]
+                
+        if cand_ind != 0 and cen_flag[cand_ind] == 1 and contam_frac[cand_ind] < 0.1:
+            targetSubhaloID = cand_ind
+            haloID = self.subhalo(targetSubhaloID)['SubhaloGrNr']
+            print(f'Warning: [{self.simName}] zoomSubhaloID = {cand_ind} ({haloID = }) as the max mstar uncontaminated central.')
+        
+        return targetSubhaloID
     
     @property
     def dmParticleMass(self):

@@ -266,6 +266,22 @@ smbh_mdot.units = r'$\rm{M_{sun} / yr}$'
 smbh_mdot.limits = [-4.0, 0.0]
 smbh_mdot.log = True
 
+@catalog_field(aliases=['l_bol','l_agn'])
+def smbh_lum(sim, partType, field, args):
+    """ Bolometric luminosity of largest SMBH in each subhalo. Avoids summing multiple SMBHs, if more than one present. """
+    acField = 'Subhalo_BH_Mass_largest'
+    m_smbh = sim.auxCat(fields=[acField])[acField]
+    
+    acField = 'Subhalo_BH_Mdot_largest'
+    smbh_mdot = sim.auxCat(fields=[acField])[acField]
+
+    return sim.units.codeBHMassMdotToBolLum(m_smbh, smbh_mdot)
+
+smbh_lum.label = r'$\rm{L_{AGN,bol}}$'
+smbh_lum.units = r'$\rm{erg / s}$'
+smbh_lum.limits = [37.0, 42.0]
+smbh_lum.log = True
+
 # ---------------------------- auxcat: gas observables --------------------------------------------
 
 @catalog_field

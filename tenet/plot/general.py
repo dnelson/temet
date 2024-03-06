@@ -1365,12 +1365,12 @@ def compareRuns_PhaseDiagram():
 
     pdf.close()
 
-def oneRun_PhaseDiagram(redshift=None, snaps=None, res=11, variant='SN'):
+def oneRun_PhaseDiagram(redshift=None, snaps=None, hInd=10677, res=11, variant='SN'):
     """ Driver. """
     from matplotlib.backends.backend_pdf import PdfPages
 
     # config
-    sim = simParams(run='structures',hInd=31619,res=res,variant=variant,redshift=redshift)
+    sim = simParams(run='structures',hInd=hInd,res=res,variant=variant,redshift=redshift)
 
     yQuant = 'temp'
     xQuant = 'nh'
@@ -1379,7 +1379,7 @@ def oneRun_PhaseDiagram(redshift=None, snaps=None, res=11, variant='SN'):
         xlim = [-7.0, 5.0]
         ylim = [1.0, 7.0]
         haloIDs = None #[0]
-        qRestrictions = None # [['rad_rvir',0.0,5.0]]
+        qRestrictions = [['rad_rvir',0.0,5.0]] # None # 
         clim = [-2.0, -0.2]
     else:
         xlim = [-9.0, 2.0]

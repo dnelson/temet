@@ -548,20 +548,20 @@ def generate_set():
         haloIDs = [88,129,151,147,153,160,167,172,189,164,177,184,192,191,199]
         sizeFac = 4.0
 
-    if 1:
+    if 0:
         # TNG50-1 z=6 bubble candidates (Joe)
         sP = simParams(run='tng50-1', redshift=6.0)
         zoomFac = 1
         haloIDs = [21] #[11]
         sizeFac = 256.0
 
-    if 0:
-        # TNG50 dwarf zooms (STRUCTURES/MCS/Byrohl)
+    if 1:
+        # TNG50 dwarf zooms (MCST)
         sP = simParams(run='tng50-1', redshift=3.0)
-        zoomFac = 8 # 1 (8e4 msun/TNG50-1 res), 2 (1e4 msun), 4 (1320 msun), 8 (160 msun), 16 (20 msun)
+        zoomFac = 16 # 1 (8e4 msun/TNG50-1 res), 2 (1e4 msun), 4 (1320 msun), 8 (160 msun), 16 (20 msun)
 
         # Milky Way progenitors at z=3
-        haloIDs = [1242]
+        # haloIDs = [1242]
 
         # mstar = 1e9 at z=3
         # grnr[np.where( (mstar>8.9) & (mstar<9.1) & (mhalo>11.1) & (mhalo<11.3) & (cen_flag) )[0][::10]]
@@ -569,7 +569,7 @@ def generate_set():
 
         # mstar = 1e8 at z=3
         # grnr[np.where( (mstar>7.9) & (mstar<8.1) & (mhalo>10.4) & (mhalo<10.6) & (cen_flag) )[0][::50]]
-        #haloIDs += [607, 2485, 3051, 3345, 3545, 3729, 3938, 4182, 4382, 4697, 5145]
+        haloIDs = [607, 2485, 3051, 3345, 3545, 3729, 3938, 4182, 4382, 4697, 5145]
 
         # mstar = 1e7 at z=3
         # grnr[np.where( (mstar>6.9) & (mstar<7.1) & (mhalo>9.8) & (mhalo<10.0) & (cen_flag) )[0][::200]]

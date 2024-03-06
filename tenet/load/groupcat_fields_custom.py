@@ -3,10 +3,6 @@ Definitions of custom catalog fields.
 """
 import h5py
 import numpy as np
-#from functools import partial
-#from getpass import getuser
-#from os.path import isfile, isdir, getsize
-#from os import mkdir
 
 from .groupcat import catalog_field
 from ..util.helper import logZeroNaN
@@ -45,6 +41,24 @@ central_flag.label = 'Central Flag (0=no, 1=yes)'
 central_flag.units = '' # dimensionless
 central_flag.limits = [0, 1]
 central_flag.log = False
+
+@catalog_field
+def contam_frac(sim, partType, field, args):
+    """ Subhalo contamination fraction (low-res DM to total DM particle count). """
+    SubhaloLenType = sim.subhalos('SubhaloLenType')
+
+    n_lowres = SubhaloLenType[:,sim.ptNum('dmlowres')]
+    n_hires = SubhaloLenType[:,sim.ptNum('dm')]
+
+    with np.errstate(invalid='ignore'):
+        frac = n_lowres / (n_lowres + n_hires)
+                       
+    return frac
+
+contam_frac.label = 'Low-res Contamination Fraction'
+contam_frac.units = '' # dimensionless
+contam_frac.limits = [0, 1]
+contam_frac.log = False
 
 # -------------------- subhalos: halo-related properties ------------------------------------------
 

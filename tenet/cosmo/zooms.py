@@ -768,23 +768,27 @@ def mstarVsMhaloEvo():
     """ Plot galaxy stellar mass vs halo mass evolution/relation, comparison between runs. 
     """
     # config simulations and field
-    variants = ['SN','SNU1','SNU2'] #'SNPIPE','TNG','ST']
-    res = [11, 12, 13]#, 14, 15]
-    hInd = 31619 #1242 #10677
+    variants = ['TNG','ST5'] #,'TNG','ST']
+    res = [11, 12, 13] #, 14, 15]
+    hInds = [1242, 4182, 10677, 12688, 31619] #1242 4182 10677 12688 31619
     redshift = 3.0
 
     # add all simulations which exist, skipping those which do not
     sims = []
-    for variant in variants:
-        for r in res:
-            try:
-                sim = simParams(run='structures', res=r, hInd=hInd, variant=variant, redshift=redshift)
-                sims.append(sim)
-                print(sim)
-            except:
-                pass
+    for hInd in hInds:
+        for variant in variants:
+            for r in res:
+                try:
+                    sim = simParams(run='structures', res=r, hInd=hInd, variant=variant, redshift=redshift)
+                    if np.abs(sim.redshift - redshift) < 0.1:
+                        sims.append(sim)
+                        print(sim, ' [OK]')
+                except:
+                    print(f'h{hInd}_L{r}_{variant} z={redshift:.0f}  [skip]')
 
     # load
+    sim_parent = sims[0].sP_parent
+
     z = []
     mhalo = []
     mstar = []
@@ -795,32 +799,49 @@ def mstarVsMhaloEvo():
     stellar_zform = []
     stellar_mass = []
 
+    def _load_sfh(sim, subhaloInd, tree=False):
+        """ Helper. """
+        # use merger tree MPB for mhalo and mstar versus redshift
+        if tree:
+            try:
+                mpb = sim.loadMPB(subhaloInd)
+                mhalo_evo = sim.units.codeMassToLogMsun(mpb['Group_M_Crit200'])
+                mstar_evo = sim.units.codeMassToLogMsun(mpb['SubhaloMassType'][:,sim.ptNum('stars')])
+                z_evo = sim.snapNumToRedshift(mpb['SnapNum'])
+            except:
+                print('No merger tree and/or offsets for [%s], skipping.' % sim)
+                mhalo_evo = np.nan
+                mstar_evo = np.nan
+                z_evo = np.nan
+
+            return mhalo_evo, mstar_evo, z_evo
+        
+        # load all stellar masses and formation times for non-tree SFH
+        star_zform = sim.snapshotSubset('stars', 'z_form', subhaloID=subhaloInd)
+        star_mass = sim.snapshotSubset('stars', 'mass', subhaloID=subhaloInd)
+        sort_inds = np.argsort(star_zform)[::-1]
+        star_zform = star_zform[sort_inds]
+        star_mass = sim.units.codeMassToLogMsun(np.cumsum(star_mass[sort_inds]))
+
+        return star_zform, star_mass
+
     for sim in sims:
         sub = sim.subhalo(sim.zoomSubhaloID)
         halo = sim.halo(sub['SubhaloGrNr'])
 
-        mhalo.append( halo['Group_M_Crit200'] )
-        mstar.append( sub['SubhaloMassType'][sim.ptNum('stars')] )
+        mhalo.append(halo['Group_M_Crit200'])
+        mstar.append(sub['SubhaloMassType'][sim.ptNum('stars')])
         z.append(sim.redshift)
 
-        # use merger tree MPB for mhalo and mstar versus redshift
-        try:
-            mpb = sim.loadMPB(sim.zoomSubhaloID)
-            mhalo_evo.append( sim.units.codeMassToLogMsun(mpb['Group_M_Crit200']) )
-            mstar_evo.append( sim.units.codeMassToLogMsun(mpb['SubhaloMassType'][:,sim.ptNum('stars')]) )
-            z_evo.append( sim.snapNumToRedshift(mpb['SnapNum']) )
-        except:
-            print('No merger tree and/or offsets for [%s], skipping.' % sim)
-            mhalo_evo.append(None)
-            mstar_evo.append(None)
-            z_evo.append(None)
+        # load SFH with tree
+        mhalo_e, mstar_e, z_e = _load_sfh(sim, sim.zoomSubhaloID, tree=True)
 
-        # load all stellar masses and formation times for alternative (non-tree) SFH
-        star_zform = sim.snapshotSubset('stars', 'z_form', subhaloID=sim.zoomSubhaloID)
-        star_mass = sim.snapshotSubset('stars', 'mass', subhaloID=sim.zoomSubhaloID)
-        sort_inds = np.argsort(star_zform)[::-1]
-        star_zform = star_zform[sort_inds]
-        star_mass = sim.units.codeMassToLogMsun(np.cumsum(star_mass[sort_inds]))
+        mhalo_evo.append(mhalo_e)
+        mstar_evo.append(mstar_e)
+        z_evo.append(z_e)
+
+        # load SFH based on star particles
+        star_zform, star_mass = _load_sfh(sim, sim.zoomSubhaloID, tree=False)
 
         stellar_zform.append(star_zform)
         stellar_mass.append(star_mass)
@@ -828,7 +849,7 @@ def mstarVsMhaloEvo():
     mstar = sim.units.codeMassToLogMsun(mstar)
     mhalo = sim.units.codeMassToLogMsun(mhalo)
 
-    # load parent box relation
+    # load: parent box relation
     tng100 = simParams(run='tng100-1', redshift=redshift)
     tng100_cen = tng100.subhalos('cen_flag')
 
@@ -840,14 +861,16 @@ def mstarVsMhaloEvo():
     # plot 1
     fig, ax = plt.subplots()
 
-    ax.set_xlabel('Halo Mass $\\rm{M_{200,crit}}$ [ $\\rm{M_\odot}$ ]')
+    ax.set_xlabel('Halo Mass $\\rm{M_{200c}}$ [ $\\rm{M_\odot}$ ]')
     ax.set_ylabel('Stellar Mass [ $\\rm{M_\odot}$ ]')
-    if hInd == 10677:
-        ax.set_xlim([9.4,10.2])
-        ax.set_ylim([6.2,7.8])
-    if hInd == 31619:
-        ax.set_xlim([9.1,9.6])
-        ax.set_ylim([5.5,7.5])
+
+    mstar_min = 5.8 #np.floor((np.min(mstar) - 0.2) * 10) / 10
+    mstar_max = 10.2 #np.ceil((np.max(mstar) + 0.2) * 10) / 10
+    mhalo_min = 9.0 #np.floor((np.min(mhalo) - 0.2) * 10) / 10
+    mhalo_max = 11.2 #np.ceil((np.max(mhalo) + 0.2) * 10) / 10
+    
+    ax.set_xlim([mhalo_min, mhalo_max])
+    ax.set_ylim([mstar_min, mstar_max])
 
     # parent box relation
     pm = savgol_filter(pm,sKn,sKo,axis=1)
@@ -855,86 +878,128 @@ def mstarVsMhaloEvo():
     ax.fill_between(xm, pm[1,:], pm[-2,:], color='#ccc', alpha=0.6)
     ax.plot(xm, ym, color='#ccc', lw=lw*2, alpha=0.9, label=tng100)
 
-    # halo from parent box
-    sim = sims[0]
-    halo_parentbox = sim.sP_parent.halo(hInd)
-    subhalo_parentbox = sim.sP_parent.subhalo(halo_parentbox['GroupFirstSub'])
+    # individual zoom runs
+    colors = [next(ax._get_lines.prop_cycler)['color'] for _ in range(len(hInds))]
 
-    mhalo_parentbox = sim.units.codeMassToLogMsun(halo_parentbox['Group_M_Crit200'])
-    mstar_parentbox = sim.units.codeMassToLogMsun(subhalo_parentbox['SubhaloMassType'][sim.ptNum('stars')])
+    for i, sim in enumerate(sims):
+        # color set by hInd
+        c = colors[hInds.index(sim.hInd)]
 
-    label = 'h%d in %s' % (hInd,sim.sP_parent.simName)
-    l, = ax.plot(mhalo_parentbox, mstar_parentbox, markers[3], color='#555', label=label)
+        # marker set by variant
+        marker = markers[variants.index(sim.variant)]
 
-    mpb = sim.sP_parent.loadMPB(halo_parentbox['GroupFirstSub'])
-    mpb_mhalo = sim.units.codeMassToLogMsun(mpb['Group_M_Crit200'])
-    mpb_mstar = sim.units.codeMassToLogMsun(mpb['SubhaloMassType'][:,sim.ptNum('stars')])
+        # marker size set by resolution
+        ms_loc = (sim.res - 10) * 2 + 8
+        lw_loc = (sim.res - 10)
 
-    star_zform = sim.sP_parent.snapshotSubset('stars', 'z_form', subhaloID=halo_parentbox['GroupFirstSub'])
-    star_mass = sim.sP_parent.snapshotSubset('stars', 'mass', subhaloID=halo_parentbox['GroupFirstSub'])
-    sort_inds = np.argsort(star_zform)[::-1]
-    star_zform = star_zform[sort_inds]
-    star_mass = sim.sP_parent.units.codeMassToLogMsun(np.cumsum(star_mass[sort_inds]))
+        l, = ax.plot(mhalo[i], mstar[i], marker, color=c, markersize=ms_loc, label='') # sim.simName
 
-    ax.plot(mpb_mhalo, mpb_mstar, '-', lw=1.5, color=l.get_color(), alpha=0.2)
+        #ax.plot(mhalo_evo[i], mstar_evo[i], '-', lw=lw_loc, color=l.get_color(), alpha=0.5)
+
+    # halos from parent box
+    for i, hInd in enumerate(hInds):
+        # final redshift point
+        halo_parentbox = sim_parent.halo(hInd)
+        subhalo_parentbox = sim_parent.subhalo(halo_parentbox['GroupFirstSub'])
+
+        mhalo_parentbox = sim.units.codeMassToLogMsun(halo_parentbox['Group_M_Crit200'])
+        mstar_parentbox = sim.units.codeMassToLogMsun(subhalo_parentbox['SubhaloMassType'][sim.ptNum('stars')])
+
+        #label = 'h%d in %s' % (hInd,sim_parent.simName)
+        label = 'hX in %s' % (sim_parent.simName) if i == 0 else ''
+        l, = ax.plot(mhalo_parentbox, mstar_parentbox, markers[len(variants)], color='#555', label=label)
+
+        # SFH
+        mpb_mhalo, mpb_mstar, mpb_z = _load_sfh(sim_parent, halo_parentbox['GroupFirstSub'], tree=True)
+
+        ax.plot(mpb_mhalo, mpb_mstar, '-', lw=1.5, color=l.get_color(), alpha=0.2)
+
+    def _add_legends(ax):
+        # legend one
+        handles, labels = ax.get_legend_handles_labels()
+
+        for hInd in hInds:
+            # color by hInd
+            c = colors[hInds.index(hInd)]
+            handles.append(plt.Line2D( (0,1), (0,0), color=c, lw=lw))
+            labels.append('h%d' % hInd)
+
+        legend = ax.legend(handles, labels, loc='upper left', ncols=1)
+        ax.add_artist(legend)
+            
+        # legend two
+        handles = []
+        labels = []
+
+        for variant in variants:
+            for r in res:
+                # marker set by variant
+                marker = markers[variants.index(variant)]
+                ms = (r - 10) * 2 + 8
+
+                handles.append(plt.Line2D((0,1), (0,0), color='black', lw=0, marker=marker, ms=ms))
+                labels.append('L%d_%s' % (r,variant))
+
+        legend2 = ax.legend(handles, labels, loc='lower right', ncols=2)
+        ax.add_artist(legend2)
+
+    # finish and save plot
+    _add_legends(ax)
+    fig.savefig('smhm_structures_comp_%d.pdf' % (len(sims)))
+    plt.close(fig)
+
+
+    # plot 2 - vs redshift time axis
+    fig, ax = plt.subplots()
+
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel('Stellar Mass [ $\\rm{M_\odot}$ ]')
+    
+    ax.set_xlim([10.0, 2.9])
 
     # individual zoom runs
     for i, sim in enumerate(sims):
-        if sim.variant == 'TNG': marker = markers[0]
-        if sim.variant == 'SN': marker = markers[1]
-        if sim.variant == 'ST': marker = markers[2]
+        # color set by hInd
+        c = colors[hInds.index(sim.hInd)]
 
-        l, = ax.plot(mhalo[i], mstar[i], marker, label=sim.simName)
+        # marker set by variant
+        marker = markers[variants.index(sim.variant)]
 
-        if mhalo_evo[i] is not None:
-            ax.plot(mhalo_evo[i], mstar_evo[i], '-', lw=1.5, color=l.get_color(), alpha=0.5)
-        #print(sim.simName, mhalo[i], mstar[i])
+        # marker size set by resolution
+        ms_loc = (sim.res - 10) * 2 + 8
+        lw_loc = (sim.res - 10)
+
+        l, = ax.plot(z[i], mstar[i], marker, color=c, markersize=ms_loc, label='')
+
+        linestyle = '-'
+
+        w = np.where(stellar_zform[i] < ax.get_xlim()[0])
+        ax.plot(stellar_zform[i][w], stellar_mass[i][w], linestyle, lw=lw_loc, color=l.get_color(), alpha=0.6)
+
+    # galaxies from parent box
+    for i, hInd in enumerate(hInds):
+        halo_parentbox = sim_parent.halo(hInd)
+        subhalo_parentbox = sim_parent.subhalo(halo_parentbox['GroupFirstSub'])
+        
+        mhalo_parentbox = sim.units.codeMassToLogMsun(halo_parentbox['Group_M_Crit200'])
+        mstar_parentbox = sim.units.codeMassToLogMsun(subhalo_parentbox['SubhaloMassType'][sim.ptNum('stars')])
+
+        #label = 'h%d in %s' % (hInd,sim.sP_parent.simName)
+        label = 'hX in %s' % (sim_parent.simName) if i == 0 else ''
+        l, = ax.plot(sim_parent.redshift, mstar_parentbox, markers[3], color='#555', label=label)
+
+        star_zform = sim_parent.snapshotSubset('stars', 'z_form', subhaloID=halo_parentbox['GroupFirstSub'])
+        star_mass = sim_parent.snapshotSubset('stars', 'mass', subhaloID=halo_parentbox['GroupFirstSub'])
+        sort_inds = np.argsort(star_zform)[::-1]
+        star_zform = star_zform[sort_inds]
+        star_mass = sim_parent.units.codeMassToLogMsun(np.cumsum(star_mass[sort_inds]))
+
+        w = np.where( (star_zform >= 0.0) & (star_zform < ax.get_xlim()[0]) )
+        ax.plot(star_zform[w], star_mass[w], '-', lw=1.5, color=l.get_color(), alpha=0.7)
+
+    ax.set_ylim(np.max([4.8,ax.get_ylim()[0]]), ax.get_ylim()[1])
 
     # finish and save plot
-    ax.legend(loc='upper left', ncols=2)   
-    fig.savefig('smhm_structures_h%d_comp_%d.png' % (hInd,len(sims)))
+    _add_legends(ax)
+    fig.savefig('mstarz_structures_comp_%d.pdf' % (len(sims)))
     plt.close(fig)
-
-    # plot 2 - vs redshift time axis
-    for mpbIter in [0,1]:
-        fig, ax = plt.subplots()
-
-        ax.set_xlabel('Redshift')
-        ax.set_ylabel('Stellar Mass [ $\\rm{M_\odot}$ ]')
-        
-        ax.set_xlim([10.0, 2.9])
-        
-        # galaxy from parent box
-        label = 'h%d in %s' % (hInd,sim.sP_parent.simName)
-        mpb_z = sim.sP_parent.snapNumToRedshift(mpb['SnapNum'])
-        l, = ax.plot(sim.sP_parent.redshift, mstar_parentbox, markers[3], color='#555', label=label)
-
-        if mpbIter:
-            ax.plot(mpb_z, mpb_mstar, '-', lw=1.5, color=l.get_color(), alpha=0.7)
-        else:
-            w = np.where( (star_zform >= 0.0) & (star_zform < ax.get_xlim()[0]) )
-            ax.plot(star_zform[w], star_mass[w], '-', lw=1.5, color=l.get_color(), alpha=0.7)
-
-        # individual zoom runs
-        for i, sim in enumerate(sims):
-            if sim.variant == 'TNG': marker = markers[0]
-            if sim.variant == 'SN': marker = markers[1]
-            if sim.variant == 'ST': marker = markers[2]
-
-            l, = ax.plot(z[i], mstar[i], marker, label=sim.simName)
-
-            linestyle = ':' if sim.variant == 'SN' else '-'
-
-            if mpbIter:
-                if z_evo[i] is not None:
-                    ax.plot(z_evo[i], mstar_evo[i], linestyle, lw=1.5, color=l.get_color(), alpha=0.7)
-            else:
-                w = np.where(stellar_zform[i] < ax.get_xlim()[0])
-                ax.plot(stellar_zform[i][w], stellar_mass[i][w], linestyle, lw=1.5, color=l.get_color(), alpha=0.7)
-
-        ax.set_ylim(np.max([4.8,ax.get_ylim()[0]]), ax.get_ylim()[1])
-
-        # finish and save plot
-        ax.legend(loc='upper left', ncols=2)   
-        fig.savefig('mstarz_structures_h%d_comp_%d_mpb%d.png' % (hInd,len(sims),mpbIter))
-        plt.close(fig)
