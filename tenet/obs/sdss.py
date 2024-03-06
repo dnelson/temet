@@ -980,3 +980,76 @@ def lnprobfn(theta, model=None, obs=None, sps=None, verbose=False):
         write_log(theta, lnp_prior, lnp_spec, lnp_phot, d1, d2)
 
     return lnp_prior + lnp_phot + lnp_spec
+
+def scida_sdss_spectra():
+    """ Demonstration of using scida to load and plot sdss-dr17.spectra.hdf5. """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import scida
+    import dask.array as da
+
+    path = '/virgotng/mpia/obs/SDSS/'
+    filename = 'sdss-dr17-spectra.hdf5'
+
+    ds = scida.load(path + filename)
+
+    # class, z, and wave are small arrays, so we just load them into memory as numpy arrays
+    cls = np.array(ds['class'])
+    z = np.array(ds['z'])
+    wave = np.array(ds['wave'])
+
+    classes = {0:'GALAXY', 2:'QSO', 1:'STAR'}
+
+    def average_bins(array, bin_size=1000):
+        """Average bins in the first axis by a given bin_size."""
+        a, b = array.shape
+        remainder = a % bin_size
+        # If there is a remainder, pad the array
+        if remainder != 0:
+            pad_size = bin_size - remainder
+            padded_array = np.pad(array, ((0, pad_size), (0, 0)), mode='constant', constant_values=0)
+        else:
+            padded_array = array
+        # Now, reshape and compute the mean along the new axis
+        reshaped_array = padded_array.reshape(-1, bin_size, b)
+        averaged_array = da.nanmean(reshaped_array, axis=1)
+
+        return averaged_array
+
+    def get_im(cl):
+        # sub-select spectra in this class
+        w = np.where(cls == cl)[0]
+
+        # order by redshift
+        z_loc = np.array(z)[w]
+        inds = np.argsort(z_loc)  # ... and argsort is not properly supported by dask anyway
+        flux = ds['flux'].rechunk((-1, 100))  # important to rechunk in first dimension where we use indices
+        im2d = flux[w[inds],:]
+
+        # compensate for distance
+        #im2d *= (1+z_loc.reshape(z_loc.size,1))**4
+
+        # reduce size by averaging 10000 spectra each
+        bin_size = 2000
+        im2d = average_bins(im2d, bin_size)
+        im2d = im2d.compute()
+
+        return im2d, [z_loc.min(), z_loc.max()]
+
+    fig, axes = plt.subplots(ncols=3, nrows=1, figsize=(14,8))
+
+    for i, (cl, label) in enumerate(classes.items()):
+        # get image for plotting
+        im2d, z_minmax = get_im(cl)
+
+        # plot
+        extent = [wave.min(), wave.max(), z_minmax[0], z_minmax[1]]
+        im = axes[i].imshow(im2d, extent=extent, origin="lower", aspect="auto")
+
+        axes[i].set_xlabel("Wavelength [%s]" % print(format(ds['wave'].units, '~L')))
+        axes[i].set_ylabel('(Approximate) Redshift')
+        axes[i].set_title(label)
+
+    fig.colorbar(im, label="Flux [%s]" % print(format(ds['flux'].units, '~L'))) # $(1+z)^4$ * 
+
+    plt.savefig("sdss-dr17-spectra.png", dpi=150)

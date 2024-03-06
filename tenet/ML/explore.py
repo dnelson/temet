@@ -2,7 +2,6 @@
 * Misc ML exploration.
 """
 import numpy as np
-import h5py
 import matplotlib.pyplot as plt
 from os.path import isfile
 
@@ -10,16 +9,18 @@ import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from torchvision import datasets
+from torchvision.utils import make_grid
 from torchvision.transforms import ToTensor, Lambda
 from torch.utils.data.dataloader import default_collate
+from torch.utils.tensorboard import SummaryWriter
 
-from ..util import simParams
 from ..plot.config import *
 
 path = '/u/dnelson/data/torch/'
 
 def mnist_tutorial():
     """ Playing with the MNIST Fashion dataset. """
+    torch.manual_seed(424242)
 
     # check gpu
     print(f'GPU is available: {torch.cuda.is_available()} [# devices = {torch.cuda.device_count()}]')
@@ -46,20 +47,21 @@ def mnist_tutorial():
                                       transform=ToTensor(), target_transform=target_trans)
 
     # plot some images
-    fig = plt.figure(figsize=(8, 8))
-    cols, rows = 3, 3
+    if 1:
+        fig = plt.figure(figsize=(8, 8))
+        cols, rows = 3, 3
+        
+        for i in range(1, cols * rows + 1):
+            sample_ind = torch.randint(len(training_data), size=(1,)).item()
+            img, label_vec = training_data[sample_ind]
+            label = labels[np.where(label_vec == 1)[0][0]]
 
-    for i in range(1, cols * rows + 1):
-        sample_ind = torch.randint(len(training_data), size=(1,)).item()
-        img, label_vec = training_data[sample_ind]
-        label = labels[np.where(label_vec == 1)[0][0]]
+            fig.add_subplot(rows, cols, i)
+            plt.title(label)
+            plt.axis("off")
+            plt.imshow(img.squeeze(), origin='upper', cmap="gray")
 
-        fig.add_subplot(rows, cols, i)
-        plt.title(label)
-        plt.axis("off")
-        plt.imshow(img.squeeze(), origin='upper', cmap="gray")
-
-    fig.savefig('mnist_tutorial.pdf')
+        fig.savefig('mnist_tutorial.pdf')
 
     # create data loaders
     def collate_fn(x):
@@ -72,11 +74,32 @@ def mnist_tutorial():
     test_dataloader = DataLoader(test_data, batch_size=batch_size, shuffle=True, 
                                  drop_last=False, pin_memory=False, collate_fn=collate_fn)
 
-    #train_dataloader = DeviceDataLoader(train_dataloader, device=device)
-    #test_dataloader = DeviceDataLoader(test_dataloader, device=device)
-
-    print(f'Total training samples [{len(train_dataloader)}]. ', end='')
+    print(f'Total training samples [{len(training_data)}]. ', end='')
     print(f'For [{batch_size = }], number of training batches [{len(train_dataloader)}].')
+
+    # tensorboard
+    writer = None
+
+    writer = SummaryWriter(path + 'runs/fashion_mnist')
+
+    if 1:
+        # tensorboard: add some images
+        imgs = [training_data[i][0] for i in range(20)]
+        img_grid = make_grid(imgs)
+        
+        writer.add_image('fashion_mnist_images', img_grid)
+        writer.flush()
+
+    if 1:
+        # tensorboard: visualize image embeddings
+        images = training_data.data[0:10]
+        labels = training_data.data[0:10]
+        features = images.view(-1, 28 * 28)
+
+        writer.add_embedding(features,
+                            metadata=labels,
+                            label_img=images.unsqueeze(1))
+        writer.flush()
 
     # load?
     if 0 and isfile('mnist_model.pth'):
@@ -114,110 +137,36 @@ def mnist_tutorial():
     # training hyperparameters
     learning_rate = 1e-3 # i.e. prefactor on grads for gradient descent
     batch_size = 64 # number of data samples propagated through the network before params are updated
-    epochs = 5 # number of times to iterate over the dataset
+    epochs = 25 # number of times to iterate over the dataset
 
     # loss function
-    loss = nn.CrossEntropyLoss() # cross entropy = LogSoftMax and NLLLoss (negative log likelihood)
+    loss_f = nn.CrossEntropyLoss() # cross entropy = LogSoftMax and NLLLoss (negative log likelihood)
 
     # optimizer
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
 
     # training loop
+    test_loss_best = np.inf
+
     for i in range(epochs):
-        print(i)
-        _train_model(train_dataloader, model, loss, optimizer, batch_size, device)
-        _test_model(test_dataloader, model, loss, device)
+        print(f'\nEpoch: [{i}]')
 
-    # save trained model
-    torch.save(model.state_dict(), 'mnist_weights.pth')
-    torch.save(model, 'mnist_model.pth')
-    print('Saved: [mnist_model.pth] and [mnist_weights.pth].')
+        train_loss = _train_model(train_dataloader, model, loss_f, optimizer, batch_size, i, writer=writer)
+        
+        test_loss = _test_model(test_dataloader, model, loss_f, current_sample=(i+1)*len(training_data), writer=writer)
 
-class DeviceDataLoader:
-    """ https://github.com/pytorch/pytorch/issues/11372 """
-    def __init__(self, dataloader, device):
-        self.dataloader = dataloader
-        self.device = device
-    
-    def __len__(self):
-        return len(self.dataloader)
-    
-    def __iter__(self):
-        for batch in self.dataloader:
-            yield tuple(tensor.to(self.device) for tensor in batch)
+        # periodically save trained model (should put epoch number into filename)
+        if test_loss < test_loss_best:
+            torch.save(model.state_dict(), 'mnist_weights.pth')
+            torch.save(model, 'mnist_model.pth')
+            print(' saved: [mnist_model.pth] and [mnist_weights.pth].')
+            test_loss_best = test_loss
 
-def _train_model(dataloader, model, loss_fn, optimizer, batch_size, device):
-    size = len(dataloader.dataset)
-    # Set the model to training mode - important for batch normalization and dropout layers
-    # Unnecessary in this situation but added for best practices
-    model.train()
-    for batch, (X, y) in enumerate(dataloader):
-        # Move to device
-        #X.to(device)
-        #y.to(device)
-
-        # Compute prediction and loss
-        pred = model(X)
-        loss = loss_fn(pred, y)
-
-        # Backpropagation
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-
-        if batch % 100 == 0:
-            loss = loss.item()
-            current = batch * batch_size + len(X)
-            print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
-
-def _test_model(dataloader, model, loss_fn, device):
-    # Set the model to evaluation mode - important for batch normalization and dropout layers
-    # Unnecessary in this situation but added for best practices
-    model.eval()
-    size = len(dataloader.dataset)
-    num_batches = len(dataloader)
-    test_loss, correct = 0, 0
-
-    # Evaluating the model with torch.no_grad() ensures that no gradients are computed during test mode
-    # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
-    with torch.no_grad():
-        for X, y in dataloader:
-            #X.to(device)
-            #y.to(device)
-
-            pred = model(X)
-            test_loss += loss_fn(pred, y).item()
-            correct += (pred.argmax(dim=1) == y.argmax(dim=1)).type(torch.float).sum().item()
-
-    test_loss /= num_batches
-    correct /= size
-    print(f"Test. Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f}.\n")
-
-class CustomDataset(Dataset):
-    """ A custom dataset. Stores samples and their corresponding labels. (Not used). """
-    def __init__(self, param1, param2, transform=None, target_transform=None):
-        pass
-        self.labels = [] # e.g. read from disk
-        self.transform = transform
-        self.target_transform = target_transform
-
-    def __len__(self):
-        return len(self.labels)
-
-    def __getitem__(self, i):
-        """ Return a single sample at index i."""
-        image = 0.0 # todo
-        label = self.labels[i]
-
-        if self.transform:
-            image = self.transform(image)
-        if self.target_transform:
-            label = self.target_transform(label)
-
-        return image, label
+    if writer is not None:
+        writer.close()
 
 class mnist_network(nn.Module):
-    """ Playing with the MNIST Fashion dataset. """
+    """ Simple NN to play with the MNIST Fashion dataset. """
     def __init__(self):
         super().__init__()
 
@@ -238,3 +187,73 @@ class mnist_network(nn.Module):
         x = self.flatten(x)
         logits = self.linear_relu_stack(x)
         return logits
+
+def _train_model(dataloader, model, loss_fn, optimizer, batch_size, epoch_num, writer=None):
+    """ Train model for one epoch. """
+    # Set the model to training mode - important for batch normalization and dropout layers
+    # Unnecessary in this situation but added for best practices
+    model.train()
+
+    for batch_num, data in enumerate(dataloader):
+        inputs, labels = data
+
+        # Zero (previous) gradients
+        optimizer.zero_grad()
+
+        # Compute prediction and loss
+        pred = model(inputs)
+        loss = loss_fn(pred, labels)
+
+        # Backpropagation
+        loss.backward()
+
+        # Adjust weights
+        optimizer.step()
+
+        if batch_num % 100 == 0:
+            loss = loss.item()
+            current_sample = batch_num * batch_size + len(inputs)
+            tot_samples = len(dataloader.dataset)
+            s = f" loss: {loss:>7f}  [{current_sample:>5d}/{tot_samples:>5d}]"
+
+            if writer is not None:
+                current_sample += epoch_num * len(dataloader) * batch_size # 'global [int] step value'
+                s += f' global {current_sample = }'
+                writer.add_scalars('loss', {'train': loss}, current_sample)
+
+            print(s)
+
+    return loss
+
+def _test_model(dataloader, model, loss_fn, current_sample, writer=None):
+    """ Test model. """
+    # Set the model to evaluation mode - important for batch normalization and dropout layers
+    # Unnecessary in this situation but added for best practices
+    model.eval()
+
+    size = len(dataloader.dataset)
+    num_batches = len(dataloader)
+    test_loss = 0.0
+    correct = 0
+
+    # Evaluating the model with torch.no_grad() ensures that no gradients are computed during test mode
+    # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
+    with torch.no_grad():
+        for inputs, labels in dataloader:
+            pred = model(inputs)
+            test_loss += loss_fn(pred, labels).item()
+            correct += (pred.argmax(dim=1) == labels.argmax(dim=1)).type(torch.float).sum().item()
+
+    test_loss /= num_batches
+    correct /= size
+
+    s = f" test: accuracy [{(100*correct):>0.1f}%], avg loss [{test_loss:>8f}]"
+
+    if writer is not None:
+        s += f' global {current_sample = }'
+        writer.add_scalars('loss', {'test': test_loss}, current_sample)
+
+    print(s)
+
+    return test_loss
+
