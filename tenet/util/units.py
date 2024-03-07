@@ -313,11 +313,12 @@ class units(object):
         mdot_msun_yr = self.codeMassOverTimeToMsunPerYear(mdot).astype('float64') # prevent overflow
 
         # Weinberger+ (2018) Eqn 12, i.e. Churazov+ (2005)
-        Lbol = np.zeros( mdot_edd.size, dtype='float64' )
+        Lbol = np.zeros(mdot_edd.size, dtype='float64')
         w_high = np.where(mdot_msun_yr >= 0.1 * mdot_edd)
         w_low  = np.where(mdot_msun_yr < 0.1 * mdot_edd)
+        w_nan = np.where(np.isnan(mdot_msun_yr))
 
-        assert len(w_high[0]) + len(w_low[0]) == mdot_edd.size
+        assert len(w_high[0]) + len(w_low[0]) + len(w_nan[0]) == mdot_edd.size
 
         Lbol = self.BH_eps_r * mdot_msun_yr * self.Msun_in_g * self.c_cgs**2 / self.s_in_yr # erg/s
         if not basic_model:

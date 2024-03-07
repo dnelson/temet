@@ -1385,19 +1385,83 @@ def hubbleMCT_emissionTrends(simname='tng50-1'):
     ax.set_xlabel('Galaxy Stellar Mass [ log M$_\odot$ ]')
     ax.set_ylabel('Surface Brightness [ log erg/s/cm$^2$/arcsec$^2$ ]')
     ax.set_xlim([mstar_min,mstar_max])
+    ax.set_ylim([-24.5, -17])
 
     # plot
     for i, distBin in enumerate(distBins):
-
         for line, label in zip(['OVI','CIII'], ['OVI 1032+1038','CIII 977']):
             y_mid = sb_percs[line][:,i,1]
             y_err_lo = sb_percs[line][:,i,1] - sb_percs[line][:,i,0]
             y_err_hi = sb_percs[line][:,i,2] - sb_percs[line][:,i,1]
 
-            ax.errorbar(mstar, y_mid, yerr=[y_err_lo, y_err_hi], fmt='o', label='%s (%d kpc)' % (label,np.mean(distBin)))
+            label_loc = '%s (%d$\pm$%d kpc)' % (label,np.mean(distBin),distBin[1]-distBin[0]/2)
+            ax.errorbar(mstar, y_mid, yerr=[y_err_lo, y_err_hi], fmt='o', label=label_loc)
 
     # finish and save plot
-    ax.legend(loc='best')
+    legend = ax.legend(loc='upper left', title=f'{sim.simName} z = {sim.redshift:.2f}')
+    legend._legend_box.align = "left"
     fig.savefig('mst_OVI_CIII_annuli_vs_mstar_%s.pdf' % sim.simName)
     plt.close(fig)
     
+def hubbleMCT_emissionTrendsVsSim():
+    """ Combine results from above into a summary plot. """
+    # config
+    sims = ['tng50-1', 'eagle', 'simba']
+    nBins = 15
+    redshift = 0.36
+
+    # load
+    sb_percs = {}
+    mstar = {}
+
+    for simname in sims:
+        print(simname)
+        sim = simParams(simname, redshift=redshift)
+        cacheFile = sim.derivPath + 'cache/hstmst_grids.hdf5'
+
+        with h5py.File(cacheFile,'r') as f:
+            for key in f['sb_percs']:
+                sb_percs[f'{simname}_{key}'] = f['sb_percs/%s' % key][()]
+            distBins = f['distBins'][()]
+            subInds = f['subInds'][()]
+
+        mstar[simname] = sim.subhalos('mstar_30pkpc_log')[subInds]
+        
+    # plot
+    fig, (ax1,ax2) = plt.subplots(nrows=1, ncols=2, figsize=(figsize[0]*1.5,figsize[1]))
+
+    ax1.set_xlabel('Galaxy Stellar Mass [ log M$_\odot$ ]')
+    ax1.set_ylabel('OVI 1032+1038 SB [ log erg/s/cm$^2$/arcsec$^2$ ]')
+    ax1.set_xlim([9.0, 11.0])
+    ax1.set_ylim([-22.5, -17.5])
+
+    ax2.set_xlabel('Galaxy Stellar Mass [ log M$_\odot$ ]')
+    ax2.set_ylabel('CIII 977 SB [ log erg/s/cm$^2$/arcsec$^2$ ]')
+    ax2.set_xlim([9.0, 11.0])
+    ax2.set_ylim([-22.5, -17.5])
+
+    for simname in sims:
+        for i, distBin in enumerate(distBins):
+            sim = simParams(simname)
+            for line, ax in zip(['OVI','CIII'], [ax1,ax2]):
+                y_mid = sb_percs[simname + '_' + line][:,i,1]
+                y_lo = sb_percs[simname + '_' + line][:,i,0]
+                y_hi = sb_percs[simname + '_' + line][:,i,2]
+
+                # running median
+                xx, yy_mid, _ = running_median(mstar[simname], y_mid, nBins=nBins)
+                xx, yy_lo, _ = running_median(mstar[simname], y_lo, nBins=nBins)
+                xx, yy_hi, _ = running_median(mstar[simname], y_hi, nBins=nBins)
+
+                c = l.get_color() if i > 0 else None
+                label = f'{sim.name} ({np.mean(distBin):.0f} kpc)' #$\pm${(distBin[1]-distBin[0])/2:.0f} kpc)'
+                l, = ax.plot(xx, yy_mid, lw=lw, color=c, ls=linestyles[i], label=label)
+                if i == 0: ax.fill_between(xx, yy_lo, yy_hi, color=l.get_color(), alpha=0.2)
+
+    # finish and save plot
+    ax1.legend(loc='upper left')
+    ax2.legend(loc='lower right')
+    ax1.text(0.97, 0.03, f'z = {redshift:.2f}', transform=ax1.transAxes, ha='right', va='bottom')
+    ax2.text(0.03, 0.97, f'z = {redshift:.2f}', transform=ax2.transAxes, ha='left', va='top')
+    fig.savefig('mst_OVI_CIII_annuli_vs_mstar.pdf')
+    plt.close(fig)
