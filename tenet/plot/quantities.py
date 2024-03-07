@@ -562,7 +562,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax[0] += sP.redshift/2
         minMax[1] += sP.redshift/2
 
-    if quantname in ['sfr','sfr1','sfr2','sfr1_surfdens','sfr2_surfdens']:
+    if quantname in ['sfr1','sfr1_surfdens','sfr2_surfdens']:
         # SFR (within 1, 2, or entire subhalo), or SFR surface density within either 1 or 2 times 2r1/2stars
         if '1' in quant:
             hFac = 1.0

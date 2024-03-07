@@ -540,7 +540,7 @@ def sfr(sim, partType, field, args):
     return sfr
 
 sfr.label = r'$\rm{SFR_{<30kpc}}$'
-sfr.units = r'$\rm{M_{sun} yr^{-1}}$'
+sfr.units = r'$\rm{M_{sun}\, yr^{-1}}$'
 sfr.limits = [-2.5, 1.0]
 sfr.log = True
 sfr.auxcat = True
@@ -551,7 +551,7 @@ def sfr2(sim, partType, field, args):
     return sim.subhalos('SubhaloSFRinRad') # units correct
 
 sfr2.label = r'$\rm{SFR_{<2r_{\star}}}$'
-sfr2.units = r'$\rm{M_{sun} yr^{-1}}$'
+sfr2.units = r'$\rm{M_{sun}\, yr^{-1}}$'
 sfr2.limits = [-2.5, 1.0]
 sfr2.log = True
 

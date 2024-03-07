@@ -9,7 +9,7 @@ from scipy.signal import savgol_filter
 from scipy import interpolate
 
 import illustris_python as il
-from ..util.helper import running_sigmawindow, iterable
+from ..util.helper import logZeroNaN, running_sigmawindow, iterable
 
 treeName_default = "SubLink"
 
@@ -338,6 +338,37 @@ def mpbSmoothedProperties(sP, id, fillSkippedEntries=True, extraFields=None):
     mpb['sm']['vvir'] = savgol_filter( mpb['Group_V_vir'], sKn, sKo )
 
     return mpb    
+
+def quantMPB(sim, mpb, quant):
+    """ Return a particular quantity from the MPB, where quant is a string. 
+    A simplified version of e.g. simSubhaloQuantity(). Can be generalized in the future. 
+    Returned units should be consistent with simSubhaloQuantity() of the same quantity name. """
+
+    prop = quant.lower().replace('_log','') # new
+    log = True # default
+
+    if prop in ['mhalo_200']:
+        vals = mpb['Group_M_Crit200']
+        vals = sim.units.codeMassToMsun(vals)
+
+    if prop in ['mstar']:
+        vals = mpb['SubhaloMassType'][:,sim.ptNum('stars')]
+        vals = sim.units.codeMassToMsun(vals)
+
+    if prop in ['mstar2']:
+        vals = mpb['SubhaloMassInRadType'][:,sim.ptNum('stars')]
+        vals = sim.units.codeMassToMsun(vals)
+
+    if prop in ['sfr2']:
+        vals = mpb['SubhaloSFRinRad']
+
+    # take log?
+    if '_log' in quant and log:
+        log = False
+        vals = logZeroNaN(vals)
+
+    # return
+    return vals #, label, minMax, log
 
 def debugPlot():
     """ Testing MPB loading and smoothing. """

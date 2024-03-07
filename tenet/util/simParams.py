@@ -226,7 +226,7 @@ class simParams:
         from ..load.groupcat import groupCat, groupCatSingle, groupCatHeader, \
             gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, groupCatHasField, groupCatFields, \
             groupCat_subhalos, groupCat_halos, groupCatSingle_subhalo, groupCatSingle_halo
-        from ..cosmo.mergertree import loadMPB, loadMDB, loadMPBs
+        from ..cosmo.mergertree import loadMPB, loadMDB, loadMPBs, quantMPB
         from ..plot.quantities import simSubhaloQuantity, simParticleQuantity
         from ..util.helper import periodicDistsN, periodicDistsIndexed
 
@@ -267,6 +267,7 @@ class simParams:
         self.loadMPB = partial(loadMPB, self)
         self.loadMDB = partial(loadMDB, self)
         self.loadMPBs = partial(loadMPBs, self)
+        self.quantMPB = partial(quantMPB, self)
 
         # loading shortcuts
         self.subhalos = partial(groupCat_subhalos, self)
@@ -307,6 +308,12 @@ class simParams:
             return "%s z=%d" % (self.simName, self.redshift)
         return "%s z=%.1f" % (self.simName, self.redshift)
         #return "%s (z=%.1f, snapshot %d)" % (self.simName, self.redshift, self.snap)
+    
+    def __eq__(self, other):
+        """ Comparison of two simParams instances. """
+        print('compare')
+        return (self.run == other.run and self.res == other.res and self.snap == other.snap and \
+                self.variant == other.variant and self.hInd == other.hInd)
 
     def scan_simulation(self, inputPath, simName=None):
         """ Fill simulation parameters automatically, based on path. """
