@@ -1720,13 +1720,15 @@ class simParams:
         # target must be a central and have low contamination
         cand_inds = np.where(cen_flag & (contam_frac < 0.1))[0]
         
-        # select from these candidates: the one with the largest stellar mass
-        cand_ind = cand_inds[np.argmax(mstar[cand_inds])]
-                
-        if cand_ind != 0 and cen_flag[cand_ind] == 1 and contam_frac[cand_ind] < 0.1:
-            targetSubhaloID = cand_ind
+        # ideally, the central of the first halo
+        targetSubhaloID = cand_inds[0]
+
+        # if this is not a candidate, then select: the one with the largest stellar mass
+        if targetSubhaloID != 0:
+            targetSubhaloID = cand_inds[np.argmax(mstar[cand_inds])]
+            
             haloID = self.subhalo(targetSubhaloID)['SubhaloGrNr']
-            print(f'Warning: [{self.simName}] zoomSubhaloID = {cand_ind} ({haloID = }) as the max mstar uncontaminated central.')
+            print(f'Warning: [{self.simName}] zoomSubhaloID = {targetSubhaloID} ({haloID = }) as the max mstar uncontaminated central.')
         
         return targetSubhaloID
     

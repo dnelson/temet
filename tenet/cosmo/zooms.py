@@ -767,9 +767,11 @@ def plot_timeevo():
 def mstarVsMhaloEvo():
     """ Plot galaxy stellar mass vs halo mass evolution/relation, comparison between runs. 
     """
+    from ..load.data import behrooziUM
+
     # config simulations and field
     variants = ['TNG','ST5'] #,'TNG','ST']
-    res = [11, 12, 13] #, 14, 15]
+    res = [11, 12, 13, 14] #, 15]
     hInds = [1242, 4182, 10677, 12688, 31619] #1242 4182 10677 12688 31619
     redshift = 3.0
 
@@ -858,25 +860,32 @@ def mstarVsMhaloEvo():
     
     xm, ym, _, pm = running_median(tng100_mhalo,tng100_mstar,binSize=0.05,percs=[5,16,50,84,95])
 
+    b19_um = behrooziUM(sims[0])
+
     # plot 1
     fig, ax = plt.subplots()
 
-    ax.set_xlabel('Halo Mass $\\rm{M_{200c}}$ [ $\\rm{M_\odot}$ ]')
-    ax.set_ylabel('Stellar Mass [ $\\rm{M_\odot}$ ]')
+    ax.set_xlabel('Halo Mass $\\rm{M_{200c}}$ [ log $\\rm{M_\odot}$ ]')
+    ax.set_ylabel('Stellar Mass [ log $\\rm{M_\odot}$ ]')
 
-    mstar_min = 5.8 #np.floor((np.min(mstar) - 0.2) * 10) / 10
+    mstar_min = 5.7 #np.floor((np.min(mstar) - 0.2) * 10) / 10
     mstar_max = 10.2 #np.ceil((np.max(mstar) + 0.2) * 10) / 10
-    mhalo_min = 9.0 #np.floor((np.min(mhalo) - 0.2) * 10) / 10
-    mhalo_max = 11.2 #np.ceil((np.max(mhalo) + 0.2) * 10) / 10
+    mhalo_min = 9.25 #np.floor((np.min(mhalo) - 0.2) * 10) / 10
+    mhalo_max = 11.25 #np.ceil((np.max(mhalo) + 0.2) * 10) / 10
     
     ax.set_xlim([mhalo_min, mhalo_max])
     ax.set_ylim([mstar_min, mstar_max])
 
-    # parent box relation
+    # parent box and UniverseMachine relations
     pm = savgol_filter(pm,sKn,sKo,axis=1)
-    ax.fill_between(xm, pm[0,:], pm[-1,:], color='#ccc', alpha=0.4)
-    ax.fill_between(xm, pm[1,:], pm[-2,:], color='#ccc', alpha=0.6)
-    ax.plot(xm, ym, color='#ccc', lw=lw*2, alpha=0.9, label=tng100)
+    ax.fill_between(xm, pm[0,:], pm[-1,:], color='#bbb', alpha=0.4)
+    ax.fill_between(xm, pm[1,:], pm[-2,:], color='#bbb', alpha=0.6)
+    ax.plot(xm, ym, color='#bbb', lw=lw*2, alpha=1.0, label=tng100)
+
+    ax.plot(b19_um['haloMass'], b19_um['mstar_mid'], '--', color='#bbb', lw=lw*1, alpha=1.0, label=b19_um['label'] + ' z = %.1f' % redshift)
+    ax.plot(b19_um['haloMass'], b19_um['mstar_low'], ':', color='#bbb', lw=lw*1, alpha=0.8)
+    ax.plot(b19_um['haloMass'], b19_um['mstar_high'], ':', color='#bbb', lw=lw*1, alpha=0.8)
+    #ax.fill_between(b19_um['haloMass'], b19_um['mstar_low'], b19_um['mstar_high'], color='#bbb', hatch='X', alpha=0.4)
 
     # individual zoom runs
     colors = [next(ax._get_lines.prop_cycler)['color'] for _ in range(len(hInds))]
@@ -889,7 +898,7 @@ def mstarVsMhaloEvo():
         marker = markers[variants.index(sim.variant)]
 
         # marker size set by resolution
-        ms_loc = (sim.res - 10) * 2 + 8
+        ms_loc = (sim.res - 10) * 2 + 6
         lw_loc = (sim.res - 10)
 
         l, = ax.plot(mhalo[i], mstar[i], marker, color=c, markersize=ms_loc, label='') # sim.simName
@@ -905,7 +914,6 @@ def mstarVsMhaloEvo():
         mhalo_parentbox = sim.units.codeMassToLogMsun(halo_parentbox['Group_M_Crit200'])
         mstar_parentbox = sim.units.codeMassToLogMsun(subhalo_parentbox['SubhaloMassType'][sim.ptNum('stars')])
 
-        #label = 'h%d in %s' % (hInd,sim_parent.simName)
         label = 'hX in %s' % (sim_parent.simName) if i == 0 else ''
         l, = ax.plot(mhalo_parentbox, mstar_parentbox, markers[len(variants)], color='#555', label=label)
 
@@ -935,7 +943,7 @@ def mstarVsMhaloEvo():
             for r in res:
                 # marker set by variant
                 marker = markers[variants.index(variant)]
-                ms = (r - 10) * 2 + 8
+                ms = (r - 10) * 2 + 6
 
                 handles.append(plt.Line2D((0,1), (0,0), color='black', lw=0, marker=marker, ms=ms))
                 labels.append('L%d_%s' % (r,variant))
@@ -953,7 +961,7 @@ def mstarVsMhaloEvo():
     fig, ax = plt.subplots()
 
     ax.set_xlabel('Redshift')
-    ax.set_ylabel('Stellar Mass [ $\\rm{M_\odot}$ ]')
+    ax.set_ylabel('Stellar Mass [ log $\\rm{M_\odot}$ ]')
     
     ax.set_xlim([10.0, 2.9])
 
@@ -966,7 +974,7 @@ def mstarVsMhaloEvo():
         marker = markers[variants.index(sim.variant)]
 
         # marker size set by resolution
-        ms_loc = (sim.res - 10) * 2 + 8
+        ms_loc = (sim.res - 10) * 2 + 6
         lw_loc = (sim.res - 10)
 
         l, = ax.plot(z[i], mstar[i], marker, color=c, markersize=ms_loc, label='')
@@ -984,7 +992,6 @@ def mstarVsMhaloEvo():
         mhalo_parentbox = sim.units.codeMassToLogMsun(halo_parentbox['Group_M_Crit200'])
         mstar_parentbox = sim.units.codeMassToLogMsun(subhalo_parentbox['SubhaloMassType'][sim.ptNum('stars')])
 
-        #label = 'h%d in %s' % (hInd,sim.sP_parent.simName)
         label = 'hX in %s' % (sim_parent.simName) if i == 0 else ''
         l, = ax.plot(sim_parent.redshift, mstar_parentbox, markers[3], color='#555', label=label)
 

@@ -11,7 +11,7 @@ from ..util.helper import closest
 
 # --- snapshot configuration & spacing ---
 
-def redshiftToSnapNum(redshifts=None, times=None, sP=None):
+def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False):
     """ Convert one or more input redshifts to closest matching snapshot numbers for a given sP. """
     from ..util.helper import closest
     from ..load.snapshot import subboxVals
@@ -38,7 +38,7 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None):
     if not isdir(sP.derivPath):
         mkdir(sP.derivPath)
 
-    if isfile(saveFilename):
+    if isfile(saveFilename) and not recalculate:
         with h5py.File(saveFilename, 'r') as f:
             for key in f.keys():
                 r[key] = f[key][()]
@@ -97,8 +97,12 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None):
             # closest snapshot redshift to requested
             zFound, w = closest( r['redshifts'], redshift )
 
-            if np.abs(zFound-redshift) > 0.1 and redshift != 2.22:
-                print("Warning! [%s] Snapshot selected with redshift error = %g" % (sP.simName,np.abs(zFound-redshift)))
+            if np.abs(zFound-redshift) > 0.1:
+                # try to recompute in case we have a partial save from a previously in progress run
+                if not recalculate:
+                    return redshiftToSnapNum(redshifts=redshifts, times=times, sP=sP, recalculate=True)
+                else:
+                    print("Warning! [%s] Snapshot selected with redshift error = %g" % (sP.simName,np.abs(zFound-redshift)))
 
             snaps[i] = w
 
