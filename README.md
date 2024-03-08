@@ -26,12 +26,14 @@ Organization
 ------------
 
 * cosmo/ - analysis specific for cosmological/comoving boxes
+* collab/ - exploration and plots for collaborations/non-first author papers
 * data/ - external text data files from the literature
 * ICs/ - initial condition generation
 * load/ - loading of group catalogs, snapshots, auxcats
+* ML/ - machine learning
 * obs/ - analysis and data reduction for observations
 * plot/ - generalized plotting
-* projects/ - routines, both analysis and plotting, specific to papers
+* projects/ - analysis and plots for first-author papers/projects
 * tables/ - large pre-computed datafiles (empty until downloaded)
 * tracer/ - Monte Carlo tracer particles
 * util/ - misc helper utilities

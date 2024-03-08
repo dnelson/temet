@@ -336,11 +336,10 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None):
 
 def paperPlots():
     """ Plots for MCST intro paper. """
-    from ..util.simParams import simParams
 
     # list of sims to include
-    variants = ['TNG','ST5'] #,'TNG','ST']
-    res = [11, 12, 13, 14] #, 15]
+    variants = ['TNG','ST5']
+    res = [11, 12, 13, 14] # 15
     hInds = [1242, 4182, 10677, 12688, 31619] #1242 4182 10677 12688 31619
     redshift = 3.0
 
@@ -371,3 +370,8 @@ def paperPlots():
         xlim = [5.7, 10.2] # log mstar
 
         twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False)
+
+    # movies
+    if 0:
+        from ..vis.haloMovieDrivers import structuresEvo
+        structuresEvo(conf='one') # one, two, three, four

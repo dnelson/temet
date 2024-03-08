@@ -1,11 +1,10 @@
 """ Analysis and plotting which is project specific.
 For the most part, each module herein contains the code to fully replicate one published paper.
 In this case, the single ``paperPlots()`` at the bottom will produce the full set of figures. """
-from . import azimuthalAngleCGM
+
 from . import clustering
 from . import color_analysis
 from . import color
-from . import explore
 from . import lrg
 from . import mcst
 from . import mg2emission
@@ -16,6 +15,4 @@ from . import outflows
 from . import oxygen
 from . import rshock
 from . import tngcluster
-from . import xrayAngularDependence
 from . import xray_scattering
-from . import zooming2

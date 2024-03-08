@@ -3,7 +3,6 @@ Plotting for evolution of tracer quantities in time (for cosmo boxes/zooms).
 """
 import h5py
 import numpy as np
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.ticker import FormatStrFormatter
@@ -13,11 +12,9 @@ from scipy.signal import savgol_filter
 from os.path import isfile, isdir
 from os import mkdir
 
-from ..tracer import tracerMC
 from ..tracer import tracerEvo
 from ..util.helper import loadColorTable, logZeroSafe, closest
 from ..cosmo.util import redshiftToSnapNum, snapNumToRedshift
-from ..plot.cosmoGeneral import addRedshiftAgeAxes
 
 # global configuration
 figsize1   = (14,8)  # set aspect ratio and relative text/label sizes

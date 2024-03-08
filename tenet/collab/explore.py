@@ -3,285 +3,14 @@
 """
 import numpy as np
 import h5py
-
-from os.path import isfile
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy.signal import savgol_filter
 
 from ..util import simParams
 from ..util.helper import logZeroNaN, running_median
 from ..plot.config import *
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
-
-def celineWriteH2CDDFBand():
-    """ Use H2 CDDFs with many variations (TNG100) to derive an envelope band, f(N_H2) vs. N_H2, and write a text file. """
-    sP = simParams(res=1820, run='tng', redshift=0.2) # z=0.2, z=0.8
-
-    vars_sfr = ['nH2_GK_depth10','nH2_GK_depth10_allSFRgt0','nH2_GK_depth10_onlySFRgt0']
-    vars_model = ['nH2_BR_depth10','nH2_KMT_depth10']
-    vars_diemer = ['nH2_GD14_depth10','nH2_GK11_depth10','nH2_K13_depth10','nH2_S14_depth10']
-    vars_cellsize = ['nH2_GK_depth10_cell3','nH2_GK_depth10_cell1']
-    vars_depth = ['nH2_GK_depth5','nH2_GK_depth20','nH2_GK_depth1']
-
-    speciesList = vars_sfr + vars_model + vars_cellsize + vars_depth
-    speciesList = ['nH2_GK_depth10'] # TNG300 test
-
-    # load
-    for i, species in enumerate(speciesList):
-        ac = sP.auxCat(fields=['Box_CDDF_'+species])
-
-        n_species  = logZeroNaN( ac['Box_CDDF_'+species][0,:] )
-        fN_species = logZeroNaN( ac['Box_CDDF_'+species][1,:] )
-
-        if i == 0:
-            # save x-axis on first iter
-            N_H2 = n_species.copy()
-            fN_H2_low = fN_species.copy()
-            fN_H2_high = fN_species.copy()
-            fN_H2_low.fill(np.nan)
-            fN_H2_high.fill(np.nan)
-        else:
-            # x-axes must match
-            assert np.array_equal(N_H2, n_species)
-
-        # take envelope
-        fN_H2_low  = np.nanmin( np.vstack((fN_H2_low, fN_species)), axis=0 )
-        fN_H2_high = np.nanmax( np.vstack((fN_H2_high, fN_species)), axis=0 )
-
-    # select reasonable range
-    w = np.where(N_H2 >= 15.0)
-    N_H2 = N_H2[w]
-    fN_H2_low = savgol_filter(fN_H2_low[w],sKn,sKo)
-    fN_H2_high = savgol_filter(fN_H2_high[w],sKn,sKo)
-
-    # plot
-    figsize = np.array([14,10]) * 0.7
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
-
-    ax.set_xlabel('N$_{\\rm H2}$ [cm$^{-2}$]')
-    ax.set_ylabel('log f(N$_{\\rm H2}$) [cm$^{2}$]')
-    ax.set_xlim([14, 24])
-    ax.set_ylim([-30,-14])
-    ax.fill_between(N_H2, fN_H2_low, fN_H2_high, alpha=0.8)
-
-    fig.savefig('h2_CDDF_%s_band-%d.pdf' % (sP.simName,len(speciesList)))
-    plt.close(fig)
-
-    # write text file
-    filename = 'h2_CDDF_%s_band-%d_z=%.1f.txt' % (sP.simName,len(speciesList),sP.redshift)
-    out = '# %s z=%.1f\n# N_H2 [cm^-2], f_N,lower [cm^2], f_N,upper [cm^2]\n' % (sP.simName,sP.redshift)
-
-    for i in range(N_H2.size):
-        out += '%.3f %.3f %.3f\n' % (N_H2[i], fN_H2_low[i], fN_H2_high[i])
-    with open(filename, 'w') as f:
-        f.write(out)
-
-def celineH2GalaxyImage():
-    """ Metallicity distribution in CGM image: Klitsch+ (2019) paper figure """
-    run        = 'tng'
-    res        = 2160
-    redshift   = 0.5
-    rVirFracs  = [0.5, 1.0] # None
-    method     = 'sphMap_global'
-    axes       = [0,1]
-    labelSim   = False
-    relCoords  = True
-    rotation   = 'edge-on'
-    sizeType   = 'kpc'
-    rVirFracs  = None
-
-    size = 40
-    subhaloInd = 564218 # for Klitsch+ (2019) paper
-
-    faceOnOptions = {'rotation'   : 'face-on',
-                     'labelScale' : 'physical',
-                     'labelHalo'  : 'mstar,sfr',
-                     'labelZ'     : True,
-                     'nPixels'    : [800,800]}
-
-    edgeOnOptions = {'rotation'   : 'edge-on',
-                     'labelScale' : False,
-                     'labelHalo'  : False,
-                     'labelZ'     : False,
-                     'nPixels'    : [800,250]}
-
-    # which halo?
-    sP = simParams(res=res, run=run, redshift=redshift)
-    haloID = sP.groupCatSingle(subhaloID=subhaloInd)['SubhaloGrNr']
-
-    panels = []
-    panels.append( {'partType':'gas', 'partField':'MH2_GK', 'valMinMax':[17.5,22.0], **faceOnOptions} )
-    panels.append( {'partType':'gas', 'partField':'MH2_GK', 'valMinMax':[17.5,22.0], **edgeOnOptions} )
-
-    class plotConfig:
-        plotStyle    = 'edged'
-        rasterPx     = faceOnOptions['nPixels'][0] 
-        colorbars    = True
-        nCols        = 1
-        nRows        = 2
-        fontsize     = 24
-        saveFilename = './%s.%d.%d.%dkpc.pdf' % (sP.simName,sP.snap,subhaloInd,size)
-
-    # render
-    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
-
-def celineGalaxyImage():
-    """ MgII emission image for Celine proposal 2022. """
-    run        = 'tng'
-    res        = 2160
-    redshift   = 0.5
-    rVirFracs  = None
-    method     = 'sphMap'
-    axes       = [0,1]
-    labelSim   = False
-    labelScale = 'physical'
-    labelZ     = True
-    relCoords  = True
-    #rotation   = 'edge-on'
-    rVirFracs  = None
-
-    sizeType   = 'arcsec'
-    size = 7.5
-
-    subhaloInd = 564218 # for Klitsch+ (2019) paper
-
-    nPixels = [800,800]
-
-    # which halo?
-    sP = simParams(res=res, run=run, redshift=redshift)
-    #haloID = sP.groupCatSingle(subhaloID=subhaloInd)['SubhaloGrNr']
-
-    panels = []
-    panels.append( {'partType':'gas', 'partField':'MH2_GK', 'valMinMax':[17.5,22.0]} )
-
-    class plotConfig:
-        plotStyle    = 'edged'
-        rasterPx     = nPixels[0]
-        colorbars    = True
-        #fontsize     = 24
-        saveFilename = './%s.%d.%d.%dkpc.pdf' % (sP.simName,sP.snap,subhaloInd,size)
-
-    # render
-    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
-
-def celineHIH2RadialProfiles():
-    """ Compute stacked radial profiles of N_HI(b) and N_H2(b). """
-    from ..util.simParams import simParams
-    from ..plot.general import plotStackedRadialProfiles1D
-
-    sPs = []
-    sPs.append( simParams(res=1820,run='tng',redshift=2.0) )
-
-    # select subhalos
-    mhalo = sPs[0].groupCat(fieldsSubhalos=['mhalo_200_log'])
-
-    with np.errstate(invalid='ignore'):
-        ww = np.where( (mhalo > 11.8) & (mhalo < 11.9) )
-
-    subhaloIDs = [{'11.8 < M$_{\\rm halo}$ < 11.9':ww[0]}]
-
-    # select properties
-    fields    = ['MHI_GK','MH2_GK']
-    weighting = None
-    op        = 'sum'
-    proj2D    = [2, None] # z-axis, no depth restriction
-
-    for field in fields:
-        plotStackedRadialProfiles1D(sPs, subhaloIDs=subhaloIDs, ptType='gas', ptProperty=field, op=op, 
-                                    weighting=weighting, proj2D=proj2D)
-
-def celineHIDensityVsColumn():
-    """ Re-create Rahmati+ (2013) Fig 2. """
-    from ..util.simParams import simParams
-    sP = simParams(run='tng100-1', redshift=3.0)
-
-    N_HI = sP.snapshotSubset('gas', 'hi_column')
-    M_HI = sP.snapshotSubset('gas', 'MHI_GK')
-    M_H2 = sP.snapshotSubset('gas', 'MH2_GK')
-    M_H  = sP.snapshotSubset('gas', 'mass') * sP.units.hydrogen_massfrac
-
-    w = np.where( np.isfinite(N_HI) ) # in grid slice
-
-    N_HI = N_HI[w]
-    M_HI = M_HI[w]
-    M_H2 = M_H2[w]
-    M_H  = M_H[w]
-
-    # compute num dens
-    vol = sP.snapshotSubsetP('gas', 'volume')[w]
-
-    numdens_HI = sP.units.codeDensToPhys(M_HI / vol, cgs=True, numDens=True)
-    numdens_H2 = sP.units.codeDensToPhys(M_H2 / vol, cgs=True, numDens=True)
-    numdens_H  = sP.units.codeDensToPhys(M_H  / vol, cgs=True, numDens=True)
-
-    # zero densities where n_HI == 0 (although done in running_median if we are weighting by n_HI)
-    w = np.where(numdens_HI == 0)
-    numdens_HI[w] = np.nan
-    numdens_H2[w] = np.nan
-    numdens_H[w]  = np.nan
-
-    # restrict to interesting column range
-    w = np.where(N_HI > 15.0)
-    N_HI = N_HI[w]
-    numdens_HI = numdens_HI[w]
-    numdens_H2 = numdens_H2[w]
-    numdens_H  = numdens_H[w]
-
-    # median (or mean weighted by n_HI)
-    nBins = 90
-    percs = [16, 50, 84]
-
-    N_HI_vals,  _, _, nhi_percs = running_median(N_HI, numdens_HI, nBins=nBins, percs=percs, mean=True, weights=numdens_HI)
-    N_HI_vals2, _, _, nh2_percs = running_median(N_HI, numdens_H2, nBins=nBins, percs=percs, mean=True, weights=numdens_HI)
-    N_HI_vals3, _, _, nh_percs  = running_median(N_HI, numdens_H, nBins=nBins, percs=percs, mean=True, weights=numdens_HI)
-
-    assert np.array_equal(N_HI_vals, N_HI_vals2) and np.array_equal(N_HI_vals, N_HI_vals3)
-
-    nhi_percs = logZeroNaN(nhi_percs)
-    nh2_percs = logZeroNaN(nh2_percs)
-    nh_percs  = logZeroNaN(nh_percs)
-
-    # plot
-    figsize = np.array([14,10]) * 0.8
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
-
-    ax.set_xlabel('N$_{\\rm HI}$ [log cm$^{-2}$]')
-    ax.set_ylabel('n$_{\\rm H}$ or n$_{\\rm HI}$ or n$_{\\rm H2}$ [log cm$^{-3}$]')
-    ax.set_xlim([15, 23])
-    ax.set_ylim([-6.0, 2.0])
-
-    l, = ax.plot(N_HI_vals, nh_percs[1,:], '-', lw=2.0, label='n$_{\\rm H}$')
-    ax.fill_between(N_HI_vals, nh_percs[0,:], nh_percs[-1,:], alpha=0.5, color=l.get_color())
-
-    l, = ax.plot(N_HI_vals, nhi_percs[1,:], '-', lw=2.0, label='n$_{\\rm HI}$')
-    ax.fill_between(N_HI_vals, nhi_percs[0,:], nhi_percs[-1,:], alpha=0.5, color=l.get_color())
-
-    ax.plot(N_HI_vals, nh2_percs[1,:], '-', lw=2.0, label='n$_{\\rm H2}$')
-    ax.fill_between(N_HI_vals, nh2_percs[0,:], nh2_percs[-1,:], alpha=0.5, color=l.get_color())
-
-    ax.legend()
-    fig.savefig('N_HI_vs_n_H_HI_H2_%s.pdf' % sP.simName)
-    plt.close(fig)
-
-    # write text file
-    filename = 'N_HI_vs_n_H_HI_H2_%s_z=%.1f.txt' % (sP.simName,sP.redshift)
-    out = '# %s z=%.1f\n (all values in log10)' % (sP.simName,sP.redshift)
-    out += '# N_HI [cm^-2], '
-    out += 'n_H [cm^-3], n_H_p16 [cm^-3] n_H_p84 [cm^-3], '
-    out += 'n_HI [cm^-3], n_HI_p16 [cm^-3] n_HI_p84 [cm^-3], '
-    out += 'n_H2 [cm^-3], n_H2_p16 [cm^-3] n_H2_p84 [cm^-3]\n'
-
-    for i in range(N_HI_vals.size):
-        out += '%6.3f ' % N_HI_vals[i]
-        out += '%7.3f %7.3f %7.3f '  % (nh_percs[1,i], nh_percs[0,i], nh_percs[2,i])
-        out += '%7.3f %7.3f %7.3f '  % (nhi_percs[1,i], nhi_percs[0,i], nhi_percs[2,i])
-        out += '%7.3f %7.3f %7.3f\n' % (nh2_percs[1,i], nh2_percs[0,i], nh2_percs[2,i])
-    with open(filename, 'w') as f:
-        f.write(out)
 
 def amyDIGzProfiles():
     """ Use some projections to create the SB(em lines) vs z plot. """
@@ -1016,452 +745,168 @@ def arjenMasses5kpc():
 
     pdf.close()
 
-def magicCGMEmissionMaps():
-    """ Emission maps (single, or in stacked M* bins) for MAGIC-II proposal. """
-    from os import path
-    import hashlib
 
-    sP = simParams(run='tng50-1',redshift=0.3)
+def yenting_vis_sample(redshift=1.0):
+    """ For the raw TNG-Cluster halos (not in the virtual box), render some views of RIZ stellar 
+    composite and SFR, to identify rings like Yen-Ting is after."""
+    from ..cosmo.zooms import _halo_ids_run
 
-    lines = ['H--1-1215.67A','H--1-1025.72A','C--4-1550.78A','C--4-1548.19A','O--6-1037.62A','O--6-1031.91A',
-             'S--4-1404.81A','S--4-1423.84A','S--4-1398.04A'] # (not NV, SiIV, SiIII, HeII)
+    zoomHaloInds = _halo_ids_run(onlyDone=False)[1:] # skip first
 
-    massBins = [ [8.48,8.52], [8.97,9.03], [9.45,9.55], [9.97, 10.03], [10.4,10.6], [10.8,11.2] ]
-    distRvir = True
-
-    # grid config (must recompute grids)
-    method    = 'sphMap' #'sphMap_global'
-    nPixels   = [800,800]
-    axes      = [0,1] # random rotation
-    size      = 1000.0
-    sizeType  = 'kpc'
-    partType  = 'gas'
-    partField = 'sb_' + lines[1] + '_ergs'
-    valMinMax = [-22, -18]
-    labelScale = 'physical'
-
-    if 0:
-        smoothFWHM = sP.units.arcsecToAngSizeKpcAtRedshift(1.5) # 1.5" FWHM
-        contour = ['gas',partField]
-        contourLevels = [-20.0, -19.0] # erg/s/cm^2/arcsec^2
-        contourOpts = {'colors':'white', 'alpha':0.8}
-
-    panels = []
-
-    # load
-    gc = sP.subhalos(['mstar_30pkpc_log','central_flag','rhalo_200_code','SubhaloPos'])
-
-    # global pre-cache of selected fields into memory
-    if 0:
-        # restrict to sub-volumes around targets
-        print('Caching [Coordinates] now...', flush=True)
-        pos = sP.snapshotSubsetP('gas', 'pos', float32=True)
-
-        # mask
-        mask = np.zeros(pos.shape[0], dtype='bool')
-
-        with np.errstate(invalid='ignore'):
-            for massBin in massBins:
-                subInds = np.where( (gc['mstar_30pkpc_log']>massBin[0]) & \
-                              (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )[0]
-                for i, subInd in enumerate(subInds):
-                    print(' mask [%3d of %3d] ind = %d' % (i,len(subInds),subInd), flush=True)
-                    dists = sP.periodicDistsN(gc['SubhaloPos'][subInd,:],pos,squared=True)
-                    size_loc = size * gc['rhalo_200_code'][subInd] # rvir -> code units
-                    w = np.where(dists <= size_loc**2) # confortable padding, only need d<sqrt(2)*size/2
-                    mask[w] = 1
-
-        pInds = np.nonzero(mask)[0]
-        mask = None
-        dists = None
-        print(' masked particle fraction = %.3f%%' % (pInds.size/pos.shape[0]*100))
-
-        pos = pos[pInds,:]
-
-        # insert into cache, load other fields
-        dataCache = {}
-        dataCache['snap%d_gas_Coordinates' % sP.snap] = pos
-        emisLoadField = partField.replace(' ','-').replace('sb_','') + ' flux'
-
-        for key in ['Masses','Density',emisLoadField]: # Density for Volume -> cellrad
-            print('Caching [%s] now...' % key, flush=True)
-            dataCache['snap%d_gas_%s' % (sP.snap,key.replace(' ','_'))] = sP.snapshotSubsetP('gas', key, inds=pInds)
-
-        print('All caching done.', flush=True)
-
-    # loop over mass bins
-    stacks = []
-
-    for i, massBin in enumerate([massBins[5]]): #enumerate(massBins):
-
-        # select subhalos
-        with np.errstate(invalid='ignore'):
-            w = np.where( (gc['mstar_30pkpc_log']>massBin[0]) & (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )
-        sub_inds = w[0]
-
-        print('%s z = %.1f [%.2f - %.2f] Processing [%d] halos...' % (sP.simName,sP.redshift,massBin[0],massBin[1],len(w[0])))
-
-        # check for existence of cache
-        hashStr = "%s-%s-%s-%s-%s-%s-%s" % (method,nPixels,axes,size,sizeType,sP.snap,sub_inds)
-        m = hashlib.sha256(hashStr.encode('utf-8')).hexdigest()[::4]
-        cacheFile = sP.derivPath + 'cache/stacked_proj_grids_%s_%s.hdf5' % (partField,m)
-
-        # plot config
-        class plotConfig:
-            plotStyle    = 'edged'
-            rasterPx     = nPixels[0] * 1.6
-            colorbars    = True
-            #fontsize     = 24
-            saveFilename = './stacked_%s_%d.pdf' % (partField,i)
-
-        if path.isfile(cacheFile):
-            # load cached result
-            with h5py.File(cacheFile,'r') as f:
-                grid_global = f['grid_global'][()]
-                sub_inds = f['sub_inds'][()]
-            print('Loaded: [%s]' % cacheFile)
-        else:
-            # allocate for full stack
-            grid_global  = np.zeros( (nPixels[0],nPixels[1],len(sub_inds)), dtype='float32' )
-
-            if 0:
-                for j, subhaloInd in enumerate(sub_inds):
-                    # render
-                    grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-
-                    # stamp
-                    grid_global[:,:,j] = grid
-
-            if 0:
-                # TESTING ONLY - render multiple views of first subhalo
-                subhaloInd = sub_inds[0]
-                plotConfig.saveFilename = './%s-s%d-sh%d.pdf' % (sP.simName,sP.snap,subhaloInd)
-                panels = []
-
-                for j, line in enumerate(lines[:6]):
-                    field = 'sb_' + line + '_ergs'
-                    panels.append({'partField':field, #'contour':['gas',field], 
-                                   'labelHalo':(j==0), 'labelSim':(j==2), 'labelZ':(j==2)})
-                renderSingleHalo(panels, plotConfig, locals())
-                return
-
-            # save cache
-            with h5py.File(cacheFile,'w') as f:
-                f['grid_global'] = grid_global
-                f['sub_inds'] = sub_inds
-
-            print('Saved: [%s]' % cacheFile)
-
-        # create stack
-        grid_stacked = np.nanmedian(grid_global, axis=2)
-        stacks.append({'grid':grid_stacked,'sub_inds':sub_inds})
-
-        # make plot of this mass bin
-        #panels[0]['grid'] = grid_stacked # override
-        #panels[0]['subhaloInd'] = sub_inds[int(len(sub_inds)/2)] # dummy
-        #renderSingleHalo(panels, plotConfig, locals())
-
-    # make final plot
-    labelScale = 'physical'
-    valMinMax = [8.0, 14.5]
-
-    class plotConfig:
-        plotStyle    = 'open'
-        rasterPx     = nPixels[0]*2
-        colorbars    = True
-        #fontsize     = 24
-        saveFilename = './stack_%s_z%.1f_%s.pdf' % (sP.simName,sP.redshift,partField)
-
-    for i, massBin in enumerate(massBins):
-        if i % 2 == 0: continue # only every other
-
-        p = {'grid':stacks[i]['grid'],
-             'labelZ':True if i == len(massBins)-1 else False,
-             'subhaloInd':stacks[i]['sub_inds'][int(len(stacks[i]['sub_inds'])/2)],
-             'title':'log M$_{\\rm \star}$ = %.1f M$_\odot$' % np.mean(massBin)}
-
-        panels.append(p)
-
-    renderSingleHalo(panels, plotConfig, locals())
-
-def magicCGMEmissionTrends():
-    """ Emission summary statisics (auxCat-based) as a function of galaxy properties, for MAGIC-II proposal. """
-    from os import path
-    from ..plot.cosmoGeneral import quantMedianVsSecondQuant
-
-    sim = simParams(run='tng50-1',redshift=0.3)
-
-    lines = ['H--1-1215.67A','H--1-1025.72A','C--4-1550.78A','C--4-1548.19A','O--6-1037.62A','O--6-1031.91A',
-             'S--4-1404.81A','S--4-1423.84A','S--4-1398.04A'] # (not NV, SiIV, SiIII, HeII)
-
-    fields = ['lum_civ1551_outercgm','lum_civ1551_innercgm']
-
-    # plot config
-    xQuant = 'mstar_30pkpc'
-    cenSatSelect = 'cen'
-
-    xlim = [9.0, 11.5]
-    ylim = [35.5, 46]
-    scatterPoints = True
-    drawMedian = False
-    markersize = 40.0
-    sizefac = 0.8 # for single column figure
-    maxPointsPerDex = 200
-
-    #scatterColor = 'l_agn'
-    #clim = [40.5, 43.5]
-    scatterColor = 'mass_smbh'
-    clim = [6.5, 8.5]
-    #scatterColor = 'ssfr_30pkpc'
-    #clim = [-9.0, -10.5] # log sSFR
-
-    # plot
-    for field in fields:
-        quantMedianVsSecondQuant([sim], yQuants=[field], xQuant=xQuant, cenSatSelect=cenSatSelect, 
-                                xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                                scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                                maxPointsPerDex=maxPointsPerDex, legendLoc='upper left', pdf=None)
-
-def hubbleMCT_gibleVis(conf=1):
-    """ Visualization of CGM emission from a GIBLE halo. """
-    res        = 4096 # 8, 64, 512, 4096
-    hInd       = 201
-    redshift   = 0.15
-    run        = 'gible'
-
-    rVirFracs  = [1.0]
-    method     = 'sphMap_global'
-    nPixels    = [1000,1000]
-    size       = 2.5
-    axes       = [0,1]
-    sizeType   = 'rVirial'
-    axesUnits  = 'arcsec'
-    labelHalo  = 'mstar,mhalo'
-    rotation   = 'edge-on'
-
-    subhaloInd = 0
+    rVirFracs   = [1.0]
+    method      = 'sphMap'
+    nPixels     = [600,600]
+    size        = 1.0
+    sizeType    = 'arcmin'
+    axesUnits   = 'arcsec'
+    labelScale  = 'physical'
+    labelHalo   = 'mstar,mhalo,sfr'
+    #haloMassBin = [13.5, 14.2]
 
     class plotConfig:
         plotStyle = 'open'
-        rasterPx  = 800
         colorbars = True
-        saveFilename = 'gible_h%d_RF%d_%s.pdf' % (hInd,res,conf)
+        fontsize  = 30.0
+        title     = False
 
-    if conf == 0:
-        # render 1032+1038 doublet combined
-        panels = [{'partType':'gas', 'partField':'sb_OVI_ergs', 'valMinMax':[-22.0,-18.0]}]
-        grid1, config1 = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+    # panel config
+    conf1 = {'partType':'stars', 'partField':'stellarCompObsFrame-sdss_r-sdss_i-sdss_z'}
+    conf2 = {'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-6.0,-1.0]}
 
-        panels = [{'partType':'gas', 'partField':'sb_O--6-1037.62A_ergs', 'valMinMax':[-22.0,-18.0]}]        
-        grid2, config2 = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+    axesLists = [ [0,2], [1,2], [0,1] ]
+    #rotations = [ 'edge-on', 'face-on' ]
 
-        panels[0]['grid'] = np.log10(10.0**grid1 + 10.0**grid2)
-        panels[0]['colorbarlabel'] = config1['label'].replace('OVI SB','OVI 1032+1038$\AA$ SB')
+    # render halos
+    for zoomHaloInd in zoomHaloInds:
+        # set sP
+        sP = simParams(res=13, run='tng_zoom', variant='sf3', redshift=redshift, hInd=zoomHaloInd)
 
-    if conf == 1:
-        # CIII 
-        panels = [{'partType':'gas', 'partField':'sb_CIII_ergs', 'valMinMax':[-22.0,-18.0]}]
+        # subhaloInd is always the most massive
+        subhaloInd = 0
 
-    if conf == 2:
-        # render CIII/OVI doublet ratio
-        panels = [{'partType':'gas', 'partField':'sb_CIII_ergs', 'valMinMax':[-22.0,-18.0]}]
-        grid_CIII, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+        # set panels
+        panels = []
 
-        panels[0]['partField'] = 'sb_OVI_ergs'
-        grid_OVI1032, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-        panels[0]['partField'] = 'sb_O--6-1037.62A_ergs'
-        grid_OVI1038, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+        for axesVal in axesLists:
+            panels.append( {**conf1, 'axes':axesVal})
+        panels.append( {**conf1, 'axes':[0,1], 'rotation':'face-on'})
 
-        grid_ratio = np.log10(10.0**grid_CIII / (10.0**grid_OVI1032 + 10.0**grid_OVI1038))
-                              
-        panels[0]['grid'] = grid_ratio
-        panels[0]['valMinMax'] = [-1.0, 1.0]
-        panels[0]['colorbarlabel'] = '(CIII/OVI) Surface Brightness Ratio [log]'
-        panels[0]['ctName'] = 'curl'
+        for axesVal in axesLists:
+            panels.append( {**conf2, 'axes':axesVal})
+        panels.append( {**conf2, 'axes':[0,1], 'rotation':'face-on'})
 
-    if conf == 3:
-        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2'}]
+        plotConfig.saveFilename = 'yenting_%s_z=%.1f.pdf' % (sP.simName,redshift)
+
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
+    print('Done.')
+
+def benedetta_vis_sample():
+    """ For all TNG300-1 centrals at z=1, Mhalo > 5e13, plot stellar RIZ (observed-frame) composites and SFR maps, 
+    in a few projections. One plot per halo."""
+    res        = 1820
+    redshift   = 0.5
+    run        = 'tng'
+    rVirFracs  = [1.0]
+    method     = 'sphMap_subhalo'
+    nPixels    = [400,400]
+    size       = 100.0
+    axes       = [0,1]
+    sizeType   = 'codeUnits'
+    partType   = 'stars'
+
+    class plotConfig:
+        plotStyle = 'open'
+        rasterPx  = 1000
+        colorbars = True
+
+    # load halos
+    haloIDs = [21, 22, 27, 28, 32, 41, 45, 46, 50, 55, 58, 60, 75, 76, 95, 104, 107, 126, 155, 157, 7324, 7328, 7331,
+               7332, 7334, 7337, 7340, 7343, 7354, 7363, 7365, 7390, 7424, 14595, 14603, 14605, 14607, 14608, 14612, 14618]
+
+    sP = simParams(res=res, run=run, redshift=redshift)
+    GroupFirstSub = sP.groupCat(fieldsHalos=['GroupFirstSub'])
+    subInds = GroupFirstSub[haloIDs]
+
+    for i, subhaloInd in enumerate(subInds[0:1]):
+        panels = []
+
+        panels.append( {'partField':'stellarBandObsFrame-sdss_r', 'valMinMax':[18,28]} )
+        panels.append( {'partField':'stellarBandObsFrame-sdss_r', 'rotation':'face-on', 'labelScale':'physical', 'valMinMax':[18,28]} )
+
+        #panels.append( {'partField':'stellarCompObsFrame-sdss_g-sdss_r-sdss_i'} )
+        #panels.append( {'partField':'stellarCompObsFrame-sdss_g-sdss_r-sdss_i', 'rotation':'face-on', 'labelScale':'physical'} )
+
+        #panels.append( {'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+        #panels.append( {'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w', 'rotation':'face-on', 'labelScale':'physical'} )
+        
+        plotConfig.saveFilename = 'benedetta_haloID-%d.pdf' % (haloIDs[i])
+
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+def erica_tng50_sfrmaps():
+    """ Render some SFR surface density maps of TNG50 galaxies for Nelson, E.+2021 vs. 3D-HST paper. """
+    from ..util import simParams
+    from ..util.helper import closest
+
+    # select halo
+    sP = simParams(run='tng50-1', redshift=1.0)
+    mstar = sP.subhalos('mstar_30pkpc_log')
+    cen_flag = sP.subhalos('central_flag')
+
+    mstar[cen_flag == 0] = np.nan # skip secondaries
+
+    # vis
+    rVirFracs  = [1.0]
+    fracsType  = 'rHalfMassStars'
+    method     = 'histo' #'sphMap'
+    nPixels    = [45,45] #[600,600]
+    axes       = [0,1]
+    labelZ     = True
+    labelScale = 'physical'
+    labelSim   = False
+    labelHalo  = 'mstar,mhalo,sfr,id'
+    relCoords  = True
+    #rotation   = 'edge-on-stars'
+    sizeType   = 'arcsec'
+    size       = 2.7
+    # psf = 0.14" if we want
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = 800
+        colorbars    = True
+        fontsize     = 22
+
+    # panels
+    partType = 'gas'
+
+    if 0:
+        # single halo, test
+        class plotConfig:
+            plotStyle    = 'edged'
+            rasterPx     = 800
+            colorbars    = True
+            fontsize     = 22
+
+        _, subhaloInd = closest(mstar, 10.55)
+        panels = [ {'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.0]},
+                   {'partField':'temp_sfcold', 'valMinMax':[4.0,6.2]},
+                   {'partField':'sfr_halpha', 'valMinMax':[35.5,40.5]},
+                   {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,9.0]} ]
+
+    if 1:
+        # gallery
+        class plotConfig:
+            plotStyle    = 'edged'
+            rasterPx     = 600
+            colorbars    = False
+            fontsize     = 22
+
+        panels = []
+        with np.errstate(invalid='ignore'):
+            subhaloInds = np.where( (mstar > 10.5) & (mstar <= 11.0) )[0]
+
+        for ind in subhaloInds:
+            panels.append( {'subhaloInd':ind, 'partField':'sfr_halpha', 'valMinMax':[35.5,40.5]} )
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
-
-def hubbleMCT_emissionTrends(simname='tng50-1'):
-    """ Hubble MST Proposal 2024 of Kate Rubin. """
-    from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
-    from ..vis.halo import subsampleRandomSubhalos
-
-    sim = simParams(simname, redshift=0.36) # tng50-1, eagle, simba
-
-    # grid config
-    method    = 'sphMap' # sphMap_global
-    nPixels   = [1000,1000]
-    axes      = [0,1]
-    size      = 180.0 # 35 arcsec @ z=0.36 (SBC field of view is 35"x31")
-    sizeType  = 'kpc'
-
-    sim.createCloudyCache = True if '_global' in method else False
-
-    # config
-    fields = ['sb_OVI_ergs','sb_O--6-1037.62A_ergs','sb_CIII_ergs']
-    percs = [25,50,75]
-    distBins = [[20,30], [45,55]] # pkpc
-
-    # sample
-    mstar_min = 9.0
-    mstar_max = 11.0
-    num_per_dex = 100
-
-    subInds, mstar = subsampleRandomSubhalos(sim, num_per_dex, [mstar_min,mstar_max], cenOnly=True)
-
-    dist, theta = _get_dist_theta_grid(size, nPixels)
-    
-    # check for existence of cache
-    grids = {}
-    sb_percs = {}
-    cacheFile = sim.derivPath + 'cache/hstmst_grids.hdf5'
-
-    if isfile(cacheFile):
-        # load cached result
-        with h5py.File(cacheFile,'r') as f:
-            for field in fields:
-                grids[field] = f[field][()]
-            for key in f['sb_percs']:
-                sb_percs[key] = f['sb_percs/%s' % key][()]
-
-            assert np.array_equal(subInds, f['subInds'][()])
-            assert np.array_equal(percs, f['percs'][()])
-            assert np.array_equal(distBins, f['distBins'][()])
-        print('Loaded: [%s]' % cacheFile)
-    else:
-        # compute now: allocate
-        for field in fields:
-            grids[field] = np.zeros((nPixels[0],nPixels[1],len(subInds)), dtype='float32')
-
-        sb_percs['OVI'] = np.zeros((len(subInds),len(distBins),len(percs)), dtype='float32')
-        sb_percs['CIII'] = np.zeros((len(subInds),len(distBins),len(percs)), dtype='float32')
-
-        # loop over subhalos
-        class plotConfig:
-            saveFilename = 'dummy'
-
-        for i, subhaloInd in enumerate(subInds):
-            print(f'[{i:3d}] of [{len(subInds):3d}] {subhaloInd = }', flush=True)
-
-            for field in fields:
-                # project
-                sP = sim
-                panels = [{'partType':'gas', 'partField':field}]
-                grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-
-                # stamp
-                grids[field][:,:,i] = grid
-
-            # compute statistics
-            for j, distBin in enumerate(distBins):
-                # pixels in this annulus
-                w = np.where((dist >= distBin[0]) & (dist < distBin[1]))
-
-                # OVI doublet map and CIII map separately
-                OVI_map = np.log10(10.0**grids['sb_OVI_ergs'][:,:,i] + 10.0**grids['sb_O--6-1037.62A_ergs'][:,:,i])
-                CIII_map = grids['sb_CIII_ergs'][:,:,i]
-
-                sb_percs['OVI'][i,j,:] = np.percentile(OVI_map[w], percs)
-                sb_percs['CIII'][i,j,:] = np.percentile(CIII_map[w], percs)
-
-        # save cache
-        with h5py.File(cacheFile,'w') as f:
-            for field in fields:
-                f[field] = grids[field]
-            for key in sb_percs.keys():
-                f['sb_percs/%s' % key] = sb_percs[key]
-            f['subInds'] = subInds
-            f['percs'] = percs
-            f['distBins'] = distBins
-
-        print('Saved: [%s]' % cacheFile)
-
-    # start figure
-    fig, ax = plt.subplots(figsize=figsize)
-
-    ax.set_xlabel('Galaxy Stellar Mass [ log M$_\odot$ ]')
-    ax.set_ylabel('Surface Brightness [ log erg/s/cm$^2$/arcsec$^2$ ]')
-    ax.set_xlim([mstar_min,mstar_max])
-    ax.set_ylim([-24.5, -17])
-
-    # plot
-    for i, distBin in enumerate(distBins):
-        for line, label in zip(['OVI','CIII'], ['OVI 1032+1038','CIII 977']):
-            y_mid = sb_percs[line][:,i,1]
-            y_err_lo = sb_percs[line][:,i,1] - sb_percs[line][:,i,0]
-            y_err_hi = sb_percs[line][:,i,2] - sb_percs[line][:,i,1]
-
-            label_loc = '%s (%d$\pm$%d kpc)' % (label,np.mean(distBin),distBin[1]-distBin[0]/2)
-            ax.errorbar(mstar, y_mid, yerr=[y_err_lo, y_err_hi], fmt='o', label=label_loc)
-
-    # finish and save plot
-    legend = ax.legend(loc='upper left', title=f'{sim.simName} z = {sim.redshift:.2f}')
-    legend._legend_box.align = "left"
-    fig.savefig('mst_OVI_CIII_annuli_vs_mstar_%s.pdf' % sim.simName)
-    plt.close(fig)
-    
-def hubbleMCT_emissionTrendsVsSim():
-    """ Combine results from above into a summary plot. """
-    # config
-    sims = ['tng50-1', 'eagle', 'simba']
-    nBins = 15
-    redshift = 0.36
-
-    # load
-    sb_percs = {}
-    mstar = {}
-
-    for simname in sims:
-        print(simname)
-        sim = simParams(simname, redshift=redshift)
-        cacheFile = sim.derivPath + 'cache/hstmst_grids.hdf5'
-
-        with h5py.File(cacheFile,'r') as f:
-            for key in f['sb_percs']:
-                sb_percs[f'{simname}_{key}'] = f['sb_percs/%s' % key][()]
-            distBins = f['distBins'][()]
-            subInds = f['subInds'][()]
-
-        mstar[simname] = sim.subhalos('mstar_30pkpc_log')[subInds]
-        
-    # plot
-    fig, (ax1,ax2) = plt.subplots(nrows=1, ncols=2, figsize=(figsize[0]*1.5,figsize[1]))
-
-    ax1.set_xlabel('Galaxy Stellar Mass [ log M$_\odot$ ]')
-    ax1.set_ylabel('OVI 1032+1038 SB [ log erg/s/cm$^2$/arcsec$^2$ ]')
-    ax1.set_xlim([9.0, 11.0])
-    ax1.set_ylim([-22.5, -17.5])
-
-    ax2.set_xlabel('Galaxy Stellar Mass [ log M$_\odot$ ]')
-    ax2.set_ylabel('CIII 977 SB [ log erg/s/cm$^2$/arcsec$^2$ ]')
-    ax2.set_xlim([9.0, 11.0])
-    ax2.set_ylim([-22.5, -17.5])
-
-    for simname in sims:
-        for i, distBin in enumerate(distBins):
-            sim = simParams(simname)
-            for line, ax in zip(['OVI','CIII'], [ax1,ax2]):
-                y_mid = sb_percs[simname + '_' + line][:,i,1]
-                y_lo = sb_percs[simname + '_' + line][:,i,0]
-                y_hi = sb_percs[simname + '_' + line][:,i,2]
-
-                # running median
-                xx, yy_mid, _ = running_median(mstar[simname], y_mid, nBins=nBins)
-                xx, yy_lo, _ = running_median(mstar[simname], y_lo, nBins=nBins)
-                xx, yy_hi, _ = running_median(mstar[simname], y_hi, nBins=nBins)
-
-                c = l.get_color() if i > 0 else None
-                label = f'{sim.name} ({np.mean(distBin):.0f} kpc)' #$\pm${(distBin[1]-distBin[0])/2:.0f} kpc)'
-                l, = ax.plot(xx, yy_mid, lw=lw, color=c, ls=linestyles[i], label=label)
-                if i == 0: ax.fill_between(xx, yy_lo, yy_hi, color=l.get_color(), alpha=0.2)
-
-    # finish and save plot
-    ax1.legend(loc='upper left')
-    ax2.legend(loc='lower right')
-    ax1.text(0.97, 0.03, f'z = {redshift:.2f}', transform=ax1.transAxes, ha='right', va='bottom')
-    ax2.text(0.03, 0.97, f'z = {redshift:.2f}', transform=ax2.transAxes, ha='left', va='top')
-    fig.savefig('mst_OVI_CIII_annuli_vs_mstar.pdf')
-    plt.close(fig)
