@@ -16,7 +16,7 @@ from ..plot.cosmoGeneral import quantMedianVsSecondQuant
 from ..plot.cosmoMisc import simClustersComparison
 from ..plot.config import *
 from ..util.helper import logZeroNaN, running_median, loadColorTable
-from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
+from ..vis.common import _get_dist_theta_grid
 from ..tracer.tracerMC import match3
 
 def vis_fullbox_virtual(sP, conf=0):

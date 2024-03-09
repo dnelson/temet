@@ -15,7 +15,7 @@ from ..util.helper import running_median, sampleColorTable
 from ..plot.config import *
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
-from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
+from ..vis.common import _get_dist_theta_grid
 
 valMinMaxQuant = {'coldens' : [18.5, 20.0], # in case we render actual quantities instead of deltas
                   'xray_lum_05-2kev' : [33, 37],

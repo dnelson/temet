@@ -12,7 +12,7 @@ from matplotlib.ticker import FormatStrFormatter
 from scipy.signal import savgol_filter
 from scipy.interpolate import interp1d
 
-from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
+from ..vis.common import _get_dist_theta_grid
 from ..util.helper import loadColorTable, logZeroNaN, running_median
 from ..plot.config import *
 from ..vis.box import renderBox

@@ -16,7 +16,7 @@ from ..util.helper import running_median, sampleColorTable, loadColorTable, logZ
 from ..plot.cosmoGeneral import quantMedianVsSecondQuant
 from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
 from ..plot.config import *
-from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
+from ..vis.common import _get_dist_theta_grid
 
 def singleHaloImageMGII(sP, subhaloInd, conf=1, size=100, rotation='edge-on', labelCustom=None,
                         rVirFracs=[0.25], fracsType='rVirial', font=16, cbars=True, psf=False):

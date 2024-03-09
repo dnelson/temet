@@ -22,7 +22,7 @@ from ..util.helper import logZeroNaN, loadColorTable, running_median
 from ..plot.config import figsize
 from ..util.simParams import simParams
 from ..util.rotation import rotationMatrixFromAngle
-from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
+from ..vis.common import _get_dist_theta_grid
 
 from scipy.ndimage import gaussian_filter, shift, center_of_mass, rotate
 from scipy.interpolate import interp1d

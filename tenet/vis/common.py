@@ -289,6 +289,34 @@ def clipStellarHSMLs(hsml, sP, pxScale, nPixels, indRange, method=2):
 
     return hsml
 
+def _get_dist_theta_grid(size, nPixels):
+    """ Compute impact parameter and angle for every pixel. """
+
+    # pixel size: [pkpc] if size in [pkpc], else units of size
+    if isinstance(nPixels, int):
+        nPixels = [nPixels, nPixels]
+
+    pxSize = size / nPixels[0] 
+
+    xx, yy = np.mgrid[0:nPixels[0], 0:nPixels[1]]
+    xx = xx.astype('float64') - nPixels[0]/2 + 0.5
+    yy = yy.astype('float64') - nPixels[1]/2 + 0.5
+    dist = np.sqrt( xx**2 + yy**2 ) * pxSize
+
+    theta = np.rad2deg(np.arctan2(xx,yy)) # 0 and +/- 180 is major axis, while +/- 90 is minor axis
+    theta = np.abs(theta) # 0 -> 90 -> 180 is major -> minor -> major
+
+    w = np.where(theta >= 90.0)
+    theta[w] = 180.0 - theta[w] # 0 is major, 90 is minor
+
+    if 0:
+        # debug plots
+        from ..util.helper import plot2d
+        plot2d(dist, label='distance [pkpc]', filename='test_dist.pdf')
+        plot2d(theta, label='theta [deg]', filename='test_theta.pdf')
+
+    return dist, theta
+
 def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, projParams, boxCenter, boxSizeImg, 
                                hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM):
     """ Generate 3-band RGB composite using starlight in three different passbands. Work in progress. """

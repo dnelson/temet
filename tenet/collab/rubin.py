@@ -75,7 +75,7 @@ def hubbleMCT_gibleVis(conf=1):
 
 def hubbleMCT_emissionTrends(simname='tng50-1'):
     """ Hubble MST Proposal 2024 of Kate Rubin. """
-    from ..projects.azimuthalAngleCGM import _get_dist_theta_grid
+    from ..vis.common import _get_dist_theta_grid
     from ..vis.halo import subsampleRandomSubhalos
 
     sim = simParams(simname, redshift=0.36) # tng50-1, eagle, simba
