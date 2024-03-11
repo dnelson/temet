@@ -79,7 +79,8 @@ def _load_mpb_quants(sim, subhaloInd, quants, smooth=False):
 
     return r
 
-def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=True, tracks=False):
+def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=True, tracks=False,
+                        f_pre=None, f_post=None):
     """ Scatterplot between two quantities, optionally including time evolution tracks through this plane.
     Designed for comparison between many zoom runs, including the target subhalo (only) from each.
 
@@ -91,6 +92,10 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Tru
       ylim (list[float][2]): if not None, override default y-axis limits.
       vstng100 (bool): if True, plot the TNG100-1 relation for comparison.
       tracks (bool): if True, plot tracks of individual galaxies. If False, only plot final redshift values.
+      f_pre (function): if not None, this 'custom' function hook is called just before plotting.
+        It must accept two arguments: the figure axis, and a list of simulation objects.
+      f_post (function): if not None, this 'custom' function hook is called just after plotting.
+        It must accept two arguments: the figure axis, and a list of simulation objects.
     """
     # currently assume all sims have the same parent
     sim_parent = sims[0].sP_parent
@@ -134,18 +139,8 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Tru
     ax.fill_between(xm, pm[1,:], pm[-2,:], color='#bbb', alpha=0.6)
     ax.plot(xm, ym, color='#bbb', lw=lw*2, alpha=1.0, label=sim_parent_relation)
 
-    # observational data, specific to certain xy pairs
-    if 'mhalo' in xQuant and 'mstar' in yQuant:
-        # Behroozi+2019 (UniverseMachine) stellar mass-halo mass relation
-        from ..load.data import behrooziUM
-
-        b19_um = behrooziUM(sim_parent)
-        label = b19_um['label'] + ' z = %.1f' % sim_parent.redshift
-
-        ax.plot(b19_um['haloMass'], b19_um['mstar_mid'], '--', color='#bbb', lw=lw*1, alpha=1.0, label=label)
-        ax.plot(b19_um['haloMass'], b19_um['mstar_low'], ':', color='#bbb', lw=lw*1, alpha=0.8)
-        ax.plot(b19_um['haloMass'], b19_um['mstar_high'], ':', color='#bbb', lw=lw*1, alpha=0.8)
-        #ax.fill_between(b19_um['haloMass'], b19_um['mstar_low'], b19_um['mstar_high'], color='#bbb', hatch='X', alpha=0.4)
+    if f_pre is not None:
+        f_pre(ax, sims)
 
     # individual zoom runs
     colors = [next(ax._get_lines.prop_cycler)['color'] for _ in range(len(hInds))]
@@ -197,6 +192,9 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Tru
             ax.plot(mpb[xQuant], mpb[yQuant], '-', lw=1.5, color=l.get_color(), alpha=0.2)
 
     # finish and save plot
+    if f_post is not None:
+        f_post(ax, sims)
+
     _add_legends(ax, hInds, res, variants, colors)
     fig.savefig(f'mcst_{xQuant}-vs-{yQuant}_comp-{len(sims)}.pdf')
     plt.close(fig)
@@ -334,6 +332,101 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None):
     fig.savefig(f'mcst_{quant}-vs-redshift_comp-{len(sims)}.pdf')
     plt.close(fig)
 
+def smhm_relation(sims):
+    """ Diagnostic plot of stellar mass vs halo mass including empirical constraints. """
+    from ..load.data import behrooziUM
+
+    xQuant = 'mhalo_200_log'
+    yQuant = 'mstar2_log'
+    xlim = [9.25, 11.25] # mhalo
+    ylim = [5.7, 10.2] # mstar
+
+    def _draw_data(ax, sims):
+        xlim = ax.get_xlim()
+        sim_parent = sims[0].sP_parent
+
+        # Behroozi+2019 (UniverseMachine) stellar mass-halo mass relation
+        b19_um = behrooziUM(sim_parent)
+        label = b19_um['label'] + ' z = %.1f' % sim_parent.redshift
+
+        ax.plot(b19_um['haloMass'], b19_um['mstar_mid'], '--', color='#bbb', lw=lw, alpha=1.0, label=label)
+        ax.plot(b19_um['haloMass'], b19_um['mstar_low'], ':', color='#bbb', lw=lw, alpha=0.8)
+        ax.plot(b19_um['haloMass'], b19_um['mstar_high'], ':', color='#bbb', lw=lw, alpha=0.8)
+        #ax.fill_between(b19_um['haloMass'], b19_um['mstar_low'], b19_um['mstar_high'], color='#bbb', hatch='X', alpha=0.4)
+
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False, f_pre=_draw_data)
+    
+def sfr_vs_mstar(sims):
+    """ Diagnostic plot of SFR vs Mstar including observational data. """
+    from ..load.data import curti23, nakajima23
+
+    xQuant = 'mstar2_log'
+    yQuant = 'sfr2_log' # 'sfr_10myr_log'
+    ylim = [-3.5, 2.0] # log sfr
+    xlim = [5.7, 10.2] # log mstar
+
+    def _draw_data(ax, sims):
+        xlim = ax.get_xlim()
+        sim_parent = sims[0].sP_parent
+
+        # constant sSFR lines
+        sSFR = [1e-10, 1e-9, 1e-8, 1e-7] # yr^-1
+
+        for i, s in enumerate(sSFR):
+            yy = np.log10(s * 10.0**np.array(xlim))
+            label = 'sSFR = $10^{%d}$ yr$^{-1}$' % np.log10(s)
+            x_label = xlim[0] + 0.08
+            y_label = yy[0] + 0.15
+            if i == 0:
+                x_label = xlim[0] + 1.0
+                y_label = yy[0] + 1.1
+            if i > 0:
+                label = '$10^{%d}$ yr$^{-1}$' % np.log10(s)
+            ax.plot(xlim, yy, ':', color='#444', lw=1, alpha=1.0)
+            ax.text(x_label, y_label, label, fontsize=11, color='#444', alpha=1.0, ha='left', va='bottom', rotation=30.0)
+
+        # Curti+23 JWST JADES (z=3-10)
+        c23 = curti23()
+        label = c23['label'] + ' $z\,\sim\,%.0f$' % sim_parent.redshift
+
+        w = np.where(np.abs(c23['redshift'] - sim_parent.redshift < 1.0)) # e.g. z=3.5-4.5 for sim at z=4
+
+        x = c23['mstar'][w]
+        y = np.log10(c23['sfr_a'][w])
+        xerr = [c23['mstar_err1'][w], c23['mstar_err2'][w]]
+        yerr = [np.log10(c23['sfr_a'][w]+c23['sfr_a_err1'][w]) - y, 
+                y - np.log10(c23['sfr_a'][w]+c23['sfr_a_err2'][w])]
+        ax.errorbar(x, y, xerr=xerr, yerr=yerr, fmt='s', color='#555', alpha=0.4, label=label)
+
+        # Nakajima+23 (z=4-10) JWST CEERS
+        n23 = nakajima23()
+        label = n23['label'] + ' $z\,\sim\,%.0f$' % sim_parent.redshift
+
+        w = np.where(np.abs(n23['redshift'] - sim_parent.redshift < 2.0)) # e.g. z=3-5 for sim at z=4
+
+        xerr = [n23['mstar_err1'][w], n23['mstar_err2'][w]]
+        yerr = [n23['sfr_err1'][w], n23['sfr_err2'][w]]
+        ax.errorbar(n23['mstar'][w], n23['sfr'][w], xerr=xerr, yerr=yerr, fmt='o', color='#555', alpha=0.3, label=label)
+
+        # Popesso+23 model at z=3+ (Eqn. 15)
+        a0 = 2.71
+        a1 = -0.186
+        a2 = 10.86
+        a3 = -0.0729
+
+        p23_redshifts = [3]
+        for i, redshift in enumerate(p23_redshifts):
+            t = sim_parent.units.redshiftToAgeFlat(redshift)
+            sfr_max = 10.0**(a0 + a1 * t)
+            M0 = 10.0**(a2 + a3 * t)
+            sfr = sfr_max / (1 + M0 / 10.0**np.array(xlim))
+
+            #label = 'Popesso+23 z=%d-%d' % (np.min(p23_redshifts),np.max(p23_redshifts)) if i == 0 else ''
+            label = 'Popesso+23 z=%d' % redshift if i == 0 else ''
+            ax.plot(xlim, np.log10(sfr), '--', color='#555', lw=lw, alpha=0.7, label=label)
+
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False, f_pre=_draw_data)
+    
 def paperPlots():
     """ Plots for MCST intro paper. """
 
@@ -347,12 +440,7 @@ def paperPlots():
 
     # figure 1 - smhm relation
     if 0:
-        xQuant = 'mhalo_200_log'
-        yQuant = 'mstar2_log'
-        xlim = [9.25, 11.25] # mhalo
-        ylim = [5.7, 10.2] # mstar
-
-        twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False)
+        smhm_relation(sims)
 
     # figure 2 - stellar mass vs redshift evo
     if 0:
@@ -364,12 +452,7 @@ def paperPlots():
 
     # figure 3 - str vs mstar relation
     if 0:
-        xQuant = 'mstar2_log'
-        yQuant = 'sfr2_log'
-        ylim = [-3.5, 1.5] # log sfr
-        xlim = [5.7, 10.2] # log mstar
-
-        twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False)
+        sfr_vs_mstar(sims)
 
     # movies
     if 0:

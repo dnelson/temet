@@ -3286,6 +3286,69 @@ def chiu18():
     
     return r
 
+def curti23():
+    """ Load observational data points from Curti+2023 JWST JADES galaxy properties. """
+    path = dataBasePath + 'curti/curti23_b1.txt'
+
+    data = np.genfromtxt(path,comments='#',delimiter='&',dtype=None,encoding=None)
+
+    r = {'nirspec_id' : [d[0] for d in data],
+         'redshift'   : np.array([d[3] for d in data]),
+         'mstar'      : np.array([d[4] for d in data]), # log msun
+         'mstar_err1' : np.array([d[5] for d in data]), # log msun (up)
+         'mstar_err2' : -np.array([d[6] for d in data]), # log msun (down) (negative -> positive sign)
+         'sfr_a'      : np.array([d[7] for d in data]), # msun/yr (SED BEAGLE fit, last 10 Myr avg)
+         'sfr_a_err1' : np.array([d[8] for d in data]), # msun/yr (up)
+         'sfr_a_err2' : np.array([d[9] for d in data]), # msun/yr (down) (negative sign, leave negative)
+         'sfr_b'      : np.array([d[10] for d in data]), # msun/yr (H-alpha based)
+         'sfr_b_err'  : np.array([d[11] for d in data]), # msun/yr 
+         'metallicity' : np.array([d[12] for d in data]), # 12 + log(O/H)
+         'label'      : 'Curti+23 JADES'}
+    
+    return r
+
+def nakajima23():
+    """ Load observational data points from Nakajima+23 JWST CEERS galaxy properties. """
+    path = dataBasePath + 'nakajima/nakajima23_d1.txt'
+
+    data = np.genfromtxt(path,comments='#',delimiter=',',dtype=None,encoding=None)
+    # cols: ID,RA,Dec,Redshift,Muv,err1_Muv,err2_Muv,log_Mstar,err1_log_Mstar,err2_log_Mstar,
+    # # log_SFR,err1_log_SFR,err2_log_SFR,EW_Hb,err_EW_Hb,R3,err_R3,R23,err_R23,O32,err_O32,
+    # 12+log(O/H),err1_log(O/H),err2_log(O/H),Flag(photometry),Flag(metallicity),Note
+    r = {'id'         : [d[0] for d in data],
+         'ra'         : np.array([d[1] for d in data]),
+         'dec'        : np.array([d[2] for d in data]),
+         'redshift'   : np.array([d[3] for d in data]),
+         'M_UV'       : np.array([d[4] for d in data]), # mag
+         'mstar'      : np.array([d[7] for d in data]), # log msun
+         'mstar_err1' : np.array([d[8] for d in data]), # log msun (up)
+         'mstar_err2' : -np.array([d[9] for d in data]), # log msun (down) (negative -> positive sign)
+         'sfr'        : np.array([d[10] for d in data]), # log msun/yr
+         'sfr_err1'   : np.array([d[11] for d in data]), # log msun/yr (up)
+         'sfr_err2'   : -np.array([d[12] for d in data]), # log msun/yr (down) (negative -> positive sign)
+         'metallicity' : np.array([d[18] for d in data]), # 12+log(O/H)
+         'metallicity_err1' : np.array([d[19] for d in data]), # 12+log(O/H)
+         'metallicity_err2' : np.array([d[20] for d in data]), # 12+log(O/H)
+         'label'      : 'Nakajima+23 CEERS'}
+    
+    # some stellar masses and SFRs are missing
+    r['mstar'][r['mstar'] == ''] = 'nan'
+    r['sfr'][r['sfr'] == ''] = 'nan'
+
+    # some stellar masses and SFRs are upper limits
+    r['mstar_upperlim'] = np.zeros(r['mstar'].shape, dtype='int32')
+    r['sfr_upperlim'] = np.zeros(r['sfr'].shape, dtype='int32')
+
+    w = np.where(['<' in m for m in r['mstar']])[0]
+    r['mstar_upperlim'][w] = 1
+    r['mstar'] = np.array([m.replace('<','') for m in r['mstar']], dtype='float32')
+
+    w = np.where(['<' in m for m in r['sfr']])[0]
+    r['sfr_upperlim'][w] = 1
+    r['sfr'] = np.array([m.replace('<','') for m in r['sfr']], dtype='float32')
+
+    return r
+
 def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
     """ Load some CSV->HDF5 files dumped from the SkyServer. """
     #SELECT
