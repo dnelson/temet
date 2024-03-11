@@ -508,10 +508,13 @@ def snapshotSubset(sP, partType, fields,
                 fields[i] = toLabel
 
     # handle non-GFM runs which have the same fields without the name prefix
+    # e.g. GFM_InitialMass -> InitialMass, GFM_StellarFormationTime -> StellarFormationTime (MCST)
     for i,field in enumerate(fields):
         if field.startswith('GFM_'):
             if not snapHasField(sP, partType, field) and snapHasField(sP, partType, field.replace('GFM_','')):
-                fields[i] = field.replace('GFM_','')
+                toLabel = field.replace('GFM_','')
+                invNameMappings[toLabel] = fields[i]
+                fields[i] = toLabel
 
     # check for snapshots written by other codes which require minor field remappings (SWIFT)
     swiftRenames = {'Density':'Densities',

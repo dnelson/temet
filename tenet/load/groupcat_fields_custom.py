@@ -539,7 +539,7 @@ def sfr(sim, partType, field, args):
     sfr = sim.auxCat(acField)[acField] # units correct
     return sfr
 
-sfr.label = r'$\rm{SFR_{<30kpc}}$'
+sfr.label = r'$\rm{SFR_{<30kpc},instant}$'
 sfr.units = r'$\rm{M_{sun}\, yr^{-1}}$'
 sfr.limits = [-2.5, 1.0]
 sfr.log = True
@@ -550,7 +550,7 @@ def sfr2(sim, partType, field, args):
     """ Galaxy star formation rate (instantaneous, within twice the stellar half mass radius). """
     return sim.subhalos('SubhaloSFRinRad') # units correct
 
-sfr2.label = r'$\rm{SFR_{<2r_{\star}}}$'
+sfr2.label = r'$\rm{SFR_{<2r_{\star},instant}}$'
 sfr2.units = r'$\rm{M_{sun}\, yr^{-1}}$'
 sfr2.limits = [-2.5, 1.0]
 sfr2.log = True
@@ -570,7 +570,7 @@ def ssfr(sim, partType, field, args):
     ssfr = sfr / mstar
     return ssfr
 
-ssfr.label = r'$\rm{sSFR_{<2r_{\star}}}$'
+ssfr.label = r'$\rm{sSFR_{<2r_{\star},instant}}$'
 ssfr.units = r'$\rm{yr^{-1}}$'
 ssfr.limits = [-12.0, -8.0]
 ssfr.log = True

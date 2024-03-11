@@ -282,6 +282,25 @@ smbh_lum.units = r'$\rm{erg / s}$'
 smbh_lum.limits = [37.0, 42.0]
 smbh_lum.log = True
 
+# ---------------------------- auxcat: sfr --------------------------------------------------------
+
+@catalog_field
+def sfr_10myr(sim, partType, field, args):
+    """ Star formation rate (full subhalo) averaged over the past 10 Myr. """
+    acField = 'Subhalo_StellarMassFormed_10myr'
+
+    dt_yr = 1e6 * 10 # 10 Myr
+
+    ac = sim.auxCat(fields=[acField])
+    vals = sim.units.codeMassToMsun(ac[acField]) / dt_yr # msun/yr
+    
+    return vals
+
+sfr_10myr.label = r'$\rm{SFR_{sub,10Myr}}$'
+sfr_10myr.units = r'$\rm{M_{sun}\, yr^{-1}}$'
+sfr_10myr.limits = [-2.5, 1.0]
+sfr_10myr.log = True
+
 # ---------------------------- auxcat: gas observables --------------------------------------------
 
 @catalog_field
