@@ -2,12 +2,10 @@
 Fully generalized plots and general plot helpers related to group catalog objects of cosmological boxes.
 """
 import numpy as np
-import h5py
-import copy
 import warnings
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import make_axes_locatable, inset_locator
-from matplotlib.colors import Normalize, LogNorm, colorConverter
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib.colors import Normalize, colorConverter
 from matplotlib.backends.backend_pdf import PdfPages
 from getpass import getuser
 from scipy.signal import savgol_filter
@@ -16,10 +14,10 @@ from scipy.stats import binned_statistic_2d
 from ..util import simParams
 from ..util.helper import running_median, running_median_sub, logZeroNaN, loadColorTable, \
        getWhiteBlackColors, sampleColorTable, binned_stat_2d, lowess, iterable
-from ..cosmo.color import loadSimGalColors, calcMstarColor2dKDE
+from ..cosmo.color import calcMstarColor2dKDE
 from ..vis.common import setAxisColors, setColorbarColors
 from ..vis.halo import subsampleRandomSubhalos
-from ..plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
+from ..plot.quantities import quantList
 from ..plot.config import *
 
 def addRedshiftAxis(ax, sP, zVals=[0.0,0.25,0.5,0.75,1.0,1.5,2.0,3.0,4.0,6.0,10.0]):
@@ -105,13 +103,13 @@ def quantHisto2D(sP, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=Non
         colorMed = 'orange'
 
     # x-axis: load fullbox galaxy properties and set plot options, cached in sP.data
-    sim_xvals, xlabel, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean)
+    sim_xvals, xlabel, xMinMax, xLog = sP.simSubhaloQuantity(xQuant, clean)
     if xMinMax[0] > xMinMax[1]: xMinMax = xMinMax[::-1] # reverse
     if xLog is True: sim_xvals = logZeroNaN(sim_xvals)
     if xlim is not None: xMinMax = xlim
 
     # y-axis: load/calculate simulation colors, cached in sP.data
-    sim_yvals, ylabel, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
+    sim_yvals, ylabel, yMinMax, yLog = sP.simSubhaloQuantity(yQuant, clean, tight=True)
     if yLog is True: sim_yvals = logZeroNaN(sim_yvals)
     if ylim is not None: yMinMax = ylim
 
@@ -130,7 +128,7 @@ def quantHisto2D(sP, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=Non
         if sP.boxSize > 100000: cMinMax = [0.0,2.5]
     else:
         if cStatistic is None: cStatistic = 'median_nan' # default if not specified with cQuant
-        sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, cQuant, clean, tight=False)
+        sim_cvals, clabel, cMinMax, cLog = sP.simSubhaloQuantity(cQuant, clean, tight=False)
         if clim is not None: cMinMax = clim
         if yQuant == 'color_C_gr': print('Warning: to reproduce TNG colors paper, set tight=True maybe.')
 
@@ -421,7 +419,7 @@ def quantHisto2D(sP, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=Non
     # special behaviors
     if yQuant == 'size_gas':
         # add virial radius median line
-        aux_yvals, _, _, _ = simSubhaloQuantity(sP, 'rhalo_200_log', clean)
+        aux_yvals, _, _, _ = sP.simSubhaloQuantity('rhalo_200_log', clean)
         aux_yvals = aux_yvals[wSelect][wFinite]
         if nanFlag: aux_yvals = aux_yvals[wFiniteCval]
 
@@ -458,8 +456,8 @@ def quantHisto2D(sP, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=Non
     if yQuant in ['BH_CumEgy_low','BH_CumEgy_high']:
         # add approximate halo binding energy line = (3/5)*GM^2/R
         G = sP.units.G / 1e10 # kpc (km/s)**2 / msun
-        r_halo, _, _, _ = simSubhaloQuantity(sP, 'rhalo_200', clean) # pkpc
-        m_halo, _, _, _ = simSubhaloQuantity(sP, 'mhalo_200', clean) # msun
+        r_halo, _, _, _ = sP.simSubhaloQuantity('rhalo_200', clean) # pkpc
+        m_halo, _, _, _ = sP.simSubhaloQuantity('mhalo_200', clean) # msun
         e_b = (3.0/5.0) * G * m_halo**2 * sP.units.f_b / r_halo # (km/s)**2 * msun
         e_b = np.array(e_b, dtype='float64') * 1e10 * sP.units.Msun_in_g # cm^2/s^2 * g
         e_b = logZeroNaN(e_b).astype('float32') # log(cm^2/s^2 * g)
@@ -564,7 +562,7 @@ def quantSlice1D(sPs, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', yRel=
             print(' ',yQuant,sP.simName,xQuant,cenSatSelect,sQuant,sRange)
 
             # y-axis: load galaxy properties (in histo2D were the color mappings)
-            sim_yvals, ylabel, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
+            sim_yvals, ylabel, yMinMax, yLog = sP.simSubhaloQuantity(yQuant, clean, tight=True)
             if ylim is not None: yMinMax = ylim
 
             if sim_yvals is None:
@@ -573,14 +571,14 @@ def quantSlice1D(sPs, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', yRel=
             if yLog is True: sim_yvals = logZeroNaN(sim_yvals)
 
             # slice values: load fullbox galaxy property to slice on (e.g. Mstar or Mhalo)
-            sim_svals, slabel, _, _ = simSubhaloQuantity(sP, sQuant, clean)
+            sim_svals, slabel, _, _ = sP.simSubhaloQuantity(sQuant, clean)
 
             if sim_svals is None:
                 print('   skip')
                 continue
 
             # x-axis: load/calculate x-axis quantity (e.g. simulation colors), cached in sP.data
-            sim_xvals, xlabel, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean, tight=True)
+            sim_xvals, xlabel, xMinMax, xLog = sP.simSubhaloQuantity(xQuant, clean, tight=True)
             if xlim is not None: xMinMax = xlim
 
             if sim_xvals is None:
@@ -796,7 +794,7 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
             print(' ',yQuant,xQuant,sP.simName,cenSatSelect)
 
             # y-axis: load fullbox galaxy properties
-            sim_yvals, ylabel_def, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
+            sim_yvals, ylabel_def, yMinMax, yLog = sP.simSubhaloQuantity(yQuant, clean, tight=True)
             if ylim is not None: yMinMax = ylim
             if ylabel is None or i > 0: ylabel = ylabel_def
 
@@ -816,7 +814,7 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
                 sim_yvals = logZeroNaN(sim_yvals)
 
             # x-axis: load fullbox galaxy properties
-            sim_xvals, xlabel_def, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean, tight=True)
+            sim_xvals, xlabel_def, xMinMax, xLog = sP.simSubhaloQuantity(xQuant, clean, tight=True)
             if xLog: sim_xvals = logZeroNaN(sim_xvals)
             if xlim is not None: xMinMax = xlim
             if xlabel is None: xlabel = xlabel_def
@@ -828,7 +826,7 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
 
             # splitting on third quantity? load now
             if sQuant is not None:
-                sim_svals, slabel, _, sLog = simSubhaloQuantity(sP, sQuant, clean, tight=True)
+                sim_svals, slabel, _, sLog = sP.simSubhaloQuantity(sQuant, clean, tight=True)
                 if sim_svals is None:
                     print('   skip')
                     continue
@@ -837,7 +835,7 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
             # coloring points by third quantity? load now
             sim_cvals = np.zeros( sim_xvals.size, dtype='float32' )
             if scatterColor is not None:
-                sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, scatterColor, clean, tight=True)
+                sim_cvals, clabel, cMinMax, cLog = sP.simSubhaloQuantity(scatterColor, clean, tight=True)
                 if cLog: sim_cvals = logZeroNaN(sim_cvals)
                 cMinMax = cMinMax if clim is None else clim
 
@@ -953,7 +951,7 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
 
                 for k, medianProp in enumerate(extraMedians):
                     # load new (y-axis) quantity, subset as before, and median
-                    sim_mvals, mlabel, mMinMax, mLog = simSubhaloQuantity(sP, medianProp, clean, tight=True)
+                    sim_mvals, mlabel, mMinMax, mLog = sP.simSubhaloQuantity(medianProp, clean, tight=True)
                     mlabel_orig = mlabel
                     if mLog: sim_mvals = logZeroNaN(sim_mvals)
 

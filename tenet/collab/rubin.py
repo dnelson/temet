@@ -5,9 +5,10 @@ import numpy as np
 import h5py
 from os.path import isfile
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from ..util import simParams
-from ..util.helper import running_median
+from ..util.helper import running_median, logZeroNaN
 from ..plot.config import *
 from ..vis.halo import renderSingleHalo
 
@@ -73,7 +74,7 @@ def hubbleMCT_gibleVis(conf=1):
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def hubbleMCT_emissionTrends(simname='tng50-1'):
+def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
     """ Hubble MST Proposal 2024 of Kate Rubin. """
     from ..vis.common import _get_dist_theta_grid
     from ..vis.halo import subsampleRandomSubhalos
@@ -101,7 +102,7 @@ def hubbleMCT_emissionTrends(simname='tng50-1'):
 
     subInds, mstar = subsampleRandomSubhalos(sim, num_per_dex, [mstar_min,mstar_max], cenOnly=True)
 
-    dist, theta = _get_dist_theta_grid(size, nPixels)
+    dist, _ = _get_dist_theta_grid(size, nPixels)
     
     # check for existence of cache
     grids = {}
@@ -176,19 +177,43 @@ def hubbleMCT_emissionTrends(simname='tng50-1'):
     ax.set_xlim([mstar_min,mstar_max])
     ax.set_ylim([-24.5, -17])
 
+    if cQuant is not None:
+        #c_vals = sim.subhalos(cQuant)[subInds]
+        sim_cvals, clabel, cMinMax, cLog = sim.simSubhaloQuantity(cQuant, clean)
+        sim_cvals = sim_cvals[subInds]
+        if cLog: sim_cvals = logZeroNaN(sim_cvals)
+        clim = None
+        cmap = 'inferno'
+        cMinMax = cMinMax if clim is None else clim
+
     # plot
+    count = 0
+
     for i, distBin in enumerate(distBins):
         for line, label in zip(['OVI','CIII'], ['OVI 1032+1038','CIII 977']):
             y_mid = sb_percs[line][:,i,1]
             y_err_lo = sb_percs[line][:,i,1] - sb_percs[line][:,i,0]
             y_err_hi = sb_percs[line][:,i,2] - sb_percs[line][:,i,1]
 
-            label_loc = '%s (%d$\pm$%d kpc)' % (label,np.mean(distBin),distBin[1]-distBin[0]/2)
-            ax.errorbar(mstar, y_mid, yerr=[y_err_lo, y_err_hi], fmt='o', label=label_loc)
+            label_loc = '%s (%d$\pm$%d kpc)' % (label,np.mean(distBin),(distBin[1]-distBin[0])/2)
+            if cQuant is None:
+                ax.errorbar(mstar, y_mid, yerr=[y_err_lo, y_err_hi], fmt='o', label=label_loc)
+            else:
+                opts = {'vmin':cMinMax[0], 'vmax':cMinMax[1], 'c':sim_cvals, 'cmap':cmap, 'marker':markers[count]}
+                sc = ax.scatter(mstar, y_mid, label=label_loc, **opts)
+                count += 1
 
     # finish and save plot
     legend = ax.legend(loc='upper left', title=f'{sim.simName} z = {sim.redshift:.2f}')
     legend._legend_box.align = "left"
+
+    if cQuant is not None:
+        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+        cb = plt.colorbar(sc, cax=cax)
+        cb.set_alpha(1) # fix stripes
+        cb.draw_all()
+        cb.ax.set_ylabel(clabel)
+
     fig.savefig('mst_OVI_CIII_annuli_vs_mstar_%s.pdf' % sim.simName)
     plt.close(fig)
     
