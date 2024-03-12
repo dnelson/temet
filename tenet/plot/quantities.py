@@ -1464,8 +1464,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quantname in ['M_BH','BH_mass']:
         # either dynamical (particle masses) or "actual" BH masses excluding gas reservoir
-        if quant == 'M_BH': fieldName = 'SubhaloMassType'
-        if quant == 'BH_mass': fieldName = 'SubhaloBHMass'
+        if quant == 'M_BH': fieldName = 'SubhaloMassType' # dynamical, i.e. large for low-res sims
+        if quant == 'BH_mass': fieldName = 'SubhaloBHMass' # actual, i.e. always starting at seed mass
 
         # 'total' black hole mass in this subhalo
         # note: some subhalos (particularly the ~50=~1e-5 most massive) have N>1 BHs, then we here 

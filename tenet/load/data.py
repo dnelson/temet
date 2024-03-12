@@ -141,6 +141,37 @@ def behrooziUM(sim):
 
     return r
 
+def zhang21(sim, redshift=None):
+    """ Load from data files: Zhang+21 (TRINITY semi-empirical model for SMBHs). """
+    if redshift is None:
+        redshift = sim.redshift
+
+    file = dataBasePath + 'zhang/fig14_median_BHHM_fit_z=0-10.dat'
+
+    # columns: z log10(Mpeak)[Msun] log10(Mbh_median)[Msun] 
+    # log10(16-th percentile of Mbh_median)[Msun] log10(84-th percentile of Mbh_median)[Msun]
+    data = np.loadtxt(file)
+
+    r = {'label'   : 'Zhang+ (21) TRINITY',
+         'redshift': data[:,0],
+         'mhalo'   : data[:,1], # log msun
+         'mbh'     : data[:,2], # log msun
+         'mbh_p16' : data[:,3], # p16
+         'mbh_p84' : data[:,4]} # p84
+
+    # select at a particular redshift?
+    z_closest, _ = closest(r['redshift'], redshift)
+    w = np.where(r['redshift'] == z_closest)[0]
+
+    if np.abs(z_closest - redshift) > 0.1:
+        print('Warning: Selected [z=%f] for Zhang+21 (TRINITY) at requested [z=%f].' % (z_closest,redshift))
+
+    for key in r:
+        if key == 'label': continue
+        r[key] = r[key][w]
+
+    return r
+
 def bouwensSFRD2014():
     """ Load observational data points from Bouwens+ (2014): arXiv:1211.2230. """
     z_vals    = np.array([3.8,   5.0,   5.9,   6.8,   8.0,   9.2,   10.0])

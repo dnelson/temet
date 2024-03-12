@@ -8,7 +8,7 @@ from scipy.signal import savgol_filter
 
 from ..util.simParams import simParams
 from ..plot.config import *
-from ..util.helper import running_median
+from ..util.helper import running_median, logZeroNaN
 
 def _get_existing_sims(variants, res, hInds, redshift):
     """ Return a list of simulation objects, only for those runs which exist (and have reached redshift). """
@@ -116,9 +116,11 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Tru
 
     parent_xvals, xlabel, xMinMax, xLog = sim_parent_relation.simSubhaloQuantity(xQuant, clean, tight=True)
     if xlim is not None: xMinMax = xlim
+    if xLog: parent_xvals = logZeroNaN(parent_xvals)
 
     parent_yvals, ylabel, yMinMax, yLog = sim_parent_relation.simSubhaloQuantity(yQuant, clean, tight=True)
     if ylim is not None: yMinMax = ylim
+    if yLog: parent_yvals = logZeroNaN(parent_yvals)
     
     parent_cen = sim_parent_relation.subhalos('cen_flag')
     w = np.where(parent_cen == 1)
@@ -152,6 +154,9 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Tru
 
         xval = xvals[sim.zoomSubhaloID]
         yval = yvals[sim.zoomSubhaloID]
+
+        if xLog: xval = logZeroNaN(xval)
+        if yLog: yval = logZeroNaN(yval)
                                           
         # color set by hInd
         c = colors[hInds.index(sim.hInd)]
@@ -427,6 +432,49 @@ def sfr_vs_mstar(sims):
 
     twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False, f_pre=_draw_data)
     
+def mbh_vs_mhalo(sims):
+    """ Diagnostic plot of SMBH mass versus halo mass. """
+    from ..load.data import zhang21
+
+    xQuant = 'mhalo_200_log'
+    yQuant = 'BH_mass'
+    xlim = [9.25, 11.25] # mhalo
+    ylim = [2.8, 7.0] # msmbh, MCST seeds at 1e3, TNG seeds at ~1e6
+
+    def _draw_data(ax, sims):
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        sim_parent = sims[0].sP_parent
+
+        # Zhang+21 TRINITY semi-empirical model
+        z21 = zhang21(sim_parent)
+
+        ax.plot(z21['mhalo'], z21['mbh'], '--', lw=lw, color='#444', alpha=0.8, label=z21['label'])
+        ax.fill_between(z21['mhalo'], z21['mbh_p16'], z21['mbh_p84'], color='#444', alpha=0.4)
+
+        # MCST seed mass from parameter file
+        SeedBlackHoleMass = 6.774e-08 # 1000 Msun
+        MinFoFMassForNewSeed_MCST =  6.774e-3 # 1e8 Msun
+        MinFoFMassForNewSeed_TNG = 5.0 # ~5e10 Msun
+        mbh_seed = sim_parent.units.codeMassToLogMsun(SeedBlackHoleMass)
+        mhalo_seed = sim_parent.units.codeMassToLogMsun(MinFoFMassForNewSeed_MCST)
+
+        #n_segments = 20
+        #tot_length = (xlim[1] + xlim[0]) / 2 - xlim[0]
+        #for i in range(n_segments):    
+        #    x_start = xlim[0] #+ i * (tot_length / n_segments) # always start at xlim[0] and overlap on purpose
+        #    x_stop = xlim[0] + (i+1) * (tot_length / n_segments)
+        #    ax.plot([x_start, x_stop], [mbh_seed, mbh_seed], '-', lw=lw, color='#444', alpha=(1.0 - i/n_segments))
+
+        ax.plot([xlim[0],(xlim[1]+xlim[0])/2], [mbh_seed, mbh_seed], ':', lw=lw, color='#444', alpha=0.8)
+        label = r'MCST $M_{\rm BH,seed}$ (@ M$_{\rm FoF} = 10^{%.1f}$ M$_{\rm sun}$)' % mhalo_seed
+        ax.text(xlim[0]+0.05, mbh_seed+0.06, label, fontsize=11, color='#444', alpha=0.8, ha='left', va='bottom')
+
+        mhalo_seed_tng = sim_parent.units.codeMassToLogMsun(MinFoFMassForNewSeed_TNG)
+        ax.plot([mhalo_seed_tng,mhalo_seed_tng], [ylim[1],ylim[1]-0.1], '-', lw=lw, color='#444', alpha=0.4)
+
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False, f_pre=_draw_data)
+
 def paperPlots():
     """ Plots for MCST intro paper. """
 
@@ -453,6 +501,10 @@ def paperPlots():
     # figure 3 - str vs mstar relation
     if 0:
         sfr_vs_mstar(sims)
+
+    # figure 4 - smbh vs mhalo relation
+    if 0:
+        mbh_vs_mhalo(sims)
 
     # movies
     if 0:
