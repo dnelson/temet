@@ -136,7 +136,6 @@ def mnist_tutorial():
 
     # training hyperparameters
     learning_rate = 1e-3 # i.e. prefactor on grads for gradient descent
-    batch_size = 64 # number of data samples propagated through the network before params are updated
     epochs = 25 # number of times to iterate over the dataset
 
     # loss function
@@ -153,7 +152,8 @@ def mnist_tutorial():
 
         train_loss = _train_model(train_dataloader, model, loss_f, optimizer, batch_size, i, writer=writer)
         
-        test_loss = _test_model(test_dataloader, model, loss_f, current_sample=(i+1)*len(training_data), writer=writer)
+        test_loss = _test_model(test_dataloader, model, loss_f, current_sample=(i+1)*len(training_data), 
+                                acc_tol='exact_onehot', writer=writer)
 
         # periodically save trained model (should put epoch number into filename)
         if test_loss < test_loss_best:
@@ -188,7 +188,7 @@ class mnist_network(nn.Module):
         logits = self.linear_relu_stack(x)
         return logits
 
-def _train_model(dataloader, model, loss_fn, optimizer, batch_size, epoch_num, writer=None):
+def _train_model(dataloader, model, loss_fn, optimizer, batch_size, epoch_num, writer=None, verbose=True):
     """ Train model for one epoch. """
     # Set the model to training mode - important for batch normalization and dropout layers
     # Unnecessary in this situation but added for best practices
@@ -196,6 +196,11 @@ def _train_model(dataloader, model, loss_fn, optimizer, batch_size, epoch_num, w
 
     for batch_num, data in enumerate(dataloader):
         inputs, labels = data
+
+        # TODO: if __getitem__() returns a single scalar, then we need this?
+        #if inputs.ndim == 1:
+        #    inputs = torch.unsqueeze(inputs, -1)
+        #    labels = torch.unsqueeze(labels, -1)
 
         # Zero (previous) gradients
         optimizer.zero_grad()
@@ -210,7 +215,9 @@ def _train_model(dataloader, model, loss_fn, optimizer, batch_size, epoch_num, w
         # Adjust weights
         optimizer.step()
 
-        if batch_num % 100 == 0:
+        # print progress
+        fac = np.max([1,int(len(dataloader) / 5)])
+        if batch_num % fac == 0:
             loss = loss.item()
             current_sample = batch_num * batch_size + len(inputs)
             tot_samples = len(dataloader.dataset)
@@ -221,11 +228,11 @@ def _train_model(dataloader, model, loss_fn, optimizer, batch_size, epoch_num, w
                 s += f' global {current_sample = }'
                 writer.add_scalars('loss', {'train': loss}, current_sample)
 
-            print(s)
+            if verbose: print(s)
 
     return loss
 
-def _test_model(dataloader, model, loss_fn, current_sample, writer=None):
+def _test_model(dataloader, model, loss_fn, current_sample, acc_tol=None, writer=None, verbose=True):
     """ Test model. """
     # Set the model to evaluation mode - important for batch normalization and dropout layers
     # Unnecessary in this situation but added for best practices
@@ -242,7 +249,21 @@ def _test_model(dataloader, model, loss_fn, current_sample, writer=None):
         for inputs, labels in dataloader:
             pred = model(inputs)
             test_loss += loss_fn(pred, labels).item()
-            correct += (pred.argmax(dim=1) == labels.argmax(dim=1)).type(torch.float).sum().item()
+
+            # 'correct' number of predictions
+            if str(acc_tol) == 'exact':
+                # exact match
+                w_loc = (pred == labels)
+            elif str(acc_tol) == 'exact_onehot':
+                # exact match for one-hot encoded labels
+                w_loc = pred.argmax(dim=1) == labels.argmax(dim=1)    
+            else:
+                # within |acc_tol| in the original (untransformed) space and units
+                pred_untransformed = dataloader.dataset.target_invtransform(pred)
+                labels_untransformed = dataloader.dataset.target_invtransform(labels)
+                w_loc = torch.abs(pred_untransformed - labels_untransformed) <= acc_tol
+
+            correct += w_loc.type(torch.float).sum().item()
 
     test_loss /= num_batches
     correct /= size
@@ -253,7 +274,6 @@ def _test_model(dataloader, model, loss_fn, current_sample, writer=None):
         s += f' global {current_sample = }'
         writer.add_scalars('loss', {'test': test_loss}, current_sample)
 
-    print(s)
+    if verbose: print(s)
 
     return test_loss
-

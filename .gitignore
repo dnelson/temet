@@ -4,6 +4,7 @@ docs/source/
 docs/quants*custom.rst
 *.pdf
 *.hdf5
+*.pth
 .pyc
 .so
 .ipynb_checkpoints
