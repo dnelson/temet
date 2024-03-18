@@ -191,6 +191,7 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
 
             # log?
             if quant[-4:] == '_log':
+                assert field in r, "Error: Can only request '_log' of a custom field. Likely a typo in the field name."
                 r[field] = logZeroNaN(r[field])
 
             # save cache

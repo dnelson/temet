@@ -71,6 +71,8 @@ def mhalo_lim(sim,pt,f):
 
 def _mhalo_load(sim, partType, field, args):
     """ Helper for the halo mass fields below. """
+    haloField = 'Group_M_Crit200' # default for 'mhalo'
+    
     if '200' in field:
         haloField = 'Group_M_Crit200'
     if '500' in field:
@@ -95,7 +97,7 @@ def _mhalo_load(sim, partType, field, args):
 
     return mhalo
 
-@catalog_field(aliases=['mhalo_200_code','mhalo_200_parent','m200','m200c'])
+@catalog_field(aliases=['mhalo_200_code','mhalo_200_parent','m200','m200c','mhalo'])
 def mhalo_200(sim, partType, field, args):
     """ Parent halo total mass (:math:`\\rm{M_{200,crit}}`).
     Only defined for centrals: satellites are assigned a value of nan (excluded by default), 

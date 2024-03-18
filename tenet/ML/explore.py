@@ -197,11 +197,6 @@ def _train_model(dataloader, model, loss_fn, optimizer, batch_size, epoch_num, w
     for batch_num, data in enumerate(dataloader):
         inputs, labels = data
 
-        # TODO: if __getitem__() returns a single scalar, then we need this?
-        #if inputs.ndim == 1:
-        #    inputs = torch.unsqueeze(inputs, -1)
-        #    labels = torch.unsqueeze(labels, -1)
-
         # Zero (previous) gradients
         optimizer.zero_grad()
 
