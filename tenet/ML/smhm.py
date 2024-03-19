@@ -15,7 +15,7 @@ from torch.utils.data.dataloader import default_collate
 from ..util import simParams
 from ..plot.config import *
 
-from tenet.ML.explore import _train_model, _test_model
+from tenet.ML.common import train_model, test_model
 
 class SMHMDataset(Dataset):
     """ A custom dataset for the stellar mass to halo mass (SMHM) relation.
@@ -200,11 +200,11 @@ def train(hidden_size=8, verbose=True):
     for i in range(epochs):
         if verbose: print(f'\nEpoch: [{i}]')
 
-        train_loss = _train_model(train_dataloader, model, loss_f, optimizer, batch_size, i, 
+        train_loss = train_model(train_dataloader, model, loss_f, optimizer, batch_size, i, 
                                   verbose=verbose)
         
         n = (i+1)*len(train_sampler)
-        test_loss = _test_model(test_dataloader, model, loss_f, current_sample=n, acc_tol=acc_tol,
+        test_loss = test_model(test_dataloader, model, loss_f, current_sample=n, acc_tol=acc_tol,
                                 verbose=verbose)
 
         # periodically save trained model (should put epoch number into filename)

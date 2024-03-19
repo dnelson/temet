@@ -6,7 +6,8 @@ import h5py
 import matplotlib.pyplot as plt
 from os.path import isfile
 
-from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_filepath, lsf_matrix, varconvolve, _resample_spectrum
+from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_filepath, \
+                             lsf_matrix, varconvolve, _resample_spectrum, load_spectra_subset
 from ..cosmo.spectrum import create_wavelength_grid, deposit_single_line, lines, instruments, absorber_catalog
 from ..util.helper import logZeroNaN, sampleColorTable
 from ..util import units
@@ -473,61 +474,9 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
     ctName = 'thermal'    
 
     # load
-    filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
+    dv_window = 500.0 # km/s, TODO should depend on transition, maybe inst
 
-    with h5py.File(filepath,'r') as f:
-        # load metadata
-        lineNames = f.attrs['lineNames']
-        wave = f['wave'][()]
-
-        # total EW (summing all transitions)
-        EW = np.sum(np.vstack([f[key][()] for key in f.keys() if 'EW_' in key]), axis=0)
-
-        # total EW (of a single transition)
-        #EW = f['EW_MgII_2796'][()]
-
-    # select
-    if EW_minmax is not None:
-        inds_all = np.where( (EW>EW_minmax[0]) & (EW<=EW_minmax[1]) )[0]
-        print(f'[{ion}] Found [{len(inds_all)}] of [{EW.size}] spectra in EW range [{EW_minmax[0]}-{EW_minmax[1]}] Ang.')
-    else:
-        inds_all = np.arange(EW.size)
-        print(f'[{ion}] Loaded [{len(inds_all)}] spectra, no EW range window.')
-
-    rng = np.random.default_rng(4242+inds_all[0]+inds_all[-1])
-
-    if mode == 'random':
-        # randomly shuffle all spectra in the EW bin, then select num
-        rng.shuffle(inds_all)
-        inds = inds_all[0:num]
-
-    if mode == 'evenly':
-        # evenly sample across EW, selecting one spectrum in each of num equal bins
-        binsize = (EW_minmax[1] - EW_minmax[0]) / num
-
-        inds = []
-        for i in range(num):
-            w = np.where((EW>EW_minmax[0]+i*binsize) & (EW<=EW_minmax[0]+(i+1)*binsize))[0]
-            rng.shuffle(w)
-
-            inds.append(w[0])
-
-    if mode == 'inds':
-        num = len(inds)
-
-    # partial load of selected spectra
-    inds = np.sort(inds)
-
-    with h5py.File(filepath,'r') as f:
-        flux = f['flux'][inds,:]
-
-    EW = EW[inds]
-
-    # re-sort
-    if mode == 'evenly':
-        sort_inds = np.argsort(EW)
-        flux = flux[sort_inds]
-        EW = EW[sort_inds]
+    wave, EW, lineNames, flux = load_spectra_subset(sim, ion, instrument, solar, num, mode, EW_minmax, dv=dv_window if dv else 0.0)
 
     # how many lines do we have? what is their span in wavelength?
     lines_wavemin = 0
@@ -537,28 +486,6 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         line = line.replace('_',' ')
         lines_wavemin = np.clip(lines_wavemin, lines[line]['wave0'], np.inf)
         lines_wavemax = np.clip(lines_wavemax, 0, lines[line]['wave0'])
-        
-    # x-axis in velocity space?
-    if dv:
-        # center each absorption line at its tau-weighted mean wavelength, and convert to dv
-        wave_dv = np.zeros((num, wave.size), dtype='float32')
-
-        for i in range(num):
-            flux_loc = flux[i,:]
-            flux_loc[flux_loc < 1e-4] = 1e-4 # avoid log(0)
-            tau = -np.log(flux_loc)
-
-            wave_mean = np.average(wave, weights=tau)
-            dlambda = wave - wave_mean
-            wave_dv[i,:] = dlambda / wave_mean * units.c_km_s
-
-            # re-compute in a fixed dv window to avoid other nearby absorption features
-            dv_window = 500.0 # km/s, TODO should depend on transition, maybe inst
-
-            w = np.where( (wave_dv[i,:] > -dv_window) & (wave_dv[i,:] <= dv_window) )[0]
-            wave_mean = np.average(wave[w], weights=tau[w])
-            dlambda = wave - wave_mean
-            wave_dv[i,:] = dlambda / wave_mean * units.c_km_s
 
     # determine wavelength (x-axis) bounds
     if str(xlim) == 'full':
@@ -575,7 +502,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
             if len(w) == 0:
                 continue
 
-            xx = wave_dv[i,:] if dv else wave
+            xx = wave[i,:] if dv else wave
             xx_min = xx[w].min()
             xx_max = xx[w].max()
 
@@ -601,6 +528,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
 
     # add noise? ("signal" is now 1.0)
     if SNR is not None:
+        rng = np.random.default_rng(424242)
         noise = rng.normal(loc=0.0, scale=1/SNR, size=flux.shape)
         flux += noise
         # achieved SNR = 1/stddev(noise)
@@ -633,7 +561,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         # vertical offset by 1.0 for each spectrum
         y_offset = (i+1)*spacingFac - 1
 
-        xx = wave_dv[i,:] if dv else wave
+        xx = wave[i,:] if dv else wave
         ax.step(xx, flux[i,:]+y_offset, '-', color=colors[i], where='mid', lw=lw)
 
         # label

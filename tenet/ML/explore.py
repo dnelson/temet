@@ -15,8 +15,32 @@ from torch.utils.data.dataloader import default_collate
 from torch.utils.tensorboard import SummaryWriter
 
 from ..plot.config import *
+from tenet.ML.common import train_model, test_model
 
 path = '/u/dnelson/data/torch/'
+
+class mnist_network(nn.Module):
+    """ Simple NN to play with the MNIST Fashion dataset. """
+    def __init__(self):
+        super().__init__()
+
+        # input pre-processing: 28x28 shape 2d arrays -> 784 shape 1d arrays
+        self.flatten = nn.Flatten()
+
+        # define layers
+        # Sequential = ordered container of modules (data passed through each module in order)
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(28*28, 512), # input/first layer, w*x + b
+            nn.ReLU(), # non-linear activation
+            nn.Linear(512, 512), # hidden layer, fully connected
+            nn.ReLU(),
+            nn.Linear(512, 10), # output layer
+        )
+
+    def forward(self, x):
+        x = self.flatten(x)
+        logits = self.linear_relu_stack(x)
+        return logits
 
 def mnist_tutorial():
     """ Playing with the MNIST Fashion dataset. """
@@ -150,9 +174,9 @@ def mnist_tutorial():
     for i in range(epochs):
         print(f'\nEpoch: [{i}]')
 
-        train_loss = _train_model(train_dataloader, model, loss_f, optimizer, batch_size, i, writer=writer)
+        train_loss = train_model(train_dataloader, model, loss_f, optimizer, batch_size, i, writer=writer)
         
-        test_loss = _test_model(test_dataloader, model, loss_f, current_sample=(i+1)*len(training_data), 
+        test_loss = test_model(test_dataloader, model, loss_f, current_sample=(i+1)*len(training_data), 
                                 acc_tol='exact_onehot', writer=writer)
 
         # periodically save trained model (should put epoch number into filename)
@@ -164,111 +188,3 @@ def mnist_tutorial():
 
     if writer is not None:
         writer.close()
-
-class mnist_network(nn.Module):
-    """ Simple NN to play with the MNIST Fashion dataset. """
-    def __init__(self):
-        super().__init__()
-
-        # input pre-processing: 28x28 shape 2d arrays -> 784 shape 1d arrays
-        self.flatten = nn.Flatten()
-
-        # define layers
-        # Sequential = ordered container of modules (data passed through each module in order)
-        self.linear_relu_stack = nn.Sequential(
-            nn.Linear(28*28, 512), # input/first layer, w*x + b
-            nn.ReLU(), # non-linear activation
-            nn.Linear(512, 512), # hidden layer, fully connected
-            nn.ReLU(),
-            nn.Linear(512, 10), # output layer
-        )
-
-    def forward(self, x):
-        x = self.flatten(x)
-        logits = self.linear_relu_stack(x)
-        return logits
-
-def _train_model(dataloader, model, loss_fn, optimizer, batch_size, epoch_num, writer=None, verbose=True):
-    """ Train model for one epoch. """
-    # Set the model to training mode - important for batch normalization and dropout layers
-    # Unnecessary in this situation but added for best practices
-    model.train()
-
-    for batch_num, data in enumerate(dataloader):
-        inputs, labels = data
-
-        # Zero (previous) gradients
-        optimizer.zero_grad()
-
-        # Compute prediction and loss
-        pred = model(inputs)
-        loss = loss_fn(pred, labels)
-
-        # Backpropagation
-        loss.backward()
-
-        # Adjust weights
-        optimizer.step()
-
-        # print progress
-        fac = np.max([1,int(len(dataloader) / 5)])
-        if batch_num % fac == 0:
-            loss = loss.item()
-            current_sample = batch_num * batch_size + len(inputs)
-            tot_samples = len(dataloader.dataset)
-            s = f" loss: {loss:>7f}  [{current_sample:>5d}/{tot_samples:>5d}]"
-
-            if writer is not None:
-                current_sample += epoch_num * len(dataloader) * batch_size # 'global [int] step value'
-                s += f' global {current_sample = }'
-                writer.add_scalars('loss', {'train': loss}, current_sample)
-
-            if verbose: print(s)
-
-    return loss
-
-def _test_model(dataloader, model, loss_fn, current_sample, acc_tol=None, writer=None, verbose=True):
-    """ Test model. """
-    # Set the model to evaluation mode - important for batch normalization and dropout layers
-    # Unnecessary in this situation but added for best practices
-    model.eval()
-
-    size = len(dataloader.dataset)
-    num_batches = len(dataloader)
-    test_loss = 0.0
-    correct = 0
-
-    # Evaluating the model with torch.no_grad() ensures that no gradients are computed during test mode
-    # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
-    with torch.no_grad():
-        for inputs, labels in dataloader:
-            pred = model(inputs)
-            test_loss += loss_fn(pred, labels).item()
-
-            # 'correct' number of predictions
-            if str(acc_tol) == 'exact':
-                # exact match
-                w_loc = (pred == labels)
-            elif str(acc_tol) == 'exact_onehot':
-                # exact match for one-hot encoded labels
-                w_loc = pred.argmax(dim=1) == labels.argmax(dim=1)    
-            else:
-                # within |acc_tol| in the original (untransformed) space and units
-                pred_untransformed = dataloader.dataset.target_invtransform(pred)
-                labels_untransformed = dataloader.dataset.target_invtransform(labels)
-                w_loc = torch.abs(pred_untransformed - labels_untransformed) <= acc_tol
-
-            correct += w_loc.type(torch.float).sum().item()
-
-    test_loss /= num_batches
-    correct /= size
-
-    s = f" test: accuracy [{(100*correct):>0.1f}%], avg loss [{test_loss:>8f}]"
-
-    if writer is not None:
-        s += f' global {current_sample = }'
-        writer.add_scalars('loss', {'test': test_loss}, current_sample)
-
-    if verbose: print(s)
-
-    return test_loss

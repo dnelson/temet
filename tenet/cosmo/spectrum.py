@@ -15,6 +15,7 @@ import ctypes
 
 from ..util.helper import logZeroNaN, pSplitRange, contiguousIntSubsets
 from ..util.voronoiRay import rayTrace
+from ..util import units
 
 # default configuration for ray generation
 projAxis_def = 2
@@ -1929,6 +1930,101 @@ def calc_statistics_from_saved_rays(sP, ion):
         f['n_clouds'] = n_clouds
 
     print(f'Saved: [{saveFilename}]')
+
+def load_spectra_subset(sim, ion, instrument, solar, num, mode, EW_minmax=None, dv=0.0):
+    """ Load a subset of spectra from a given simulation and ion.
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      ion (str): space separated species name and ionic number e.g. 'Mg II'.
+      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+        use the (constant) solar value.
+      num (int): how many individual spectra to show.
+      mode (str): either 'random', 'evenly', or 'inds'.
+      inds (list[int]): if mode is 'inds', then the list of specific spectra indices to plot. num is ignored.
+      EW_minmax (list[float]): minimum and maximum EW to plot [Ang].
+      dv (float): if not zero, then take as a velocity window (+/-), convert 
+        the wavelength axis to velocity, and subset spectra to only this vel range.
+    """
+    filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
+
+    with h5py.File(filepath,'r') as f:
+        # load metadata
+        lineNames = f.attrs['lineNames']
+        wave = f['wave'][()]
+
+        # total EW (summing all transitions)
+        EW = np.sum(np.vstack([f[key][()] for key in f.keys() if 'EW_' in key]), axis=0)
+
+        # total EW (of a single transition)
+        #EW = f['EW_MgII_2796'][()]
+
+    # select
+    if EW_minmax is not None:
+        inds_all = np.where( (EW>EW_minmax[0]) & (EW<=EW_minmax[1]) )[0]
+        print(f'[{ion}] Found [{len(inds_all)}] of [{EW.size}] spectra in EW range [{EW_minmax[0]}-{EW_minmax[1]}] Ang.')
+    else:
+        inds_all = np.arange(EW.size)
+        print(f'[{ion}] Loaded [{len(inds_all)}] spectra, no EW range window.')
+
+    rng = np.random.default_rng(4242+inds_all[0]+inds_all[-1])
+
+    if mode == 'random':
+        # randomly shuffle all spectra in the EW bin, then select num
+        rng.shuffle(inds_all)
+        inds = inds_all[0:num]
+
+    if mode == 'evenly':
+        # evenly sample across EW, selecting one spectrum in each of num equal bins
+        binsize = (EW_minmax[1] - EW_minmax[0]) / num
+
+        inds = []
+        for i in range(num):
+            w = np.where((EW>EW_minmax[0]+i*binsize) & (EW<=EW_minmax[0]+(i+1)*binsize))[0]
+            rng.shuffle(w)
+
+            inds.append(w[0])
+
+    if mode == 'inds':
+        num = len(inds)
+
+    # partial load of selected spectra
+    inds = np.sort(inds)
+
+    with h5py.File(filepath,'r') as f:
+        flux = f['flux'][inds,:]
+
+    EW = EW[inds]
+
+    # re-sort
+    if mode == 'evenly':
+        sort_inds = np.argsort(EW)
+        flux = flux[sort_inds]
+        EW = EW[sort_inds]
+        
+    # x-axis in velocity space?
+    if dv:
+        # center each absorption line at its tau-weighted mean wavelength, and convert to dv
+        wave_dv = np.zeros((num, wave.size), dtype='float32')
+
+        for i in range(num):
+            flux_loc = flux[i,:]
+            flux_loc[flux_loc < 1e-4] = 1e-4 # avoid log(0)
+            tau = -np.log(flux_loc)
+
+            wave_mean = np.average(wave, weights=tau)
+            dlambda = wave - wave_mean
+            wave_dv[i,:] = dlambda / wave_mean * units.c_km_s
+
+            # re-compute in a fixed dv window to avoid other nearby absorption features
+            w = np.where( (wave_dv[i,:] > -dv) & (wave_dv[i,:] <= dv) )[0]
+            wave_mean = np.average(wave[w], weights=tau[w])
+            dlambda = wave - wave_mean
+            wave_dv[i,:] = dlambda / wave_mean * units.c_km_s
+
+        wave = wave_dv
+
+    return wave, EW, lineNames, flux
 
 def test_conv():
     """ Debug check behavior and benchmark variable convolution. """ 
