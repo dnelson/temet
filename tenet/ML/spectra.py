@@ -26,15 +26,30 @@ class MockSpectraDataset(Dataset):
         self.instrument = instrument
 
         # load data
-        num = 100 # for testing
-        mode = 'evenly' # for testing
+        mode = 'all' #'random' # for testing
+        num = None #10 # for testing
         solar = False # fixed
-        dv_window = 500.0 # km/s
+        dv_window = 1000.0 # +/- km/s
 
-        wave, EW, lineNames, flux = load_spectra_subset(self.sim, ion, instrument, solar, num, mode, EW_minmax, dv=dv_window)
+        cacheFilename = 'cache_mockspec_%s-%d_%s-%s_%s_%s_%s-%s_%.0f.hdf5' % \
+            (self.sim.simName, self.sim.snap, ion.replace(' ',''), instrument, str(EW_minmax).replace(' ',''), mode, num, solar, dv_window)
+        
+        if isfile(cacheFilename):
+            # load from condensed cache file
+            print(f'Loading cached mock spectra: [{cacheFilename}]')
+            with h5py.File(cacheFilename, 'r') as f:
+                EW = f['EW'][()]
+                flux = f['flux'][()]
+                wave = f['wave'][()]
+        else:
+            # load from full files
+            wave, EW, lineNames, flux = load_spectra_subset(self.sim, ion, instrument, solar, mode, num, EW_minmax, dv=dv_window)
 
-        # TODO: we don't really want a separate wave for each spectrum, get rid of this
-        # TODO: wave_dv and flux are still full, convert to local subsets inside load_spectra_subset()
+            # save to condensed cache file
+            with h5py.File(cacheFilename, 'w') as f:
+                f['EW'] = EW
+                f['flux'] = flux
+                f['wave'] = wave
 
         # store samples (mstar) and labels (mhalo), only within the selected range
         self.samples = torch.from_numpy(flux)
@@ -70,8 +85,30 @@ class MockSpectraDataset(Dataset):
 
         # note: return can be anything, e.g. a more complex dict: 
         # we unpack it as needed when iterating over the batches in a dataloader
-        return vals, label
-    
+        return vals, label # {'spec':vals, 'EW':label}
+
+class mlp_network(nn.Module):
+    """ Simple MLP NN to explore the (normalized absorption spectra) -> (EW) mapping. """
+    def __init__(self, hidden_size, num_inputs):
+        """ hidden_size (int): number of neurons in the hidden layer(s). """
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.num_inputs = num_inputs
+
+        # define layers
+        # Sequential = ordered container of modules (data passed through each module in order)
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(self.num_inputs, self.hidden_size), # input/first layer, w*x + b
+            nn.ReLU(), 
+            nn.Linear(self.hidden_size, self.hidden_size), # hidden layer, fully connected
+            nn.ReLU(),
+            nn.Linear(self.hidden_size, 1), # output layer
+        )
+
+    def forward(self, x):
+        L = self.linear_relu_stack(x)
+        return L
+
 def train(hidden_size=8, verbose=True):
     """ Train the mockspec CNN. """
     torch.manual_seed(424242)
@@ -79,18 +116,18 @@ def train(hidden_size=8, verbose=True):
 
     # config
     sim = 'TNG50-1'
-    redshift = 1.5 # 1.5, 2.0, 3.0, 4.0, 5.0
+    redshift = 2.0 # 1.5, 2.0, 3.0, 4.0, 5.0
 
     ion = 'C IV'
     instrument = 'SDSS-BOSS'
-    EW_minmax = [1.0, 1.5] # Ang, for testing
+    EW_minmax = [3.0, 6.0] # Ang, for testing
 
     # learning parameters
     test_fraction = 0.2 # fraction of data to reserve for testing
-    batch_size = 64 # number of data samples propagated through the network before params are updated
+    batch_size = 100 # number of data samples propagated through the network before params are updated
     learning_rate = 1e-3 # i.e. prefactor on grads for gradient descent
-    acc_tol = 0.05 # acceptable tolerance for reporting the prediction accuracy (untransformed space, i.e. log msun)
-    epochs = 15 # number of times to iterate over the dataset
+    acc_tol = 0.05 # acceptable tolerance for reporting the prediction accuracy (untransformed space, i.e. EW/ang)
+    epochs = 10 # number of times to iterate over the dataset
 
     modelFilename = 'mockspec_cnn_model_%s-%s_%d.pth' % (ion,instrument,hidden_size)
 
@@ -103,5 +140,61 @@ def train(hidden_size=8, verbose=True):
     # load data
     data = MockSpectraDataset(sim, redshift, ion, instrument, EW_minmax)
 
-    # TODO
-    import pdb; pdb.set_trace()
+    spec_n = data[0][0].shape[0] # data[0]['spec'].shape[0] # number of wavelength bins
+    
+    # create indices for training/test subsets
+    n = len(data)
+    inds = list(range(n))
+    split = int(np.floor(test_fraction * n))
+
+    # shuffle and split
+    rng.shuffle(inds)
+    
+    train_indices, test_indices = inds[split:], inds[:split]
+
+    # create data samplers and loaders
+    train_sampler = SubsetRandomSampler(train_indices)
+    test_sampler = SubsetRandomSampler(test_indices)
+
+    train_dataloader = DataLoader(data, sampler=train_sampler, batch_size=batch_size,
+                                  shuffle=False, drop_last=False, pin_memory=False)
+    test_dataloader = DataLoader(data, sampler=test_sampler, batch_size=batch_size,
+                                 shuffle=False, drop_last=False, pin_memory=False)
+
+    if verbose:
+        print(f'Total training samples [{len(train_sampler)}]. ', end='')
+        print(f'For [{batch_size = }], number of training batches [{len(train_dataloader)}].')
+
+    # define model
+    model = mlp_network(hidden_size=hidden_size, num_inputs=spec_n)
+
+    # define loss function
+    loss_f = nn.MSELoss() # mean square error
+
+    # define optimizer
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    # train
+    test_loss_best = np.inf
+
+    for i in range(epochs):
+        if verbose: print(f'\nEpoch: [{i}]')
+
+        train_loss = train_model(train_dataloader, model, loss_f, optimizer, batch_size, i, 
+                                  verbose=verbose)
+        
+        n = (i+1)*len(train_sampler)
+        test_loss = test_model(test_dataloader, model, loss_f, current_sample=n, acc_tol=acc_tol,
+                                verbose=verbose)
+
+        # periodically save trained model (should put epoch number into filename)
+        if test_loss < test_loss_best:
+            torch.save(model, modelFilename)
+            #print(f' new best loss, saved: [[modelFilename]].')
+
+        test_loss_best = np.min([test_loss, test_loss_best])
+
+    if verbose:
+        print(f'Done. [{test_loss_best = }]')
+
+    return test_loss_best

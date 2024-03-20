@@ -474,9 +474,13 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
     ctName = 'thermal'    
 
     # load
-    dv_window = 500.0 # km/s, TODO should depend on transition, maybe inst
+    dv_window = 1000.0 # km/s, TODO should depend on transition, maybe inst
 
-    wave, EW, lineNames, flux = load_spectra_subset(sim, ion, instrument, solar, num, mode, EW_minmax, dv=dv_window if dv else 0.0)
+    if isinstance(xlim,list) and dv_window < xlim[1]:
+        print(f'Increaing {dv_window = } to {xlim[1]} km/s to cover requested xlim.')
+        dv_window = xlim[1]
+
+    wave, EW, lineNames, flux = load_spectra_subset(sim, ion, instrument, solar, mode, num, EW_minmax, dv=dv_window if dv else 0.0)
 
     # how many lines do we have? what is their span in wavelength?
     lines_wavemin = 0
@@ -502,9 +506,8 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
             if len(w) == 0:
                 continue
 
-            xx = wave[i,:] if dv else wave
-            xx_min = xx[w].min()
-            xx_max = xx[w].max()
+            xx_min = wave[w].min()
+            xx_max = wave[w].max()
 
             if xx_min < xlim[0]: xlim[0] = xx_min
             if xx_max > xlim[1]: xlim[1] = xx_max
@@ -523,7 +526,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         if np.max(EW_minmax) <= 0.4:
             spacingFac = 0.5
         if np.max(EW_minmax) > 0.8:
-            spacingFac = 1.2
+            spacingFac = 0.8 #1.2
     ylim = [+spacingFac/2, num*spacingFac + spacingFac/5]
 
     # add noise? ("signal" is now 1.0)
@@ -550,10 +553,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
     ax.set_ylabel(ylabel)
 
     ax.set_yticks(np.arange(num+1)*spacingFac)
-    if spacingFac >= 1.0:
-        ax.set_yticklabels(['%d' % i for i in range(num+1)])
-    else:
-        ax.set_yticklabels(['%.1f' % (i*spacingFac) for i in range(num+1)])
+    ax.set_yticklabels(['%d' % i for i in range(num+1)])
 
     colors = sampleColorTable(ctName, num, bounds=[0.0, 0.9])
 
@@ -561,8 +561,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         # vertical offset by 1.0 for each spectrum
         y_offset = (i+1)*spacingFac - 1
 
-        xx = wave[i,:] if dv else wave
-        ax.step(xx, flux[i,:]+y_offset, '-', color=colors[i], where='mid', lw=lw)
+        ax.step(wave, flux[i,:]+y_offset, '-', color=colors[i], where='mid', lw=lw)
 
         # label
         text_x = xlim[0] + (xlim[1]-xlim[0])/50

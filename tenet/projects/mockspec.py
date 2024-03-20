@@ -343,20 +343,20 @@ def paperPlots():
     instruments = ['4MOST-HRS','SDSS-BOSS','DESI','KECK-HIRES'] # todo: add cos, and something NIR (XS or GNIRS?)
     ions = ['HI','MgII','FeII','SiII','NV','CIV','OVI','CaII','ZnII'] # CaII and ZnII with solar abunds
 
-    # {1M-uni} 4MOST-HRS    SDSS-BOSS    KECK-HIRES     COS          DESI          XSHOOTER (something NIR/high-z)
-    #          ---------    ---------    ----------     ---          ----          --------
-    # HI       [ ]          [.] 2-5      [X] 1.5-5      [ ]          [ ]           [ ] 
-    # MgII     [ ]          [X] 0.3-2    [X] 0.1-2      [ ]          [ ]           [ ] 
-    # FeII     [ ]          [ ] 0.4-5    [ ]            [ ]          [ ]           [ ] 
-    # SiII     [ ]          [X] 1.5-5    [X] 1-5        [ ]          [ ]           [ ] 
-    # SiIII    [ ]          [X] 2-5      [X] 1.5-5      [ ]          [ ]           [ ]
-    # SiIV     [ ]          [X] 1.5-5    [X] 1.5-5      [ ]          [ ]           [ ] 
-    # NV       [ ]          [X] 2-5      [X] 1.5-5      [ ]          [ ]           [ ]
-    # CII      [ ]          [X] 1.5-5    [X] 1.5-5      [ ]          [ ]           [ ]
-    # CIV      [ ]          [X] 1.5-5    [X] 1-5        [ ]          [ ]           [ ] 
-    # OVI      [ ]          [X] 3-5      [X] 2-5        [ ]          [ ]           [ ] 
-    # CaII     [ ]          [ ]          [ ]            [ ]          [ ]           [ ] 
-    # ZnII     [ ]          [ ]          [ ]            [ ]          [ ]           [ ] 
+    # {1M-uni} 4MOST-HRS    SDSS-BOSS    KECK-HIRES     UVES      COS          DESI          XSHOOTER (something NIR/high-z)
+    #          ---------    ---------    ----------     ----      ---          ----          --------
+    # HI       [ ]          [.] 2-5      [X] 1.5-5      [ ]       [ ]          [ ]           [ ] 
+    # MgII     [ ]          [X] 0.3-2    [X] 0.1-2      [ ]       [ ]          [ ]           [ ] 
+    # FeII     [ ]          [ ] 0.4-5    [ ]            [ ]       [ ]          [ ]           [ ] 
+    # SiII     [ ]          [X] 1.5-5    [X] 1-5        [ ]       [ ]          [ ]           [ ] 
+    # SiIII    [ ]          [X] 2-5      [X] 1.5-5      [ ]       [ ]          [ ]           [ ]
+    # SiIV     [ ]          [X] 1.5-5    [X] 1.5-5      [ ]       [ ]          [ ]           [ ] 
+    # NV       [ ]          [X] 2-5      [X] 1.5-5      [ ]       [ ]          [ ]           [ ]
+    # CII      [ ]          [X] 1.5-5    [X] 1.5-5      [ ]       [ ]          [ ]           [ ]
+    # CIV      [ ]          [X] 1.5-5    [X] 1-5        [ ]       [ ]          [ ]           [ ] 
+    # OVI      [ ]          [X] 3-5      [X] 2-5        [ ]       [ ]          [ ]           [ ] 
+    # CaII     [ ]          [ ]          [ ]            [ ]       [ ]          [ ]           [ ] 
+    # ZnII     [ ]          [ ]          [ ]            [ ]       [ ]          [ ]           [ ] 
     # future: {4M-rnd} ?
 
     # fig 1: individual spectra galleries
@@ -370,7 +370,7 @@ def paperPlots():
         spectra_gallery_indiv(sim, EW_minmax=[0.01, 0.4], mode='evenly', **opts)
         spectra_gallery_indiv(sim, EW_minmax=[3.0, 6.0], mode='random', **opts)
 
-    if 1:
+    if 0:
         # C IV
         sim = simParams(run='tng50-1', redshift=2.0)
         inst = 'SDSS-BOSS' #'KECK-HIRES-B14'

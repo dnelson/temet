@@ -13,7 +13,7 @@ from numba import jit
 from numba.extending import get_cython_function_address
 import ctypes
 
-from ..util.helper import logZeroNaN, pSplitRange, contiguousIntSubsets
+from ..util.helper import closest, pSplitRange, contiguousIntSubsets
 from ..util.voronoiRay import rayTrace
 from ..util import units
 
@@ -1931,7 +1931,7 @@ def calc_statistics_from_saved_rays(sP, ion):
 
     print(f'Saved: [{saveFilename}]')
 
-def load_spectra_subset(sim, ion, instrument, solar, num, mode, EW_minmax=None, dv=0.0):
+def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=None, dv=0.0):
     """ Load a subset of spectra from a given simulation and ion.
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
@@ -1940,12 +1940,18 @@ def load_spectra_subset(sim, ion, instrument, solar, num, mode, EW_minmax=None, 
       solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
         use the (constant) solar value.
       num (int): how many individual spectra to show.
-      mode (str): either 'random', 'evenly', or 'inds'.
+      mode (str): either 'all', 'random', 'evenly', or 'inds'.
       inds (list[int]): if mode is 'inds', then the list of specific spectra indices to plot. num is ignored.
       EW_minmax (list[float]): minimum and maximum EW to plot [Ang].
       dv (float): if not zero, then take as a velocity window (+/-), convert 
         the wavelength axis to velocity, and subset spectra to only this vel range.
     """
+    assert mode in ['all','random','evenly','inds']
+    if mode in ['random','evenly']:
+        assert num is not None
+    else:
+        assert num is None, 'Do not specify num if mode is not random or evenly.'
+
     filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
 
     with h5py.File(filepath,'r') as f:
@@ -1968,6 +1974,10 @@ def load_spectra_subset(sim, ion, instrument, solar, num, mode, EW_minmax=None, 
         print(f'[{ion}] Loaded [{len(inds_all)}] spectra, no EW range window.')
 
     rng = np.random.default_rng(4242+inds_all[0]+inds_all[-1])
+
+    if mode == 'all':
+        inds = inds_all
+        num = len(inds)
 
     if mode == 'random':
         # randomly shuffle all spectra in the EW bin, then select num
@@ -2002,8 +2012,8 @@ def load_spectra_subset(sim, ion, instrument, solar, num, mode, EW_minmax=None, 
         flux = flux[sort_inds]
         EW = EW[sort_inds]
         
-    # x-axis in velocity space?
-    if dv:
+    # x-axis in velocity space? keep global spectra, shift wave axis
+    if 0 and dv:
         # center each absorption line at its tau-weighted mean wavelength, and convert to dv
         wave_dv = np.zeros((num, wave.size), dtype='float32')
 
@@ -2023,6 +2033,46 @@ def load_spectra_subset(sim, ion, instrument, solar, num, mode, EW_minmax=None, 
             wave_dv[i,:] = dlambda / wave_mean * units.c_km_s
 
         wave = wave_dv
+
+    # x-axis in velocity space? take local subsets of spectra, adopt common dv axis
+    if dv:
+        # how many wavelenght bins in velocity window?
+        dlambda = wave - wave.mean()
+        wave_dv = dlambda / wave.mean() * units.c_km_s
+
+        w = np.where( (wave_dv > -dv) & (wave_dv <= dv) )[0]
+        n = int(np.ceil(len(w) / 2))
+
+        _, ind_cen = closest(wave, wave.mean())
+        wave_dv = wave_dv[ind_cen-n+1:ind_cen+n+1] #wave_dv[w]
+
+        flux_dv = np.zeros((flux.shape[0],wave_dv.size), dtype=flux.dtype)
+        #dwave_cen = np.zeros(flux.shape[0], dtype=wave.dtype)
+
+        for i in range(num):
+            flux_loc = flux[i,:]
+            flux_loc[flux_loc < 1e-4] = 1e-4 # avoid log(0)
+            tau = -np.log(flux_loc)
+
+            # center at ta-weighted mean wavelength
+            wave_mean = np.average(wave, weights=tau)
+            dlambda = wave - wave_mean
+            wave_dv_loc = dlambda / wave_mean * units.c_km_s
+
+            # re-compute in a fixed dv window to avoid other nearby absorption features
+            w = np.where( (wave_dv_loc > -dv) & (wave_dv_loc <= dv) )[0]
+
+            wave_mean = np.average(wave[w], weights=tau[w])
+
+            # select closest bin to center wavelength
+            wave_cen, ind_cen = closest(wave, wave_mean)
+
+            # stamp
+            flux_dv[i,:] = flux[i,ind_cen-n+1:ind_cen+n+1]
+            #dwave_cen[i] = wave_cen - wave_mean
+
+        wave = wave_dv
+        flux = flux_dv
 
     return wave, EW, lineNames, flux
 
@@ -2070,8 +2120,6 @@ def test_conv():
 
 def test_conv_master():
     """ Debug check convolving on master grid vs inst grid. """ 
-    from ..util.helper import closest
-
     master = 'master2'
     inst = 'SDSS-BOSS'
     dtype = 'float32'
