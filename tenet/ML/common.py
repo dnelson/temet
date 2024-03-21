@@ -7,7 +7,6 @@ import torch
 def train_model(dataloader, model, loss_fn, optimizer, batch_size, epoch_num, writer=None, verbose=True):
     """ Train model for one epoch. """
     # Set the model to training mode - important for batch normalization and dropout layers
-    # Unnecessary in this situation but added for best practices
     model.train()
 
     for batch_num, data in enumerate(dataloader):
@@ -44,9 +43,8 @@ def train_model(dataloader, model, loss_fn, optimizer, batch_size, epoch_num, wr
     return loss
 
 def test_model(dataloader, model, loss_fn, current_sample, acc_tol=None, writer=None, verbose=True):
-    """ Test model. """
+    """ Test model and compute statistics. """
     # Set the model to evaluation mode - important for batch normalization and dropout layers
-    # Unnecessary in this situation but added for best practices
     model.eval()
 
     size = len(dataloader.dataset)
@@ -70,8 +68,8 @@ def test_model(dataloader, model, loss_fn, current_sample, acc_tol=None, writer=
                 w_loc = pred.argmax(dim=1) == labels.argmax(dim=1)    
             else:
                 # within |acc_tol| in the original (untransformed) space and units
-                pred_untransformed = dataloader.dataset.target_invtransform(pred)
-                labels_untransformed = dataloader.dataset.target_invtransform(labels)
+                pred_untransformed = dataloader.dataset.target_invtransform(pred).squeeze()
+                labels_untransformed = dataloader.dataset.target_invtransform(labels).squeeze()
                 w_loc = torch.abs(pred_untransformed - labels_untransformed) <= acc_tol
 
             correct += w_loc.type(torch.float).sum().item()

@@ -20,10 +20,11 @@ from tenet.ML.common import train_model, test_model
 
 class MockSpectraDataset(Dataset):
     """ A custom dataset for loading mock spectra and corresponding labels. """
-    def __init__(self, simname, redshift, ion, instrument, EW_minmax=None):
+    def __init__(self, simname, redshift, ion, instrument, model_type, EW_minmax=None):
         self.sim = simParams(simname, redshift=redshift)
         self.ion = ion
         self.instrument = instrument
+        self.model_type = model_type
 
         # load data
         mode = 'all' #'random' # for testing
@@ -59,6 +60,11 @@ class MockSpectraDataset(Dataset):
         self.samples = torch.from_numpy(flux)
         self.labels = torch.from_numpy(EW)
 
+        # for CNN: insert extra (middle) dimension for in_channels == out_channels == 1
+        # input has shape [N_batch, in_channels, num_inputs], output has shape [N_batch, out_channels, conv_num_out]
+        if self.model_type == 'cnn':
+            self.samples = self.samples.unsqueeze(1)
+
         # establish transformations: normalize to ~[0,1] (going outside this range is ok)
         # TODO: EWs are linear, probably a bad idea if we want to consider EW_min < 0.1 Ang or so
         EW_min = 0.0
@@ -75,6 +81,7 @@ class MockSpectraDataset(Dataset):
         self.target_invtransform = target_invtransform
 
     def __len__(self):
+        # TODO: add data augmentation with random noise generation, making this len(self.samples) * num_noisy_per_sample
         return len(self.samples)
 
     def __getitem__(self, i):
@@ -95,7 +102,11 @@ class MockSpectraDataset(Dataset):
 class mlp_network(nn.Module):
     """ Simple MLP NN to explore the (normalized absorption spectra) -> (EW) mapping. """
     def __init__(self, hidden_size, num_inputs):
-        """ hidden_size (int): number of neurons in the hidden layer(s). """
+        """
+        Args:
+          hidden_size (int): number of neurons in the hidden layer(s).
+          num_inputs (int): number of input features i.e. number of wavelength bins.
+        """
         super().__init__()
         self.hidden_size = hidden_size
         self.num_inputs = num_inputs
@@ -110,13 +121,62 @@ class mlp_network(nn.Module):
             nn.Linear(self.hidden_size, 1), # output layer
         )
 
+        # diagnostics
+        self.total_num_params = sum(p.numel() for p in self.parameters())
+
     def forward(self, x):
         L = self.linear_relu_stack(x)
         return L
+    
+class cnn_network(nn.Module):
+    """ Simple CNN to explore the (normalized absorption spectra) -> (EW) mapping. """
+    def __init__(self, kernel_size, hidden_size, num_inputs):
+        """
+        Args:
+          kernel_size (int): size of convolution kernel.
+          hidden_size (int): number of neurons in the hidden layer(s).
+          num_inputs (int): number of input features i.e. number of wavelength bins.
+        """
+        super().__init__()
+        # Conv1D layer parameters
+        self.kernel_size = kernel_size
+        self.stride = 1
+        self.padding = 0
+        self.dilation = 1
 
-def train(hidden_size=8, verbose=True):
-    """ Train the mockspec CNN. """
-    torch.manual_seed(424242)
+        # output size of Conv1D layer
+        self.conv_num_out = (num_inputs + 2 * self.padding - self.dilation * (self.kernel_size - 1) - 1) / self.stride + 1
+        assert self.conv_num_out == int(self.conv_num_out)
+        self.conv_num_out = int(self.conv_num_out)
+
+        # linear layer parameters
+        self.hidden_size = hidden_size
+        self.num_inputs = num_inputs
+
+        # define layers
+        # Sequential = ordered container of modules (data passed through each module in order)
+        self.relu_stack = nn.Sequential(
+            nn.Conv1d(in_channels=1, out_channels=1, 
+                      kernel_size=self.kernel_size, stride=self.stride, 
+                      padding=self.padding, dilation=self.dilation),
+            nn.ReLU(), 
+            nn.Linear(self.conv_num_out, self.hidden_size), # hidden layer, fully connected
+            nn.ReLU(),
+            nn.Linear(self.hidden_size, 1), # output layer
+        )
+
+        # diagnostics
+        self.total_num_params = sum(p.numel() for p in self.parameters())
+
+    def forward(self, x):
+        """ Forward pass. """
+        L = self.relu_stack(x)
+        L = L.squeeze(-1) # remove the extra dimension corresponding to the channel number
+        return L
+
+def train(model_type='cnn', hidden_size=8, kernel_size=3, verbose=True):
+    """ Train the mockspec model. """
+    torch.manual_seed(424242+1)
     rng = np.random.default_rng(424242)
 
     # config
@@ -132,9 +192,9 @@ def train(hidden_size=8, verbose=True):
     batch_size = 100 # number of data samples propagated through the network before params are updated
     learning_rate = 1e-3 # i.e. prefactor on grads for gradient descent
     acc_tol = 0.05 # acceptable tolerance for reporting the prediction accuracy (untransformed space, i.e. EW/ang)
-    epochs = 10 # number of times to iterate over the dataset
+    epochs = 50 # number of times to iterate over the dataset
 
-    modelFilename = 'mockspec_cnn_model_%s-%s_%d.pth' % (ion,instrument,hidden_size)
+    modelFilename = 'mockspec_model_%s_%s-%s_%d-%d.pth' % (model_type,ion.replace(' ',''),instrument,hidden_size,kernel_size)
 
     # check gpu
     if verbose:
@@ -143,9 +203,9 @@ def train(hidden_size=8, verbose=True):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # load data
-    data = MockSpectraDataset(sim, redshift, ion, instrument, EW_minmax)
+    data = MockSpectraDataset(sim, redshift, ion, instrument, model_type, EW_minmax)
 
-    spec_n = data[0][0].shape[0] # data[0]['spec'].shape[0] # number of wavelength bins
+    spec_n = data[0][0].shape[-1] # number of wavelength bins
     
     # create indices for training/test subsets
     n = len(data)
@@ -171,7 +231,10 @@ def train(hidden_size=8, verbose=True):
         print(f'For [{batch_size = }], number of training batches [{len(train_dataloader)}].')
 
     # define model
-    model = mlp_network(hidden_size=hidden_size, num_inputs=spec_n)
+    if model_type == 'mlp':
+        model = mlp_network(hidden_size=hidden_size, num_inputs=spec_n)
+    if model_type == 'cnn':
+        model = cnn_network(kernel_size=kernel_size, hidden_size=hidden_size, num_inputs=spec_n)
 
     # define loss function
     loss_f = nn.MSELoss() # mean square error
@@ -204,7 +267,7 @@ def train(hidden_size=8, verbose=True):
 
     return test_loss_best
 
-def plot_true_vs_predicted_EW(hidden_size=8):
+def plot_true_vs_predicted_EW(model_type='cnn', hidden_size=8, kernel_size=3):
     """ Scatterplot of true vs predicted labels, versus the one-to-one (perfect) relation. """
     # config
     sim = 'TNG50-1'
@@ -215,16 +278,28 @@ def plot_true_vs_predicted_EW(hidden_size=8):
     EW_minmax = [3.0, 6.0] # Ang, for testing
 
     # load data
-    data = MockSpectraDataset(sim, redshift, ion, instrument, EW_minmax)
+    data = MockSpectraDataset(sim, redshift, ion, instrument, model_type, EW_minmax)
 
     # load model and evaluate on all data
-    modelFilename = 'mockspec_cnn_model_%s-%s_%d.pth' % (ion,instrument,hidden_size)
+    modelFilename = 'mockspec_model_%s_%s-%s_%d-%d.pth' % (model_type,ion.replace(' ',''),instrument,hidden_size,kernel_size)
     print(modelFilename)
     model = torch.load(modelFilename)
 
-    # model(X) evaluation where X.shape = [num_pts, num_fields_per_pt], i.e. forward pass
     model.eval()
 
+    if 0:
+        # debug: run only the Conv1D layer on a single input spectrum, to see its output
+        X = data.samples[552,:].unsqueeze(0) # single spectrum
+        conv_out = model.relu_stack[0](X) # all negative
+        relu_out = model.relu_stack[1](conv_out) # --> all zeros, not good!
+
+        # debug: print out all model parameters
+        for name, param in model.named_parameters():
+            print(name, param.shape, param)
+
+        import pdb; pdb.set_trace()
+
+    # model(X) evaluation where X.shape = [num_pts, num_fields_per_pt], i.e. forward pass
     with torch.no_grad():
         Y = data.target_invtransform(model(data.samples))
 
@@ -238,9 +313,10 @@ def plot_true_vs_predicted_EW(hidden_size=8):
     ax.set_ylim(lim)
     ax.set_xlim(lim)
 
-    ax.plot(data.labels, Y, 'o', ls='None', ms=4, alpha=0.5, label='MLP[%d]' % hidden_size)
+    label = 'MLP[%d]' % hidden_size if model_type == 'mlp' else 'CNN[%d,%d]' % (hidden_size,kernel_size)
+    ax.plot(data.labels, Y, 'o', ls='None', ms=4, alpha=0.5, label=label)
     ax.plot(lim, lim, '-', lw=lw, color='black', alpha=0.7, label='1-to-1')
 
     ax.legend(loc='upper left')
-    fig.savefig('spec_EW_true_vs_predicted_%d.pdf' % hidden_size)
+    fig.savefig('%s.pdf' % modelFilename.replace('_model_','_EW-comp_').replace('.pth',''))
     plt.close(fig)
