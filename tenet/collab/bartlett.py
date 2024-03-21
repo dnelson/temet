@@ -17,7 +17,7 @@ def magicCGMEmissionMaps():
     sP = simParams(run='tng50-1',redshift=0.3)
 
     lines = ['H--1-1215.67A','H--1-1025.72A','C--4-1550.78A','C--4-1548.19A','O--6-1037.62A','O--6-1031.91A',
-             'S--4-1404.81A','S--4-1423.84A','S--4-1398.04A'] # (not NV, SiIV, SiIII, HeII)
+             'S--4-1404.81A','S--4-1423.84A','S--4-1398.04A','He-2-1640.43A'] # (to add: NV, SiIV, SiIII)
 
     massBins = [ [8.48,8.52], [8.97,9.03], [9.45,9.55], [9.97, 10.03], [10.4,10.6], [10.8,11.2] ]
     distRvir = True
@@ -29,7 +29,7 @@ def magicCGMEmissionMaps():
     size      = 1000.0
     sizeType  = 'kpc'
     partType  = 'gas'
-    partField = 'sb_' + lines[1] + '_ergs'
+    partField = 'sb_' + lines[-1] + '_ergs'
     valMinMax = [-22, -18]
     labelScale = 'physical'
 

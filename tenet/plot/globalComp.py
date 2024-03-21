@@ -2255,7 +2255,7 @@ def plots():
     #sPs.append( simParams(run='tng100-1', redshift=2.0) )
     #sPs.append( simParams(run='tng100-1', redshift=4.0) )
 
-    for variant in ['0000','5018']: #'5010','5014','5015','5017']:
+    for variant in ['0000','5018','5200']: #'5010','5014','5015','5017']:
         sPs.append( simParams(res=512, run='tng', variant=variant) )
     #for variant in ['','0000','4503']:
     #    sPs.append( simParams(res=625, run='tng', variant=variant) )
@@ -2282,7 +2282,8 @@ def plots():
     if 0:
         # single plot and quit
         pdf = PdfPages('comptest_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        plotPhaseSpace2D(sPs[0], xQuant='numdens', yQuant='temp', pdf=pdf)
+        for sP in sPs:
+            plotPhaseSpace2D(sP, xQuant='numdens', yQuant='temp', pdf=pdf)
         pdf.close()
         return
 

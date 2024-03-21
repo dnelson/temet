@@ -546,11 +546,11 @@ def gjoshi_clustermaps(conf=0, haloID=0):
     #redshift   = simParams(res=2160,run='tng',snap=snap).redshift
     rVirFracs  = [0.5, 1.0] # None
     method     = 'sphMap'
-    nPixels    = [1200,1200] #[800,800] #[1920,1920]
+    nPixels    = [2400,2400] #[1200,1200] #[800,800] #[1920,1920]
     axes       = [0,1]
     labelZ     = True
     labelScale = True
-    labelSim   = True
+    labelSim   = False #True
     labelHalo  = True
     relCoords  = True
     rotation   = None
@@ -576,8 +576,8 @@ def gjoshi_clustermaps(conf=0, haloID=0):
     class plotConfig:
         plotStyle    = 'edged'
         rasterPx     = 1200
-        colorbars    = True
-        saveFilename = './gjoshi_clustermaps_%d_%s_%d_%d_ID-%d_%s.png' % \
+        colorbars    = False #True
+        saveFilename = './gjoshi_clustermaps_%d_%s_%d_%d_ID-%d_%s.pdf' % \
           (conf,run,res,sP.snap,haloID,method)
 
 #    plotSubhaloIDs = [15, 26, 29, 38, 39, 44, 48, 54, 63, 67, 73] #fof0 of TNG50: disks at accretion, not disks at z=0

@@ -373,7 +373,7 @@ def nachoAngularQuenchingDens():
 
 def nachoAngularQuenchingImage():
     """ Images of delta rho/rho (for Martin Navarro+20). """
-    from ..projects.xrayAngularDependence import stackedHaloImage
+    from ..collab.truong_xrayangular import stackedHaloImage
 
     conf = 0
     median = True
@@ -744,7 +744,6 @@ def arjenMasses5kpc():
                                  pdf=pdf)
 
     pdf.close()
-
 
 def yenting_vis_sample(redshift=1.0):
     """ For the raw TNG-Cluster halos (not in the virtual box), render some views of RIZ stellar 

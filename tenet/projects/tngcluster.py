@@ -1065,6 +1065,7 @@ def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0
         labelSim = True
         labelZ = True
         labelScale = True
+        if partField == 'Mg II': valMinMax = [8.0, 15.0]
 
         # loop over all halos
         for subhaloInd, haloID in zip(subhaloIDs, haloIDs):

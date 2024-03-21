@@ -556,7 +556,7 @@ def stackedImageProjection():
     valMinMax = [8.0, 14.5]
 
     contour = ['gas',dataField]
-    contourLevels = [11.0, 14.0] # 1/cm^2, corresponding to EW~0.002 Ang and EW~1 Ang (from COG)
+    contourLevels = [11.5, 14.0] #[11.0, 14.0] # 1/cm^2, corresponding to EW~0.002 Ang and EW~1 Ang (from COG)
     contourOpts = {'colors':'white', 'alpha':0.8}
     contourSmooth = 3.0
 

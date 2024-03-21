@@ -27,34 +27,47 @@ def hubbleMCT_gibleVis(conf=1):
     sizeType   = 'rVirial'
     axesUnits  = 'arcsec'
     labelHalo  = 'mstar,mhalo'
+    labelSim   = False
+    labelZ     = False
     rotation   = 'edge-on'
+    labelScale = 'physical'
 
     subhaloInd = 0
+    vmm = [-22.0, -18.0] # log sb
+
+    # pretend snapshot is at this redshift (note: manual hacks also needed in vis.common for fluxes)
+    mock_redshift = 0.36 
 
     class plotConfig:
         plotStyle = 'open'
-        rasterPx  = 800
+        rasterPx  = 360
         colorbars = True
+        title = None
         saveFilename = 'gible_h%d_RF%d_%s.pdf' % (hInd,res,conf)
 
-    if conf == 0:
+    if conf in [0,3]:
         # render 1032+1038 doublet combined
-        panels = [{'partType':'gas', 'partField':'sb_OVI_ergs', 'valMinMax':[-22.0,-18.0]}]
+        if conf == 3:
+            vmm = [-19.5, -17.0]
+            size = 0.7 # zoom
+
+        panels = [{'partType':'gas', 'partField':'sb_OVI_ergs', 'valMinMax':vmm}]
         grid1, config1 = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
 
-        panels = [{'partType':'gas', 'partField':'sb_O--6-1037.62A_ergs', 'valMinMax':[-22.0,-18.0]}]        
+        panels = [{'partType':'gas', 'partField':'sb_O--6-1037.62A_ergs', 'valMinMax':vmm}]        
         grid2, config2 = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
 
         panels[0]['grid'] = np.log10(10.0**grid1 + 10.0**grid2)
         panels[0]['colorbarlabel'] = config1['label'].replace('OVI SB','OVI 1032+1038$\AA$ SB')
+        if conf == 3: panels[0]['ctName'] = 'magma_gray'
 
     if conf == 1:
         # CIII 
-        panels = [{'partType':'gas', 'partField':'sb_CIII_ergs', 'valMinMax':[-22.0,-18.0]}]
+        panels = [{'partType':'gas', 'partField':'sb_CIII_ergs', 'valMinMax':vmm}]
 
     if conf == 2:
         # render CIII/OVI doublet ratio
-        panels = [{'partType':'gas', 'partField':'sb_CIII_ergs', 'valMinMax':[-22.0,-18.0]}]
+        panels = [{'partType':'gas', 'partField':'sb_CIII_ergs', 'valMinMax':vmm}]
         grid_CIII, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
 
         panels[0]['partField'] = 'sb_OVI_ergs'
@@ -68,9 +81,6 @@ def hubbleMCT_gibleVis(conf=1):
         panels[0]['valMinMax'] = [-1.0, 1.0]
         panels[0]['colorbarlabel'] = '(CIII/OVI) Surface Brightness Ratio [log]'
         panels[0]['ctName'] = 'curl'
-
-    if conf == 3:
-        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2'}]
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 

@@ -642,7 +642,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         lineName = partField.split("_")[1].replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
 
         # compute line emission flux for each gas cell in [erg/s/cm^2] or [photon/s/cm^2]
-        if 1:
+        if 0:
             # use cache
             assert not zeroSfr # not implemented in cache
             assert not lumUnits # not implemented in cache
@@ -658,12 +658,17 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
             e_interp = cloudyEmission(sP, line=lineName, redshiftInterp=True)
             lum = e_interp.calcGasLineLuminosity(sP, lineName, indRange=indRange, dustDepletion=dustDepletion)
             
+            redshift = sP.redshift
+            if 0: # collab.rubin.hubbleMCT_gibleVis()
+                redshift = 0.36 # mock
+                print(f'Pretending snapshot is at z={redshift:.2f} instead of z={sP.redshift:.2f} for flux.')
+
             if lumUnits:
                 mass = lum / 1e30 # 10^30 erg/s
             else:
                 wavelength = e_interp.lineWavelength(lineName)
                 # photon/s/cm^2 if wavelength is not None, else erg/s/cm^2
-                mass = sP.units.luminosityToFlux(lum, wavelength=wavelength if not ergUnits else None)
+                mass = sP.units.luminosityToFlux(lum, wavelength=wavelength if not ergUnits else None, redshift=redshift)
 
             assert mass.min() >= 0.0
             assert np.count_nonzero( np.isnan(mass) ) == 0
@@ -1022,7 +1027,17 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         if '_lum' in partField:
             gridOffset = 30.0 # add 1e30 factor, to convert back to [erg/s]
 
+        if 0: # collab.rubin.hubbleMCT_gibleVis()
+            mock_redshift = 0.36
+            old_redshift = sP.redshift
+            sP.setRedshift(mock_redshift)
+            print(f'Pretending snapshot is at z={mock_redshift:.2f} instead of z={old_redshift:.2f} for SB.')
+
         grid = sP.units.fluxToSurfaceBrightness(grid, pxSizesCode, arcsec2=arcsec2, ster=ster, kpc=kpc)
+
+        if 0:
+            sP.setRedshift(old_redshift)
+
         uLabel = 'arcsec$^{-2}$'
         if ster: uLabel = 'ster$^{-1}$'
         if '_kpc' in partField: uLabel = 'kpc$^{-2}$'
@@ -2529,21 +2544,33 @@ def addBoxMarkers(p, conf, ax, pExtent):
                  size=conf.fontsize, ha='right', va='top') # same size as legend text
 
     if 'labelScale' in p and p['labelScale']:
-        scaleBarLen = (p['extent'][1]-p['extent'][0])*0.10 # 10% of plot width
+        # add a scale bar: what is the total size of the plot (in code units?)
+        extent = np.array(p['extent'])
+
+        if p['axesUnits'] in ['deg','arcmin','arcsec']:
+            fac = 1 if p['axesUnits'] == 'arcsec' else (60 if p['axesUnits'] == 'arcmin' else 3600.0)
+            extent = p['sP'].units.arcsecToAngSizeKpcAtRedshift(extent * fac)
+            extent = p['sP'].units.physicalKpcToCodeLength(extent)
+        if p['axesUnits'] == 'kpc':
+            extent = p['sP'].units.physicalKpcToCodeLength(extent)
+        if p['axesUnits'] == 'mpc':
+            extent = p['sP'].units.physicalMpcToCodeLength(extent)
+
+        scaleBarLen = (extent[1]-extent[0]) * 0.10 # 10% of plot width
         scaleBarLen /= p['sP'].HubbleParam # ckpc/h -> ckpc (or cMpc/h -> cMpc)
 
-        #if p['sP'].mpcUnits:
-        #    scaleBarLen = 1.0 * np.ceil(scaleBarLen/1.0) # round to nearest ~1 Mpc
-        #else:
-        #    scaleBarLen = 100.0 * np.ceil(scaleBarLen/100.0) # round to nearest ~100 kpc
+        # pretend that the snapshot is at a different redshift?
+        if 'mock_redshift' in p:
+            old_redshift = p['sP'].redshift
+            p['sP'].setRedshift(p['mock_redshift'])
+            print(f'Pretending snapshot is at z={p["mock_redshift"]:.2f} instead of z={old_redshift:.2f} for scale bar.')
 
-        # if scale bar is more than 30% of width, reduce
-        while scaleBarLen >= 0.3 * (p['extent'][1]-p['extent'][0]):
-            scaleBarLen /= 1.2
+        # if scale bar is more than (less than) 30% (20%) of width, reduce (increase)
+        while scaleBarLen >= 0.3 * (extent[1]-extent[0]):
+            scaleBarLen /= 1.4
 
-        # if scale bar is less than 20% of width, increase
-        while scaleBarLen < 0.20 * (p['extent'][1]-p['extent'][0]):
-            scaleBarLen *= 1.2
+        while scaleBarLen < 0.20 * (extent[1]-extent[0]):
+            scaleBarLen *= 1.4
 
         # if scale bar is more than X Mpc/kpc, round to nearest X Mpc/kpc
         mpcFac = 1000.0 if p['sP'].mpcUnits else 1.0
@@ -2553,11 +2580,13 @@ def addBoxMarkers(p, conf, ax, pExtent):
             if scaleBarLen >= roundScale:
                 scaleBarLen = roundScale * np.round(scaleBarLen/roundScale)
 
+        scaleBarLen *= 1.5
+
         # actually plot size in code units (e.g. ckpc/h)
         scaleBarPlotLen = scaleBarLen * p['sP'].HubbleParam
 
         if p['labelScale'] == 'physical':
-            # convert size from comoving to physical, which influences only the label below
+            # convert size from comoving to physical
             scaleBarLen *= p['sP'].units.scalefac
 
             # want to round this display value
@@ -2565,6 +2594,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
                 if scaleBarLen >= roundScale:
                     scaleBarLen = roundScale * np.round(scaleBarLen/roundScale)
 
+            # make sure we draw the correct (rounded) length
             scaleBarPlotLen = p['sP'].units.physicalKpcToCodeLength(scaleBarLen*mpcFac)
 
         # label
@@ -2592,13 +2622,13 @@ def addBoxMarkers(p, conf, ax, pExtent):
             scaleBarStr = "%d thousand lightyears" % scaleBarLen
 
         lw = 2.5 * np.sqrt(conf.rasterPx[1] / 1000)
-        y_off = np.clip(0.04 - 0.01 * 1000 / conf.rasterPx[1], 0.01, 0.06)
+        y_off = np.clip(0.04 - 0.01 * 1000 / conf.rasterPx[1], 0.01, 0.02)
         yt_fac = np.clip(1.5 + 0.1 * 1000 / conf.rasterPx[1], 1.0, 2.0)
 
-        x0 = p['extent'][0] + (p['extent'][1]-p['extent'][0])*(y_off * 720.0/conf.rasterPx[0]) # upper left
+        x0 = extent[0] + (extent[1]-extent[0])*(y_off * 720.0/conf.rasterPx[0]) # upper left
         x1 = x0 + scaleBarPlotLen
-        yy = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(y_off * 720.0/conf.rasterPx[1])
-        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*((y_off*yt_fac) * 720.0/conf.rasterPx[1])
+        yy = extent[3] - (extent[3]-extent[2])*(y_off * 720.0/conf.rasterPx[1])
+        yt = extent[3] - (extent[3]-extent[2])*((y_off*yt_fac) * 720.0/conf.rasterPx[1])
 
         if p['axesUnits'] in ['deg','arcmin','arcsec']:
             deg = (p['axesUnits'] == 'deg')
@@ -2618,6 +2648,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
             x1 = p['sP'].units.codeLengthToMpc(x1)
             yy = p['sP'].units.codeLengthToMpc(yy)
             yt = p['sP'].units.codeLengthToMpc(yt)
+
+        if 'mock_redshift' in p:
+            p['sP'].setRedshift(old_redshift)
 
         color = 'white' if 'textcolor' not in p else p['textcolor']
 
@@ -2828,7 +2861,7 @@ def addContourOverlay(p, conf, ax):
     # load grid of contour quantity
     if field_name == p['partField']:
         # use current field
-        grid_c = p['grid_data']
+        grid_c = p['grid'] # grid_data
     else:
         smoothFWHM = p['smoothFWHM'] if 'smoothFWHM' in p else None
         hsmlFac = p['hsmlFac'] if p['partType'] == field_pt else defaultHsmlFac(field_pt)
