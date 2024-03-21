@@ -395,3 +395,56 @@ def plot_mhalo_error_distribution():
     ax.legend(loc='upper left')
     fig.savefig('smhm_mhalo_err_dist%s.pdf' % p_str)
     plt.close(fig)
+
+def plot_true_vs_predicted_mhalo(hidden_size=8):
+    """ Scatterplot of true vs predicted labels, versus the one-to-one (perfect) relation. """
+    # config
+    sim = 'TNG100-1'
+    redshift = 0.0
+
+    lim = [10.0, 15.0]
+
+    # model config
+    secondary_params = ['ssfr_log'] # ['mhalo_200_log']
+
+    # load data
+    data = SMHMDataset(sim, redshift, secondary_params)
+
+    # load model and evaluate on all data
+    p_str = '_' + '-'.join(secondary_params) if len(secondary_params) else ''
+    modelFilename = 'smhm_mlp_model_%d%s.pth' % (hidden_size, p_str)
+    print(modelFilename)
+    model = torch.load(modelFilename)
+
+    model.eval() # evaluation mode
+
+    xx = data.samples
+
+    # model(X) evaluation where X.shape = [num_pts, num_fields_per_pt]
+    vals = torch.zeros((len(xx),len(secondary_params)+1), dtype=data.samples.dtype)
+    vals[:,0] = data.transform(xx)
+
+    for i, param in enumerate(data.secondary_params):
+        vals[:,i+1] = data.p_transforms[param](data.p_data[param])
+
+    if not len(secondary_params):
+        vals = vals.unsqueeze(-1)
+
+    # forward pass
+    with torch.no_grad():
+        Y = data.target_invtransform(model(vals))
+
+    # plot
+    fig, ax = plt.subplots(figsize=(figsize[1],figsize[1]))
+
+    ax.set_ylabel(r'M$_{\rm halo,predicted}$ [ log M$_{\rm sun}$ ]')
+    ax.set_xlabel(r'M$_{\rm halo,true}$ [ log M$_{\rm sun}$ ]')
+    ax.set_ylim(lim)
+    ax.set_xlim(lim)
+
+    ax.plot(data.labels, Y, 'o', ls='None', ms=4, alpha=0.5, label='MLP[%d]' % hidden_size)
+    ax.plot(lim, lim, '-', lw=lw, color='black', alpha=0.7, label='1-to-1')
+
+    ax.legend(loc='upper left')
+    fig.savefig('smhm_mhalo_true_vs_predicted_%d%s.pdf' % (hidden_size,p_str))
+    plt.close(fig)

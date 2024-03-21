@@ -41,21 +41,26 @@ class MockSpectraDataset(Dataset):
                 EW = f['EW'][()]
                 flux = f['flux'][()]
                 wave = f['wave'][()]
+                self.lineNames = f['lineNames'][()].decode()
         else:
             # load from full files
             wave, EW, lineNames, flux = load_spectra_subset(self.sim, ion, instrument, solar, mode, num, EW_minmax, dv=dv_window)
+
+            self.lineNames = ','.join([line.split('_')[1] for line in lineNames])
 
             # save to condensed cache file
             with h5py.File(cacheFilename, 'w') as f:
                 f['EW'] = EW
                 f['flux'] = flux
                 f['wave'] = wave
+                f['lineNames'] = self.lineNames.encode('ascii')
 
         # store samples (mstar) and labels (mhalo), only within the selected range
         self.samples = torch.from_numpy(flux)
         self.labels = torch.from_numpy(EW)
 
         # establish transformations: normalize to ~[0,1] (going outside this range is ok)
+        # TODO: EWs are linear, probably a bad idea if we want to consider EW_min < 0.1 Ang or so
         EW_min = 0.0
         EW_max = 5.0
         
@@ -198,3 +203,44 @@ def train(hidden_size=8, verbose=True):
         print(f'Done. [{test_loss_best = }]')
 
     return test_loss_best
+
+def plot_true_vs_predicted_EW(hidden_size=8):
+    """ Scatterplot of true vs predicted labels, versus the one-to-one (perfect) relation. """
+    # config
+    sim = 'TNG50-1'
+    redshift = 2.0 # 1.5, 2.0, 3.0, 4.0, 5.0
+
+    ion = 'C IV'
+    instrument = 'SDSS-BOSS'
+    EW_minmax = [3.0, 6.0] # Ang, for testing
+
+    # load data
+    data = MockSpectraDataset(sim, redshift, ion, instrument, EW_minmax)
+
+    # load model and evaluate on all data
+    modelFilename = 'mockspec_cnn_model_%s-%s_%d.pth' % (ion,instrument,hidden_size)
+    print(modelFilename)
+    model = torch.load(modelFilename)
+
+    # model(X) evaluation where X.shape = [num_pts, num_fields_per_pt], i.e. forward pass
+    model.eval()
+
+    with torch.no_grad():
+        Y = data.target_invtransform(model(data.samples))
+
+    # plot
+    fig, ax = plt.subplots(figsize=(figsize[1],figsize[1]))
+
+    ax.set_ylabel(r'EW$_{\rm %s\,%s,predicted}$ [ $\AA$ ]' % (ion,data.lineNames))
+    ax.set_xlabel(r'EW$_{\rm %s\,%s,true}$ [ $\AA$ ]' % (ion,data.lineNames))
+
+    lim = [EW_minmax[0]-1.0, EW_minmax[1]+1.0]
+    ax.set_ylim(lim)
+    ax.set_xlim(lim)
+
+    ax.plot(data.labels, Y, 'o', ls='None', ms=4, alpha=0.5, label='MLP[%d]' % hidden_size)
+    ax.plot(lim, lim, '-', lw=lw, color='black', alpha=0.7, label='1-to-1')
+
+    ax.legend(loc='upper left')
+    fig.savefig('spec_EW_true_vs_predicted_%d.pdf' % hidden_size)
+    plt.close(fig)
