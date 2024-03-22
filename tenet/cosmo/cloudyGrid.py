@@ -9,7 +9,6 @@ import subprocess
 from functools import partial
 from os.path import isfile, isdir, getsize, expanduser
 from os import mkdir, remove
-from scipy.interpolate import interpn
 
 from ..cosmo import hydrogen
 from ..util.helper import closest, logZeroNaN, rootPath
@@ -17,7 +16,7 @@ from ..util.helper import closest, logZeroNaN, rootPath
 basePath = rootPath + "tables/cloudy/"
 basePathTemp = expanduser("~") + "/data/cloudy_tables/"
 
-# proposed emission lines to record:
+# emission lines recorded (must redo Cloudy grid to add lines)
 lineList = """
 #1259    H  1 911.753A      radiative recombination continuum, i.e. (inf -> n=1) "Lyman limit"
 #1260    H  1 3645.98A      radiative recombination continuum, i.e. (inf -> n=2) "Balmer limit"
@@ -28,6 +27,9 @@ lineList = """
 #3677    H  1 4861.33A      H-like, 2 8,   2^2S -   4^2P, (n=4 to n=2) "H-beta" / "Balmer-beta"
 #3682    H  1 4340.46A      H-like, 2 12,   2^2S -   5^2P, (n=5 to n=2) "H-gamma" / "Balmer-gamma"
 #3687    H  1 4101.73A      H-like, 2 17,   2^2S -   6^2P, (n=6 to n=2) "H-delta" / "Balmer-delta"
+#5703    He 2 1640.43A      H-like, 2 5,   2^2S -   3^2P, MAGIC
+#5708    He 2 1215.13A      H-like, 2 8,   2^2S -   4^2P
+#5818    He 2 4685.64A      H-like, 4 8,   3^2S -   4^2P
 #7487    C  6 33.7372A      H-like, 1 3,   1^2S -   2^2P, in Bertone+ 2010 (highest energy CVI line photon)
 #7795    N  7 24.7807A      H-like, 1 3,   1^2S -   2^2P, in Bertone+ 2010 (")
 #8103    O  8 18.9709A      H-like, 1 3,   1^2S -   2^2P, OVIII (n=2 to n=1) in Bertone+ 2010, "OVIII LyA"
@@ -41,6 +43,8 @@ lineList = """
 #9105    Si14 6.18452A      H-like, 1 3,   1^2S -   2^2P
 #9894    S 16 4.73132A      H-like, 1 3,   1^2S -   2^2P
 #12819   Fe26 1.78177A      H-like, 1 3,   1^2S -   2^2P
+#14854   He 1 3888.63A      He-like, 2 10,   2^3S -   3^3P
+#15164   He 1 5875.64A      He-like, 6 11,   2^3P_2 -   3^3D
 #21954   C  5 40.2678A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance" (leftmost of triplet)
 #21989   C  5 41.4721A      He-like, 1 2,   1^1S -   2^3S, forbidden? (rightmost of triplet)
 #23516   N  6 29.5343A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "forbidden" "NVI(f)" (leftmost of 'Kalpha' triplet)
@@ -68,9 +72,31 @@ lineList = """
 #37079   Fe25 1.85951A      He-like, 1 5,   1^1S -   2^3P_1
 #37084   Fe25 1.85541A      He-like, 1 6,   1^1S -   2^3P_2
 #37089   Fe25 1.85040A      He-like, 1 7,   1^1S -   2^1P_1
+#83452   Ar 3 3005.22A      Stout, 1 5
+#83457   Ar 3 3109.18A      Stout, 2 5
+#83462   Ar 3 5191.82A      Stout, 4 5
+#83467   Ar 3 7135.79A      Stout, 1 4
+#83472   Ar 3 7751.11A      Stout, 2 4
+#83477   Ar 3 8036.52A      Stout, 3 4
+#83512   Ar 4 2853.66A      Stout, 1 5
+#83517   Ar 4 2868.22A      Stout, 1 4
+#83522   Ar 4 4711.26A      Stout, 1 3
+#83527   Ar 4 4740.12A      Stout, 1 2
+#83532   Ar 4 7170.70A      Stout, 2 5
+#83537   Ar 4 7237.77A      Stout, 3 5
+#83542   Ar 4 7263.33A      Stout, 2 4
+#83547   Ar 4 7332.15A      Stout, 3 4
+#83592   Ar 5 2691.05A      Stout, 2 5
+#83597   Ar 5 2785.96A      Stout, 3 5
+#83602   Ar 5 4625.39A      Stout, 4 5
+#83612   Ar 5 6435.12A      Stout, 2 4
+#83617   Ar 5 7005.83A      Stout, 3 4
 #85082   C  3 1908.73A      Stout, 1 3
 #85087   C  3 1906.68A      Stout, 1 4
 #85092   C  3 977.020A      Stout, 1 5, in vdV+ 2013, in Bertone+ (2010b)
+#85297   C  3 2296.87A      Stout, 5 9
+#105092  N  5 1238.82A      Stout, 1 3, doublet in Bertone+ (2010b)
+#105097  N  5 1242.80A      Stout, 1 2, doublet in Bertone+ (2010b)
 #123142  C  4 1550.78A      Chianti, 1 2, doublet in Bertone+ (2010b)
 #123147  C  4 1548.19A      Chianti, 1 3, doublet in Bertone+ (2010b), in vdV+ 2013
 #158187  O  6 1037.62A      Chianti, 1 2, "resonance line" (Draine pg.88), doublet in Bertone+ (2010b)
@@ -80,11 +106,16 @@ lineList = """
 #161442  S  4 1404.81A      Chianti, 1 3
 #161447  S  4 1423.84A      Chianti, 2 3
 #161452  S  4 1398.04A      Chianti, 1 4, in vdV+ 2013
+#108422  O  1 5577.34A      Stout, 4 5
+#108427  O  1 6300.30A      Stout, 1 4
+#108432  O  1 6363.78A      Stout, 2 4
+#108437  O  1 6391.73A      Stout, 3 4
 #108822  O  2 3728.81A      Stout, 1 2, i.e. JWST/high-z emission line
 #108827  O  2 3726.03A      Stout, 1 3, i.e. JWST/high-z emission line
 #108847  O  3 4931.23A      Stout, 1 4, i.e. JWST/high-z emission line
 #108852  O  3 4958.91A      Stout, 2 4, i.e. JWST/high-z emission line
 #108857  O  3 5006.84A      Stout, 3 4, i.e. JWST/high-z emission line
+#108862  O  3 2320.95A      Stout, 2 5
 #151382  N  2 6527.23A      Chianti, 1 4, i.e. JWST/high-z emission line
 #151387  N  2 6548.05A      Chianti, 2 4, i.e. JWST/high-z emission line
 #151392  N  2 6583.45A      Chianti, 3 4, i.e. JWST/high-z emission line
@@ -92,24 +123,79 @@ lineList = """
 #110057  S  2 6716.44A      Stout, 1 3, i.e. JWST/high-z emission line
 #110062  S  2 4076.35A      Stout, 1 4, i.e. JWST/high-z emission line
 #110067  S  2 4068.60A      Stout, 1 5, i.e. JWST/high-z emission line
+#113372  Si 2 2334.41A      Stout, 1 3
+#113377  Si 2 2328.52A      Stout, 1 4
+#113382  Si 2 1808.01A      Stout, 1 6
+#113387  Si 2 1526.71A      Stout, 1 8
+#113862  Si 3 1892.03A      Stout, 1 3
+#113867  Si 3 1882.71A      Stout, 1 4
+#113872  Si 3 1206.50A      Stout, 1 5
+#114467  Si 4 1393.75A      Stout, 1 3
+#114472  Si 4 1402.77A      Stout, 1 2
+#125712  Ca 2 7323.89A      Chianti, 1 2
+#125717  Ca 2 7291.47A      Chianti, 1 3
+#125727  Ca 2 3968.47A      Chianti, 1 4
+#125732  Ca 2 8662.14A      Chianti, 2 4
+#125737  Ca 2 3933.66A      Chianti, 1 5
+#125817  Ca 2 1651.99A      Chianti, 1 9
+#125742  Ca 2 8498.02A      Chianti, 2 5
+#125747  Ca 2 8542.09A      Chianti, 3 5
+#125747  Ca 2 8542.09A      Chianti, 3 5
+#134562  Fe17 17.0960A      Chianti, 1 2, LEM
+#134567  Fe17 17.0510A      Chianti, 1 3, LEM
+#134572  Fe17 16.7760A      Chianti, 1 5
+#134577  Fe17 16.3360A      Chianti, 1 7
+#134582  Fe17 16.2380A      Chianti, 1 10
+#134587  Fe17 16.0040A      Chianti, 1 14
+#134592  Fe17 15.4530A      Chianti, 1 17
+#134597  Fe17 15.4170A      Chianti, 1 18
+#134602  Fe17 15.2620A      Chianti, 1 23
+#151407  N  2 5754.61A      Chianti, 4 5
+#151522  N  3 1748.65A      Chianti, 1 3, from LineList_HII
+#151527  N  3 1753.99A      Chianti, 2 3, from LineList_HII
+#151532  N  3 1746.82A      Chianti, 1 4, from LineList_HII
+#151537  N  3 1752.16A      Chianti, 2 4, from LineList_HII
+#151542  N  3 1749.67A      Chianti, 2 5, from LineList_HII
+#151547  N  3 989.799A      Chianti, 1 6, from LineList_HII
+#151552  N  3 991.511A      Chianti, 2 6, from LineList_HII
+#151557  N  3 991.577A      Chianti, 2 7, from LineList_HII
+#152947  Ne 4 2421.66A      Chianti, 1 2
+#152957  Ne 4 2424.28A      Chianti, 1 3
+#152962  Ne 4 1601.61A      Chianti, 1 4
+#152967  Ne 4 4725.58A      Chianti, 2 4
+#152972  Ne 4 4715.64A      Chianti, 3 4
+#152977  Ne 4 1601.45A      Chianti, 1 5
+#152982  Ne 4 4724.17A      Chianti, 2 5
+#152987  Ne 4 4714.23A      Chianti, 3 5
+#153837  Ne 8 780.325A      Chianti, 1 2, doublet in Bertone+ (2010b)
+#153842  Ne 8 770.410A      Chianti, 1 3, doublet in Bertone+ (2010b)
+#153207  Ne 5 3300.37A      Chianti, 1 4
+#153212  Ne 5 3345.99A      Chianti, 2 4
+#153217  Ne 5 3426.03A      Chianti, 3 4
+#153222  Ne 5 1574.76A      Chianti, 2 5
+#153227  Ne 5 1592.26A      Chianti, 3 5
+#153232  Ne 5 2973.20A      Chianti, 4 5
 #167489  O  6 5291.00A      recombination line, i.e. inf -> n=
 #167490  O  6 2082.00A      recombination line
 #167491  O  6 3434.00A      recombination line
 #167492  O  6 2070.00A      recombination line
 #167493  O  6 1125.00A      recombination line
 #229439  Blnd 2798.00A      Blend: "Mg 2      2795.53A"+"Mg 2      2802.71A"
+#229512  Blnd 1240.00A      Blend: "N  5      1238.82A"+"N  5      1242.80A"
+#229517  Blnd 2471.00A      Blend: "O  2      2470.22A"+"O  2      2470.34A"+"O 2R      2471.00A"
+#229448  Blnd 1406.00A      total S IV 1406
+#229451  Blnd 2665.00A      Blend: "Al 2      2669.15A"+"Al 2      2660.35A"
+#229452  Blnd 1860.00A      Blend: "Al 3      1854.72A"+"Al 3      1862.79A"
+#229457  Blnd 2335.00A      total Si II] 2335
+#229459  Blnd 1397.00A      Blend: "Si 4      1393.75A"+"Si 4      1402.77A"
+#229476  Blnd 2326.00A      total C II] 2324.69 + 2328.12
+#229485  Blnd 1909.00A      Blend: "C  3      1908.73A"+"C  3      1906.68A"+"C 3R      1909.00A"+"C 3H      1909.00A"
+#229490  Blnd 1549.00A      Blend: "C  4      1550.78A"+"C  4      1548.19A"+"C 4R      1549.00A"+"C 4R      1549.00A"
+#229506  Blnd 1750.00A      total N III] 1750 (all components)
+#229511  Blnd 1486.00A      Blend: "N  4      1483.32A"+"N  4      1486.50A"
+#229556  Blnd 1402.00A      total O IV] 1402; 5 components to line
 #229562  Blnd 1035.00A      Blend: "O  6      1031.91A"+"O  6      1037.62A"
 """
-# missing (for the future):
-#Si  3 (1207A)
-#He  2 (1640A)
-#Si  4 1393.755A, doublet in Bertone+ (2010b)
-#Si  4 1402.770A, doublet in Bertone+ (2010b)
-#N   5 1238.821A, doublet in Bertone+ (2010b)
-#N   5 1242.804A, doublet in Bertone+ (2010b)
-#Ne  8 770.409A, doublet in Bertone+ (2010b)
-#Ne  8 780.324, doublet in Bertone+ (2010b)
-#Fe 17 * including 17.073 for LEM
 
 def getEmissionLines():
     """ Return the list of emission lines (``lineList`` above) that we save from CLOUDY runs. """
@@ -427,14 +513,16 @@ def runCloudySim(gv, temp):
     gv['inputFileName']    = 'input_' + fileNameStr # in cwd of basePath
     gv['inputFileNameAbs'] = gv['basePath'] + 'input_' + fileNameStr
     gv['outputFileName']   = 'output_' + fileNameStr + '.txt'
-    gv['outputFileNameEm']   = 'output_em_' + fileNameStr + '.txt'
+    gv['outputFileNameEm'] = 'output_em_' + fileNameStr + '.txt'
+
+    outputFilePath = gv['basePath'] + gv['outputFileName']
 
     # skip if this output has already been made
-    if isfile(gv['outputFileName']) and getsize(gv['outputFileName']) > 0:
+    if isfile(outputFilePath) and getsize(outputFilePath) > 0:
         return
     
-    if isfile(gv['inputFileNameAbs']+'.out') and getsize(gv['inputFileNameAbs']+'.out') > 1e5:
-        return
+    #if isfile(gv['inputFileNameAbs']+'.out') and getsize(gv['inputFileNameAbs']+'.out') > 1e5:
+    #    return
 
     # generate input file
     makeCloudyConfigFile(gv)
@@ -456,7 +544,7 @@ def runCloudySim(gv, temp):
     remove( gv['inputFileNameAbs'] + '.out' )
 
     # some formatting fixes of our saved ionization fractions (make it a valid CSV)
-    with open( gv['outputFileName'],'r' ) as f:
+    with open(outputFilePath,'r') as f:
         outputLines = f.read()
 
     outputLines = outputLines.replace('\n    ','')              # erroneous line breaks
@@ -464,7 +552,7 @@ def runCloudySim(gv, temp):
     outputLines = outputLines.replace('(H2)','#(H2)')           # uncommented comments
     outputLines = outputLines.replace('1      2','#1      2')   # random footer lines
 
-    with open( gv['outputFileName'],'w' ) as f:
+    with open(outputFilePath,'w') as f:
         f.write(outputLines)
 
 def _getRhoTZzGrid(res, uvb):
@@ -474,7 +562,7 @@ def _getRhoTZzGrid(res, uvb):
 
     if res == 'test':
         densities = np.arange(-3.0,-2.5+eps, 0.5)
-        temps     = np.arange(6.0,6.6+eps,0.1)
+        temps     = np.arange(6.0,6.3+eps,0.1)
         metals    = np.arange(-0.1,0.1+eps,0.1)
         redshifts = np.array([1.0,2.2])
 
@@ -569,13 +657,14 @@ def collectOutputs(res='lg', uvb='FG11'):
     def parseCloudyIonFile(basePath,r,d,Z,T,maxNumIons=99):
         """ Construct file path to a given Cloudy output, load and parse. """
         basePath = basePathTemp + 'redshift_%04.2f_%s/' % (r,uvb)
-        fileNameStr = "z%.1f_n%.1f_Z%.1f_T%s" % (r,d,Z,np.round(T*100)/100)
+        fileNameStr = "z%s_n%s_Z%.1f_T%.2f" % (r,d,Z,T)
         path = basePath + 'output_' + fileNameStr + '.txt'
 
         data = [line.split('#',1)[0].replace('\n','').strip().split() for line in open(path)]
         data = [d for d in data if d] # remove all blank lines
 
         if len(data) != 30:
+            print(path)
             raise Exception('Did not find expected [30] elements in output.')
 
         names  = [d[0] for d in data]
@@ -621,7 +710,7 @@ def collectOutputs(res='lg', uvb='FG11'):
                         data[element][0:abunds[elemNum].size,i,j,k,l] = abunds[elemNum]
 
     # save grid to HDF5
-    saveFile = basePath + 'grid_ions_' + res + '.hdf5'
+    saveFile = basePath + 'grid_ions_' + res + '_c23.hdf5'
     print('Write: ' + saveFile)
 
     with h5py.File(saveFile,'w') as f:
@@ -645,7 +734,7 @@ def collectEmissivityOutputs(res='lg', uvb='FG11'):
     def parseCloudyEmisFile(basePath,r,d,Z,T):
         """ Construct file path to a given Cloudy output, load and parse. """
         basePath = basePathTemp + 'redshift_%04.2f_%s/' % (r,uvb)
-        fileNameStr = "z" + str(r) + "_n" + str(d) + "_Z" + str(Z) + "_T" + str(T)
+        fileNameStr = "z%s_n%s_Z%.1f_T%.2f" % (r,d,Z,T)
         path = basePath + 'output_em_' + fileNameStr + '.txt'
 
         with open(path,'r') as f:
@@ -669,7 +758,7 @@ def collectEmissivityOutputs(res='lg', uvb='FG11'):
 
     names, vals = parseCloudyEmisFile(basePath,redshifts[0],densities[0],metals[0],temps[2])
     names_save, _ = getEmissionLines() #[name.replace(" ","_") for name in names] # element name case
-    assert names == [name.upper() for name in names_save] # same lines and ordering as we requested?
+    assert names == [name for name in names_save] # same lines and ordering as we requested?
 
     for line in names_save:
         data[line] = np.zeros( (redshifts.size,densities.size,metals.size,temps.size), dtype='float32' )
@@ -701,7 +790,7 @@ def collectEmissivityOutputs(res='lg', uvb='FG11'):
         data[line][w] = zeroValLog
 
     # save grid to HDF5
-    saveFile = basePath + 'grid_emissivities_' + res + '.hdf5'
+    saveFile = basePath + 'grid_emissivities_' + res + '_c23.hdf5'
     print('Write: ' + saveFile)
 
     with h5py.File(saveFile,'w') as f:

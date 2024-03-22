@@ -149,7 +149,7 @@ class cloudyIon():
               'XXIX':29, 'XXX':30, 'XXXI':31}
     _romanInv = {v:k for k,v in _roman.items()}
 
-    def __init__(self, sP, el=None, res='lg_c17', redshiftInterp=False, order=3):
+    def __init__(self, sP, el=None, res='lg_c23', redshiftInterp=False, order=3):
         """ Load the table, optionally only for a given element(s). """
         if sP is None: return # instantiate only for misc methods
 
@@ -526,7 +526,7 @@ class cloudyEmission():
                           'CIII'        : 'C  3 977.020A',
                           'NVII'        : 'N  7 24.7807A'}
 
-    def __init__(self, sP, line=None, res='lg', redshiftInterp=False, order=3):
+    def __init__(self, sP, line=None, res='lg_c23', redshiftInterp=False, order=3):
         """ Load the table, optionally only for a given line(s). """
         if sP is None: return # instantiate only for misc methods
 
