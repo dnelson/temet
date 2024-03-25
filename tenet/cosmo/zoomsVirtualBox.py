@@ -250,9 +250,9 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
     GroupLenType_hInd = np.zeros( (len(hInds),6), dtype='int32' )
 
     offsets = {}
-    offsets['Group']   = np.hstack( (0,np.cumsum(lengths['Group'])[:-1]) )
-    offsets['Subhalo'] = np.hstack( (0,np.cumsum(lengths['Subhalo'])[:-1]) )
-    offsets['Tracers'] = np.hstack( (0,np.cumsum(GroupLenTypeTracers)[:-1]) )
+    offsets['Group']   = np.hstack( (0,np.cumsum(lengths['Group'], dtype='int64')[:-1]) )
+    offsets['Subhalo'] = np.hstack( (0,np.cumsum(lengths['Subhalo'], dtype='int64')[:-1]) )
+    offsets['Tracers'] = np.hstack( (0,np.cumsum(GroupLenTypeTracers, dtype='int64')[:-1]) )
 
     numFiles = sP.groupCatHeader()['NumFiles']
     print('\nCombine [%d] zooms, re-writing group catalogs:' % len(hInds))
@@ -368,7 +368,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
             # tracers: add Tracer{Length,Offset}Type at z=0
             if snap == 99:
                 data['Group']['TracerLengthType'] = np.zeros((lengths['Group'][hCount],6), dtype='int32')
-                data['Group']['TracerOffsetType'] = np.zeros((lengths['Group'][hCount],6), dtype='int32')
+                data['Group']['TracerOffsetType'] = np.zeros((lengths['Group'][hCount],6), dtype='int64')
 
                 with h5py.File(outPath + 'tracers_%d.hdf5' % hInd,'r') as f:
                     for key in f['TracerLength_Halo'].keys():
@@ -411,7 +411,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
             # tracers: add Tracer{Length,Offset}Type at z=0
             if snap == 99:
                 data['Subhalo']['TracerLengthType'] = np.zeros((lengths['Subhalo'][hCount],6), dtype='int32')
-                data['Subhalo']['TracerOffsetType'] = np.zeros((lengths['Subhalo'][hCount],6), dtype='int32')
+                data['Subhalo']['TracerOffsetType'] = np.zeros((lengths['Subhalo'][hCount],6), dtype='int64')
 
                 with h5py.File(outPath + 'tracers_%d.hdf5' % hInd,'r') as f:
                     for key in f['TracerLength_Subhalo'].keys():
@@ -1002,3 +1002,67 @@ def check_particle_property():
     ax.legend(loc='best')
     fig.savefig('check_%s_%s.pdf' % (pt,prop))
     plt.close(fig)
+
+def fix_tracer_offsets():
+    """ Fix Group and Subhalo TracerOffsetType fields, which had overflow in original virtual box. """
+    sim = simParams(run='tng-cluster', snap=99)
+
+    # load
+    GroupTracerLengthType = sim.groups('TracerLengthType')
+    SubhaloTracerLengthType = sim.subhalos('TracerLengthType')
+    GroupNsubs = sim.groups('GroupNsubs')
+
+    #GroupOff_old = sim.groups('TracerOffsetType')
+    #SubhaloOff_old = sim.subhalos('TracerOffsetType')
+
+    # allocate
+    nTypes = 6
+    offsetsGroup   = np.zeros((sim.numHalos, nTypes), dtype=np.int64)
+    offsetsSubhalo = np.zeros((sim.numSubhalos, nTypes), dtype=np.int64)
+
+    # remake offsets
+    for j in range(nTypes):
+        print(j)
+        subgroupCount = 0
+        
+        # compute group offsets first (first entry is zero!)
+        offsetsGroup[1:,j] = np.cumsum(GroupTracerLengthType[:,j], dtype=np.int64)[:-1]
+
+        for k in range(sim.numHalos):
+            # subhalo offsets depend on group (to allow fuzz)
+            if GroupNsubs[k] > 0:
+                offsetsSubhalo[subgroupCount,j] = offsetsGroup[k,j]
+                
+                subgroupCount += 1
+                for m in np.arange(1, GroupNsubs[k]):
+                    offsetsSubhalo[subgroupCount,j] = \
+                    offsetsSubhalo[subgroupCount-1,j] + SubhaloTracerLengthType[subgroupCount-1,j]
+                    subgroupCount += 1
+    
+    # save
+    with h5py.File('tracer_offsets.hdf5','w') as f:
+        f['Group'] = offsetsGroup
+        f['Subhalo'] = offsetsSubhalo
+    print('Wrote: [tracer_offsets.hdf5]')
+
+    # overwrite existing old fields in TNG-Cluster group catalogs at snap 99
+    path = '/virgotng/mpia/TNG-Cluster/TNG-Cluster/output/groups_099/'
+    w_offset1 = 0
+    w_offset2 = 0
+
+    for i in range(352):
+        print(i, w_offset1, w_offset2)
+        with h5py.File(path+'fof_subhalo_tab_099.%d.hdf5' % i, 'r+') as f:
+            Nsubhalos = f['Header'].attrs['Nsubgroups_ThisFile']
+            Nhalos = f['Header'].attrs['Ngroups_ThisFile']
+
+            del f['Group']['TracerOffsetType'] # wrong dtype
+            del f['Subhalo']['TracerOffsetType']
+
+            f['Group/TracerOffsetType'] = offsetsGroup[w_offset1:w_offset1+Nhalos]
+            f['Subhalo/TracerOffsetType'] = offsetsSubhalo[w_offset2:w_offset2+Nsubhalos]
+
+            w_offset1 += Nhalos
+            w_offset2 += Nsubhalos
+
+    print('Done.')
