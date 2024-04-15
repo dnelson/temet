@@ -684,6 +684,10 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='C  4 1550.78A lum2phase',op='sum',rad='20pkpc_halfrvir',cenSatSelect='cen',scope='fof'),
    'Subhalo_CIV1551_Lum_OuterCGM' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='C  4 1550.78A lum2phase',op='sum',rad='halfrvir_rvir',cenSatSelect='cen',scope='fof'),
+   'Subhalo_HeII1640_Lum_InnerCGM' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='He 2 1640.43A lum2phase',op='sum',rad='20pkpc_halfrvir',cenSatSelect='cen',scope='fof'),
+   'Subhalo_HeII1640_Lum_OuterCGM' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='He 2 1640.43A lum2phase',op='sum',rad='halfrvir_rvir',cenSatSelect='cen',scope='fof'),
 
    # emission (other)
    'Subhalo_S850um' : \

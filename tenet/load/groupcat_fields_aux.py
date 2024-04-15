@@ -414,6 +414,36 @@ lum_civ1551_innercgm.units = r'$\rm{erg/s}$'
 lum_civ1551_innercgm.limits = [36.0, 45.0]
 lum_civ1551_innercgm.log = True
 
+@catalog_field
+def lum_heii1640_outercgm(sim, partType, field, args):
+    """ HeII 1640 luminosity in the outer CGM. """
+    acField = 'Subhalo_HeII1640_Lum_OuterCGM'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+    
+    vals = ac[acField].astype('float64') * 1e30  # 1e30 erg/s -> erg/s
+
+    return vals
+
+lum_heii1640_outercgm.label = r'$\rm{L_{HeII 1640} (R_{200c}/2 - R_{200c})}$'
+lum_heii1640_outercgm.units = r'$\rm{erg/s}$'
+lum_heii1640_outercgm.limits = [36.0, 45.0]
+lum_heii1640_outercgm.log = True
+
+@catalog_field
+def lum_heii1640_innercgm(sim, partType, field, args):
+    """ HeII 1640 luminosity in the inner CGM. """
+    acField = 'Subhalo_HeII1640_Lum_InnerCGM'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+    
+    vals = ac[acField].astype('float64') * 1e30  # 1e30 erg/s -> erg/s
+
+    return vals
+
+lum_heii1640_innercgm.label = r'$\rm{L_{HeII 1640} (20 kpc - R_{200c}/2)}$'
+lum_heii1640_innercgm.units = r'$\rm{erg/s}$'
+lum_heii1640_innercgm.limits = [36.0, 45.0]
+lum_heii1640_innercgm.log = True
+
 # ---------------------------- auxcat: stellar kinematics --------------------------------------------
 
 @catalog_field

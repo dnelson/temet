@@ -158,9 +158,10 @@ def _TNGboxFieldConfig(res, conf, thinSlice, remap=False):
     if conf == 31: panels.append( {'partType':'gas', 'partField':'sb_Lyman-alpha', 'valMinMax':[-13.0, -8.0]} )
     if conf == 32: panels.append( {'partType':'gas', 'partField':'sb_O--6-1031.91A_ster', 'valMinMax':[-4.0, 2.0]} )
     if conf == 33: panels.append( {'partType':'gas', 'partField':'ionmassratio_O6_O8', 'valMinMax':[-2.0, 3.0]} )
+    if conf == 34: panels.append( {'partType':'gas', 'partField':'cellsize_kpc', 'valMinMax':[-0.5, 1.5], 'ctName':'magma'} )
 
     # testing equirectangular projections:
-    if conf == 34:  panels.append( {'partType':'gas', 'partField':'coldens_msun_ster', 'valMinMax':gasFullMM} )
+    if conf == 35:  panels.append( {'partType':'gas', 'partField':'coldens_msun_ster', 'valMinMax':gasFullMM} )
 
     # thin slices may need different optimal bounds:
     if thinSlice:
@@ -189,14 +190,14 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
     panels, centerHaloID, nSlicesTot, curSlice = _TNGboxFieldConfig(res, conf, thinSlice)
 
-    run        = 'eagle' #'tng' #'millennium'
+    run        = 'tng' #'eagle' #'millennium'
     redshift   = 0.0
     nPixels    = 2000 # 800, 2000, 8000
     axes       = [0,1] # x,y
-    labelZ     = False
-    labelScale = False
-    labelSim   = False
-    plotHalos  = False
+    labelZ     = True
+    labelScale = True
+    labelSim   = True
+    plotHalos  = 100
     method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
 
@@ -226,8 +227,8 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
     class plotConfig:
         plotStyle  = 'edged' # open, edged
-        rasterPx   = nPixels if isinstance(nPixels,list) else [nPixels,nPixels]
-        colorbars  = False
+        rasterPx   = 1000 #nPixels if isinstance(nPixels,list) else [nPixels,nPixels]
+        colorbars  = True # False
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s%s.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr,mStr)

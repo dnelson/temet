@@ -277,6 +277,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     if label is not None: # remove once migration is complete
         ptType = 'subhalo' # completely redundant, can remove?
         ptProperty = quantname # todo: unify and remove redundancy
+        assert units is not None, 'Missing units for custom field (likely typo).'
 
         if callable(label):
             label = label(sP, ptType, ptProperty)

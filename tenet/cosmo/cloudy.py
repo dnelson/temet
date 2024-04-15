@@ -515,6 +515,7 @@ class cloudyEmission():
     """ Use pre-computed Cloudy table to derive line emissivities for simulation gas cells. """
     _lineAbbreviations = {'Lyman-alpha' : 'H  1 1215.67A',
                           'Lyman-beta'  : 'H  1 1025.72A',
+                          'HeII'        : 'He 2 1640.43A',
                           'MgII'        : 'Blnd 2798.00A', # 2796+2803A together
                           'H-alpha'     : 'H  1 6562.81A',
                           'H-beta'      : 'H  1 4861.33A',

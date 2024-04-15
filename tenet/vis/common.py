@@ -637,7 +637,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
             partField = partField.replace("_dustdeplete","")
             dustDepletion = True
 
-        partField = partField.replace("_ster","").replace("_kpc","") # options handled later
+        partField = partField.replace("_ster","").replace("_kpc","").replace("_ergs","") # options handled later
 
         lineName = partField.split("_")[1].replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
 

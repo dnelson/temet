@@ -9,7 +9,7 @@ from ..util import simParams
 from ..plot.config import *
 from ..vis.halo import renderSingleHalo
 
-def magicCGMEmissionMaps():
+def magicCGMEmissionMaps(single=False):
     """ Emission maps (single, or in stacked M* bins) for MAGIC-II proposal. """
     from os import path
     import hashlib
@@ -28,8 +28,10 @@ def magicCGMEmissionMaps():
     axes      = [0,1] # random rotation
     size      = 1000.0
     sizeType  = 'kpc'
-    partType  = 'gas'
-    partField = 'sb_' + lines[-1] + '_ergs'
+
+    if not single: # stack config
+        partField = 'sb_' + lines[-1] + '_ergs'
+
     valMinMax = [-22, -18]
     labelScale = 'physical'
 
@@ -39,7 +41,7 @@ def magicCGMEmissionMaps():
         contourLevels = [-20.0, -19.0] # erg/s/cm^2/arcsec^2
         contourOpts = {'colors':'white', 'alpha':0.8}
 
-    panels = []
+    panels = [{'partType':'gas'}]
 
     # load
     gc = sP.subhalos(['mstar_30pkpc_log','central_flag','rhalo_200_code','SubhaloPos'])
@@ -74,7 +76,7 @@ def magicCGMEmissionMaps():
         # insert into cache, load other fields
         dataCache = {}
         dataCache['snap%d_gas_Coordinates' % sP.snap] = pos
-        emisLoadField = partField.replace(' ','-').replace('sb_','') + ' flux'
+        emisLoadField = partField.replace(' ','-').replace('sb_','').replace('_ergs','') + ' flux'
 
         for key in ['Masses','Density',emisLoadField]: # Density for Volume -> cellrad
             print('Caching [%s] now...' % key, flush=True)
@@ -85,19 +87,11 @@ def magicCGMEmissionMaps():
     # loop over mass bins
     stacks = []
 
-    for i, massBin in enumerate([massBins[5]]): #enumerate(massBins):
-
+    for i, massBin in enumerate(massBins):
         # select subhalos
         with np.errstate(invalid='ignore'):
             w = np.where( (gc['mstar_30pkpc_log']>massBin[0]) & (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )
         sub_inds = w[0]
-
-        print('%s z = %.1f [%.2f - %.2f] Processing [%d] halos...' % (sP.simName,sP.redshift,massBin[0],massBin[1],len(w[0])))
-
-        # check for existence of cache
-        hashStr = "%s-%s-%s-%s-%s-%s-%s" % (method,nPixels,axes,size,sizeType,sP.snap,sub_inds)
-        m = hashlib.sha256(hashStr.encode('utf-8')).hexdigest()[::4]
-        cacheFile = sP.derivPath + 'cache/stacked_proj_grids_%s_%s.hdf5' % (partField,m)
 
         # plot config
         class plotConfig:
@@ -105,8 +99,31 @@ def magicCGMEmissionMaps():
             rasterPx     = nPixels[0] * 1.6
             colorbars    = True
             #fontsize     = 24
-            saveFilename = './stacked_%s_%d.pdf' % (partField,i)
+            saveFilename = './stacked_%d.pdf' % (i)
 
+        if single:
+            # render multiple views of first subhalo in this mass bin
+            subhaloInd = sub_inds[0]
+            plotConfig.saveFilename = './%s-s%d-sh%d.pdf' % (sP.simName,sP.snap,subhaloInd)
+            plotConfig.nRows = 2
+            plotConfig.rasterPx *= 1.4
+            panels = []
+
+            for j, line in enumerate(lines):
+                field = 'sb_' + line + '_ergs'
+                panels.append({'partField':field, #'contour':['gas',field], 
+                                'labelHalo':(j==0), 'labelSim':(j==2), 'labelZ':(j==2)})
+            renderSingleHalo(panels, plotConfig, locals())
+            continue
+        else:
+            # stack
+            print('%s z = %.1f [%.2f - %.2f] Processing [%d] halos...' % (sP.simName,sP.redshift,massBin[0],massBin[1],len(w[0])))
+
+            # check for existence of cache
+            hashStr = "%s-%s-%s-%s-%s-%s-%s" % (method,nPixels,axes,size,sizeType,sP.snap,sub_inds)
+            m = hashlib.sha256(hashStr.encode('utf-8')).hexdigest()[::4]
+            cacheFile = sP.derivPath + 'cache/stacked_proj_grids_%s_%s.hdf5' % (partField,m)
+        
         if path.isfile(cacheFile):
             # load cached result
             with h5py.File(cacheFile,'r') as f:
@@ -117,26 +134,12 @@ def magicCGMEmissionMaps():
             # allocate for full stack
             grid_global  = np.zeros( (nPixels[0],nPixels[1],len(sub_inds)), dtype='float32' )
 
-            if 0:
-                for j, subhaloInd in enumerate(sub_inds):
-                    # render
-                    grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+            for j, subhaloInd in enumerate(sub_inds):
+                # render
+                grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
 
-                    # stamp
-                    grid_global[:,:,j] = grid
-
-            if 0:
-                # TESTING ONLY - render multiple views of first subhalo
-                subhaloInd = sub_inds[0]
-                plotConfig.saveFilename = './%s-s%d-sh%d.pdf' % (sP.simName,sP.snap,subhaloInd)
-                panels = []
-
-                for j, line in enumerate(lines[:6]):
-                    field = 'sb_' + line + '_ergs'
-                    panels.append({'partField':field, #'contour':['gas',field], 
-                                   'labelHalo':(j==0), 'labelSim':(j==2), 'labelZ':(j==2)})
-                renderSingleHalo(panels, plotConfig, locals())
-                return
+                # stamp
+                grid_global[:,:,j] = grid
 
             # save cache
             with h5py.File(cacheFile,'w') as f:
@@ -153,6 +156,9 @@ def magicCGMEmissionMaps():
         #panels[0]['grid'] = grid_stacked # override
         #panels[0]['subhaloInd'] = sub_inds[int(len(sub_inds)/2)] # dummy
         #renderSingleHalo(panels, plotConfig, locals())
+
+    if single:
+        return
 
     # make final plot
     labelScale = 'physical'
@@ -184,10 +190,8 @@ def magicCGMEmissionTrends():
 
     sim = simParams(run='tng50-1',redshift=0.3)
 
-    lines = ['H--1-1215.67A','H--1-1025.72A','C--4-1550.78A','C--4-1548.19A','O--6-1037.62A','O--6-1031.91A',
-             'S--4-1404.81A','S--4-1423.84A','S--4-1398.04A'] # (not NV, SiIV, SiIII, HeII)
-
-    fields = ['lum_civ1551_outercgm','lum_civ1551_innercgm']
+    #fields = ['lum_civ1551_outercgm','lum_civ1551_innercgm']
+    fields = ['lum_heii1640_outercgm','lum_heii1640_innercgm']
 
     # plot config
     xQuant = 'mstar_30pkpc'

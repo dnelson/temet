@@ -36,7 +36,7 @@ def hubbleMCT_gibleVis(conf=1):
     vmm = [-22.0, -18.0] # log sb
 
     # pretend snapshot is at this redshift (note: manual hacks also needed in vis.common for fluxes)
-    mock_redshift = 0.36 
+    #mock_redshift = 0.36 
 
     class plotConfig:
         plotStyle = 'open'
@@ -81,6 +81,10 @@ def hubbleMCT_gibleVis(conf=1):
         panels[0]['valMinMax'] = [-1.0, 1.0]
         panels[0]['colorbarlabel'] = '(CIII/OVI) Surface Brightness Ratio [log]'
         panels[0]['ctName'] = 'curl'
+
+    if conf == 4:
+        # He II test 
+        panels = [{'partType':'gas', 'partField':'sb_He-2-1640.43A_ergs', 'valMinMax':vmm}]
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
