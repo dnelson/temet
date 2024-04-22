@@ -26,16 +26,24 @@ def _get_existing_sims(variants, res, hInds, redshift):
 
     return sims
 
-def _add_legends(ax, hInds, res, variants, colors):
+def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
     """ Plot helper to add two legends: one showing hInds (color), one showing res/variants (symbols and markersizes). """
     # legend one
     handles, labels = ax.get_legend_handles_labels()
 
-    for hInd in hInds:
-        # color by hInd
-        c = colors[hInds.index(hInd)]
-        handles.append(plt.Line2D( (0,1), (0,0), color=c, lw=lw))
-        labels.append('h%d' % hInd)
+    if len(hInds) == 1 and lineplot:
+        # if we have only one halo and resolution, vary the linestyle by variant (for e.g. quant lines vs redshift)
+        for i, variant in enumerate(variants):
+            ls = linestyles[i]
+            handles.append(plt.Line2D( (0,1), (0,0), color=colors[0], ls=ls, lw=lw))
+            labels.append('h%d_%s' % (hInds[0],variant))
+    else:
+        for hInd in hInds:
+            # color by hInd
+            c = colors[hInds.index(hInd)]
+
+            handles.append(plt.Line2D( (0,1), (0,0), color=c, ls='-', lw=lw))
+            labels.append('h%d' % hInd)
 
     legend = ax.legend(handles, labels, loc='upper left', ncols=1)
     ax.add_artist(legend)
@@ -48,7 +56,7 @@ def _add_legends(ax, hInds, res, variants, colors):
         for r in res:
             # marker set by variant
             marker = markers[variants.index(variant)]
-            ms = (r - 10) * 2 + 6
+            ms = (r - 10) * 2.5 + 4
 
             handles.append(plt.Line2D((0,1), (0,0), color='black', lw=0, marker=marker, ms=ms))
             labels.append('L%d_%s' % (r,variant))
@@ -157,6 +165,15 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Tru
 
         if xLog: xval = logZeroNaN(xval)
         if yLog: yval = logZeroNaN(yval)
+
+        if np.isnan(xval) or np.isnan(yval):
+            print(f'NaN in {sim.simName} {xQuant}={xval} {yQuant}={yval}')
+        if xval < xMinMax[0] or xval > xMinMax[1] or yval < yMinMax[0] or yval > yMinMax[1]:
+            print(f'Out of bounds in {sim.simName} {xQuant}={xval} {yQuant}={yval}')
+
+        if np.isnan(yval) or yval < yMinMax[0]:
+            yval = yMinMax[0] + (yMinMax[1]-yMinMax[0])/100
+            print(f' set {yQuant}={yval} for visibility.')
                                           
         # color set by hInd
         c = colors[hInds.index(sim.hInd)]
@@ -165,7 +182,7 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Tru
         marker = markers[variants.index(sim.variant)]
 
         # marker size set by resolution
-        ms_loc = (sim.res - 10) * 2 + 6
+        ms_loc = (sim.res - 10) * 2.5 + 4
         lw_loc = (sim.res - 10)
 
         l, = ax.plot(xval, yval, marker, color=c, markersize=ms_loc, label='') # sim.simName
@@ -214,7 +231,8 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None):
       xlim (list[float][2]): if not None, override default x-axis (redshift) limits.
       ylim (list[float][2]): if not None, override default y-axis limits.
     """
-    linestyle = '-'
+    # quantities based on stellar formation times of stars in the final snapshot, as opposed to tree MPBs
+    star_zform_quants = ['mstar2_log','mstar_log','mstar_tot_log','sfr','sfr2']
 
     # currently assume all sims have the same parent
     sim_parent = sims[0].sP_parent
@@ -228,13 +246,14 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None):
     variants = sorted(list(set([sim.variant for sim in sims])))
 
     # load helper (called both for individual zooms and parent box halos)
-    def _load_sfh(sim, quant, subhaloInd, maxpts=1000):
+    def _load_sfh(sim, quant, subhaloInd, maxpts=1000, nbins_sfh=50):
         """ Helper to load a SFH using stellar ages, for a single subhalo. """
-        # load all stellar masses and formation times to create a high time resolution SFH
+        # load all (initial) stellar masses and formation times to create a high time resolution SFH
+        # note: no aperture applied, so this does not reflect Mstar or SFR in any aperture smaller than the whole subhalo
         star_zform = sim.snapshotSubset('stars_real', 'z_form', subhaloID=subhaloInd)
-        star_mass = sim.snapshotSubset('stars_real', 'mass', subhaloID=subhaloInd)
+        star_mass = sim.snapshotSubset('stars_real', 'mass_ini', subhaloID=subhaloInd)
 
-        if 'mstar2' in quant:
+        if 0 and quant in ['mstar2','mstar2_log','sfr2']:
             # restrict to stars within twice the stellar half mass radius for consistency
             # TODO: this is not working, star_mass[w].sum() is larger than SubhaloMassInRadType[4]...
             star_rad = sim.snapshotSubset('stars_real', 'rad', subhaloID=subhaloInd)
@@ -247,12 +266,35 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None):
         # sort by formation time
         sort_inds = np.argsort(star_zform)[::-1]
         star_zform = star_zform[sort_inds]
-        star_mass = sim.units.codeMassToLogMsun(np.cumsum(star_mass[sort_inds]))
+        star_mass = star_mass[sort_inds]
+        
+        if 'sfr' in quant:
+            # sfh (sfr vs redshift)
+            star_mass = sim.units.codeMassToMsun(star_mass)
+            star_tform = sim.units.redshiftToAgeFlat(star_zform)
 
-        # coarsen to e.g. ~1000 max points to reduce size
-        stride = np.max([1,int(star_zform.size / maxpts)])
-        star_zform = star_zform[::stride]
-        star_mass = star_mass[::stride]
+            # bin and convert to rate
+            tbins = np.linspace(0.0, sim.units.redshiftToAgeFlat(sim.redshift), nbins_sfh)
+            tbins_cen = 0.5 * (tbins[1:] + tbins[:-1])
+            zbins_cen = sim.units.ageFlatToRedshift(tbins_cen)
+
+            sfr_zbin = np.zeros_like(tbins)
+            mstar_check = 0.0
+            for i in range(1,tbins.size):
+                w = np.where( (star_tform >= tbins[i-1]) & (star_tform < tbins[i]) )
+                dt = (tbins[i] - tbins[i-1]) * 1e9 # yr
+                sfr_zbin[i] = np.sum(star_mass[w]) / dt # Msun/yr
+                mstar_check += sfr_zbin[i] * dt # Msun
+
+            return zbins_cen, logZeroNaN(sfr_zbin) # log Msun/yr
+        else:
+            # cumulative stellar mass at each formation time
+            star_mass = sim.units.codeMassToLogMsun(np.cumsum(star_mass))
+
+            # coarsen to e.g. ~1000 max points to reduce size
+            stride = np.max([1,int(star_zform.size / maxpts)])
+            star_zform = star_zform[::stride]
+            star_mass = star_mass[::stride]
 
         return star_zform, star_mass
 
@@ -276,34 +318,37 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None):
 
     for i, sim in enumerate(sims):
         # load
-        vals, _, _, _ = sim.simSubhaloQuantity(quant, clean, tight=True)
+        vals, _, _, valLog = sim.simSubhaloQuantity(quant, clean, tight=True)
         val = vals[sim.zoomSubhaloID]
+        if valLog: val = logZeroNaN(val)
 
         # color set by hInd
         c = colors[hInds.index(sim.hInd)]
 
-        # marker set by variant
+        # marker and ls set by variant
         marker = markers[variants.index(sim.variant)]
+        linestyle = linestyles[variants.index(sim.variant)]
 
         # marker size set by resolution
-        ms_loc = (sim.res - 10) * 2 + 6
-        lw_loc = (sim.res - 10)
+        ms_loc = (sim.res - 10) * 2.5 + 4
+        lw_loc = (sim.res - 10) if len(res) > 1 else lw
+        alpha_loc = 0.6 if len(res) > 1 else 1.0
 
         # final redshift marker
         l, = ax.plot(sim.redshift, val, marker, color=c, markersize=ms_loc, label='')
 
         # time track
-        if quant in ['mstar2_log','mstar_log','mstar_tot_log']:
-            # special case: SFH
+        if quant in star_zform_quants:
+            # special case: stellar mass growth or SFH
             star_zform, star_mass = _load_sfh(sim, quant, sim.zoomSubhaloID)
 
             w = np.where(star_zform < ax.get_xlim()[0])
-            ax.plot(star_zform[w], star_mass[w], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=0.6)
+            ax.plot(star_zform[w], star_mass[w], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha_loc)
         else:
             # general case
             mpb = _load_mpb_quants(sim, sim.zoomSubhaloID, quants=[quant])
 
-            ax.plot(mpb['z'], mpb[quant], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=0.6)
+            ax.plot(mpb['z'], mpb[quant], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha_loc)
 
     # galaxies from parent box
     vals, _, _, _ = sim_parent.simSubhaloQuantity(quant, clean, tight=True)
@@ -319,21 +364,20 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None):
         l, = ax.plot(sim_parent.redshift, val, markers[3], color='#555', label=label)
 
         # time track
-        if quant in ['mstar2_log','mstar_log','mstar_tot_log']:
-            # special case: SFH
+        if quant in star_zform_quants:
+            # special case: stellar mass growth or SFH
             star_zform, star_mass = _load_sfh(sim_parent, quant, subhaloInd)
 
             w = np.where( (star_zform >= 0.0) & (star_zform < ax.get_xlim()[0]) )
-            ax.plot(star_zform[w], star_mass[w], '-', lw=1.5, color=l.get_color(), alpha=0.7)
-
+            ax.plot(star_zform[w], star_mass[w], '-', lw=lw, color=l.get_color(), alpha=1.0)
         else:
             # general case
             mpb = _load_mpb_quants(sim_parent, subhaloInd, quants=[quant])
 
-            ax.plot(mpb['z'], mpb[quant], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=0.6)
+            ax.plot(mpb['z'], mpb[quant], ls=linestyle, lw=lw, color=l.get_color(), alpha=1.0)
 
     # finish and save plot
-    _add_legends(ax, hInds, res, variants, colors)
+    _add_legends(ax, hInds, res, variants, colors, lineplot=True)
     fig.savefig(f'mcst_{quant}-vs-redshift_comp-{len(sims)}.pdf')
     plt.close(fig)
 
@@ -361,12 +405,11 @@ def smhm_relation(sims):
 
     twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False, f_pre=_draw_data)
     
-def sfr_vs_mstar(sims):
+def sfr_vs_mstar(sims, yQuant):
     """ Diagnostic plot of SFR vs Mstar including observational data. """
     from ..load.data import curti23, nakajima23
 
     xQuant = 'mstar2_log'
-    yQuant = 'sfr2_log' # 'sfr_10myr_log'
     ylim = [-3.5, 2.0] # log sfr
     xlim = [5.7, 10.2] # log mstar
 
@@ -475,13 +518,71 @@ def mbh_vs_mhalo(sims):
 
     twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False, f_pre=_draw_data)
 
+def sizes_vs_mstar(sims):
+    """ Diagnostic plot of galaxy stellar size (half mass radius for now) versus stellar mass. """
+
+    xQuant = 'mstar2_log'
+    yQuant = 'rhalf_stars'
+    ylim = [-1.7, 1.5] # log pkpc
+    xlim = [5.7, 10.2] # log mstar
+
+    def _draw_data(ax, sims):
+        # ELVES (z=0 local volume, not directly related)
+        label = 'Carlsten+21 ELVES (z=0)'
+        xx = np.log10([5e5, 5e8])
+        yy_mid = np.log10([2.26e-1, 1.73e0])
+        yy_low = np.log10([1.37e-1, 1.05e0])
+        yy_high = np.log10([3.72e-1, 2.84e0])
+
+        ax.plot(xx, yy_mid, '--', lw=lw, color='#999', alpha=0.8, label=label)
+        ax.fill_between(xx, yy_low, yy_high, color='#999', alpha=0.2)
+
+        # Mowla+2019 HST (extrapolation below M* = 9.5)
+        xx = np.array([5.5, 9.5, 11.5])
+        A = 10.0**0.51 # Table 2, z=2.75, star-forming
+        A_high = 10.0**(0.51+0.09)
+        A_low = 10.0**(0.51-0.09)
+        alpha = 0.14
+        reff = np.log10(A * (10.0**xx / 7e10)**alpha) # log pkpc
+
+        ax.plot(xx[1:], reff[1:], ':', lw=lw, color='#999', alpha=1.0, label='Mowla+19 HST (z=2.5-3)') # data constrained
+        ax.plot(xx[:-1], reff[:-1], ':', lw=lw-1, color='#999', alpha=0.7) # extrapolation
+
+        reff_low = np.log10(A_low * (10.0**xx / 7e10)**alpha) # log pkpc
+        reff_high = np.log10(A_high * (10.0**xx / 7e10)**alpha) # log pkpc
+
+        ax.fill_between(xx, reff_low, reff_high, color='#999', alpha=0.2)
+
+        # Ormerod+24 CEERS (only down to M* = 9.5)
+        o24_mstar = [9.61,9.64,9.71,9.76,9.66,9.71,9.61,9.57,9.61,9.59,9.64,9.65,9.69,9.65,9.62,9.61,9.59,9.58,
+                     9.58,9.57,9.59,9.59,9.61,9.63,9.66,9.64,9.65,9.67,9.65,9.70,9.61,9.62,9.61,9.59,9.63,9.66,
+                     9.67,9.63,9.64,9.58,9.60,9.59,9.62,9.64,9.57,9.56,9.57,9.60,9.62,9.61,9.70,9.73,9.75,9.71,
+                     9.74,9.70,9.71,9.71,9.73,9.73,9.77,9.76,9.68,9.71,9.76,9.74,9.79,9.80,9.83,9.88,9.86,9.82,
+                     9.81,9.79,9.85,9.84,9.83,9.84,9.85,9.87,9.90,9.86,9.86,9.84,9.81,9.87,9.98,9.91,9.96,9.99,
+                     9.98,9.89,9.86,9.88,9.91,9.91,9.93,9.94,9.96,9.98,9.99,9.93,9.95,9.95,10.05,10.03,10.04,
+                     9.99,10.02,10.05,10.08,10.14,10.12,10.06,10.13,10.20,10.23,10.15,10.13,10.18,10.25,10.28,
+                     10.37,10.37,10.44,10.49,10.52,10.50,10.49,10.38,10.39,10.49,10.44,10.58,10.60,10.47,10.40,
+                     10.53,10.65,10.29,10.28,9.90,10.77,10.97,10.85,10.91,11.05,11.14,11.29,11.18] # log msun
+        o24_Re = [4.06,4.34,4.17,4.2,3.32,3.24,2.76,2.46,2.17,1.96,2.04,2.13,2,1.79,1.8,1.73,1.71,1.64,1.45,1.36,
+                  1.34,1.27,1.31,1.35,1.36,1.31,1.47,1.51,1.65,1.43,1.24,1.2,1.13,1.09,1.11,1.1,1.04,0.993,0.929,
+                  0.967,0.917,0.863,0.887,0.846,0.751,0.635,0.602,0.571,0.602,0.684,0.545,0.635,0.618,0.786,0.781,
+                  0.887,0.935,0.993,0.863,0.917,0.869,0.993,1.3,1.29,1.74,1.65,2.15,2.4,2.3,2.21,1.9,1.67,1.54,1.54,
+                  1.26,1.12,0.899,0.98,1.01,1.01,1.06,0.83,0.781,0.746,0.721,0.657,0.781,1.22,1.22,1.23,1.31,1.41,
+                  1.54,1.54,1.52,1.65,1.6,1.74,1.84,1.78,1.51,2.02,2.79,3.41,3.46,2.93,2.85,2.67,2.55,2.35,2.04,
+                  2.23,2.55,1.6,1.6,1.45,1.72,1.26,1,4.37,3.37,2.7,3.03,2.29,4.06,2.83,2.4,2.17,1.6,1.64,1.41,1.17,
+                  1.03,0.899,0.741,0.675,0.639,0.506,0.527,0.893,7.31,6.02,1.67,2.08,0.781,0.808,0.786,0.666,1.84,1.34] # kpc
+        
+        ax.plot(o24_mstar, np.log10(o24_Re), 's', color='#777', alpha=0.6, label='Ormerod+24 CEERS (z=3-4)')
+
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False, f_pre=_draw_data)
+
 def paperPlots():
     """ Plots for MCST intro paper. """
 
     # list of sims to include
-    variants = ['TNG','ST5']
-    res = [11, 12, 13, 14] # 15
-    hInds = [1242, 4182, 10677, 12688, 31619] #1242 4182 10677 12688 31619
+    variants = ['ST5', 'ST5e', 'ST5f'] # TNG, ST5, ST5e1, ST5e2
+    res = [11, 12, 13] # [11, 12, 13, 14]
+    hInds = [10677, 12688, 31619] # [1242, 4182, 10677, 12688, 31619]
     redshift = 3.0
 
     sims = _get_existing_sims(variants, res, hInds, redshift)
@@ -498,13 +599,28 @@ def paperPlots():
 
         quantVsRedshift(sims, quant, xlim, ylim)
 
-    # figure 3 - str vs mstar relation
+    # figure 3 - sfr vs mstar relation
     if 0:
-        sfr_vs_mstar(sims)
+        #yQuant = 'sfr2_log'
+        yQuant = 'sfr_30pkpc_100myr'
+        #yQuant = 'sfr_30pkpc_instant'
+        sfr_vs_mstar(sims, yQuant=yQuant)
 
     # figure 4 - smbh vs mhalo relation
     if 0:
         mbh_vs_mhalo(sims)
+
+    # figure 5 - star formation history
+    if 0:
+        quant = 'sfr2'
+        xlim = [10.1, 2.9]
+        ylim = [-4.0, 1.0]
+
+        quantVsRedshift(sims, quant, xlim, ylim)
+
+    # figure 6 - stellar sizes
+    if 0:
+        sizes_vs_mstar(sims)
 
     # movies
     if 0:

@@ -429,7 +429,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         if '_instant' in quant:
             fieldName = 'Subhalo_GasSFR_%dpkpc' % aperture
-            timeStr = 'instantaneous'
+            timeStr = 'instant'
             
             vals = sP.auxCat(fieldName)[fieldName] # msun/yr
         else:
@@ -462,7 +462,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             minMax = [-7.0, -1.0]
             if tight: minMax = [-7.0, 0.0]
         else:
-            label = 'SFR [ log M$_{\\rm sun}$ yr$^{-1}$ ] (<%dpkpc, %s)' % (aperture,timeStr)
+            label = 'SFR$_{\\rm <%dpkpc, %s}$ [ log M$_{\\rm sun}$ yr$^{-1}$ ]' % (aperture,timeStr)
             minMax = [-2.0, 2.5]
             if tight: minMax = [-1.5, 2.0]
 
@@ -2064,6 +2064,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         vals = np.zeros(sP.numSubhalos, dtype='float32') + sP.redshift
         label = 'Redshift'
         log = False
+
+    # did we find the requested field?
+    assert label is not None, 'Error: Unrecognized subhalo quantity [%s].' % quant
 
     # take log?
     if '_log' in quant and log:
