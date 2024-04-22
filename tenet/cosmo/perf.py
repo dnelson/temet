@@ -215,7 +215,7 @@ def loadTimebinsTxt(basePath):
 
     cols = None
 
-    def _getTimsbinsLastTimestep():
+    def _getTimebinsLastTimestep():
         if not isfile(filePath):
             return 0.0, 0.0, 0.0, 0.0 # no recalculate
 
@@ -242,7 +242,7 @@ def loadTimebinsTxt(basePath):
             maxTimeSaved = f['time'][()].max()
             maxStepSaved = f['step'][()].max()
 
-            maxStepAvail, maxTimeAvail, _, _ = _getTimsbinsLastTimestep()
+            maxStepAvail, maxTimeAvail, _, _ = _getTimebinsLastTimestep()
 
             if maxTimeAvail > maxTimeSaved*1.001:
                 # recalc for new data
@@ -255,7 +255,7 @@ def loadTimebinsTxt(basePath):
                 r[key] = f[key][()]
     else:
         # determine number of timesteps in file, ~maximum number of bins, and allocate
-        maxSize, lastTime, nBins, binMin = _getTimsbinsLastTimestep()
+        maxSize, lastTime, nBins, binMin = _getTimebinsLastTimestep()
 
         print('[%s] maxSize: %d lastTime: %.2f (nBins=%d), loading...' % (basePath, maxSize, lastTime, nBins))
 
@@ -361,6 +361,38 @@ def loadTimebinsTxt(basePath):
                 f[key] = r[key]
 
     return r
+
+def loadMemoryTxt(basePath):
+    """ Parse the memory.txt file for a run (prelimiany). """
+    largest_alloc = 0.0
+    largest_alloc_wo_generic = 0.0
+
+    filePath = basePath + 'output/memory.txt'
+
+    if not isfile(filePath):
+        filePath = basePath + 'output/txt-files/memory.txt'
+
+    if not isfile(filePath):
+        return largest_alloc, largest_alloc_wo_generic # no recalculate
+
+    # load entire file
+    with open(filePath, 'r') as f:
+        lines = f.readlines()
+
+    # find maximum values across all timesteps
+    for line in lines:
+        if 'MEMORY:' not in line:
+            continue
+
+        alloc1 = float(line.split(" ")[5]) # MB
+        alloc2 = float(line.split(" ")[-2]) # MB
+
+        if alloc1 > largest_alloc:
+            largest_alloc = alloc1
+        if alloc2 > largest_alloc_wo_generic:
+            largest_alloc_wo_generic = alloc2
+
+    return largest_alloc, largest_alloc_wo_generic
 
 def _cpuEstimateFromOtherRunProfile(sP, cur_a, cur_cpu_mh):
     """ Helper function, use the profile of CPU_hours(a) from another run to extrapolation a 

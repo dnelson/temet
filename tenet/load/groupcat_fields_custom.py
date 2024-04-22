@@ -671,7 +671,7 @@ def size_stars(sim, partType, field, args):
 
     return rad
 
-size_stars.label = r'r$_{\\rm 1/2,\star}$'
+size_stars.label = r'r$_{\rm 1/2,\star}$'
 size_stars.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
 size_stars.limits = lambda sim,pt,f: [0.0, 1.8] if sim.redshift < 1 else [-0.4, 1.4]
 size_stars.log = True

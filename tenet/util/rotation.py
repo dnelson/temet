@@ -87,6 +87,10 @@ def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subh
         if len(wGas) >= 50:
             useStars = False
 
+    if not stars['count']:
+        assert not onlyStars, 'No stars, but onlyStars=True.'
+        useStars = False
+
     if useStars:
         # restrict to real stars
         wValid = np.where( stars['GFM_StellarFormationTime'] > 0.0 )

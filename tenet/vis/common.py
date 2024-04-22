@@ -563,16 +563,9 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         mass = sP.snapshotSubsetP(partType, weightField, indRange=indRange).astype('float32')
         massTot = mass.sum() # for checks
 
-    # neutral hydrogen mass model (do column densities)
+    # neutral hydrogen (do column densities, ignore atomic vs molecular complication)
     if partField in ['HI','HI_segmented']:
         nh0_frac = sP.snapshotSubsetP(partType, 'NeutralHydrogenAbundance', indRange=indRange)
-
-        # calculate atomic hydrogen mass (HI) or total neutral hydrogen mass (HI+H2) [10^10 Msun/h]
-        #mHI = hydrogen.hydrogenMass(gas, sP, atomic=(species=='HI' or species=='HI2'), totalNeutral=(species=='HI_noH2'))
-        # simplified models (difference is quite small in CDDF)
-        ##mHI = gas['Masses'] * gas['GFM_Metals'] * gas['NeutralHydrogenAbundance']
-        ##mHI = gas['Masses'] * sP.units.hydrogen_massfrac * gas['NeutralHydrogenAbundance']
-
         mass *= sP.units.hydrogen_massfrac * nh0_frac
 
     # molecular hydrogen (Popping pre-computed files, here with abbreviated names)

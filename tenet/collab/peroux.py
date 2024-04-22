@@ -281,3 +281,44 @@ def numdensHIVsColumn():
         out += '%7.3f %7.3f %7.3f\n' % (nh2_percs[1,i], nh2_percs[0,i], nh2_percs[2,i])
     with open(filename, 'w') as f:
         f.write(out)
+
+def galaxyRotationAngles():
+    """ For Daniela filaments project. """
+    from ..util.rotation import momentOfInertiaTensor, rotationMatricesFromInertiaTensor
+
+    sim = simParams('tng50-1', redshift=2.0)
+    mstar = sim.subhalos('mstar_30kpc_log')
+
+    subhaloIDs = np.where((mstar > 7.0))[0]
+
+    # allocate and load
+    N = subhaloIDs.size
+    angles = np.zeros((N,3), dtype='float32')
+    angles.fill(np.nan)
+
+    SubhaloLenType = sim.subhalos('SubhaloLenType')
+
+    # loop over all subhalos
+    for i, subhaloID in enumerate(subhaloIDs):
+        if i % 100 == 0:
+            print(i, N, flush=True)
+
+        if SubhaloLenType[subhaloID,sim.ptNum('gas')] == 0 and SubhaloLenType[subhaloID,sim.ptNum('stars')] == 0:
+            continue
+
+        # calculate rotation matrix
+        I = momentOfInertiaTensor(sim, subhaloID=subhaloID)
+        rots = rotationMatricesFromInertiaTensor(I)
+        R = rots['face-on']
+
+        # calculate angle
+        angles[i,0] = R[1,2] - R[2,1]
+        angles[i,1] = R[2,0] - R[0,2]
+        angles[i,2] = R[0,1] - R[1,0]
+
+    # save
+    with h5py.File('angles_%s_%d.hdf5' % (sim.simName,sim.snap),'w') as f:
+        f['angles'] = angles
+        f['subhaloIDs'] = subhaloIDs
+
+    print('Saved [angles_%s_%d.hdf5].' % (sim.simName,sim.snap))

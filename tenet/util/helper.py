@@ -1164,7 +1164,7 @@ def validColorTableNames():
     names1 = colormaps() # matplotlib
     names1 = [n.replace('cmo.','') for n in names1] # cmocean
     names2 = ['dmdens','dmdens_tng','HI_segmented','H2_segmented','perula','magma_gray',
-              'bluered_black0','blgrrd_black0','BdRd_r_black',
+              'magma_gray_r','bluered_black0','blgrrd_black0','BdRd_r_black',
               'tarn0','diff0','curl0','delta0','topo0','balance0'] # custom
 
     return names1 + names2
@@ -1340,7 +1340,7 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
     if ctName == 'magma_gray':
         # discontinuous colormap: magma on the upper half, grayscale on the lower half, split at 1e-16 (e.g. surface brightness)
         assert valMinMax is not None # need for placing discontinuities at correct physical locations
-        valCut = -18.0 # 13.0 #-15.0 #np.log10(1e14) #-17.0
+        valCut = 0.5 #-18.0 # 13.0 #-15.0 #np.log10(1e14) #-17.0
 
         fCut = (valCut-valMinMax[0]) / (valMinMax[1]-valMinMax[0])
         if fCut <= 0 or fCut >= 1:
@@ -1356,6 +1356,28 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
         # combine them and construct a new colormap
         colors = np.vstack((colors2, colors1))
         cmap = LinearSegmentedColormap.from_list('magma_gray', colors)
+
+        return cmap
+
+    if ctName == 'magma_gray_r':
+        # discontinuous colormap: magma_r on the upper half, grayscale_r on the lower half, split at valCut
+        assert valMinMax is not None # need for placing discontinuities at correct physical locations
+        valCut = 0.0 # can be changed/generalized
+
+        fCut = (valCut-valMinMax[0]) / (valMinMax[1]-valMinMax[0])
+        if fCut <= 0 or fCut >= 1:
+            print('Warning: strange fCut, fix!')
+            fCut = 0.5
+
+        # sample from both colormaps
+        x1 = np.linspace(0.0, 0.9, int(512*(1-fCut))) # avoid darkest (black) region of magma
+        x2 = np.linspace(0.2, 1.0, int(512*fCut)) # avoid brightness whites
+        colors1 = plt.cm.magma_r(x1)
+        colors2 = plt.cm.gray_r(x2)
+
+        # combine them and construct a new colormap
+        colors = np.vstack((colors2, colors1))
+        cmap = LinearSegmentedColormap.from_list('magma_gray_r', colors)
 
         return cmap
 
