@@ -155,9 +155,16 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
     if fieldsSubhalos is not None:
         fieldsSubhalos = list(iterable(fieldsSubhalos))
 
-        # special behaviors
-        if 'SubhaloGrNr' in fieldsSubhalos and not sP.groupCatHasField('Subhalo','SubhaloGrNr'):
-            fieldsSubhalos[fieldsSubhalos.index('SubhaloGrNr')] = 'SubhaloGroupNr'
+        # special behaviors (AREPO -> AREPO-2 conventions)
+        field_renames = {'SubhaloGrNr':'SubhaloGroupNr',
+                         'SubhaloSFRinRad':'SubhaloSfrInRad',
+                         'SubhaloSFRinHalfRad':'SubhaloSfrInHalfRad',
+                         'SubhaloSFRinMaxRad':'SubhaloSfrInMaxRad',
+                         'SubhaloGasMetallicitySfrWeighted':'SubhaloGasMetallicityWeighted'}
+        
+        for field_old, field_new in field_renames.items():
+            if field_old in fieldsSubhalos and not sP.groupCatHasField('Subhalo',field_old):
+                fieldsSubhalos[fieldsSubhalos.index(field_old)] = field_new
 
         for i, field in enumerate(fieldsSubhalos):
             quant = field.lower()
@@ -260,8 +267,15 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                     r['subhalos'][field] = il.groupcat.loadSubhalos(sP.simPath, sP.snap, fields=field)
             il.groupcat.gcPath = gcPath # restore
 
-        for field in r['subhalos']: # cache
+        # cache
+        for field in r['subhalos']:
             sP.data['gc_sub_%s' % field] = r['subhalos'][field]
+
+        # reverse AREPO -> AREPO-2 conventions
+        for field_old, field_new in field_renames.items():
+            if field_new in r['subhalos']:
+                r['subhalos'][field_old] = r['subhalos'][field_new]
+                r['subhalos'].pop(field_new)
 
         key0 = list(r['subhalos'].keys())[0]
         if len(r['subhalos'].keys()) == 1 and key0 != 'count': # keep old behavior of il.groupcat.loadSubhalos()
@@ -352,6 +366,9 @@ def groupCatSingle(sP, haloID=None, subhaloID=None):
     with h5py.File(gcPath(sP.simPath,sP.snap,fileNum),'r') as f:
         for haloProp in f[gcName].keys():
             r[haloProp] = f[gcName][haloProp][groupOffset]
+
+    if 'SubhaloGroupNr' in r:
+        r['SubhaloGrNr'] = r['SubhaloGroupNr'] # AREPO-2 -> AREPO convention
             
     return r
 
@@ -373,6 +390,12 @@ def groupCatHeader(sP, fileName=None):
 
     with h5py.File(fileName,'r') as f:
         header = dict( f['Header'].attrs.items() )
+
+     # AREPO-2 -> AREPO convention
+    if 'Nsubhalos_Total' in header:
+        # AREPO-2 also has uint64, but this causes np.arange() to return float, messing up many indexing opreations
+        header['Nsubgroups_Total'] = np.int64(header['Nsubhalos_Total'])
+        header['Nsubgroups_ThisFile'] = np.int64(header['Nsubhalos_ThisFile']) 
 
     return header
 

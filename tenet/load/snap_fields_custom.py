@@ -1365,7 +1365,7 @@ def _cloudy_load(sim, partType, field, args):
 
                 # indRange is inclusive for snapshotSubset(), so skip saving the very last 
                 # element, which is included in the next return of pSplitRange()
-                indRangeLocal[1] -= 1
+                indRangeLocal[1] = int(indRangeLocal[1] - 1)
 
                 if indRangeLocal[0] == indRangeLocal[1]:
                     continue # we are done

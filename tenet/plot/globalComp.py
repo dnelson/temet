@@ -586,8 +586,6 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
     # config
     mts = ['SubhaloMassInRadType','SubhaloMassInHalfRadType','SubhaloMassType']
 
-    cutClumps = False
-
     # plot setup
     if fig_subplot[0] is None:
         fig = plt.figure(figsize=figsize)
@@ -697,43 +695,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
                 wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0))
                 w = gc['halos']['GroupFirstSub'][wHalo]
             else:
-                w = np.arange(gc['subhalos']['count'])
-
-                if cutClumps:
-                    extraFieldsHalo = ['GroupPos','Group_R_Crit200']
-                    extraFields = ['SubhaloMass', 'SubhaloPos', 'SubhaloGrNr', 'SubhaloLenType']
-                    gc2 = sP.groupCat(fieldsHalos=extraFieldsHalo, fieldsSubhalos=extraFields)
-
-                    massFracStars = gc['subhalos']['SubhaloMassType'][:,sP.ptNum('stars')] / \
-                                    gc2['subhalos']['SubhaloMass']
-
-                    numDM = gc2['subhalos']['SubhaloLenType'][:,sP.ptNum('dm')]
-
-                    isPrimary = np.zeros( gc['subhalos']['count'], dtype='int32' )
-                    ww = np.where( gc['halos']['GroupFirstSub'] >= 0 )
-                    isPrimary[ gc['halos']['GroupFirstSub'][ww] ] = 1
-
-                    parentPos = np.zeros( (gc['subhalos']['count'],3), dtype='float32' )
-                    for i in range(3):
-                        parentPos[:,i] = gc2['halos']['GroupPos'][ gc2['subhalos']['SubhaloGrNr'],i ]
-                    parentR200 = gc2['halos']['Group_R_Crit200'][ gc2['subhalos']['SubhaloGrNr'] ]
-
-                    ww = np.where(parentR200 == 0.0)
-                    parentR200[ww] = 1e-10 # make finite and small s.t. normalized dist is outside cut
-
-                    radialDist = sP.periodicDists( gc2['subhalos']['SubhaloPos'], parentPos)
-                    radialDistNormedByParentR200 = radialDist / parentR200
-
-                    wExclude = np.where( (numDM < 10) & \
-                                         (massFracStars > 1 - 1e-3) & \
-                                         (isPrimary == 0) & \
-                                         (radialDistNormedByParentR200 < 0.2) )
-
-                    print(' cut clumps (exclude %d of %d)' % (wExclude[0].size, len(w)))
-
-                    mask = np.zeros( gc['subhalos']['count'], dtype='int32' )
-                    mask[wExclude] = 1
-                    w = np.where(mask == 0)
+                w = np.arange(gc['subhalos']['count'], dtype='int32')
 
             # for each of the three stellar mass definitions, calculate SMF and plot
             count = 0
@@ -782,9 +744,9 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
                     l.set_label('%s [cen+sat]' % sP.simName)
                     # add centrals only
                     wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0))
-                    w = gc['halos']['GroupFirstSub'][wHalo]
+                    w_cen = gc['halos']['GroupFirstSub'][wHalo]
 
-                    xm, ym = running_histogram(xx[w], binSize=binSize, normFac=normFac, skipZeros=True)
+                    xm, ym = running_histogram(xx[w_cen], binSize=binSize, normFac=normFac, skipZeros=True)
                     ym = savgol_filter(ym,sKn,sKo)
                     l, = ax.plot(xm[3:], ym[3:], linestyles[count], lw=lw, label='%s [cen]' % sP.simName)
 
@@ -1538,7 +1500,7 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
             fieldsSubhalos=['SubhaloMassInRadType']+metalFields)
 
         # include: centrals + satellites (no noticeable difference vs. centrals only)
-        w = np.arange(gc['subhalos']['count'])
+        w = np.arange(gc['subhalos']['count'], dtype='int32')
         #w = np.where(gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')] > 0.0)[0]
 
         # stellar mass definition

@@ -2949,7 +2949,7 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSF
     for i in np.arange(nChunks):
         # calculate load indices (snapshotSubset is inclusive on last index) (make sure we get to the end)
         indRange = [i*chunkSize, (i+1)*chunkSize-1]
-        if i == nChunks-1: indRange[1] = h['NumPart'][sP.ptNum('gas')]-1
+        if i == nChunks-1: indRange[1] = int(h['NumPart'][sP.ptNum('gas')]-1)
         print('  [%2d] %9d - %d' % (i,indRange[0],indRange[1]), reportMemory())
 
         # load
