@@ -780,16 +780,6 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad='sdss_fiber',weighting='bandLum-sdss_r'),
    'Subhalo_StellarAge_SDSSFiber4pkpc_rBandLumWt'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad='sdss_fiber_4pkpc',weighting='bandLum-sdss_r'),
-   'Subhalo_StellarZ_4pkpc_rBandLumWt'    : \
-     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad=4.0,weighting='bandLum-sdss_r'),
-   'Subhalo_StellarZ_SDSSFiber_rBandLumWt'    : \
-     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='sdss_fiber',weighting='bandLum-sdss_r'),
-   'Subhalo_StellarZ_SDSSFiber4pkpc_rBandLumWt'    : \
-     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='sdss_fiber_4pkpc',weighting='bandLum-sdss_r'),
-   'Subhalo_StellarZ_2rhalf_rBandLumWt': \
-     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='2rhalfstars',weighting='bandLum-sdss_r'),
-   'Subhalo_StellarZ_30pkpc_rBandLumWt': \
-     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad=30.0,weighting='bandLum-sdss_r'),
 
    'Subhalo_StellarAge_2rhalf_rBandLumWt'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad='2rhalfstars',weighting='bandLum-sdss_r'),
@@ -804,6 +794,19 @@ fieldComputeFunctionMapping = \
    'Subhalo_StellarAge_NoRadCut_MassWt'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=None,weighting='mass'),
 
+   'Subhalo_StellarZ_NoRadCut_MassWt': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad=None,weighting='mass'),
+   'Subhalo_StellarZ_4pkpc_rBandLumWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad=4.0,weighting='bandLum-sdss_r'),
+   'Subhalo_StellarZ_SDSSFiber_rBandLumWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='sdss_fiber',weighting='bandLum-sdss_r'),
+   'Subhalo_StellarZ_SDSSFiber4pkpc_rBandLumWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='sdss_fiber_4pkpc',weighting='bandLum-sdss_r'),
+   'Subhalo_StellarZ_2rhalf_rBandLumWt': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='2rhalfstars',weighting='bandLum-sdss_r'),
+   'Subhalo_StellarZ_30pkpc_rBandLumWt': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad=30.0,weighting='bandLum-sdss_r'),
+
    'Subhalo_StellarZform_VIMOS_Slit'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='z_form',op='mean',rad='legac_slit',weighting='mass'),
    'Subhalo_StellarMeanVel' : \
@@ -811,6 +814,8 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_GasZ_30pkpc_SfrWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='metal',op='mean',rad=30.0,weighting='sfr'),
+   'Subhalo_GasZ_NoRadCut_SfrWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metal',op='mean',rad=None,weighting='sfr'),
 
    # magnetic fields
    'Subhalo_Bmag_SFingGas_massWt' : \

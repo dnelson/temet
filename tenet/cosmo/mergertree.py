@@ -17,22 +17,26 @@ def loadMPB(sP, id, fields=None, treeName=treeName_default, fieldNamesOnly=False
     assert sP.snap is not None, "sP.snap required"
 
     if treeName in ['SubLink','SubLink_gal']:
-        return il.sublink.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMPB=True, treeName=treeName)
+        tree = il.sublink.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMPB=True, treeName=treeName)
     if treeName in ['LHaloTree']:
-        return il.lhalotree.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMPB=True)
+        tree = il.lhalotree.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMPB=True)
 
-    raise Exception('Unrecognized treeName.')
+    tree['Redshift'] = sP.snapNumToRedshift(tree['SnapNum'])
+
+    return tree
 
 def loadMDB(sP, id, fields=None, treeName=treeName_default, fieldNamesOnly=False):
     """ Load fields of main-descendant-branch (MDB) of subhalo id from the given tree. """
     assert sP.snap is not None, "sP.snap required"
 
     if treeName in ['SubLink','SubLink_gal']:
-        return il.sublink.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMDB=True, treeName=treeName)
+        tree = il.sublink.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMDB=True, treeName=treeName)
     if treeName in ['LHaloTree']:
-        return il.lhalotree.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMDB=True)
+        tree = il.lhalotree.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMDB=True)
+    
+    tree['Redshift'] = sP.snapNumToRedshift(tree['SnapNum'])
 
-    raise Exception('Unrecognized treeName.')
+    return tree
 
 def loadMPBs(sP, ids, fields=None, treeName=treeName_default):
     """ Load multiple MPBs at once (e.g. all of them), optimized for speed, with a full tree load (high mem).

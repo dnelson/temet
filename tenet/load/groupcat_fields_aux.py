@@ -444,6 +444,34 @@ lum_heii1640_innercgm.units = r'$\rm{erg/s}$'
 lum_heii1640_innercgm.limits = [36.0, 45.0]
 lum_heii1640_innercgm.log = True
 
+# ---------------------------- auxcat: metallicity ---------------------------------------------------
+
+@catalog_field
+def z_stars_masswt(sim, partType, field, args):
+    """ Stellar metallicity (no radial restriction), mass weighted. """
+    acField = 'Subhalo_StellarZ_NoRadCut_MassWt'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+
+    return sim.units.metallicityInSolar(ac[acField])
+
+z_stars_masswt.label = r'$\rm{Z_{\star,masswt}}$'
+z_stars_masswt.units = r'$\rm{Z_{\odot}}$'
+z_stars_masswt.limits = [-3.0, 0.5]
+z_stars_masswt.log = True
+
+@catalog_field
+def z_gas_sfrwt(sim, partType, field, args):
+    """ Gas-phase metallicity (no radial restriction), mass weighted. """
+    acField = 'Subhalo_GasZ_NoRadCut_SfrWt'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+
+    return sim.units.metallicityInSolar(ac[acField])
+
+z_gas_sfrwt.label = r'$\rm{Z_{gas,sfrwt}}$'
+z_gas_sfrwt.units = r'$\rm{Z_{\odot}}$'
+z_gas_sfrwt.limits = [-3.0, 0.5]
+z_gas_sfrwt.log = True
+
 # ---------------------------- auxcat: stellar kinematics --------------------------------------------
 
 @catalog_field
