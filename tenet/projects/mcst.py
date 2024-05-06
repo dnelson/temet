@@ -517,7 +517,8 @@ def mbh_vs_mhalo(sims):
     from ..load.data import zhang21
 
     xQuant = 'mhalo_200_log'
-    yQuant = 'BH_mass'
+    yQuant = 'mass_smbh' # largest BH_Mass in each subhalo
+    # yQuant = 'BH_mass' # sum of all BH_Mass in each subhalo
     xlim = [9.25, 11.25] # mhalo
     ylim = [2.8, 7.0] # msmbh, MCST seeds at 1e3, TNG seeds at ~1e6
 
@@ -715,9 +716,9 @@ def paperPlots():
     """ Plots for MCST intro paper. """
 
     # list of sims to include
-    variants = ['TNG','ST6'] # TNG, ST5*, ST6, ST6b
+    variants = ['TNG','ST5'] # TNG, ST5*, ST6, ST6b
     res = [11, 12, 13] # [11, 12, 13, 14]
-    hInds = [10677, 12688, 31619] # [1242, 4182, 10677, 12688, 31619]
+    hInds = [1242, 4182, 10677, 12688, 31619] # [1242, 4182, 10677, 12688, 31619]
     redshift = 3.0
 
     sims = _get_existing_sims(variants, res, hInds, redshift)
@@ -740,7 +741,7 @@ def paperPlots():
             sfr_vs_mstar(sims, yQuant=yQuant)
 
     # figure 4 - smbh vs mhalo relation
-    if 0:
+    if 1:
         mbh_vs_mhalo(sims)
 
     # figure 5 - star formation history (one plot per halo)

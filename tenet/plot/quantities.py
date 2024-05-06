@@ -1480,8 +1480,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         label = 'M$_{\\rm BH}$ [ log M$_{\\rm sun}$ ]'
         if not clean:
-            if quant == 'B_MH': label += ' w/ reservoir'
-            if quant == 'BH_mass': label += ' w/o reservoir'
+            if quant == 'B_MH': label += ' w/ reservoir' # dynamical, i.e. starting at the particle mass resolution
+            if quant == 'BH_mass': label += ' w/o reservoir' # true i.e. physical, i.e. starting at the seed mass
         minMax = [6.0,9.0]
         if tight:
             minMax = [6.0,10.0] #[7.5,8.5]

@@ -1041,7 +1041,14 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     assert np.count_nonzero(np.isnan(radSqMax[subhaloIDsTodo])) == 0, 'Radial selection requires centrals only?'
 
     if ptType not in indRange:
-        return np.nan, {} # e.g. snapshots so early there are no stars
+        # e.g. snapshots so early there are no stars, or no SMBHs
+        attrs = {'Description' : desc.encode('ascii'),
+                 'Selection'   : "NOTE: No particles of requested type at this snapshot!".encode('ascii'),
+                 'subhaloIDs'  : subhaloIDsTodo}
+        r = np.zeros(nSubsDo, dtype='float32')
+        r.fill(np.nan)
+
+        return r, attrs
 
     indRange = indRange[ptType] # choose index range for the requested particle type
 
