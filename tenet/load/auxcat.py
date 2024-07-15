@@ -1378,6 +1378,10 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='entropy',op='mean',weighting='mass',radMin=-2.0, radMax=0.3, radNumBins=50, radBinsLog=True, radRvirUnits=True, scope='global_tngcluster'),
     'Subhalo_RadProfile3D_Global_Gas_ne' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='ne',op='mean',weighting='mass',radMin=-2.0, radMax=0.3, radNumBins=50, radBinsLog=True, radRvirUnits=True, scope='global_tngcluster'),
+    'Subhalo_RadProfile3D_Global_Gas_Bmag' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='bmag',op='mean',weighting='mass',radMin=-2.0, radMax=0.3, radNumBins=50, radBinsLog=True, radRvirUnits=True, scope='global_tngcluster'),
+    'Subhalo_RadProfile3D_Global_Gas_Bmag_VolWt' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='bmag',op='mean',weighting='volume',radMin=-2.0, radMax=0.3, radNumBins=50, radBinsLog=True, radRvirUnits=True, scope='global_tngcluster'),
 
     'Subhalo_RadProfile3D_Global_HighResDM_Count' : \
      partial(subhaloRadialProfile,ptType='dm',ptProperty='mass',op='count',radMin=0.0, radMax=10.0, radNumBins=50, radBinsLog=False, radRvirUnits=True, scope='global_tngcluster'),

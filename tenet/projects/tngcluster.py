@@ -1672,11 +1672,13 @@ def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
     ylims = {'Metallicity' : [0.04, 1.12],
              'Temp'        : [7.1, 8.2],
              'ne'          : [-3.6, -0.5],
-             'Entropy'     : [8.1, 11.0]}
+             'Entropy'     : [8.1, 11.0],
+             'Bmag'       : [-6.8, -4.5]}
     ylog = {'Metallicity' : False,
             'Temp'        : True,
             'ne'          : True,
-            'Entropy'     : True}
+            'Entropy'     : True,
+            'Bmag'        : True}
 
     cmap = loadColorTable(ctName) #, fracSubset=[0.2,0.9])
     cmap = plt.cm.ScalarMappable(norm=Normalize(vmin=color_minmax[0], vmax=color_minmax[1]), cmap=cmap)
@@ -2051,7 +2053,7 @@ def paperPlots():
         #vis_fullbox_virtual(TNG_C, conf=5)
 
     # figure 3 - samples
-    if 1:
+    if 0:
         sample_halomasses_vs_redshift(sPs)
 
     # figure 4 - simulation meta-comparison
@@ -2100,6 +2102,7 @@ def paperPlots():
         cluster_radial_profiles(TNG_C, quant='Metallicity', weight='_XrayWt_2D')
         cluster_radial_profiles(TNG_C, quant='Entropy')
         ##cluster_radial_profiles(TNG_C, quant='ne')
+        ##cluster_radial_profiles(TNG_C, quant='Bmag', weight='_VolWt')
 
     # figure 13 - black hole mass scaling relation
     if 0:
