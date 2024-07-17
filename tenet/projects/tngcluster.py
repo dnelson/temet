@@ -1977,9 +1977,9 @@ def galaxy_number_profile(sim, criterion='Mr_lt205_2D'):
     fig.savefig('rad_profiles_%s_%s_%d.pdf' % (sim.name, criterion, sim.snap))
     plt.close(fig)
 
-def halo_properties_table(sim):
-    """ Write out a latex table of primary target halo properties. """
-    filename = 'table.tex'
+def halo_properties_table(sim, fmt='tex'):
+    """ Write out a latex or CSV table of primary target halo properties. """
+    filename = f'table.{fmt}'
     cc_str = {0 : 'CC', 1 : 'WCC', 2 : 'NCC'}
 
     # TNG-Cluster: all primary zoom targets
@@ -2004,6 +2004,14 @@ def halo_properties_table(sim):
         w = np.where(sub_haloIDs == haloID)[0]
         halos['richness'][haloID] = np.sum(mstar_mask[w])
 
+    # auxcats
+    acs = ['Subhalo_Bmag_uG_10kpc_hot_massWt','Subhalo_ne_10kpc_hot_massWt']
+
+    for ac in acs:
+        data = sim.auxCat(ac)
+        #assert np.array_equal(data['subhaloIDs'],subhaloIDs) # else take subset
+        subhalos[ac] = data[ac]
+
     # take subset
     for key in subhalos:
         subhalos[key] = subhalos[key][subhaloIDs]
@@ -2012,21 +2020,54 @@ def halo_properties_table(sim):
 
     # write
     with open(filename,'w') as f:
-        for i in range(len(haloIDs)):
-            line = '    %4d & %8d & ' % (halos['origID'][i], haloIDs[i])
-            line += '%5.2f & %5.2f & %5.3f & %5.3f & %5.2f & %5.2f & ' % \
-                (subhalos['mhalo_200_log'][i],subhalos['mhalo_500_log'][i],subhalos['r200'][i]/1000, \
-                 subhalos['r500'][i]/1000,subhalos['mstar_30kpc_log'][i],subhalos['mhi_halo_log'][i])
-            line += '%5.3f & %5.2f & %5.2f & ' % \
-                (subhalos['fgas_r500'][i],subhalos['sfr_30pkpc_log'][i],subhalos['mass_smbh_log'][i])
-            line += '%5.2f & %5.2f & %4.2f & %3d & %3s' % \
-                (subhalos['xray_0.5-2.0kev_r500_halo_log'][i],subhalos['szy_r500c_3d_log'][i],
-                 subhalos['zform'][i],halos['richness'][i],cc_str[int(subhalos['coolcore_flag'][i])])
-            line += ' \\\\\n'
+        # data (text file export)
+        if fmt == 'txt':
+            f.write('# TNG-Cluster Catalog (see: https://www.tng-project.org/cluster/ and http://arxiv.org/abs/2311.06338)\n')
+            f.write('# Note: this table is dynamic, and new columns are frequently added. Requests for additions are welcome.\n')
+            f.write(f'# [{len(haloIDs)}] halos, all properties at [z=0] unless specified otherwise.\n')
+            f.write('#\n')
+            f.write('# columns: \n')
+            f.write('# [1] origID: Original Parent Halo ID (for reference only)\n')
+            f.write('# [2] haloID: TNG-Cluster Halo ID (in the group catalog)\n')
+            f.write('# [3] mhalo_200: M$_{\\rm 200c}$ [log M$_\odot$)\n')
+            f.write('# [4] mhalo_500: M$_{\\rm 500c}$ [log M$_\odot$)\n')
+            f.write('# [5] r200: R$_{\\rm 200c}$ [Mpc]\n')
+            f.write('# [6] r500: R$_{\\rm 500c}$ [Mpc]\n')
+            f.write('# [7] mstar_30kpc: stellar mass within 30 kpc [log(M$_\star$ / M$_\odot$]\n')
+            f.write('# [8] Bmag_uG_10kpc: magnitude field magnitude within 10 kpc, mass-weighted mean of log(T)>5.5 gas [micro Gauss]\n')
+            f.write('# [9] ne_10kpc: electron density within 10 kpc, mass-weighted mean of log(T)>5.5 gas [log cm$^{-3}$]\n')
+            f.write('#\n')
 
-            line = line.replace(' nan ','  -- ') # zero SFRs
+            for i in range(len(haloIDs)):
+                line =  '%4d '   % halos['origID'][i]
+                line += '%8d '   % haloIDs[i]
+                line += '%5.2f ' % subhalos['mhalo_200_log'][i]
+                line += '%5.2f ' % subhalos['mhalo_500_log'][i]
+                line += '%5.3f ' % (subhalos['r200'][i]/1000)
+                line += '%5.3f ' % (subhalos['r500'][i]/1000)
+                line += '%5.2f ' % subhalos['mstar_30kpc_log'][i]
+                line += '%6.2f ' % subhalos['Subhalo_Bmag_uG_10kpc_hot_massWt'][i]
+                line += '%5.2f'  % np.log10(subhalos['Subhalo_ne_10kpc_hot_massWt'][i])
 
-            f.write(line)
+                f.write(line + '\n')
+
+        # data (original latex table for intro paper)
+        if fmt == 'tex':
+            for i in range(len(haloIDs)):
+                line = '    %4d & %8d & ' % (halos['origID'][i], haloIDs[i])
+                line += '%5.2f & %5.2f & %5.3f & %5.3f & %5.2f & %5.2f & ' % \
+                    (subhalos['mhalo_200_log'][i],subhalos['mhalo_500_log'][i],subhalos['r200'][i]/1000, \
+                    subhalos['r500'][i]/1000,subhalos['mstar_30kpc_log'][i],subhalos['mhi_halo_log'][i])
+                line += '%5.3f & %5.2f & %5.2f & ' % \
+                    (subhalos['fgas_r500'][i],subhalos['sfr_30pkpc_log'][i],subhalos['mass_smbh_log'][i])
+                line += '%5.2f & %5.2f & %4.2f & %3d & %3s' % \
+                    (subhalos['xray_0.5-2.0kev_r500_halo_log'][i],subhalos['szy_r500c_3d_log'][i],
+                    subhalos['zform'][i],halos['richness'][i],cc_str[int(subhalos['coolcore_flag'][i])])
+                line += ' \\\\\n'
+
+                line = line.replace(' nan ','  -- ') # zero SFRs
+
+                f.write(line)
 
     print('Wrote [%s]' % filename)
 

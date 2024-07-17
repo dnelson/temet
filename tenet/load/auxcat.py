@@ -846,6 +846,12 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='b2',op='mean',rad=None,weighting='volume'),
    'Subhalo_B2_2rhalfstars_volWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='b2',op='mean',rad='2rhalfstars',weighting='volume'),
+   'Subhalo_B2_2rhalfstars_volWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='b2',op='mean',rad='2rhalfstars',weighting='volume'),
+   'Subhalo_Bmag_uG_10kpc_hot_massWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag_ug',op='mean',rad=10.0,weighting='mass',cenSatSelect='cen',ptRestrictions={'temp_sfcold_log':['gt',5.5]}),
+   'Subhalo_ne_10kpc_hot_massWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='ne',op='mean',rad=10.0,weighting='mass',cenSatSelect='cen',ptRestrictions={'temp_sfcold_log':['gt',5.5]}),
 
    # CGM gas properties
    'Subhalo_Temp_halo_massWt' : \
