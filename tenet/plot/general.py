@@ -581,6 +581,8 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         for rFieldName, rFieldMin, rFieldMax in qRestrictions:
             #rLabel, _, _ = simParticleQuantity(sP, partType, rFieldName)
             qLabels.append('%g < %s < %g' % (rFieldMin,rFieldName,rFieldMax))
+        
+        if sP.run in ['structures']: qLabels.append('z = %.1f' % sP.redshift)
 
         handles = [plt.Line2D( (0,1), (0,0), lw=0) for i in range(len(qLabels)) ]
         legend = ax.legend(handles, qLabels, borderpad=0.4, loc='upper right')
@@ -1365,7 +1367,7 @@ def compareRuns_PhaseDiagram():
 
     pdf.close()
 
-def oneRun_PhaseDiagram(redshift=None, snaps=None, hInd=10677, res=11, variant='SN'):
+def oneRun_PhaseDiagram(redshift=None, snaps=None, hInd=10677, res=13, variant='ST7'):
     """ Driver. """
     from matplotlib.backends.backend_pdf import PdfPages
 
@@ -1392,7 +1394,7 @@ def oneRun_PhaseDiagram(redshift=None, snaps=None, hInd=10677, res=11, variant='
         snaps = sim.validSnapList()[::10] # [99]
     if redshift is not None:
         snaps = [sim.snap]
-
+    
     # start PDF, add one page per snapshot
     for snap in snaps:
         sim.setSnap(snap)

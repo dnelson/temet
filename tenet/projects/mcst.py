@@ -9,6 +9,7 @@ from scipy.signal import savgol_filter
 from ..util.simParams import simParams
 from ..plot.config import *
 from ..util.helper import running_median, logZeroNaN, closest
+from ..plot.general import plotPhaseSpace2D
 
 def _get_existing_sims(variants, res, hInds, redshift):
     """ Return a list of simulation objects, only for those runs which exist (and have reached redshift). """
@@ -61,7 +62,7 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
             handles.append(plt.Line2D((0,1), (0,0), color='black', lw=0, marker=marker, ms=ms))
             labels.append('L%d_%s' % (r,variant))
 
-    legend2 = ax.legend(handles, labels, loc='lower right', ncols=2)
+    legend2 = ax.legend(handles, labels, loc='lower right', ncols=len(variants))
     ax.add_artist(legend2)
 
 def _load_mpb_quants(sim, subhaloInd, quants, smooth=False):
@@ -427,6 +428,9 @@ def smhm_relation(sims):
     if sims[0].redshift > 5.0:
         xlim = [8.5, 10.5]
         ylim = [4.9, 9.5]
+    if sims[0].redshift > 8.0:
+        xlim = [8.0, 10.0]
+        ylim = [3.9, 8.5]
 
     def _draw_data(ax, sims):
         xlim = ax.get_xlim()
@@ -712,12 +716,46 @@ def stellar_mzr(sims):
 
     twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False, f_pre=_draw_data)
 
+def phase_diagram(sim):
+    """ Driver. """
+    # config
+    yQuant = 'temp'
+    xQuant = 'nh'
+
+    xlim = [-7.0, 6.0]
+    ylim = [1.0, 7.0]
+    haloIDs = None #[0]
+    qRestrictions = [['rad_rvir',0.0,5.0]] # None # 
+    clim = [-4.0, -0.2]
+    
+    # MCS model: star formation threshold
+    def _f_post(ax):
+        from ..util.units import units
+        xx = ax.get_xlim()
+        dens = 10.0**np.array(xx) # 1/cm^3
+        dens *= sim.units.mass_proton # g/cm^3
+
+        # NOTE: 8.0 is a model parameter!
+        for i, M_J in enumerate([1.0,8.0]):
+            M_jeans = M_J * sim.units.codeMassToMsun(sim.targetGasMass)[0] # Msun
+            M_jeans *= sim.units.Msun_in_g # g
+
+            # [g * (cm**3/g/s**2)**(3/2) * cm**(-3/2) g**1/2] = [cm^(9/2) * cm^(-3/2) / s^3] = [cm/s]^3
+            csnd = (M_jeans * 6 * units.Gravity**(3/2) * dens**(1/2) / np.pi**(5/2))**(1/3) # Smith+ Eqn. 1 [cm/s]
+            # [cm^2/s^2 g / erg * K] = [cm^2/s^2 g s^2/cm^2/g * K] = [K]
+            temp = csnd**2 * units.mass_proton / units.gamma / units.boltzmann
+
+            ax.plot(xx, np.log10(temp), ls=[':','--'][i], color='black', lw=lw, alpha=0.7)
+
+    plotPhaseSpace2D(sim, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs, qRestrictions=qRestrictions,
+        xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, f_post=_f_post)
+
 def paperPlots():
     """ Plots for MCST intro paper. """
 
     # list of sims to include
-    variants = ['TNG','ST5'] # TNG, ST5*, ST6, ST6b
-    res = [11, 12, 13] # [11, 12, 13, 14]
+    variants = ['TNG','ST8'] # TNG, ST5*, ST6, ST6b
+    res = [11, 12, 13, 14, 15] # [11, 12, 13, 14]
     hInds = [1242, 4182, 10677, 12688, 31619] # [1242, 4182, 10677, 12688, 31619]
     redshift = 3.0
 
@@ -741,7 +779,7 @@ def paperPlots():
             sfr_vs_mstar(sims, yQuant=yQuant)
 
     # figure 4 - smbh vs mhalo relation
-    if 1:
+    if 0:
         mbh_vs_mhalo(sims)
 
     # figure 5 - star formation history (one plot per halo)
@@ -765,6 +803,11 @@ def paperPlots():
     # figure 8 - stellar metallicity
     if 0:
         stellar_mzr(sims)
+
+    # figure 9 - phase space diagrams (one per run)
+    if 0:
+        for sim in sims:
+            phase_diagram(sim)
 
     # movies
     if 0:

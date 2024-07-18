@@ -749,7 +749,7 @@ class simParams:
 
             self.gravSoft = 0.390 / (res-10)
             if self.variant != 'DM':
-                self.targetGasMas = 5.73879e-6 / (res-10)**3
+                self.targetGasMass = 5.73879e-6 / (res-10)**3
             self.boxSize = 35000.0 # ckpc/h
 
             # common: Planck2015 TNG cosmology
