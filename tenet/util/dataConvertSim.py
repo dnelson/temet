@@ -1483,6 +1483,10 @@ def convertEagleSnapshot(snap=20):
                 mags_1msun = map_coordinates( gfm_photo['Magnitude_%s' % band], iND, order=1, mode='nearest')
                 data['PartType4']['GFM_StellarPhotometrics'][:,i] = mags_1msun - 2.5 * stars_masslogmsun
         
+        # BHs: accretion rates (1e3 from Mpc in UnitTime)
+        if 'PartType5' in data:
+            data['PartType5']['BH_Mdot'] /= 1e3
+
         # BHs: bondi and eddington mdot (should be checked more carefully)
         if 'PartType5' in data and 'BH_SurroundingGasVel' in data['PartType5']:
             UnitMass_over_UnitTime = 10.22
