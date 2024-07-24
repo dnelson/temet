@@ -9,7 +9,6 @@ from ..cosmo.spectrum import create_spectra_from_traced_rays, create_wavelength_
 from ..util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
                               trace_ray_through_voronoi_mesh_with_connectivity, rayTrace
 from ..util.sphMap import sphGridWholeBox, sphMap
-from ..plot.spectrum import _spectrum_debug_plot
 from ..util.voronoi import loadSingleHaloVPPP, loadGlobalVPPP
 from ..util.treeSearch import buildFullTree
 
@@ -341,8 +340,6 @@ def generate_spectrum_uniform_grid():
     # plot
     plotName = f"spectrum_box_{sP.simName}_{line}_{nCells}_h{haloID}_{posInds[0]}-{posInds[1]}_z{sP.redshift:.0f}.pdf"
 
-    _spectrum_debug_plot(line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos)
-
 def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1, verify=True):
     """ Generate a single absorption spectrum by ray-tracing through the Voronoi mesh.
 
@@ -454,8 +451,6 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
     # plot
     meshStr = 'vppp' if use_precomputed_mesh else 'treebased'
     plotName = f"spectrum_voronoi_{sP.simName}_{line}_{meshStr}_h{haloID}_z{sP.redshift:.0f}.pdf"
-
-    _spectrum_debug_plot(line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos)
 
 def generate_spectra_voronoi_halo():
     """ Generate a large grid of (halocentric) absorption spectra by ray-tracing through the Voronoi mesh. """

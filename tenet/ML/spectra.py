@@ -361,8 +361,6 @@ def plot_true_vs_predicted_EW(model_type='cnn', hidden_size=8, kernel_size=3):
         for name, param in model.named_parameters():
             print(name, param.shape, param)
 
-        import pdb; pdb.set_trace()
-
     # model(X) evaluation where X.shape = [num_pts, num_fields_per_pt], i.e. forward pass
     with torch.no_grad():
         Y = data.target_invtransform(model(data.samples))

@@ -451,7 +451,7 @@ class units(object):
         return eta_w
 
     def densToSH03TwoPhase(self, dens_in, sfr):
-        """ Convert a gas cell density [code units] to values corresponding to the two-phase 
+        """ Convert a gas cell density to values corresponding to the two-phase 
         state of the sub-cell gas, according to the Springel & Hernquist (2003) sub-grid 
         ISM pressurization model. 
         
@@ -541,6 +541,14 @@ class units(object):
     def codeLengthToComovingMpc(self, x):
         """ Convert length/distance in code units to comoving Mpc. """
         return self.codeLengthToComovingKpc(x) / 1000.0
+
+    def codeLengthToCm(self, x):
+        """ Convert length/distance in code units to cgs (cm). """
+        x_phys_cgs = np.array(x, dtype='float32') / self._sP.HubbleParam # remove little h factor
+        x_phys_cgs *= self.UnitLength_in_cm # ckpc -> ccm
+        x_phys_cgs *= self.scalefac # comoving -> physical
+
+        return x_phys_cgs
 
     def codeAreaToKpc2(self, x):
         """ Convert an area [length^2] in code units to physical kpc^2. """

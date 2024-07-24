@@ -13,7 +13,7 @@ from os.path import isfile
 
 from tenet.cosmo.spectrum import _spectra_filepath, lines
 #from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
-from tenet.plot.spectrum import spectra_gallery_indiv, EW_distribution, dNdz_evolution, instrument_lsf
+from tenet.plot.spectrum import spectra_gallery_indiv, EW_distribution, dNdz_evolution, EW_vs_coldens, instrument_lsf
 from tenet.plot.config import *
 
 def metalAbundancesVsSolar(sim, ion='Mg II'):
@@ -337,6 +337,7 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None):
 
 def paperPlots():
     from ..util.simParams import simParams
+    # https://arxiv.org/abs/2404.00193
 
     # pre-computed sightlines and spectra:
     redshifts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0]
@@ -345,7 +346,7 @@ def paperPlots():
 
     # {1M-uni} 4MOST-HRS    SDSS-BOSS    KECK-HIRES     UVES      COS          DESI          XSHOOTER (something NIR/high-z)
     #          ---------    ---------    ----------     ----      ---          ----          --------
-    # HI       [ ]          [.] 2-5      [X] 1.5-5      [ ]       [ ]          [ ]           [ ] 
+    # HI       [ ]          [X] 2-4      [X] 1.5-5      [ ]       [ ]          [ ]           [ ] 
     # MgII     [ ]          [X] 0.3-2    [X] 0.1-2      [ ]       [ ]          [ ]           [ ] 
     # FeII     [ ]          [ ] 0.4-5    [ ]            [ ]       [ ]          [ ]           [ ] 
     # SiII     [ ]          [X] 1.5-5    [X] 1-5        [ ]       [ ]          [ ]           [ ] 
@@ -428,6 +429,11 @@ def paperPlots():
         solar = False
 
         dNdz_evolution(sim, redshifts=redshifts, line=line, instrument=inst, solar=solar)
+
+    # fig 5: EW vs coldens vs CoG
+    if 0:
+        sim = simParams('tng50-1', redshift=2.0)
+        EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS')
 
     # fig X: abundances vs solar i.e. for mini-snaps
     if 0:

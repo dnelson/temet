@@ -1352,7 +1352,8 @@ def _integrate_quantity_along_traced_rays(rays_off, rays_len, rays_cell_dl, rays
 
 def integrate_along_saved_rays(sP, field, pSplit=None):
     """ Integrate a physical (gas) property along the line of sight, based on already computed and saved rays.
-    The result has units of [pc] * [field] where [field] is the original units of the physical field as loaded.
+    The result has units of [pc] * [field] where [field] is the original units of the physical field as loaded, 
+    unless field is a number density, in which case the result (column density) is in [cm^-2].
     
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
@@ -1380,8 +1381,13 @@ def integrate_along_saved_rays(sP, field, pSplit=None):
 
     cell_values = sP.snapshotSubsetP('gas', field, inds=cell_inds) # units unchanged
 
-    # convert length units [parsecs]
-    rays_dl = sP.units.codeLengthToPc(rays_dl)
+    # convert length units
+    if 'numdens' in field:
+        # result units: [cm^-2]
+        rays_dl = sP.units.codeLengthToCm(rays_dl)
+    else:
+        # result units: [parsecs] * [field units]
+        rays_dl = sP.units.codeLengthToPc(rays_dl)
 
     # start output
     with h5py.File(saveFilename,'w') as f:

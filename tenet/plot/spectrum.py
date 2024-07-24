@@ -4,37 +4,55 @@ Diagnostic and production plots based on synthetic ray-traced absorption spectra
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+from scipy.signal import savgol_filter
 from os.path import isfile
 
 from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_filepath, \
-                             lsf_matrix, varconvolve, _resample_spectrum, load_spectra_subset
+                             lsf_matrix, varconvolve, _resample_spectrum, load_spectra_subset, \
+                             integrate_along_saved_rays
 from ..cosmo.spectrum import create_wavelength_grid, deposit_single_line, lines, instruments, absorber_catalog
 from ..util.helper import logZeroNaN, sampleColorTable
 from ..util import units
 from ..plot.config import *
 
-def curve_of_growth(line='MgII 2803'):
-    """ Plot relationship between EW and N for a given transition.
-
+def _cog(lines, N, b, nPts=401):
+    """ Compute a local absorption spectrum for one or more line(s) at a given column density and 
+    Doppler parameter, returning (relative) flux array and derived equivalent width. 
+    
     Args:
-      line (str): name of transition, e.g. 'MgII 2803' or 'LyA'.
+      lines (list[str]): names of transitions, e.g. ['LyA'], ['MgII 2803'] or ['CIV 1548','CIV 1550'].
+        If multiple lines are given, the COG includes both i.e. for a doublet.
+      N (float): log column density [cm^-2].
+      b (float): Doppler parameter [km/s].
+      nPts (int): number of points to sample the spectrum.
     """
-    f, gamma, wave0_ang, _, _ = _line_params(line)
+    f, gamma, wave0_ang, _, _ = _line_params(lines[0])
 
-    # run config
-    nPts = 201
-    wave_ang = np.linspace(wave0_ang-5, wave0_ang+5, nPts)
+    wave_ang = np.linspace(wave0_ang-10, wave0_ang+10, nPts) # 0.05 Ang spacing
     dvel = (wave_ang/wave0_ang - 1) * units.c_cgs / 1e5 # cm/s -> km/s
 
     #dwave_ang = wave_ang[1] - wave_ang[0]
     #wave_edges_ang = np.hstack(((wave_ang - dwave_ang/2),(wave_ang[-1] + dwave_ang/2)))
-    
-    # run test
-    #N = 21.0 # log 1/cm^2
-    #b = 30.0 # km/s
-    #tau = _voigt_tau(wave_ang/1e8, N, b, wave0_ang, f, gamma)
-    #flux = np.exp(-1*tau)
 
+    tau = np.zeros(wave_ang.shape, dtype='float64')
+
+    for line in lines:
+        f, gamma, wave0_ang, _, _ = _line_params(line)
+        tau += _voigt_tau(wave_ang, 10.0**N, b, wave0_ang, f, gamma)
+
+    flux = np.exp(-1*tau)
+    EW = _equiv_width(tau,wave_ang)
+
+    return flux, EW, dvel
+
+def curve_of_growth(lines=['MgII 2803'], bvals=[5,10,15]):
+    """ Plot relationship between EW and column density (N) for the given transition(s).
+
+    Args:
+      lines (list[str]): names of transitions, e.g. ['LyA'], ['MgII 2803'] or ['CIV 1548','CIV 1550'].
+        If multiple lines are given, the COG includes both i.e. for a doublet.
+      bvals (list[float]): list of Doppler parameters [km/s] to vary across for the COG.
+    """    
     # plot flux
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
@@ -42,51 +60,65 @@ def curve_of_growth(line='MgII 2803'):
     ax.set_xlabel('Velocity Offset [ km/s ]')
     ax.set_ylabel('Relative Flux')
 
-    for N in [12,13,14,15,18,19,20]:
-        for j, sigma in enumerate([30]):
-            b = sigma * np.sqrt(2)
-            tau = _voigt_tau(wave_ang, 10.0**N, b, wave0_ang, f, gamma)
-            flux = np.exp(-1*tau)
-            EW = _equiv_width(tau,wave_ang)
-            print(N,b,EW)
+    for i, N in enumerate([13,14,15,18,20]):
+        for j, b in enumerate(bvals):
+            flux, EW, dvel = _cog(lines, N=N, b=b)
+            print(f'{N = }, {b = }, {EW = :.3f}')
 
-            ax.plot(dvel, flux, lw=lw, linestyle=linestyles[j], label='N = %.1f b = %d' % (N,b))
+            label = f'{N = :.1f} cm$^{{-2}}$' if j == 0 else ''
+            c = l.get_color() if j > 0 else None
+            l, = ax.plot(dvel, flux, lw=lw, linestyle=linestyles[j], c=c, label=label)
 
-    ax.legend(loc='best')
-    fig.savefig('flux_%s.pdf' % line)
+    legend1 = ax.legend(loc='lower left')
+    ax.add_artist(legend1)
+
+    # legend two
+    handles = []
+    labels = []
+
+    for j, b in enumerate(bvals):
+        handles.append(plt.Line2D((0,1), (0,0), color='black', lw=lw, ls=linestyles[j]))
+        labels.append(f'{b = :d} km/s')
+
+    legend2 = ax.legend(handles, labels, loc='lower right')
+    ax.add_artist(legend2)
+
+    # finish plot
+    fig.savefig('flux_%s.pdf' % '-'.join([line for line in lines]))
     plt.close(fig)
 
     # plot cog
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
+    lineStr = '+'.join([line for line in lines])
     ax.set_xlabel('Column Density [ log cm$^{-2}$ ]')
-    ax.set_ylabel('Equivalent Width [ $\AA$ ]')
+    ax.set_ylabel(lineStr + ' Equivalent Width [ $\AA$ ]')
     ax.set_yscale('log')
-    #ax.set_ylim([0.01,10])
+    ax.set_ylim([0.01,10])
 
-    cols = np.linspace(12.0, 18.5, 100)
-    bvals = [3,5,10,15]
+    cols = np.linspace(13.0, 20.0, 100)
+
+    EW_cvals = [0.1, 0.5, 1.0, 3.0]
 
     for b in bvals: # doppler parameter, km/s
-        # draw EW targets
+        # draw some bands of constant EW
         xx = [cols.min(), cols.max()]
-        ax.plot(xx, [0.4,0.4], '-', color='#444444', alpha=0.4)
-        ax.plot(xx, [1.0,1.0], '-', color='#444444', alpha=0.4)
-
-        ax.fill_between(xx, [0.3,0.3], [0.5,0.5], color='#444444', alpha=0.05)
-        ax.fill_between(xx, [0.9,0.9], [1.1,1.1], color='#444444', alpha=0.05)
+        for EW_cval in EW_cvals:
+            ax.plot(xx, [EW_cval,EW_cval], '-', color='#444444', alpha=0.4)
+            ax.fill_between(xx, [EW_cval*0.9,EW_cval*0.9], [EW_cval*1.1,EW_cval*1.1], 
+                            color='#444444', alpha=0.05)
 
         # derive EWs as a function of column density
-        EW = np.zeros( cols.size, dtype='float32')
+        EWs = np.zeros(cols.size, dtype='float32')
         for i, col in enumerate(cols):
-            tau = _voigt_tau(wave_ang, 10.0**col, b, wave0_ang, f, gamma)
-            EW[i] = _equiv_width(tau,wave_ang)
+            _, EW, _ = _cog(lines, N=col, b=b)
+            EWs[i] = EW
 
-        ax.plot(cols, EW, lw=lw, label='b = %d km/s' % b)
+        ax.plot(cols, EWs, lw=lw, label='b = %d km/s' % b)
 
-    ax.legend(loc='best')
-    fig.savefig('cog_%s.pdf' % line)
+    ax.legend(loc='upper left')
+    fig.savefig('cog_%s.pdf' % '-'.join([line for line in lines]))
     plt.close(fig)
 
 def profile_single_line():
@@ -395,59 +427,6 @@ def instrument_lsf(instrument):
     fig.savefig('lsf_%s.pdf' % instrument)
     plt.close(fig)
 
-def _spectrum_debug_plot(line, plotName, master_mid, tau_master, master_dens, master_dx, master_temp, master_vellos):
-    """ Plot some quick diagnostic panels for spectra. """
-
-    # calculate derivative quantities
-    flux_master = np.exp(-1*tau_master)
-    master_dl = np.cumsum(master_dx)
-
-    # start
-    fig = plt.figure(figsize=(26,14))
-
-    ax = fig.add_subplot(321) # upper left
-    w = np.where(tau_master > 0)[0]
-    xminmax = master_mid[ [w[0]-5, w[-1]+5] ]
-    xcen = np.mean(xminmax)
-
-    ax.set_xlabel('Wavelength [ Ang ]')
-    ax.set_xlim([xminmax[0], xminmax[1]]) # [xcen-25,xcen+25]
-    ax.set_ylabel('Relative Flux')
-    ax.plot(master_mid, flux_master, '-', lw=lw, label=line)
-    ax.legend(loc='best')
-
-    ax = fig.add_subplot(322) # upper right
-    ax.set_xlabel('Distance Along Ray [ Mpc ]')
-    ax.set_ylabel('Density [log cm$^{-3}$]')
-    ax.plot(master_dl, logZeroNaN(master_dens), '-', lw=lw)
-
-    ax = fig.add_subplot(323) # center left
-    ax.set_xlabel('$\Delta$ v [ km/s ]')
-    ax.set_xlim([-300, 300])
-    ax.set_ylabel('Relative Flux')
-    dv = (master_mid-xcen)/xcen * units.c_km_s
-    ax.plot(dv, flux_master, '-', lw=lw, label=line)
-
-    ax = fig.add_subplot(324) # center right
-    ax.set_xlabel('Distance Along Ray [ Mpc ]')
-    ax.set_ylabel('Column Density [log cm$^{-2}$]')
-    ax.plot(master_dl, logZeroNaN(master_dens*master_dx*units.Mpc_in_cm), '-', lw=lw)
-
-    ax = fig.add_subplot(325) # lower left
-    ax.set_xlabel('Distance Along Ray [ Mpc ]')
-    ax.set_ylabel('Line-of-sight Velocity [ km/s ]')
-    ax.plot(master_dl, master_vellos, '-', lw=lw)
-    #ax.set_ylabel('Wavelength Deposited [ Ang ]')
-    #ax.plot(master_dl, master_towave, '-', lw=lw)
-
-    ax = fig.add_subplot(326) # lower right
-    ax.set_xlabel('Distance Along Ray [ Mpc ]')
-    ax.set_ylabel('Temperature [ log K ]')
-    ax.plot(master_dl, logZeroNaN(master_temp), '-', lw=lw)
-
-    fig.savefig(plotName)
-    plt.close(fig)
-
 def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0.1,1.0], 
                           num=10, mode='random', inds=None, solar=False, SNR=None, dv=False, xlim=None):
     """ Plot a gallery of individual absorption profiles within a given EW range.
@@ -696,11 +675,96 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
         opts = {'color':'#333333', 'ecolor':'#333333', 'alpha':0.9, 'capsize':0.0, 'fmt':'D'}
         ax.errorbar(m13_x, c16_y, yerr=c16_yerr, xerr=xerr, label=c16_label, **opts)
 
-    # check: https://iopscience.iop.org/article/10.3847/1538-4357/abbb34/pdf
+        # check: https://iopscience.iop.org/article/10.3847/1538-4357/abbb34/pdf
+
+    if line == 'CIV 1548':
+        # Finlator+
+        # Hasan, F.+ 2020
+        pass
 
     # finish plot
     ax.legend(loc='best')
     fig.savefig('EW_histogram_%s_%s%s_%s.pdf' % (sim.simName,line.replace(' ','-'),'_log' if log else '',instrument))
+    plt.close(fig)
+
+def EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS', 
+                    xlim=[12.5,16.0], ylim=[-1.7,0.5], solar=False, log=False):
+    """ Plot the relationship between EW and column density, and compare to the CoG.
+
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      line (str): string specifying the line transition.
+      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      xlim (list[float]): min and max column density [log 1/cm^2].
+      ylim (list[float]): min and max equivalent width [log Ang].
+      solar (bool): use the (constant) solar value instead of simulation-tracked metal abundances.
+      log (bool): plot log(EW) instead of linear EWs.
+    """
+    # plot config
+    EW_min = 1e-2 # rest-frame ang
+    coldens_min = 10.0 # log 1/cm^2
+
+    # load
+    ion = lines[line]['ion']
+    filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
+
+    with h5py.File(filepath,'r') as f:
+        EW = f['EW_%s' % line.replace(' ','_')][()]
+
+    coldens = integrate_along_saved_rays(sim, '%s numdens' % ion)
+
+    # convert to rest-frame
+    EW /= (1+sim.redshift)
+
+    # select and log
+    with np.errstate(divide='ignore'):
+        EW = np.log10(EW)
+        coldens = np.log10(coldens)
+
+        w = np.where( (EW>ylim[0]) & (EW<=ylim[1]) & (coldens>xlim[0]) & (coldens<=xlim[1]))
+
+    print('[%s] %d/%d sightlines selected.' % (sim.simName,len(w[0]),len(EW)))
+
+    EW = EW[w]
+    coldens = coldens[w]
+
+    # start plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.set_xlabel('Column Density [ log cm$^{-2}$ ]')
+    ax.set_ylabel(line + ' Equivalent Width [ log $\AA$ ]')
+
+    # simulation sightlines
+    min_contour = 0.1 # individual points shown outside this level
+    nBins2D = [80, 50]
+
+    ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
+
+    ax.scatter(coldens, EW, marker='.', color='#333', alpha=0.8, zorder=0)
+
+    zz, xc, yc = np.histogram2d(coldens, EW, bins=nBins2D, range=[xlim,ylim], density=True)
+    zz = savgol_filter(zz.T, sKn, sKo)
+    ax.contourf(xc[:-1], yc[:-1], zz, levels=[min_contour-0.02,100], extent=[xlim[0],xlim[1],ylim[0],ylim[1]], colors='#fff', zorder=1)
+    ax.contour(xc[:-1], yc[:-1], zz, linewidths=lw, levels=[min_contour,0.5,1,2,3], extent=[xlim[0],xlim[1],ylim[0],ylim[1]], colors='#333', zorder=2)
+
+    # overplot curve of growth
+    Nvals = np.linspace(xlim[0], xlim[1], 100)
+    bvals = [5, 10, 25, 50, 100, 150] # km/s
+
+    for b in bvals:
+        EWs = np.zeros(Nvals.size, dtype='float32')
+        for i, N in enumerate(Nvals):
+            _, EW, _ = _cog([line], N=N, b=b)
+            EWs[i] = EW
+        
+        ax.plot(Nvals, np.log10(EWs), lw=lw, label='b = %d km/s' % b)
+
+    # finish plot
+    ax.legend(loc='upper left')
+    fig.savefig('EW_vs_coldens_%s_%s%s_%s.pdf' % (sim.simName,line.replace(' ','-'),'_log' if log else '',instrument))
     plt.close(fig)
 
 def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', solar=False):
