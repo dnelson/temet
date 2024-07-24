@@ -754,7 +754,7 @@ def paperPlots():
     """ Plots for MCST intro paper. """
 
     # list of sims to include
-    variants = ['TNG','ST8'] # TNG, ST5*, ST6, ST6b
+    variants = ['TNG','ST8','ST8e'] # TNG, ST5*, ST6, ST6b
     res = [11, 12, 13, 14, 15] # [11, 12, 13, 14]
     hInds = [1242, 4182, 10677, 12688, 31619] # [1242, 4182, 10677, 12688, 31619]
     redshift = 3.0
@@ -807,6 +807,12 @@ def paperPlots():
     # figure 9 - phase space diagrams (one per run)
     if 0:
         for sim in sims:
+            phase_diagram(sim)
+
+    # figure 9b - phase space diagram movie
+    if 0:
+        for snap in range(175):
+            sim = simParams(run='structures', hInd=1242, res=13, variant='ST8', snap=snap)
             phase_diagram(sim)
 
     # movies

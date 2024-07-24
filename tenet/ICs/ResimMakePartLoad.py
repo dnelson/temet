@@ -528,6 +528,13 @@ def generate_set():
         sizeFac = 3.0 # fiducial choice, [2.0,3.0,4.0]
 
     if 0:
+        # TNG-Cluster: Wonki SIDM project
+        sP = simParams(res=2048,run='tng_dm',redshift=0.0)
+        zoomFac = 4 # zoomFac = 2 for L12 low-res
+        haloIDs = [6, 5122]
+        sizeFac = 3.0 # fiducial choice, [2.0,3.0,4.0]
+
+    if 0:
         # LRG-CGM paper: TNG50-1 no-MHD test (z=0.5)
         sP = simParams(run='tng50-1', redshift=0.5)
         zoomFac = 1
@@ -555,7 +562,7 @@ def generate_set():
         haloIDs = [21] #[11]
         sizeFac = 256.0
 
-    if 1:
+    if 0:
         # TNG50 dwarf zooms (MCST)
         sP = simParams(run='tng50-1', redshift=3.0)
         zoomFac = 16 # 1 (8e4 msun/TNG50-1 res), 2 (1e4 msun), 4 (1320 msun), 8 (160 msun), 16 (20 msun)

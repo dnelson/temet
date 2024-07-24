@@ -9,15 +9,21 @@ from ..util import simParams
 from ..plot.config import *
 from ..vis.halo import renderSingleHalo
 
-def magicCGMEmissionMaps(single=False):
-    """ Emission maps (single, or in stacked M* bins) for MAGIC-II proposal. """
+def magicCGMEmissionMaps(single=False, subhaloID=None):
+    """ Emission maps (single, or in stacked M* bins) for MAGIC-II proposal.
+    
+    Args:
+      single (bool): render a single subhalo per mass bin for visualization (no stacking).
+      subhaloID (int): if not None, just visualize this specific subhalo (single must be True).
+    """
     from os import path
     import hashlib
 
     sP = simParams(run='tng50-1',redshift=0.3)
 
-    lines = ['H--1-1215.67A','H--1-1025.72A','C--4-1550.78A','C--4-1548.19A','O--6-1037.62A','O--6-1031.91A',
-             'S--4-1404.81A','S--4-1423.84A','S--4-1398.04A','He-2-1640.43A'] # (to add: NV, SiIV, SiIII)
+    lines = ['H--1-1215.67A','H--1-1025.72A','C--4-1550.78A','C--4-1548.19A',
+             'O--6-1037.62A','O--6-1031.91A','C--3-977.020A','He-2-1640.43A']
+    #lines = ['Si-4-1393.75A','Si-4-1402.77A','Blnd-2798.00A']
 
     massBins = [ [8.48,8.52], [8.97,9.03], [9.45,9.55], [9.97, 10.03], [10.4,10.6], [10.8,11.2] ]
     distRvir = True
@@ -26,7 +32,7 @@ def magicCGMEmissionMaps(single=False):
     method    = 'sphMap' #'sphMap_global'
     nPixels   = [800,800]
     axes      = [0,1] # random rotation
-    size      = 1000.0
+    size      = 400.0 #1000.0
     sizeType  = 'kpc'
 
     if not single: # stack config
@@ -93,6 +99,11 @@ def magicCGMEmissionMaps(single=False):
             w = np.where( (gc['mstar_30pkpc_log']>massBin[0]) & (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )
         sub_inds = w[0]
 
+        if subhaloID is not None:
+            assert single
+            sub_inds = [subhaloID] # user specified override
+            if i > 0: continue # just use the first 'mass bin' to do the vis
+
         # plot config
         class plotConfig:
             plotStyle    = 'edged'
@@ -104,6 +115,7 @@ def magicCGMEmissionMaps(single=False):
         if single:
             # render multiple views of first subhalo in this mass bin
             subhaloInd = sub_inds[0]
+            print(subhaloInd,massBin)
             plotConfig.saveFilename = './%s-s%d-sh%d.pdf' % (sP.simName,sP.snap,subhaloInd)
             plotConfig.nRows = 2
             plotConfig.rasterPx *= 1.4

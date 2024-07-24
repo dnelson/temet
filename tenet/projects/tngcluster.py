@@ -2005,7 +2005,7 @@ def halo_properties_table(sim, fmt='tex'):
         halos['richness'][haloID] = np.sum(mstar_mask[w])
 
     # auxcats
-    acs = ['Subhalo_Bmag_uG_10kpc_hot_massWt','Subhalo_ne_10kpc_hot_massWt']
+    acs = ['Subhalo_Bmag_uG_10kpc_hot_massWt','Subhalo_ne_10kpc_hot_massWt','Subhalo_temp_10kpc_hot_massWt']
 
     for ac in acs:
         data = sim.auxCat(ac)
@@ -2036,6 +2036,7 @@ def halo_properties_table(sim, fmt='tex'):
             f.write('# [7] mstar_30kpc: stellar mass within 30 kpc [log(M$_\star$ / M$_\odot$]\n')
             f.write('# [8] Bmag_uG_10kpc: magnitude field magnitude within 10 kpc, mass-weighted mean of log(T)>5.5 gas [micro Gauss]\n')
             f.write('# [9] ne_10kpc: electron density within 10 kpc, mass-weighted mean of log(T)>5.5 gas [log cm$^{-3}$]\n')
+            f.write('# [10] temp_10kpc: temperature within 10 kpc, mass-weighted mean of log(T)>5.5 gas [log K]\n')
             f.write('#\n')
 
             for i in range(len(haloIDs)):
@@ -2048,6 +2049,7 @@ def halo_properties_table(sim, fmt='tex'):
                 line += '%5.2f ' % subhalos['mstar_30kpc_log'][i]
                 line += '%6.2f ' % subhalos['Subhalo_Bmag_uG_10kpc_hot_massWt'][i]
                 line += '%5.2f'  % np.log10(subhalos['Subhalo_ne_10kpc_hot_massWt'][i])
+                line += '%5.2f'  % np.log10(subhalos['Subhalo_temp_10kpc_hot_massWt'][i])
 
                 f.write(line + '\n')
 
