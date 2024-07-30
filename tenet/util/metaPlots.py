@@ -394,7 +394,7 @@ def periodic_slurm_status(machine='vera',nosave=False):
 
     # get data
     jobs  = pyslurm.job().get()
-    topo  = pyslurm.topology().get()
+    #topo  = pyslurm.topology().get()
     stats = pyslurm.statistics().get()
     nodes = pyslurm.node().get()
     parts = pyslurm.partition().get()
@@ -525,15 +525,19 @@ def periodic_slurm_status(machine='vera',nosave=False):
             f.attrs['count'] += 1
 
     # count nodes per rack
-    maxNodesPerRack = 0
-    for i, rackNum in enumerate(rackNumberList):
-        rack = topo[rackPrefix + '%d' % (rackNum+1)]
-        rackNodes = _expandNodeList(rack['nodes'])
-        if len(rackNodes) > maxNodesPerRack:
-            maxNodesPerRack = len(rackNodes)
+    if 0:
+        # topo plugin hardening issue with slurm 23.11.x
+        maxNodesPerRack = 0
+        for i, rackNum in enumerate(rackNumberList):
+            rack = topo[rackPrefix + '%d' % (rackNum+1)]
+            rackNodes = _expandNodeList(rack['nodes'])
+            if len(rackNodes) > maxNodesPerRack:
+                maxNodesPerRack = len(rackNodes)
 
-    if visRackMultFac > 1:
-        maxNodesPerRack = int(np.ceil(maxNodesPerRack / visRackMultFac))
+        if visRackMultFac > 1:
+            maxNodesPerRack = int(np.ceil(maxNodesPerRack / visRackMultFac))
+    else:
+        maxNodesPerRack = 36
 
     # start node figure
     fig = plt.figure(figsize=(18.9,9.2))
@@ -546,21 +550,34 @@ def periodic_slurm_status(machine='vera',nosave=False):
     #if machine == 'vera': rackVisBoxes = rackVisBoxes[:-1] # do not split second (small) rack
 
     for i, rackNum in enumerate(rackVisBoxes):
-        rack = topo[rackPrefix + '%d' % (rackNum+1)]
-        rackNodes = _expandNodeList(rack['nodes'])
-        #print(rack['name'], rack['level'], rack['nodes'], len(rackNodes))
+        if 0:
+            # topo plugin hardening issue with slurm 23.11.x
+            rack = topo[rackPrefix + '%d' % (rackNum+1)]
+            rackNodes = _expandNodeList(rack['nodes'])
 
-        if visRackMultFac > 1 and rackVisBoxes.count(rackNum) > 1:
-            # take subset of nodes in this actual rack, to display in this 'virtual rack' box
-            segment = i % visRackMultFac
-            nPerSeg = int(len(rackNodes) / visRackMultFac)
+            #print(rack['name'], rack['level'], rack['nodes'], len(rackNodes))
 
-            # make sure we don't skip any
-            if segment == visRackMultFac - 1 and nPerSeg * visRackMultFac != len(rackNodes):
-                rackNodes = rackNodes[nPerSeg*segment:]
-            else:
-                # normal case
-                rackNodes = rackNodes[nPerSeg*segment:nPerSeg*(segment+1)]
+            if visRackMultFac > 1 and rackVisBoxes.count(rackNum) > 1:
+                # take subset of nodes in this actual rack, to display in this 'virtual rack' box
+                segment = i % visRackMultFac
+                nPerSeg = int(len(rackNodes) / visRackMultFac)
+
+                # make sure we don't skip any
+                if segment == visRackMultFac - 1 and nPerSeg * visRackMultFac != len(rackNodes):
+                    rackNodes = rackNodes[nPerSeg*segment:]
+                else:
+                    # normal case
+                    rackNodes = rackNodes[nPerSeg*segment:nPerSeg*(segment+1)]
+        else:
+            # vera hard-coded hack
+            nodeNames = list(nodes.keys())
+            for nn in ['vera01','vera02']: # re-arrange to natural sort
+                nodeNames.remove(nn)
+                nodeNames.append(nn)
+            if i == 0: rackNodes = nodeNames[0:36]
+            if i == 1: rackNodes = nodeNames[36:72]
+            if i == 2: rackNodes = nodeNames[72:93]
+            if i == 3: rackNodes = nodeNames[93:]
 
         ax = fig.add_subplot(1,len(rackVisBoxes),i+1)
         ax.set_position([i*0.25+0.005,0.01,0.24,0.87]) # left,bottom,width,height
