@@ -4,7 +4,7 @@ General helper functions, small algorithms, basic I/O, etc.
 import copy
 import numpy as np
 import matplotlib.pyplot as plt
-import collections
+import collections.abc as collections
 from scipy.optimize import leastsq, least_squares, curve_fit
 from scipy.ndimage.filters import gaussian_filter
 from scipy.stats import binned_statistic
@@ -50,7 +50,7 @@ def contiguousIntSubsets(x):
     """ Return a list of index pairs corresponding to contiguous integer subsets of the input array. 
     Final index of each pair is exclusive as in numpy syntax, so to obtain all the 
     elements of a range from a numpy array, x[ranges[0][0]:ranges[0][1]]."""
-    assert x.dtype in ['int32','int64']
+    assert x.dtype in [np.int32,np.int64]
 
     ranges = []
     inRange = False

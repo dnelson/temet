@@ -5,7 +5,7 @@ import numpy as np
 import h5py
 import astropy.io.fits as pyfits
 from os.path import expanduser
-from scipy.integrate import cumtrapz
+from scipy.integrate import cumulative_trapezoid
 
 from ..util.helper import rootPath, closest
 
@@ -67,7 +67,7 @@ def integrate_to_common_grid(bins_in, cont_in, bins_out):
     mask = mask[sort_inds]
 
     # cumulative integrate: composite trap rule
-    cum_cont = cumtrapz(cont_all, bins_all, initial=0.0)
+    cum_cont = cumulative_trapezoid(cont_all, bins_all, initial=0.0)
 
     # select our output points
     cont_out = cum_cont[mask]

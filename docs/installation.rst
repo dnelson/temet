@@ -13,22 +13,22 @@ If you don't yet have a working python installation/environment, then e.g. on th
 
 .. code-block:: bash
 
-    module load anaconda/3/2021.11
+    module load anaconda/3/2023.03
     mkdir -p ~/.local/envs
-    conda create --prefix=~/.local/envs/myenv python=3.9
+    conda create --prefix=~/.local/envs/myenv python=3.12
     source activate ~/.local/envs/myenv
 
 2. Add the following lines to your ``~/.bashrc`` file for permanence
 
 .. code-block:: bash
 
-    module load intel/21.5.0
-    module load impi/2021.5
+    module load gcc/12
+    module load openmpi/4.1
     module load fftw-serial/3.3.10
-    module load hdf5-serial/1.12.1
+    module load hdf5-serial/1.12.2
     module load gsl/2.4
 
-    module load anaconda/3/2021.11
+    module load anaconda/3/2023.03
     source activate ~/.local/envs/myenv
 
 
