@@ -392,8 +392,13 @@ def paperPlots():
         spectra_gallery_indiv(sim, EW_minmax=[3.0, 6.0], mode='random', **opts)
 
     # fig 1b: (dense) spectra galleries
-    if 0:
-        pass
+    if 1:
+        # C IV
+        sim = simParams(run='tng50-1', redshift=2.0)
+        inst = 'SDSS-BOSS' #'KECK-HIRES-B14'
+        opts = {'ion':'C IV', 'instrument':inst, 'num':121, 'SNR':50, 'dv':True, 'xlim':[-900,900]}
+
+        spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='evenly', style='grid', **opts)
 
     # fig 2: 2d spectra visualization
     if 0:

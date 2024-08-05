@@ -9,9 +9,10 @@ from os.path import isfile
 
 from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_filepath, \
                              lsf_matrix, varconvolve, _resample_spectrum, load_spectra_subset, \
-                             integrate_along_saved_rays
-from ..cosmo.spectrum import create_wavelength_grid, deposit_single_line, lines, instruments, absorber_catalog
-from ..util.helper import logZeroNaN, sampleColorTable
+                             integrate_along_saved_rays, create_wavelength_grid, deposit_single_line, \
+                             lines, instruments
+from ..cosmo.spectrum_analysis import absorber_catalog
+from ..util.helper import sampleColorTable
 from ..util import units
 from ..plot.config import *
 
@@ -93,7 +94,7 @@ def curve_of_growth(lines=['MgII 2803'], bvals=[5,10,15]):
 
     lineStr = '+'.join([line for line in lines])
     ax.set_xlabel('Column Density [ log cm$^{-2}$ ]')
-    ax.set_ylabel(lineStr + ' Equivalent Width [ $\AA$ ]')
+    ax.set_ylabel(lineStr + r' Equivalent Width [ $\AA$ ]')
     ax.set_yscale('log')
     ax.set_ylim([0.01,10])
 
@@ -125,12 +126,12 @@ def profile_single_line():
     """ Voigt profile deposition of a single absorption line: create spectrum and plot. """
 
     # transition, instrument, and spectrum type
-    line = 'LyA'
+    line = 'CIV 1548'
     instrument = None
     
     # config for 'this cell'
     N = 15.0 # log 1/cm^2
-    b = 40.0 # km/s
+    b = 25.0 # km/s
 
     vel_los = 0.0 #1000.0 # km/s
     z_cosmo = 0.0
@@ -144,7 +145,7 @@ def profile_single_line():
     z_doppler = vel_los / units.c_km_s
     z_eff = (1+z_doppler)*(1+z_cosmo) - 1 # effective redshift
 
-    wave_local, tau_local, flux_local = deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff, debug=True)
+    deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff, debug=True)
 
     # compute flux
     flux_master = np.exp(-1*tau_master)
@@ -156,7 +157,7 @@ def profile_single_line():
     ax.set_xlabel('Wavelength [ Ang ]')
     ax.set_ylabel('Relative Flux')
     ax.plot(master_mid, flux_master, 'o-', lw=lw, label='method A')
-    ax.plot(wave_local, flux_local, '-', lw=lw, label='local')
+    #ax.plot(wave_local, flux_local, '-', lw=lw, label='local')
 
     ax.legend(loc='best')
     ax = fig.add_subplot(212)
@@ -164,7 +165,7 @@ def profile_single_line():
     ax.set_xlabel('Wavelength [ Ang ]')
     ax.set_ylabel('Optical Depth $\\tau$')
     ax.plot(master_mid, tau_master, 'o-', lw=lw, label='method A')
-    ax.plot(wave_local, tau_local, '-', lw=lw, label='local')
+    #ax.plot(wave_local, tau_local, '-', lw=lw, label='local')
 
     ax.legend(loc='best')
     fig.savefig('spectrum_single_%s.pdf' % line)
@@ -204,7 +205,7 @@ def profiles_multiple_lines(plotTau=True):
     for line in lineNames:
         f, gamma, wave0, _, _ = _line_params(line)
 
-        deposit_single_line(master_edges, master_mid, tau_master, f, gamma, wave0, 10.0**N, b, z_eff)
+        deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff)
 
     # compute flux
     flux_master = np.exp(-1*tau_master)
@@ -226,7 +227,7 @@ def profiles_multiple_lines(plotTau=True):
         if xlim is not None: ax.set_xlim(xlim)
 
         ax.set_xlabel('Wavelength [ Ang ]')
-        ax.set_ylabel('Optical Depth $\\tau$')
+        ax.set_ylabel(r'Optical Depth $\tau$')
         ax.plot(master_mid, tau_master, '-', lw=lw, label=label)
 
         ax.legend(loc='best')
@@ -264,9 +265,9 @@ def profiles_multiple_lines_coldens():
         if xlim is not None: ax.set_xlim(xlim)
         if ylim is not None: ax.set_ylim(ylim)
 
-        ax.set_xlabel('Wavelength [ $\mu$m ]')
+        ax.set_xlabel(r'Wavelength [ $\mu$m ]')
         ax.set_ylabel('Relative Flux')
-        ax.set_title('log N$_{\\rm NaI}$ = %.1f cm$^{{-2}}$' % N)
+        ax.set_title(r'log N$_{\rm NaI}$ = %.1f cm$^{{-2}}$' % N)
         ax.ticklabel_format(useOffset=False)
 
         # create master grid
@@ -279,7 +280,7 @@ def profiles_multiple_lines_coldens():
         for line in lineNames:
             f, gamma, wave0, _, _ = _line_params(line)
 
-            deposit_single_line(master_edges, master_mid, tau_master, f, gamma, wave0, 10.0**N, b, z_eff)
+            deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff)
 
         # convovle with LSF, then convert optical depth to relative flux
         tau_master = varconvolve(tau_master, lsf)
@@ -319,7 +320,7 @@ def LyA_profiles_vs_coldens():
     from matplotlib.colors import BoundaryNorm
     from ..util.helper import sampleColorTable, loadColorTable
 
-    line = 'LyA'
+    line = 'HI 1215'
     
     # config for 'this cell'
     N_vals = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20] # log 1/cm^2
@@ -348,7 +349,7 @@ def LyA_profiles_vs_coldens():
 
     # top x-axis (v/c = dwave/wave)
     ax2 = ax.twiny()
-    ax2.set_xlabel('$\Delta$v [ km/s ]')
+    ax2.set_xlabel(r'$\Delta$v [ km/s ]')
 
     dwave = np.array(ax.get_xlim()) - wave0 # ang
     dv = units.c_km_s * (dwave / wave0)
@@ -363,15 +364,16 @@ def LyA_profiles_vs_coldens():
 
     # loop over N values, compute a local spectrum for each and plot
     for i, N in enumerate(N_vals):
-        wave, tau, flux = deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff, debug=True)
+        deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff, debug=True)
 
         # plot
-        ax.plot(wave, flux, '-', lw=lw, color=sm.to_rgba(N))
+        flux = np.exp(-1*tau_master)
+        ax.plot(master_mid, flux, '-', lw=lw, color=sm.to_rgba(N))
 
     # finish plot
     cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.1)
     cb = plt.colorbar(sm, cax=cax, ticks=N_vals)
-    cb.ax.set_ylabel('log N$_{\\rm HI}$ [ cm$^{-2}$ ]')
+    cb.ax.set_ylabel(r'log N$_{\rm HI}$ [ cm$^{-2}$ ]')
 
     fig.savefig('LyA_absflux_vs_coldens.pdf')
     plt.close(fig)
@@ -417,8 +419,8 @@ def instrument_lsf(instrument):
         ax.plot([xx[cen_i],xx[cen_i]], [0, ax.get_ylim()[1]], '--', color='#ccc')
 
     # bottom panel: FWHM vs wave
-    axes[-1].set_xlabel('Wavelength [ $\\rm{\AA}$ ]')
-    axes[-1].set_ylabel('FWHM [ $\\rm{\AA}$ ]')
+    axes[-1].set_xlabel(r'Wavelength [ $\rm{\AA}$ ]')
+    axes[-1].set_ylabel(r'FWHM [ $\rm{\AA}$ ]')
         
     axes[-1].plot(wave_mid, lsf_fwhm)
 
@@ -428,7 +430,8 @@ def instrument_lsf(instrument):
     plt.close(fig)
 
 def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0.1,1.0], 
-                          num=10, mode='random', inds=None, solar=False, SNR=None, dv=False, xlim=None):
+                          num=10, mode='random', inds=None, style='offset', 
+                          solar=False, SNR=None, dv=False, xlim=None):
     """ Plot a gallery of individual absorption profiles within a given EW range.
 
     Args:
@@ -439,6 +442,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
       num (int): how many individual spectra to show.
       mode (str): either 'random', 'evenly', or 'inds'.
       inds (list[int]): if mode is 'inds', then the list of specific spectra indices to plot. num is ignored.
+      style (str): type of plot, 'stacked', 'grid', or '2d'.
       solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
         use the (constant) solar value.
       SNR (float): if not None, then add noise to achieve this signal to noise ratio.
@@ -470,6 +474,14 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         lines_wavemin = np.clip(lines_wavemin, lines[line]['wave0'], np.inf)
         lines_wavemax = np.clip(lines_wavemax, 0, lines[line]['wave0'])
 
+    # add noise? ("signal" is now 1.0)
+    if SNR is not None:
+        rng = np.random.default_rng(424242)
+        noise = rng.normal(loc=0.0, scale=1/SNR, size=flux.shape)
+        flux += noise
+        # achieved SNR = 1/stddev(noise)
+        flux = np.clip(flux, 0, np.inf) # clip negative values at zero
+
     # determine wavelength (x-axis) bounds
     if str(xlim) == 'full':
         xlim = [np.min(wave), np.max(wave)]
@@ -499,66 +511,103 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         # symmetrize
         xlim = [-np.max(np.abs(xlim)), np.max(np.abs(xlim))]
 
-    # determine flux (y-axis) bounds
-    spacingFac = 1.0
-    if EW_minmax is not None:
-        if np.max(EW_minmax) <= 0.4:
-            spacingFac = 0.5
-        if np.max(EW_minmax) > 0.8:
-            spacingFac = 0.8 #1.2
-    ylim = [+spacingFac/2, num*spacingFac + spacingFac/5]
-
-    # add noise? ("signal" is now 1.0)
-    if SNR is not None:
-        rng = np.random.default_rng(424242)
-        noise = rng.normal(loc=0.0, scale=1/SNR, size=flux.shape)
-        flux += noise
-        # achieved SNR = 1/stddev(noise)
-        flux = np.clip(flux, 0, np.inf) # clip negative values at zero
-
-    # plot
-    figsize_loc = [figsize[0]*0.6, figsize[1]*1.5*np.sqrt(num/10)]
-
-    fig = plt.figure(figsize=figsize_loc)
-    ax = fig.add_subplot(111)
-
-    xlabel = '$\Delta v$ [ km/s ]' if dv else 'Wavelength [ Ang ]'
+    # other common plot config
+    title = r'%s ($\rm{z \simeq %.1f}$) %s' % (ion,sim.redshift,instrument)
+    xlabel = r'$\Delta v$ [ km/s ]' if dv else 'Wavelength [ Ang ]'
     ylabel = 'Relative Flux'
-    if num > 1: ylabel += ' (+ constant offset)'
-
-    ax.set_xlim(xlim)
-    ax.set_ylim(ylim)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-
-    ax.set_yticks(np.arange(num+1)*spacingFac)
-    ax.set_yticklabels(['%d' % i for i in range(num+1)])
 
     colors = sampleColorTable(ctName, num, bounds=[0.0, 0.9])
+    
+    if style == 'offset':
+        # plot - single panel, with spectra vertically offset
+        figsize_loc = [figsize[0]*0.6, figsize[1]*1.5*np.sqrt(num/10)]
 
-    for i in range(num):
-        # vertical offset by 1.0 for each spectrum
-        y_offset = (i+1)*spacingFac - 1
+        fig = plt.figure(figsize=figsize_loc)
+        ax = fig.add_subplot(111)
 
-        ax.step(wave, flux[i,:]+y_offset, '-', color=colors[i], where='mid', lw=lw)
+        if num > 1: ylabel += ' (+ constant offset)'
 
-        # label
-        text_x = xlim[0] + (xlim[1]-xlim[0])/50
-        text_y = y_offset + 1.0 - (num/50) * spacingFac
-        if SNR is not None: text_y -= (num/50) * (5/SNR)
-        label = 'EW = %.2f$\AA$' % EW[i]
+        # determine flux (y-axis) bounds
+        spacingFac = 1.0
+        if EW_minmax is not None:
+            if np.max(EW_minmax) <= 0.4:
+                spacingFac = 0.5
+            if np.max(EW_minmax) > 0.8:
+                spacingFac = 0.8 #1.2
+        ylim = [+spacingFac/2, num*spacingFac + spacingFac/5]
 
-        ax.text(text_x, text_y, label, color=colors[i], alpha=0.6, fontsize=18, ha='left', va='top')
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
 
-    # finish plot
-    label = r'%s ($\rm{z \simeq %.1f}$) %s' % (ion,sim.redshift,instrument)
-    #ax.legend([plt.Line2D((0,1),(0,0),lw=0,marker='')], [label], fontsize=20, loc='upper right')
-    ax.set_title(label)
+        ax.set_yticks(np.arange(num+1)*spacingFac)
+        ax.set_yticklabels(['%d' % i for i in range(num+1)])
+
+        for i in range(num):
+            # vertical offset by 1.0 for each spectrum
+            y_offset = (i+1)*spacingFac - 1
+
+            ax.step(wave, flux[i,:]+y_offset, '-', color=colors[i], where='mid', lw=lw)
+
+            # label
+            text_x = xlim[0] + (xlim[1]-xlim[0])/50
+            text_y = y_offset + 1.0 - (num/50) * spacingFac
+            if SNR is not None: text_y -= (num/50) * (5/SNR)
+            label = r'EW = %.2f$\AA$' % EW[i]
+
+            ax.text(text_x, text_y, label, color=colors[i], alpha=0.6, fontsize=18, ha='left', va='top')
+
+        # finish plot
+        #ax.legend([plt.Line2D((0,1),(0,0),lw=0,marker='')], [title], fontsize=20, loc='upper right')
+        ax.set_title(title)
+
+    if style == 'grid':
+        # plot - (square) grid of many panels, each with one spectrum
+        n = int(np.sqrt(num))
+        figsize_loc = [figsize[0]*1.3*(n/10), figsize[0]*1.3*(n/10)]
+
+        gs = {'left':0.06, 'bottom':0.06, 'right':0.95, 'top':0.95}
+
+        fig = plt.figure(figsize=figsize_loc)
+        axes = fig.subplots(nrows=n, ncols=n, sharex=True, sharey=True, gridspec_kw=gs)
+
+        fontsize = 23 * (n/10)
+        fig.suptitle(title, fontsize=fontsize)
+        fig.supxlabel(xlabel, fontsize=fontsize)
+        fig.supylabel(ylabel, fontsize=fontsize)
+
+        ylim = [-0.1, 1.1]
+        xticks = [-600, 0, 600] if dv else None # needs generalization, axes[i,j].get_xticks()[1::2]
+
+        for i in range(n):
+            for j in range(n):
+                # axis config
+                axes[i,j].set_xlim(xlim)
+                axes[i,j].set_ylim(ylim)
+                axes[i,j].set_yticks([0.0, 0.5, 1.0])
+                axes[i,j].set_yticklabels(['0','', '1'])
+
+                if xticks is not None:
+                    axes[i,j].set_xticks(xticks)
+
+                # grid
+                axes[i,j].plot(xlim, [0.5,0.5], '-', color='#000', alpha=0.1)
+                axes[i,j].plot([0,0], ylim, '-', color='#000', alpha=0.1)
+
+                # plot
+                axes[i,j].step(wave, flux[i*n+j,:], '-', c=colors[i*n+j], where='mid', lw=lw)
+
+        fig.set_tight_layout(False)
+        fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01, wspace=0.05, hspace=0.05)
+
+    if style == '2d':
+        pass
 
     snrStr = '_snr%d' % SNR if SNR is not None else ''
     ewStr = '_%.1f-%.1f' % (EW_minmax[0],EW_minmax[1]) if EW_minmax is not None else ''
-    fig.savefig('spectra_%s_%d_%s_%s%s_%d-%s%s.pdf' % \
-        (sim.simName,sim.snap,ion.replace(' ',''),instrument,ewStr,num,mode,snrStr))
+    fig.savefig('spectra_%s_%d_%s_%s%s_%d-%s%s_%s.pdf' % \
+        (sim.simName,sim.snap,ion.replace(' ',''),instrument,ewStr,num,mode,snrStr,style))
     plt.close(fig)
 
 def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=[0.5,0.7,1.0], 
@@ -623,7 +672,7 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
     ax = fig.add_subplot(111)
 
     ax.set_xlim(xlim)
-    ax.set_xlabel('Rest-frame Equivalent Width [ %s$\\rm{\AA}$ ]' % ('Log ' if log else ''))
+    ax.set_xlabel(r'Rest-frame Equivalent Width [ %s$\rm{\AA}$ ]' % ('Log ' if log else ''))
     ax.set_ylabel('d$^2 N$/d$z$d$W$ (%s)' % line)
     ax.set_yscale('log')
 
@@ -735,7 +784,7 @@ def EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS',
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     ax.set_xlabel('Column Density [ log cm$^{-2}$ ]')
-    ax.set_ylabel(line + ' Equivalent Width [ log $\AA$ ]')
+    ax.set_ylabel(line + r' Equivalent Width [ log $\AA$ ]')
 
     # simulation sightlines
     min_contour = 0.1 # individual points shown outside this level
@@ -839,7 +888,7 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
     # plot the simulation dN/dz for each EW threshold
     colors = []
     for EW_thresh in EW_thresholds:
-        l, = ax.plot(zz, dNdz[EW_thresh], '-', lw=lw, label='EW > %.1f$\,\\rm{\AA}$' % EW_thresh)
+        l, = ax.plot(zz, dNdz[EW_thresh], '-', lw=lw, label=r'EW > %.1f$\,\\rm{\AA}$' % EW_thresh)
         colors.append(l.get_color())
 
     # observational data
@@ -873,7 +922,7 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
     ax.set_yscale('log')
 
     for EW_thresh in EW_thresholds:
-        ax.plot(zz, dNdX[EW_thresh], '-', label='EW > %.1f$\,\\rm{\AA}$' % EW_thresh)
+        ax.plot(zz, dNdX[EW_thresh], '-', label=r'EW > %.1f$\,\\rm{\AA}$' % EW_thresh)
 
     # observational data
     if line == 'MgII 2796':
