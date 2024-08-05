@@ -392,7 +392,7 @@ def paperPlots():
         spectra_gallery_indiv(sim, EW_minmax=[3.0, 6.0], mode='random', **opts)
 
     # fig 1b: (dense) spectra galleries
-    if 1:
+    if 0:
         # C IV
         sim = simParams(run='tng50-1', redshift=2.0)
         inst = 'SDSS-BOSS' #'KECK-HIRES-B14'
@@ -402,7 +402,12 @@ def paperPlots():
 
     # fig 2: 2d spectra visualization
     if 0:
-        pass
+        # C IV
+        sim = simParams(run='tng50-1', redshift=2.0)
+        inst = 'SDSS-BOSS' #'KECK-HIRES-B14'
+        opts = {'ion':'C IV', 'instrument':inst, 'num':None, 'SNR':50, 'dv':True, 'xlim':[-900,900]}
+
+        spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='all', style='2d', **opts)
 
     # fig 3: MgII EW distribution functions vs. data
     if 0:

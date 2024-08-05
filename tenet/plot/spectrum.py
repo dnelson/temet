@@ -4,15 +4,17 @@ Diagnostic and production plots based on synthetic ray-traced absorption spectra
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from os.path import isfile
 
 from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_filepath, \
-                             lsf_matrix, varconvolve, _resample_spectrum, load_spectra_subset, \
+                             lsf_matrix, varconvolve, _resample_spectrum, \
                              integrate_along_saved_rays, create_wavelength_grid, deposit_single_line, \
                              lines, instruments
-from ..cosmo.spectrum_analysis import absorber_catalog
-from ..util.helper import sampleColorTable
+from ..cosmo.spectrum_analysis import absorber_catalog, load_spectra_subset
+from ..util.helper import sampleColorTable, logZeroNaN
 from ..util import units
 from ..plot.config import *
 
@@ -449,8 +451,9 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
       dv (bool): if False, x-axis in wavelength, else in velocity.
       xlim (str, list[float]): either 'full', a 2-tuple of [min,max], or automatic if None (default)
     """
-    assert mode in ['random','evenly','inds']
+    assert mode in ['random','evenly','inds','all']
     if mode == 'inds': assert inds is not None
+    if mode == 'all': assert num is None and style == '2d'
     if mode in ['random','evenly']: assert inds is None
     
     # config
@@ -516,14 +519,12 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
     xlabel = r'$\Delta v$ [ km/s ]' if dv else 'Wavelength [ Ang ]'
     ylabel = 'Relative Flux'
 
-    colors = sampleColorTable(ctName, num, bounds=[0.0, 0.9])
-    
     if style == 'offset':
         # plot - single panel, with spectra vertically offset
+        colors = sampleColorTable(ctName, num, bounds=[0.0, 0.9])
         figsize_loc = [figsize[0]*0.6, figsize[1]*1.5*np.sqrt(num/10)]
 
-        fig = plt.figure(figsize=figsize_loc)
-        ax = fig.add_subplot(111)
+        fig, ax = plt.subplots(figsize=figsize_loc)
 
         if num > 1: ylabel += ' (+ constant offset)'
 
@@ -564,6 +565,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
 
     if style == 'grid':
         # plot - (square) grid of many panels, each with one spectrum
+        colors = sampleColorTable(ctName, num, bounds=[0.0, 0.9])
         n = int(np.sqrt(num))
         figsize_loc = [figsize[0]*1.3*(n/10), figsize[0]*1.3*(n/10)]
 
@@ -602,7 +604,54 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01, wspace=0.05, hspace=0.05)
 
     if style == '2d':
-        pass
+        # plot - single 2d panel, color indicating relative flux
+        inds = np.argsort(EW)
+        num = inds.size
+        flux = flux[inds,:]
+        EW = EW[inds]
+
+        # plot
+        fig, ax = plt.subplots(figsize=[figsize[0]*0.8,figsize[1]*1.5])
+        ax.set_xlim(xlim)
+        ax.set_xlabel(xlabel)
+
+        ax.set_ylabel(r'Equivalent Width [ $\rm{\AA}$ ]')
+        cbar_label = 'Relative Flux'
+
+        ylim = [np.log10(EW_minmax[0]), np.log10(EW_minmax[1])]
+        extent = [xlim[0], xlim[1], ylim[0], ylim[1]]
+        norm = Normalize(vmin=0.9, vmax=1.0)
+
+        nbins = 1000
+        bins = np.linspace(ylim[0], ylim[1], nbins)
+        EW = np.log10(EW)
+
+        h2d = np.zeros((nbins,wave.size), dtype='float32')
+
+        for i in range(nbins-1):
+            w = np.where((EW >= bins[i]) & (EW < bins[i+1]))[0]
+            h2d[i,:] = np.mean(flux[w,:], axis=0)
+
+        # show in log?
+        if 0:
+            h2d = logZeroNaN(h2d)
+            norm = Normalize(vmin=-0.05, vmax=0.0)
+            cbar_label += ' [ log ]'
+
+        s = ax.imshow(h2d, extent=extent, norm=norm, origin='lower', aspect='auto', cmap='plasma')
+
+        yticks_all = [0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0]
+        yticks = []
+        for ytick in yticks_all:
+            if ytick >= EW_minmax[0] and ytick <= EW_minmax[1]:
+                yticks.append(ytick)
+        ax.set_yticks(np.log10(yticks))
+        ax.set_yticklabels(['%.1f' % y for y in yticks])
+
+        # colorbar
+        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.1)
+        cb = fig.colorbar(s, cax=cax)
+        cb.ax.set_ylabel(cbar_label)
 
     snrStr = '_snr%d' % SNR if SNR is not None else ''
     ewStr = '_%.1f-%.1f' % (EW_minmax[0],EW_minmax[1]) if EW_minmax is not None else ''
