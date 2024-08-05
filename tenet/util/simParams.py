@@ -105,7 +105,10 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      'eagle100-1':['eagle',1504],
                      'simba':['simba',1024],
                      'simba100':['simba',1024],
+                     'simba100-1':['simba',1024],
                      'simba25':['simba',512],
+                     'simba25-1':['simba',512],
+                     'simba50-1':['simba50',512],
                      'millennium-1':['millennium',1],
                      'millennium-2':['millennium',2]}
 
@@ -435,7 +438,7 @@ class simParams:
             if res in res_L35:  self.targetGasMass = 5.73879e-6 * (8 ** np.log2(2160/res))
             if res in res_L75:  self.targetGasMass = 9.43950e-5 * (8 ** np.log2(1820/res))
             if res in res_L205: self.targetGasMass = 7.43736e-4 * (8 ** np.log2(2500/res))
-            if res in res_L680: self.targetGasMass = 1.82873e-3 * (8 ** np.log2(6144/res))
+            if res in res_L680: self.targetGasMass = 1.82873e-3 * (8 ** np.log2(8192/res))
             if res in res_L500: self.targetGasMass = 0.0 # DMO so far
 
             if res in res_L25:  self.boxSize = 25000.0

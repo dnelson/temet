@@ -86,7 +86,7 @@ def createVirtualSimHDF5():
     at least one of every particle type! Note: run in simulation root dir, since we make relative path links. """
     from ..util.simParams import simParams
 
-    sP = simParams(run='simba25')
+    sP = simParams(run='tng-cluster')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() or sP.simName.replace('-','/') in getcwd() # careful
 
     global_attr_skip = ['Ngroups_ThisFile','Ngroups_Total','Nids_ThisFile','Nids_Total','Nsubgroups_ThisFile','Nsubgroups_Total',
@@ -178,7 +178,7 @@ def createVirtualSimHDF5():
                 if nPt == 0:
                     continue # group not present for this snapshot (or ever)
 
-                print(' %s' % gName)
+                print(' %s' % gName, flush=True)
 
                 # loop over fields
                 for field in shapes[gName].keys():
