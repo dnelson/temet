@@ -1,19 +1,19 @@
 """
-Synthetic absorption spectra generation.
+Synthetic absorption spectra: generation.
 """
 import numpy as np
 import h5py
 import glob
 import threading
-from os.path import isfile, isdir, expanduser
+from os.path import isfile, isdir
 from os import mkdir, unlink
-from scipy.special import wofz
+#from scipy.special import wofz
 
 from numba import jit
 from numba.extending import get_cython_function_address
 import ctypes
 
-from ..util.helper import closest, pSplitRange, contiguousIntSubsets
+from ..util.helper import closest, pSplitRange
 from ..util.voronoiRay import rayTrace
 from ..util import units
 
@@ -473,7 +473,7 @@ def create_wavelength_grid(line=None, instrument=None):
     if line is not None:
         wave_min = np.floor(wave0_restframe - 15.0)
         wave_max = np.ceil(wave0_restframe + 15.0)
-        dwave = 0.1
+        dwave = 0.01
 
     if instrument is not None:
         wave_min = instruments[instrument]['wave_min']
@@ -650,7 +650,7 @@ def varconvolve(arr, kernel):
     return arr_conv
 
 @jit(nopython=True, nogil=True, cache=False)
-def deposit_single_line(wave_edges_master, wave_mid_master, tau_master, f, gamma, wave0, N, b, z_eff, debug=False):
+def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_eff, debug=False):
     """ Add the absorption profile of a single transition, from a single cell, to a spectrum.
     Global method, where the original master grid is assumed to be very high resolution, such that 
     no sub-sampling is necessary (re-sampling onto an instrument grid done later).
@@ -885,7 +885,7 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
             if N[j] < 1e2:
                 continue
 
-            deposit_single_line(master_edges, master_mid, tau_master, f, gamma, wave0, N[j], b[j], z_eff[j])
+            deposit_single_line(master_edges, tau_master, f, gamma, wave0, N[j], b[j], z_eff[j])
 
         # resample tau_master on to instrument wavelength grid
         tau_inst = _resample_spectrum(master_mid, tau_master, inst_waveedges)
@@ -949,7 +949,7 @@ def create_spectra_from_traced_rays(sP, line, instrument,
     # line properties
     f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
 
-    # assign sP.redshift to the front intersectiom (beginning) of the box
+    # assign sP.redshift to the front intersection (beginning) of the box
     z_vals = np.linspace(sP.redshift, sP.redshift+0.1, 200)
     assert sP.boxSize < 40000, 'Increase 0.1 factor above for boxes larger than TNG50.'
 
@@ -1537,8 +1537,8 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', pS
     projAxis = list(ray_dir).index(1)
     velLosField = 'vel_'+['x','y','z'][projAxis]
 
-    cell_vellos = sP.snapshotSubsetP('gas', velLosField, inds=cell_inds) # code # , verbose=True
-    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold', inds=cell_inds) # K # , verbose=True
+    cell_vellos = sP.snapshotSubsetP('gas', velLosField, inds=cell_inds) # code
+    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold', inds=cell_inds) # K
     
     cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
 
@@ -1571,7 +1571,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', pS
             densField = '%s numdens' % lines[line]['ion']
             if solar: densField += '_solar'
 
-            cell_dens = sP.snapshotSubsetP('gas', densField, inds=cell_inds) # ions/cm^3 # , verbose=True
+            cell_dens = sP.snapshotSubsetP('gas', densField, inds=cell_inds) # ions/cm^3
 
         # create spectra
         inst_wave, tau_local, EW_local = \
@@ -1722,220 +1722,6 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
         unlink(filename)
 
     print('Split files removed.')
-
-def absorber_catalog(sP, ion, instrument, solar=False):
-    """ Detect and chatacterize absorbers, handling the possibility of one or possibly multiple per sightline, 
-    defined as separated but contiguous regions of absorption. Create an absorber catalog, i.e. counts and 
-    offsets per sightline, and compute their EWs.
-
-    Args:
-      sP (:py:class:`~util.simParams`): simulation instance.
-      ion (str): space separated species name and ionic number e.g. 'Mg II'.
-      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
-      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
-        use the (constant) solar value.
-    """
-    # config
-    EW_threshold = 1e-3 # observed frame [ang]
-
-    # lines of this ion
-    lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
-
-    loadFilename = _spectra_filepath(sP, ion, instrument=instrument, solar=solar)
-    saveFilename = loadFilename.replace('_combined','_EWs')
-
-    # dicts
-    EWs_orig = {}
-    spec_inds = {}
-    tau = {}
-
-    EWs_processed = {}
-    counts_processed = {}
-    offset_processed = {}
-
-    # save file already exists? then load now and return
-    if isfile(saveFilename):
-        with h5py.File(saveFilename,'r') as f:
-            for line in f['EWs_orig'].keys():
-                EWs_orig[line]  = f['EWs_orig/'+line][()]
-                spec_inds[line] = f['spec_inds/'+line][()]
-
-                EWs_processed[line]  = f['EWs_processed/'+line][()]
-                counts_processed[line] = f['counts_processed/'+line][()]
-                offset_processed[line] = f['offset_processed/'+line][()]
-
-        print('Loaded: [%s]' % saveFilename)
-
-        return EWs_orig, spec_inds, EWs_processed, counts_processed, offset_processed
-
-    # loop over possible transitions
-    for line in lineNames:
-
-        with h5py.File(loadFilename,'r') as f:
-            # load metadata
-            count_tot = f.attrs['count']
-            wave = f['wave'][()]
-            dang = np.abs(np.diff(wave)) # wavelength bin size
-
-            key = 'EW_%s' % line.replace(' ','_')
-            if key not in f:
-                print(f'[{line}] skipping, not present.')
-                continue
-
-            # load original EWs
-            EWs_orig[line] = f[key][()]
-
-            # select above threshold
-            spec_inds[line] = np.where(EWs_orig[line] >= EW_threshold)[0]
-            count = len(spec_inds[line])
-            print('[%s] [%s] have [%d] of [%d] above EW > %g.' % (sP,line,count,EWs_orig[line].size,EW_threshold))
-
-            # load spectra, for this subset only
-            key = 'tau_%s' % line.replace(' ','_')
-            tau[line] = f[key][()][spec_inds[line]]
-
-        # allocate for processed results
-        nspec = spec_inds[line].size
-        count_abs = 0
-
-        EWs_processed[line] = np.zeros(nspec*10, dtype='float32') # space for >1 absorber per sightline
-        counts_processed[line] = np.zeros(nspec, dtype='int32')
-        
-        # loop over spectra, find deviations from tau==0, find contiguous regions, compute EW in each
-        for i in range(nspec):
-            if i % int(nspec/10) == 0: print(' %.2f%%' % (i/nspec*100))
-            # single spectrum
-            local_tau = tau[line][i,:].flatten()
-
-            # non-zero optical depth regions (i.e. normalized flux less than unity)
-            local_tau_nonzero_inds = np.where(local_tau > 0)[0]
-
-            # find contiguous tau > 0 regions
-            ranges = contiguousIntSubsets(local_tau_nonzero_inds)
-
-            counts_processed[line][i] = len(ranges)
-            
-            # loop over each contiguous range
-            for ind_start,ind_stop in ranges:
-                local_inds = local_tau_nonzero_inds[ind_start:ind_stop+1]
-
-                # integrate (1-exp(-tau_lambda)) d_lambda from 0 to inf, composite trap rule
-                integrand = 1 - np.exp(-local_tau[local_inds])
-                res = np.sum(dang[local_inds[:-1]] * (integrand[1:] + integrand[:-1])/2)
-
-                # save EW of this single absorption feature
-                EWs_processed[line][count_abs] = res
-                count_abs += 1
-
-                # debug
-                #ratio = EWs_orig[line][spec_inds[line][i]]/res
-                #if np.abs(ratio - 1.0) > 0.01:
-                #    print('compare new vs orig EW: ',i,spec_inds[line][i],res,EWs_orig[line][spec_inds[line][i]],ratio)
-            
-        # sanity checks, and reduce EW array to used size
-        assert count_abs == counts_processed[line].sum()
-        EWs_processed[line] = EWs_processed[line][0:count_abs]
-
-        # create offsets
-        offset_processed[line] = np.zeros(nspec, dtype='int32')
-        offset_processed[line][1:] = np.cumsum(counts_processed[line])[:-1]
-
-    # open file for writing
-    fOut = h5py.File(saveFilename,'w')
-
-    # load subset
-    with h5py.File(loadFilename,'r') as f:
-        # copy metadata
-        for attr in f.attrs:
-            fOut.attrs[attr] = f.attrs[attr]
-    fOut.attrs['EW_threshold'] = EW_threshold
-
-    # loop over lines
-    for line in EWs_orig.keys():
-        fOut['EWs_orig/%s' % line] = EWs_orig[line]
-        fOut['spec_inds/%s' % line] = spec_inds[line]
-        fOut['EWs_processed/%s' % line] = EWs_processed[line]
-        fOut['counts_processed/%s' % line] = counts_processed[line]
-        fOut['offset_processed/%s' % line] = offset_processed[line]
-
-    fOut.close()
-
-    print('Saved: [%s]' % saveFilename)
-
-    return EWs_orig, spec_inds, EWs_processed, counts_processed, offset_processed
-
-def calc_statistics_from_saved_rays(sP, ion):
-    """ Calculate useful statistics based on already computed and saved rays.
-    Results depend on ion, independent of actual transition.
-    Results depend on the physical properties along each sightline, not on the absorption spectra.
-
-    Args:
-      sP (:py:class:`~util.simParams`): simulation instance.
-      ion (str): space separated species name and ionic number e.g. 'Mg II'.
-    """
-    # config
-    dens_threshold = 1e-12 # ions/cm^3
-
-    pSplitNum = 16
-
-    # save file
-    saveFilename = _spectra_filepath(sP, ion).replace('integral_','stats_').replace('_combined','')
-
-    # (global) load required gas cell properties
-    densField = '%s numdens' % ion
-    cell_dens = sP.snapshotSubset('gas', densField) # ions/cm^3
-
-    # loop over splits
-    w_offset = 0
-
-    for i in range(pSplitNum):
-        pSplit = [i, pSplitNum]
-
-        # load rays
-        result = generate_rays_voronoi_fullbox(sP, pSplit=pSplit, search=True)
-        if result is None:
-            continue
-
-        rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = result
-
-        # convert indices local to this subset of the snapshot into global snapshot indices
-        ray_cell_inds = cell_inds[rays_inds]
-
-        # allocate (equal number of rays per split file)
-        if i == 0:
-            n_clouds = np.zeros(rays_len.size * pSplitNum, dtype='int32')
-
-        # loop over each ray
-        print_fac = int(rays_len.size/10)
-        for j in range(rays_len.size):
-            if j % print_fac == 0: print('[%2d of %2d] %.2f%%' % (i,pSplitNum,j/rays_len.size*100), flush=True)
-            # get skewers of density, pathlength
-            local_inds = ray_cell_inds[rays_off[j]:rays_off[j]+rays_len[j]]
-            local_dens = cell_dens[local_inds]
-
-            local_dl = rays_dl[rays_off[j]:rays_off[j]+rays_len[j]]
-
-            # identify all intersected cells above ion density threshold
-            w = np.where(local_dens > dens_threshold)[0]
-
-            if len(w) == 0:
-                # no cells above threshold == no clouds
-                continue
-
-            # find contiguous index ranges, identify breakpoints between contiguous ranges
-            diff = np.diff(w)
-            breaks = np.where(diff != 1)[0]
-
-            # count number of discrete clouds
-            n_clouds[w_offset+j] = len(breaks) + 1
-
-        w_offset += rays_len.size
-
-    # save output
-    with h5py.File(saveFilename,'w') as f:
-        f['n_clouds'] = n_clouds
-
-    print(f'Saved: [{saveFilename}]')
 
 def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=None, dv=0.0):
     """ Load a subset of spectra from a given simulation and ion.

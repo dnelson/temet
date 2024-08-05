@@ -46,11 +46,12 @@ def evenlySample(sequence, num, logSpace=False):
 
     return sequence[inds.astype('int32')]
 
+@jit(nopython=True, nogil=True, cache=True)
 def contiguousIntSubsets(x):
     """ Return a list of index pairs corresponding to contiguous integer subsets of the input array. 
     Final index of each pair is exclusive as in numpy syntax, so to obtain all the 
     elements of a range from a numpy array, x[ranges[0][0]:ranges[0][1]]."""
-    assert x.dtype in [np.int32,np.int64]
+    #assert x.dtype in [np.int32,np.int64]
 
     ranges = []
     inRange = False
@@ -1566,6 +1567,7 @@ def contourf(*args, **kwargs):
 
 def plothist(x, filename='out.pdf', nBins=50, norm=False, skipzeros=True):
     """ Plot a quick 1D histogram of an array x and save it to a PDF. """
+    x = x.copy().astype('float32')
     if skipzeros: x = x[x != 0.0]
 
     # linear (x)

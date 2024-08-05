@@ -10,6 +10,7 @@ from . import mergertree
 from . import perf
 from . import skirt
 from . import spectrum
+from . import spectrum_analysis
 from . import spectrum_test
 from . import stellarPop # requires fsps
 from . import util

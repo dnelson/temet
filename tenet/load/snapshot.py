@@ -156,6 +156,7 @@ def snapshotHeader(sP, fileName=None):
 
     # calculate and include NumPart_Total
     header['NumPart'] = il.snapshot.getNumPart(header)
+
     del header['NumPart_Total']
     if 'NumPart_Total_HighWord' in header:
         del header['NumPart_Total_HighWord']
