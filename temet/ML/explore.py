@@ -15,7 +15,7 @@ from torch.utils.data.dataloader import default_collate
 from torch.utils.tensorboard import SummaryWriter
 
 from ..plot.config import *
-from tenet.ML.common import train_model, test_model
+from ..ML.common import train_model, test_model
 
 path = '/u/dnelson/data/torch/'
 

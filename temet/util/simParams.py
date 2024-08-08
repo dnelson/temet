@@ -6,14 +6,14 @@ creating an instance of this class as:
 
 .. code-block:: python
 
-   sim = tenet.sim(run='tng100-1', redshift=0.0)
+   sim = temet.sim(run='tng100-1', redshift=0.0)
 
 To analyze a new or custom simulation which is not defined in this file, you can instead 
 pass its path, and the simulation metadata will be automatically loaded.
 
 .. code-block:: python
 
-   sim = tenet.sim('/virgo/simulations/IllustrisTNG/TNG50-1/', redshift=0.0)
+   sim = temet.sim('/virgo/simulations/IllustrisTNG/TNG50-1/', redshift=0.0)
 
 This ``sim`` object can then be passed to many analysis routines, which then automatically 
 know (i) where to find the data files, and (ii) which snapshot to analyze. Furthermore, many 
@@ -336,7 +336,7 @@ class simParams:
         else:
             # otherwise we create a new cache folder in the home folder of the user
             hsh = hash_path(self.arepoPath,length=8)
-            self.derivPath = os.path.join(os.path.expanduser("~/tenetdata/"),hsh) + "/"
+            self.derivPath = os.path.join(os.path.expanduser("~/temet.cache/"),hsh) + "/"
             p = Path(self.derivPath)
             p.mkdir(parents=True, exist_ok=True)
             with open(os.path.join(p,"simpath.txt"), 'w') as f:

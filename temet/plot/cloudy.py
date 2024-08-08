@@ -8,7 +8,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import Normalize
 from datetime import datetime
 
-from ..util.helper import contourf, evenlySample, sampleColorTable, closest, logZeroNaN, loadColorTable
+from ..util.helper import contourf, evenlySample, sampleColorTable, closest, logZeroNaN, loadColorTable, rootPath
 from ..cosmo.cloudyGrid import loadUVB
 from ..cosmo.cloudy import cloudyIon
 from ..plot.config import *
@@ -288,7 +288,7 @@ def grackleTable():
     #filename2 = 'grid_cooling_UVB=FG11.hdf5' # my new version (testing)
     ##filename2 = 'CloudyData_UVB=FG2011_shielded.h5' # orig
 
-    filepath = '/u/dnelson/tenet/tenet/tables/cloudy/'
+    filepath = rootPath + 'tables/cloudy/'
     filename1 = 'grid_cooling_UVB=FG20_unshielded.hdf5'
     filename2 = 'grid_cooling_UVB=FG20.hdf5'
 

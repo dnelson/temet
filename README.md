@@ -1,4 +1,4 @@
-tenet
+temet
 =====
 
 A python toolkit for the preparation, analysis, and visualization of astrophysical numerical simulations. Specifically, hydrodynamical simulations run with the [AREPO](https://wwwmpa.mpa-garching.mpg.de/~volker/arepo/) moving mesh code, as well as codes producing similarly structured outputs including [GADGET-4](https://wwwmpa.mpa-garching.mpg.de/gadget4/), [GIZMO](http://www.tapir.caltech.edu/~phopkins/Site/GIZMO.html) and [SWIFT](http://swift.dur.ac.uk/).
@@ -9,7 +9,7 @@ In addition, this codebase is focused on cosmological simulations for large-scal
 Documentation
 -------------
 
-Please see [online documentation](https://tenet.tng-project.org/).
+Please see [online documentation](https://temet.tng-project.org/).
 
 Installation and usage instructions are available there.
 
@@ -59,9 +59,9 @@ version, tagged on the date near the finalization of the paper.
 Contributing
 ------------
 
-Any contributions to this open source project, large or small, are welcome. To submit a bug report, feature request, general question, or similar, please open a [new issue](https://github.com/dnelson86/tenet/issues) directly on github. Please include as much detail as possible, including a minimum working example which reproduces any problem or buggy behavior.
+Any contributions to this open source project, large or small, are welcome. To submit a bug report, feature request, general question, or similar, please open a [new issue](https://github.com/dnelson86/temet/issues) directly on github. Please include as much detail as possible, including a minimum working example which reproduces any problem or buggy behavior.
 
-To directly contribute code or documentation please try to follow existing style and structure as much as possible. When you are ready, please make a [pull request](https://github.com/dnelson86/tenet/pulls) with your proposed changes. To do so you should take the following steps: (i) fork the repository, (ii) clone the project to your local machine, (iii) edit and make changes, (iv) commit your changes to your own branch, (v) push your work back up to your fork, (vi) submit a pull request for review.
+To directly contribute code or documentation please try to follow existing style and structure as much as possible. When you are ready, please make a [pull request](https://github.com/dnelson86/temet/pulls) with your proposed changes. To do so you should take the following steps: (i) fork the repository, (ii) clone the project to your local machine, (iii) edit and make changes, (iv) commit your changes to your own branch, (v) push your work back up to your fork, (vi) submit a pull request for review.
 
 Additional code contributions, fixes, and suggestions to this package have been made by:
 

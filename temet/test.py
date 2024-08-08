@@ -8,7 +8,7 @@ import time
 from os import path, mkdir, rename
 import matplotlib.pyplot as plt
 
-import tenet.cosmo
+import temet.cosmo
 from .plot.config import figsize
 from .util import simParams
 from illustris_python.util import partTypeNum

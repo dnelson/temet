@@ -11,10 +11,10 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from os.path import isfile
 
-from tenet.cosmo.spectrum import _spectra_filepath, lines
+from ..cosmo.spectrum import _spectra_filepath, lines
 #from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
-from tenet.plot.spectrum import spectra_gallery_indiv, EW_distribution, dNdz_evolution, EW_vs_coldens, instrument_lsf
-from tenet.plot.config import *
+from ..plot.spectrum import spectra_gallery_indiv, EW_distribution, dNdz_evolution, EW_vs_coldens, instrument_lsf
+from ..plot.config import *
 
 def metalAbundancesVsSolar(sim, ion='Mg II'):
     """ Diagnostic plot of how much various metal abundances actual vary vs. the solar abundance ratio. """
@@ -169,7 +169,7 @@ def lightconeSpectra(sim, instrument, ion, solar=False, add_lines=None):
 
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
-      instrument (str): specify observational instrument (from tenet.cosmo.spectrum.instruments).
+      instrument (str): specify observational instrument (from ..cosmo.spectrum.instruments).
       ion (str): space-separated name of ion e.g. 'Mg II'.
       solar (bool): if True, then adopt solar abundance ratio for the given species, instead of snap value.
       add_lines (list[str] or None): if not None, then a list of lines to include. otherwise, include all for this ion.
@@ -260,7 +260,7 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None):
 
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
-      instrument (str): specify observational instrument (from tenet.cosmo.spectrum.instruments).
+      instrument (str): specify observational instrument (from ..cosmo.spectrum.instruments).
       ion (str): space-separated name of ion e.g. 'Mg II'.
       add_lines (list[str] or None): if not None, then a list of lines to include. otherwise, include all for this ion.
     """

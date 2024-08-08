@@ -3,7 +3,7 @@
 # to build:
 #
 # sphinx-apidoc -t docs/_templates/ -o docs/source .
-# rm docs/source/.rst docs/source/tenet.rst docs/source/modules.rst
+# rm docs/source/.rst docs/source/temet.rst docs/source/modules.rst
 # sphinx-build -b html docs/ docs/_build/
 
 import sys
@@ -27,8 +27,8 @@ def git_version():
 
 # -- Project information -----------------------------------------------------
 
-project = 'tenet'
-copyright = '2022, Dylan Nelson'
+project = 'temet'
+copyright = '2024, Dylan Nelson'
 author = 'Dylan Nelson'
 
 version = git_version()
@@ -180,8 +180,8 @@ def quant_rowtext(custom_fields, custom_fields_aliases, key, cat=False):
     return f_name, f_label, f_units, f_aliases, f_desc
 
 with open('quants_custom.rst','w') as f:
-    from tenet.load.snapshot import custom_fields, custom_multi_fields
-    from tenet.load.snapshot import custom_fields_aliases
+    from temet.load.snapshot import custom_fields, custom_multi_fields
+    from temet.load.snapshot import custom_fields_aliases
 
     # write header for custom table
     f.write('.. csv-table::\n')
@@ -211,8 +211,8 @@ with open('quants_custom.rst','w') as f:
     f.write('\n')
 
 with open('quants_cat_custom.rst','w') as f:
-    from tenet.load.groupcat import custom_cat_fields, custom_cat_multi_fields
-    from tenet.load.groupcat import custom_cat_fields_aliases
+    from temet.load.groupcat import custom_cat_fields, custom_cat_multi_fields
+    from temet.load.groupcat import custom_cat_fields_aliases
 
     # write header for custom (catalog field) table
     f.write('.. csv-table::\n')

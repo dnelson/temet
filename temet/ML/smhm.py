@@ -15,7 +15,7 @@ from torch.utils.data.dataloader import default_collate
 from ..util import simParams
 from ..plot.config import *
 
-from tenet.ML.common import train_model, test_model
+from ..ML.common import train_model, test_model
 
 class SMHMDataset(Dataset):
     """ A custom dataset for the stellar mass to halo mass (SMHM) relation.

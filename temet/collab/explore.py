@@ -709,7 +709,7 @@ def xenoSNevo_movie(conf=1):
 
 def arjenMasses5kpc():
     """ Explore Mtot_5kpc vs M*_5kpc. """
-    from tenet.plot.cosmoGeneral import quantMedianVsSecondQuant
+    from ..plot.cosmoGeneral import quantMedianVsSecondQuant
 
     # config
     redshift = 0.0 #0.8

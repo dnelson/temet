@@ -11,8 +11,8 @@ def post_install():
     """ Custom post-install actions. """
     def find_module_path():
         for p in sys.path:
-            if os.path.isdir(p) and 'tenet' in os.listdir(p):
-                return os.path.join(p, 'tenet')
+            if os.path.isdir(p) and 'temet' in os.listdir(p):
+                return os.path.join(p, 'temet')
     install_path = Path(find_module_path())
 
     home = Path.home()
@@ -50,12 +50,12 @@ class new_install(install):
 
 setup(
     cmdclass={'install': new_install},
-    name='tenet',
-    version='0.0.1',
-    url='https://www.github.com/dnelson86/tenet',
+    name='temet',
+    version='0.2',
+    url='https://www.github.com/dnelson86/temet',
     author='Dylan Nelson',
     packages=find_packages(),
-    package_data={'tenet':['matplotlibrc','util/parallelSort.cpp']},
+    package_data={'temet':['matplotlibrc','util/parallelSort.cpp']},
     include_package_data=True,
     python_requires='>=3.6',
     install_requires=["astropy","cmocean","corner","emcee","fsps","h5py",

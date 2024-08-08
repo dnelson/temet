@@ -10,7 +10,7 @@ from scipy.ndimage.filters import gaussian_filter
 from scipy.stats import binned_statistic
 from numba import jit
 
-# --- root path (e.g. '/home/dnelson/tenet/') ----
+# --- root path (e.g. '/home/username/temet/temet/') ----
 from os.path import dirname, abspath
 rootPath = abspath(dirname(__file__) + '/../') + '/'
 

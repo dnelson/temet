@@ -1,8 +1,8 @@
 
-tenet toolkit: documentation
+temet toolkit: documentation
 ============================
 
-Welcome to the documentation for **tenet**, a python toolkit for the execution, analysis, and 
+Welcome to the documentation for **temet**, a python toolkit for the execution, analysis, and 
 visualization of numerical simulations. Specifically, hydrodynamical simulations run with the 
 `AREPO <https://wwwmpa.mpa-garching.mpg.de/~volker/arepo/>`_ moving mesh code, as well as codes 
 producing similarly structured outputs including 
@@ -42,15 +42,15 @@ with this toolkit.
     :maxdepth: 1
     :caption: Reference
 
-    source/tenet.ICs
-    source/tenet.cosmo
-    source/tenet.load
-    source/tenet.obs
-    source/tenet.plot
-    source/tenet.projects
-    source/tenet.tracer
-    source/tenet.util
-    source/tenet.vis
+    source/temet.ICs
+    source/temet.cosmo
+    source/temet.load
+    source/temet.obs
+    source/temet.plot
+    source/temet.projects
+    source/temet.tracer
+    source/temet.util
+    source/temet.vis
 
 
 Citation and Acknowledgment
