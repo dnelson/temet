@@ -13,7 +13,7 @@ Exploratory Plots for Galaxies (Catalog Values)
 -----------------------------------------------
 
 We continue from the :doc:`first_steps` here. The plotting functions in 
-:py:mod:`plot.cosmoGeneral <tenet.plot.cosmoGeneral>` can be useful for exploring trends in the 
+:py:mod:`plot.cosmoGeneral <temet.plot.cosmoGeneral>` can be useful for exploring trends in the 
 objects of the group catalogs, i.e. galaxies (subhalos).
 
 Let's examine a classic observed galaxy scaling relation: the correlation between gas-phase metallicity, 
@@ -21,9 +21,9 @@ and stellar mass, the "mass-metallicity relation" (MZR).
 
 .. code-block:: python
 
-    sP = tenet.sim(run='tng100-1', redshift=0.0)
+    sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    tenet.plot.cosmoGeneral.quantMedianVsSecondQuant(sP, 'Z_gas', 'mstar_30pkpc')
+    temet.plot.cosmoGeneral.quantMedianVsSecondQuant(sim, 'Z_gas', 'mstar_30pkpc')
 
 This produces a PDF figure named ``medianQuants_TNG100-1_Z_gas_mstar_30pkpc_cen.pdf`` in the current working 
 directory. It shows the mass-metallicity relation of TNG100 galaxies at :math:`z=0`, and looks like this:
@@ -34,9 +34,9 @@ We can enrich the plot in a number of ways, both by tweaking minor aesthetic opt
 additional information from the simulation. For example, we will shift the x-axis bounds, and also 
 include individual subhalos as colored points, coloring based on gas fraction::
 
-    sP = tenet.sim(run='tng100-1', redshift=0.0)
+    sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    tenet.plot.cosmoGeneral.quantMedianVsSecondQuant(sP, 'Z_gas', 'mstar_30pkpc', 
+    temet.plot.cosmoGeneral.quantMedianVsSecondQuant(sim, 'Z_gas', 'mstar_30pkpc', 
       xlim=[8.0, 11.5], scatterColor='fgas2')
 
 This produces the following figure, which highlights how lower mass galaxies have high gas fractions of 
@@ -52,9 +52,9 @@ To more clearly see, and better understand, subtle secondary correlations, we ca
 Instead of using color to represent the actual gas fraction values, we can instead represent the 
 **relative** gas fractions, with respect to their median value at each stellar mass::
 
-    sP = tenet.sim(run='tng100-1', redshift=0.0)
+    sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    tenet.plot.cosmoGeneral.quantMedianVsSecondQuant(sP, 'Z_gas', 'mstar_30pkpc', 
+    temet.plot.cosmoGeneral.quantMedianVsSecondQuant(sim, 'Z_gas', 'mstar_30pkpc', 
       xlim=[8.0, 11.5], scatterColor='fgas2', cRel=[0.5,2.0,False])
 
 More generally, the color quantity is made relative to its running median value as a function of the 
@@ -74,9 +74,9 @@ Instead of plotting individual colored markers, which can be misleading due to o
 we can also use the technique of two-dimensional histograms, where the color can either indicate the 
 number of objects in each pixel::
 
-    sP = tenet.sim(run='tng100-1', redshift=0.0)
+    sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    tenet.plot.cosmoGeneral.quantHisto2D(sP, 'Z_gas', 'mstar_30pkpc', xlim=[8.0, 11.5])
+    temet.plot.cosmoGeneral.quantHisto2D(sim, 'Z_gas', 'mstar_30pkpc', xlim=[8.0, 11.5])
 
 .. image:: _static/plotting_histo2D_1.png
 
@@ -86,9 +86,9 @@ number of objects in each pixel::
 
 Alternatively, the color can indicate the median value of a third property for all the objects in each pixel::
 
-    sP = tenet.sim(run='tng100-1', redshift=0.0)
+    sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    tenet.plot.cosmoGeneral.quantHisto2D(sP, 'Z_gas', 'mstar_30pkpc', cQuant='size_stars', xlim=[8.0, 11.5])
+    temet.plot.cosmoGeneral.quantHisto2D(sim, 'Z_gas', 'mstar_30pkpc', cQuant='size_stars', xlim=[8.0, 11.5])
 
 .. image:: _static/plotting_histo2D_2.png
 
@@ -97,9 +97,9 @@ For example, given the plot above, we can look at the correlation between gas me
 (half mass radius) for galaxies in particular, narrow stellar mass bins, contrasting 
 :math:`10^{9.5} < M_\star / \rm{M}_\odot < 10^{9.6}` against :math:`10^{10.5} < M_\star / \rm{M}_\odot < 10^{10.6}`::
 
-    sP = tenet.sim(run='tng100-1', redshift=0.0)
+    sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    tenet.plot.cosmoGeneral.quantSlice1D([sP], xQuant='size_stars', yQuants=['Z_gas'], sQuant='mstar_30pkpc_log',
+    temet.plot.cosmoGeneral.quantSlice1D([sim], xQuant='size_stars', yQuants=['Z_gas'], sQuant='mstar_30pkpc_log',
       sRange=[[9.5, 9.6],[10.5, 10.6]], ylim=[-0.5, 0.5], xlim=[0.0, 1.2])
 
 .. image:: _static/plotting_histo2D_3.png
@@ -117,7 +117,7 @@ Exploratory Plots for Snapshots (Particle/Cell Values)
 
 Here we also continue from the corresponding section of the :doc:`first_steps`.
 
-Similar to above, :py:mod:`plot.general <tenet.plot.general>` provides general plotting routines focused 
+Similar to above, :py:mod:`plot.general <temet.plot.general>` provides general plotting routines focused 
 on snapshots, i.e. particle-level data. These are also then suitable for non-cosmological simulations.
 
 For example, we could plot the traditional 2D "phase diagram" of density versus temperature. However, we can 
@@ -125,9 +125,9 @@ also use any (known) quantity on either axis. Furthermore, while color can repre
 mass, it can also be used to show the value of a third particle/cell property, in each pixel. Let's look at 
 the relationship between gas pressure and magnetic field strength at :math:`z=0`::
 
-    sP = tenet.sim(run='tng100-1', redshift=0.0)
+    sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    tenet.plot.general.plotPhaseSpace2D(sP, 'gas', xQuant='pres', yQuant='bmag')
+    temet.plot.general.plotPhaseSpace2D(sim, 'gas', xQuant='pres', yQuant='bmag')
 
 .. image:: _static/first_steps_phase2D_1.png
 
@@ -135,11 +135,11 @@ For cosmological simulations, we can also look at particle/cell properties for o
 For example, the relationship between (halocentric) radial velocity and (halocentric) distance, for all dark 
 matter particles within the tenth most massive halo of TNG50-1 at :math:`z=2`::
 
-    sP = tenet.sim(run='tng50-1', redshift=2.0)
+    sim = temet.sim(run='tng50-1', redshift=2.0)
     haloIDs = [9]
 
     opts = {'xlim':[-0.6,0.3], 'ylim':[-800,600], 'clim':[-4.7,-2.3], 'ctName':'inferno'}
-    tenet.plot.general.plotPhaseSpace2D(sP, 'dm', xQuant='rad_rvir', yQuant='vrad', haloIDs=haloIDs, **opts)
+    temet.plot.general.plotPhaseSpace2D(sim, 'dm', xQuant='rad_rvir', yQuant='vrad', haloIDs=haloIDs, **opts)
 
 .. image:: _static/first_steps_phase2D_2.png
 

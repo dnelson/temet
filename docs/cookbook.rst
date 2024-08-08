@@ -11,7 +11,7 @@ Galaxy/Halo Catalog Queries
 
 ::
 
-  sim = tenet.sim("tng50-1", redshift=0.0)
+  sim = temet.sim("tng50-1", redshift=0.0)
 
   # load
   mstar_30pkpc = sim.subhalos("mstar_30pkpc_log")
@@ -29,7 +29,7 @@ In TNG50-1 (z=0.0, snapshot 99) there are 580 such galaxies.
 
 ::
 
-  sim = tenet.sim("tng100-1", redshift=0.0)
+  sim = temet.sim("tng100-1", redshift=0.0)
 
   # load
   cen_flag = sim.subhalos("cen_flag")
@@ -47,7 +47,7 @@ In TNG100-1 (z=0.0, snapshot 99) there are 1282 such galaxies.
 
 ::
 
-  sim = tenet.sim("tng100-1", redshift=0.0)
+  sim = temet.sim("tng100-1", redshift=0.0)
 
   # load
   cen_flag = sim.subhalos("cen_flag") # equals zero for satellites
@@ -63,7 +63,7 @@ In TNG100-1 (z=0.0, snapshot 99) there are 109806 such satellite galaxies.
 
 Alternatively, and more directly::
 
-  sim = tenet.sim("tng100-1", redshift=0.0)
+  sim = temet.sim("tng100-1", redshift=0.0)
 
   # load
   cen_flag = sim.subhalos("cen_flag") # equals zero for satellites
@@ -92,7 +92,7 @@ Particle/Cell Snapshot Queries
 
 ::
 
-  sim = tenet.sim("tng100-1", redshift=0.0)
+  sim = temet.sim("tng100-1", redshift=0.0)
 
   # load
   ages = sim.stars("stellar_age")
@@ -109,7 +109,7 @@ These primarily decrease with time as gas is converted into stars::
   ptNum = sim.ptNum("gas")
 
   for z in [10, 6, 4, 2, 1, 0]:
-    sim = tenet.sim("tng100-1", redshift=z)
+    sim = temet.sim("tng100-1", redshift=z)
 
     print(f'At {z = :.1f} there are {sim.numPart[ptNum]} gas cells.')
 
@@ -131,12 +131,12 @@ Practice Exercise Solutions
 The "Quickstart Guide for Heidelberg Groups (MPIA/ITA)" suggests a number of exercises to get familiar 
 with the Illustris[TNG] data. Here we provide an example of solutions to each using this package::
 
-  import tenet
+  import temet
   import matplotlib.pyplot as plt
 
 We will work with TNG100-3 at :math:`z=0` for convenience::
 
-  sim = tenet.sim('tng100-3', redshift=0.0)
+  sim = temet.sim('tng100-3', redshift=0.0)
 
 Exercise 0a
 ^^^^^^^^^^^

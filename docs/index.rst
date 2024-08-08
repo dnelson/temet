@@ -43,8 +43,10 @@ with this toolkit.
     :caption: Reference
 
     source/temet.ICs
+    source/temet.collab
     source/temet.cosmo
     source/temet.load
+    source/temet.ML
     source/temet.obs
     source/temet.plot
     source/temet.projects

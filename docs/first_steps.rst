@@ -5,37 +5,37 @@ First, start a command-line ``ipython`` session, or a Jupyter notebook. Then imp
 
 .. code-block:: python
 
-    import tenet
+    import temet
 
 Simulation Selection
 --------------------
 
-Most analysis is based around a "simulation parameters" object (typically called ``sP`` or ``sim`` below), 
+Most analysis is based around a "simulation parameters" object (typically called ``sim`` below), 
 which specifies the simulation and snapshot of interest, among other details.  You can then select a simulation and snapshot from a known list, e.g. the TNG100-2 simulation of IllustrisTNG at redshift two:
 
 .. code-block:: python
 
-    sP = tenet.sim(res=910, run='tng', redshift=2.0)
+    sim = temet.sim(res=910, run='tng', redshift=2.0)
 
 Or the TNG50-1 simulation at redshift zero, by its short-hand name
 
 .. code-block:: python
 
-    sP = tenet.sim(run='tng50-1', redshift=0.0)
+    sim = temet.sim(run='tng50-1', redshift=0.0)
 
 Note that if you would like to select a simulation which is not in the pre-defined list of known simulations, 
 i.e. a simulation you have run yourself, then you can specify it simply by path
 
 .. code-block:: python
 
-    sP = tenet.sim('/home/user/sims/sim_run/', redshift=0.0)
+    sim = temet.sim('/home/user/sims/sim_run/', redshift=0.0)
 
 In all cases, the redshift or snapshot number is optionally used to pre-select the particular snapshot of 
 interest. You can also specify the overall simulation without this, for example
 
 .. code-block:: python
 
-    sim = tenet.sim('tng300-1')
+    sim = temet.sim('tng300-1')
 
 
 Loading Data
@@ -46,16 +46,16 @@ particular fields from the group catalogs
 
 .. code-block:: python
 
-    subs = sP.groupCat(fieldsSubhalos=['SubhaloMass','SubhaloPos'])
-    sub_masses_logmsun = sP.units.codeMassToLogMsun( subs['SubhaloMass'] )
+    subs = sim.groupCat(fieldsSubhalos=['SubhaloMass','SubhaloPos'])
+    sub_masses_logmsun = sim.units.codeMassToLogMsun( subs['SubhaloMass'] )
 
 To load particle-level data from the snapshot itself
 
 .. code-block:: python
 
-    gas_pos = sP.snapshotSubset('gas', 'pos')
-    star_masses = sP.snapshotSubsetP('stars', 'mass')
-    dm_vel_sub10 = sP.snapshotSubset('dm', 'vel', subhaloID=10)
+    gas_pos = sim.snapshotSubset('gas', 'pos')
+    star_masses = sim.snapshotSubsetP('stars', 'mass')
+    dm_vel_sub10 = sim.snapshotSubset('dm', 'vel', subhaloID=10)
 
 In addition to shorthand names for fields such as "pos" (mapping to "Coordinates"), many custom fields 
 at both the particle and group catalog level are defined. Note that ``snapshotSubsetP()`` is the 
@@ -64,17 +64,17 @@ shorthands, for example
 
 .. code-block:: python
 
-    subs = sP.subhalos('mstar_30pkpc')
-    x = sP.gas('cellsize_kpc')
+    subs = sim.subhalos('mstar_30pkpc')
+    x = sim.gas('cellsize_kpc')
 
-    fof10 = sP.halo(10) # all fields
-    sub_sat1 = sP.subhalo( fof10['GroupFirstSub']+1 ) # all fields
+    fof10 = sim.halo(10) # all fields
+    sub_sat1 = sim.subhalo( fof10['GroupFirstSub']+1 ) # all fields
 
 
 Exploratory Plots for Galaxies
 ------------------------------
 
-The various plotting functions in :py:mod:`plot.cosmoGeneral <tenet.plot.cosmoGeneral>` are designed to 
+The various plotting functions in :py:mod:`plot.cosmoGeneral <temet.plot.cosmoGeneral>` are designed to 
 be as general and automatic as possible. They are idea for a quick look or for exploring trends in the 
 objects of the group catalogs, i.e. galaxies (subhalos).
 
@@ -83,9 +83,9 @@ and stellar mass, the "mass-metallicity relation" (MZR).
 
 .. code-block:: python
 
-    sP = tenet.sim(run='tng100-1', redshift=0.0)
+    sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    tenet.plot.cosmoGeneral.quantMedianVsSecondQuant(sP, 'Z_gas', 'mstar_30pkpc')
+    temet.plot.cosmoGeneral.quantMedianVsSecondQuant(sim, 'Z_gas', 'mstar_30pkpc')
 
 This produces a PDF figure named ``medianQuants_TNG100-1_Z_gas_mstar_30pkpc_cen.pdf`` in the current working 
 directory. It shows the mass-metallicity relation of TNG100 galaxies at :math:`z=0`, and looks like this:
@@ -96,9 +96,9 @@ We can enrich the plot in a number of ways, both by tweaking minor aesthetic opt
 additional information from the simulation. For example, we will shift the x-axis bounds, and also 
 include individual subhalos as colored points, coloring based on gas fraction::
 
-    sP = tenet.sim(run='tng100-1', redshift=0.0)
+    sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    tenet.plot.cosmoGeneral.quantMedianVsSecondQuant(sP, 'Z_gas', 'mstar_30pkpc', 
+    temet.plot.cosmoGeneral.quantMedianVsSecondQuant(sim, 'Z_gas', 'mstar_30pkpc', 
       xlim=[8.0, 11.5], scatterColor='fgas2')
 
 This produces the following figure, which highlights how lower mass galaxies have high gas fractions of 
@@ -118,7 +118,7 @@ and correlates with other galaxy properties.
 Exploratory Plots for Snapshots
 -------------------------------
 
-Similarly, :py:mod:`plot.general <tenet.plot.general>` provides general plotting routines focused on snapshots, 
+Similarly, :py:mod:`plot.general <temet.plot.general>` provides general plotting routines focused on snapshots, 
 i.e. particle-level data. These are also then suitable for non-cosmological simulations.
 
 Functionality includes 1D histograms, 2D distributions, median relations, and radial profiles.
@@ -128,9 +128,9 @@ also use any (known) quantity on either axis. Furthermore, while color can repre
 mass, it can also be used to show the value of a third particle/cell property, in each pixel. Let's look at 
 the relationship between gas pressure and magnetic field strength at :math:`z=0`::
 
-    sP = tenet.sim(run='tng100-1', redshift=0.0)
+    sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    tenet.plot.general.plotPhaseSpace2D(sP, 'gas', xQuant='pres', yQuant='bmag')
+    temet.plot.general.plotPhaseSpace2D(sim, 'gas', xQuant='pres', yQuant='bmag')
 
 .. image:: _static/first_steps_phase2D_1.png
 
@@ -138,11 +138,11 @@ For cosmological simulations, we can also look at particle/cell properties for o
 For example, the relationship between (halocentric) radial velocity and (halocentric) distance, for all dark 
 matter particles within the tenth most massive halo of TNG50-1 at :math:`z=2`::
 
-    sP = tenet.sim(run='tng50-1', redshift=2.0)
+    sim = temet.sim(run='tng50-1', redshift=2.0)
     haloIDs = [9]
 
     opts = {'xlim':[-0.6,0.3], 'ylim':[-800,600], 'clim':[-4.7,-2.3], 'ctName':'inferno'}
-    tenet.plot.general.plotPhaseSpace2D(sP, 'dm', xQuant='rad_rvir', yQuant='vrad', haloIDs=haloIDs, **opts)
+    temet.plot.general.plotPhaseSpace2D(sim, 'dm', xQuant='rad_rvir', yQuant='vrad', haloIDs=haloIDs, **opts)
 
 .. image:: _static/first_steps_phase2D_2.png
 

@@ -14,33 +14,33 @@ For example, for general particle-level plots:
 
 .. code-block:: python
 
-    sP = simParams(res=1820, run='tng', redshift=0.0)
-    sP2 = simParams(res=910, run='tng', redshift=0.0)
+    sim = temet.sim(res=1820, run='tng', redshift=0.0)
+    sim2 = temet.sim(res=910, run='tng', redshift=0.0)
 
-    plot.general.plotHistogram1D([sP], 'gas', 'temp')
-    plot.general.plotHistogram1D([sP], 'gas', 'temp', subhaloIDs=[0,1,2,3,4])
-    plot.general.plotHistogram1D([sP, sP2], 'gas', 'dens', qRestrictions=[('temp',5.0,np.inf)])
+    plot.general.plotHistogram1D([sim], 'gas', 'temp')
+    plot.general.plotHistogram1D([sim], 'gas', 'temp', subhaloIDs=[0,1,2,3,4])
+    plot.general.plotHistogram1D([sim, sim2], 'gas', 'dens', qRestrictions=[('temp',5.0,np.inf)])
 
-    plot.general.plotPhaseSpace2D(sP, 'gas', xQuant='numdens', yQuant='temp')
-    plot.general.plotPhaseSpace2D(sP, 'gas', xQuant='numdens', yQuant='temp', meancolors=['dens','O VI frac'])
+    plot.general.plotPhaseSpace2D(sim, 'gas', xQuant='numdens', yQuant='temp')
+    plot.general.plotPhaseSpace2D(sim, 'gas', xQuant='numdens', yQuant='temp', meancolors=['dens','O VI frac'])
 
-    plot.general.plotParticleMedianVsSecondQuant(sP, 'dm', xQuant='velmag', yQuant='veldisp')
+    plot.general.plotParticleMedianVsSecondQuant(sim, 'dm', xQuant='velmag', yQuant='veldisp')
 
-    plot.general.plotStackedRadialProfiles1D([sP], subhaloIDs=[0], 'gas', ptProperty='entropy', op='median')
-    plot.general.plotStackedRadialProfiles1D([sP,sP2], subhaloIDs=[[0,1,2],[1,4,5]], 'gas', ptProperty='bmag')
+    plot.general.plotStackedRadialProfiles1D([sim], subhaloIDs=[0], 'gas', ptProperty='entropy', op='median')
+    plot.general.plotStackedRadialProfiles1D([sim,sim2], subhaloIDs=[[0,1,2],[1,4,5]], 'gas', ptProperty='bmag')
 
 And for general group catalog-level plots:
 
 .. code-block:: python
 
-    sP = simParams(run='tng300-1', redshift=0.0)
+    sim = temet.sim(run='tng300-1', redshift=0.0)
 
-    plot.cosmoGeneral.quantHisto2D(sP, pdf=None, yQuant='sfr2_surfdens', xQuant='mstar2_log', cenSatSelect='cen')
-    plot.cosmoGeneral.quantHisto2D(sP, pdf=None, yQuant='stellarage', xQuant='mstar_30pkpc', cQuant='Krot_stars2')
+    plot.cosmoGeneral.quantHisto2D(sim, pdf=None, yQuant='sfr2_surfdens', xQuant='mstar2_log', cenSatSelect='cen')
+    plot.cosmoGeneral.quantHisto2D(sim, pdf=None, yQuant='stellarage', xQuant='mstar_30pkpc', cQuant='Krot_stars2')
 
-    plot.cosmoGeneral.quantSlice1D([sP], pdf=None, xQuant='sfr2', yQuants=['BH_BolLum','Z_gas'], sQuant='mstar_30pkpc_log', sRange=[10.0,10.2])
+    plot.cosmoGeneral.quantSlice1D([sim], pdf=None, xQuant='sfr2', yQuants=['BH_BolLum','Z_gas'], sQuant='mstar_30pkpc_log', sRange=[10.0,10.2])
 
-    plot.cosmoGeneral.quantMedianVsSecondQuant([sP], pdf=None, yQuants=['Z_stars','ssfr'], xQuant='mhalo_200')
+    plot.cosmoGeneral.quantMedianVsSecondQuant([sim], pdf=None, yQuants=['Z_stars','ssfr'], xQuant='mhalo_200')
 
 Note that at the bottom of `plot/general.py` and `plot/cosmoGeneral.py` there are several "driver" functions which 
 show more complex examples of making these types of plots, including advanced functionality, and automatic 
@@ -88,9 +88,9 @@ For a halo-based render, the process is the same, and `subhaloInd` specifies the
     run = 'tng50-3'
     redshift = 0.0
 
-    sP = simParams(run=run, redshift=redshift)
-    fof10 = sP.halo(10)
-    fof11 = sP.halo(11)
+    sim = temet.sim(run=run, redshift=redshift)
+    fof10 = sim.halo(10)
+    fof11 = sim.halo(11)
 
     panels = []
     panels.append( {'subhaloInd':fof10['GroupFirstSub'], 'partType':'gas', 'partField':'coldens_msunkpc2'} )
@@ -126,15 +126,15 @@ For example:
 
 .. code-block:: python
 
-    sP = simParams(run='tng100-1', redshift=2.0)
+    sim = temet.sim(run='tng100-1', redshift=2.0)
     for i in range(8):
-        x = sP.auxCat('Subhalo_Mass_30pkpc_Stars', pSplit=[i,8])
+        x = sim.auxCat('Subhalo_Mass_30pkpc_Stars', pSplit=[i,8])
 
 In general, loading an auxCat which has already been created:
 
 .. code-block:: python
 
-    x = sP.auxCat('Subhalo_Mass_30pkpc_Stars')
+    x = sim.auxCat('Subhalo_Mass_30pkpc_Stars')
 
 
 Synthetic Observations
@@ -155,7 +155,7 @@ Known Simulation Families
 
 A few suites of simulations (those available on the MPCDF storage systems) are 'known' and can be selected 
 by name. In this case metadata and other important attributes are hardcoded in 
-:mod:`simParams <tenet.util.simParams>`. Currently, the simulation families specified in this way are:
+:mod:`simParams <temet.util.simParams>`. Currently, the simulation families specified in this way are:
 
 * Illustris
     * Illustris-1, Illustris-2, Illustris-3, Illustris-1-Dark, Illustris-2-Dark, Illustris-3-Dark, Illustris-2-NR, Illustris-3-NR
@@ -170,7 +170,7 @@ by name. In this case metadata and other important attributes are hardcoded in
     * TNG50-1, TNG50-2, TNG50-3, TNG50-4, TNG50-1-Dark, TNG50-2-Dark, TNG50-3-Dark, TNG50-4-Dark
 
 * TNG variations
-    * L25n512_{xxxx}, L25n256_{xxxx}, L25n128_{xxxx} where `variant={xxxx}` gives the 4-digit variation number.
+  * L25n512_{xxxx}, L25n256_{xxxx}, L25n128_{xxxx} where `variant={xxxx}` gives the 4-digit variation number.
 
 * EAGLE
     * Eagle100, Eagle100-Dark (rewritten versions)

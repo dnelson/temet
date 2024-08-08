@@ -39,15 +39,15 @@ Automatic Installation
 
 .. code-block:: bash
 
-    pip install git+ssh://git@github.com/dnelson86/tenet.git
+    pip install git+ssh://git@github.com/dnelson86/temet.git
 
-2. Or, if you plan on editing, making changes, and adding functionality to this package (this is expected to be the most common choice), then first clone the repository into your home directory, here into a ``tenet`` directory, then install the package in 'editable' mode. This means that the files in this directory are not copied anywhere, but are used as is. Any changes you make are reflected (i.e. usable) in your python environment.
+2. Or, if you plan on editing, making changes, and adding functionality to this package (this is expected to be the most common choice), then first clone the repository into your home directory, here into a ``temet`` directory, then install the package in 'editable' mode. This means that the files in this directory are not copied anywhere, but are used as is. Any changes you make are reflected (i.e. usable) in your python environment.
 
 .. code-block:: bash
 
     cd ~
-    git clone git@github.com:dnelson86/tenet.git
-    pip install -e tenet
+    git clone git@github.com:dnelson86/temet.git
+    pip install -e temet
 
 
 Manual Installation
@@ -55,12 +55,12 @@ Manual Installation
 
 If the above didn't work or gave errors, you may need to go through a manual installation:
 
-1. Clone the repository into your home directory, here into a ``tenet`` directory
+1. Clone the repository into your home directory, here into a ``temet`` directory
 
 .. code-block:: bash
 
     cd ~
-    git clone git@github.com:dnelson86/tenet.git
+    git clone git@github.com:dnelson86/temet.git
 
 2. Clone the public Illustris data analysis python scripts
 
@@ -75,20 +75,20 @@ For example, add the following lines to your ``~/.bashrc`` file
 
 .. code-block:: bash
 
-    export PYTHONPATH+=:$HOME/tenet/:$HOME/illustris_release/
+    export PYTHONPATH+=:$HOME/temet/:$HOME/illustris_release/
 
 4. Install all python dependencies as required
 
 .. code-block:: bash
 
-    pip install --user -r ~/tenet/requirements.txt
+    pip install --user -r ~/temet/requirements.txt
 
 6. Point ``matplotlib`` to the default settings file
 
 .. code-block:: bash
 
     mkdir -p ~/.config/matplotlib
-    ln -s ~/tenet/tenet/matplotlibrc ~/.config/matplotlib/
+    ln -s ~/temet/temet/matplotlibrc ~/.config/matplotlib/
 
 and install the Roboto font used by default
 
@@ -103,8 +103,8 @@ and install the Roboto font used by default
 
 .. code-block:: bash
 
-    cd ~/tenet/tenet/tables/
-    wget -r -nH --cut-dirs=1 --no-parent --reject="index.html*" -e robots=off tenet.tng-project.org/tables/
+    cd ~/temet/temet/tables/
+    wget -r -nH --cut-dirs=1 --no-parent --reject="index.html*" -e robots=off temet.tng-project.org/tables/
 
 8. Organize simulation directories as follows
 

@@ -32,7 +32,7 @@ For complete documentation of available fields, their definitions, and units, se
 
 * the IllustrisTNG Public Data Release `Snapshot Documentation <https://www.tng-project.org/data/docs/specifications/#sec1>`_.
 
-The :py:mod:`tenet.load.snap_fields` module defines metadata associated with these fields, 
+The :py:mod:`temet.load.snap_fields` module defines metadata associated with these fields, 
 including a description (label for plotting), units, and default bounds.
 
 
@@ -52,7 +52,7 @@ Custom Snapshot Quantities
 --------------------------
 
 The following particle/cell-level custom quantities are currently defined, in the 
-:py:mod:`tenet.load.snap_fields_custom` module, along with associated metadata including 
+:py:mod:`temet.load.snap_fields_custom` module, along with associated metadata including 
 a description, units, reasonable bounds, and so on.
 
 .. include:: quants_custom.rst
@@ -61,10 +61,10 @@ a description, units, reasonable bounds, and so on.
     # note: changing intro line from '..' to '.. exec::' makes this an executing code block
     # this snippet is left here, in case we need a similar source parsing functionality
 
-    # code executes in tenet/ directory, load the source of a file
+    # code executes in temet/ directory, load the source of a file
     import re
 
-    with open('tenet/plot/quantities.py','r') as f:
+    with open('temet/plot/quantities.py','r') as f:
         lines = f.readlines()
 
     # start output (is then run through the rest/html build parser)
@@ -108,13 +108,13 @@ field is simple: just define a function, and decorate it with the ``@snap_field`
 shown below. It must accept four ordered arguments: ``(sim, partType, field, args)``, and must 
 return a numpy array of the requested values.
 
-You can find all built-in custom quantities defined in the :py:mod:`tenet.load.snap_fields_custom` 
+You can find all built-in custom quantities defined in the :py:mod:`temet.load.snap_fields_custom` 
 module. If you are editing this package directly, or want to share your custom fields in the 
 future, you can add to that file. But, you can also define your custom field in any file you want.
 
 For example, to define a new custom field for the 'spherical equivalent radius' of a gas cell::
 
-    from tenet.load.snapshot import snap_field
+    from temet.load.snapshot import snap_field
 
     @snap_field
     def cell_radius(sim, partType, field, args):
@@ -166,7 +166,7 @@ Custom Catalog Quantities
 -------------------------
 
 The following halo/subhalo custom quantities are currently defined, in the
-:py:mod:`tenet.load.groupcat_fields_custom` module, along with associated metadata including
+:py:mod:`temet.load.groupcat_fields_custom` module, along with associated metadata including
 a description, units, reasonable bounds, and so on.
 
 .. include:: quants_cat_custom.rst

@@ -3,7 +3,7 @@
 # to build:
 #
 # sphinx-apidoc -t docs/_templates/ -o docs/source .
-# rm docs/source/.rst docs/source/temet.rst docs/source/modules.rst
+# rm docs/source/.rst docs/source/temet.rst docs/source/modules.rst docs/source/setup.rst
 # sphinx-build -b html docs/ docs/_build/
 
 import sys

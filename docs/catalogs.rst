@@ -70,25 +70,25 @@ Generating and Loading Catalogs
 
 Once you have added a new entry to the auxCat dictionary, you can request this catalog for a given run::
 
-    sP = simParams(run='tng100-2', redshift=0.0)
-    data, meta = sP.auxCat('MyCatalogName')
+    sim = simParams(run='tng100-2', redshift=0.0)
+    data, meta = sim.auxCat('MyCatalogName')
 
 All methods to generate catalogs should support ``pSplit``-based :ref:`parallelism`. So you can launch a 
 distributed job, for example with eight independent jobs, each executing::
 
-    sP = simParams(run='tng100-2', redshift=0.0)
-    x = sP.auxCat('MyCatalogName', pSplit=[i,8])
+    sim = simParams(run='tng100-2', redshift=0.0)
+    x = sim.auxCat('MyCatalogName', pSplit=[i,8])
 
 After the final job completes, the eight intermediate output files can be combined into the final catalog::
 
-    data, meta = sP.auxCat('MyCatalogName', pSplit=[0,8])
+    data, meta = sim.auxCat('MyCatalogName', pSplit=[0,8])
 
 In some cases you may wish to compute a catalog across several chunks in this way, for example in order to 
 reduce the peak memory usage by avoiding to load an entire snapshot at once, but still want to run these 
 chunks one after another on a single machine. In this case the following shorthand can be used::
 
-    sP = simParams(run='tng100-2', redshift=0.0)
-    data, meta = sP.auxCatSplit('MyCatalogName')
+    sim = simParams(run='tng100-2', redshift=0.0)
+    data, meta = sim.auxCatSplit('MyCatalogName')
 
 .. warning::
 
@@ -124,11 +124,11 @@ all the properties we know for subhalos.
 
 After you have made this addition, you can then load the corresponding data as::
 
-    x = sP.simSubhaloQuantity('my_new_field')
+    x = sim.simSubhaloQuantity('my_new_field')
 
 And request it on any of the general plot routines, for instance::
 
-    plot.cosmoGeneral.quantMedianVsSecondQuant(sP, 'my_new_field', 'mstar_30pkpc')
+    plot.cosmoGeneral.quantMedianVsSecondQuant(sim, 'my_new_field', 'mstar_30pkpc')
 
 
 Analysis Capabilities
@@ -243,7 +243,7 @@ The code base currently has the following catalog definitions, as listed in the
 
 .. exec::
 
-    from tenet.load.auxcat import fieldComputeFunctionMapping
+    from temet.load.auxcat import fieldComputeFunctionMapping
 
     print('.. csv-table::')
     print('    :header: "Catalog Name", "Generator Function", "Arguments"')
