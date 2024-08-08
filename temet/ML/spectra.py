@@ -13,20 +13,24 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data.dataloader import default_collate
 
-from ..cosmo.spectrum_analysis import load_spectra_subset
+from ..cosmo.spectrum_analysis import load_spectra_subset, load_absorber_spectra, absorber_catalog
+from ..cosmo.spectrum import lines
 from ..util import simParams
+from ..util.helper import running_median
 from ..plot.config import *
 
-from tenet.ML.common import train_model, test_model
+from ..ML.common import train_model, test_model
 
 class MockSpectraDataset(Dataset):
     """ A custom dataset for loading mock spectra and corresponding labels. """
     def __init__(self, simname, redshift, ion, instrument, model_type, EW_minmax=None, 
-                 SNR=None, num_noisy_per_sample=1):
+                 SNR=None, num_noisy_per_sample=1, coldens=False):
         self.sim = simParams(simname, redshift=redshift)
         self.ion = ion
         self.instrument = instrument
         self.model_type = model_type
+        self.EW_minmax = EW_minmax
+        self.coldens = coldens
 
         # noise data augmentation
         self.SNR = SNR
@@ -37,32 +41,50 @@ class MockSpectraDataset(Dataset):
         else:
             assert self.num_noisy_per_sample == 1 # disabled
 
-        # load data
+        # hard-coded config
         mode = 'all' #'random' # for testing
         num = None #10 # for testing
         solar = False # fixed
         dv_window = 1000.0 # +/- km/s
+        indiv_abs = True # use absorber catalog and spectra + EWs + Ns for individual absorbers
 
-        cacheFilename = 'mockspec_cache_%s-%d_%s-%s_%s_%s_%s-%s_%.0f.hdf5' % \
-            (self.sim.simName, self.sim.snap, ion.replace(' ',''), instrument, str(EW_minmax).replace(' ',''), mode, num, solar, dv_window)
+        # load data with caching
+        cacheFilename = 'mockspec_cache_%s-%d_%s-%s_%s_%s_%s-%s_%.0f%s.hdf5' % \
+            (self.sim.simName, self.sim.snap, ion.replace(' ',''), instrument, 
+             str(EW_minmax).replace(' ',''), mode, num, solar, dv_window, '-abs' if indiv_abs else '')
         
         if isfile(cacheFilename):
             # load from condensed cache file
             print(f'Loading cached mock spectra: [{cacheFilename}]')
             with h5py.File(cacheFilename, 'r') as f:
                 EW = f['EW'][()]
+                N = f['N'][()]
                 flux = f['flux'][()]
                 wave = f['wave'][()]
                 self.lineNames = f['lineNames'][()].decode()
         else:
             # load from full files
-            wave, EW, lineNames, flux = load_spectra_subset(self.sim, ion, instrument, solar, mode, num, EW_minmax, dv=dv_window)
+            if indiv_abs:
+                # individual absorbers
+                assert mode == 'all' and num is None
+
+                # need to specify which line we take the absorber catalog from, although the 
+                # actual flux of the spectra are observable i.e. contain all (nearby) lines of this ion
+                lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
+                assert len(lineNames) in [1,2] # only handling single or doublets
+                line = lineNames[0] # single line
+
+                wave, flux, EW, N, lineNames = load_absorber_spectra(self.sim, line, instrument, solar, EW_minmax, dv=dv_window)
+            else:
+                # old: returns the single largest feature from each spectrum
+                wave, flux, EW, N, lineNames = load_spectra_subset(self.sim, ion, instrument, solar, mode, num, EW_minmax, dv=dv_window)
 
             self.lineNames = ','.join([line.split('_')[1] for line in lineNames])
 
             # save to condensed cache file
             with h5py.File(cacheFilename, 'w') as f:
                 f['EW'] = EW
+                f['N'] = N
                 f['flux'] = flux
                 f['wave'] = wave
                 f['lineNames'] = self.lineNames.encode('ascii')
@@ -76,11 +98,17 @@ class MockSpectraDataset(Dataset):
 
             # store (tile: [0, 1, ..., N] -> [0, 1, ..., N, 0, 1, ..., N, ...])
             flux = flux_noisy
+
             EW = np.tile(EW, self.num_noisy_per_sample)
+            N = np.tile(N, self.num_noisy_per_sample)
 
         # store samples (1d flux vectors) and labels (EW), only within the selected range
         self.samples = torch.from_numpy(flux)
-        self.labels = torch.from_numpy(EW)
+
+        if coldens:
+            self.labels = torch.from_numpy(N)
+        else:
+            self.labels = torch.from_numpy(EW)
 
         # for CNN: insert extra (middle) dimension for in_channels == out_channels == 1
         # input has shape [N_batch, in_channels, num_inputs], output has shape [N_batch, out_channels, conv_num_out]
@@ -88,17 +116,21 @@ class MockSpectraDataset(Dataset):
             self.samples = self.samples.unsqueeze(1)
 
         # establish transformations: normalize to ~[0,1] (going outside this range is ok)
-        # TODO: EWs are linear, probably a bad idea if we want to consider EW_min < 0.1 Ang or so
-        EW_min = 0.0
-        EW_max = 5.0
-        
+        if coldens:
+            val_min = 10.0
+            val_max = 17.0
+        else:
+            # TODO: EWs are linear, probably a bad idea if we want to consider EW_min < 0.1 Ang or so
+            val_min = 0.0
+            val_max = 5.0
+            
         def target_transform(x):
-            return (x - EW_min) / (EW_max - EW_min)
+            return (x - val_min) / (val_max - val_min)
         
         def target_invtransform(x):
-            return x * (EW_max - EW_min) + EW_min
+            return x * (val_max - val_min) + val_min
         
-        self.transform = None # no need to transform, already [0,1]
+        self.transform = None # no need to transform relative flux, already in [0,1]
         self.target_transform = target_transform
         self.target_invtransform = target_invtransform
 
@@ -227,8 +259,16 @@ class cnn_network(nn.Module):
         L = L.squeeze(-1) # remove the extra dimension corresponding to the channel number
         return L
 
-def train(model_type='cnn', hidden_size=8, kernel_size=3, num_hidden_layers=1, verbose=True):
-    """ Train the mockspec model. """
+def train(model_type='cnn', model_params=None, verbose=True):
+    """ Train the mockspec model.
+    
+    Args:
+      model_type (str): either 'mlp' or 'cnn'.
+      model_params (dict): pairs of name:value model parameters. 
+        for mlp: hidden_size, num_hidden_layers.
+        for cnn: kernel_size, hidden_size, num_hidden_layers.
+      verbose (bool): print out training progress. 
+    """
     torch.manual_seed(424242+1)
     rng = np.random.default_rng(424242)
 
@@ -238,10 +278,11 @@ def train(model_type='cnn', hidden_size=8, kernel_size=3, num_hidden_layers=1, v
 
     ion = 'C IV'
     instrument = 'SDSS-BOSS'
-    EW_minmax = [3.0, 6.0] # Ang, for testing
+    EW_minmax = [0.5, 6.0] # Ang, for testing
+    coldens = True #False # target is column density rather than equivalent width
 
     # noise data augmentation
-    SNR = None # signal to noise ratio (None for no noise addition)
+    SNR = None #100 #None # signal to noise ratio (None for no noise addition)
     num_noisy_per_sample = 1
 
     # learning parameters
@@ -251,8 +292,6 @@ def train(model_type='cnn', hidden_size=8, kernel_size=3, num_hidden_layers=1, v
     acc_tol = 0.05 # acceptable tolerance for reporting the prediction accuracy (EW/ang)
     epochs = 15 # number of times to iterate over the dataset
 
-    modelFilename = 'mockspec_model_%s_%s-%s_%d-%d.pth' % (model_type,ion.replace(' ',''),instrument,hidden_size,kernel_size)
-
     # check gpu
     if verbose:
         print(f'GPU is available: {torch.cuda.is_available()} [# devices = {torch.cuda.device_count()}]')
@@ -261,7 +300,7 @@ def train(model_type='cnn', hidden_size=8, kernel_size=3, num_hidden_layers=1, v
 
     # load data
     data = MockSpectraDataset(sim, redshift, ion, instrument, model_type, EW_minmax, 
-                              SNR, num_noisy_per_sample)
+                              SNR, num_noisy_per_sample, coldens)
 
     spec_n = data[0][0].shape[-1] # number of wavelength bins
     
@@ -290,11 +329,25 @@ def train(model_type='cnn', hidden_size=8, kernel_size=3, num_hidden_layers=1, v
 
     # define model
     if model_type == 'mlp':
-        model = mlp_network(hidden_size=hidden_size, num_inputs=spec_n,
-                            num_hidden_layers=num_hidden_layers)
+        if model_params is None: # defaults
+            model_params = {'hidden_size': 8, 'num_hidden_layers': 1, 'kernel_size': 0}
+
+        model = mlp_network(hidden_size=model_params['hidden_size'], 
+                            num_inputs=spec_n,
+                            num_hidden_layers=model_params['num_hidden_layers'])
     if model_type == 'cnn':
-        model = cnn_network(kernel_size=kernel_size, hidden_size=hidden_size, 
-                            num_inputs=spec_n, num_hidden_layers=num_hidden_layers)
+        if model_params is None: # defaults
+            model_params = {'hidden_size': 8, 'num_hidden_layers': 1, 'kernel_size': 3}
+
+        model = cnn_network(kernel_size=model_params['kernel_size'], 
+                            hidden_size=model_params['hidden_size'], 
+                            num_inputs=spec_n, 
+                            num_hidden_layers=model_params['num_hidden_layers'])
+
+    modelFilename = 'mockspec_model_%s_%s-%s_%d-%d-%d%s.pth' % \
+        (model_type,ion.replace(' ',''),instrument,
+         model_params['hidden_size'],model_params['num_hidden_layers'],model_params['kernel_size'],
+         '-N' if coldens else '-EW')
 
     print(f'\nModel: [{model_type}] with layers/parameters:')
     for name, param in model.named_parameters():
@@ -331,25 +384,34 @@ def train(model_type='cnn', hidden_size=8, kernel_size=3, num_hidden_layers=1, v
 
     return test_loss_best
 
-def plot_true_vs_predicted_EW(model_type='cnn', hidden_size=8, kernel_size=3):
+def plot_true_vs_predicted(model_type='cnn', params=None):
     """ Scatterplot of true vs predicted labels, versus the one-to-one (perfect) relation. """
     # config
     sim = 'TNG50-1'
     redshift = 2.0 # 1.5, 2.0, 3.0, 4.0, 5.0
-
     ion = 'C IV'
     instrument = 'SDSS-BOSS'
-    EW_minmax = [3.0, 6.0] # Ang, for testing
 
-    # load data
-    data = MockSpectraDataset(sim, redshift, ion, instrument, model_type, EW_minmax)
+    SNR = None # evaluate only the original number of (noiseless) spectra
+
+    # TODO: these have to match the trained model, makes no sense to specify here, should be factored out
+    EW_minmax = [0.5, 6.0] # Ang, for testing
+    coldens = True # target is column density rather than equivalent width
 
     # load model and evaluate on all data
-    modelFilename = 'mockspec_model_%s_%s-%s_%d-%d.pth' % (model_type,ion.replace(' ',''),instrument,hidden_size,kernel_size)
+    modelFilename = 'mockspec_model_%s_%s-%s_%d-%d-%d%s.pth' % \
+        (model_type,ion.replace(' ',''),instrument,
+         params['hidden_size'],params['num_hidden_layers'],params['kernel_size'],
+         '-N' if coldens else '-EW')
+    
     print(modelFilename)
-    model = torch.load(modelFilename)
+    model = torch.load(modelFilename, weights_only=False)
 
     model.eval()
+
+    # load data
+    data = MockSpectraDataset(sim, redshift, ion, instrument, model_type, EW_minmax, \
+                              SNR=None, coldens=coldens)
 
     if 0:
         # debug: run only the Conv1D layer on a single input spectrum, to see its output
@@ -362,23 +424,51 @@ def plot_true_vs_predicted_EW(model_type='cnn', hidden_size=8, kernel_size=3):
             print(name, param.shape, param)
 
     # model(X) evaluation where X.shape = [num_pts, num_fields_per_pt], i.e. forward pass
+    X = data.labels.numpy()
+
     with torch.no_grad():
         Y = data.target_invtransform(model(data.samples))
+        Y = np.squeeze(Y)
 
     # plot
     fig, ax = plt.subplots(figsize=(figsize[1],figsize[1]))
 
-    ax.set_ylabel(r'EW$_{\rm %s\,%s,predicted}$ [ $\AA$ ]' % (ion,data.lineNames))
-    ax.set_xlabel(r'EW$_{\rm %s\,%s,true}$ [ $\AA$ ]' % (ion,data.lineNames))
+    if coldens:
+        ax.set_ylabel(r'N$_{\rm %s,predicted}$ [ $\AA$ ]' % (ion))
+        ax.set_xlabel(r'N$_{\rm %s,true}$ [ $\AA$ ]' % (ion))
+    else:
+        ax.set_ylabel(r'EW$_{\rm %s\,%s,predicted}$ [ $\AA$ ]' % (ion,data.lineNames))
+        ax.set_xlabel(r'EW$_{\rm %s\,%s,true}$ [ $\AA$ ]' % (ion,data.lineNames))
 
     lim = [EW_minmax[0]-1.0, EW_minmax[1]+1.0]
+    if coldens: lim = [13.0, 16.0]
+
     ax.set_ylim(lim)
     ax.set_xlim(lim)
 
-    label = 'MLP[%d]' % hidden_size if model_type == 'mlp' else 'CNN[%d,%d]' % (hidden_size,kernel_size)
-    ax.plot(data.labels, Y, 'o', ls='None', ms=4, alpha=0.5, label=label)
+    ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
+
+    if model_type == 'mlp':
+        label = 'MLP[%d,%d]' % (params['hidden_size'],params['num_hidden_layers'])
+    if model_type == 'cnn':
+        label = 'CNN[%d,%d,%d]' % (params['hidden_size'],params['num_hidden_layers'],params['kernel_size'])
+
+    ax.plot(X, Y, 'o', ls='None', ms=4, alpha=0.5, label=label, zorder=0)
     ax.plot(lim, lim, '-', lw=lw, color='black', alpha=0.7, label='1-to-1')
+
+    xx, yy_med, _, yy_percs = running_median(X, Y, nBins=30, percs=percs)
+    l, = ax.plot(xx[:-2], yy_med[:-2], '-', lw=lw, alpha=0.7, label='median')
+    ax.fill_between(xx[:-2], yy_percs[0,:-2], yy_percs[-1,:-2], color=l.get_color(), alpha=0.3)
 
     ax.legend(loc='upper left')
     fig.savefig('%s.pdf' % modelFilename.replace('_model_','_EW-comp_').replace('.pth',''))
     plt.close(fig)
+
+def run():
+    """ Driver. """
+    model_type = 'cnn' # mlp, cnn
+    #model_params = {'hidden_size': 8, 'num_hidden_layers': 1, 'kernel_size': 0} # mlp
+    model_params = {'hidden_size': 64, 'num_hidden_layers': 2, 'kernel_size': 3} # cnn
+
+    best_loss = train(model_type, model_params)
+    plot_true_vs_predicted(model_type, model_params)

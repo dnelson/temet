@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from os.path import isfile
 from numba import jit
 
-from ..util.helper import closest, contiguousIntSubsets
+from ..util.helper import closest, contiguousIntSubsets, logZeroMin
 from ..cosmo.spectrum import generate_rays_voronoi_fullbox, integrate_along_saved_rays, \
     create_wavelength_grid, _spectra_filepath, lines
 from ..util import units
@@ -15,6 +15,7 @@ from ..plot.config import *
 
 def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=None, dv=0.0):
     """ Load a subset of spectra from a given simulation and ion.
+
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
       ion (str): space separated species name and ionic number e.g. 'Mg II'.
@@ -91,6 +92,12 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=N
             flux = f['flux'][()][inds]
 
     EW = EW[inds]
+    
+    # load column densities (per spectrum)
+    field = ion + ' numdens'
+    N = integrate_along_saved_rays(sim, field) # linear cm^-2
+    N = N[inds]
+    N = logZeroMin(N) # log cm^-2
 
     # re-sort
     if mode == 'evenly':
@@ -161,8 +168,7 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=N
             # re-compute in a fixed dv window to avoid other nearby absorption features
             w = np.where( (wave_dv_loc > -dv) & (wave_dv_loc <= dv) )[0]
 
-            if tau[w].sum() == 0:
-                import pdb; pdb.set_trace()
+            #assert tau[w].sum() > 0 # otherwise next line fails
             wave_mean = np.average(wave[w], weights=tau[w])
 
             # select closest bin to center wavelength
@@ -175,7 +181,108 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=N
         wave = wave_dv
         flux = flux_dv
 
-    return wave, EW, lineNames, flux
+    return wave, flux, EW, N, lineNames
+
+def load_absorber_spectra(sim, line, instrument, solar, EW_minmax=None, dwave=0.0, dv=0.0):
+    """ Load the (local) spectra for each absorber, from a given simulation and ion.
+    Note that the absorber catalog is available for each line separately, so one must 
+    be specified, and this line is used for the EW_minmax restriction (and returned EW 
+    values). However, the flux is the observable i.e. the full spectrum including all 
+    lines of this ion.
+
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      line (str): transition name e.g. 'Mg II 2796', since each line has its own absorber catalog.
+      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+        use the (constant) solar value.
+      EW_minmax (list[float]): minimum and maximum EW to plot [Ang].
+      dwave (float): if not zero, then take as a wavelength window (+/-) around each absorber.
+      dv (float): if not zero, then take as a velocity window (+/-), convert 
+        the wavelength axis to velocity, and subset spectra to only this vel range.
+    """
+    assert dwave == 0 or dv == 0, 'Cannot specify both dwave and dv.'
+
+    ion = lines[line]['ion']
+
+    filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
+
+    with h5py.File(filepath,'r') as f:
+        # load metadata
+        lineNames = f.attrs['lineNames']
+        wave_orig = f['wave'][()]
+
+    # load absorber catalog
+    abs_EW, _, _, abs_ind_spec, abs_ind_start, abs_ind_stop = \
+        absorber_catalog(sim, ion, instrument, solar=solar)
+
+    # load column densities per absorber
+    _, _, _, coldens_abs, colfrac_abs = cell_to_absorber_map(sim, ion, instrument)
+    assert coldens_abs[line].shape == abs_EW[line].shape
+
+    # select on EW
+    if EW_minmax is not None:
+        inds = np.where( (abs_EW[line]>EW_minmax[0]) & (abs_EW[line]<=EW_minmax[1]) )[0]
+        print(f'[{ion}] Found [{len(inds)}] of [{abs_EW[line].size}] absorbers in EW range [{EW_minmax[0]}-{EW_minmax[1]}] Ang.')
+    else:
+        inds = np.arange(abs_EW[line].size)
+        print(f'[{ion}] Loaded [{len(inds)}] absorbers, no EW range window.')
+
+    n_abs = len(inds)
+
+    # reduce absorber catalog to this subset, and only for the requested line
+    abs_EW = abs_EW[line][inds]
+    abs_N = np.log10(coldens_abs[line][inds]) # log cm^-2
+    abs_ind_spec = abs_ind_spec[line][inds]
+    abs_ind_start = abs_ind_start[line][inds]
+    abs_ind_stop = abs_ind_stop[line][inds]
+
+    # partial load of selected spectra (cannot index within h5py since duplicate inds == non-ascending inds)
+    with h5py.File(filepath,'r') as f:
+        flux_orig = f['flux'][()][abs_ind_spec]
+
+    # how many wavelength bins in window?
+    wave0_obs = lines[line]['wave0'] * (1 + sim.redshift)
+    wave = wave_orig - wave0_obs
+
+    if dwave:
+        # wavelength window
+        w = np.where( (wave > -dwave) & (wave <= +dwave) )[0]
+    else:
+        # velocity window
+        wave = wave / wave0_obs * units.c_km_s # dv [km/s]
+        w = np.where( (wave > -dv) & (wave <= +dv) )[0]
+
+    n = int(np.ceil(len(w) / 2))
+
+    _, ind_cen = closest(wave, 0.0)
+    wave = wave[ind_cen-n+1:ind_cen+n+1]
+
+    flux = np.zeros((n_abs,wave.size), dtype=flux_orig.dtype)
+
+    # loop over each absorber
+    for i in range(n_abs):
+        # get spectrum hosting this absorber
+        flux_loc = flux_orig[i,:]
+        flux_i0 = abs_ind_start[i]
+        flux_i1 = abs_ind_stop[i]
+
+        # get tau-weighted mean wavelength of this absorber
+        flux_loc[flux_loc < 1e-4] = 1e-4 # avoid log(0)
+        tau = -np.log(flux_loc)
+
+        tau[0:flux_i0] = 0
+        tau[flux_i1:] = 0
+
+        wave_mean = np.average(wave_orig, weights=tau)
+
+        # select closest bin to center wavelength
+        wave_cen, ind_cen = closest(wave_orig, wave_mean)
+
+        # stamp
+        flux[i,:] = flux_orig[i,ind_cen-n+1:ind_cen+n+1]
+
+    return wave, flux, abs_EW, abs_N, lineNames
 
 def absorber_catalog(sP, ion, instrument, solar=False):
     """ Detect and chatacterize absorbers, handling the possibility of one or possibly multiple per sightline, 
@@ -189,9 +296,6 @@ def absorber_catalog(sP, ion, instrument, solar=False):
       solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
         use the (constant) solar value.
     """
-    # config
-    EW_threshold = 1e-3 # observed frame [ang]
-
     # lines of this ion
     lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
 
@@ -310,7 +414,6 @@ def absorber_catalog(sP, ion, instrument, solar=False):
         # copy metadata
         for attr in f.attrs:
             fOut.attrs[attr] = f.attrs[attr]
-    fOut.attrs['EW_threshold'] = EW_threshold
 
     # loop over lines
     for line in lineNames:
