@@ -554,7 +554,7 @@ def bfield_strength_vs_halomass(sPs, redshifts):
         mass_range = sPs[0].units.m500_to_m200(np.array([5e14, 9e14])) # msun
 
         ax.fill_between(np.log10(mass_range), y1=[bmin,bmin], y2=[bmax,bmax], edgecolor='#cccccc', 
-            facecolor='#cccccc', alpha=0.7,lw=lw, label='Di Gennaro+20 ($z \sim 0.8$)', zorder=-1)
+            facecolor='#cccccc', alpha=0.7,lw=lw, label=r'Di Gennaro+20 ($z \sim 0.8$)', zorder=-1)
 
         # Boehringer+2016 (https://arxiv.org/abs/1610.02887)
         # -- about ~90 measurements have mean r/r500 = 0.32, median r/r500 = 0.25
@@ -563,7 +563,7 @@ def bfield_strength_vs_halomass(sPs, redshifts):
         mass_range = [2e14,4e14] # m200 msun
 
         ax.fill_between(np.log10(mass_range), y1=[bmin,bmin], y2=[bmax,bmax], edgecolor='#eeeeee', 
-            facecolor='#eeeeee', lw=lw, label='B$\\rm\\"{o}$hringer+16 ($z \sim 0.1$)', zorder=-1)
+            facecolor='#eeeeee', lw=lw, label=r'B$\rm\"{o}$hringer+16 ($z \sim 0.1$)', zorder=-1)
 
     def _draw_data2(ax):
         """ Draw additional data constraints on figure, individual halos. """
@@ -865,7 +865,7 @@ def gas_fraction_vs_halomass(sPs):
         # universal baryon fraction line
         OmegaU = sPs[0].omega_b / sPs[0].omega_m
         ax.plot(xlim, [OmegaU,OmegaU], '--', lw=1.0, color='#444444', alpha=0.3)
-        ax.text(xlim[1]-0.13, OmegaU+0.003, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', size='large', alpha=0.3)
+        ax.text(xlim[1]-0.13, OmegaU+0.003, r'$\Omega_{\rm b} / \Omega_{\rm m}$', size='large', alpha=0.3)
 
         # second legend
         handles = [l1,l2,l3,l4,l5]#,l6[0]]
@@ -1076,7 +1076,7 @@ def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0
 
                 projAxis = ['x','y','z'][3-np.sum(axes)]
                 saveStr = '%s-%s_%s_%s' % (partType,partField,confStr,projAxis)
-                labelCustom = [confStr.replace('_',' ') + ' ($\hat{%s}$)' % projAxis]
+                labelCustom = [confStr.replace('_',' ') + r' ($\hat{%s}$)' % projAxis]
                 plotConfig.saveFilename = '%s.%d.%08d.%s.png' % (sP.simName,sP.snap,subhaloInd,saveStr)
                 
                 renderSingleHalo(panels, plotConfig, locals()) #, skipExisting=False)
@@ -1357,7 +1357,7 @@ def szy_vs_halomass(sPs):
         M500 = np.array([1.5e14, 5e14])
         Y500 = np.log10(2e-5 * (M500/5e14)**(5/3))
 
-        ax.plot(np.log10(M500), Y500, ':', color='#000000', alpha=0.7, label='$\\rm{Y_{500} \propto M_{500}^{5/3}}$')
+        ax.plot(np.log10(M500), Y500, ':', color='#000000', alpha=0.7, label=r'$\rm{Y_{500} \propto M_{500}^{5/3}}$')
 
 
         # (2) observational pointsets
@@ -1645,7 +1645,7 @@ def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
     # masses and color values
     m200 = sim.subhalos('m200c_log')[subhaloIDs]
 
-    clabel = 'Halo Mass M$_{200c}$ [ log M$_\odot$ ]'
+    clabel = r'Halo Mass M$_{\rm 200c}$ [ log M$_\odot$ ]'
     color_minmax = [14.4, 15.4]
     
     # compute mass binned profiles
@@ -1987,8 +1987,10 @@ def halo_properties_table(sim, fmt='tex'):
     haloIDs = sim.subhalos('SubhaloGrNr')[subhaloIDs]
 
     # load
-    subhalos = sim.subhalos(['mhalo_200_log','mhalo_500_log','r200','r500','mstar_30kpc_log','mhi_halo_log',
-                             'mass_smbh_log','szy_r500c_3d_log','zform','coolcore_flag'])
+    subhalos = sim.subhalos(['mhalo_200_log','mhalo_500_log','r200','r500','mstar_30kpc_log',
+                             'mstar_100kpc_log','mhi_halo_log',
+                             'mass_smbh_log','szy_r500c_3d_log','zform',
+                             'coolcore_flag','coolcore_tcool','coolcore_entropy'])
 
     for field in ['fgas_r500','sfr_30pkpc_log','xray_0.5-2.0kev_r500_halo_log']:
         quant, _, _, _ = sim.simSubhaloQuantity(field)
@@ -1997,12 +1999,15 @@ def halo_properties_table(sim, fmt='tex'):
     halos = {'origID' : sim.halos('GroupOrigHaloID')}
 
     # compute a richness
-    halos['richness'] = np.zeros(sim.numHalos, dtype='int32')
-    mstar_mask = subhalos['mstar_30kpc_log'] > 10.5
     sub_haloIDs = sim.subhalos('SubhaloGrNr')
-    for haloID in haloIDs:
-        w = np.where(sub_haloIDs == haloID)[0]
-        halos['richness'][haloID] = np.sum(mstar_mask[w])
+
+    for mstar_limit in [9.5, 10.0, 10.5, 11.0]:
+        k = f'richness_{mstar_limit:.1f}'
+        halos[k] = np.zeros(sim.numHalos, dtype='int32')
+        mstar_mask = subhalos['mstar_30kpc_log'] > mstar_limit
+        for haloID in haloIDs:
+            w = np.where(sub_haloIDs == haloID)[0]
+            halos[k][haloID] = np.sum(mstar_mask[w])
 
     # auxcats
     acs = ['Subhalo_Bmag_uG_10kpc_hot_massWt','Subhalo_ne_10kpc_hot_massWt','Subhalo_temp_10kpc_hot_massWt']
@@ -2024,33 +2029,67 @@ def halo_properties_table(sim, fmt='tex'):
         if fmt == 'txt':
             f.write('# TNG-Cluster Catalog (see: https://www.tng-project.org/cluster/ and http://arxiv.org/abs/2311.06338)\n')
             f.write('# Note: this table is dynamic, and new columns are frequently added. Requests for additions are welcome.\n')
+            f.write('# If you use quantities from this table, please also cite the relevant paper, when indicated for a column.\n')
             f.write(f'# [{len(haloIDs)}] halos, all properties at [z=0] unless specified otherwise.\n')
             f.write('#\n')
             f.write('# columns: \n')
             f.write('# [1] origID: Original Parent Halo ID (for reference only)\n')
             f.write('# [2] haloID: TNG-Cluster Halo ID (in the group catalog)\n')
-            f.write('# [3] mhalo_200: M$_{\\rm 200c}$ [log M$_\odot$)\n')
-            f.write('# [4] mhalo_500: M$_{\\rm 500c}$ [log M$_\odot$)\n')
-            f.write('# [5] r200: R$_{\\rm 200c}$ [Mpc]\n')
-            f.write('# [6] r500: R$_{\\rm 500c}$ [Mpc]\n')
-            f.write('# [7] mstar_30kpc: stellar mass within 30 kpc [log(M$_\star$ / M$_\odot$]\n')
-            f.write('# [8] Bmag_uG_10kpc: magnitude field magnitude within 10 kpc, mass-weighted mean of log(T)>5.5 gas [micro Gauss]\n')
-            f.write('# [9] ne_10kpc: electron density within 10 kpc, mass-weighted mean of log(T)>5.5 gas [log cm$^{-3}$]\n')
-            f.write('# [10] temp_10kpc: temperature within 10 kpc, mass-weighted mean of log(T)>5.5 gas [log K]\n')
+            f.write('# [3] mhalo_200c: halo mass within r200c [log M$_\\odot$]\n')
+            f.write('# [4] mhalo_500c: halo mass within r500c  [log M$_\\odot$]\n')
+            f.write('# [5] r200c: halo radius r200c [Mpc]\n')
+            f.write('# [6] r500c: halo radius r500c [Mpc]\n')
+            f.write('# [7] mstar_30kpc: stellar mass within 30 kpc [log(M$_\\star$ / M$_\\odot$]\n')
+            f.write('# [8] mstar_100kpc: stellar mass within 100 kpc [log(M$_\\star$ / M$_\\odot$]\n')
+
+            f.write('# [9] mhi_halo: neutral HI mass within the (FoF) halo [log M$_\\odot$]\n')
+            f.write('# [10] mass_smbh: mass of central SMBH [log M$_\\odot$]\n')
+            f.write('# [11] fgas_r500: gas fraction within r500c [unitless]\n')
+            f.write('# [12] sfr_30pkpc: star formation rate within 30 pkpc (nan indicates an upper limit of -3.0) [log M$_\\odot$ / yr]\n')
+            f.write('# [13] xray_0.5-2.0kev_r500_halo: X-ray luminosity 0.5-2 keV soft-band, within r500c in 3D [log erg/s]\n')
+            f.write('# [14] szy_r500c_3d: integrated Y_SZ parameter within r500c in 3D [log Mpc^2]\n')
+
+            f.write('# [15] Bmag_uG_10kpc: magnitude field magnitude within 10 kpc, mass-weighted mean of log(T)>5.5 gas [micro Gauss]\n')
+            f.write('# [16] ne_10kpc: electron density within 10 kpc, mass-weighted mean of log(T)>5.5 gas [log cm$^{-3}$]\n')
+            f.write('# [17] temp_10kpc: temperature within 10 kpc, mass-weighted mean of log(T)>5.5 gas [log K]\n')
+            f.write('# [18] zform: formation redshift [unitless]\n')
+            f.write('# [19] richness_9.5: number of satellite galaxies with log(M*) (30pkpc) > 9.5 Msun [unitless]\n')
+            f.write('# [20] richness_10.0: number of satellite galaxies with log(M*) (30pkpc) > 10.0 Msun [unitless]\n')
+            f.write('# [21] richness_10.5: number of satellite galaxies with log(M*) (30pkpc) > 10.5 Msun [unitless]\n')
+            f.write('# [22] richness_11.0: number of satellite galaxies with log(M*) (30pkpc) > 11.0 Msun [unitless]\n')
+            f.write('# [23] coolcore_flag: cool core status, based on central cooling time (CC, WCC, or NCC) {Source: Lehle+2024} [unitless]\n')
+            f.write('# [24] coolcore_tcool: central cooling time, computed within a 3D aperture of 0.012r500c {Source: Lehle+2024} [Gyr]\n')
+            f.write('# [25] coolcore_entropy: central entropy, computed within a 3D aperture of 0.012r500c {Source: Lehle+2024} [keV cm$^2$]\n')
             f.write('#\n')
 
             for i in range(len(haloIDs)):
-                line =  '%4d '   % halos['origID'][i]
-                line += '%8d '   % haloIDs[i]
-                line += '%5.2f ' % subhalos['mhalo_200_log'][i]
-                line += '%5.2f ' % subhalos['mhalo_500_log'][i]
-                line += '%5.3f ' % (subhalos['r200'][i]/1000)
-                line += '%5.3f ' % (subhalos['r500'][i]/1000)
-                line += '%5.2f ' % subhalos['mstar_30kpc_log'][i]
-                line += '%6.2f ' % subhalos['Subhalo_Bmag_uG_10kpc_hot_massWt'][i]
-                line += '%5.2f'  % np.log10(subhalos['Subhalo_ne_10kpc_hot_massWt'][i])
-                line += '%5.2f'  % np.log10(subhalos['Subhalo_temp_10kpc_hot_massWt'][i])
+                line =  '%4d '   % halos['origID'][i] # 1
+                line += '%8d '   % haloIDs[i] # 2
+                line += '%5.2f ' % subhalos['mhalo_200_log'][i] # 3
+                line += '%5.2f ' % subhalos['mhalo_500_log'][i] # 4
+                line += '%5.3f ' % (subhalos['r200'][i]/1000) # 5
+                line += '%5.3f ' % (subhalos['r500'][i]/1000) # 6
+                line += '%5.2f ' % subhalos['mstar_30kpc_log'][i] # 7
+                line += '%5.2f ' % subhalos['mstar_100kpc_log'][i] # 8
 
+                line += '%5.2f ' % subhalos['mhi_halo_log'][i] # 9
+                line += '%5.2f ' % subhalos['mass_smbh_log'][i] # 10
+                line += '%5.3f ' % subhalos['fgas_r500'][i] # 11
+                line += '%5.2f ' % subhalos['sfr_30pkpc_log'][i] # 12
+                line += '%5.2f ' % subhalos['xray_0.5-2.0kev_r500_halo_log'][i] # 13
+                line += '%5.2f ' % subhalos['szy_r500c_3d_log'][i] # 14
+
+                line += '%6.2f ' % subhalos['Subhalo_Bmag_uG_10kpc_hot_massWt'][i] # 15
+                line += '%5.2f ' % np.log10(subhalos['Subhalo_ne_10kpc_hot_massWt'][i]) # 16
+                line += '%5.2f ' % np.log10(subhalos['Subhalo_temp_10kpc_hot_massWt'][i]) # 17
+                line += '%4.2f ' % subhalos['zform'][i] # 18
+                line += '%3d ' % halos['richness_9.5'][i] # 19
+                line += '%3d ' % halos['richness_10.0'][i] # 20
+                line += '%3d ' % halos['richness_10.5'][i] # 21
+                line += '%3d ' % halos['richness_11.0'][i] # 22
+                line += '%3s ' % cc_str[int(subhalos['coolcore_flag'][i])] # 23
+                line += '%5.2f ' % subhalos['coolcore_tcool'][i] # 24
+                line += '%6.2f ' % subhalos['coolcore_entropy'][i] # 25
                 f.write(line + '\n')
 
         # data (original latex table for intro paper)
@@ -2064,7 +2103,7 @@ def halo_properties_table(sim, fmt='tex'):
                     (subhalos['fgas_r500'][i],subhalos['sfr_30pkpc_log'][i],subhalos['mass_smbh_log'][i])
                 line += '%5.2f & %5.2f & %4.2f & %3d & %3s' % \
                     (subhalos['xray_0.5-2.0kev_r500_halo_log'][i],subhalos['szy_r500c_3d_log'][i],
-                    subhalos['zform'][i],halos['richness'][i],cc_str[int(subhalos['coolcore_flag'][i])])
+                    subhalos['zform'][i],halos['richness_10.5'][i],cc_str[int(subhalos['coolcore_flag'][i])])
                 line += ' \\\\\n'
 
                 line = line.replace(' nan ','  -- ') # zero SFRs

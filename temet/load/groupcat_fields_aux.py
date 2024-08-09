@@ -808,7 +808,7 @@ lgal_.log = False # variable (todo)
 
 @catalog_field
 def coolcore_flag(sim, partType, field, args):
-    """ Postprocessing/CCcriteria: flag (0=SCC, 1=WCC, 2=NCC) based on Lehle+23 central cool fiducial definition. """
+    """ Postprocessing/CCcriteria: flag (0=SCC, 1=WCC, 2=NCC) based on Lehle+24 central cooling time fiducial definition. """
     filePath = sim.postPath + '/released/CCcriteria.hdf5'
 
     with h5py.File(filePath,'r') as f:
@@ -820,5 +820,39 @@ def coolcore_flag(sim, partType, field, args):
     vals.fill(np.nan)
 
     vals[sim.halos('GroupFirstSub')[HaloIDs]] = flags
+
+    return vals
+
+@catalog_field(alias='tcool0')
+def coolcore_tcool(sim, partType, field, args):
+    """ Postprocessing/CCcriteria: Lehle+23 central cooling time. """
+    filePath = sim.postPath + '/released/CCcriteria.hdf5'
+
+    with h5py.File(filePath,'r') as f:
+        HaloIDs = f['HaloIDs'][()]
+        data = f['centralCoolingTime'][:, sim.snap]
+
+    # expand from value per primary target to value per subhalo
+    vals = np.zeros(sim.numSubhalos, dtype='float32')
+    vals.fill(np.nan)
+
+    vals[sim.halos('GroupFirstSub')[HaloIDs]] = data
+
+    return vals
+
+@catalog_field(alias='K0')
+def coolcore_entropy(sim, partType, field, args):
+    """ Postprocessing/CCcriteria: Lehle+23 central cooling time. """
+    filePath = sim.postPath + '/released/CCcriteria.hdf5'
+
+    with h5py.File(filePath,'r') as f:
+        HaloIDs = f['HaloIDs'][()]
+        data = f['centralEntropy'][:, sim.snap]
+
+    # expand from value per primary target to value per subhalo
+    vals = np.zeros(sim.numSubhalos, dtype='float32')
+    vals.fill(np.nan)
+
+    vals[sim.halos('GroupFirstSub')[HaloIDs]] = data
 
     return vals

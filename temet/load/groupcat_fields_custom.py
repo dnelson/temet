@@ -315,6 +315,19 @@ mgas2.units = r'$\rm{M_{sun}}$'
 mgas2.limits = lambda sim,pt,f: [8.0, 11.0] if sim.boxSize > 50000 else [7.0, 10.5]
 mgas2.log = True
 
+@catalog_field(alias='mstar_100kpc')
+def mstar_100pkpc(sim, partType, field, args):
+    """ Galaxy stellar mass, measured within a fixed 3D aperture of 100 physical kpc. """
+    acField = 'Subhalo_Mass_100pkpc_Stars'
+    mass = sim.auxCat(acField)[acField]
+    return sim.units.codeMassToMsun(mass)
+
+mstar_100pkpc.label = r'$\rm{M_{\star, <30kpc}}$'
+mstar_100pkpc.units = r'$\rm{M_{sun}}$'
+mstar_100pkpc.limits = lambda sim,pt,f: [9.0, 11.0] if sim.boxSize > 50000 else [8.0, 11.5]
+mstar_100pkpc.log = True
+mstar_100pkpc.auxcat = True
+
 @catalog_field(alias='mstar_30kpc')
 def mstar_30pkpc(sim, partType, field, args):
     """ Galaxy stellar mass, measured within a fixed 3D aperture of 30 physical kpc. """
