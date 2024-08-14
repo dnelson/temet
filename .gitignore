@@ -13,6 +13,7 @@ illustris_website
 illustris_python
 illustris_idl
 misc
+sbi-logs
 temet.egg-info
 temet/util/*.so
 .DS_Store
