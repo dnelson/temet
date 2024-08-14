@@ -157,8 +157,6 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Tru
         f_pre(ax, sims)
 
     # individual zoom runs
-    colors = [next(ax._get_lines.prop_cycler)['color'] for _ in range(len(hInds))]
-
     for i, sim in enumerate(sims):
         # load
         xvals, _, _, _ = sim.simSubhaloQuantity(xQuant, clean, tight=True)
@@ -345,8 +343,6 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
         ax.set_xticklabels(['3','4','5','6','8','10','12'])
 
     # individual zoom runs
-    colors = [next(ax._get_lines.prop_cycler)['color'] for _ in range(len(hInds))]
-
     for i, sim in enumerate(sims):
         # load
         vals, _, _, valLog = sim.simSubhaloQuantity(quant, clean, tight=True)

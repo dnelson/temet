@@ -97,10 +97,11 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=
 
         if sP.simName.split("-")[0] == prevName:
             # decrease line thickness
+            c = l.get_color()
             lwMod += 1.0
         else:
             # next color
-            c = next(ax._get_lines.prop_cycler)['color']
+            c = None
             prevName = sP.simName.split("-")[0]
             lwMod = 0.0
 
@@ -143,7 +144,7 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=
             yy_max = logZeroNaN(fN_OVI_max*n_OVI)
             yy = logZeroNaN( 0.5*(fN_OVI_min*n_OVI+fN_OVI_max*n_OVI) )
 
-        ax.fill_between(xx, yy_min, yy_max, color=c, alpha=0.2, interpolate=True)
+        l = ax.fill_between(xx, yy_min, yy_max, color=c, alpha=0.2, interpolate=True)
 
         # plot middle line
         label = sP.simName
@@ -219,14 +220,11 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
     for sP in sPs:
         txt = []
 
+        for _ in range(colorOff+1):
+            ax.plot([], []) # cycle color
+
         for j, ion in enumerate(ions):
             print('[%s]: %s' % (ion,sP.simName))
-
-            if j == 0:
-                for _ in range(colorOff+1):
-                    c = next(ax._get_lines.prop_cycler)['color']
-            else:
-                c = next(ax._get_lines.prop_cycler)['color']
 
             for i, redshift in enumerate(redshifts):
                 sP.setRedshift(redshift)
@@ -268,7 +266,7 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
                 if len(sPs) > 8: label = '%s (%.1f)' % (sP.simName,boxOmega*1e7)
 
                 if i > 0: label = ''
-                c = 'black' if (len(sPs) > 5 and sP.variant == '0000') else c
+                c = 'black' if (len(sPs) > 5 and sP.variant == '0000') else None
                 lwLoc = lw if not (len(sPs) == 12 and sP.variant == '0000') else 2*lw
 
                 ls = linestyles[i]
@@ -498,8 +496,9 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
                 if ion in ionColors: # preset color
                     c = ionColors[ion]
                 else: # cycle
+                    c = None
                     for _ in range(colorOff+1):
-                        c = next(ax._get_lines.prop_cycler)['color']
+                        ax.plot([], []) # cycle color
                     if colorOff > 0: colorOff = 0 # only once
                 colors.append(c)
             else:
@@ -884,15 +883,11 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
 
                         # determine color
                         if i == 0 and radType == 0:
-                        #if k == 0: # different color per something other than massbin (i.e. sP)
-                            c = next(ax._get_lines.prop_cycler)['color']
-                            colors.append(c)
+                            c = None # next in cycle
                         else:
-                            #c = colors[i] # sP
-                            c = colors[k] # massbin
+                            c = l.get_color() # use previous, based on massbin
 
                         linestyle = linestyles[radType] # 1-halo, 2-halo
-                        #linestyle = linestyles[k] # massbin
 
                         # plot median line
                         label = '%.1f < $M_{\\rm halo}$ < %.1f' \
@@ -901,9 +896,9 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                           % (0.5*(massBin[0]+massBin[1])) if (i == 0 and radType == 0) else ''
 
                         if median:
-                            ax.plot(rr, yp[1,:], lw=lw, color=c, linestyle=linestyle, label=label)
+                            l, = ax.plot(rr, yp[1,:], lw=lw, color=c, linestyle=linestyle, label=label)
                         else:
-                            ax.plot(rr, yy_mean, lw=lw, color=c, linestyle=linestyle, label=label)
+                            l, = ax.plot(rr, yy_mean, lw=lw, color=c, linestyle=linestyle, label=label)
 
                         txt_loc = {}
                         txt_loc['bin'] = massBin
@@ -1029,13 +1024,10 @@ def ionTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0, c
     ax.set_ylabel('%s$\\xi%s(r)$ [ log ]' % (['','r','r$^2$'][order],ionStr))
 
     # loop over each particle type/property
-    for j, ion in enumerate(ions):
-        if j == 0:
-            for _ in range(colorOff+1):
-                c = next(ax._get_lines.prop_cycler)['color']
-        else:
-            c = next(ax._get_lines.prop_cycler)['color']
+    for _ in range(colorOff+1):
+        ax.plot([], []) # cycle colors
 
+    for j, ion in enumerate(ions):
         if ion == 'bhmass':
             partType = 'bh'
         else:
@@ -1068,7 +1060,7 @@ def ionTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0, c
 
             label = ion if i == 0 else ''
             if label == 'O': label = 'O, Z$_{\\rm tot}$'
-            l, = ax.plot(x_plot, y_plot, lw=lw, linestyle=linestyles[i], label=label, color=c, alpha=alpha)
+            l, = ax.plot(x_plot, y_plot, lw=lw, linestyle=linestyles[i], label=label, alpha=alpha)
 
             # todo, symbols, bands, etc
             if xi_err is not None and drawError:
@@ -1235,10 +1227,9 @@ def obsSimMatchedGalaxySamples(sPs, saveName, config='COS-Halos'):
                alpha=0.5, color=c_obs, orientation='vertical', label=config)
 
     for i, sP in enumerate(sPs):
-        c_sim.append( next(ax._get_lines.prop_cycler)['color'] )
         ax_h1.hist(sim_samples[i]['mstar_30pkpc_log'].ravel(), 
                    bins=nBinsHist*4, range=xlim, density=True, histtype='bar', 
-                   alpha=0.5, color=c_sim[-1], orientation='vertical', label=sP.simName)
+                   alpha=0.5, orientation='vertical', label=sP.simName)
 
     ax_h1.legend(bbox_to_anchor=(1.01, 0.96), prop={'size':18})
 
@@ -1257,7 +1248,7 @@ def obsSimMatchedGalaxySamples(sPs, saveName, config='COS-Halos'):
     for i, sP in enumerate(sPs):
         ax_h2.hist(sim_samples[i][yval_name].ravel(), 
                    bins=nBinsHist*4, range=ylim, density=True, histtype='bar', 
-                   alpha=0.5, color=c_sim[i], orientation='horizontal', label=sP.simName)
+                   alpha=0.5, orientation='horizontal', label=sP.simName)
 
     # colorbar
     cbar_ax = fig.add_axes(rect_cbar)
@@ -1798,14 +1789,12 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
         cnum = 1
         if config == 'LRG-RDR': cnum = 2
         if config == 'COS-LRG HI': cnum = 3
-        for _ in range(cnum):
-            c = next(ax._get_lines.prop_cycler)['color']
 
         #ax.plot(blim, [0.0,0.0], '-', lw=lw-1, color='black', alpha=0.1)
         #ax.plot(blim, [0.5,0.5], '-', lw=lw-1, color='black', alpha=0.1)
         ax.fill_between([0,550], [0.0,0.0], [0.5,0.5], color='#cccccc', alpha=0.2)
 
-        ax.plot(R, pvals, 'o', color=c, label=config)
+        ax.plot(R, pvals, 'o', color=f'C{cnum}', label=config)
 
         ax.legend(loc='upper left')
         fig.savefig(saveName.replace('_ext','_lambdaVsR'))
@@ -1829,7 +1818,7 @@ def obsColumnsLambdaVsR(sP, saveName, configs='COS-Halos'):
     ax.fill_between(blim, [0.0,0.0], [0.5,0.5], color='#cccccc', alpha=0.2)
 
     # loop over requested configs
-    colors = [next(ax._get_lines.prop_cycler)['color'] for _ in range(len(configs))]
+    colors = []
 
     for config_num, config in enumerate(configs):
         # load data
@@ -1914,7 +1903,8 @@ def obsColumnsLambdaVsR(sP, saveName, configs='COS-Halos'):
                 plims[i] = col_limit[sort_ind]
 
         # supplementary figure: lambda vs R
-        ax.plot(R, pvals, 'o', color=colors[config_num], label=config)
+        l, = ax.plot(R, pvals, 'o', label=config)
+        colors.append(l.get_color())
 
     # finish
     l = ax.legend(markerscale=0, handletextpad=-2.0, loc='upper right')
@@ -1986,8 +1976,7 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
 
     if config == 'COS-Halos':
         for j, gs in enumerate( galaxySets ):
-            c = 'black' if j == 0 and len(galaxySets) == 1 else next(ax._get_lines.prop_cycler)['color']
-            colors.append(c)
+            c = 'black' if j == 0 and len(galaxySets) == 1 else None
 
             for i in range(len(werk13['rad'])):
                 x = np.mean( werk13['rad'][i] ) + [0,4,0,4][j] # horizontal offset for visual clarity
@@ -2003,14 +1992,18 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
                 if gs == 'all':
                     ax.text(124, 0.64, 'Werk+ (2013)', ha='left', size=18)
                     ax.text(124, 0.59, 'N$_{\\rm OVI}$ > 10$^{14.15}$ cm$^{-2}$', ha='left', size=18)
-                if i > 0: label = ''
-                ax.errorbar(x, y/100.0, xerr=xerr, yerr=yerr, fmt='o', 
-                            color=c, markersize=11.0, lw=1.6, capthick=1.6, label=label)
+
+                if i > 0:
+                    label = ''
+                    c = l.get_color()
+
+                l,_,_ = ax.errorbar(x, y/100.0, xerr=xerr, yerr=yerr, fmt='o', 
+                                    color=c, markersize=11.0, lw=1.6, capthick=1.6, label=label)
+            colors.append(c)
 
     if config in ['eCGM','eCGMfull']:
         for j, gs in enumerate( galaxySets ):
-            c = 'black' if j == 0 and len(galaxySets) == 1 else next(ax._get_lines.prop_cycler)['color']
-            colors.append(c)
+            c = 'black' if j == 0 and len(galaxySets) == 1 else None
 
             if len(j15[gs]) == 0:
                 continue # no data points (all)
@@ -2026,15 +2019,17 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
 
                 label = ''
                 if gs != 'all': label = 'Johnson+ (2015) ' + gsNames[gs]
-                if i > 0: label = ''
-                ax.errorbar(x, y, xerr=xerr, yerr=yerr, fmt='o', 
-                            color=c, markersize=11.0, lw=1.6, capthick=1.6, label=label)
+
+                if i > 0:
+                    label = ''
+                    c = l.get_color()
+
+                l,_,_ = ax.errorbar(x, y, xerr=xerr, yerr=yerr, fmt='o', 
+                                    color=c, markersize=11.0, lw=1.6, capthick=1.6, label=label)
+            colors.append(c)
 
     # loop over each column density threshold (different colors)
     for j, thresh in enumerate(colDensThresholds):
-
-        if len(colDensThresholds) > 1:
-            c = next(ax._get_lines.prop_cycler)['color']
 
         # loop over each fullbox run (different linestyles)
         for i, sP in enumerate(sPs):
@@ -2044,9 +2039,6 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
             cf = ionCoveringFractions(sP, sim_sample, config=config)
 
             print('[%s]: %s' % (sP.simName,thresh))
-
-            if len(colDensThresholds) == 1 and len(sPs) > 1:
-                c = next(ax._get_lines.prop_cycler)['color']
 
             # which index for the requested col density threshold?
             assert thresh in cf['colDensThresholds']
@@ -2073,7 +2065,7 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
                 if len(galaxySets) > 1:
                     c = colors[k]
                 else:
-                    c = 'black' if (len(sPs) > 5 and sP.variant == '0000') else c
+                    c = 'black' if (len(sPs) > 5 and sP.variant == '0000') else None
 
                 ls = linestyles[i] if len(colDensThresholds) > 1 else linestyles[0]
                 if len(sPs) > 8 and 'BH' in sP.simName: ls = '--'

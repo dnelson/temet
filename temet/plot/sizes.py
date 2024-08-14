@@ -515,10 +515,8 @@ def lumModelsRatios(res=1820, run='tng', redshifts=[0.0]):
         ylabel = 'Band-Luminosity Ratio'
         ax.set_ylabel(ylabel)
         
-        for band in bands:
+        for i, band in enumerate(bands):
             # in this band
-            c = next(ax._get_lines.prop_cycler)['color']
-
             bandNum1 = list(ac[acPre+acField1+'_attrs']['bands']).index( band )
             bandNum2 = list(ac[acPre+acField2+'_attrs']['bands']).index( band )
             assert bandNum1 == bandNum2
@@ -540,13 +538,13 @@ def lumModelsRatios(res=1820, run='tng', redshifts=[0.0]):
                 ratio = lums2 / lums1
                 assert ratio.shape == xx.shape
 
-                xm_stars, ym_stars, sm_stars = running_median(xx,ratio,binSize=binSize,skipZeros=True)
+                xm_stars, ym_stars, _ = running_median(xx,ratio,binSize=binSize,skipZeros=True)
 
                 label = '%s / %s (%s)' % (acField2,acField1,band) if projNum == 0 else ''
                 lw = 3.0 if projNum == 0 else 1.0
                 alpha = 1.0 if projNum == 0 else 0.2
                 l, = ax.plot(xm_stars[:-1], ym_stars[:-1], linestyles[0], 
-                             lw=lw, color=c, alpha=alpha, label=label)
+                             lw=lw, color=colors[i], alpha=alpha, label=label)
 
         # finish page (for one redshift)
         ax.legend(loc='best',prop={'size':13})

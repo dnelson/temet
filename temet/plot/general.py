@@ -738,8 +738,6 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
                 sim_yvals = sim_yvals[w]
 
             # color and label
-            c = next(ax._get_lines.prop_cycler)['color']
-
             label = ""
             if isinstance(haloIDs[i], dict):
                 label = list(haloIDs[i].keys())[j]
@@ -758,7 +756,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
                 ym = savgol_filter(ym,sKn,sKo)
 
                 # plot
-                ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=label)
+                ax.plot(xm, ym, linestyles[0], lw=lw, label=label)
 
             elif totalCum:
                 # cumulative sum of y-quantity as a function of x-quantity bins
@@ -814,10 +812,10 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
                     yms[k].append(ym)
 
                     # plot: solid lines for both, with dotted line showing reflection symmetry
-                    ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=label if k == 0 else "")
+                    l, = ax.plot(xm, ym, linestyles[0], lw=lw, label=label if k == 0 else "")
                     if k == 0:
                         # plot flipped to assess symmetry
-                        ax.plot(-xm, ym, linestyles[1], lw=lw, color=c, alpha=(1.0-0.5*k))
+                        ax.plot(-xm, ym, linestyles[1], lw=lw, color=l.get_color(), alpha=(1.0-0.5*k))
 
             else:
                 # median and 16/84th percentile lines
@@ -1031,7 +1029,7 @@ def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas'
     plt.close(fig)
 
 def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp', subhaloIDs=None, haloIDs=None, 
-    xlog=True, xlim=None, ylog=None, ylim=None, sfreq0=False, colorOffs=None, scope='fof'):
+    xlog=True, xlim=None, ylog=None, ylim=None, sfreq0=False, scope='fof'):
     """ Radial profile of some quantity ptProperty of ptType vs. radius from halo center,
     where subhaloIDs (or haloIDs) is an ID list with one entry per sPs entry. 
     If haloIDs is not None, then use these FoF IDs as inputs instead of Subfind IDs. 
@@ -1121,10 +1119,6 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp', subhaloIDs=Non
             yy_perc = savgol_filter(yy_perc,sKn,sKo,axis=1) # P[10,90]
 
         # plot lines
-        if colorOffs is not None:
-            for _ in range(colorOffs[i]):
-                _ = next(ax._get_lines.prop_cycler)['color']
-
         label = '%s haloID=%d [%s]' % (sP.simName,haloID,scope) if not clean else sP.simName
         l, = ax.plot(rr, yy_median, '-', lw=lw, label=label)
         ax.plot(rr, yy_mean, '--', lw=lw, color=l.get_color())

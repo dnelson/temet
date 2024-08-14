@@ -1370,7 +1370,7 @@ def debug_plot_spectra():
     """ Check mock spectra. """
     import matplotlib.pyplot as plt
     from ..util import simParams
-    from ..plot.config import figsize, linestyles
+    from ..plot.config import figsize, linestyles, colors
 
     sP = simParams(res=270,run='tng',redshift=0.8)
     acFields = ['Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_p07c_cf00dust_res_conv_z',
@@ -1393,12 +1393,11 @@ def debug_plot_spectra():
     #ax.set_xlim([8000 / (1+sP.redshift),9000 / (1+sP.redshift)])
     #ax.set_xlim([8000,9000])
 
-    for subInd in subInds:
-        c = next(ax._get_lines.prop_cycler)['color']
-        for i, acField in enumerate(acFields):
+    for i, subInd in subInds:
+        for j, acField in enumerate(acFields):
             label = 'Em' if '_Em_' in acField else 'NoEm'
             label += ' [%d, %d]' % (subInd,ac['subhaloIDs'][subInd])
-            ax.plot(ac['wavelength'], data[acField][subInd,:], color=c, ls=linestyles[i], marker='o', markersize=1.5, label=label)
+            ax.plot(ac['wavelength'], data[acField][subInd,:], color=colors[i], ls=linestyles[j], marker='o', markersize=1.5, label=label)
 
     ax.legend()
     fig.savefig('debug_spec_obs.pdf')

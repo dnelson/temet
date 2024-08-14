@@ -228,8 +228,6 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
 
         # plot: loop over each bin
         for k, cfBoundSet in enumerate(cfs.keys()):
-            c = next(ax._get_lines.prop_cycler)['color'] if cm is None else cm[k]
-
             # loop over each run/redshift for this bin
             for i, cf in enumerate(cfs[cfBoundSet]):
                 xx = cf['sP'].units.codeLengthToComovingMpc(cf['rad'])
@@ -247,6 +245,7 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
 
                 if y_plot.max() > yy_max: yy_max = y_plot.max()
 
+                c = cm[k] if cm is not None else colors[k]
                 l, = ax.plot(x_plot, y_plot, lw=lw, linestyle=linestyles[i], alpha=alpha, label=label, color=c)
 
                 if drawSymbols:
@@ -387,8 +386,6 @@ def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
 
     # loop over each mass bin
     for k, massSet in enumerate(confs.keys()):
-        c = next(ax._get_lines.prop_cycler)['color'] if cm is None else cm[k]
-
         # loop over each color (or secondary property in general) split for this mass bin
         for i, secSet in enumerate(confs[massSet].keys()):
             rf = confs[massSet][secSet]
@@ -399,6 +396,7 @@ def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
             label = massSet + ' ' + secSet #if i == 0 else ''
 
             # y-axis multiplier
+            c = cm[k] if cm is not None else colors[k]
             l, = ax.plot(xx[ww], rf['redfrac'][ww], lw=lw, linestyle=linestyles[i], 
                          alpha=alpha, label=label, color=c)
 

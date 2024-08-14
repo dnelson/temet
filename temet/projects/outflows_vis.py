@@ -396,20 +396,20 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
         # y-axis 1: additional properties
         if conf == 1:
             for key in ['gas','stars']:
-                c = next(ax._get_lines.prop_cycler)['color']
                 for j, aperture in enumerate(data['apertures']['scalar']):
                     yy = sP.units.codeMassToLogMsun( data[key]['mass'][:,j])
                     yy -= 3.0 # 3 dex offset to get within range of M_BH
                     label = key.capitalize() + 'Mass/$10^3$' if j == 0 else ''
-                    l, = ax.plot(redshifts[w], yy[w], linestyles[j], lw=lw, alpha=0.5, label=label, color=c)
-                    ax.plot(redshifts[snap], yy[snap], 'o', markersize=14.0, alpha=0.7, color=c)
+                    c = None if j == 0 else l.get_color()
+                    l, = ax.plot(redshifts[w], yy[w], linestyles[j], lw=lw, alpha=0.5, label=label)
+                    ax.plot(redshifts[snap], yy[snap], 'o', markersize=14.0, alpha=0.7, color=l.get_color())
         if conf == 2:
-            c = next(ax._get_lines.prop_cycler)['color']
             for j, aperture in enumerate(data['apertures']['scalar']):
                 yy = logZeroNaN( data['gas']['StarFormationRate'][:,j] )
                 label = 'Gas_SFR' if j == 0 else ''
+                c = None if j == 0 else l.get_color()
                 l, = ax.plot(redshifts[w], yy[w], linestyles[j], lw=lw, alpha=0.5, label=label, color=c)
-                ax.plot(redshifts[snap], yy[snap], 'o', markersize=14.0, alpha=0.7, color=c)
+                ax.plot(redshifts[snap], yy[snap], 'o', markersize=14.0, alpha=0.7, color=l.get_color())
 
         # y-axis 2
         if conf == 1:
@@ -417,12 +417,12 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
             ax2 = ax.twinx()
             setAxisColors(ax2, color2)
             ax2.set_ylabel('BH $\Delta$ E$_{\\rm low}$ (dotted), E$_{\\rm high}$ (solid) [ log erg ]')
-            c = next(ax._get_lines.prop_cycler)['color']
-            ax2.plot(redshifts[w], dy_high[w], '-', lw=lw, alpha=0.7, color=c)
-            ax2.plot(redshifts[w], dy_low[w], ':', lw=lw, alpha=0.7, color=c)
-            ax2.plot(redshifts[snap], dy_high[snap], 'o', markersize=14.0, color=c, alpha=0.6)
-            ax2.plot(redshifts[snap], dy_low[snap], 'o', markersize=14.0, color=c, alpha=0.6)
-            for t in ax2.get_yticklabels(): t.set_color(c)
+
+            l, = ax2.plot(redshifts[w], dy_high[w], '-', lw=lw, alpha=0.7)
+            ax2.plot(redshifts[w], dy_low[w], ':', lw=lw, alpha=0.7, color=l.get_color())
+            ax2.plot(redshifts[snap], dy_high[snap], 'o', markersize=14.0, color=l.get_color(), alpha=0.6)
+            ax2.plot(redshifts[snap], dy_low[snap], 'o', markersize=14.0, color=l.get_color(), alpha=0.6)
+            for t in ax2.get_yticklabels(): t.set_color(l.get_color())
 
             ax2.set_ylim([54,60])
             if np.nanmax(dy_high[w]) > 60.1:

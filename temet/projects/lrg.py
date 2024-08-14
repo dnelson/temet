@@ -58,7 +58,7 @@ def radialResolutionProfiles(sPs, saveName, redshift=0.5, cenSatSelect='cen',
     ax.set_ylabel('Gas Resolution $r_{\\rm cell}$ [ log kpc ]')
 
     # init
-    colors = []
+    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     rvirs = []
 
     if haloMassBins is not None:
@@ -160,19 +160,13 @@ def radialResolutionProfiles(sPs, saveName, redshift=0.5, cenSatSelect='cen',
                     yy_mean = savgol_filter(yy_mean,sKn_loc,sKo+1)
                     yp = savgol_filter(yp,sKn_loc,sKo+1,axis=1) # P[10,90]
 
-                # determine color
-                if i == 0 and j == 0:
-                    c = next(ax._get_lines.prop_cycler)['color']
-                    colors.append(c)
-                else:
-                    c = colors[k]
-
                 # plot median line
                 label = '%.1f < $M_{\\rm halo}$ < %.1f' % (massBin[0],massBin[1]) if (i == 0 and j == 0) else ''
                 label = '$M_{\\rm halo}$ = %.1f' % (0.5*(massBin[0]+massBin[1])) if (i == 0 and j == 0) else ''
                 alpha = 1.0 if j == 0 else 0.3
                 linewidth = lw if j == 0 else lw-1
-                ax.plot(rr, yy_mean, lw=linewidth, color=c, linestyle=linestyles[i], label=label, alpha=alpha)
+
+                l, = ax.plot(rr, yy_mean, lw=linewidth, color=colors[k], linestyle=linestyles[i], label=label, alpha=alpha)
 
                 # draw rvir lines (or 300pkpc lines if x-axis is already relative to rvir)
                 yrvir = ax.get_ylim()
@@ -189,8 +183,8 @@ def radialResolutionProfiles(sPs, saveName, redshift=0.5, cenSatSelect='cen',
                     yrvir[1] += 0.0 * (len(massBins)-k)
 
                 if i == 0 and j == 0:
-                    ax.plot(xrvir, yrvir, lw=lw*1.5, color=c, alpha=0.1)
-                    ax.text(xrvir[0]-0.02, yrvir[0], textStr, color=c, va='bottom', ha='right', 
+                    ax.plot(xrvir, yrvir, lw=lw*1.5, color=l.get_color(), alpha=0.1)
+                    ax.text(xrvir[0]-0.02, yrvir[0], textStr, color=l.get_color(), va='bottom', ha='right', 
                             fontsize=20.0, alpha=0.1, rotation=90)
 
                     # show percentile scatter only for first run
@@ -602,20 +596,18 @@ def ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthresh, sPs2=None, rad
     for N in Nthresh:
         print(N)
         # loop over individual halos, and one extra iter for all
-        c = next(ax._get_lines.prop_cycler)['color']
-
         xx, fc = _covering_fracs(dist_global, grid_global, N)
+
+        # plot global
+        label = 'N$_{\\rm %s}$ > 10$^{%.1f}$ cm$^{-2}$' % (ion,N)
+        ax.plot(10**xx, fc[:,-1], '-', lw=3.0, alpha=1.0, label=label)
 
         # fill band (1 sigma halo-to-halo variation) for first column threshold only
         if N == Nthresh[0]:
             fc_percs = np.percentile(fc[:,:-1], [16,84], axis=1)
             fc_percs = savgol_filter(fc_percs, sKn, sKo, axis=1)
 
-            ax.fill_between(10**xx, fc_percs[0,:], fc_percs[1,:], color=c, alpha=0.1, interpolate=True)
-
-        # plot global
-        label = 'N$_{\\rm %s}$ > 10$^{%.1f}$ cm$^{-2}$' % (ion,N)
-        ax.plot(10**xx, fc[:,-1], '-', lw=3.0, alpha=1.0, color=c, label=label)
+            ax.fill_between(10**xx, fc_percs[0,:], fc_percs[1,:], color=l.get_color(), alpha=0.1, interpolate=True)
 
     # second sim set? only do for last column threshold
     if sPs2 is not None:

@@ -279,11 +279,11 @@ def figure1_res_statistics(conf=0):
     if conf == 1:
         # Figure 1, lower right panel
         plotSingleRadialProfile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='cellsize_kpc', 
-            sfreq0=True, colorOffs=[0,2], xlim=[-0.5,3.0], scope='global')
+            sfreq0=True, xlim=[-0.5,3.0], scope='global')
     if conf == 2:
         # Figure 1, upper panel
         plotSingleRadialProfile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', 
-            colorOffs=[0,2], xlim=[2.0,4.7], scope='global')
+            xlim=[2.0,4.7], scope='global')
 
 def tracer_ambient_hot_halo():
     """ Check the existence of an ambient/pre-existing hot halo at r<0.25rvir, as opposed to the possibility that all 
@@ -460,10 +460,6 @@ def gas_components_time_evo():
     legend2 = ax.legend(lines, [sP.simName for sP in sPs], loc='upper left')
     ax.add_artist(legend2)
 
-    colors = []
-    for i in range(5):
-        colors.append( next(ax._get_lines.prop_cycler)['color'])
-
     for i, sP in enumerate(sPs):
         z = data[i]['redshifts']
 
@@ -625,7 +621,6 @@ def mgii_radial_profile():
 
     # init
     ionData = cloudyIon(None)
-    colors = []
 
     # loop over each fullbox run
     for i, sP in enumerate(sPs):
@@ -715,12 +710,9 @@ def mgii_radial_profile():
         if rr.size > sKn:
             yy_mean = savgol_filter(yy_mean,sKn,sKo)
 
-        # determine color
-        c = next(ax._get_lines.prop_cycler)['color']
-
         # plot median line
         label = sP.simName
-        ax.plot(rr, yy_mean, lw=lw, color=c, linestyle=linestyles[radType], label=label)
+        l, = ax.plot(rr, yy_mean, lw=lw, linestyle=linestyles[radType], label=label)
 
         # draw rvir lines (or 300pkpc lines if x-axis is already relative to rvir)
         yrvir = ax.get_ylim()
@@ -729,8 +721,8 @@ def mgii_radial_profile():
         xrvir = [rvir_pkpc, rvir_pkpc]
         textStr = 'R$_{\\rm vir}$'
 
-        ax.plot(xrvir, yrvir, lw=lw*1.5, color=c, alpha=0.1)
-        ax.text(xrvir[0]-0.02, yrvir[1], textStr, color=c, va='bottom', ha='right', 
+        ax.plot(xrvir, yrvir, lw=lw*1.5, color=l.get_color(), alpha=0.1)
+        ax.text(xrvir[0]-0.02, yrvir[1], textStr, color=l.get_color(), va='bottom', ha='right', 
                 fontsize=20.0, alpha=0.1, rotation=90)
 
     # legend
@@ -761,8 +753,6 @@ def hi_covering_frac():
 
     # plot setup
     fig = plt.figure(figsize=[figsize[0], figsize[1]])
-
-    colors = []
 
     # loop over each column density threshold
     for j, thresh in enumerate(colDensThresholds):
@@ -804,14 +794,9 @@ def hi_covering_frac():
             xx = cf['radBins%s' % relStr] / rvir
             yy = np.squeeze( cf['all_percs%s' % relStr][ind,:,3] )
 
-            # plot middle line                
-            if j == 0:
-                c = next(ax._get_lines.prop_cycler)['color']
-                colors.append(c)
-            else:
-                c = colors[i]
-
-            ax.plot(xx, yy, lw=lw, color=c, linestyle='-', label=sP.simName if j == len(colDensThresholds)-1 else '')
+            # plot middle line
+            label = sP.simName if j == len(colDensThresholds)-1 else ''
+            ax.plot(xx, yy, lw=lw, color=colors[i], linestyle='-', label=label)
 
         legend = ax.legend(loc='upper right')
 

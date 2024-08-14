@@ -1,6 +1,7 @@
 """
 Global plot-related configuration which is imported into other plotting submodules.
 """
+import matplotlib.pyplot as plt
 
 sKn     = 5   # savgol smoothing kernel length (1=disabled)
 sKo     = 3   # savgol smoothing kernel poly order
@@ -17,7 +18,7 @@ figsize_sm = [figsize[0] * sizefac, figsize[1] * sizefac]
 lw = 2.5 # default line width
 
 linestyles = ['-',':','--','-.',(0, (3, 5, 1, 5, 1, 5)),'--','-.',':','--'] # 9 linestyles to alternate through (custom is dashdotdot)
-colors     = ['blue','purple','black'] # colors for zoom markers only (cannot vary linestyle with 1 point) (old, delete)
+colors     = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 markers    = ['o','s','D','p','H','*','v','8','^','P','X','>','<','d']  # marker symbols to alternate through
 
 # the dust model used by default for all colors

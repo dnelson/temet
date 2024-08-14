@@ -215,9 +215,7 @@ def contamination_compare_profiles():
     ax.set_ylim(ylim)
 
     # load: loop over hInd/variant combination
-    for hInd in hInds:
-        c = next(ax._get_lines.prop_cycler)['color']
-
+    for i, hInd in enumerate(hInds):
         for j, variant in enumerate(variants):
             # load zoom: group catalog
             sPz = simParams(res=zoomRes, run=run, hInd=hInd, redshift=redshift, variant=variant)
@@ -232,10 +230,10 @@ def contamination_compare_profiles():
             halo_r200_pMpc = sPz.units.codeLengthToMpc(halo_zoom['Group_R_Crit200'])
             min_dist_lr = contam['min_dist_lr'] / halo_r200_pMpc
 
-            l, = ax.plot(rr, logZeroNaN(contam['r_frac']), linestyles[j], color=c, lw=lw, label='h%d_%s' % (hInd,variant))
-            #l, = ax.plot(rr, logZeroNaN(contam['r_massfrac']), '--', lw=lw, color=c)
+            l, = ax.plot(rr, logZeroNaN(contam['r_frac']), linestyles[j], color=colors[i], lw=lw, label='h%d_%s' % (hInd,variant))
+            #l, = ax.plot(rr, logZeroNaN(contam['r_massfrac']), '--', lw=lw, color=colors[i])
 
-            ax.plot([min_dist_lr,min_dist_lr], [ylim[1]-0.3,ylim[1]], linestyles[j], color=c, lw=lw, alpha=0.5)
+            ax.plot([min_dist_lr,min_dist_lr], [ylim[1]-0.3,ylim[1]], linestyles[j], color=l.get_color(), lw=lw, alpha=0.5)
             print(hInd,variant,min_dist_lr,halo_r200_pMpc)
 
     ax.plot([0,rr[-1]], [-1.0, -1.0], '-', color='#888888', lw=lw-1.0, alpha=0.4, label='10%')
@@ -475,19 +473,15 @@ def sizefacComparison():
 
     print(' within 1rvir, numhalos, mean median number of low-res dm: ', len(num_lowres), np.mean(num_lowres), np.median(num_lowres))
 
+    # set up unique coloring by variant/sizeFac
+    colors = {variant:colors[i] for i,variant in enumerate(variants)}
+
     # start plot
     fig = plt.figure(figsize=(22,12))
 
     for rowNum in [0,1]:
         xlabel = 'Halo ID' if rowNum == 0 else 'Halo Mass [log M$_{\\rm sun}$]'
         ax = fig.add_subplot(2,3,rowNum*3+1)
-
-        # set up unique coloring by variant/sizeFac
-        colors = OrderedDict()
-
-        for variant in variants:
-            c = next(ax._get_lines.prop_cycler)['color']
-            colors[ variant ] = c
 
         handles = [plt.Line2D((0,1), (0,0), color=colors[sf], marker='o', lw=lw) for sf in colors.keys()]
 
@@ -498,7 +492,7 @@ def sizefacComparison():
 
         for result in results:
             xx = result['hInd'] if rowNum == 0 else result['haloMass']
-            color = colors[ result['variant'] ]
+            color = colors[result['variant']]
             ax.plot( xx, result['contam_min'], 'o', color=color, label='')
         
         ax.legend(handles, ['%s' % variant for variant in colors.keys()], loc='best')
@@ -510,7 +504,7 @@ def sizefacComparison():
 
         for result in results:
             xx = result['hInd'] if rowNum == 0 else result['haloMass']
-            color = colors[ result['variant'] ]
+            color = colors[result['variant']]
             ax.plot( xx, result['contam_min']*sP.HubbleParam/result['haloRvir'], 'o', color=color, label='')
 
         xlim = ax.get_xlim()
@@ -526,7 +520,7 @@ def sizefacComparison():
 
         for result in results:
             xx = result['hInd'] if rowNum == 0 else result['haloMass']
-            color = colors[ result['variant'] ]
+            color = colors[result['variant']]
             ax.plot( xx, np.log10(result['cpuHours']/1e3), 'o', color=color, label='')
 
         ax.legend(handles, ['%s' % variant for variant in colors.keys()], loc='best')

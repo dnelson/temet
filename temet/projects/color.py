@@ -106,7 +106,6 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
 
     # loop over each fullbox run
     pMaxVals = np.zeros( len(stellarMassBins), dtype='float32' )
-    pNum = 0
 
     for sP in sPs:
         if sP.isZoom:
@@ -125,13 +124,8 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
             # galaxy selection
             w_cen, w_all, w_sat = sP.cenSatSubhaloIndices()
 
-            # determine unique color
-            c = next(ax._get_lines.prop_cycler)['color']
-            # skip second color (pNum=1), reserved for L205n2500, if we do a res (x3), dustModel (x3), 
-            # or TNG vs Illlustris (x2) comparison
-            if pNum == 1 and (len(sPs) >=3 or len(simColorsModels) >= 3):
-                c = next(ax._get_lines.prop_cycler)['color']
-            pNum += 1
+            # determine color
+            c = None
             if (len(sPs) == 2 and sPs[1].simName == 'TNG100-1' and sPs[0].simName == 'Illustris-1'):
                 #if sP.simName == 'Illustris-1': c = '#9467BD' # tableau10 fifth (purple) for Illustris-1
                 #if sP.simName == 'Illustris-1': c = '#8C564B' # tableau10 sixth (brown) for Illustris-1
@@ -459,17 +453,12 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
             ax2.get_yaxis().set_ticks([])
 
         # loop over each fullbox run
-        spColors = []
-
         for sP in sPs:
             if sP.isZoom:
                 continue
 
             print('Color 2D PDFs [%s] [%s]: %s' % ('-'.join(bands),simColorsModel,sP.simName))
             sP.setRedshift(simRedshift)
-
-            c = next(ax._get_lines.prop_cycler)['color']
-            spColors.append(c)
 
             # load fullbox stellar masses and photometrics
             gc = sP.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])
@@ -531,8 +520,8 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
                     kde = gaussian_kde(galaxy_color[simInds], bw_method='scott')
 
                     label = sP.simName if j == 0 else ''
-                    axes2[i].plot(kde(xx), xx, '-', color=c, alpha=1.0, lw=3.0, label=label)
-                    axes2[i].fill_betweenx(xx, 0.0, kde(xx), facecolor=c, alpha=0.1)
+                    l, = axes2[i].plot(kde(xx), xx, '-', alpha=1.0, lw=3.0, label=label)
+                    axes2[i].fill_betweenx(xx, 0.0, kde(xx), facecolor=l.get_color(), alpha=0.1)
 
                     # (only one 2D contour set per plot)
                     if sP != sP_target:
@@ -548,7 +537,7 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
 
                     for k, cLevel in enumerate(cLevels):
                         axes[i].contour(xx, yy, kde_sim, [cLevel], 
-                                       colors=[c], alpha=cAlphas[k], linewidths=3.0, extent=extent)
+                                       colors=[l.get_color()], alpha=cAlphas[k], linewidths=3.0, extent=extent)
 
                     # (B) sim 2D histogram approach
                     #cc, xBins, yBins = np.histogram2d(stellar_mass[wBin], galaxy_color[wBin], bins=nBins2D, \
@@ -1679,7 +1668,6 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
 
         # plot, looping over all runs and CSSes
         for i, sP in enumerate(sPs):
-            c = next(ax._get_lines.prop_cycler)['color']
             nBinsLoc = nBins if sP.res > 2000 else int(nBins/2)
 
             for j, cenSatSelect in enumerate(plotCSS):
@@ -1716,7 +1704,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
                 xx = xx[:-1] + 0.5*binSize
 
                 label = sP.simName if j == 0 else ''
-                ax.plot(xx,yy,lw=lw,alpha=alpha,color=c,linestyle=linestyles[j],label=label)
+                l, = ax.plot(xx,yy,lw=lw,alpha=alpha,linestyle=linestyles[j],label=label)
 
                 if fieldName == 'dM_redfr':
                     # for figure 13, add Mstar>11.0 also as dotted lines
@@ -1734,7 +1722,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
                     yy = yy.astype('float32') * normFac
                     xx = xx[:-1] + 0.5*binSize
 
-                    ax.plot(xx,yy,lw=lw,alpha=alpha,color=c,linestyle=linestyles[j+1])
+                    ax.plot(xx,yy,lw=lw,alpha=alpha,color=l.get_color(),linestyle=linestyles[j+1])
 
                 if fieldName == 'M_redini' and plotCSS == ['cen']:
                     # for figure 11, add mstar at z=0 for comparison
@@ -1764,7 +1752,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
                     xx = xx[:-1] + 0.5*binSize
 
                     alphaFac = 0.7
-                    ax.plot(xx,yy,lw=lw,alpha=alpha*alphaFac,color=c,linestyle=linestyles[2])
+                    ax.plot(xx,yy,lw=lw,alpha=alpha*alphaFac,color=l.get_color(),linestyle=linestyles[2])
 
                 if yy.max() > yy_max: yy_max = yy.max()
 
@@ -1843,7 +1831,6 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
         binSize = (fieldMinMax[xAxis][1]-fieldMinMax[xAxis][0])/nBins
 
         for i, sP in enumerate(sPs):
-            c = next(ax._get_lines.prop_cycler)['color']
             for j, cenSatSelect in enumerate(plotCSS):
                 x_vals = data[i][xAxis][cenSatSelect]
                 y_vals = data[i][yAxis][cenSatSelect]
@@ -1883,7 +1870,8 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
                     pm = savgol_filter(pm,sKn,sKo,axis=1) # P[10,90]
 
                 label = sP.simName if j == 0 else ''
-                ax.plot(xm[:-1], ym[:-1], linestyles[j], color=c, lw=lw, label=label)
+                c = None if j == 0 else l.get_color()
+                l, = ax.plot(xm[:-1], ym[:-1], linestyles[j], color=c, lw=lw, label=label)
 
                 if j > 0:
                     # show percentile scatter only for 'all galaxies'
@@ -2106,12 +2094,6 @@ def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pageNum=Non
         # dust_C
         xx = gal_masses[dust_C][:,i]
         yy = gal_colors[dust_C][:,i]
-
-        # skip some light colors
-        if i == 9:
-            for _ in range(2): c = next(ax._get_lines.prop_cycler)['color']
-        if i == 10:
-            c = next(ax._get_lines.prop_cycler)['color']
 
         l, = ax.plot(xx, yy, 'o-', alpha=tAlpha, label='ID #%d' % shID)
         for j in range(xx.size):

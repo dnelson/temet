@@ -635,7 +635,7 @@ def plotRshockVsMass(sPs, quants=['Temp_400rad_16ns'], vsHaloMass=True, kpc=Fals
 
     # loop over each fullbox run
     txt = []
-    colors = [next(ax._get_lines.prop_cycler)['color'] for _ in range(10)]
+    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
     for i, sP in enumerate(sPs):
         # load halo/stellar masses, rshock auxcat

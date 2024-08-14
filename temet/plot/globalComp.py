@@ -104,8 +104,6 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
             xx = sP.units.codeMassToLogMsun( xx_code )
 
             # stellar mass definition(s)
-            c = next(ax._get_lines.prop_cycler)['color']
-
             if use30kpc:
                 # load auxcat
                 field = 'Subhalo_Mass_30pkpc_Stars'
@@ -114,28 +112,28 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
                 yy = ac[field][w] / xx_code / (sP.omega_b/sP.omega_m)
                 xm, ym, sm = running_median(xx,yy,binSize=binSize)
                 ym2 = savgol_filter(ym,sKn,sKo)
-                l, = ax.plot(xm[:-1], ym2[:-1], linestyles[0], color=c, lw=3.0, label=label)
+                l, = ax.plot(xm[:-1], ym2[:-1], linestyles[0], c=colors[i], lw=lw, label=label)
                 lines.append(l)
 
             if allMassTypes:
                 yy = gc['subhalos']['SubhaloMassType'][w,4] / xx_code / (sP.omega_b/sP.omega_m)
                 xm, ym, sm = running_median(xx,yy,binSize=binSize)
                 ym2 = savgol_filter(ym,sKn,sKo)
-                l, = ax.plot(xm[:-1], ym2[:-1], linestyles[1], color=c, lw=3.0)
+                l, = ax.plot(xm[:-1], ym2[:-1], linestyles[1], c=colors[i], lw=lw)
 
             if not use30kpc or allMassTypes:
                 # primary (in 2rhalf_stars)
                 yy = gc['subhalos']['SubhaloMassInRadType'][w,4] / xx_code / (sP.omega_b/sP.omega_m)
                 xm, ym, sm = running_median(xx,yy,binSize=binSize)
                 ym2 = savgol_filter(ym,sKn,sKo)
-                l, = ax.plot(xm[:-1], ym2[:-1], linestyles[0], lw=3.0, color=c, label=label)
+                l, = ax.plot(xm[:-1], ym2[:-1], linestyles[0], c=colors[i], lw=lw, label=label)
                 lines.append(l)
 
             if allMassTypes:
                 yy = gc['subhalos']['SubhaloMassInHalfRadType'][w,4] / xx_code / (sP.omega_b/sP.omega_m)
                 xm, ym, sm = running_median(xx,yy,binSize=binSize)
                 ym2 = savgol_filter(ym,sKn,sKo)
-                l, = ax.plot(xm[:-1], ym2[:-1], linestyles[2], lw=3.0, color=c)
+                l, = ax.plot(xm[:-1], ym2[:-1], linestyles[2], c=colors[i], lw=lw)
 
             # individual N most massive points
             ax.plot(xx[0:nIndivPoints], yy[0:nIndivPoints], 'o', color=l.get_color(), alpha=0.9)
@@ -150,14 +148,14 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
         lExtra.append( handle.get_label() )
 
     if allMassTypes:
-        sExtra += [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[1]),
-                  plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[0]),
-                  plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[2])]
+        sExtra += [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[1]),
+                  plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[0]),
+                  plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[2])]
         lExtra += [r'$M_\star^{\rm tot}$',
                   r'$M_\star^{< 2r_{1/2}}$', 
                   r'$M_\star^{< r_{1/2}}$']
     if use30kpc:
-        sExtra += [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[0])]
+        sExtra += [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[0])]
         lExtra += [r'$M_\star$ (< 30 pkpc)']
 
     for sP in sPs:
@@ -315,7 +313,7 @@ def sfrAvgVsRedshift(sPs, pdf):
         ax.fill_between(xx, yyDown, yyUp, color=l.get_color(), interpolate=True, alpha=0.3)
 
     # loop over each fullbox run
-    for sP in sPs:
+    for i, sP in enumerate(sPs):
         if sP.isZoom:
             continue
 
@@ -326,8 +324,6 @@ def sfrAvgVsRedshift(sPs, pdf):
         xx = simData['redshifts']
 
         # plot line for each halo mass bin
-        c = next(ax._get_lines.prop_cycler)['color']
-
         for haloMassBin in plotMassBins:
             # locate this mass bin in saved data
             k = np.where(simData['haloMassBins'] == haloMassBin)[0]
@@ -337,8 +333,8 @@ def sfrAvgVsRedshift(sPs, pdf):
             for j in [1]: # <2r1/2
                 label = sP.simName if (haloMassBin==plotMassBins[0] and j==1) else ''
 
-                #ax.plot(xx, simData['sfrs_med'][:,k,j], ':', color=c, lw=3.0, label=label)
-                ax.plot(xx, simData['sfrs_med_noZero'][:,k,j], '-', color=c, lw=3.0, label=label)
+                #ax.plot(xx, simData['sfrs_med'][:,k,j], ':', color=c, lw=lw, label=label)
+                ax.plot(xx, simData['sfrs_med_noZero'][:,k,j], '-', color=colors[i], lw=lw, label=label)
 
                 #if sP == sPs[0] and j == 1:
                 #    yy_down = simData['sfrs_med_noZero'][:,k,j] - simData['sfrs_std_noZero'][:,k,j]
@@ -567,7 +563,7 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
             ax.plot(xx[ww], yy[ww], 'o', label=sP.simName)
         else:
             # normal: show running medians with percentile bands
-            l, = ax.plot(xm[:-1], ym2[:-1], '-', lw=3.0, label=sP.simName)
+            l, = ax.plot(xm[:-1], ym2[:-1], '-', lw=lw, label=sP.simName)
 
             if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2):
                 y_down = np.array(ym2[:-1]) - sm2[:-1]
@@ -912,7 +908,7 @@ def uvLuminosityFunction(sPs, pdf, centralsOnly=False, use30kpc=False, absoluteM
                 # plot
                 label = sP.simName+' z=%.1f'%sP.redshift if i == 0 else ''
                 color = l.get_color() if i > 0 else None
-                l, = ax.plot(xm[3:], ym[3:], linestyles[i], color=color, lw=3.0, label=label)
+                l, = ax.plot(xm[3:], ym[3:], linestyles[i], color=color, lw=lw, label=label)
 
     # second legend
     handles, labels = ax.get_legend_handles_labels()
@@ -1289,7 +1285,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
     ax.add_artist(legend1)
 
     # loop over each fullbox run
-    for sP in sPs:
+    for j, sP in enumerate(sPs):
         print('MMStars: '+sP.simName)
         sP.setRedshift(simRedshift)
 
@@ -1297,8 +1293,6 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
             continue
 
         # load
-        c = next(ax._get_lines.prop_cycler)['color']
-
         gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
             fieldsSubhalos=['SubhaloMass','SubhaloMassInRadType']+metalFields)
         ac = sP.auxCat(fields=acMetalFields)
@@ -1343,10 +1337,10 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
                     ym = ym[ww]
 
                 label = sP.simName if (i == 0 and i_num == 0) else ''
-                ax.plot(xm[:-1], ym[:-1], linestyles[i+i_num*2], color=c, lw=3.0, label=label)
+                l, = ax.plot(xm[:-1], ym[:-1], linestyles[i+i_num*2], color=colors[j], lw=lw, label=label)
 
                 if i_num == 0:
-                    ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.25)
+                    ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=l.get_color(), interpolate=True, alpha=0.25)
 
         # metallicities from groupcat, measured within what radius?                    
         for i, metalField in enumerate(metalFields):
@@ -1359,7 +1353,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
             ym2 = savgol_filter(ym,sKn,sKo)
             pm2 = savgol_filter(pm,sKn,sKo,axis=1) # P[10,90]
 
-            ax.plot(xm[1:-1], ym2[1:-1], linestyles[i+len(acMetalFields)], color=c, lw=3.0)
+            ax.plot(xm[1:-1], ym2[1:-1], linestyles[i+len(acMetalFields)], color=c, lw=lw)
 
         # testing
         if sdssFiberFits and sP.simName == 'TNG100-1':
@@ -1381,7 +1375,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
             pm = savgol_filter(pm_i,sKn,sKo,axis=1)
 
             label = sP.simName + ' fiber'
-            ax.plot(xm[:-1], ym[:-1], linestyles[0], color='green', lw=3.0, label=label)
+            ax.plot(xm[:-1], ym[:-1], linestyles[0], color='green', lw=lw, label=label)
             ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color='green', interpolate=True, alpha=0.25)
 
     # second legend
@@ -1390,17 +1384,17 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
     lExtra = []
 
     if not clean:
-        sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[0]),
-                  plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[1]),
-                  plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[2]),
-                  plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[3])]
+        sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[0]),
+                  plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[1]),
+                  plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[2]),
+                  plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[3])]
         lExtra = ['Z$_{\\rm stars}$ (r < 4pkpc, rBand-LumWt)',
                   'Z$_{\\rm stars}$ (r < 1r$_{1/2})$', 
                   'Z$_{\\rm stars}$ (r < 2r$_{1/2})$',
                   'Z$_{\\rm stars}$ (r < r$_{\\rm max})$']
     else:
         pass
-        #sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[2])]
+        #sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[2])]
         #lExtra = ['Guidi+ (2016) Correction'] 
 
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
@@ -1489,7 +1483,7 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
         ax.add_artist(legend1)
 
     # loop over each fullbox run
-    for sP in sPs:
+    for j, sP in enumerate(sPs):
         if sP.isZoom:
             continue
 
@@ -1507,9 +1501,7 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
         xx_code = gc['subhalos']['SubhaloMassInRadType'][w,sP.ptNum('stars')]
         xx = sP.units.codeMassToLogMsun( xx_code )
 
-        # metallicity measured how/within what radius?
-        c = next(ax._get_lines.prop_cycler)['color']
-                
+        # metallicity measured how/within what radius?                
         for i, metalField in enumerate(metalFields):
             # only subhalos with nonzero metalField (some star-forming gas)
             wNz = np.where( gc['subhalos'][metalField][w] > 0.0 )
@@ -1522,16 +1514,16 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
             sm2 = savgol_filter(sm,sKn,sKo)
 
             label = sP.simName + ' z=%3.1f' % simRedshift if i==0 else ''
-            ax.plot(xm[:-1], ym2[:-1], linestyles[i], color=c, lw=3.0, label=label)
+            l, = ax.plot(xm[:-1], ym2[:-1], linestyles[i], color=colors[j], lw=lw, label=label)
 
             if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2) and i == 0:
                 ax.fill_between(xm[:-1], ym2[:-1]-sm2[:-1], ym2[:-1]+sm2[:-1], 
-                color=c, interpolate=True, alpha=0.3)
+                color=l.get_color(), interpolate=True, alpha=0.3)
 
     # second legend
     handles, labels = ax.get_legend_handles_labels()
-    sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[0]),
-              plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[1])]
+    sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[0]),
+              plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[1])]
     lExtra = ['Z$_{\\rm gas}$ (sfr>0 sfr-weighted)',
               'Z$_{\\rm gas}$ (sfr>0 mass-weighted)']
 
@@ -1587,7 +1579,7 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
     ax.text( 12.5, OmegaU+0.003, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', size='large', alpha=0.2)
 
     # loop over each fullbox run
-    for sP in sPs:
+    for j, sP in enumerate(sPs):
         print('Fracs500Crit: '+sP.simName)
         sP.setRedshift(simRedshift)
 
@@ -1621,11 +1613,9 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
             data[ww,0] = 1e-10
             data[ww,1:2] = 0.0
 
-            xx = sP.units.codeMassToLogMsun( xx_code )
+            xx = sP.units.codeMassToLogMsun(xx_code)
 
-            # loop over fraction types
-            c = next(ax._get_lines.prop_cycler)['color']
-                    
+            # loop over fraction types                    
             for i, fracType in enumerate(fracTypes):
                 if fracType == 'gas':
                     val = data[:,1]
@@ -1640,21 +1630,21 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
                 ym2 = savgol_filter(ym,sKn,sKo)
 
                 label = sP.simName if i==0 else ''
-                ax.plot(xm[:], ym2[:], linestyles[i], color=c, lw=3.0, label=label)
+                ax.plot(xm[:], ym2[:], linestyles[i], color=colors[j], lw=lw, label=label)
 
                 #if fracType == 'gas':
                 #    ax.fill_between(xm[:-1], ym2[:-1]-sm[:-1], ym2[:-1]+sm[:-1], 
-                #                    color=c, interpolate=True, alpha=0.3)
+                #                    color=colors[j], interpolate=True, alpha=0.3)
 
     # f_labels legend
-    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
+    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=ls) for ls in linestyles]
     lExtra = ['f$_{\\rm '+t+'}$' for t in fracTypes]
 
     legend3 = ax.legend(sExtra, lExtra, loc='lower right')
     ax.add_artist(legend3)
 
     # sim legend
-    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,alpha=0.0,marker='')]
+    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=lw,alpha=0.0,marker='')]
     lExtra = ['[ sims z=%3.1f ]' % simRedshift]
 
     handles, labels = ax.get_legend_handles_labels()
@@ -1761,15 +1751,13 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
         ax.add_artist(legend1)
 
     # loop over each fullbox run
-    for sP in sPs:
+    for j, sP in enumerate(sPs):
         if sP.isZoom:
             continue
 
         print('CDDF %s: %s' % (sStr,sP.simName))
         if simRedshift is not None:
             sP.setRedshift(simRedshift)
-
-        c = next(ax._get_lines.prop_cycler)['color']
 
         # once including H2 modeling, once without
         for i, species in enumerate(speciesList):
@@ -1788,34 +1776,12 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
                 yy = logZeroNaN(fN_species*n_species)
 
             label = '%s z=%.1f' % (sP.simName,sP.redshift) if i == 0 else ''
-            ax.plot(xx, yy, lw=3.0, linestyle=linestyles[i], color=c, label=label)
+            ax.plot(xx, yy, lw=lw, linestyle=linestyles[i], color=colors[j], label=label)
 
-        # custom test
-        from ..cosmo.hydrogen import calculateCDDF
-        files = [] #['save_440839_sphmap1920','save_440839_histo1920','save_440839_histo200']
-
-        for file in files:
-            with h5py.File(file+'.hdf5','r') as f:
-                grid = f['grid'][()] # log cm^-2
-
-            # derive CDDF from this grid
-            depthFrac = 0.1 #TODO sP.units.physicalKpcToCodeLength(30.0) / sP.boxSize
-            fN, n = calculateCDDF(grid, 14.0, 25.0, 0.1, sP, depthFrac=depthFrac)
-            xx = np.log10(n)
-            yy = logZeroNaN(fN)
-
-            ax.plot(xx, yy, '-', lw=3.0, label=file.split('save_')[1])
-        # end custom test
-
-    # variations legend
-    #legend3 = ax.legend(sExtra, lExtra, loc='lower right')
-    #ax.add_artist(legend3)
-
-    # sim legend
+    # legend
     #sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=0.0,alpha=0.0,marker='')]
     #lExtra = ['[ sims z=%3.1f ]' % simRedshift]
-
-    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
+    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=ls) for ls in linestyles]
     lExtra = [str(s.replace('nH2_','')) for s in speciesList]
 
     handles, labels = ax.get_legend_handles_labels()
@@ -1855,14 +1821,12 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
     ax.add_artist(legend1)
 
     # loop over each fullbox run
-    for sP in sPs:
+    for j, sP in enumerate(sPs):
         if sP.isZoom:
             continue
         else:
             print('DLA Z PDF: '+sP.simName)
             sP.setRedshift(simRedshift)
-
-            c = next(ax._get_lines.prop_cycler)['color']
 
             # once including H2 modeling, once without
             for i, species in enumerate(speciesList):
@@ -1880,10 +1844,10 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
                 xx = xx[:-1] + 0.5*(log_Z_range[1]-log_Z_range[0])/log_Z_nBins
 
                 label = sP.simName+' z=%3.1f' % sP.redshift if i == 0 else ''
-                ax.plot(xx, yy, lw=3.0, linestyle=linestyles[i], color=c, label=label)
+                ax.plot(xx, yy, lw=lw, linestyle=linestyles[i], color=colors[j], label=label)
 
     # second legend
-    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
+    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=ls) for ls in linestyles]
     lExtra = [str(s) for s in speciesList]
 
     handles, labels = ax.get_legend_handles_labels()
@@ -1944,7 +1908,7 @@ def velocityFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
         xm = 10.0**xm_i
         ym = savgol_filter(ym_i,sKn,sKo)
 
-        l, = ax.plot(xm[1:-1], ym[1:-1], linestyles[0], lw=3.0, label=sP.simName)
+        l, = ax.plot(xm[1:-1], ym[1:-1], linestyles[0], lw=lw, label=sP.simName)
 
     # second legend
     handles, labels = ax.get_legend_handles_labels()
@@ -2015,7 +1979,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
     ax.add_artist(legend1)
 
     # loop over each fullbox run
-    for sP in sPs:
+    for j, sP in enumerate(sPs):
         print('AGES: '+sP.simName)
         sP.setRedshift(simRedshift)
 
@@ -2042,9 +2006,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
 
         xx = sP.units.codeMassToLogMsun( xx_code[w] )
 
-        # loop through ages measured through different techniques
-        c = next(ax._get_lines.prop_cycler)['color']
-                
+        # loop through ages measured through different techniques                
         for i, ageType in enumerate(ageTypes):
 
             iters = [0]
@@ -2075,10 +2037,10 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
                     ym = ym[ww]
 
                 label = sP.simName if (i == 0 and i_num == 0) else ''
-                ax.plot(xm[:-1], ym[:-1], linestyles[i+2*i_num], color=c, lw=3.0, label=label)
+                l, = ax.plot(xm[:-1], ym[:-1], linestyles[i+2*i_num], color=colors[j], lw=lw, label=label)
 
                 if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2) and i == 0 and i_num == 0: # P[10,90]
-                    ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.25)
+                    ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=l.get_color(), interpolate=True, alpha=0.25)
 
         # testing
         if sdssFiberFits and sP.simName == 'TNG100-1':
@@ -2100,7 +2062,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
             pm = savgol_filter(pm_i,sKn,sKo,axis=1)
 
             label = sP.simName + ' fiber'
-            ax.plot(xm[:-1], ym[:-1], linestyles[0], color='green', lw=3.0, label=label)
+            ax.plot(xm[:-1], ym[:-1], linestyles[0], color='green', lw=lw, label=label)
             ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color='green', interpolate=True, alpha=0.25)
 
     # legend
@@ -2109,12 +2071,12 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
     lExtra = []
 
     if not clean:
-        sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[i]) \
+        sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[i]) \
                     for i,ageType in enumerate(ageTypes)]
         lExtra = [', '.join(ageType.split("_")[2:]) for ageType in ageTypes]
     else:
         pass
-        #sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[2])]
+        #sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[2])]
         #lExtra = ['Guidi+ (2016) Correction'] 
 
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower right')
@@ -2217,10 +2179,10 @@ def plots():
     #sPs.append( simParams(run='tng100-1', redshift=2.0) )
     #sPs.append( simParams(run='tng100-1', redshift=4.0) )
 
-    for variant in ['0000','5018','5200']: #'5010','5014','5015','5017']:
-        sPs.append( simParams(res=512, run='tng', variant=variant) )
-    #for variant in ['','0000','4503']:
-    #    sPs.append( simParams(res=625, run='tng', variant=variant) )
+    #for variant in ['0000','5018','5200']: #'5010','5014','5015','5017']:
+    #    sPs.append( simParams(res=512, run='tng', variant=variant) )
+    for variant in ['','0000','4503']:
+        sPs.append( simParams(res=625, run='tng', variant=variant) )
 
     #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
@@ -2244,8 +2206,7 @@ def plots():
     if 0:
         # single plot and quit
         pdf = PdfPages('comptest_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        for sP in sPs:
-            plotPhaseSpace2D(sP, xQuant='numdens', yQuant='temp', pdf=pdf)
+        stellarMassHaloMass(sPs, pdf, ylog=False, use30kpc=True, simRedshift=zZero)
         pdf.close()
         return
 

@@ -360,19 +360,12 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
                 if len(sPs) > 1 and sPs[1].res != sPs[0].res: label += ' (%s)' % sP.simName
                 if len(sPs) > 1 and sPs[1].redshift != sPs[0].redshift: label += 'z = %.1f' % sP.redshift
 
-                # always vary color with each line:
-                if 0:
-                    # old
-                    colors.append( next(ax._get_lines.prop_cycler)['color'] )
-                    c = colors[-1]
-                    ls = linestyles[(i+k) if len(massBins)==1 and len(sPs)==1 else (j)]
-                if 1:
-                    # new
-                    c = colors[i+j+k]
-                    ls = ':'
-                    if np.mean(massBin) == 9.5 and np.mean(distBin) == 100 and \
-                       np.abs(sP.redshift-0.5)<0.01 and NHI is None: # fiducial
-                        ls = '-'
+                # always vary color with each line
+                c = colors[i+j+k]
+                ls = ':'
+                if np.mean(massBin) == 9.5 and np.mean(distBin) == 100 and \
+                    np.abs(sP.redshift-0.5)<0.01 and NHI is None: # fiducial
+                    ls = '-'
 
                 ls_massbins.append(ls)
 

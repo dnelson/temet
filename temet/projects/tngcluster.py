@@ -402,8 +402,6 @@ def sample_halomasses_vs_redshift(sPs):
                 f['subid'] = subid
 
         # draw evolution lines
-        color = next(ax._get_lines.prop_cycler)['color']
-
         for j in range(subid.shape[0]):
             label = sP.simName if j == 0 else ''
 
@@ -425,7 +423,8 @@ def sample_halomasses_vs_redshift(sPs):
                 zorder = rng.integers(-500, high=-2, size=1) #-3
             alpha_loc = np.clip(alpha_loc, 0.2, 0.9)
 
-            ax.plot(z, m500_loc, lw=lw, c=color, alpha=alpha_loc, zorder=zorder, label=label)
+            c = None if j == 0 else l.get_color()
+            l, = ax.plot(z, m500_loc, lw=lw, c=c, alpha=alpha_loc, zorder=zorder, label=label)
             #ax.plot(z[-1], m500_loc[-1], 'o', c=color, alpha=alpha_loc, zorder=zorder, ms=4)
 
     # first legend

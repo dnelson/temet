@@ -261,13 +261,8 @@ def stellarMergerContributionPlot():
     ax.plot(histMinMax, [0.1,0.1], ':', color='black', alpha=0.05)
     ax.plot(histMinMax, [0.5,0.5], ':', color='black', alpha=0.05)
     ax.plot(histMinMax, [0.9,0.9], ':', color='black', alpha=0.05)
-
-    colors = []
     
     for j, haloMassBin in enumerate(md[sP.simName]['haloMassBins']):
-        c = next(ax._get_lines.prop_cycler)['color']
-        colors.append(c)
-
         for i, sP in enumerate(sPs):
 
             alpha = 1.0
@@ -282,7 +277,7 @@ def stellarMergerContributionPlot():
             yy_cum = yy[::-1].cumsum()[::-1] # above a given subhalo mass threshold
             #label = '%.1f < M$_{\\rm halo}$ < %.1f' % (haloMassBin[0],haloMassBin[1])
 
-            ax.plot(hist_bins, yy_cum, linestyles[i], lw=lw, color=c, label='', alpha=alpha)
+            ax.plot(hist_bins, yy_cum, linestyles[i], lw=lw, color=colors[j], label='', alpha=alpha)
 
     # legend
     sExtra = []
@@ -306,13 +301,9 @@ def stellarMergerContributionPlot():
     ax.set_xlim([12.0,15.0])
     ax.set_ylim([8.0,12.0])
 
-    colors = []
     threshInds = [1,2]
 
     for apertureIter in range(nApertures):
-        c = next(ax._get_lines.prop_cycler)['color']
-        colors.append(c)
-
         for i, sP in enumerate(sPs):
             for threshIter in threshInds:
                 x_vals = md[sP.simName]['indivHaloMasses']
@@ -325,12 +316,12 @@ def stellarMergerContributionPlot():
 
                 alpha = [0.0,0.3,1.0][threshIter]
 
-                l, = ax.plot(xm[:-1], ym[:-1], linestyles[i], lw=lw, color=c, alpha=alpha)
+                l, = ax.plot(xm[:-1], ym[:-1], linestyles[i], lw=lw, color=colors[apertureIter], alpha=alpha)
 
                 if apertureIter > 0 or threshIter == 1 or i > 0:
                     continue # show percentile scatter only for first aperture
                 
-                ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.1)
+                ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=l.get_color(), interpolate=True, alpha=0.1)
 
     # legend
     sExtra = []

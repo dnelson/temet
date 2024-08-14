@@ -636,12 +636,6 @@ def quantSlice1D(sPs, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', yRel=
                 if yRel is not None:
                     yy /= np.nanmedian(yy)
 
-                # plot points
-                c = next(ax._get_lines.prop_cycler)['color']
-
-                if xx.size < ptPlotThresh:
-                    ax.plot(xx, yy, 'o', color=c, alpha=0.3)
-
                 # median and 10/90th percentile lines
                 nBins = 30
                 if xx.size >= ptPlotThresh:
@@ -657,11 +651,15 @@ def quantSlice1D(sPs, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', yRel=
 
                 sName = slabel.split('[')[0].rstrip() # shortened version (remove units) of split quant name for legend
                 label = sP.simName if len(sRanges) == 1 else '%.1f < %s < %.1f' % (sRange[0],sName,sRange[1])
-                ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=label)
+                l, = ax.plot(xm, ym, linestyles[0], lw=lw, label=label)
 
                 # percentile band:
                 if xx.size >= ptPlotThresh:
-                    ax.fill_between(xm, pm[1,:], pm[-2,:], facecolor=c, alpha=0.1, interpolate=True)
+                    ax.fill_between(xm, pm[1,:], pm[-2,:], facecolor=l.get_color(), alpha=0.1, interpolate=True)
+
+                # plot points
+                if xx.size < ptPlotThresh:
+                    ax.plot(xx, yy, 'o', color=l.get_color(), alpha=0.3)
 
         # legend
         if i == 0:
@@ -914,7 +912,7 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
                         assert len(sim_xx) # otherwise, no galaxies left
 
                 # decide color
-                c = next(ax._get_lines.prop_cycler)['color']
+                c = ax.plot([], [])[0].get_color()
 
                 if ctName is not None:
                     ct = ctName
@@ -1004,28 +1002,21 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
                     svals_loc = sim_svals[wSelect][wFinite]
                     binSizeS = binSize*2
 
-                    if 1 or len(sPs) == 1:
-                        # if only one run, use new colors for above and below slices (currently always do this)
-                        c = next(ax._get_lines.prop_cycler)['color']
-
                     xm, yma, ymb, pma, pmb = running_median_sub(sim_xx,sim_yy,svals_loc,binSize=binSizeS,
                                                         sPercs=sLowerPercs)
 
                     for k, sLowerPerc in enumerate(sLowerPercs):
                         label = '%s < P[%d]' % (slabel,sLowerPerc)
-                        ax.plot(xm, ymb[k], linestyles[1+k], lw=lw, color=c, label=label)
+                        ax.plot(xm, ymb[k], linestyles[1+k], lw=lw, label=label)
 
-                    lsOffset = len(sLowerPercs)
-                    if 1 or len(sPs) == 1:
-                        c = next(ax._get_lines.prop_cycler)['color']
-                        lsOffset = 0
+                    lsOffset = 0
 
                     xm, yma, ymb, pma, pmb = running_median_sub(sim_xx,sim_yy,svals_loc,binSize=binSizeS,
                                                         sPercs=sUpperPercs)
 
                     for k, sUpperPerc in enumerate(sUpperPercs):
                         label = '%s > P[%d]' % (slabel,sUpperPerc)
-                        ax.plot(xm, yma[k], linestyles[1+k+lsOffset], lw=lw, color=c, label=label)
+                        ax.plot(xm, yma[k], linestyles[1+k+lsOffset], lw=lw, label=label)
 
                 # contours (optionally conditional, i.e. independently normalized for each x-axis value)
                 # todo

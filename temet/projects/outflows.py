@@ -151,7 +151,7 @@ def sample_comparison_z2_sins_ao(sP):
     fig.savefig('sample_comparison_%s_sfrFullSub=%s.pdf' % (sP.simName,fullSubhaloSFR))
     plt.close(fig)
 
-def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=None, colorOff=0, massField='Masses', v200norm=False):
+def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=None, massField='Masses', v200norm=False):
     """ Explore radial mass flux data, aggregating into a single Msun/yr value for each galaxy, and plotting 
     trends as a function of stellar mass or any other galaxy/halo property. """
 
@@ -253,9 +253,6 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
                 ax.text(10.78, -0.24, 'TNG Model', color='black', alpha=0.6, rotation=-43.0)
                 ax.text(10.69, -0.32, '(at Injection)', color='black', alpha=0.6, rotation=-43.0)
 
-        for _ in range(colorOff):
-            c = next(ax._get_lines.prop_cycler)['color']
-
         txt = []
 
         # loop over radii and/or vcut selections
@@ -298,23 +295,19 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
                 if len(vcutIndsPlot) > 1 and len(radIndsPlot) > 1:
                     # one color per v_rad, if cycling over both
                     if i == 0:
-                        colors.append( next(ax._get_lines.prop_cycler)['color'] )
-                    c = colors[j]
-
-                if len(vcutIndsPlot) == 1 or len(radIndsPlot) == 1:
-                    c = next(ax._get_lines.prop_cycler)['color']
+                        ax.set_prop_cycle(None) # reset color cycle
 
                 # symbols for each system
                 if markersize > 0:# or (i==1 and j==1): # hard-coded option
                     size = markersize if markersize > 0 else 4.0
                     yy_mark = yy if skipZeroVals else logZeroNaN(yy)
-                    ax.plot(xvals, yy_mark, 's', color=c, markersize=size, alpha=malpha, rasterized=True)
+                    l, = ax.plot(xvals, yy_mark, 's', markersize=size, alpha=malpha, rasterized=True)
 
                     # mark those at absolute zero just above the bottom of the y-axis
                     off = 0.2
                     w_zero = np.where(np.isnan(yy_mark))
                     yy_zero = np.random.uniform( size=len(w_zero[0]), low=ylim[0]+off/2, high=ylim[0]+off )
-                    ax.plot(xvals[w_zero], yy_zero, 's', alpha=malpha/2, markersize=size, color=c)
+                    ax.plot(xvals[w_zero], yy_zero, 's', alpha=malpha/2, markersize=size, color=l.get_color())
 
                 # median line and 1sigma band
                 xm, ym, sm, pm = running_median(xvals,yy,binSize=binSize,percs=percs,mean=(stat == 'mean'))
@@ -657,7 +650,6 @@ def gasOutflowRatesVsRedshift(sP, ptType, eta=False, config=None, massField='Mas
                     ym = binned_result[binInd,:]
                     pm = binned_percs[:,binInd,:]
 
-                    #c = next(ax._get_lines.prop_cycler)['color']
                     cmap = loadColorTable('viridis', numColors=None)
                     c = cmap(float(binInd) / len(bins))
                     
@@ -858,6 +850,8 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
         if config is not None and 'ylabel' in config: ax.set_ylabel(config['ylabel'])
 
         labels_sec = []
+        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+        color_ind = 0
 
         # TNG minimum velocity band
         if ('mstar' in xQuant or 'mhalo' in xQuant) and not v200norm:
@@ -947,7 +941,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
             for i, rad_ind in enumerate(radIndsPlot):
 
                 if (len(percIndsPlot) > 1 and len(radIndsPlot) > 1) or len(redshifts) > 1:
-                    c = next(ax._get_lines.prop_cycler)['color'] # one color per rad, if cycling over both
+                    color_ind += 1 # one color per rad, if cycling over both
 
                 # local data (outflow rates in this radial bin)
                 if rad_ind < mdot.shape[1]:
@@ -1001,17 +995,17 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                         label = '' # move percs to separate labels
 
                     if (len(percIndsPlot) == 1 or len(radIndsPlot) == 1) and len(redshifts) == 1:
-                        c = next(ax._get_lines.prop_cycler)['color']
+                        color_ind += 1
 
                     # symbols for each system
                     if markersize > 0:
-                        ax.plot(xx, yy, 's', color=c, markersize=markersize, alpha=malpha, rasterized=True)
+                        ax.plot(xx, yy, 's', color=colors[color_ind], markersize=markersize, alpha=malpha, rasterized=True)
 
                         # mark those at absolute zero just above the bottom of the y-axis
                         off = 10
                         w_zero = np.where(np.isnan(yy))
                         yy_zero = np.random.uniform( size=len(w_zero[0]), low=ylim[0]+off/2, high=ylim[0]+off )
-                        ax.plot(xx[w_zero], yy_zero, 's', alpha=malpha/2, markersize=markersize, color=c)
+                        ax.plot(xx[w_zero], yy_zero, 's', alpha=malpha/2, markersize=markersize, color=colors[color_ind])
 
                     # median line and 1sigma band
                     minNum = 2 if 'etaM' in xQuant else 5 # for xQuants = mstar, SFR, Lbol, ...
@@ -1032,7 +1026,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
 
                     if xm[0] > xlim[0]: xm[0] = xlim[0] # visual
 
-                    l, = ax.plot(xm, ym, linestyles[lsInd], lw=lw, alpha=1.0, color=c, label=label)
+                    l, = ax.plot(xm, ym, linestyles[lsInd], lw=lw, alpha=1.0, color=colors[color_ind], label=label)
 
                     data_z.append( {'redshift':redshift, 'vperc':percs[perc_ind], 'rad':radMidPoint, 'xm':xm, 'ym':ym} )
 
@@ -1375,7 +1369,7 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
 
         # loop over redshifts
         txt = []
-        colors = []
+        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
         for j, redshift in enumerate(redshifts):
             # get local data
@@ -1383,12 +1377,6 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
 
             # loop over stellar mass bins and stack
             for i, mStarBin in enumerate(mStarBins):
-
-                if j == 0:
-                    c = next(ax._get_lines.prop_cycler)['color'] # one color per bin (fixed across redshift)
-                    colors.append(c)
-                else:
-                    c = colors[i]
 
                 # local data
                 w = np.where( (mstar > mStarBin[0]) & (mstar <= mStarBin[1]) )
@@ -1452,7 +1440,7 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
                 sm = savgol_filter(sm,sKn,sKo)
 
                 #l, = ax.plot(xm[:-1], ym[:-1], linestyles[i], lw=lw, alpha=1.0, color=c, label=label)
-                l, = ax.plot(xx, yy, linestyle=linestyles[j], lw=lw, alpha=1.0, color=c, label=label)
+                l, = ax.plot(xx, yy, linestyle=linestyles[j], lw=lw, alpha=1.0, color=colors[i], label=label)
 
                 txt.append( {'vout':xx, 'outflowrate':yy, 'redshift':redshift, 'mstar':mStarMidPoint})
 
@@ -2164,7 +2152,7 @@ def _haloSizeScalesHelper(ax, sP, field, xaxis, massBins, i, k, avg_rvir_code, a
             if k == targetK and i == 0: ax.text(xrvir[0]-xoff, y2[0], textStr, color=c, **textOpts)
 
 def stackedRadialProfiles(sPs, field, cenSatSelect='cen', projDim='3D', xaxis='log_pkpc', reBand='jwst_f115w',
-                          haloMassBins=None, mStarBins=None, ylabel='', ylim=None, colorOff=0, saveName=None, pdf=None):
+                          haloMassBins=None, mStarBins=None, ylabel='', ylim=None, saveName=None, pdf=None):
     """ Plot average/stacked radial profiles for a series of stellar mass bins and/or runs (sPs) i.e. at different 
     redshifts. """
     from ..projects.oxygen import _resolutionLineHelper
@@ -2480,8 +2468,6 @@ def stackedRadialProfiles(sPs, field, cenSatSelect='cen', projDim='3D', xaxis='l
 
             # determine color
             if i == 0:
-                for _ in range(colorOff+1):
-                    c = next(ax._get_lines.prop_cycler)['color']
                 colors.append(c)
             else:
                 c = colors[k]
@@ -2849,26 +2835,25 @@ def paperPlots(sPs=None):
         # fig 15: observational comparisons, many panels of etaM vs. galaxy/BH properties
         vcutInds = [0,2,4] # vrad>X cut indices
         stat     = 'median'
-        colorOff = 0 # len(percInds) # change color palette vs percInds lines above?
 
         # etaM vs. SFR
         config = {'vcutInds':vcutInds, 'radInds':radInds, 'stat':stat, 'xlim':[-1.0, 2.6], 'ylim':[-1.1, 2.6], 'skipZeros':False, 
                   'binSize':binSize, 'loc1':'upper right', 'loc2':None, 'leg3white':True, 
                   'markersize':0.0, 'percs':percs, 'minMstar':minMstar,
                   'xlabel':'Star Formation Rate [ log M$_{\\rm sun}$ yr$^{-1}$ ]'}
-        gasOutflowRatesVsQuant(TNG50_z1, ptType='total', xQuant='sfr_30pkpc_100myr', eta=True, colorOff=colorOff, config=config)
+        gasOutflowRatesVsQuant(TNG50_z1, ptType='total', xQuant='sfr_30pkpc_100myr', eta=True,config=config)
 
         # etaM vs. Lbol
         config = {'vcutInds':vcutInds, 'radInds':radInds, 'stat':stat, 'ylim':[-1.1, 2.6], 'xlim':[40.0,47.5], 'skipZeros':False, 
                   'binSize':binSize, 'loc1':'upper right', 'leg1white':True, 'loc2':None, 'loc3':'upper left', 'leg3ncol':2,
                   'markersize':0.0, 'percs':percs, 'minMstar':minMstar}
-        gasOutflowRatesVsQuant(TNG50_z1, ptType='total', xQuant='BH_BolLum', eta=True, colorOff=colorOff, config=config)
+        gasOutflowRatesVsQuant(TNG50_z1, ptType='total', xQuant='BH_BolLum', eta=True, config=config)
 
         # etaM vs. Sigma_SFR (?)
         config = {'vcutInds':vcutInds, 'radInds':radInds, 'stat':stat, 'xlim':[-3.0, 2.0], 'ylim':[-1.1, 2.6], 'skipZeros':False, 
                   'binSize':binSize, 'loc1':'upper right', 'leg1white':True, 'loc2':None, 'loc3':'upper left', 
                   'markersize':0.0, 'percs':percs, 'minMstar':minMstar}
-        gasOutflowRatesVsQuant(TNG50_z1, ptType='total', xQuant='sfr1_surfdens', eta=True, colorOff=colorOff, config=config)
+        gasOutflowRatesVsQuant(TNG50_z1, ptType='total', xQuant='sfr1_surfdens', eta=True, config=config)
 
     if 0:
         # fig 16: stacked radial profiles of SFR surface density
@@ -3013,7 +2998,7 @@ def paperPlots(sPs=None):
                 for xaxis in ['log_pkpc','log_rvir','log_rhalf','pkpc']:
                     for i, mStarBin in enumerate(mStarBins):
                         stackedRadialProfiles(sPs, field, xaxis=xaxis, cenSatSelect=cenSatSelect, 
-                            projDim=projDim, mStarBins=[mStarBin], colorOff=i, pdf=pdf)
+                            projDim=projDim, mStarBins=[mStarBin], pdf=pdf)
 
             pdf.close()
 
