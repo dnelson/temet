@@ -7,14 +7,16 @@ import matplotlib.pyplot as plt
 from os.path import isfile
 
 import torch
-from sbi import utils
-from sbi.inference import SNPE
+import sbi
+from sbi import utils, inference
 
 from ..plot.config import *
 from ..ML.smhm import SMHMDataset
 
 def train(method='SNPE'):
-    """ Train a neural posterior estimator for the SMHM relation. """
+    """ Train a sbi (neural) estimator for the SMHM relation. """
+    assert method in ['SNPE','SNLE','SNRE','FMPE']
+
     torch.manual_seed(424242)
     rng = np.random.default_rng(424242)
 
@@ -29,11 +31,29 @@ def train(method='SNPE'):
     mhalo = data.labels
 
     # prior: uniform on [10.0,15.0] for mhalo
-    prior = utils.BoxUniform(low=torch.zeros(1) + 10.0, high=torch.zeros(1) + 15.0)
+    prior = sbi.utils.BoxUniform(low=torch.zeros(1) + 10.0, high=torch.zeros(1) + 15.0)
     
-    # sequential neural posterior estimation (SNPE) - Papamakarios & Murray (2016)
-    if method == 'SNPE':
-        inference = SNPE(prior)
+    # neural posterior estimation (SNPE)
+    if method == 'SNPE': # SNPE_C, Greenberg+ (2019)
+        density_method = 'made' # nsf, maf, mdn, made (or a custom network)
+        inference = sbi.inference.SNPE(prior, density_estimator=density_method)
+
+    # neural likelihood estimation (SNLE)
+    if method == 'SNLE': # SNLE_A, Papamakarios+ (2019)
+        density_method = 'maf' # nsf, maf, mdn, made (or a custom network)
+        inference = sbi.inference.SNLE(prior, density_estimator=density_method)
+
+    # neural likelihood-ratio estimation (SNRE)
+    if method == 'SNRE': # SNRE_B, Durkan+ (2020)
+        density_method = 'resnet' # linear, mlp, resnet (or a custom network)
+        inference = sbi.inference.SNRE(prior, classifier=density_method)
+
+    # flow matching posterior estimation (FMPE)
+    if method == 'FMPE': # Wildberger+ (2023), Dax+ (2023)
+        density_method = 'resnet' # mlp, resnet (or a custom network)
+        inference = sbi.inference.FMPE(prior, density_estimator=density_method)
+
+    saveStr = '%s_%s' % (method,density_method)
 
     # (parameter -> observation) sample pairs i.e. {theta,x} pairs
     # theta,x should both be float32 tensors of shape [num_simulations, num_dim]
@@ -42,8 +62,38 @@ def train(method='SNPE'):
     x = mstar.unsqueeze(-1)
    
     # train the density estimator
+    # note: train accepts many parameters that customize the training process, e.g.
+    # training_batch_size, learning_rate, validation_fraction, stop_after_epochs, 
+    # max_number_epochs, clip_max_norm, and e.g. resume options
     density_estimator = inference.append_simulations(theta, x).train()
-    posterior = inference.build_posterior(density_estimator)
+
+    if method in ['SNPE','FMPE']:
+        # SNPE and FMPE: density estimator is of the posterior
+        posterior = inference.build_posterior(density_estimator)
+
+    if method in ['SNLE','SNRE']:
+        # SNLE and SNRE: density estimator is of the likelihood, now we need to sample
+        if 0:
+            # Sampling with MCMC (very slow)
+            sampling_algorithm = "mcmc"
+            mcmc_method = "nuts" # slice_np (built-in) or nuts, hmc, slice (via pyro library)
+            mcmc_params = {'num_chains':8, 'num_workers':16}
+            posterior = inference.build_posterior(sample_with=sampling_algorithm, 
+                                                  mcmc_method=mcmc_method,
+                                                  mcmc_parameters=mcmc_params)
+
+        if 0:
+            # Sampling with variational inference
+            sampling_algorithm = "vi"
+            vi_method = "rKL" # or fKL
+            posterior = inference.build_posterior(sample_with=sampling_algorithm, vi_method=vi_method)
+
+        if 1:
+            # Sampling with rejection sampling
+            sampling_algorithm = "rejection"
+            posterior = inference.build_posterior(sample_with=sampling_algorithm)
+
+        saveStr += '_' + sampling_algorithm
 
     # define our 'observations' of mstar
     obs_values = [9.5, 10.0, 10.5, 11.0]
@@ -56,6 +106,11 @@ def train(method='SNPE'):
         # inference: given observation x, sample from the posterior p(theta|x)
         # amortized, as the posterior estimator was not observation specific
         obs = torch.tensor([obs_value])
+
+        if method in ['SNLE','SNRE'] and sampling_algorithm == 'vi':
+            # unlike other methods, vi needs a training step for every observation
+            posterior = posterior.set_default_x(obs).train()
+
         samples = posterior.sample((10000,), x=obs).numpy()
 
         # histogram posterior samples
@@ -74,7 +129,7 @@ def train(method='SNPE'):
 
         ax.legend(loc='upper left')
 
-    fig.savefig('smhm_sbi_posterior_samples.pdf')
+    fig.savefig('smhm_sbi_posterior_%s.pdf' % saveStr)
     plt.close(fig)
 
 def train_toy():
