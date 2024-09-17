@@ -83,16 +83,16 @@ def structuresEvo(conf='one'):
     panels = []
 
     # halo selection
-    hInd    = 10677 # 10677, 31619
+    hInd    = 31619 # 10677, 31619
     run     = 'structures'
     variant = 'TNG'
-    res     = 18
+    res     = 15
 
     # panel selection
     dmMM = [6.0,8.5]
     gasMM = [5.0,7.5]
     variants = ['ST','SN'] # for model vs model comparisons
-    resolutions = [14,18] # for res vs res comparisons
+    resolutions = [14,15] # for res vs res comparisons
 
     if conf == 'one':
         # one run, gas and stars side-by-side

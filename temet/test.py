@@ -11,8 +11,46 @@ import matplotlib.pyplot as plt
 import temet.cosmo
 from .plot.config import figsize
 from .util import simParams
+from .util.helper import pSplitRange
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
+
+def concat_tracer_parent_cats():
+    """ Combine individual tracer_parent_indextype catalogs into single file. """
+    sim = simParams('tng50-1')
+    basePath = '/u/dnelson/sims.TNG/TNG50-1/postprocessing/tracer_tracks/'
+    nSplits = 50
+    nSnaps = 100
+
+    # load first file to get shape
+    with h5py.File(basePath + 'tr_all_groups_99_parent_indextype_indiv-0.hdf5','r') as f:
+        nTr = f['parent_indextype'].size
+
+    shape = [nTr,nSnaps]
+
+    # create output file
+    with h5py.File(basePath + 'tr_all_groups_99_parent_indextype.hdf5','w') as f:
+        f.create_dataset('parent_indextype', shape, dtype='int64')
+        f['snaps'] = np.arange(nSnaps, dtype='int64')[::-1]
+        f['redshifts'] = sim.snapNumToRedshift(f['snaps'][()])
+
+    # loop over splits
+    for i in range(nSplits):
+        # allocate, load across all cats
+        indRange = pSplitRange([0, shape[0]], nSplits, i)
+        print(i, indRange, flush=True)
+        data = np.zeros((indRange[1]-indRange[0],nSnaps), dtype='int64')
+
+        for j in range(nSnaps)[::-1]:
+            # load
+            with h5py.File(basePath + 'tr_all_groups_99_parent_indextype_indiv-%d.hdf5' % j,'r') as f:
+                data[:,j] = f['parent_indextype'][indRange[0]:indRange[1]]
+
+        # save
+        with h5py.File(basePath + 'tr_all_groups_99_parent_indextype.hdf5','a') as f:
+            f['parent_indextype'][indRange[0]:indRange[1]] = data
+
+    print('Done.')
 
 def daniela_accretion_angles():
     """ Combine three auxCat's and compute final angle. """

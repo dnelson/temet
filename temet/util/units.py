@@ -1446,7 +1446,7 @@ class units(object):
             redshift = self._sP.redshift
 
         # flux F = L/(4*pi*d_L^2)*(lambda_L/h/c)*(1+z) in [photon/s/cm^2]
-        d_L_cm = self.redshiftToLumDist(redshift) * self.Mpc_in_cm
+        d_L_cm = np.float64(self.redshiftToLumDist(redshift)) * self.Mpc_in_cm
 
         dist_fac = 4 * np.pi * d_L_cm**2.0 # cm^2
 

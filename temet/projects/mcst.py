@@ -10,6 +10,7 @@ from ..util.simParams import simParams
 from ..plot.config import *
 from ..util.helper import running_median, logZeroNaN, closest
 from ..plot.general import plotPhaseSpace2D
+from ..vis.halo import renderSingleHalo
 
 def _get_existing_sims(variants, res, hInds, redshift):
     """ Return a list of simulation objects, only for those runs which exist (and have reached redshift). """
@@ -336,7 +337,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
     ax.set_xlim(xMinMax)
     ax.set_ylim(yMinMax)
     if quant in star_zform_quants:
-        ylabel = ylabel.replace('<2r_{\star},', '') # aperture restriction on SFH not yet implemented
+        ylabel = ylabel.replace(r'<2r_{\star},', '') # aperture restriction on SFH not yet implemented
 
         ax.set_xscale('log')
         ax.set_xticks([3,4,5,6,8,10,12])
@@ -472,7 +473,7 @@ def sfr_vs_mstar(sims, yQuant):
 
         # Curti+23 JWST JADES (z=3-10)
         c23 = curti23()
-        label = c23['label'] + ' $z\,\sim\,%.0f$' % sim_parent.redshift
+        label = c23['label'] + r' $z\,\sim\,%.0f$' % sim_parent.redshift
 
         w = np.where(np.abs(c23['redshift'] - sim_parent.redshift < 1.0)) # e.g. z=3.5-4.5 for sim at z=4
 
@@ -485,7 +486,7 @@ def sfr_vs_mstar(sims, yQuant):
 
         # Nakajima+23 (z=4-10) JWST CEERS
         n23 = nakajima23()
-        label = n23['label'] + ' $z\,\sim\,%.0f$' % sim_parent.redshift
+        label = n23['label'] + r' $z\,\sim\,%.0f$' % sim_parent.redshift
 
         w = np.where(np.abs(n23['redshift'] - sim_parent.redshift < 2.0)) # e.g. z=3-5 for sim at z=4
 
@@ -718,7 +719,7 @@ def phase_diagram(sim):
     yQuant = 'temp'
     xQuant = 'nh'
 
-    xlim = [-7.0, 6.0]
+    xlim = [-6.5, 7.0]
     ylim = [1.0, 7.0]
     haloIDs = None #[0]
     qRestrictions = [['rad_rvir',0.0,5.0]] # None # 
@@ -754,6 +755,12 @@ def paperPlots():
     res = [11, 12, 13, 14, 15] # [11, 12, 13, 14]
     hInds = [1242, 4182, 10677, 12688, 31619] # [1242, 4182, 10677, 12688, 31619]
     redshift = 3.0
+
+    # testing:
+    #variants = ['ST8']
+    #res = [13,14,15]
+    #hInds = [31619]
+    #redshift = 6.0
 
     sims = _get_existing_sims(variants, res, hInds, redshift)
 
@@ -810,6 +817,38 @@ def paperPlots():
         for snap in range(175):
             sim = simParams(run='structures', hInd=1242, res=13, variant='ST8', snap=snap)
             phase_diagram(sim)
+
+    # single image
+    if 0:
+        run = 'structures'
+        hInd = hInds[0]
+        variant = variants[0]
+        res = res[0]
+
+        rVirFracs  = [1.0]
+        fracsType  = 'rHalfMassStars'
+        nPixels    = [960,960]
+        size       = 1.0
+        sizeType   = 'kpc'
+        labelSim   = True
+        labelHalo  = 'mhalo,mstar'
+        labelZ     = True
+        labelScale = 'physical'
+        relCoords  = True
+        #rotation   = None
+
+        # panels (can vary hInd, variant, res)
+        panels = []
+        panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5]} ) # 'variant':variants[0]
+        panels.append( {'partType':'stars', 'partField':'stellarComp'} ) # 'variant':variants[1]
+
+        class plotConfig:
+            plotStyle    = 'edged'
+            colorbars    = True
+            fontsize     = 28 # 24
+            saveFilename = '%s_h%d_%s_L%d.pdf' % (run,hInd,variants[0],res)
+
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
     # movies
     if 0:

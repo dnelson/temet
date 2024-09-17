@@ -768,7 +768,7 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
         NextNode, length, center, sibling, nextnode = buildFullTree(pos,boxSizeSim,treePrec,verbose=verbose)
     else:
         NextNode, length, center, sibling, nextnode = tree # split out list
-        
+
     if posSearch is None:
         posSearch = pos # set search coordinates as a view onto the same pos used to make the tree
     if posMask is None:

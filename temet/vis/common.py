@@ -565,8 +565,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
 
     # neutral hydrogen (do column densities, ignore atomic vs molecular complication)
     if partField in ['HI','HI_segmented']:
-        nh0_frac = sP.snapshotSubsetP(partType, 'NeutralHydrogenAbundance', indRange=indRange)
-        mass *= sP.units.hydrogen_massfrac * nh0_frac
+        mass *= sP.snapshotSubsetP(partType, 'xhi', indRange=indRange)
 
     # molecular hydrogen (Popping pre-computed files, here with abbreviated names)
     if partField in ['H2_BR','H2_GK','H2_KMT','HI_BR','HI_GK','HI_KMT']:
@@ -653,7 +652,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
             
             redshift = sP.redshift
             if 0: # collab.rubin.hubbleMCT_gibleVis()
-                redshift = 0.36 # mock
+                redshift = 0.36 # mock_redshift
                 print(f'Pretending snapshot is at z={redshift:.2f} instead of z={sP.redshift:.2f} for flux.')
 
             if lumUnits:
@@ -988,7 +987,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
             w_pos = np.where(grid > 0.0)
             grid[w_pos] = -logZeroMin( grid[w_pos] )
             grid[w_neg] = logZeroMin( -grid[w_neg] )
-            config['label'] += ' [$\pm$log]'
+            config['label'] += r' [$\pm$log]'
         if 0:
             # asinh scale (similar to symlog)
             grid = np.arcsinh(grid)
@@ -1044,7 +1043,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         for s in ["_ster","_lum","_kpc","_ergs","_dustdeplete"]:
             lineName = lineName.replace(s,"")
         lineName = lineName.replace(" alpha","-$\\alpha$").replace(" beta","$\\beta$")
-        if lineName[-1] == 'A': lineName = lineName[:-1] + '$\AA$' # Angstrom
+        if lineName[-1] == 'A': lineName = lineName[:-1] + r'$\AA$' # Angstrom
         config['label']  = '%s %s %s]' % (lineName,eLabel,uLabel)
         config['ctName'] = 'inferno' # 'magma_gray' # 'cividis'
 
@@ -1052,7 +1051,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         # equivalent width maps via synthetic spectra
         grid = grid
         lineName = partField.replace('EW_','')
-        config['label'] = '%s Equivalent Width [ log $\AA$ ]' % lineName
+        config['label'] = r'%s Equivalent Width [ log $\AA$ ]' % lineName
         config['ctName'] = 'cividis'
 
     # gas: mass-weighted quantities
@@ -1073,14 +1072,14 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     if partField in ['bmag_uG']:
         grid = grid
-        config['label']  = 'Magnetic Field Magnitude [log $\mu$G]'
+        config['label']  = r'Magnetic Field Magnitude [log $\mu$G]'
         config['ctName'] = 'Spectral_r'
         config['plawScale'] = 0.4
 
     if partField in ['bfield_x','bfield_y','bfield_z']:
         grid = sP.units.particleCodeBFieldToGauss(grid) * 1e6 # linear micro-Gauss
         dirStr = partField.split("_")[1].lower()
-        config['label']  = 'B$_{\\rm %s}$ [$\mu$G]' % dirStr
+        config['label']  = r'B$_{\\rm %s}$ [$\mu$G]' % dirStr
         config['ctName'] = 'PuOr' # is brewer-purpleorange
         logMin = False
 
@@ -1098,7 +1097,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['ctName'] = 'haline'
 
     if partField in ['tcool_tff']:
-        config['label'] = 't$_{\\rm cool}$ / t$_{\\rm ff}$ [log]'
+        config['label'] = r't$_{\rm cool}$ / t$_{\rm ff}$ [log]'
         config['ctName'] = 'curl'
 
     # halo-centric
@@ -1334,7 +1333,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             ptRestrictions=None, weightField='mass', randomNoise=None, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
     from ..util.rotation import rotateCoordinateArray, perspectiveProjection
-    
+
     optionalStr = ''
     if projType != 'ortho':
         optionalStr += '_%s-%s' % (projType, '_'.join( [str(k)+'='+str(v) for k,v in projParams.items()] ))
@@ -2362,9 +2361,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
                 # construct dictionary of properties (one or more)
                 labelVals = {}
                 if 'mstar' in p['labelHalos']: # label with M*
-                    labelVals['M$_\star$ = 10$^{%.1f}$ M$_\odot$'] = gc_s[sub_ids]
+                    labelVals[r'M$_\star$ = 10$^{%.1f}$ M$_\odot$'] = gc_s[sub_ids]
                 if 'mhalo' in p['labelHalos']: # label with M200
-                    labelVals['M$_{\\rm h}$ = 10$^{%.1f}$ M$_\odot$'] = halo_mass_logmsun
+                    labelVals[r'M$_{\\rm h}$ = 10$^{%.1f}$ M$_\odot$'] = halo_mass_logmsun
                 if 'id' in p['labelHalos']:
                     labelVals['[%d]'] = halo_id
 
@@ -2552,12 +2551,6 @@ def addBoxMarkers(p, conf, ax, pExtent):
         scaleBarLen = (extent[1]-extent[0]) * 0.10 # 10% of plot width
         scaleBarLen /= p['sP'].HubbleParam # ckpc/h -> ckpc (or cMpc/h -> cMpc)
 
-        # pretend that the snapshot is at a different redshift?
-        if 'mock_redshift' in p:
-            old_redshift = p['sP'].redshift
-            p['sP'].setRedshift(p['mock_redshift'])
-            print(f'Pretending snapshot is at z={p["mock_redshift"]:.2f} instead of z={old_redshift:.2f} for scale bar.')
-
         # if scale bar is more than (less than) 30% (20%) of width, reduce (increase)
         while scaleBarLen >= 0.3 * (extent[1]-extent[0]):
             scaleBarLen /= 1.4
@@ -2641,9 +2634,6 @@ def addBoxMarkers(p, conf, ax, pExtent):
             x1 = p['sP'].units.codeLengthToMpc(x1)
             yy = p['sP'].units.codeLengthToMpc(yy)
             yt = p['sP'].units.codeLengthToMpc(yt)
-
-        if 'mock_redshift' in p:
-            p['sP'].setRedshift(old_redshift)
 
         color = 'white' if 'textcolor' not in p else p['textcolor']
 
@@ -2964,6 +2954,9 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
 
     if 'Stellar Composite' in config['label']:
         return # skip meaningless [0, ..., 255] labels
+    
+    if 'colorbarnoticks' in config:
+        return
 
     # tick labels, 5 evenly spaced inside bar
     colorsA = [(1,1,1),(0.9,0.9,0.9),(0.8,0.8,0.8),(0.2,0.2,0.2),(0,0,0)]
@@ -3074,6 +3067,7 @@ def renderMultiPanel(panels, conf):
         # for each panel: paths and render setup
         for i, p in enumerate(panels):
             if p['boxSizeImg'] is None: continue # blank panel
+
             # grid projection for image
             grid, config, _ = gridBox(**p)
 
@@ -3088,10 +3082,15 @@ def renderMultiPanel(panels, conf):
                 config['label'] = p['colorbarlabel']
                 print('NOTE: Overriding colorbar label with input label.')
 
-            # create this panel, and label axes and title
-            ax = fig.add_subplot(nRows,nCols,i+1)
+            if 'mock_redshift' in p: # collab.rubin.hubbleMCT_gibleVis()
+                old_redshift = sP.redshift
+                p['sP'].setRedshift(p['mock_redshift'])
+                print(f"Pretending snapshot is at z={p['mock_redshift']:.2f} instead of z={old_redshift:.2f}.")
 
             sP = p['sP']
+
+            # create this panel, and label axes and title
+            ax = fig.add_subplot(nRows,nCols,i+1)
 
             if conf.title:
                 idStr = ' (id=' + str(sP.subhaloInd) + ')' if not sP.isZoom and sP.subhaloInd is not None else ''
@@ -3178,6 +3177,9 @@ def renderMultiPanel(panels, conf):
                 cb.outline.set_edgecolor(color2)
                 cb.ax.set_ylabel(config['label'])
 
+                if 'colorbarnoticks' in p:
+                    cb.set_ticks([])
+
             padding = conf.rasterPx[0] / 240.0
             ax.tick_params(axis='x', which='major', labelsize=conf.fontsize)
             ax.tick_params(axis='y', which='major', labelsize=conf.fontsize)
@@ -3194,6 +3196,9 @@ def renderMultiPanel(panels, conf):
             # post-render function hook?
             if 'f_post' in p and callable(p['f_post']):
                 p['f_post'](ax)
+
+            if 'mock_redshift' in p:
+                p['sP'].setRedshift(old_redshift)
 
         if nRows == 1 and nCols == 3: plt.subplots_adjust(top=0.97,bottom=0.06) # fix degenerate case
 
@@ -3345,6 +3350,9 @@ def renderMultiPanel(panels, conf):
             else:
                 p['grid_data'] = grid # attach for later use
 
+            if 'colorbarnoticks' in p:
+                config['colorbarnoticks'] = p['colorbarnoticks']
+
             # render tweaks
             if 'splitphase' in p:
                 print('NOTE: Rendering fraction of grid, phase = %s!' % p['splitphase'])
@@ -3352,6 +3360,11 @@ def renderMultiPanel(panels, conf):
                 splitRange = pSplitRange([0, grid.shape[1]], totParts, splitPart)
                 grid = grid[:, splitRange[0]:splitRange[1]]
                 fig.set_size_inches(width_in / totParts, height_in)
+
+            if 'mock_redshift' in p: # collab.rubin.hubbleMCT_gibleVis()
+                old_redshift = sP.redshift
+                p['sP'].setRedshift(p['mock_redshift'])
+                print(f"Pretending snapshot is at z={p['mock_redshift']:.2f} instead of z={old_redshift:.2f}.")
 
             # set axes coordinates and add
             curRow = np.floor(i / nCols)
@@ -3454,6 +3467,9 @@ def renderMultiPanel(panels, conf):
 
             if 'vecColorbar' in p and p['vecColorbar'] and not oneGlobalColorbar:
                 raise Exception('Only support vecColorbar addition with oneGlobalColorbar type configuration.')
+
+            if 'mock_redshift' in p:
+                p['sP'].setRedshift(old_redshift)
 
         # one global colorbar? centered at bottom
         if oneGlobalColorbar:

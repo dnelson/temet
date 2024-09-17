@@ -762,10 +762,10 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
             # internal saving of this field? do so now, and mark this snapshot as done
             if saveFilename is not None:
                 with h5py.File(saveFilename,'r+') as f:
+                    f[field][:,saveSnapInd] = r[field][:,m]
+
                     f['done'][saveSnapInd] = 1
                     done[saveSnapInd] = 1
-
-                    f[field][:,saveSnapInd] = r[field][:,m]
 
                 print('  Saved snapshot index [%d] to [%s].' % (saveSnapInd,saveFilename.split("/")[-1]))
 
@@ -1015,22 +1015,33 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
             # internal saving of this field? do so now, and mark this snapshot as done
             if saveFilename is not None:
+                print('  Saving now...', flush=True)
                 with h5py.File(saveFilename,'r+') as f:
-                    f['done'][saveSnapInd] = 1
-                    done[saveSnapInd] = 1
-
+                    # hack (below): disable the next four lines
                     if r[field].ndim == 2:
                         f[field][:,saveSnapInd] = r[field][:,m]
                     else:
                         f[field][:,:,saveSnapInd] = r[field][:,:,m]
 
-                print('  Saved snapshot index [%d] to [%s].' % (saveSnapInd,saveFilename.split("/")[-1]))
+                    f['done'][saveSnapInd] = 1
+                    done[saveSnapInd] = 1
+
+                # hack: write temporary file with just this snapshot (combine later), since writing
+                # into the slice of the existing dataset can be extremely slow
+                #saveFilenameIndiv = saveFilename.replace('.hdf5','_indiv-%d.hdf5' % saveSnapInd)
+                #with h5py.File(saveFilenameIndiv,'w') as f:
+                #    if r[field].ndim == 2:
+                #        f[field] = r[field][:,m]
+                #    else:
+                #        f[field] = r[field][:,:,m]
+
+                print('  Saved snapshot index [%d] to [%s].' % (saveSnapInd,saveFilename.split("/")[-1]), flush=True)
 
         if exitAfterOneSnap and parFields[0] != 'halo_id': # so we can compute globalTracerMPBMap() for 'rad' catalog
             print('Exiting for now (one snap at a time)!')
             sP.setSnap(startSnap)
             return
-
+  
     sP.setSnap(startSnap)
     return r
 

@@ -13,44 +13,56 @@ from ..plot.config import *
 from ..vis.halo import renderSingleHalo
 
 def hubbleMCT_gibleVis(conf=1):
-    """ Visualization of CGM emission from a GIBLE halo. """
-    res        = 4096 # 8, 64, 512, 4096
-    hInd       = 201
-    redshift   = 0.15
-    run        = 'gible'
-
-    rVirFracs  = [1.0]
-    method     = 'sphMap_global'
-    nPixels    = [1000,1000]
-    size       = 2.5
-    axes       = [0,1]
-    sizeType   = 'rVirial'
-    axesUnits  = 'arcsec'
-    labelHalo  = 'mstar,mhalo'
-    labelSim   = False
-    labelZ     = False
-    rotation   = 'edge-on'
-    labelScale = 'physical'
-
-    subhaloInd = 0
-    vmm = [-22.0, -18.0] # log sb
-
-    # pretend snapshot is at this redshift (note: manual hacks also needed in vis.common for fluxes)
-    #mock_redshift = 0.36 
-
+    """ Visualization of CGM emission from a GIBLE or TNG50 halo. """
     class plotConfig:
         plotStyle = 'open'
         rasterPx  = 360
         colorbars = True
         title = None
-        saveFilename = 'gible_h%d_RF%d_%s.pdf' % (hInd,res,conf)
 
-    if conf in [0,3]:
-        # render 1032+1038 doublet combined
-        if conf == 3:
-            vmm = [-19.5, -17.0]
-            size = 0.7 # zoom
+    if 1:
+        res      = 4096 # 8, 64, 512, 4096
+        hInd     = 201
+        redshift = 0.15 # 0.15
+        run      = 'gible' # gible
 
+        subhaloInd = 0
+        method     = 'sphMap_global'
+
+        # pretend snapshot is at this redshift (note: manual hacks also needed in vis.common for fluxes)
+        mock_redshift = 0.36
+
+        plotConfig.saveFilename = 'gible_h%d_RF%d_%s.pdf' % (hInd,res,conf)
+
+    if 0:
+        run = 'tng'
+        res = 2160
+        redshift = 0.36
+
+        subhaloInd = 473093 #549178
+        method     = 'sphMap'
+        labelHalo  = 'mstar,mhalo,sfr'
+
+        plotConfig.saveFilename = 'tng50-1_h%d_%s.pdf' % (subhaloInd,conf)
+
+    rVirFracs  = [2.0]
+    fracsType  = 'rHalfMassStars'    
+    nPixels    = [1000,1000]
+    size       = 200.0 # 0.5 #2.5
+    sizeType   = 'codeUnits'
+    axes       = [0,1]
+    axesUnits  = 'arcsec'
+    labelSim   = False
+    labelZ     = True #False
+    rotation   = 'edge-on'
+    labelScale = False
+    
+    vmm = [-20.0, -16.5] # log sb
+    ctName = 'magma_gray' # 'magma_gray'
+    colorbarnoticks = True
+
+    if conf == 0:
+        # render OVI 1032+1038 doublet combined
         panels = [{'partType':'gas', 'partField':'sb_OVI_ergs', 'valMinMax':vmm}]
         grid1, config1 = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
 
@@ -58,8 +70,8 @@ def hubbleMCT_gibleVis(conf=1):
         grid2, config2 = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
 
         panels[0]['grid'] = np.log10(10.0**grid1 + 10.0**grid2)
-        panels[0]['colorbarlabel'] = config1['label'].replace('OVI SB','OVI 1032+1038$\AA$ SB')
-        if conf == 3: panels[0]['ctName'] = 'magma_gray'
+        panels[0]['colorbarlabel'] = config1['label'].replace('OVI SB',r'OVI 1032+1038$\AA$ SB')
+        panels[0]['colorbarlabel'] = r'OVI 1032+1038$\AA$ Surface Brightness'
 
     if conf == 1:
         # CIII 
@@ -82,9 +94,31 @@ def hubbleMCT_gibleVis(conf=1):
         panels[0]['colorbarlabel'] = '(CIII/OVI) Surface Brightness Ratio [log]'
         panels[0]['ctName'] = 'curl'
 
-    if conf == 4:
+    if conf == 3:
         # He II test 
         panels = [{'partType':'gas', 'partField':'sb_He-2-1640.43A_ergs', 'valMinMax':vmm}]
+
+    if conf == 4:
+        panels = [{'partType':'gas', 'partField':'sb_MgII_ergs', 'valMinMax':vmm}]
+
+    if conf == 5:
+        panels = [{'partType':'gas', 'partField':'sb_O--2-3728.81A_ergs', 'valMinMax':vmm}]
+        panels[0]['colorbarlabel'] = r'OII 3729$\AA$ SB [log erg s$^{−1}$ cm$^{−2}$ arcsec$^{−2}$]'
+        panels[0]['colorbarlabel'] = r'OII 3729$\AA$ Surface Brightness'
+
+    if conf == 6:
+        panels = [{'partType':'gas', 'partField':'sb_O--3-5006.84A_ergs', 'valMinMax':vmm}]
+        panels[0]['colorbarlabel'] = r'OIII 5007$\AA$ SB [log erg s$^{−1}$ cm$^{−2}$ arcsec$^{−2}$]'
+        panels[0]['colorbarlabel'] = r'OIII 5007$\AA$ Surface Brightness'
+
+    if conf == 7:
+        panels = [{'partType':'gas', 'partField':'sb_H-alpha', 'valMinMax':[-16.0,-12.0]}]
+
+    if conf == 8:
+        panels = [{'partType':'gas', 'partField':'sb_H-beta', 'valMinMax':[-16.0,-12.0]}]
+
+    if conf == 9:
+        panels = [{'partType':'stars', 'partField':'stellarComp'}]
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -186,8 +220,8 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
     # start figure
     fig, ax = plt.subplots(figsize=figsize)
 
-    ax.set_xlabel('Galaxy Stellar Mass [ log M$_\odot$ ]')
-    ax.set_ylabel('Surface Brightness [ log erg/s/cm$^2$/arcsec$^2$ ]')
+    ax.set_xlabel(r'Galaxy Stellar Mass [ log M$_\odot$ ]')
+    ax.set_ylabel(r'Surface Brightness [ log erg/s/cm$^2$/arcsec$^2$ ]')
     ax.set_xlim([mstar_min,mstar_max])
     ax.set_ylim([-24.5, -17])
 
@@ -209,7 +243,7 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
             y_err_lo = sb_percs[line][:,i,1] - sb_percs[line][:,i,0]
             y_err_hi = sb_percs[line][:,i,2] - sb_percs[line][:,i,1]
 
-            label_loc = '%s (%d$\pm$%d kpc)' % (label,np.mean(distBin),(distBin[1]-distBin[0])/2)
+            label_loc = r'%s (%d$\pm$%d kpc)' % (label,np.mean(distBin),(distBin[1]-distBin[0])/2)
             if cQuant is None:
                 ax.errorbar(mstar, y_mid, yerr=[y_err_lo, y_err_hi], fmt='o', label=label_loc)
             else:
@@ -258,13 +292,13 @@ def hubbleMCT_emissionTrendsVsSim():
     # plot
     fig, (ax1,ax2) = plt.subplots(nrows=1, ncols=2, figsize=(figsize[0]*1.5,figsize[1]))
 
-    ax1.set_xlabel('Galaxy Stellar Mass [ log M$_\odot$ ]')
-    ax1.set_ylabel('OVI 1032+1038 SB [ log erg/s/cm$^2$/arcsec$^2$ ]')
+    ax1.set_xlabel(r'Galaxy Stellar Mass [ log M$_\odot$ ]')
+    ax1.set_ylabel(r'OVI 1032+1038 SB [ log erg/s/cm$^2$/arcsec$^2$ ]')
     ax1.set_xlim([9.0, 11.0])
     ax1.set_ylim([-22.5, -17.5])
 
-    ax2.set_xlabel('Galaxy Stellar Mass [ log M$_\odot$ ]')
-    ax2.set_ylabel('CIII 977 SB [ log erg/s/cm$^2$/arcsec$^2$ ]')
+    ax2.set_xlabel(r'Galaxy Stellar Mass [ log M$_\odot$ ]')
+    ax2.set_ylabel(r'CIII 977 SB [ log erg/s/cm$^2$/arcsec$^2$ ]')
     ax2.set_xlim([9.0, 11.0])
     ax2.set_ylim([-22.5, -17.5])
 
