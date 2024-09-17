@@ -258,6 +258,22 @@ nh.limits = [-9.0, 3.0]
 nh.limits_halo = [-5.0, 0.0]
 nh.log = True
 
+@snap_field(alias='massfrac_hi')
+def xhi(sim, partType, field, args):
+    """ Neutral hydrogen fraction, relative to the total gas mass. No H2 model applied. """
+    if sim.snapHasField(partType, 'NeutralHydrogenAbundance'):
+        nh0_frac = sim.snapshotSubset(partType, 'NeutralHydrogenAbundance', **args)
+        return sim.units.hydrogen_massfrac * nh0_frac
+    
+    if sim.snapHasField(partType, 'HIMassFraction'): # grackle
+        return sim.snapshotSubset(partType, 'HIMassFraction', **args)
+
+xhi.label = r'Neutral Hydrogen Mass Fraction $\rm{x_{HI}}$'
+xhi.units = '' # dimensionless
+xhi.limits = [-9.0, 0.0]
+xhi.limits_halo = [-5.0, 0.0]
+xhi.log = True
+
 @snap_field
 def numdens(sim, partType, field, args):
     """ Total gas number density, derived from total Density. """
