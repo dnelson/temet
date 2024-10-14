@@ -2521,9 +2521,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
     if 'labelZ' in p and p['labelZ']:
         if p['sP'].redshift >= 0.99 or np.abs(np.round(10*p['sP'].redshift)/10 - p['sP'].redshift) < 1e-2:
-            zStr = "z$\,$=$\,$%.1f" % p['sP'].redshift
+            zStr = r"z$\,$=$\,$%.1f" % p['sP'].redshift
         else:
-            zStr = "z$\,$=$\,$%.2f" % p['sP'].redshift
+            zStr = r"z$\,$=$\,$%.2f" % p['sP'].redshift
 
         if p['labelZ'] == 'tage':
             zStr = "%5.2f billion years after the Big Bang" % p['sP'].units.redshiftToAgeFlat(p['sP'].redshift)
@@ -2657,7 +2657,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
         if 'mstar' in str(p['labelHalo']):
             # just Mstar
-            str2 = "log M$_{\star}$ = %.1f" % stellarMass
+            str2 = r"log M$_{\star}$ = %.1f" % stellarMass
             legend_labels.append( str2 )
         if 'mhalo' in str(p['labelHalo']):
             # just Mhalo
@@ -2677,11 +2677,10 @@ def addBoxMarkers(p, conf, ax, pExtent):
             #legend_labels.append( 'ID %d' % subhalo['SubhaloGrNr'] )
 
         if 'sfr' in str(p['labelHalo']):
-            legend_labels.append( 'SFR = %.1f M$_\odot$ yr$^{-1}$' % subhalo['SubhaloSFRinRad'])
+            legend_labels.append(r'SFR = %.1f M$_\odot$ yr$^{-1}$' % subhalo['SubhaloSFRinRad'])
         if 'redshift' in str(p['labelHalo']):
             #legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,p['sP'].subhaloInd))
-            legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,subhalo['SubhaloGrNr']))
-
+            legend_labels.append('z = %.1f, ID %d' % (p['sP'].redshift,subhalo['SubhaloGrNr']))
 
     if 'labelCustom' in p and p['labelCustom']:
         for label in p['labelCustom']:
@@ -3083,7 +3082,7 @@ def renderMultiPanel(panels, conf):
                 print('NOTE: Overriding colorbar label with input label.')
 
             if 'mock_redshift' in p: # collab.rubin.hubbleMCT_gibleVis()
-                old_redshift = sP.redshift
+                old_redshift = p['sP'].redshift
                 p['sP'].setRedshift(p['mock_redshift'])
                 print(f"Pretending snapshot is at z={p['mock_redshift']:.2f} instead of z={old_redshift:.2f}.")
 
@@ -3109,17 +3108,17 @@ def renderMultiPanel(panels, conf):
                 ax.set_title(p['title'])
 
             axStrs = {'code':'[ ckpc/h ]', 'kpc':'[ pkpc ]', 'mpc':'[ Mpc ]', 
-                      'arcsec' : '[ arcsec ]', 'arcmin':'[ arcmin ]', 'deg':'[ degrees ]', 'rad_pi':' [ radians / $\pi$ ]'}
+                      'arcsec' : '[ arcsec ]', 'arcmin':'[ arcmin ]', 'deg':'[ degrees ]', 'rad_pi':r' [ radians / $\pi$ ]'}
             if p['sP'].mpcUnits: axStrs['code'] = '[ cMpc/h ]'
             axStr = axStrs[ p['axesUnits'] ]
             ax.set_xlabel( ['x','y','z'][p['axes'][0]] + ' ' + axStr)
             ax.set_ylabel( ['x','y','z'][p['axes'][1]] + ' ' + axStr)
             if p['axesUnits'] in ['arcsec','arcmin','deg']:
-                ax.set_xlabel( '$\\alpha$ ' + axStr) # e.g. right ascension
-                ax.set_ylabel( '$\delta$ ' + axStr) # e.g. declination
+                ax.set_xlabel(r'$\alpha$ ' + axStr) # e.g. right ascension
+                ax.set_ylabel(r'$\delta$ ' + axStr) # e.g. declination
             if p['axesUnits'] in ['rad_pi']:
-                ax.set_xlabel( '$\\theta$ ' + axStr) # e.g. longitude
-                ax.set_ylabel( '$\phi$ ' + axStr) # e.g. latitude
+                ax.set_xlabel(r'$\theta$ ' + axStr) # e.g. longitude
+                ax.set_ylabel(r'$\phi$ ' + axStr) # e.g. latitude
 
             setAxisColors(ax, color2)
 

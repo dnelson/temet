@@ -17,6 +17,17 @@ basePath = rootPath + "tables/cloudy/"
 basePathTemp = expanduser("~") + "/data/cloudy_tables/"
 
 # emission lines recorded (must redo Cloudy grid to add lines)
+# to add in the future:
+#Fe 2 in the UV
+#O 1 in the UV (e.g. 1302)
+#C 2 in the UV (e.g. 1334)
+#Si 2                1304.37A
+#Si 2                1260.42A
+#Si 2                1231.66A
+#Si 2                1230.75A
+#Si 2                1193.29A
+#Si 2                1190.42A
+
 lineList = """
 #1259    H  1 911.753A      radiative recombination continuum, i.e. (inf -> n=1) "Lyman limit"
 #1260    H  1 3645.98A      radiative recombination continuum, i.e. (inf -> n=2) "Balmer limit"

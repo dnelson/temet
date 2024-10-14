@@ -29,7 +29,7 @@ def hubbleMCT_gibleVis(conf=1):
         subhaloInd = 0
         method     = 'sphMap_global'
 
-        # pretend snapshot is at this redshift (note: manual hacks also needed in vis.common for fluxes)
+        # pretend snapshot is at this redshift (note: manual hacks also needed in vis.common for flux and SB)
         mock_redshift = 0.36
 
         plotConfig.saveFilename = 'gible_h%d_RF%d_%s.pdf' % (hInd,res,conf)
@@ -123,11 +123,12 @@ def hubbleMCT_gibleVis(conf=1):
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
-    """ Hubble MST Proposal 2024 of Kate Rubin. """
+    """ Hubble MST Proposal 2024 of Kate Rubin, and MAGIC-2 proposal. """
     from ..vis.common import _get_dist_theta_grid
     from ..vis.halo import subsampleRandomSubhalos
 
-    sim = simParams(simname, redshift=0.36) # tng50-1, eagle, simba
+    #sim = simParams(simname, redshift=0.36) # MCT
+    sim = simParams(simname, redshift=0.3) # MAGIC-2
 
     # grid config
     method    = 'sphMap' # sphMap_global
@@ -139,13 +140,25 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
     sim.createCloudyCache = True if '_global' in method else False
 
     # config
-    fields = ['sb_OVI_ergs','sb_O--6-1037.62A_ergs','sb_CIII_ergs']
+    #fields = ['sb_OVI_ergs','sb_O--6-1037.62A_ergs','sb_CIII_ergs'] # MCT
+    fields = ['sb_O--6-1037.62A_ergs',
+              'sb_O--6-1031.91A_ergs',
+              'sb_Si-2-1808.01A_ergs',
+              'sb_Si-2-1526.71A_ergs',
+              'sb_Si-3-1206.50A_ergs',
+              'sb_H--1-1215.67A_ergs',
+              'sb_H--1-1025.72A_ergs',
+              'sb_C--3-977.020A_ergs',
+              'sb_Si-4-1393.75A_ergs',
+              'sb_Si-4-1402.77A_ergs',
+              'sb_C--4-1550.78A_ergs',
+              'sb_C--4-1548.19A_ergs'] # MAGIC-2
     percs = [25,50,75]
     distBins = [[20,30], [45,55]] # pkpc
 
     # sample
     mstar_min = 9.0
-    mstar_max = 11.0
+    mstar_max = 11.5
     num_per_dex = 100
 
     subInds, mstar = subsampleRandomSubhalos(sim, num_per_dex, [mstar_min,mstar_max], cenOnly=True)
@@ -155,7 +168,7 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
     # check for existence of cache
     grids = {}
     sb_percs = {}
-    cacheFile = sim.derivPath + 'cache/hstmst_grids.hdf5'
+    cacheFile = sim.derivPath + 'cache/magic2_grids.hdf5' # hstmst_grids.hdf5
 
     if isfile(cacheFile):
         # load cached result
@@ -173,9 +186,10 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
         # compute now: allocate
         for field in fields:
             grids[field] = np.zeros((nPixels[0],nPixels[1],len(subInds)), dtype='float32')
+            sb_percs[field] = np.zeros((len(subInds),len(distBins),len(percs)), dtype='float32')
 
-        sb_percs['OVI'] = np.zeros((len(subInds),len(distBins),len(percs)), dtype='float32')
-        sb_percs['CIII'] = np.zeros((len(subInds),len(distBins),len(percs)), dtype='float32')
+        #sb_percs['OVI'] = np.zeros((len(subInds),len(distBins),len(percs)), dtype='float32')
+        #sb_percs['CIII'] = np.zeros((len(subInds),len(distBins),len(percs)), dtype='float32')
 
         # loop over subhalos
         class plotConfig:
@@ -198,12 +212,17 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
                 # pixels in this annulus
                 w = np.where((dist >= distBin[0]) & (dist < distBin[1]))
 
-                # OVI doublet map and CIII map separately
-                OVI_map = np.log10(10.0**grids['sb_OVI_ergs'][:,:,i] + 10.0**grids['sb_O--6-1037.62A_ergs'][:,:,i])
-                CIII_map = grids['sb_CIII_ergs'][:,:,i]
+                # MCST: OVI doublet map and CIII map separately
+                #OVI_map = np.log10(10.0**grids['sb_OVI_ergs'][:,:,i] + 10.0**grids['sb_O--6-1037.62A_ergs'][:,:,i])
+                #CIII_map = grids['sb_CIII_ergs'][:,:,i]
 
-                sb_percs['OVI'][i,j,:] = np.percentile(OVI_map[w], percs)
-                sb_percs['CIII'][i,j,:] = np.percentile(CIII_map[w], percs)
+                #sb_percs['OVI'][i,j,:] = np.percentile(OVI_map[w], percs)
+                #sb_percs['CIII'][i,j,:] = np.percentile(CIII_map[w], percs)
+
+                # MAGIC-2
+                for field in fields:
+                    loc_grid = np.squeeze(grids[field][:,:,i])
+                    sb_percs[field][i,j,:] = np.percentile(loc_grid[w], percs)
 
         # save cache
         with h5py.File(cacheFile,'w') as f:
@@ -217,53 +236,68 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
 
         print('Saved: [%s]' % cacheFile)
 
-    # start figure
-    fig, ax = plt.subplots(figsize=figsize)
-
-    ax.set_xlabel(r'Galaxy Stellar Mass [ log M$_\odot$ ]')
-    ax.set_ylabel(r'Surface Brightness [ log erg/s/cm$^2$/arcsec$^2$ ]')
-    ax.set_xlim([mstar_min,mstar_max])
-    ax.set_ylim([-24.5, -17])
-
-    if cQuant is not None:
-        #c_vals = sim.subhalos(cQuant)[subInds]
-        sim_cvals, clabel, cMinMax, cLog = sim.simSubhaloQuantity(cQuant, clean)
-        sim_cvals = sim_cvals[subInds]
-        if cLog: sim_cvals = logZeroNaN(sim_cvals)
-        clim = None
-        cmap = 'inferno'
-        cMinMax = cMinMax if clim is None else clim
-
-    # plot
-    count = 0
+    # MAGIC-2: multiple axes, grouping SBs by species
+    species = list(set([line.replace('sb_','').split('-',1)[0] for line in fields]))
+    nrows = int(np.sqrt(len(species)))
+    ncols = int(np.ceil(len(species) / nrows))
 
     for i, distBin in enumerate(distBins):
-        for line, label in zip(['OVI','CIII'], ['OVI 1032+1038','CIII 977']):
-            y_mid = sb_percs[line][:,i,1]
-            y_err_lo = sb_percs[line][:,i,1] - sb_percs[line][:,i,0]
-            y_err_hi = sb_percs[line][:,i,2] - sb_percs[line][:,i,1]
 
-            label_loc = r'%s (%d$\pm$%d kpc)' % (label,np.mean(distBin),(distBin[1]-distBin[0])/2)
-            if cQuant is None:
-                ax.errorbar(mstar, y_mid, yerr=[y_err_lo, y_err_hi], fmt='o', label=label_loc)
-            else:
-                opts = {'vmin':cMinMax[0], 'vmax':cMinMax[1], 'c':sim_cvals, 'cmap':cmap, 'marker':markers[count]}
-                sc = ax.scatter(mstar, y_mid, label=label_loc, **opts)
-                count += 1
+        # start figure
+        #fig, ax = plt.subplots(figsize=figsize) # MCST
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(figsize[0]*nrows,figsize[1]*ncols)) # MAGIC-2
 
-    # finish and save plot
-    legend = ax.legend(loc='upper left', title=f'{sim.simName} z = {sim.redshift:.2f}')
-    legend._legend_box.align = "left"
+        for species_name, ax in zip(species,axes.flatten()): # MAGIC-2
 
-    if cQuant is not None:
-        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-        cb = plt.colorbar(sc, cax=cax)
-        cb.set_alpha(1) # fix stripes
-        cb.draw_all()
-        cb.ax.set_ylabel(clabel)
+            ax.set_xlabel(r'Galaxy Stellar Mass [ log M$_\odot$ ]')
+            ax.set_ylabel(r'Surface Brightness [ log erg/s/cm$^2$/arcsec$^2$ ]')
+            ax.set_xlim([mstar_min,mstar_max])
+            ax.set_ylim([-24.5, -17])
 
-    fig.savefig('mst_OVI_CIII_annuli_vs_mstar_%s.pdf' % sim.simName)
-    plt.close(fig)
+            if cQuant is not None:
+                #c_vals = sim.subhalos(cQuant)[subInds]
+                sim_cvals, clabel, cMinMax, cLog = sim.simSubhaloQuantity(cQuant, clean)
+                sim_cvals = sim_cvals[subInds]
+                if cLog: sim_cvals = logZeroNaN(sim_cvals)
+                clim = None
+                cmap = 'inferno'
+                cMinMax = cMinMax if clim is None else clim
+
+            # plot
+            count = 0
+
+            #for i, distBin in enumerate(distBins):
+            #for line, label in zip(['OVI','CIII'], ['OVI 1032+1038','CIII 977']): # MCST
+            for line in sb_percs.keys(): # MAGIC-2
+                if species_name+'-' not in line: # MAGIC-2
+                    continue # MAGIC-2
+
+                label = line.replace('sb_','').replace('_ergs','').replace('-',' ').replace('A',r'$\AA$')
+                y_mid = sb_percs[line][:,i,1]
+                y_err_lo = sb_percs[line][:,i,1] - sb_percs[line][:,i,0]
+                y_err_hi = sb_percs[line][:,i,2] - sb_percs[line][:,i,1]
+
+                label_loc = r'%s (%d$\pm$%d kpc)' % (label,np.mean(distBin),(distBin[1]-distBin[0])/2)
+                if cQuant is None:
+                    ax.errorbar(mstar, y_mid, yerr=[y_err_lo, y_err_hi], fmt='o', label=label_loc)
+                else:
+                    opts = {'vmin':cMinMax[0], 'vmax':cMinMax[1], 'c':sim_cvals, 'cmap':cmap, 'marker':markers[count]}
+                    sc = ax.scatter(mstar, y_mid, label=label_loc, **opts)
+                    count += 1
+
+            # finish and save plot
+            legend = ax.legend(loc='upper left', title=f'{sim.simName} z = {sim.redshift:.2f}')
+            legend._legend_box.align = "left"
+
+            if cQuant is not None:
+                cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+                cb = plt.colorbar(sc, cax=cax)
+                cb.set_alpha(1) # fix stripes
+                cb.draw_all()
+                cb.ax.set_ylabel(clabel)
+
+        fig.savefig('magic2_SBs_annuli_vs_mstar_%s_%dkpc.pdf' % (sim.simName,np.mean(distBin))) # 'mst_OVI_CIII_annuli_vs_mstar_%s.pdf'
+        plt.close(fig)
     
 def hubbleMCT_emissionTrendsVsSim():
     """ Combine results from above into a summary plot. """
