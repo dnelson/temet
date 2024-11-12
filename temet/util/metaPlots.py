@@ -8,11 +8,12 @@ from scipy.signal import savgol_filter
 from datetime import datetime
 from os.path import isfile, isdir, expanduser
 
+from ..plot.config import linestyles, figsize, lw
+
 def plotUsersData():
     """ Parse and plot a user data dump from the Illustris[TNG] public data release website. """
     from ..vis.common import setAxisColors
     from ..util.helper import getWhiteBlackColors
-    from ..plot.config import linestyles, figsize, lw
 
     # config
     col_headers = ["Date","NumUsers","Num30","NumLab","CountLogin","CountApi",
@@ -31,7 +32,7 @@ def plotUsersData():
     fac2 = 1.05
 
     # load
-    convertfunc = lambda x: datetime.strptime(x.decode('utf8'), '%Y-%m-%d')    
+    convertfunc = lambda x: datetime.strptime(x, '%Y-%m-%d')    
     #dd = [(col_headers[0], 'object')] + [(a, 'd') for a in col_headers[1:]]
     dd = [object] + ['d' for a in col_headers[1:]]
     data_load = np.genfromtxt(expanduser("~") + '/plot_stats.txt', delimiter=',',\
@@ -53,7 +54,7 @@ def plotUsersData():
         r, g, b = tableau20[i]
         tableau20[i] = (r / 255., g / 255., b / 255.)
 
-    color1, color2, color3, color4 = getWhiteBlackColors(pStyle)    
+    color1, color2, _, _ = getWhiteBlackColors(pStyle)    
 
     # plot (1) - everything
     fig = plt.figure(figsize=(22,13), facecolor=color1)
@@ -149,10 +150,16 @@ def plotNumPublicationsVsTime():
     from re import findall
     from time import mktime
     from datetime import datetime
-    from ..plot.config import figsize, lw
+    from ..vis.common import setAxisColors
+    from ..util.helper import getWhiteBlackColors
 
     num_start = 10 # align 'time=0' after this number of publications have appeared
-    xlim = [-0.6, 7.0] # years, [-3.2, 7.0] for num_start=100
+    xlim = [-0.6, 8.0] # years, [-3.2, 7.0] for num_start=100
+
+    today_ts = mktime(datetime.now().timetuple())
+
+    pStyle = 'black' # 'white', 'black'
+    color1, color2, _, _ = getWhiteBlackColors(pStyle)  
 
     # load Illustris and TNG
     pub_sets = {
@@ -165,7 +172,12 @@ def plotNumPublicationsVsTime():
             pub['ts'] = mktime(datetime.strptime(pub['arxiv_date'], "%Y-%m-%d").timetuple())
 
     # load Millennium
-    pubs_html = requests.get('https://wwwmpa.mpa-garching.mpg.de/millennium/').content.decode()
+    if 0:
+        pubs_html = requests.get('https://wwwmpa.mpa-garching.mpg.de/millennium/').content.decode()
+    else:
+        with open('page.html','r') as f:
+            pubs_html = f.read()
+
     pubs_html = pubs_html[pubs_html.find("<small>PUBLICATIONS</small>"):]
 
     astroph_ids = findall(r"a name=\"astro-ph/[0-9.]+\"", pubs_html)
@@ -181,16 +193,19 @@ def plotNumPublicationsVsTime():
         pub_sets['Millennium'].append(pub)
 
     # start plot
-    fig = plt.figure(figsize=(figsize[0]*0.7,figsize[1]*0.7))
-    ax = fig.add_subplot(111)
+    fig = plt.figure(figsize=(figsize[0]*0.7,figsize[1]*0.7), facecolor=color1)
+    ax = fig.add_subplot(111, facecolor=color1)
     ax.set_ylabel('Number of Publications')
     ax.set_xlabel('Number of Years since %s Publication' % \
         ('%d$^{\\rm th}$' % num_start if num_start > 0 else 'First'))
     ax.set_axisbelow(True)
-    ax.grid(alpha=0.6)
+    ax.grid(alpha=0.3)
+    setAxisColors(ax, color2)
 
     ax.set_xlim(xlim)
-    ax.set_ylim([0, len(pub_sets['TNG'])*1.05])
+    ax.set_ylim([10, 1200]) #len(pub_sets['TNG'])*1.05])
+
+    ax.set_yscale('log')
 
     for sim_name, pub_set in pub_sets.items():
         xx = np.array([pub['ts'] for pub in pub_set])
@@ -203,8 +218,57 @@ def plotNumPublicationsVsTime():
         ax.plot(xx_plot, np.arange(xx_plot.size), '-', lw=lw, label=sim_name)
         print(sim_name, len(pub_set))
 
-    ax.legend(loc='upper left')
-    fig.savefig('numpubs_vs_time_%d.pdf' % num_start)
+    l = ax.legend(loc='upper left')
+    for text in l.get_texts():
+        text.set_color(color2)
+    fig.savefig('numpubs_vs_time_%d.pdf' % num_start, facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+    # compute number of publications 'per day'
+    fig = plt.figure(figsize=(figsize[0]*0.7,figsize[1]*0.7), facecolor=color1)
+    ax = fig.add_subplot(111, facecolor=color1)
+    ax.set_ylabel('Papers per arXiv day')
+    ax.set_xlabel('Number of Years since %s Publication' % \
+        ('%d$^{\\rm th}$' % num_start if num_start > 0 else 'First'))
+    ax.set_axisbelow(True)
+    ax.grid(alpha=0.3)
+    setAxisColors(ax, color2)
+
+    ax.set_xlim(xlim)
+    ax.set_ylim([0.0, 1.2]) #len(pub_sets['TNG'])*1.05])
+
+    for sim_name, pub_set in pub_sets.items():
+        xx = np.array([pub['ts'] for pub in pub_set])
+        xx = xx[np.argsort(xx)] # make sure we are sorted ascending in time
+
+        # calculate starting point, and delta years of each publication
+        start_ts = xx[num_start]
+        xx_plot = (xx - start_ts) / (60*60*24*7*52) # delta days
+
+        # in days
+        xx_days = (xx - start_ts) / (60*60*24)
+        num_per_day = np.zeros(xx_days.size, dtype='float32')
+
+        for i in range(xx_days.size):
+            cur_day = xx_days[i]
+            num_weeks_sm = 12 # four week smoothing window
+            min_day = cur_day - (num_weeks_sm/2*7) 
+            max_day = cur_day + (num_weeks_sm/2*7)
+            w = np.where( (xx_days >= min_day) & (xx_days < max_day) )[0]
+            num_per_day[i] = len(w) / (num_weeks_sm*5) # 'arxiv days' i.e. weekdays
+
+            # if future is incomplete, truncate
+            today = (today_ts - start_ts) / (60*60*24) # days
+            if max_day > today:
+                num_per_day[i] = np.nan
+
+        ax.plot(xx_plot, num_per_day, '-', lw=lw, label=sim_name)
+        print(sim_name, len(pub_set))
+
+    l = ax.legend(loc='upper left')
+    for text in l.get_texts():
+        text.set_color(color2)
+    fig.savefig('numpubs_perday_%d.pdf' % num_start, facecolor=fig.get_facecolor())
     plt.close(fig)
 
 def plotCpuTimeEstimates():
