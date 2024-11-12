@@ -236,6 +236,23 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
 
         print('Saved: [%s]' % cacheFile)
 
+    # write text file
+    with open('magic2_SBs_annuli_vs_mstar.txt','w') as f:
+        f.write('# %s z = %.1f\n' % (sim.name,sim.redshift))
+        f.write('# fields: %s\n' % ', '.join([f.replace('sb_','').replace('_ergs','') for f in fields]))
+        f.write('# distance bins [pkpc]: %s\n' % distBins)
+        f.write('# percentiles: %s\n' % percs)
+        f.write('# columns: subhaloInd mstar SBs\n')
+        f.write('# note that "SBs" are ordered by field, distance bin, and then percentile (each line has 6 entries in a row).\n')
+
+        for i, subhaloInd in enumerate(subInds):
+            s = '%6d %6.2f' % (subhaloInd, mstar[i])
+            for field in fields:
+                for j, distBin in enumerate(distBins):
+                    for k, perc in enumerate(percs):
+                        s += ' %.2f' % sb_percs[field][i,j,k]
+            f.write(s + '\n')
+
     # MAGIC-2: multiple axes, grouping SBs by species
     species = list(set([line.replace('sb_','').split('-',1)[0] for line in fields]))
     nrows = int(np.sqrt(len(species)))

@@ -661,11 +661,14 @@ massfrac_exsitu.units = '' # linear dimensionless
 massfrac_exsitu.limits = [0.0, 1.0]
 massfrac_exsitu.log = False
 
-@catalog_field(multi='num_mergers_')
+@catalog_field(multi='num_mergers_', alias='num_mergers')
 def num_mergers_(sim, partType, field, args):
     """ Postprocessing/MergerHistory: number of major/minor mergers, within different time ranges. """
     # num_mergers, num_mergers_{major,minor}, num_mergers_{major,minor}_{250myr,500myr,gyr,z1,z2}
     filePath = sim.postPath + '/MergerHistory/MergerHistory_%03d.hdf5' % (sim.snap)
+
+    if not isfile(filePath):
+        filePath = sim.postPath + '/MergerHistory/merger_history_%03d.hdf5' % (sim.snap)
 
     typeStr = ''
     timeStr = 'Total'

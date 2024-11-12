@@ -422,10 +422,10 @@ def smhm_relation(sims):
     xlim = [9.25, 11.25] # mhalo
     ylim = [5.7, 10.2] # mstar
 
-    if sims[0].redshift > 5.0:
+    if sims[0].redshift >= 4.5:
         xlim = [8.5, 10.5]
         ylim = [4.9, 9.5]
-    if sims[0].redshift > 8.0:
+    if sims[0].redshift >= 7.5:
         xlim = [8.0, 10.0]
         ylim = [3.9, 8.5]
 
@@ -751,16 +751,22 @@ def paperPlots():
     """ Plots for MCST intro paper. """
 
     # list of sims to include
-    variants = ['TNG','ST8','ST8e'] # TNG, ST5*, ST6, ST6b
-    res = [11, 12, 13, 14, 15] # [11, 12, 13, 14]
-    hInds = [1242, 4182, 10677, 12688, 31619] # [1242, 4182, 10677, 12688, 31619]
-    redshift = 3.0
+    #variants = ['TNG','ST8','ST8e'] # TNG, ST5*, ST6, ST6b
+    #res = [11, 12, 13, 14, 15] # [11, 12, 13, 14]
+    #hInds = [1242, 4182, 10677, 12688, 31619] # [1242, 4182, 10677, 12688, 31619]
+    #redshift = 3.0
+
+    # single run resolution series
+    #variants = ['ST8']
+    #res = [11, 12, 13, 14, 15]
+    #hInds = [4182, 31619]
+    #redshift = 5.0
 
     # testing:
-    #variants = ['ST8']
-    #res = [13,14,15]
-    #hInds = [31619]
-    #redshift = 6.0
+    variants = ['ST8']
+    res = [13, 14, 15]
+    hInds = [31619] #[4182]
+    redshift = 5.0
 
     sims = _get_existing_sims(variants, res, hInds, redshift)
 
@@ -812,10 +818,10 @@ def paperPlots():
         for sim in sims:
             phase_diagram(sim)
 
-    # figure 9b - phase space diagram movie
+    # figure 9b - phase space diagram movie (note: must change save name from .pdf to .png manually)
     if 0:
-        for snap in range(175):
-            sim = simParams(run='structures', hInd=1242, res=13, variant='ST8', snap=snap)
+        for snap in range(86):
+            sim = simParams(run='structures', hInd=31619, res=15, variant='ST8', snap=snap)
             phase_diagram(sim)
 
     # single image
@@ -835,12 +841,14 @@ def paperPlots():
         labelZ     = True
         labelScale = 'physical'
         relCoords  = True
-        #rotation   = None
+        if 1:
+            axes = [0,1]
+            rotation   = 'face-on'
 
         # panels (can vary hInd, variant, res)
         panels = []
-        panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5]} ) # 'variant':variants[0]
-        panels.append( {'partType':'stars', 'partField':'stellarComp'} ) # 'variant':variants[1]
+        panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5]} )
+        panels.append( {'partType':'stars', 'partField':'stellarComp'} )
 
         class plotConfig:
             plotStyle    = 'edged'
@@ -854,3 +862,8 @@ def paperPlots():
     if 0:
         from ..vis.haloMovieDrivers import structuresEvo
         structuresEvo(conf='one') # one, two, three, four
+
+    # CPU times
+    if 0:
+        from ..cosmo.perf import plotCpuTimes
+        plotCpuTimes(sims, xlim=[0.0, 0.25])

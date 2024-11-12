@@ -510,7 +510,7 @@ def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
             partTypes[gName]['Masses'] = P_Mass[w]
 
     headerExtra = {'GroupCM':cmInitial, 'MinLevel':MinLevel, 'MaxLevel':MaxLevel, 'ZoomFactor':ZoomFactor, 'Boxsize':sP.boxSize, 
-                   'Sim_name':np.string_(sP.simName), 'Sim_snap':sP_snap, 'Sim_fofID':fofID, 'InitTime':sP.scalefac, 
+                   'Sim_name':np.bytes_(sP.simName), 'Sim_snap':sP_snap, 'Sim_fofID':fofID, 'InitTime':sP.scalefac, 
                    'InitBoxVolFrac':vol_frac, 'InitBoxExtentFrac':extent_frac, 'EnlargeHighResFactor':EnlargeHighResFactor}
 
     write_ic_file(saveFilename, partTypes, sP.boxSize, massTable=massTable, headerExtra=headerExtra)

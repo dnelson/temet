@@ -443,40 +443,11 @@ def _redshiftAxisHelper(ax):
 
     return axTop
 
-def plotCpuTimes():
-    """ Plot code time usage fractions from cpu.txt. Note that this function is being automatically 
-    run and the resultant plot uploaded to http://www.illustris-project.org/w/images/c/ce/cpu_tng.pdf 
-    as of May 2016 and modifications should be made with caution. """
+def plotCpuTimes(sims=None, xlim=[0.0,1.0]):
+    """ Plot code time usage fractions from cpu.txt."""
     from ..util import simParams
 
     # config
-    sPs = []
-    #sPs.append( simParams(res=1820, run='illustris') )
-    #sPs.append( simParams(res=1820, run='tng') )
-    #sPs.append( simParams(res=910, run='illustris') )
-    #sPs.append( simParams(res=910, run='tng') )
-    #sPs.append( simParams(res=455, run='illustris') )
-    #sPs.append( simParams(res=455, run='tng') )
-
-    #sPs.append( simParams(res=2500, run='tng') )
-    #sPs.append( simParams(res=1250, run='tng') )
-    #sPs.append( simParams(res=625, run='tng') )
-
-    #sPs.append( simParams(res=270, run='tng') )
-    #sPs.append( simParams(res=540, run='tng') )
-    #sPs.append( simParams(res=1080, run='tng') )
-    #sPs.append( simParams(res=2160, run='tng') )
-    #sPs.append( simParams(res=2160, run='tng_dm') )
-
-    #sPs.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3'))
-    #sPs.append( simParams(run='tng_zoom', res=14, hInd=1335, variant='sf3_s'))
-    #sPs.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3'))
-    #sPs.append( simParams(run='tng_zoom', res=14, hInd=1919, variant='sf3_s'))
-
-    sPs.append(simParams(run='structures', res=12, hInd=31619, variant='DM'))
-    sPs.append(simParams(run='structures', res=12, hInd=31619, variant='TNG'))
-    sPs.append(simParams(run='structures', res=12, hInd=31619, variant='SN'))
-
     plotKeys = ['total','total_log','treegrav','pm_grav','voronoi','blackholes','hydro',
                 'gradients','enrich','domain','i_o','restart','subfind']
     #plotKeys = ['total']
@@ -492,7 +463,7 @@ def plotCpuTimes():
         fig = plt.figure(figsize=(12.5,9))
 
         ax = fig.add_subplot(111)
-        ax.set_xlim([0.0,1.0])
+        ax.set_xlim(xlim)
         ax.tick_params(labeltop=False, labelright=True)
 
         ax.set_title('')
@@ -514,14 +485,14 @@ def plotCpuTimes():
         pLabels = []
         pColors = []
 
-        for i,sP in enumerate(sPs):
+        for sim in sims:
             # load select datasets from cpu.hdf5
-            if sP.run == 'tng' and sP.res in [1024,910,1820,1080,2160,1250,2500]:
+            if sim.run == 'tng' and sim.res in [1024,910,1820,1080,2160,1250,2500]:
                 hatbMin = 41
             else:
-                hatbMin = 0
+                hatbMin = 37 # may need to lower for certain runs
 
-            cpu = loadCpuTxt(sP.arepoPath, keys=keys, hatbMin=hatbMin)
+            cpu = loadCpuTxt(sim.arepoPath, keys=keys, hatbMin=hatbMin)
 
             if plotKey not in cpu.keys():
                 continue # e.g. hydro fields in DMO runs
@@ -536,24 +507,24 @@ def plotCpuTimes():
             if ind in [0,2]:
                 yy = yy / (1e6*60.0*60.0) * cpu['numCPUs']
 
-            label = sP.simName
+            label = sim.simName
             if 'total' in plotKey:
                 if yy[-1] > 0.1:
-                    label = sP.simName + ' (%.2f Mh)' % yy[-1]
+                    label = sim.simName + ' (%.2f Mh)' % yy[-1]
                 else:
-                    label = sP.simName + ' (%.2f Kh)' % (yy[-1]*1000)
+                    label = sim.simName + ' (%.2f Kh)' % (yy[-1]*1000)
 
             l, = ax.plot(xx,yy,lw=lw,label=label)
 
             if plotKey == 'total':
-                print(f'{sP.simName} [{plotKey}]: entries = {len(w[0])} max_time = {cpu["time"].max()} total CPU hours = {yy.max()*1000:.2f}k')
+                print(f'{sim.simName} [{plotKey}]: entries = {len(w[0])} max_time = {cpu["time"].max()} total CPU hours = {yy.max()*1000:.2f}k')
 
             # for zooms which stop at high-z, adjust x-axis
-            if xx.max() < 0.99 and sP.isZoom and sP.sP_parent is not None and sP.sP_parent.redshift > 0:
+            if xx.max() < 0.99 and sim.isZoom and sim.sP_parent is not None and sim.sP_parent.redshift > 0:
                 ax.set_xlim([0.0,xx.max()])
 
             # total time predictions for runs which aren't yet done
-            if plotKey in ['total'] and xx.max() < 0.99 and not sP.isZoom: 
+            if plotKey in ['total'] and xx.max() < 0.99 and not sim.isZoom: 
                 if ax.get_yscale() == 'log': ax.set_ylim([1e-1,200])
 
                 fac_delta = 0.02
@@ -604,27 +575,27 @@ def plotCpuTimes():
                     print('  * To z = %.3f estimate %.2f Mhs' % (1.0/xx[ww]-1.0,yy[ww]))
 
             # total time prediction based on L75n1820TNG and L25n1024_4503 profiles
-            if plotKey in ['total'] and xx.max() < 0.99 and sP.variant == 'None':
-                sPs_predict = [simParams(res=1820, run='tng')] 
-                               #simParams(res=1024, run='tng', variant='4503')]
-                ls = ['--','-.']
+            #if plotKey in ['total'] and xx.max() < 0.99 and sim.variant == 'None':
+            #    sPs_predict = [simParams(res=1820, run='tng')] 
+            #                   #simParams(res=1024, run='tng', variant='4503')]
+            #    ls = ['--','-.']
 
-                for j, sP_p in enumerate(sPs_predict):
-                    p_a, p_cpu, p_tot = _cpuEstimateFromOtherRunProfile(sP_p, xx.max(), yy.max())
-                    w = np.where(p_a > xx.max())
+            #    for j, sP_p in enumerate(sPs_predict):
+            #        p_a, p_cpu, p_tot = _cpuEstimateFromOtherRunProfile(sP_p, xx.max(), yy.max())
+            #        w = np.where(p_a > xx.max())
 
-                    # plot
-                    ax.plot(p_a[w], p_cpu[w], lw=lw, linestyle=ls[j], color=l.get_color())
+            #        # plot
+            #        ax.plot(p_a[w], p_cpu[w], lw=lw, linestyle=ls[j], color=l.get_color())
 
-                    # estimate finish date
-                    remainingRunDays = (p_tot-yy.max()) * 1e6 / (cpu['numCPUs'] * 24.0)
-                    p_date = datetime.now() + timedelta(days=remainingRunDays)
-                    p_str = p_date.strftime('%d %B, %Y')
-                    print(' [w/ %s] Predicted: %.1f million CPUhs (%s)' % (sP_p.simName,p_tot,p_str))
+            #        # estimate finish date
+            #        remainingRunDays = (p_tot-yy.max()) * 1e6 / (cpu['numCPUs'] * 24.0)
+            #        p_date = datetime.now() + timedelta(days=remainingRunDays)
+            #        p_str = p_date.strftime('%d %B, %Y')
+            #        print(' [w/ %s] Predicted: %.1f million CPUhs (%s)' % (sP_p.simName,p_tot,p_str))
 
-                    #pLabels.append( ' [w/ %s]: %3.1f MHs (%s)' % (sP_p.simName,p_tot,p_str))
-                    pLabels.append( ' [w/ %s]: %3.1f MHs' % (sP_p.simName,p_tot))
-                    pColors.append( plt.Line2D( (0,1), (0,0), color=l.get_color(), marker='', linestyle=ls[j]) )
+            #        #pLabels.append( ' [w/ %s]: %3.1f MHs (%s)' % (sP_p.simName,p_tot,p_str))
+            #        pLabels.append( ' [w/ %s]: %3.1f MHs' % (sP_p.simName,p_tot))
+            #        pColors.append( plt.Line2D( (0,1), (0,0), color=l.get_color(), marker='', linestyle=ls[j]) )
 
         axTop = _redshiftAxisHelper(ax)
 
@@ -649,11 +620,11 @@ def plotCpuTimes():
     # singlepage pdf: all values on one panel
     pdf = PdfPages(fName2)
 
-    for sP in sPs:
+    for sim in sims:
         fig = plt.figure(figsize=(12.5,9))
 
         ax = fig.add_subplot(111)
-        ax.set_xlim([0.0,1.0])
+        ax.set_xlim(xlim)
 
         ax.set_title('')
         ax.set_xlabel('Scale Factor')
@@ -663,12 +634,12 @@ def plotCpuTimes():
         keys = ['time','hatb'] + plotKeys
 
         # load select datasets from cpu.hdf5
-        if sP.run == 'tng' and sP.res in [1024,910,1820,1080,2160,1250,2500]:
+        if sim.run == 'tng' and sim.res in [1024,910,1820,1080,2160,1250,2500]:
             hatbMin = 41
         else:
             hatbMin = 0
 
-        cpu = loadCpuTxt(sP.arepoPath, keys=keys, hatbMin=hatbMin)
+        cpu = loadCpuTxt(sim.arepoPath, keys=keys, hatbMin=hatbMin)
 
         # plot each
         for plotKey in plotKeys:
@@ -690,7 +661,7 @@ def plotCpuTimes():
         axTop = _redshiftAxisHelper(ax)
 
         handles, labels = ax.get_legend_handles_labels()
-        pLabels = [sP.simName]
+        pLabels = [sim.simName]
         pColors = [plt.Line2D( (0,1), (0,0), color='white', marker='', linestyle='-')]
         ax.legend(handles+pColors, labels+pLabels, loc='best') #, prop={'size':13})
 
@@ -864,8 +835,6 @@ def plotTimebinsFrame(pStyle='white', conf=0, timesteps=None):
     data['n_grav'] -= data['n_hydro'] # convert 'grav' (which includes gas) into dm/stars only
     numPart = float(data['n_grav'][:,0].sum())
 
-    #import pdb; pdb.set_trace()
-
     ylim = [5e-11, 3.0] #[0.5,data['n_hydro'].max()*2.5]
 
     yticks = [numPart/1e0,numPart/1e1,numPart/1e2,numPart/1e3,numPart/1e4,numPart/1e5,
@@ -917,7 +886,7 @@ def plotTimebinsFrame(pStyle='white', conf=0, timesteps=None):
         axTop.set_xticks(xx)
         topLabels = ['%.1f' % logda for logda in np.log10(data['bin_dt'][::-1])]
         axTop.set_xticklabels(topLabels)
-        axTop.set_xlabel('Timestep [ log $\Delta a$ ]', labelpad=10)
+        axTop.set_xlabel(r'Timestep [ log $\Delta a$ ]', labelpad=10)
         axTop.set_xlim(ax.get_xlim())
 
         # make right axis (particle fraction)
