@@ -937,7 +937,7 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
     # plot the simulation dN/dz for each EW threshold
     colors = []
     for EW_thresh in EW_thresholds:
-        l, = ax.plot(zz, dNdz[EW_thresh], '-', lw=lw, label=r'EW > %.1f$\,\\rm{\AA}$' % EW_thresh)
+        l, = ax.plot(zz, dNdz[EW_thresh], '-', lw=lw, label=r'EW > %.1f$\,\rm{\AA}$' % EW_thresh)
         colors.append(l.get_color())
 
     # observational data
@@ -971,7 +971,7 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
     ax.set_yscale('log')
 
     for EW_thresh in EW_thresholds:
-        ax.plot(zz, dNdX[EW_thresh], '-', label=r'EW > %.1f$\,\\rm{\AA}$' % EW_thresh)
+        ax.plot(zz, dNdX[EW_thresh], '-', label=r'EW > %.1f$\,\rm{\AA}$' % EW_thresh)
 
     # observational data
     if line == 'MgII 2796':

@@ -340,7 +340,7 @@ def nachoAngularQuenchingDens():
     ax = fig.add_subplot(111)
 
     ax.set_xlabel('Galactocentric Angle [ deg ] [0 = major axis, 90 = minor axis]')
-    ax.set_ylabel('Gas $\delta \\rho / <\\rho>$ [ linear ]')
+    ax.set_ylabel(r'Gas $\delta \\rho / <\\rho>$ [ linear ]')
 
     ax.set_ylim([0.75,1.35])
     ax.set_xlim([0,360])
@@ -909,3 +909,55 @@ def erica_tng50_sfrmaps():
             panels.append( {'subhaloInd':ind, 'partField':'sfr_halpha', 'valMinMax':[35.5,40.5]} )
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+def sanch_ovi_groups():
+    """ Mock OVI absorption spectra around TNG50-1 z=0.1 groups for Sanch Borthakur. """
+    from ..cosmo.spectrum import integrate_along_saved_rays, generate_rays_voronoi_fullbox
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    from scipy.stats import binned_statistic_2d
+
+    sim = simParams(run='tng50-1', redshift=0.1)
+
+    subhaloIDs = [188893, 199226, 208563, 219842, 231369, 239843, 247945, 264620, 277688, 277688, 288932, 305020]
+    nRaysPerDim = 300
+    raysType = 'sample_localized'
+    pSplit = [0, len(subhaloIDs)]
+
+    # load
+    coldens = integrate_along_saved_rays(sim, 'O VI numdens', nRaysPerDim=300, raysType='sample_localized', 
+                                         subhaloIDs=subhaloIDs, pSplit=pSplit)
+    
+    rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
+        generate_rays_voronoi_fullbox(sim, nRaysPerDim=nRaysPerDim, raysType=raysType, 
+                                      subhaloIDs=subhaloIDs, pSplit=pSplit)
+
+    # metadata
+    subhaloID = subhaloIDs[pSplit[0]]
+    subhalo = sim.subhalo(subhaloID)
+    halo = sim.halo(subhalo['SubhaloGrNr'])
+    pos = subhalo['SubhaloPos']
+    r200 = halo['Group_R_Crit200']
+
+    # bin
+    nbins = 300
+    mm = 2.1
+
+    x = (ray_pos[:,0] - pos[0]) / r200
+    y = (ray_pos[:,1] - pos[1]) / r200
+
+    h2d, _, _, _ = binned_statistic_2d(x, y, coldens, statistic='mean', bins=[nbins,nbins], 
+                                       range=[[-mm,mm],[-mm,mm]])
+    
+    h2d = h2d.T
+    h2d = np.log10(h2d)
+
+    # plot
+    fig,ax = plt.subplots()
+    im = ax.imshow(h2d, extent=[-mm,mm,-mm,mm], origin='lower', interpolation='none', aspect='equal')
+
+    cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.1)
+    cb = plt.colorbar(im, cax=cax)
+    cb.ax.set_ylabel('OVI Column Density [cm$^{-2}$]')
+
+    fig.savefig('test_%s_%d_OVI_groups_%d.pdf' % (sim.name,sim.snap,pSplit[0]))
+    plt.close(fig)

@@ -18,10 +18,12 @@ from ..util.voronoiRay import rayTrace
 
 # default configuration for ray generation
 projAxis_def = 2
-#nRaysPerDim_def = 2000 # 10000 for frm_los
-#raysType_def = 'voronoi_rndfullbox'
-nRaysPerDim_def = 1000
-raysType_def = 'voronoi_fullbox'
+nRaysPerDim_def = 2000 # 10000 for frm_los
+raysType_def = 'voronoi_rndfullbox'
+
+#projAxis_def = 2
+#nRaysPerDim_def = 1000
+#raysType_def = 'voronoi_fullbox'
 
 # line data (e.g. AtomDB), name is ion plus wavelength in ang rounded down
 # (and Verner+96 https://www.pa.uky.edu/~verner/lines.html)
@@ -1106,7 +1108,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
     # spatial decomposition
     nRaysPerDimOrig = nRaysPerDim
 
-    if pSplit is not None:
+    if pSplit is not None and raysType != 'sample_localized':
         assert np.abs(np.sqrt(pSplit[1]) - np.round(np.sqrt(pSplit[1]))) < 1e-6, 'pSplitSpatial: Total number of jobs should have integer square root, e.g. 9, 16, 25, 64.'
         nPerDim = int(np.sqrt(pSplit[1]))
         extent = sP.boxSize / nPerDim
@@ -1149,27 +1151,35 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
         xpts = rng.uniform(low=xmin, high=xmax, size=nRaysPerDim**2)
         ypts = rng.uniform(low=ymin, high=ymax, size=nRaysPerDim**2)
 
-    if raysType == 'sample_localized':
+    if raysType == 'sample_localized' and pSplit is None:
         # localized (e.g. <= rvir) sightlines around a given sample of subhalos, specified by a list of 
         # subhaloIDs, taking nRaysPerDim**2 sightlines around each subhalo
         assert subhaloIDs is not None, 'Error: For [sample_localized], specify subhaloIDs.'
-        assert pSplit is None, 'Error: Need to implement, take subset of subhaloIDs in xminmax yminmax.'
 
         numrays = nRaysPerDim**2 * len(subhaloIDs)
-        virRadFactor = 2.0 # out to this factor times r200c in impact parameter
+        virRadFactor = 1.5 # out to this factor times r200c in impact parameter
+
+        # local pathlength? if None, then keep the full box
+        # note: must be a constant, so is computed as the average across the subhaloIDs
+        total_dl_local = 2.0 # plus/minus this factor times r200c in line-of-sight direction
 
         # load subhalo metadata
         SubhaloPos = sP.subhalos('SubhaloPos')
-        Subhalo_R200c = sP.subhalos('rhalo_200')
+        r200c = sP.subhalos('rhalo_200')
 
         rng = np.random.default_rng(424242 + nRaysPerDim + sP.snap + sP.res)
     
         xpts = np.zeros(numrays, dtype='float32')
         ypts = np.zeros(numrays, dtype='float32')
+        zpts = np.zeros(numrays, dtype='float32')
+
+        r200c_avg = r200c[subhaloIDs].mean()
+
+        extent = np.max([virRadFactor,total_dl_local*2]) * r200c[subhaloIDs].max() # max
 
         for i, subhaloID in enumerate(subhaloIDs):
             randomAngle = rng.uniform(0, 2*np.pi, nRaysPerDim**2)
-            randomDistance = rng.uniform(0, virRadFactor*Subhalo_R200c[subhaloID], nRaysPerDim**2)
+            randomDistance = rng.uniform(0, virRadFactor*r200c[subhaloID], nRaysPerDim**2)
 
             offset = i * nRaysPerDim**2
             xpts[offset:offset + nRaysPerDim**2] = randomDistance * np.cos(randomAngle)
@@ -1177,13 +1187,60 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
     
             xpts[offset:offset + nRaysPerDim**2] += SubhaloPos[subhaloID,inds[0]]
             ypts[offset:offset + nRaysPerDim**2] += SubhaloPos[subhaloID,inds[1]]
+
+            if total_dl_local is not None:
+                zpts[offset:offset + nRaysPerDim**2] = -total_dl_local*r200c_avg
+                zpts[offset:offset + nRaysPerDim**2] += SubhaloPos[subhaloID,projAxis]
+
+                total_dl = total_dl_local*2*r200c_avg # constant
+
+                print(i, subhaloID, r200c_avg, total_dl_local, total_dl, zpts[offset])
+
+    if raysType == 'sample_localized' and pSplit is not None:
+        # localized (e.g. <= rvir) sightlines around a given sample of subhalos, specified by a list of 
+        # subhaloIDs, taking nRaysPerDim**2 sightlines around each subhalo
+        assert subhaloIDs is not None, 'Error: For [sample_localized], specify subhaloIDs.'
+        assert pSplit[1] == len(subhaloIDs), 'Error: pSplit size needs to equal subhaloIDs length.'
+
+        numrays = nRaysPerDim**2
+        virRadFactor = 1.5 # out to this factor times r200c in impact parameter
+
+        # local pathlength? if None, then keep the full box
+        total_dl_local = 2.0 # plus/minus this factor times r200c in line-of-sight direction
+
+        # load subhalo metadata
+        subhaloID = subhaloIDs[pSplit[0]]
+
+        rng = np.random.default_rng(424242 + nRaysPerDim + sP.snap + sP.res + subhaloID)
+
+        subhalo = sP.subhalo(subhaloID)
+        halo = sP.halo(subhalo['SubhaloGrNr'])
+        SubhaloPos = subhalo['SubhaloPos']
+        r200c = halo['Group_R_Crit200']
+
+        extent = np.max([virRadFactor*2,total_dl_local*2]) * r200c # max
+
+        # generate sample of sightlines around this subhalo
+        randomAngle = rng.uniform(0, 2*np.pi, nRaysPerDim**2)
+        randomDistance = rng.uniform(0, virRadFactor*r200c, nRaysPerDim**2)
+
+        xpts = randomDistance * np.cos(randomAngle) + SubhaloPos[inds[0]]
+        ypts = randomDistance * np.sin(randomAngle) + SubhaloPos[inds[1]]
+        zpts = np.zeros(numrays, dtype='float32')
+
+        if total_dl_local is not None:
+            zpts += SubhaloPos[projAxis] - total_dl_local*r200c
+
+            total_dl = total_dl_local*2*r200c
+
+            print(subhaloID, r200c, total_dl_local, total_dl, zpts[0])
     
     # construct [N,3] list of ray starting locations
-    ray_pos = np.zeros( (numrays,3), dtype='float64')
+    ray_pos = np.zeros((numrays,3), dtype='float64')
     
     ray_pos[:,inds[0]] = xpts.ravel()
     ray_pos[:,inds[1]] = ypts.ravel()
-    ray_pos[:,projAxis] = 0.0
+    ray_pos[:,projAxis] = zpts.ravel() if raysType == 'sample_localized' else 0.0
 
     sP.correctPeriodicPosVecs(ray_pos)
 
@@ -1197,7 +1254,13 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
             print(' slice[%s]...' % axis, end='')
             dists = sP.snapshotSubsetP('gas', 'pos_'+axis, float32=True)
 
-            dists = (ij[ind] + 0.5) * extent - dists # 1D, along axis, from center of subregion
+            if raysType == 'sample_localized':
+                dists = SubhaloPos[ind] - dists # 1D, along axis, from position of pSplit-targeted subhalo
+                uniform_frac = (extent / sP.boxSize)**(1/3)
+            else:
+                dists = (ij[ind] + 0.5) * extent - dists # 1D, along axis, from center of subregion
+                uniform_frac = 1 / pSplit[1]
+
             sP.correctPeriodicDistVecs(dists)
 
             # compute maxdist heuristic (in code units): the largest 1d distance we need for the calculation
@@ -1209,7 +1272,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
 
         cell_inds = np.nonzero(mask)[0]
         print('\n pSplitSpatial: particle load fraction = %.2f%% vs. uniform expectation = %.2f%%' % \
-            (cell_inds.size/mask.size*100, 1/pSplit[1]*100))
+            (cell_inds.size/mask.size*100, uniform_frac*100))
 
         dists = None
         w_spatial = None
@@ -1349,7 +1412,7 @@ def _integrate_quantity_along_traced_rays(rays_off, rays_len, rays_cell_dl, rays
 
     return r
 
-def integrate_along_saved_rays(sP, field, pSplit=None):
+def integrate_along_saved_rays(sP, field, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def, subhaloIDs=None, pSplit=None):
     """ Integrate a physical (gas) property along the line of sight, based on already computed and saved rays.
     The result has units of [pc] * [field] where [field] is the original units of the physical field as loaded, 
     unless field is a number density, in which case the result (column density) is in [cm^-2].
@@ -1370,7 +1433,8 @@ def integrate_along_saved_rays(sP, field, pSplit=None):
 
     # load rays
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
-      generate_rays_voronoi_fullbox(sP, pSplit=pSplit)
+      generate_rays_voronoi_fullbox(sP, nRaysPerDim=nRaysPerDim, raysType=raysType, 
+                                    subhaloIDs=subhaloIDs, pSplit=pSplit)
 
     projAxis = list(ray_dir).index(1)
 
