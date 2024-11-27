@@ -10,7 +10,9 @@ from ..util.simParams import simParams
 from ..plot.config import *
 from ..util.helper import running_median, logZeroNaN, closest
 from ..plot.general import plotPhaseSpace2D
+from ..plot.cosmoMisc import simHighZComparison
 from ..vis.halo import renderSingleHalo
+from ..vis.box import renderBox
 
 def _get_existing_sims(variants, res, hInds, redshift):
     """ Return a list of simulation objects, only for those runs which exist (and have reached redshift). """
@@ -34,11 +36,22 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
     handles, labels = ax.get_legend_handles_labels()
 
     if len(hInds) == 1 and lineplot:
-        # if we have only one halo and resolution, vary the linestyle by variant (for e.g. quant lines vs redshift)
-        for i, variant in enumerate(variants):
-            ls = linestyles[i]
-            handles.append(plt.Line2D( (0,1), (0,0), color=colors[0], ls=ls, lw=lw))
-            labels.append('h%d_%s' % (hInds[0],variant))
+        # if we have only one halo, vary the linestyle by variant or res (for e.g. quant lines vs redshift)
+        if len(variants) > 1 and len(res) == 1:
+            for i, variant in enumerate(variants):
+                handles.append(plt.Line2D( (0,1), (0,0), color=colors[0], ls=linestyles[i], lw=lw))
+                labels.append('h%d_%s' % (hInds[0],variant))
+        if len(res) > 1 and len(variants) == 1:
+            for i, r in enumerate(res):
+                handles.append(plt.Line2D( (0,1), (0,0), color=colors[i], ls=linestyles[0], lw=lw))
+                labels.append('h%d_L%d' % (hInds[0],r))
+        if len(res) > 1 and len(variants) > 1:
+            for i, r in enumerate(res):
+                handles.append(plt.Line2D( (0,1), (0,0), color=colors[i], ls='-', lw=lw))
+                labels.append('h%d_L%d' % (hInds[0],r))
+            for i, variant in enumerate(variants):
+                handles.append(plt.Line2D( (0,1), (0,0), color='black', ls=linestyles[i], lw=lw))
+                labels.append('%s' % variant)
     else:
         for hInd in hInds:
             # color by hInd
@@ -336,12 +349,23 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
     
     ax.set_xlim(xMinMax)
     ax.set_ylim(yMinMax)
+
     if quant in star_zform_quants:
         ylabel = ylabel.replace(r'<2r_{\star},', '') # aperture restriction on SFH not yet implemented
 
+        if xMinMax[0] > 6.0:
+            xx = np.array([7,8,9,10,11,12,13,14,15])
+            xlabels = np.array(['7','8','9','10','11','12','13','14','15'])
+        else:
+            xx = np.array([3,4,5,6,8,10,12])
+            xlabels = np.array(['3','4','5','6','8','10','12'])
+
+        w = np.where((xx < xMinMax[0]) & (xx >= xMinMax[1]))[0]
+
         ax.set_xscale('log')
-        ax.set_xticks([3,4,5,6,8,10,12])
-        ax.set_xticklabels(['3','4','5','6','8','10','12'])
+        ax.set_xticks(xx[w])
+        ax.set_xticklabels(xlabels[w])
+        ax.xaxis.minorticks_off()
 
     # individual zoom runs
     for i, sim in enumerate(sims):
@@ -362,6 +386,15 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
         lw_loc = (sim.res - 10) if len(res) > 1 else lw
         alpha_loc = 0.6 if len(res) > 1 else 1.0
 
+        # if only one hInd, then use color for either variant or res
+        if len(hInds) == 1:
+            if len(variants) > 1 and len(res) == 1:
+                c = colors[variants.index(sim.variant)]
+            if len(res) > 1 and len(variants) == 1:
+                c = colors[res.index(sim.res)]
+            if len(res) > 1 and len(variants) > 1:
+                c = colors[res.index(sim.res)]
+
         # final redshift marker
         l, = ax.plot(sim.redshift, val, marker, color=c, markersize=ms_loc, label='')
 
@@ -373,7 +406,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
             if sfh_lin:
                 star_mass = 10.0**star_mass
 
-            w = np.where(star_zform < ax.get_xlim()[0])
+            w = np.where(star_zform < xMinMax[0])
             ax.plot(star_zform[w], star_mass[w], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha_loc)
         else:
             # general case
@@ -391,21 +424,22 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
         val = vals[subhaloInd]
 
         # final redshift marker
-        label = 'hX in %s' % (sim_parent.simName) if i == 0 else ''
-        l, = ax.plot(sim_parent.redshift, val, markers[3], color='#555', label=label)
+        if sim_parent.redshift >= xMinMax[1]:
+            label = 'hX in %s' % (sim_parent.simName) if i == 0 else ''
+            l, = ax.plot(sim_parent.redshift, val, markers[3], color='#555', label=label)
 
         # time track
         if quant in star_zform_quants:
             # special case: stellar mass growth or SFH
             star_zform, _, star_mass = _load_sfh(sim_parent, quant, subhaloInd)
 
-            w = np.where( (star_zform >= 0.0) & (star_zform < ax.get_xlim()[0]) )
-            ax.plot(star_zform[w], star_mass[w], '-', lw=lw, color=l.get_color(), alpha=1.0)
+            w = np.where((star_zform >= 0.0) & (star_zform < xMinMax[0]))
+            ax.plot(star_zform[w], star_mass[w], '-', lw=lw, color='#555', alpha=1.0)
         else:
             # general case
             mpb = _load_mpb_quants(sim_parent, subhaloInd, quants=[quant])
 
-            ax.plot(mpb['z'], mpb[quant], ls=linestyle, lw=lw, color=l.get_color(), alpha=1.0)
+            ax.plot(mpb['z'], mpb[quant], ls=linestyle, lw=lw, color='#555', alpha=1.0)
 
     # finish and save plot
     _add_legends(ax, hInds, res, variants, colors, lineplot=True)
@@ -747,6 +781,85 @@ def phase_diagram(sim):
     plotPhaseSpace2D(sim, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs, qRestrictions=qRestrictions,
         xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, f_post=_f_post)
 
+def vis_single_image(sP):
+    """ Visualization: single image of a halo. """
+    rVirFracs  = [1.0]
+    fracsType  = 'rHalfMassStars'
+    nPixels    = [960,960]
+    size       = 1.0 if sP.hInd > 20000 else 5.0
+    sizeType   = 'kpc'
+    labelSim   = True
+    labelHalo  = 'mhalo,mstar,haloid'
+    labelZ     = True
+    labelScale = 'physical'
+    relCoords  = True
+    if 1:
+        axes = [0,1]
+        rotation   = 'face-on'
+
+    #subhaloInd = sP.zoomSubhaloInd
+    #subhaloInd = sP.halo(1)['GroupFirstSub']
+
+    # panels (can vary hInd, variant, res)
+    panels = []
+    panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5]} )
+    panels.append( {'partType':'stars', 'partField':'stellarComp'} )
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        colorbars    = True
+        fontsize     = 28 # 24
+        saveFilename = '%s_%d.pdf' % (sP.simName,sP.snap)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+def vis_movie(sP, frame=None):
+    """ Visualization: movie of a single halo. """
+    rVirFracs  = [1.0]
+    fracsType  = 'rHalfMassStars'
+    nPixels    = [960,960]
+    size       = 2.0 if sP.hInd > 20000 else 5.0
+    sizeType   = 'kpc'
+    labelSim   = True
+    labelHalo  = 'mhalo,mstar'
+    labelZ     = True
+    labelScale = 'physical'
+    relCoords  = True
+    if 0:
+        axes = [0,1]
+        rotation   = 'face-on'
+
+    #subhaloInd = sP.halo(1)['GroupFirstSub']
+
+    # panels
+    if 0:
+        panels = []
+        panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5]} )
+        panels.append( {'partType':'stars', 'partField':'stellarComp'} )
+
+    class plotConfig:
+        plotStyle    = 'edged_black'
+        colorbars    = True
+        fontsize     = 28
+
+    snapList = [frame] if frame is not None else sP.validSnapList()[::-1]
+
+    for snap in snapList:
+        sP.setSnap(snap)
+
+        # custom: decide switch (h31619)
+        inds = [0, sP.halo(1)['GroupFirstSub']]
+        if snap in [9,10,36,37,40,41,42,43,44,45,46,65,68,69,71,72,73,74,75,76,77,78,79,80,
+                    81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101]:
+            inds = inds[::-1]
+
+        panels = []
+        panels.append( {'partType':'stars', 'partField':'stellarComp', 'subhaloInd':inds[0]} )
+        panels.append( {'partType':'stars', 'partField':'stellarComp', 'subhaloInd':inds[1]} )
+
+        plotConfig.saveFilename = '%s_%03d.png' % (sP.simName,sP.snap)
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
 def paperPlots():
     """ Plots for MCST intro paper. """
 
@@ -763,18 +876,18 @@ def paperPlots():
     #redshift = 5.0
 
     # testing:
-    variants = ['ST8']
-    res = [13, 14, 15]
-    hInds = [31619] #[4182]
-    redshift = 5.0
+    variants = ['ST8','ST8m']
+    res = [15] #[12,13,14,15]
+    hInds = [31619] #[31619]
+    redshift = 11.0 #4.15
 
     sims = _get_existing_sims(variants, res, hInds, redshift)
 
-    # figure 1 - smhm relation
+    # figure - smhm relation
     if 0:
         smhm_relation(sims)
 
-    # figure 2 - stellar mass vs redshift evo
+    # figure - stellar mass vs redshift evo
     if 0:
         quant = 'mstar2_log'
         xlim = [10.0, 2.9]
@@ -782,43 +895,59 @@ def paperPlots():
 
         quantVsRedshift(sims, quant, xlim, ylim)
 
-    # figure 3 - sfr vs mstar relation
+    # figure - sfr vs mstar relation
     if 0:
         for yQuant in ['sfr2_log','sfr_30pkpc_100myr','sfr_30pkpc_instant']:
             sfr_vs_mstar(sims, yQuant=yQuant)
 
-    # figure 4 - smbh vs mhalo relation
+    # figure - smbh vs mhalo relation
     if 0:
         mbh_vs_mhalo(sims)
 
-    # figure 5 - star formation history (one plot per halo)
+    # figure - star formation history (one plot per halo)
     if 0:
         quant = 'sfr2'
         xlim = [12.1, 2.95]
-        ylim = [-4.0, 1.5]
+        ylim = [-6.5, 0.5]
 
         for hInd in hInds:
             sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
             quantVsRedshift(sims_loc, quant, xlim, ylim, sfh_lin=False)
 
-    # figure 6 - stellar sizes
+    # figure - star formation history (one plot per halo)
+    if 0:
+        quant = 'mstar2_log'
+        xlim = [12.1, 2.95]
+        ylim = [5.0, 8.5]
+
+        for hInd in hInds:
+            sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
+            quantVsRedshift(sims_loc, quant, xlim, ylim, sfh_lin=False)
+
+    # figure - stellar sizes
     if 0:
         sizes_vs_mstar(sims)
 
-    # figure 7 - gas metallicity
+    # figure - gas metallicity
     if 0:
         gas_mzr(sims)
 
-    # figure 8 - stellar metallicity
+    # figure - stellar metallicity
     if 0:
         stellar_mzr(sims)
 
-    # figure 9 - phase space diagrams (one per run)
+    # figure - phase space diagrams (one per run)
     if 0:
         for sim in sims:
             phase_diagram(sim)
 
-    # figure 9b - phase space diagram movie (note: must change save name from .pdf to .png manually)
+    # ------------
+
+    # simulation comparison plot
+    if 0:
+        simHighZComparison()
+
+    # phase space diagram movie (note: must change save name from .pdf to .png manually)
     if 0:
         for snap in range(86):
             sim = simParams(run='structures', hInd=31619, res=15, variant='ST8', snap=snap)
@@ -826,37 +955,11 @@ def paperPlots():
 
     # single image
     if 0:
-        run = 'structures'
-        hInd = hInds[0]
-        variant = variants[0]
-        res = res[0]
+        vis_single_image(sims[0])
 
-        rVirFracs  = [1.0]
-        fracsType  = 'rHalfMassStars'
-        nPixels    = [960,960]
-        size       = 1.0
-        sizeType   = 'kpc'
-        labelSim   = True
-        labelHalo  = 'mhalo,mstar'
-        labelZ     = True
-        labelScale = 'physical'
-        relCoords  = True
-        if 1:
-            axes = [0,1]
-            rotation   = 'face-on'
-
-        # panels (can vary hInd, variant, res)
-        panels = []
-        panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5]} )
-        panels.append( {'partType':'stars', 'partField':'stellarComp'} )
-
-        class plotConfig:
-            plotStyle    = 'edged'
-            colorbars    = True
-            fontsize     = 28 # 24
-            saveFilename = '%s_h%d_%s_L%d.pdf' % (run,hInd,variants[0],res)
-
-        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+    # movie
+    if 0:
+        vis_movie(sims[0])
 
     # movies
     if 0:
@@ -867,3 +970,72 @@ def paperPlots():
     if 0:
         from ..cosmo.perf import plotCpuTimes
         plotCpuTimes(sims, xlim=[0.0, 0.25])
+
+    # timebin diagnostic
+    if 0:
+        sP = sims[0]
+        nPixels    = 500
+        axes       = [0,1] # x,y
+        labelZ     = True
+        labelScale = True
+        labelSim   = True
+        plotHalos  = 100
+        method     = 'histo_minIP' # sphMap, sphMap_minIP, sphMap_maxIP
+        zoomFac    = 0.01 #0.15 # fraction of box-size
+        sliceFac   = zoomFac # same projection depth as zoom
+        minmax     = [40, 47]
+        #ctName     = 'plasma_r'
+
+        absCenPos  = sP.subhalo(sP.zoomSubhaloID)['SubhaloPos']
+        relCenPos  = None
+
+        numColors = minmax[1] - minmax[0] # discrete colorbar
+        panels = [{'partType':'gas', 'partField':'TimebinHydro', 'valMinMax':minmax}]
+
+        class plotConfig:
+            plotStyle  = 'open'
+            #rasterPx   = 1000
+            saveFilename = './boxImage_%s_%s.png' % (sP.simName,panels[0]['partField'])
+
+        renderBox(panels, plotConfig, locals())
+
+    # snapshot spacing diagnostic
+    if 0:
+        from matplotlib.ticker import ScalarFormatter
+        fig, ax = plt.subplots()
+        ax.set_ylim([0, 20])
+        ax.set_xlim([20, 2.9])
+        ax.set_xscale('log')
+        ax.xaxis.set_major_formatter(ScalarFormatter())
+        ax.xaxis.set_minor_formatter(ScalarFormatter())
+        ax.set_xlabel('Redshift')
+        ax.set_ylabel('Snapshot Spacing [Myr]')
+
+        ax.plot(ax.get_xlim(), [10,10], '-', color='#999', alpha=0.5)
+
+        for sim in sims:
+            snaps = sim.validSnapList()
+            redshifts = sim.snapNumToRedshift(snaps)
+            tage = sim.units.redshiftToAgeFlat(redshifts) * 1000 # Myr
+            dt = np.diff(tage)
+
+            ax.plot(redshifts[1:], dt, 'o-', ms=6.0, label=f'{sim} saved')
+
+        # load request
+        fname1 = '/u/dnelson/sims.structures/arepo0/outputlist_10Myr_z10-3.txt'
+        fname2 = '/u/dnelson/sims.structures/arepo0/outputlist_1Myr_z20-3.txt'
+
+        for i, fname in enumerate([fname1,fname2]):
+            with open(fname,'r') as f:
+                times = np.array([float(line.split()[0]) for line in f.readlines()[1:]])
+                redshifts = 1/times - 1
+                tage = sims[0].units.redshiftToAgeFlat(redshifts) * 1000 # Myr
+                dt = np.diff(tage)
+                c = ['#666','#000'][i]
+                label = fname.split('/')[-1].replace('outputlist_','').replace('.txt','')
+                ax.plot(redshifts[1:], dt, 'o-', ms=4.0, color=c, label='%s request' % label)
+
+        ax.legend()
+        
+        fig.savefig('snapshot_spacing_%s.pdf' % sims[0].simName)
+        plt.close(fig)

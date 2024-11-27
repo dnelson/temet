@@ -1794,7 +1794,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                                          nPixels=nPixels, hsml_1=hsml_1, colDens=normCol, multi=True, 
                                          maxIntProj=maxIntProj, minIntProj=minIntProj, refGrid=refGrid )
 
-            elif method in ['histo']:
+            elif method in ['histo','histo_maxIP','histo_minIP']:
                 # simple 2D histogram, particles assigned to the bin which contains them
                 from scipy.stats import binned_statistic_2d
                 assert hsml_1 is None # not supported
@@ -3145,8 +3145,9 @@ def renderMultiPanel(panels, conf):
             cenVal = p['cmapCenVal'] if 'cmapCenVal' in p else None
             if 'cmapCenVal' in config: cenVal = config['cmapCenVal']
             ctName = p['ctName'] if p['ctName'] is not None else config['ctName']
+            numColors = p['numColors'] if 'numColors' in p else None
 
-            cmap = loadColorTable(ctName, valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
+            cmap = loadColorTable(ctName, valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal, numColors=numColors)
            
             cmap.set_bad(color='#000000',alpha=1.0) # use black for nan pixels
             grid = np.ma.array(grid, mask=np.isnan(grid))
@@ -3400,8 +3401,9 @@ def renderMultiPanel(panels, conf):
             cenVal = p['cmapCenVal'] if 'cmapCenVal' in p else None
             if 'cmapCenVal' in config: cenVal = config['cmapCenVal']
             ctName = p['ctName'] if p['ctName'] is not None else config['ctName']
+            numColors = p['numColors'] if 'numColors' in p else None
 
-            cmap = loadColorTable(ctName, valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
+            cmap = loadColorTable(ctName, valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal, numColors=numColors)
 
             # DEBUG: dump raw 16-bit tiff image
             if 0:

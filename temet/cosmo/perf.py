@@ -448,8 +448,8 @@ def plotCpuTimes(sims=None, xlim=[0.0,1.0]):
     from ..util import simParams
 
     # config
-    plotKeys = ['total','total_log','treegrav','pm_grav','voronoi','blackholes','hydro',
-                'gradients','enrich','domain','i_o','restart','subfind']
+    plotKeys = ['total','total_log','treegrav','pm_grav','voronoi','hydro', # enrich
+                'stellarfeed','sfrcool','gradients','domain','i_o','restart','subfind']
     #plotKeys = ['total']
 
     # multipage pdf: one plot per value
@@ -494,7 +494,7 @@ def plotCpuTimes(sims=None, xlim=[0.0,1.0]):
 
             cpu = loadCpuTxt(sim.arepoPath, keys=keys, hatbMin=hatbMin)
 
-            if plotKey not in cpu.keys():
+            if plotKey not in cpu.keys() or cpu[plotKey][0,-1,2] < 0.2:
                 continue # e.g. hydro fields in DMO runs
 
             # include only bigish timesteps
