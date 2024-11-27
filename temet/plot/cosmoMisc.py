@@ -1023,184 +1023,6 @@ def simHydroResolutionProfileComparison(onlyCold=False, ckpc=False):
     fig.savefig('sim_comparison_res_profiles%s%s.pdf' % ('_cold' if onlyCold else '','_ckpc' if ckpc else ''))
     plt.close(fig)
 
-def plotClumpsEvo():
-    """ Plot evolution of clumps (smallest N subhalos in halfmassrad) using SubLink_gal tree. """
-    sP = simParams(res=1820,run='tng',redshift=0.0)
-    figsize = (22.4,12.6) # (16,9)*1.4
-    treeName = 'SubLink_gal'
-    selectQuant = 'SubhaloHalfmassRad' # SubhaloHalfmassRadType
-    selectN = 1000 # number 
-    lw = 2.0
-    reverseSort = False # if True, then descending
-
-    # load and select
-    gc = sP.groupCat(fieldsHalos=['GroupFirstSub'], fieldsSubhalos=['SubhaloMass', selectQuant])
-    sort_inds = np.argsort( gc['subhalos'][selectQuant] )
-    if reverseSort: sort_inds = sort_inds[::-1]
-
-    snapRedshifts = sP.snapNumToRedshift(all=True)
-    snapAgeGyr = sP.units.redshiftToAgeFlat( snapRedshifts )
-    snapDtGyr = snapAgeGyr - np.roll(snapAgeGyr,1)
-    snapDtGyr[0] = snapAgeGyr[0] - sP.units.redshiftToAgeFlat(127.0)
-
-    # start pdf
-    pdf = PdfPages('clumps_evo_%s_first%d.pdf' % (sP.simName,selectN))
-
-    # halo or stellar mass function
-    for i in range(selectN):
-        print('[%3d] subhaloID = %d' % (i,sort_inds[i]))
-        fig = plt.figure(figsize=figsize)
-
-        # load MPB
-        mpbFields = ['SnapNum','SubhaloPos','SubhaloHalfmassRad','SubhaloHalfmassRadType','SubhaloSFR',
-                     'SubhaloMass','SubhaloMassType','SubhaloGrNr','Group_M_Crit200','SubhaloParent']
-        mpb = sP.loadMPB(sort_inds[i], fields=mpbFields, treeName=treeName)
-
-        xx = sP.snapNumToRedshift(mpb['SnapNum'])
-
-        # get the MPB of the z=0 parent halo
-        halo = sP.groupCatSingle(haloID=mpb['SubhaloGrNr'][0])
-        mpbParent = sP.loadMPB(halo['GroupFirstSub'], fields=mpbFields, treeName=treeName)
-
-        xxPar = sP.snapNumToRedshift(mpbParent['SnapNum'])
-
-        # allocate parent relative properties
-        radFromPar = np.zeros( xx.size, dtype='float32')
-        inParFlag = np.zeros( xx.size, dtype='float32' )
-        inParFlag2 = np.zeros( xx.size, dtype='float32' )
-        radFromPar.fill(np.nan)
-
-        for j in range(xx.size):
-            # cross-match
-            w = np.where(mpbParent['SnapNum'] == mpb['SnapNum'][j])[0]
-            if len(w) == 0:
-                continue
-            assert len(w) == 1
-            w = w[0]
-
-            # calculate radial distance of clump from this z=0 parent halo MPB
-            xyzPar = mpbParent['SubhaloPos'][w,:].reshape( (1,3) )
-            xyzSub = mpb['SubhaloPos'][j,:].reshape( (1,3) )
-
-            radFromPar[j] = sP.periodicDists(xyzPar, xyzSub)
-
-            # calculate when clump is/isnot within this z=0 parent halo
-            if mpbParent['SubhaloGrNr'][w] == mpb['SubhaloGrNr'][j]:
-                inParFlag[j] = 1
-            if mpbParent['SubhaloParent'][w] == mpb['SubhaloParent'][j]:
-                inParFlag2[j] = 1
-
-        # load member star particle formation times and calculate a SFR(t) based on them
-        sfh = np.zeros( snapRedshifts.size, dtype='float32' )
-        sfh.fill(np.nan)
-
-        if mpb['SubhaloMassType'][0,sP.ptNum('stars')] > 0:
-            stars = sP.snapshotSubset('stars', ['masses','sftime'], subhaloID=sort_inds[i])
-
-            snapScalefacs = 1.0 / (1+snapRedshifts)
-            for j in range(snapRedshifts.size-1):
-                aMin = snapScalefacs[j]
-                aMax = snapScalefacs[j+1]
-                w = np.where( (stars['GFM_StellarFormationTime'] > aMin) & \
-                              (stars['GFM_StellarFormationTime'] <= aMax) )
-
-                # compute SFR in [Msun/yr] in this redshift bin between two successive snapshots
-                sfh[j] = sP.units.codeMassToMsun(np.sum(stars['Masses'][w])) / (snapDtGyr[j]*1e9)
-
-            #verifyMass1 = np.log10( np.nanmean(sfh) * sP.units.redshiftToAgeFlat(0.0)*1e9 )
-            #verifyMass2 = sP.units.codeMassToLogMsun( mpb['SubhaloMassType'][0,sP.ptNum('stars')] )
-            #assert np.abs(verifyMass1-verifyMass2)/verifyMass1 < 0.5 # 50% agreement in log
-
-        # modify symbol to a single circle for clumps with no tracked snapshots
-        sym = '-' if xx.size > 1 else 'o'
-
-        # six quantities
-        for j in range(6):
-            ax = fig.add_subplot(2,3,j+1)
-
-            redshift_max = 2.0 if xx.max() > 2.0 else xx.max()+0.1
-            if xx.size == 1: redshift_max = 2.0
-            ax.set_xlim([redshift_max, -0.1])
-            ax.set_xlabel('Redshift')
-
-            if j == 0:
-                # quant (A): mass by type
-                ax.set_title(sP.simName + ' ['+str(i)+'] shID='+str(sort_inds[i]))
-                ax.set_ylabel('Subhalo Mass [ log M$_{\\rm sun}$ ]')
-                yy0 = sP.units.codeMassToLogMsun( mpb['SubhaloMass'] )
-                ax.plot(xx, yy0, sym, lw=lw, label='total')
-
-                for ptName in ['gas','stars','dm','bhs']:
-                    yy = sP.units.codeMassToLogMsun( mpb['SubhaloMassType'][:,sP.ptNum(ptName)])
-                    if ptName == 'bhs' and yy.size == 1 and yy == 0.0: continue
-                    ax.plot(xx, yy, sym, lw=lw, label=ptName)
-
-                ax.legend(loc='best')
-
-            if j == 1:
-                # quant (B): mass fractions
-                ax.set_title('z=0 size: %.3f ckpc/h' % mpb['SubhaloHalfmassRad'][0])
-                ax.set_ylabel('log ( Subhalo Mass Fraction )')
-
-                for ptName in ['gas','stars','dm']:
-                    yy = mpb['SubhaloMassType'][:,sP.ptNum(ptName)] / mpb['SubhaloMass']
-                    yy = logZeroNaN(yy)
-                    ax.plot(xx, yy, sym, lw=lw, label=ptName+'/total')
-
-                ax.legend(loc='best')
-
-            if j == 2:
-                # quant (C): sizes
-                ax.set_title('z$_{\\rm trackedto}$=%.1f numSnapsTracked=%d' % (xx.max(),xx.size))
-                ax.set_ylabel('Subhalo Size [ log ckpc/h ]')
-                ax.plot(xx, logZeroNaN(mpb['SubhaloHalfmassRad']), sym, lw=lw, label='total')
-
-                for ptName in ['gas','stars','dm']:
-                    yy = mpb['SubhaloHalfmassRadType'][:,sP.ptNum(ptName)]
-                    yy = logZeroNaN(yy)
-                    ax.plot(xx, yy, sym, lw=lw, label=ptName)
-
-                ax.legend(loc='best')
-
-            if j == 3:
-                # quant (D): parent halo mass
-                ax.set_ylabel('Parent Halo M$_{200}$ [ log M$_{\\rm sun}$ ]')
-
-                yy = sP.units.codeMassToLogMsun( mpbParent['Group_M_Crit200'] )
-                ax.plot(xxPar, yy, '-', lw=lw, color='black')
-
-            if j == 4:
-                # quant (E): radial distance from parent halo
-                ax.set_ylabel('Radial Dist from Parent [ log ckpc/h ]')
-
-                w1 = np.where( inParFlag == 0 )
-                w2 = np.where( inParFlag2 == 0 )
-
-                if len(w1[0]):
-                    ax.plot(xx[w1], logZeroNaN(radFromPar)[w1], 'o', markeredgecolor='red', alpha=0.8, label='outside z=0 parentGr')
-                if len(w2[0]):
-                    ax.plot(xx[w2], logZeroNaN(radFromPar)[w2], 's', markeredgecolor='green', alpha=0.8, label='subhParent differs from mpb')
-                if len(w1[0]) or len(w2[0]):
-                    ax.legend()
-
-                ax.plot(xx, logZeroNaN(radFromPar), sym, lw=lw, color='black')
-
-            if j == 5:
-                # quant (F): SFR(t) and SFH histogram of constitutient star particles
-                ax.set_ylabel('Subhalo SFR [ log M$_{\\rm sun}$/yr ]')
-                yy = logZeroNaN( mpb['SubhaloSFR'] )
-
-                ax.plot(xx, yy, sym, lw=lw, color='black')
-
-                if mpb['SubhaloMassType'][0,sP.ptNum('stars')] > 0:
-                    ax.plot(snapRedshifts, logZeroNaN(sfh), '-', lw=lw, color='red', label='from star ages')
-                    ax.legend()
-
-        pdf.savefig()
-        plt.close(fig)
-
-    pdf.close()
-
 def compareEOSFiles(doTempNotPres=False):
     """ Compare eos.txt files from different runs (in eosFiles), and actual runs as well (in sPs). """
     sPs = []
@@ -1278,204 +1100,118 @@ def compareEOSFiles(doTempNotPres=False):
         plt.savefig('compareTwoEosFiles.pdf')
     plt.close()
 
+def simHighZComparison():
+    """ Meta plot: place MCST into its context of (res,halo mass) similar projects.
+    """
+    from matplotlib.patches import FancyArrowPatch
 
-def bFieldStrengthComparison():
-    """ Plot histogram of B field magnitude comparing runs etc. """
-    sPs = []
+    msize = 14.0 # marker size
+    fs1 = 14 # diagonal lines, cost labels
+    fs2 = 17 # sim name labels, upper right arrow label
+    fs3 = 14  # legend
 
-    haloID = None # None for fullbox
-    redshift = 0.5
-    nBins = 100
-    valMinMax = [-7.0,4.0]
+    def _volumeToMassFunc(Lbox_cMpch):
+        """ Convert a box side-length [cMpc/h] into DM halo mass function using 
+        TNG300 as the scaling reference. """
+        tng300_size = 205
+        tng300_nobj = {'14':280, '14.5':41, '15':3}
+        vol_ratio = (np.array(Lbox_cMpch) / tng300_size)**3
+        return tng300_nobj * vol_ratio
 
-    sPs.append( simParams(res=1820, run='tng', redshift=redshift) )
-    sPs.append( simParams(res=910, run='tng', redshift=redshift) )
-    sPs.append( simParams(res=455, run='tng', redshift=redshift) )
-
-    # start plot
-    fig = plt.figure(figsize=(16,9))
+    # plot setup
+    fig = plt.figure(figsize=[figsize[0]*0.7, figsize[1]*0.9])
     ax = fig.add_subplot(111)
-
-    hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
-    ax.set_title('z=%.1f %s' % (redshift,hStr))
-    ax.set_xlim(valMinMax)
-    ax.set_xlabel('Magnetic Field Magnitude [ log $\mu$G ]')
-    ax.set_ylabel('N$_{\\rm cells}$ PDF $\int=1$')
+    
+    ax.set_xlim([1e8, 1e12])
+    ax.set_ylim([1e10,1e6])
+    ax.set_xscale('log')
     ax.set_yscale('log')
 
-    for sP in sPs:
-        # load
-        b_mag = sP.snapshotSubset('gas', 'bmag', haloID=haloID)
-        b_mag *= 1e6 # Gauss to micro-Gauss
-        b_mag = np.log10(b_mag) # log uG
+    ax.set_ylabel('Baryon Mass Resolution [ M$_{\odot}$ ]')
+    ax.set_xlabel('Halo Mass [ log M$_{\odot}$ ]')
 
-        # add to plot
-        yy, xx = np.histogram(b_mag, bins=nBins, density=True, range=valMinMax)
-        xx = xx[:-1] + 0.5*(valMinMax[1]-valMinMax[0])/nBins
+    # set simulation data (N_cl criterion: Mhalo > {1e14,1e14.5,1e15} at z=0)
+    boxes = [{'name':'TNG50',                  'M_halo':[10.5], 'm_gas':8.0e4, 'Lbox_cMpch':35},
+             {'name':'TNG100$\,/\,$Illustris', 'M_halo':[10.6], 'm_gas':1.4e6, 'Lbox_cMpch':75},
+             {'name':'Eagle',                  'M_halo':[11.1], 'm_gas':1.8e6, 'Lbox_cMpch':67.8},
+             {'name':'Magneticum-2hr',         'M_halo':[10.9,11.1,11.2], 'm_gas':2.0e8, 'Lbox_cMpch':352},
+             {'name':'Horizon-AGN',            'M_halo':[10.0], 'm_gas':2.0e6, 'Lbox_cMpch':100}]
 
-        ax.plot(xx, yy, label=sP.simName)
+    # set simulation data (for zoom projects)
+    zooms = [{'name':'TNG-Cluster',            'M_halo':[9.0], 'm_gas':1.2e7},
+             {'name':'MACSIS',                 'M_halo':[9.2], 'm_gas':1.1e9},
+             {'name':'Hydrangea/C-Eagle',      'M_halo':[9.4], 'm_gas':1.8e6},
+             {'name':'Rhapsody-G',             'M_halo':[8.2], 'm_gas':2.5e8},
+             {'name':'Rhapsody-C',             'M_halo':[10.2], 'm_gas':1.7e7},
+             {'name':'FABLE',                  'M_halo':[9.1,9.3,9.4], 'm_gas':1.5e7}]
 
-    # finish plot
-    ax.legend(loc='best')
+    # for boxes we don't have access to, estimate M_halo distribution from volume
+    for box in boxes:
+        if box['M_halo'] == -1:
+            box['M_halo'] = _volumeToMassFunc(box['Lbox_cMpch'])
 
-    fig.savefig('bFieldStrengthComparison_%s.pdf' % hStr)
+    # plot lines of constant number of particles (per halo)
+    if 0: # TODO
+        for i, N in enumerate([512,1024,2048,4096,8192]):
+            sim = simParams(run='tng100-1',redshift=0.0) # for units
+            xx = []
+            yy = []
+            for Lbox in [1e0, 1e4]: # cMpc/h
+                m_gas = sim.units.particleCountToMass(N, boxLength=Lbox)
+                n_gal = _volumeToNcluster(Lbox)
+
+                xx.append(n_gal)
+                yy.append(m_gas)
+
+            if N <= 1024:
+                continue
+            color = '#aaaaaa'
+            ax.plot(xx, yy, lw=lw, linestyle=':', alpha=0.4, color=color)
+            m = (yy[1] - yy[0]) / (xx[1] - xx[0])
+            x_target = 8e2
+            y_target = m * x_target + xx[0]
+            ax.text(x_target, y_target*1.05, '$%d^3$' % N, color=color, alpha=0.5, rotation=-45.0, fontsize=fs1, va='center', ha='right')
+
+    # plot arrows of computational work
+    if 1:
+        color = '#aaaaaa' 
+        arrowstyle ='simple, head_width=12, head_length=12, tail_width=3'
+        textOpts = {'color':color, 'fontsize':fs1, 'va':'top', 'ha':'left', 'multialignment':'center'}
+        xx = 6e2
+        yy = 6.0e6
+        p1 = FancyArrowPatch(posA=[xx,yy*1.05], posB=[xx, yy/4], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        p2 = FancyArrowPatch(posA=[xx*0.95,yy], posB=[xx*4, yy], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        ax.add_artist(p1)
+        ax.text(xx*0.86, yy*0.49, 'x10 cost', color=color, rotation=90.0, fontsize=fs1, ha='right', va='center')
+        ax.add_artist(p2)
+        ax.text(xx*1.9, yy*1.2, 'x5 cost', color=color, rotation=0.0, fontsize=fs1, ha='center', va='top')
+        ax.text(xx*2.2, yy*0.4, '(x4 mass res\nor x4 volume)', color=color, rotation=45.0, fontsize=fs1-2, ha='center', va='center')
+
+    # plot boxes
+    for sim in boxes:
+        x = 10.0**np.array(sim['M_halo'])
+        y = np.zeros(x.size) + sim['m_gas']
+        l, = ax.plot(x, y, ls='None', marker='o', ms=msize, label=sim['name'])
+
+        if 'TNG-Cluster' in sim['name']: # enlarge marker
+            fac = 1.7 if sim['name'] == 'TNG-Cluster' else 1.3
+            ax.plot(x, y, ls='None', marker='o', ms=msize*fac, color=l.get_color())
+
+    # plot zooms
+    ax.set_prop_cycle(None) # reset color cycle
+    for sim in zooms:
+        x = 10.0**np.array(sim['M_halo'])
+        y = np.zeros(x.size) + sim['m_gas']
+        msize_loc = msize if sim['name'] != 'TNG-Cluster' else msize*1.3
+        l, = ax.plot(x, y, ls='None', marker='D', ms=msize_loc, label=sim['name'])
+
+        if 'TNG' in sim['name'] : # label certain runs only
+            textOpts = {'color':l.get_color(), 'fontsize':fs2*1.4, 'ha':'center', 'va':'bottom'}
+            ax.text(x, y*0.7, sim['name'], **textOpts)
+
+    # legend and finish
+    legParams = {'ncol':1, 'columnspacing':1.0, 'fontsize':fs3, 'markerscale':0.6} #, 'frameon':1, 'framealpha':0.9, 'fancybox':False}
+    legend = ax.legend(loc='lower left', **legParams)
+
+    fig.savefig('sim_comparison.pdf')
     plt.close(fig)
-
-def depletionVsDynamicalTimescale():
-    """ Andi: depletion vs dynamical timescale.
-      t_dep = M_H2/SFR   M_H2 the cold, star-forming gas or take total gas mass instead
-      t_dyn = r12 / v_rot  r12 the half mass radius of the gaseous disk, v_rot its characteristic rot. vel
-    """
-
-    # config
-    figsize = (14,9)
-    sP = simParams(res=1820,run='illustris',redshift=0.0)
-
-    gc = sP.groupCat(fieldsHalos=['GroupFirstSub'], 
-                      fieldsSubhalos=['SubhaloHalfmassRadType','SubhaloVmax','SubhaloSFR'])
-    ac = sP.auxCat(fields=['Subhalo_Mass_SFingGas','Subhalo_Mass_30pkpc_Stars'])
-
-    # t_dep [Gyr]
-    M_cold = sP.units.codeMassToMsun(ac['Subhalo_Mass_SFingGas'])
-    SFR = gc['subhalos']['SubhaloSFR'] # Msun/yr
-    t_dep = M_cold / SFR / 1e9
-
-    # t_dyn [Gyr]
-    r12 = sP.units.codeLengthToKpc(gc['subhalos']['SubhaloHalfmassRadType'][:,sP.ptNum('stars')])
-    v_rot = gc['subhalos']['SubhaloVmax'] * sP.units.kmS_in_kpcGyr
-    t_dyn = r12 / v_rot
-
-    # stellar masses and central selection
-    m_star = sP.units.codeMassToLogMsun(ac['Subhalo_Mass_30pkpc_Stars'])
-
-    w_central = np.where( gc['halos'] >= 0 )
-    
-    centralsMask = np.zeros( gc['subhalos']['count'], dtype=np.int16 )
-    centralsMask[gc['halos'][w_central]] = 1
-
-    centrals = np.where(centralsMask & (SFR > 0.0) & (r12 > 0.0))
-
-    t_dep = t_dep[centrals]
-    t_dyn = t_dyn[centrals]
-    m_star = m_star[centrals]
-
-    # plot config
-    title = sP.simName + ' z=%.1f' % sP.redshift + ' [only centrals with SFR>0 and r12>0]'
-    tDynMinMax = [0,0.2]
-    tDepMinMax = [0,4]
-    mStarMinMax = [9.0,12.0]
-    ratioMinMax = [0,0.05] # tdyn/tdep
-    nBinsX = 200
-    nBinsY = 150
-    binSizeMed = 0.01
-
-    # (A) 2d histogram of t_dep vs. t_dyn for all centrals
-    if 1:
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
-
-        ax.set_title(title)
-        ax.set_xlim(tDynMinMax)
-        ax.set_ylim(tDepMinMax)
-        ax.set_xlabel('t$_{\\rm dyn}$ [Gyr]')
-        ax.set_ylabel('t$_{\\rm dep}$ [Gyr]')
-
-        # 2d histo
-        zz, xc, yc = np.histogram2d(t_dyn, t_dep, bins=[nBinsX, nBinsY], 
-                                    range=[tDynMinMax,tDepMinMax], density=True)
-        zz = np.transpose(zz)
-        zz = np.log10(zz)
-
-        cmap = loadColorTable('viridis')
-        plt.imshow(zz, extent=[tDynMinMax[0],tDynMinMax[1],tDepMinMax[0],tDepMinMax[1]], 
-                   cmap=cmap, origin='lower', interpolation='nearest', aspect='auto')
-
-        # median
-        #xm, ym, sm = running_median(t_dyn,t_dep,binSize=binSizeMed)
-        #ym2 = savgol_filter(ym,3,2)
-        #sm2 = savgol_filter(sm,3,2)
-        #ax.plot(xm[:-1], ym2[:-1], '-', color='black', lw=2.0)
-        #ax.plot(xm[:-1], ym2[:-1]+sm2[:-1], ':', color='black', lw=2.0)
-        #ax.plot(xm[:-1], ym2[:-1]-sm2[:-1], ':', color='black', lw=2.0)
-
-        # colorbar and save
-        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-        cb = plt.colorbar(cax=cax)
-        cb.ax.set_ylabel('Number of Galaxies [ log ]')
-
-        fig.savefig('tdyn_vs_tdep_%s_a.pdf' % sP.simName)
-        plt.close(fig)
-
-    # (B) 2d histogram of ratio (t_dep/t_dyn) vs. m_star for all centrals
-    if 1:
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
-
-        ax.set_title(title)
-        ax.set_xlim(mStarMinMax)
-        ax.set_ylim(ratioMinMax)
-        ax.set_xlabel('M$_{\\rm star}$ [ log M$_\odot$ ]')
-        ax.set_ylabel('t$_{\\rm dyn}$ / t$_{\\rm dep}$')
-
-        # 2d histo
-        zz, xc, yc = np.histogram2d(m_star, t_dyn/t_dep, bins=[nBinsX, nBinsY], 
-                                    range=[mStarMinMax,ratioMinMax], density=True)
-        zz = np.transpose(zz)
-        zz = np.log10(zz)
-
-        cmap = loadColorTable('viridis')
-        plt.imshow(zz, extent=[mStarMinMax[0],mStarMinMax[1],ratioMinMax[0],ratioMinMax[1]], 
-                   cmap=cmap, origin='lower', interpolation='nearest', aspect='auto')
-
-        # median
-        xm, ym, sm = running_median(m_star,t_dyn/t_dep,binSize=binSizeMed*10)
-        ym2 = savgol_filter(ym,3,2)
-        sm2 = savgol_filter(sm,3,2)
-        ax.plot(xm[:-3], ym2[:-3], '-', color='black', lw=2.0)
-        ax.plot(xm[:-3], ym2[:-3]+sm2[:-3], ':', color='black', lw=2.0)
-        ax.plot(xm[:-3], ym2[:-3]-sm2[:-3], ':', color='black', lw=2.0)
-
-        # colorbar and save
-        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-        cb = plt.colorbar(cax=cax)
-        cb.ax.set_ylabel('Number of Galaxies [ log ]')
-
-        fig.savefig('tdyn_vs_tdep_%s_b.pdf' % sP.simName)
-        plt.close(fig)
-
-    # (C) t_dep vs m_star
-    if 1:
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
-
-        ax.set_title(title)
-        ax.set_xlim(mStarMinMax)
-        ax.set_ylim(tDepMinMax)
-        ax.set_xlabel('M$_{\\rm star}$ [ log M$_\odot$ ]')
-        ax.set_ylabel('t$_{\\rm dep}$ [ Gyr ]')
-
-        # 2d histo
-        zz, xc, yc = np.histogram2d(m_star, t_dep, bins=[nBinsX, nBinsY], 
-                                    range=[mStarMinMax,tDepMinMax], density=True)
-        zz = np.transpose(zz)
-        zz = np.log10(zz)
-
-        cmap = loadColorTable('viridis')
-        plt.imshow(zz, extent=[mStarMinMax[0],mStarMinMax[1],tDepMinMax[0],tDepMinMax[1]], 
-                   cmap=cmap, origin='lower', interpolation='nearest', aspect='auto')
-
-        # median
-        xm, ym, sm = running_median(m_star,t_dep,binSize=binSizeMed*10)
-        ym2 = savgol_filter(ym,3,2)
-        sm2 = savgol_filter(sm,3,2)
-        ax.plot(xm[:-3], ym2[:-3], '-', color='black', lw=2.0)
-        ax.plot(xm[:-3], ym2[:-3]+sm2[:-3], ':', color='black', lw=2.0)
-        ax.plot(xm[:-3], ym2[:-3]-sm2[:-3], ':', color='black', lw=2.0)
-
-        # colorbar and save
-        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-        cb = plt.colorbar(cax=cax)
-        cb.ax.set_ylabel('Number of Galaxies [ log ]')
-
-        fig.savefig('tdyn_vs_tdep_%s_c.pdf' % sP.simName)
-        plt.close(fig)

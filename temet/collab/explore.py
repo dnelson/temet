@@ -910,6 +910,207 @@ def erica_tng50_sfrmaps():
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
+def bFieldStrengthComparison():
+    """ Plot histogram of B field magnitude comparing runs etc. """
+    sPs = []
+
+    haloID = None # None for fullbox
+    redshift = 0.5
+    nBins = 100
+    valMinMax = [-7.0,4.0]
+
+    sPs.append( simParams(res=1820, run='tng', redshift=redshift) )
+    sPs.append( simParams(res=910, run='tng', redshift=redshift) )
+    sPs.append( simParams(res=455, run='tng', redshift=redshift) )
+
+    # start plot
+    fig = plt.figure(figsize=(16,9))
+    ax = fig.add_subplot(111)
+
+    hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
+    ax.set_title('z=%.1f %s' % (redshift,hStr))
+    ax.set_xlim(valMinMax)
+    ax.set_xlabel('Magnetic Field Magnitude [ log $\mu$G ]')
+    ax.set_ylabel('N$_{\\rm cells}$ PDF $\int=1$')
+    ax.set_yscale('log')
+
+    for sP in sPs:
+        # load
+        b_mag = sP.snapshotSubset('gas', 'bmag', haloID=haloID)
+        b_mag *= 1e6 # Gauss to micro-Gauss
+        b_mag = np.log10(b_mag) # log uG
+
+        # add to plot
+        yy, xx = np.histogram(b_mag, bins=nBins, density=True, range=valMinMax)
+        xx = xx[:-1] + 0.5*(valMinMax[1]-valMinMax[0])/nBins
+
+        ax.plot(xx, yy, label=sP.simName)
+
+    # finish plot
+    ax.legend(loc='best')
+
+    fig.savefig('bFieldStrengthComparison_%s.pdf' % hStr)
+    plt.close(fig)
+
+def depletionVsDynamicalTimescale():
+    """ Andi: depletion vs dynamical timescale.
+      t_dep = M_H2/SFR   M_H2 the cold, star-forming gas or take total gas mass instead
+      t_dyn = r12 / v_rot  r12 the half mass radius of the gaseous disk, v_rot its characteristic rot. vel
+    """
+
+    # config
+    figsize = (14,9)
+    sP = simParams(res=1820,run='illustris',redshift=0.0)
+
+    gc = sP.groupCat(fieldsHalos=['GroupFirstSub'], 
+                      fieldsSubhalos=['SubhaloHalfmassRadType','SubhaloVmax','SubhaloSFR'])
+    ac = sP.auxCat(fields=['Subhalo_Mass_SFingGas','Subhalo_Mass_30pkpc_Stars'])
+
+    # t_dep [Gyr]
+    M_cold = sP.units.codeMassToMsun(ac['Subhalo_Mass_SFingGas'])
+    SFR = gc['subhalos']['SubhaloSFR'] # Msun/yr
+    t_dep = M_cold / SFR / 1e9
+
+    # t_dyn [Gyr]
+    r12 = sP.units.codeLengthToKpc(gc['subhalos']['SubhaloHalfmassRadType'][:,sP.ptNum('stars')])
+    v_rot = gc['subhalos']['SubhaloVmax'] * sP.units.kmS_in_kpcGyr
+    t_dyn = r12 / v_rot
+
+    # stellar masses and central selection
+    m_star = sP.units.codeMassToLogMsun(ac['Subhalo_Mass_30pkpc_Stars'])
+
+    w_central = np.where( gc['halos'] >= 0 )
+    
+    centralsMask = np.zeros( gc['subhalos']['count'], dtype=np.int16 )
+    centralsMask[gc['halos'][w_central]] = 1
+
+    centrals = np.where(centralsMask & (SFR > 0.0) & (r12 > 0.0))
+
+    t_dep = t_dep[centrals]
+    t_dyn = t_dyn[centrals]
+    m_star = m_star[centrals]
+
+    # plot config
+    title = sP.simName + ' z=%.1f' % sP.redshift + ' [only centrals with SFR>0 and r12>0]'
+    tDynMinMax = [0,0.2]
+    tDepMinMax = [0,4]
+    mStarMinMax = [9.0,12.0]
+    ratioMinMax = [0,0.05] # tdyn/tdep
+    nBinsX = 200
+    nBinsY = 150
+    binSizeMed = 0.01
+
+    # (A) 2d histogram of t_dep vs. t_dyn for all centrals
+    if 1:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_title(title)
+        ax.set_xlim(tDynMinMax)
+        ax.set_ylim(tDepMinMax)
+        ax.set_xlabel('t$_{\\rm dyn}$ [Gyr]')
+        ax.set_ylabel('t$_{\\rm dep}$ [Gyr]')
+
+        # 2d histo
+        zz, xc, yc = np.histogram2d(t_dyn, t_dep, bins=[nBinsX, nBinsY], 
+                                    range=[tDynMinMax,tDepMinMax], density=True)
+        zz = np.transpose(zz)
+        zz = np.log10(zz)
+
+        cmap = loadColorTable('viridis')
+        plt.imshow(zz, extent=[tDynMinMax[0],tDynMinMax[1],tDepMinMax[0],tDepMinMax[1]], 
+                   cmap=cmap, origin='lower', interpolation='nearest', aspect='auto')
+
+        # median
+        #xm, ym, sm = running_median(t_dyn,t_dep,binSize=binSizeMed)
+        #ym2 = savgol_filter(ym,3,2)
+        #sm2 = savgol_filter(sm,3,2)
+        #ax.plot(xm[:-1], ym2[:-1], '-', color='black', lw=2.0)
+        #ax.plot(xm[:-1], ym2[:-1]+sm2[:-1], ':', color='black', lw=2.0)
+        #ax.plot(xm[:-1], ym2[:-1]-sm2[:-1], ':', color='black', lw=2.0)
+
+        # colorbar and save
+        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+        cb = plt.colorbar(cax=cax)
+        cb.ax.set_ylabel('Number of Galaxies [ log ]')
+
+        fig.savefig('tdyn_vs_tdep_%s_a.pdf' % sP.simName)
+        plt.close(fig)
+
+    # (B) 2d histogram of ratio (t_dep/t_dyn) vs. m_star for all centrals
+    if 1:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_title(title)
+        ax.set_xlim(mStarMinMax)
+        ax.set_ylim(ratioMinMax)
+        ax.set_xlabel('M$_{\\rm star}$ [ log M$_\odot$ ]')
+        ax.set_ylabel('t$_{\\rm dyn}$ / t$_{\\rm dep}$')
+
+        # 2d histo
+        zz, xc, yc = np.histogram2d(m_star, t_dyn/t_dep, bins=[nBinsX, nBinsY], 
+                                    range=[mStarMinMax,ratioMinMax], density=True)
+        zz = np.transpose(zz)
+        zz = np.log10(zz)
+
+        cmap = loadColorTable('viridis')
+        plt.imshow(zz, extent=[mStarMinMax[0],mStarMinMax[1],ratioMinMax[0],ratioMinMax[1]], 
+                   cmap=cmap, origin='lower', interpolation='nearest', aspect='auto')
+
+        # median
+        xm, ym, sm = running_median(m_star,t_dyn/t_dep,binSize=binSizeMed*10)
+        ym2 = savgol_filter(ym,3,2)
+        sm2 = savgol_filter(sm,3,2)
+        ax.plot(xm[:-3], ym2[:-3], '-', color='black', lw=2.0)
+        ax.plot(xm[:-3], ym2[:-3]+sm2[:-3], ':', color='black', lw=2.0)
+        ax.plot(xm[:-3], ym2[:-3]-sm2[:-3], ':', color='black', lw=2.0)
+
+        # colorbar and save
+        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+        cb = plt.colorbar(cax=cax)
+        cb.ax.set_ylabel('Number of Galaxies [ log ]')
+
+        fig.savefig('tdyn_vs_tdep_%s_b.pdf' % sP.simName)
+        plt.close(fig)
+
+    # (C) t_dep vs m_star
+    if 1:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_title(title)
+        ax.set_xlim(mStarMinMax)
+        ax.set_ylim(tDepMinMax)
+        ax.set_xlabel('M$_{\\rm star}$ [ log M$_\odot$ ]')
+        ax.set_ylabel('t$_{\\rm dep}$ [ Gyr ]')
+
+        # 2d histo
+        zz, xc, yc = np.histogram2d(m_star, t_dep, bins=[nBinsX, nBinsY], 
+                                    range=[mStarMinMax,tDepMinMax], density=True)
+        zz = np.transpose(zz)
+        zz = np.log10(zz)
+
+        cmap = loadColorTable('viridis')
+        plt.imshow(zz, extent=[mStarMinMax[0],mStarMinMax[1],tDepMinMax[0],tDepMinMax[1]], 
+                   cmap=cmap, origin='lower', interpolation='nearest', aspect='auto')
+
+        # median
+        xm, ym, sm = running_median(m_star,t_dep,binSize=binSizeMed*10)
+        ym2 = savgol_filter(ym,3,2)
+        sm2 = savgol_filter(sm,3,2)
+        ax.plot(xm[:-3], ym2[:-3], '-', color='black', lw=2.0)
+        ax.plot(xm[:-3], ym2[:-3]+sm2[:-3], ':', color='black', lw=2.0)
+        ax.plot(xm[:-3], ym2[:-3]-sm2[:-3], ':', color='black', lw=2.0)
+
+        # colorbar and save
+        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+        cb = plt.colorbar(cax=cax)
+        cb.ax.set_ylabel('Number of Galaxies [ log ]')
+
+        fig.savefig('tdyn_vs_tdep_%s_c.pdf' % sP.simName)
+        plt.close(fig)
+
 def sanch_ovi_groups():
     """ Mock OVI absorption spectra around TNG50-1 z=0.1 groups for Sanch Borthakur. """
     from ..cosmo.spectrum import integrate_along_saved_rays, generate_rays_voronoi_fullbox
