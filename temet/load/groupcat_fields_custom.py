@@ -691,11 +691,12 @@ size_stars.log = True
 
 # -------------------- subhalo photometrics  ------------------------------------------------------
 
-@catalog_field(aliases=['m_u','m_b'])
+@catalog_field(aliases=['m_u','m_b','m_r'])
 def m_v(sim, partType, field, args):
-    """ V-band magnitude (StellarPhotometrics from snapshot). No dust. """
+    """ V-band (B-band, r-band, ...) magnitude (StellarPhotometrics from snapshot). No dust. """
     assert '_log' not in field
     bandName = field.split('_')[1].upper()
+    if bandName not in gfmBands: bandName = bandName.lower()
 
     vals = sim.subhalos('SubhaloStellarPhotometrics')
     mags = vals[:,gfmBands[bandName]]

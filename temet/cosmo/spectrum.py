@@ -1165,7 +1165,8 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
 
         # load subhalo metadata
         SubhaloPos = sP.subhalos('SubhaloPos')
-        r200c = sP.subhalos('rhalo_200')
+        grnr = sP.subhalos('SubhaloGrNr')[subhaloIDs]
+        r200c = sP.halos('Group_R_Crit200')[grnr]
 
         rng = np.random.default_rng(424242 + nRaysPerDim + sP.snap + sP.res)
     
@@ -1173,13 +1174,13 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
         ypts = np.zeros(numrays, dtype='float32')
         zpts = np.zeros(numrays, dtype='float32')
 
-        r200c_avg = r200c[subhaloIDs].mean()
+        r200c_avg = r200c.mean()
 
-        extent = np.max([virRadFactor,total_dl_local*2]) * r200c[subhaloIDs].max() # max
+        extent = np.max([virRadFactor,total_dl_local*2]) * r200c.max() # max
 
         for i, subhaloID in enumerate(subhaloIDs):
             randomAngle = rng.uniform(0, 2*np.pi, nRaysPerDim**2)
-            randomDistance = rng.uniform(0, virRadFactor*r200c[subhaloID], nRaysPerDim**2)
+            randomDistance = rng.uniform(0, virRadFactor*r200c[i], nRaysPerDim**2)
 
             offset = i * nRaysPerDim**2
             xpts[offset:offset + nRaysPerDim**2] = randomDistance * np.cos(randomAngle)
@@ -1193,8 +1194,6 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
                 zpts[offset:offset + nRaysPerDim**2] += SubhaloPos[subhaloID,projAxis]
 
                 total_dl = total_dl_local*2*r200c_avg # constant
-
-                print(i, subhaloID, r200c_avg, total_dl_local, total_dl, zpts[offset])
 
     if raysType == 'sample_localized' and pSplit is not None:
         # localized (e.g. <= rvir) sightlines around a given sample of subhalos, specified by a list of 
@@ -1424,9 +1423,10 @@ def integrate_along_saved_rays(sP, field, nRaysPerDim=nRaysPerDim_def, raysType=
         that we follow a spatial subdivision, so the total job number should be an integer squared.
     """
     # save file
-    saveFilename = _spectra_filepath(sP, ion=field, pSplit=pSplit)
+    saveFilename = _spectra_filepath(sP, ion=field, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=pSplit)
 
     if isfile(saveFilename):
+        print('Loading: [%s]' % saveFilename)
         with h5py.File(saveFilename,'r') as f:
             result = f['result'][()]
         return result
@@ -1734,46 +1734,58 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
     assert count == n_spec * pSplitNum, 'Error: Unexpected total number of spectra.'
 
     # start save
-    with h5py.File(saveFilename,'w') as f:
-        # wavelength grid, flux array, ray positions
-        f['wave'] = wave
-        f['ray_pos'] = ray_pos
-        f['ray_dir'] = ray_dir
-        f['ray_total_dl'] = ray_total_dl
+    savedDatasets = []
 
-        # metadata
-        f.attrs['simName'] = sP.simName
-        f.attrs['redshift'] = sP.redshift
-        f.attrs['snapshot'] = sP.snap
-        f.attrs['instrument'] = instrument
-        f.attrs['lineNames'] = lines_present
-        f.attrs['count'] = count
+    if not isfile(saveFilename):
+        with h5py.File(saveFilename,'w') as f:
+            # wavelength grid, flux array, ray positions
+            f['wave'] = wave
+            f['ray_pos'] = ray_pos
+            f['ray_dir'] = ray_dir
+            f['ray_total_dl'] = ray_total_dl
 
-        # load large datasets, one at a time, and save
-        dsets = ['flux']
-        dsets += ['EW_%s' % line for line in lines_present]
-        dsets += ['tau_%s' % line for line in lines_present]
+            # metadata
+            f.attrs['simName'] = sP.simName
+            f.attrs['redshift'] = sP.redshift
+            f.attrs['snapshot'] = sP.snap
+            f.attrs['instrument'] = instrument
+            f.attrs['lineNames'] = lines_present
+            f.attrs['count'] = count
+    else:
+        with h5py.File(saveFilename,'r') as f:
+            savedDatasets = list(f.keys())
 
-        for dset in dsets:
-            # allocate
-            print(f'Loading [{dset}] -- [', end='')
-            offset = 0
+    # load large datasets, one at a time, and save
+    dsets = ['flux']
+    dsets += ['EW_%s' % line for line in lines_present]
+    dsets += ['tau_%s' % line for line in lines_present]
 
-            if 'EW_' in dset:
-                data = np.zeros(count, dtype='float32')
-            else:
-                data = np.zeros((count,n_wave), dtype='float32')
+    for dset in dsets:
+        # already done?
+        if dset in savedDatasets:
+            print(f'Skipping [{dset}], already saved.')
+            continue
 
-            # load
-            for i in range(pSplitNum):
-                filename = _spectra_filepath(sP, ion, instrument=instrument, pSplit=[i,pSplitNum], solar=solar)
-                print(i, end=' ', flush=True)
+        # allocate
+        print(f'Loading [{dset}] -- [', end='')
+        offset = 0
 
-                with h5py.File(filename,'r') as f_read:
-                    data[offset:offset+n_spec] = f_read[dset][()]
-                offset += n_spec
+        if 'EW_' in dset:
+            data = np.zeros(count, dtype='float32')
+        else:
+            data = np.zeros((count,n_wave), dtype='float32')
 
-            # write
+        # load
+        for i in range(pSplitNum):
+            filename = _spectra_filepath(sP, ion, instrument=instrument, pSplit=[i,pSplitNum], solar=solar)
+            print(i, end=' ', flush=True)
+
+            with h5py.File(filename,'r') as f_read:
+                data[offset:offset+n_spec] = f_read[dset][()]
+            offset += n_spec
+
+        # write
+        with h5py.File(saveFilename,'r+') as f:
             print('] writing...')
             f.create_dataset(dset, data=data, compression='gzip')
 
