@@ -1913,7 +1913,7 @@ def vel_rel(sim, partType, field, args):
     if isinstance(vel, dict) and vel['count'] == 0: return vel # no particles of type, empty return
 
     # get reference velocity
-    if sim.isZoom:
+    if sim.isZoom and args['subhaloID'] is None:
         args['subhaloID'] = sim.zoomSubhaloID
         print(f'WARNING: Using {sim.zoomSubhaloID =} for zoom run to compute [{field}]!')
 
@@ -1958,7 +1958,7 @@ def rad(sim, partType, field, args):
     if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
     
     # get (host) halo center position
-    if sim.isZoom:
+    if sim.isZoom and args['subhaloID'] is None:
         args['subhaloID'] = sim.zoomSubhaloID
         print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
 
@@ -2021,7 +2021,7 @@ def dist_2dz(sim, partType, field, args):
     if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
     
     # get (host) halo center position, or position of reference
-    if sim.isZoom:
+    if sim.isZoom and args['subhaloID'] is None:
         args['subhaloID'] = sim.zoomSubhaloID
         print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
 
@@ -2058,7 +2058,7 @@ def vrad(sim, partType, field, args):
     if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
 
     # get position and velocity of reference
-    if sim.isZoom:
+    if sim.isZoom and args['subhaloID'] is None:
         args['subhaloID'] = sim.zoomSubhaloID
         print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
 
@@ -2122,7 +2122,7 @@ def angmom(sim, partType, field, args):
     if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
 
     # reference position and velocity
-    if sim.isZoom:
+    if sim.isZoom and args['subhaloID'] is None:
         args['subhaloID'] = sim.zoomSubhaloID
         print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
 
