@@ -95,8 +95,11 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False):
         # redshift search
         for i,redshift in np.ndenumerate(redshifts):
             # closest snapshot redshift to requested
-            zFound, w = closest( r['redshifts'], redshift )
+            w_nan = np.where(r['redshifts'] == -1)[0]
+            r['redshifts'][w_nan] = np.nan # do not select non-existent snapshot
 
+            zFound, w = closest(r['redshifts'], redshift)
+            
             if np.abs(zFound-redshift) > 0.1:
                 # try to recompute in case we have a partial save from a previously in progress run
                 if not recalculate:
