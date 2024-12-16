@@ -693,13 +693,13 @@ size_stars.log = True
 
 @catalog_field(aliases=['m_u','m_b','m_r'])
 def m_v(sim, partType, field, args):
-    """ V-band (B-band, r-band, ...) magnitude (StellarPhotometrics from snapshot). No dust. """
+    """ V-band (B-band, r-band, ...) magnitude (StellarPhotometrics from snapshot). AB system. No dust. """
     assert '_log' not in field
     bandName = field.split('_')[1].upper()
     if bandName not in gfmBands: bandName = bandName.lower()
 
     vals = sim.subhalos('SubhaloStellarPhotometrics')
-    mags = vals[:,gfmBands[bandName]]
+    mags = vals[:,gfmBands[bandName]].copy() # careful with mutable cache
 
     # fix zero values
     w = np.where(mags > 1e10)
@@ -718,7 +718,7 @@ m_v.log = False
 
 @catalog_field(aliases=['color_vb'])
 def color_uv(sim, partType, field, args):
-    """ Integrated photometric/broadband galaxy colors, from snapshot. No dust. """
+    """ Integrated photometric/broadband galaxy colors, from snapshot. AB system. No dust. """
     assert '_log' not in field
     bandNames = field.split('color_')[1].upper()
 

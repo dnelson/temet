@@ -592,7 +592,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         else:
             vals = gc
 
-            label = 'Star Formation Rate %s' % sfrLabel
+            label = 'Star Formation Rate %s [ log M$_{\\rm sun}$ yr$^{-1}$ ]' % sfrLabel
             minMax = [-2.5, 1.0]
             if tight: minMax = [-3.0, 2.0]
 
