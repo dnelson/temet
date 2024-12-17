@@ -4,6 +4,7 @@ https://arxiv.org/abs/xxxx.xxxxx
 """
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter
 from scipy.signal import savgol_filter
 
 from ..util.simParams import simParams
@@ -14,7 +15,7 @@ from ..plot.cosmoMisc import simHighZComparison
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
 
-def _get_existing_sims(variants, res, hInds, redshift):
+def _get_existing_sims(variants, res, hInds, redshift, all=False):
     """ Return a list of simulation objects, only for those runs which exist (and have reached redshift). """
     sims = []
     for hInd in hInds:
@@ -22,7 +23,7 @@ def _get_existing_sims(variants, res, hInds, redshift):
             for r in res:
                 try:
                     sim = simParams(run='structures', res=r, hInd=hInd, variant=variant, redshift=redshift)
-                    if np.abs(sim.redshift - redshift) < 0.1:
+                    if np.abs(sim.redshift - redshift) < 0.1 or all:
                         sims.append(sim)
                         print(sim, ' [OK]')
                 except:
@@ -39,12 +40,12 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
         # if we have only one halo, vary the linestyle by variant or res (for e.g. quant lines vs redshift)
         if len(variants) > 1 and len(res) == 1:
             for i, variant in enumerate(variants):
-                handles.append(plt.Line2D( (0,1), (0,0), color=colors[0], ls=linestyles[i], lw=lw))
-                labels.append('h%d_%s' % (hInds[0],variant))
+                handles.append(plt.Line2D( (0,1), (0,0), color=colors[i], ls=linestyles[0], lw=lw))
+                labels.append('h%d_L%d_%s' % (hInds[0],res[0],variant))
         if len(res) > 1 and len(variants) == 1:
             for i, r in enumerate(res):
                 handles.append(plt.Line2D( (0,1), (0,0), color=colors[i], ls=linestyles[0], lw=lw))
-                labels.append('h%d_L%d' % (hInds[0],r))
+                labels.append('h%d_L%d_%s' % (hInds[0],r,variants[0]))
         if len(res) > 1 and len(variants) > 1:
             for i, r in enumerate(res):
                 handles.append(plt.Line2D( (0,1), (0,0), color=colors[i], ls='-', lw=lw))
@@ -62,6 +63,9 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
 
     legend = ax.legend(handles, labels, loc='upper left', ncols=1)
     ax.add_artist(legend)
+
+    if len(hInds) == 1:
+        return
         
     # legend two
     handles = []
@@ -285,11 +289,10 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
         star_zform = sim.snapshotSubset('stars_real', 'z_form', subhaloID=subhaloInd)
         star_mass = sim.snapshotSubset('stars_real', 'mass_ini', subhaloID=subhaloInd)
 
-        if 0 and quant in ['mstar2','mstar2_log','sfr2']:
+        if quant in ['mstar2','mstar2_log','sfr2']:
             # restrict to stars within twice the stellar half mass radius for consistency
-            # TODO: this is not working, star_mass[w].sum() is larger than SubhaloMassInRadType[4]...
             star_rad = sim.snapshotSubset('stars_real', 'rad', subhaloID=subhaloInd)
-            star_rad /= sim.subhalo(subhaloInd)['SubhaloHalfmassRad']
+            star_rad /= sim.subhalo(subhaloInd)['SubhaloHalfmassRadType'][sim.ptNum('stars')]
 
             w = np.where(star_rad <= 2.0)
             star_mass = star_mass[w]
@@ -369,50 +372,76 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
 
     # individual zoom runs
     for i, sim in enumerate(sims):
-        # load
-        vals, _, _, valLog = sim.simSubhaloQuantity(quant, clean, tight=True)
-        val = vals[sim.zoomSubhaloID]
-        if valLog and not sfh_lin: val = logZeroNaN(val)
+        # which subhalo(s) to include?
+        subhaloIDs = [sim.zoomSubhaloID]
 
-        # color set by hInd
-        c = colors[hInds.index(sim.hInd)]
+        # all centrals with stellar mass and low contamination
+        contam_frac = sim.subhalos('contam_frac')
+        cen_flag = sim.subhalos('cen_flag')
+        mstar = sim.subhalos('mstar2_log')
+        w = np.where((contam_frac < 0.01) & (cen_flag == 1) & (mstar > 0))[0]
 
-        # marker and ls set by variant
-        marker = markers[variants.index(sim.variant)]
-        linestyle = linestyles[variants.index(sim.variant)]
+        subhaloIDs = w
 
-        # marker size set by resolution
-        ms_loc = (sim.res - 10) * 2.5 + 4
-        lw_loc = (sim.res - 10) if len(res) > 1 else lw
-        alpha_loc = 0.6 if len(res) > 1 else 1.0
+        print(f'[{quant}] Showing {len(subhaloIDs)} subhalos for {sim.simName}.')
 
-        # if only one hInd, then use color for either variant or res
-        if len(hInds) == 1:
-            if len(variants) > 1 and len(res) == 1:
-                c = colors[variants.index(sim.variant)]
-            if len(res) > 1 and len(variants) == 1:
-                c = colors[res.index(sim.res)]
-            if len(res) > 1 and len(variants) > 1:
-                c = colors[res.index(sim.res)]
+        # loop over each subhalo
+        for j, subhaloID in enumerate(subhaloIDs):
+            # load
+            vals, _, _, valLog = sim.simSubhaloQuantity(quant, clean, tight=True)
+            val = vals[subhaloID]
+            if valLog and not sfh_lin: val = logZeroNaN(val)
 
-        # final redshift marker
-        l, = ax.plot(sim.redshift, val, marker, color=c, markersize=ms_loc, label='')
+            # color set by hInd
+            c = colors[hInds.index(sim.hInd)]
 
-        # time track
-        if quant in star_zform_quants:
-            # special case: stellar mass growth or SFH
-            star_zform, dt_Myr, star_mass = _load_sfh(sim, quant, sim.zoomSubhaloID)
-            ax.set_ylabel(ylabel.replace('instant',r'\Delta t = %.1f Myr' % dt_Myr))
-            if sfh_lin:
-                star_mass = 10.0**star_mass
+            # marker and ls set by variant
+            marker = markers[variants.index(sim.variant)]
+            linestyle = linestyles[variants.index(sim.variant)]
 
-            w = np.where(star_zform < xMinMax[0])
-            ax.plot(star_zform[w], star_mass[w], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha_loc)
-        else:
-            # general case
-            mpb = _load_mpb_quants(sim, sim.zoomSubhaloID, quants=[quant])
+            # marker size set by resolution
+            ms_loc = (sim.res - 10) * 2.5 + 4
+            lw_loc = lw #(sim.res - 10) if len(res) > 1 else lw
+            alpha_loc = 1.0 #0.6 if len(res) > 1 else 1.0
 
-            ax.plot(mpb['z'], mpb[quant], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha_loc)
+            # if only one hInd, then use color for either variant or res
+            if len(hInds) == 1:
+                marker = markers[0]
+                linestyle = linestyles[0]
+
+                if len(variants) > 1 and len(res) == 1:
+                    c = colors[variants.index(sim.variant)]
+                if len(res) > 1 and len(variants) == 1:
+                    c = colors[res.index(sim.res)]
+                if len(res) > 1 and len(variants) > 1:
+                    c = colors[res.index(sim.res)]
+
+                if len(subhaloIDs) > 1:
+                    linestyle = linestyles[j]
+
+            # final redshift marker
+            l, = ax.plot(sim.redshift, val, marker, color=c, markersize=ms_loc, label='')
+
+            # time track
+            if quant in star_zform_quants:
+                # special case: stellar mass growth or SFH
+                star_zform, dt_Myr, star_mass = _load_sfh(sim, quant, subhaloID)
+                ax.set_ylabel(ylabel.replace('instant',r'\Delta t = %.1f Myr' % dt_Myr))
+                if sfh_lin:
+                    star_mass = 10.0**star_mass
+
+                w = np.where(star_zform < xMinMax[0])
+                ax.plot(star_zform[w], star_mass[w], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha_loc)
+                
+                # extend to symbol
+                x = star_zform[w][-1]
+                y = star_mass[w][-1]
+                ax.plot([x,sim.redshift], [y,y], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=0.2)
+            else:
+                # general case
+                mpb = _load_mpb_quants(sim, subhaloID, quants=[quant])
+
+                ax.plot(mpb['z'], mpb[quant], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha_loc)
 
     # galaxies from parent box
     vals, _, _, _ = sim_parent.simSubhaloQuantity(quant, clean, tight=True)
@@ -423,9 +452,11 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
         subhaloInd = parent_GroupFirstSub[hInd]
         val = vals[subhaloInd]
 
+        label = 'hX in %s' % (sim_parent.simName) if i == 0 else ''
+        if len(hInds) == 1: label = 'h%d in %s' % (hInds[0],sim_parent.simName)
+
         # final redshift marker
         if sim_parent.redshift >= xMinMax[1]:
-            label = 'hX in %s' % (sim_parent.simName) if i == 0 else ''
             l, = ax.plot(sim_parent.redshift, val, markers[3], color='#555', label=label)
 
         # time track
@@ -434,12 +465,12 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
             star_zform, _, star_mass = _load_sfh(sim_parent, quant, subhaloInd)
 
             w = np.where((star_zform >= 0.0) & (star_zform < xMinMax[0]))
-            ax.plot(star_zform[w], star_mass[w], '-', lw=lw, color='#555', alpha=1.0)
+            ax.plot(star_zform[w], star_mass[w], '-', lw=lw, color='#555', alpha=1.0, label=label)
         else:
             # general case
             mpb = _load_mpb_quants(sim_parent, subhaloInd, quants=[quant])
 
-            ax.plot(mpb['z'], mpb[quant], ls=linestyle, lw=lw, color='#555', alpha=1.0)
+            ax.plot(mpb['z'], mpb[quant], ls=linestyle, lw=lw, color='#555', alpha=1.0, label=label)
 
     # finish and save plot
     _add_legends(ax, hInds, res, variants, colors, lineplot=True)
@@ -809,7 +840,7 @@ def vis_single_image(sP):
         plotStyle    = 'edged'
         colorbars    = True
         fontsize     = 28 # 24
-        saveFilename = '%s_%d.pdf' % (sP.simName,sP.snap)
+        saveFilename = '%s_%d.png' % (sP.simName,sP.snap)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -876,22 +907,22 @@ def paperPlots():
     #redshift = 5.0
 
     # testing:
-    variants = ['ST8','ST8m']
-    res = [15] #[12,13,14,15]
+    variants = ['ST8','ST8m'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
+    res = [14,15] #[12,13,14,15]
     hInds = [31619] #[31619]
-    redshift = 11.0 #4.15
+    redshift = 3.0 #4.15
 
-    sims = _get_existing_sims(variants, res, hInds, redshift)
+    sims = _get_existing_sims(variants, res, hInds, redshift, all=True)
 
     # figure - smhm relation
     if 0:
         smhm_relation(sims)
 
-    # figure - stellar mass vs redshift evo
+    # figure - SFH (stellar mass vs redshift evo)
     if 0:
         quant = 'mstar2_log'
-        xlim = [10.0, 2.9]
-        ylim = [4.8, 10.0]
+        xlim = [13.1, 8.9] #[12.1, 2.95]
+        ylim = [4.0, 8.0] #[5.0, 8.5]
 
         quantVsRedshift(sims, quant, xlim, ylim)
 
@@ -909,16 +940,6 @@ def paperPlots():
         quant = 'sfr2'
         xlim = [12.1, 2.95]
         ylim = [-6.5, 0.5]
-
-        for hInd in hInds:
-            sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
-            quantVsRedshift(sims_loc, quant, xlim, ylim, sfh_lin=False)
-
-    # figure - star formation history (one plot per halo)
-    if 0:
-        quant = 'mstar2_log'
-        xlim = [12.1, 2.95]
-        ylim = [5.0, 8.5]
 
         for hInd in hInds:
             sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
@@ -971,7 +992,7 @@ def paperPlots():
         from ..cosmo.perf import plotCpuTimes
         plotCpuTimes(sims, xlim=[0.0, 0.25])
 
-    # timebin diagnostic
+    # diagnostic: timebin spatial distribution
     if 0:
         sP = sims[0]
         nPixels    = 500
@@ -999,9 +1020,8 @@ def paperPlots():
 
         renderBox(panels, plotConfig, locals())
 
-    # snapshot spacing diagnostic
+    # diagnostic: snapshot spacing
     if 0:
-        from matplotlib.ticker import ScalarFormatter
         fig, ax = plt.subplots()
         ax.set_ylim([0, 20])
         ax.set_xlim([20, 2.9])
@@ -1039,3 +1059,86 @@ def paperPlots():
         
         fig.savefig('snapshot_spacing_%s.pdf' % sims[0].simName)
         plt.close(fig)
+
+    # diagnostic: number of non-contaminated halos vs redshift
+    if 0:
+        ymin = 1e-6
+
+        fig, ax = plt.subplots()
+        ax.set_ylim([ymin, 1.0])
+        ax.set_xlim([14, 2.9])
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.xaxis.set_major_formatter(ScalarFormatter())
+        ax.xaxis.set_minor_formatter(ScalarFormatter())
+        ax.set_xlabel('Redshift')
+        ax.set_ylabel('Low-resolution DM Contamination Fraction')
+
+        max_num = 0
+
+        for sim in sims:
+            # loop over snapshots
+            for snap in sim.validSnapList():
+                # load
+                sim.setSnap(snap)
+
+                contam_frac = sim.subhalos('contam_frac')
+                cen_flag = sim.subhalos('cen_flag')
+                mstar = sim.subhalos('mstar2_log')
+
+                # select subhalos of interest
+                subhaloIDs = np.where((cen_flag == 1) & (mstar > 0) & np.isfinite(mstar))[0]
+                mstar = mstar[subhaloIDs]
+                contam_frac = contam_frac[subhaloIDs]
+
+                max_num = np.max([max_num, len(subhaloIDs)])
+
+                print(snap, mstar)
+
+                # plot
+                for j, subhaloID in enumerate(subhaloIDs):
+                    yy = contam_frac[j] if contam_frac[j] > ymin else ymin*1.5
+                    ms = mstar[j] * 1.5
+                    ax.plot(sim.redshift, yy, marker=markers[0], ms=ms, color=colors[j])
+
+        # legend
+        handles = [plt.Line2D( (0,0), (0,0), ls='-', color='black', lw=0)]
+        labels = [sim.simName]
+
+        for i in range(max_num):
+            handles.append(plt.Line2D( (0,1), (0,0), marker=markers[0], color=colors[i], lw=0))
+            labels.append('Halo ID#%d' % i)
+
+        legend = ax.legend(handles, labels, loc='upper left')
+        
+        fig.savefig('contam_frac_z_%s.pdf' % sims[0].simName)
+        plt.close(fig)
+
+    # diagnostic: global box sfrd
+    if 0:
+        from ..load.data import sfrTxt
+
+        fig, ax = plt.subplots()
+        ax.set_ylim([1e-10, 1e-4])
+        ax.set_xlim([14, 9.0])
+        #ax.set_ylim([1e-9, 3e-2])
+        #ax.set_xlim([14, 3.0])
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.xaxis.set_major_formatter(ScalarFormatter())
+        ax.xaxis.set_minor_formatter(ScalarFormatter())
+        ax.set_xlabel('Redshift')
+        ax.set_ylabel('SFRD [ M$_{\\rm sun}$  yr$^{-1}$  Mpc$^{-3}$]')
+
+        for sim in sims:
+            # load sfr.txt file
+            s = sfrTxt(sim)
+
+            ax.plot(s['redshift'], s['sfrd'], '-', lw=lw, label=sim.simName)
+
+        # second legend
+        ax.legend(loc='lower right')
+
+    fig.savefig('cosmic_sfrd_comp-%d.pdf' % len(sims))
+    plt.close(fig)
+    
