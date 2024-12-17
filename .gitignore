@@ -3,7 +3,9 @@ docs/_build/
 docs/source/
 docs/quants*custom.rst
 *.pdf
+*.png
 *.hdf5
+*.fits
 *.pth
 .pyc
 .so

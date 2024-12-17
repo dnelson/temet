@@ -4,7 +4,6 @@ Following Schulz-Rinne (1993), Kurganov & Tadmor (2002), Liska & Wendroff (2003)
 http://www-troja.fjfi.cvut.cz/%7Eliska/CompareEuler/compare8/
 """
 import numpy as np
-import h5py
 from ..ICs.utilities import write_ic_file
 
 def create_ics(numPartPerDim=200, config=1, filename='ics.hdf5'):
@@ -130,3 +129,144 @@ def create_ics(numPartPerDim=200, config=1, filename='ics.hdf5'):
     pt0 = {'Coordinates':pos, 'Velocities':vel, 'Masses':mass, 'InternalEnergy':u, 'ParticleIDs':ids}
 
     write_ic_file(filename, {'PartType0':pt0}, boxSize=boxSize)
+
+def uniform_ics_3d(N=64):
+    """ Create completely uniform ICs of gas (in 3D). """
+
+    # config
+    rho = 1.0
+    vx = 0.0
+    vy = 0.0
+    vz = 0.0
+    P  = 1.0
+
+    L = 1.0
+    gamma  = 1.4
+
+    # derived properties
+    dx = dy = dz = L / N
+
+    # allocate
+    pos  = np.zeros((N**3,3), dtype='float32')
+    vel  = np.zeros((N**3,3), dtype='float32')
+    dens = np.zeros(N**3, dtype='float32')
+    u    = np.zeros(N**3, dtype='float32')
+    ids  = np.arange(N**3, dtype='int32') + 1
+
+    # assign gas cell positions
+    for i in range(N):
+        for j in range(N):
+            for k in range(N):
+                index = i + j*N + k*N**2
+
+                pos[index,0] = i * dx + dx/2.0
+                pos[index,1] = j * dy + dy/2.0
+                pos[index,2] = k * dz + dz/2.0
+
+    # assign properties
+    dens[:] = rho
+    u[:] = P/rho/(gamma-1.0)
+    vel[:,0] = vx
+    vel[:,1] = vy
+    vel[:,2] = vz
+
+    # density -> mass
+    cell_vol = L**3 / N**3
+    mass = dens * cell_vol
+
+    # write
+    pt0 = {'Coordinates':pos, 'Velocities':vel, 'Masses':mass, 'InternalEnergy':u, 'ParticleIDs':ids}
+
+    filename = 'ics_%d.hdf5' % N
+    write_ic_file(filename, {'PartType0':pt0}, boxSize=L)
+
+def vis_test(conf=0):
+    """ Quick vis test. """
+    from ..util.treeSearch import calcHsml
+    from os.path import isfile
+    import glob
+    import h5py
+    import matplotlib.pyplot as plt
+
+    path = '/u/dnelson/sims.idealized/sims.turbbox/test/output/'
+
+    cmap = 'viridis'
+
+    num_snaps = len(glob.glob(path + 'snap_*.hdf5'))
+
+    for snap in np.arange(num_snaps):
+        outfile = 'frame%d_%03d.png' % (conf,snap)
+        print(outfile)
+        if isfile(outfile):
+            print(' skip')
+            continue
+
+        # load
+        with h5py.File(path + 'snap_%03d.hdf5' % snap, 'r') as f:
+            boxsize = f['Header'].attrs['BoxSize']
+            pos = f['PartType0']['Coordinates'][()]
+            vel = f['PartType0']['Velocities'][()]
+            dens = f['PartType0']['Density'][()]
+
+            print(' dens: ',dens.mean(),dens.min(),dens.max())
+            vmag = np.sqrt(vel[:,0]**2 + vel[:,1]**2 + vel[:,2]**2)
+            print(' vmag: ',vmag.mean(),vmag.min(),vmag.max())
+
+        # shuffle
+        rng = np.random.default_rng(424242)
+        indices = np.arange(dens.size)
+        rng.shuffle(indices)
+        pos = pos[indices]
+        vel = vel[indices]
+        dens = dens[indices]
+        vmag = vmag[indices]
+
+        # start plot
+        fig, ax = plt.subplots(1,1, figsize=(6,6))
+
+        ax.set_xlim(0,boxsize)
+        ax.set_ylim(0,boxsize)
+        ax.set_aspect('equal')
+
+        # scatter, quiver, or voronoi slice?
+        if conf == 1:
+            ax.scatter(pos[:,0], pos[:,1], c=vmag, s=1, cmap=cmap)
+
+        if conf == 2:
+            cmap = plt.get_cmap(cmap)
+            norm = plt.Normalize(vmin=0.0, vmax=0.1)
+            #colors = cmap(norm(dens)) # always 1.0 with gamma=1.0?
+            colors = cmap(norm(vmag))
+
+            ax.quiver(pos[:,0], pos[:,1], vel[:,0], vel[:,1], scale_units='xy', scale=0.4, color=colors, cmap=cmap)
+
+        if conf == 3:
+            # define (x,y) pixel centers
+            nPixels = 512
+            pxSize = boxsize / nPixels
+            boxcenter = boxsize / 2
+
+            xypts = np.linspace(boxcenter-boxsize/2, boxcenter+boxsize/2-pxSize, nPixels) + pxSize/2
+            xpts, ypts = np.meshgrid(xypts, xypts, indexing='ij')
+
+            # construct [N,3] list of search positions
+            search_pos = np.zeros( (nPixels*nPixels,3), dtype=pos.dtype)
+            
+            search_pos[:,0] = xpts.ravel()
+            search_pos[:,1] = ypts.ravel()
+            search_pos[:,2] = boxcenter # slice location along line-of-sight
+
+            # construct tree, find nearest gas cell (parent Voronoi cell) to each pixel center
+            _, index = calcHsml(pos, boxsize, posSearch=search_pos, nearest=True)
+
+            assert index.min() >= 0 and index.max() < pos.shape[0]
+
+            # sample values from cells onto grid pixels
+            grid = vmag[index].reshape([nPixels,nPixels]).T
+
+            extent = [0, boxsize, 0, boxsize]
+            plt.imshow(grid, extent=extent, cmap=cmap, aspect=1.0)
+
+        # finish plot
+        plt.savefig(outfile)
+        plt.close()
