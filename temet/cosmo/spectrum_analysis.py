@@ -9,11 +9,11 @@ from numba import jit
 
 from ..util.helper import closest, contiguousIntSubsets, logZeroMin
 from ..cosmo.spectrum import generate_rays_voronoi_fullbox, integrate_along_saved_rays, \
-    create_wavelength_grid, _spectra_filepath, lines
-from ..util import units
+    create_wavelength_grid, _spectra_filepath, lines, projAxis_def, nRaysPerDim_def, raysType_def
 from ..plot.config import *
 
-def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=None, dv=0.0):
+def load_spectra_subset(sim, ion, instrument, solar, mode, nRaysPerDim=nRaysPerDim_def, 
+                        raysType=raysType_def, num=None, EW_minmax=None, dv=0.0):
     """ Load a subset of spectra from a given simulation and ion.
 
     Args:
@@ -24,6 +24,9 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=N
         use the (constant) solar value.
       num (int): how many individual spectra to show.
       mode (str): either 'all', 'random', 'evenly', or 'inds'.
+      nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
+      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or 
+        'sample_localized' (distributed around a given set of subhalos).
       inds (list[int]): if mode is 'inds', then the list of specific spectra indices to plot. num is ignored.
       EW_minmax (list[float]): minimum and maximum EW to plot [Ang].
       dv (float): if not zero, then take as a velocity window (+/-), convert 
@@ -35,7 +38,7 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=N
     else:
         assert num is None, 'Do not specify num if mode is not random or evenly.'
 
-    filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
+    filepath = _spectra_filepath(sim, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, solar=solar)
 
     with h5py.File(filepath,'r') as f:
         # load metadata
@@ -74,6 +77,9 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=N
         inds = []
         for i in range(num):
             w = np.where((EW>EW_minmax[0]+i*binsize) & (EW<=EW_minmax[0]+(i+1)*binsize))[0]
+            if len(w) == 0:
+                print(f'Warning: no spectra in EW bin {i} of {num}.')
+                continue
             rng.shuffle(w)
 
             inds.append(w[0])
@@ -95,7 +101,7 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=N
     
     # load column densities (per spectrum)
     field = ion + ' numdens'
-    N = integrate_along_saved_rays(sim, field) # linear cm^-2
+    N = integrate_along_saved_rays(sim, field, nRaysPerDim=nRaysPerDim, raysType=raysType) # linear cm^-2
     N = N[inds]
     N = logZeroMin(N) # log cm^-2
 
@@ -104,6 +110,7 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=N
         sort_inds = np.argsort(EW)
         flux = flux[sort_inds]
         EW = EW[sort_inds]
+        N = N[sort_inds]
         
     # x-axis in velocity space? keep global spectra, shift wave axis
     if 0 and dv:
@@ -117,13 +124,13 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=N
 
             wave_mean = np.average(wave, weights=tau)
             dlambda = wave - wave_mean
-            wave_dv[i,:] = dlambda / wave_mean * units.c_km_s
+            wave_dv[i,:] = dlambda / wave_mean * sim.units.c_km_s
 
             # re-compute in a fixed dv window to avoid other nearby absorption features
             w = np.where( (wave_dv[i,:] > -dv) & (wave_dv[i,:] <= dv) )[0]
             wave_mean = np.average(wave[w], weights=tau[w])
             dlambda = wave - wave_mean
-            wave_dv[i,:] = dlambda / wave_mean * units.c_km_s
+            wave_dv[i,:] = dlambda / wave_mean * sim.units.c_km_s
 
         wave = wave_dv
 
@@ -131,7 +138,7 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=N
     if dv:
         # how many wavelength bins in velocity window?
         dlambda = wave - wave.mean()
-        wave_dv = dlambda / wave.mean() * units.c_km_s
+        wave_dv = dlambda / wave.mean() * sim.units.c_km_s
 
         w = np.where( (wave_dv > -dv) & (wave_dv <= dv) )[0]
         n = int(np.ceil(len(w) / 2))
@@ -142,7 +149,7 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=N
         flux_dv = np.zeros((flux.shape[0],wave_dv.size), dtype=flux.dtype)
         #dwave_cen = np.zeros(flux.shape[0], dtype=wave.dtype)
 
-        for i in range(num):
+        for i in range(flux.shape[0]):
             flux_loc = flux[i,:]
             flux_loc[flux_loc < 1e-4] = 1e-4 # avoid log(0)
             tau = -np.log(flux_loc)
@@ -163,7 +170,7 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, num=None, EW_minmax=N
             # center at tau-weighted mean wavelength
             wave_mean = np.average(wave, weights=tau)
             dlambda = wave - wave_mean
-            wave_dv_loc = dlambda / wave_mean * units.c_km_s
+            wave_dv_loc = dlambda / wave_mean * sim.units.c_km_s
 
             # re-compute in a fixed dv window to avoid other nearby absorption features
             w = np.where( (wave_dv_loc > -dv) & (wave_dv_loc <= dv) )[0]
@@ -250,7 +257,7 @@ def load_absorber_spectra(sim, line, instrument, solar, EW_minmax=None, dwave=0.
         w = np.where( (wave > -dwave) & (wave <= +dwave) )[0]
     else:
         # velocity window
-        wave = wave / wave0_obs * units.c_km_s # dv [km/s]
+        wave = wave / wave0_obs * sim.units.c_km_s # dv [km/s]
         w = np.where( (wave > -dv) & (wave <= +dv) )[0]
 
     n = int(np.ceil(len(w) / 2))

@@ -413,7 +413,7 @@ def paperPlots():
     if 0:
         sim = simParams(run='tng50-1')
         line = 'MgII 2796'
-        inst = '4MOST-HRS'
+        inst = '4MOST-HRS' # 'KECK-HIRES-B14'
         redshifts = [0.5, 0.7, 1.0]
         indivEWs = False
         opts = {'xlim':[0,8], 'solar':False, 'log':False}
@@ -452,7 +452,7 @@ def paperPlots():
 
     # fig X: instrumental LSFs
     if 0:
-        inst = '4MOST-HRS' #'SDSS-BOSS'
+        inst = 'COS-G130M' #'4MOST-HRS' #'SDSS-BOSS'
         instrument_lsf(inst)
 
     # fig X: example of a cosmological-distance (i.e. lightcone) spectrum
@@ -478,6 +478,31 @@ def paperPlots():
     # fig X: redshift coverage for transitions, given an instrument
     if 0:
         pass # x-axis: redshift?
+
+    # table: transitions
+    if 0:
+        #ions = ['H I','Mg II','Fe II','Si II','Si III','Si IV','N V','C II','C IV','O VI','Ca II','Zn II']
+        ions = list(dict.fromkeys([info['ion'] for line,info in lines.items()])) # unique
+        for ion in ions:
+            s = ion + " & "
+            for line, info in lines.items():
+                if info['ion'] == ion:
+                    s += line.split(' ')[1] + ", "
+            print(s[:-2] + r" \\")
+
+    if 0:
+        # O VI sample_localized test (sanch)
+        sim = simParams(run='tng50-1', redshift=0.1)
+        #sim = simParams(run='simba', redshift=0.138)
+        inst = 'COS-G130M' #'COS-G130M-noLSF'
+        nRaysPerDim = 300
+        raysType = 'sample_localized'
+        opts = {'ion':'O VI', 'instrument':inst, 'num':10, 'SNR':None, 'nRaysPerDim':nRaysPerDim, 'raysType':raysType}
+        opts['dv'] = True; opts['xlim'] = [-500,500]
+
+        spectra_gallery_indiv(sim, EW_minmax=[0.1, 1.5], mode='evenly', **opts)
+        spectra_gallery_indiv(sim, EW_minmax=[0.01, 0.4], mode='evenly', **opts)
+        spectra_gallery_indiv(sim, EW_minmax=[2.0, 6.0], mode='random', **opts)
 
 if __name__ == "__main__":
     paperPlots()

@@ -242,7 +242,6 @@ lines = {'HI 1215'    : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion'
 # instrument characteristics (all wavelengths in angstroms)
 # R = lambda/dlambda = c/dv
 # EW_restframe = W_obs / (1+z_abs)
-# todo: finish COS and its LSFs
 # todo: finish PFS and MIKE (confirm R, get wave grids)
 # todo: finish MOSFIRE (get wave grid from KOA)
 # todo: finish GNIRS (confirm R, get wave grids)
@@ -250,9 +249,14 @@ instruments = {'idealized'       : {'wave_min':800,   'wave_max':30000, 'dwave':
                'master'          : {'wave_min':1,     'wave_max':25000, 'dwave':0.0001, 'R':None},  # used to create master spectra (2GB per, float64 uncompressed)
                'NIRSpec'         : {'wave_min':11179, 'wave_max':11221, 'dwave':0.002,  'R':2700 }, # testing (celine) only
                'NIRSpec_inst'    : {'wave_min':11180, 'wave_max':11220, 'dwave':0.2,    'R':2700 }, # testing (celine) only
-               'COS-G130M'       : {'wave_min':1150,  'wave_max':1450,  'dwave':0.01},    # approximate
-               'COS-G140L'       : {'wave_min':1130,  'wave_max':2330,  'dwave':0.08},    # approximate
-               'COS-G160M'       : {'wave_min':1405,  'wave_max':1777,  'dwave':0.012},   # approximate
+               'COS-G130M'       : {'wave_min':892,   'wave_max':1480,  'dwave':0.00997, 'LSF_tab':'COS-G130M'}, # FUV
+               'COS-G130M-noLSF' : {'wave_min':892,   'wave_max':1480,  'dwave':0.00997, 'R':None}, # testing, no LSF convolution
+               'COS-G160M'       : {'wave_min':1374,  'wave_max':1811,  'dwave':0.01223, 'LSF_tab':'COS-G160M'}, # FUV
+               'COS-G140L'       : {'wave_min':1026,  'wave_max':2497,  'dwave':0.083, 'LSF_tab':'COS-G140L'}, # FUV
+               'COS-G185M'       : {'wave_min':1664,  'wave_max':2133,  'dwave':0.035, 'LSF_tab':'COS-NUV'},
+               'COS-G225M'       : {'wave_min':2069,  'wave_max':2523,  'dwave':0.032, 'LSF_tab':'COS-NUV'},
+               'COS-G285M'       : {'wave_min':2476,  'wave_max':3223,  'dwave':0.037, 'LSF_tab':'COS-NUV'},
+               'COS-G230L'       : {'wave_min':1349,  'wave_max':3585,  'dwave':0.19, 'LSF_tab':'COS-NUV'},
                'SDSS-BOSS'       : {'wave_min':3543,  'wave_max':10400, 'dlogwave':1e-4, 'R_tab':True}, # constant log10(dwave)=1e-4
                'DESI'            : {'wave_min':3600,  'wave_max':9824,  'dwave':0.8, 'R_tab':True},  # constant dwave (https://arxiv.org/abs/2209.14482 Sec 4.5.5)
                '4MOST-LRS'       : {'wave_min':4000,  'wave_max':8860,  'dwave':0.35, 'R_tab':True}, # approx R=5000 (for B), ~6000 (for G/R)
@@ -392,7 +396,7 @@ def lsf_matrix(instrument):
 
     inst = instruments[instrument]
     lsf_mode = 0
-    lsf = 0
+    lsf = np.zeros((1,1), dtype='float32')
     lsf_dlambda = 0
 
     # get the instrumental wavelength grid
@@ -439,14 +443,47 @@ def lsf_matrix(instrument):
         lsf = _generate_lsf_matrix(wave_mid, lsf_dlambda, dwave)
         print(f'Created LSF matrix with shape {lsf.shape} with constant FWHM = {inst["lsf_fwhm"]}.')
 
-    # todo: different analytic shapes in wavelength space
+    if 'LSF_tab' in inst:
+        # tabulated LSF (e.g. COS)
+        lsf_mode = 1
+        
+        # load from the corresponding LSF data file
+        fname = basePath + inst['LSF_tab'] + '.txt'
+        data = np.loadtxt(fname, delimiter=' ', comments='#')
 
-    # todo: discrete LSFs in pixel space (COS)
-    # download LSFs: https://www.stsci.edu/hst/instrumentation/cos/performance/spectral-resolution
-    # tutorial: https://github.com/spacetelescope/notebooks/blob/master/notebooks/COS/LSF/LSF.ipynb
-    # need to handle cubic-polynomial dispersion coefficient table (i.e. pixel num -> wavelength mapping), disptab
-    # https://hst-docs.stsci.edu/cosdhb/chapter-3-cos-calibration/3-7-reference-files#id-3.7ReferenceFiles-3.7.11DISPTAB:DispersionCoefficientTable
-    # https://github.com/sheliak/varconvolve
+        lsf_wave = data[:,0]
+        lsf_tab = data[:,1:]
+
+        # generate LSF matrix, each wavelength gets the closest sampled tabulated LSF
+        kernel_size = lsf_tab.shape[1]
+        lsf = np.zeros((wave_mid.size,kernel_size), dtype='float32')
+
+        for i in range(wave_mid.size):
+            # find the closest tabulated LSF
+            ind = np.argmin(np.abs(lsf_wave - wave_mid[i]))
+            lsf[i] = lsf_tab[ind]
+
+        # calculate fwhm (discrete)
+        lsf_dlambda = np.zeros(lsf_wave.size, dtype='float32')
+
+        for i in range(lsf_wave.size):
+            start_ind = int(np.floor(kernel_size / 2))
+            max_val = lsf_tab[i,:].max() # lsf_tab[i,start_ind]
+            for j in range(1, start_ind):
+                if lsf_tab[i,start_ind+j] < max_val/2:
+                    break
+
+            lsf_dlambda[i] = j * 2 * dwave[0] # dwave is const
+
+            # try interp
+            xp = lsf_tab[i,start_ind:][::-1]
+            yp = np.arange(start_ind + 1)[::-1]
+            lsf_dlambda[i] = np.interp(max_val/2, xp, yp) * 2 * dwave[0]
+
+        # interpoalte fwhm onto the wavelength grid
+        lsf_dlambda = np.interp(wave_mid, lsf_wave, lsf_dlambda)
+
+        print(f'Created LSF matrix with shape {lsf.shape} from [{fname}].')
 
     if lsf_mode == 0:
         print('WARNING: No LSF smoothing specified for [%s], will not be applied.' % instrument)
@@ -951,8 +988,8 @@ def create_spectra_from_traced_rays(sP, line, instrument,
     f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
 
     # assign sP.redshift to the front intersection (beginning) of the box
-    z_vals = np.linspace(sP.redshift, sP.redshift+0.1, 200)
-    assert sP.boxSize < 40000, 'Increase 0.1 factor above for boxes larger than TNG50.'
+    z_vals = np.linspace(sP.redshift, sP.redshift+0.2, 400)
+    assert sP.boxSize <= 100000, 'Increase 0.2 factor above for boxes larger than TNG100.'
 
     z_lengths = sP.units.redshiftToComovingDist(z_vals) - sP.units.redshiftToComovingDist(sP.redshift)
 
@@ -1065,6 +1102,8 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
     # check existence
     if isfile(path):
         print('Loading [%s].' % path)
+
+        # TODO: if subhaloIDs is not None, verify consistent with existing file
 
         if integrateQuant is not None:
             with h5py.File(path, 'r') as f:
@@ -1354,7 +1393,8 @@ def _spectra_filepath(sim, ion, projAxis=projAxis_def, nRaysPerDim=nRaysPerDim_d
       ion (str): space separated species name and ionic number e.g. 'Mg II'.
       projAxis (int): either 0, 1, or 2. only axis-aligned allowed for now.
       nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
-      raysType (str): either 'voronoi_fullbox' (equally spaced) or 'voronoi_rndfullbox' (random).
+      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or 
+        'sample_localized' (distributed around a given set of subhalos).
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
       pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
         that we follow a spatial subdivision, so the total job number should be an integer squared.
@@ -1419,6 +1459,9 @@ def integrate_along_saved_rays(sP, field, nRaysPerDim=nRaysPerDim_def, raysType=
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
       field (str): any available gas field.
+      nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
+      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or 
+        'sample_localized' (distributed around a given set of subhalos).
       pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
         that we follow a spatial subdivision, so the total job number should be an integer squared.
     """
@@ -1469,7 +1512,7 @@ def integrate_along_saved_rays(sP, field, nRaysPerDim=nRaysPerDim_def, raysType=
 
     return result
 
-def concat_integrals(sP, field):
+def concat_integrals(sP, field, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def):
     """ Combine split files for line-of-sight quantity integrals into a single file.
 
     Args:
@@ -1477,8 +1520,8 @@ def concat_integrals(sP, field):
       field (str): any available gas field.
     """
     # search for chunks
-    loadFilename = _spectra_filepath(sP, ion=field, pSplit='*')
-    saveFilename = _spectra_filepath(sP, ion=field, pSplit=None)
+    loadFilename = _spectra_filepath(sP, ion=field, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit='*')
+    saveFilename = _spectra_filepath(sP, ion=field, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=None)
 
     pSplitNum = len([f for f in glob.glob(loadFilename) if '_combined' not in f])
     assert pSplitNum > 0, 'Error: No split spectra files found.'
@@ -1488,7 +1531,7 @@ def concat_integrals(sP, field):
     count = 0
 
     for i in range(pSplitNum):
-        filename = _spectra_filepath(sP, ion=field, pSplit=[i,pSplitNum])
+        filename = _spectra_filepath(sP, ion=field, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=[i,pSplitNum])
 
         with h5py.File(filename,'r') as f:
             # first file: load number of spectra per chunk file, master wavelength grid, and other metadata
@@ -1535,19 +1578,26 @@ def concat_integrals(sP, field):
     print('Saved: [%s]' % saveFilename)
 
     # remove split files
+    if raysType == 'sample_localized':
+        return # likely want to keep them (per-halo)
+    
     for i in range(pSplitNum):
-        filename = _spectra_filepath(sP, ion=field, pSplit=[i,pSplitNum])
+        filename = _spectra_filepath(sP, ion=field, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=[i,pSplitNum])
         unlink(filename)
 
     print('Split files removed.')
 
-def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', pSplit=None, solar=False):
+def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nRaysPerDim=nRaysPerDim_def, 
+                                     raysType=raysType_def, subhaloIDs=None, pSplit=None, solar=False):
     """ Generate a large number of spectra, based on already computed and saved rays.
 
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
       ion (str): space separated species name and ionic number e.g. 'Mg II'.
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
+      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or 
+        'sample_localized' (distributed around a given set of subhalos).
       pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
         that we follow a spatial subdivision, so the total job number should be an integer squared.
       solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
@@ -1572,8 +1622,8 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', pS
         lineNames.append(line)
 
     # save file
-    saveFilename = _spectra_filepath(sP, ion, instrument=instrument, pSplit=pSplit, solar=solar)
-    saveFilenameConcat = _spectra_filepath(sP, ion, instrument=instrument, pSplit=None, solar=solar)
+    saveFilename = _spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=pSplit, solar=solar)
+    saveFilenameConcat = _spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=None, solar=solar)
 
     # does save already exist, with all lines done?
     existing_lines = []
@@ -1594,7 +1644,8 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', pS
 
     # load rays
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
-      generate_rays_voronoi_fullbox(sP, pSplit=pSplit)
+      generate_rays_voronoi_fullbox(sP, nRaysPerDim=nRaysPerDim, raysType=raysType, 
+                                    subhaloIDs=subhaloIDs, pSplit=pSplit)
 
     # load required gas cell properties
     projAxis = list(ray_dir).index(1)
@@ -1667,21 +1718,25 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', pS
 
     print(f'Saved: [{saveFilename}]')
 
-def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
+def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPerDim_def, 
+                   raysType=raysType_def, solar=False):
     """ Combine split files for spectra into a single file.
 
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
       ion (str): space separated species name and ionic number e.g. 'Mg II'.
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
+      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or 
+        'sample_localized' (distributed around a given set of subhalos).
       solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
         use the (constant) solar value.
     """
     # search for chunks
     lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
 
-    loadFilename = _spectra_filepath(sP, ion, instrument=instrument, pSplit='*', solar=solar)
-    saveFilename = _spectra_filepath(sP, ion, instrument=instrument, pSplit=None, solar=solar)
+    loadFilename = _spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit='*', solar=solar)
+    saveFilename = _spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=None, solar=solar)
 
     pSplitNum = len([f for f in glob.glob(loadFilename) if '_combined' not in f])
     assert pSplitNum > 0, 'Error: No split spectra files found.'
@@ -1691,7 +1746,7 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
     count = 0
 
     for i in range(pSplitNum):
-        filename = _spectra_filepath(sP, ion, instrument=instrument, pSplit=[i,pSplitNum], solar=solar)
+        filename = _spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=[i,pSplitNum], solar=solar)
 
         with h5py.File(filename,'r') as f:
             # first file: load number of spectra per chunk file, master wavelength grid, and other metadata
@@ -1777,7 +1832,7 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
 
         # load
         for i in range(pSplitNum):
-            filename = _spectra_filepath(sP, ion, instrument=instrument, pSplit=[i,pSplitNum], solar=solar)
+            filename = _spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=[i,pSplitNum], solar=solar)
             print(i, end=' ', flush=True)
 
             with h5py.File(filename,'r') as f_read:
@@ -1792,8 +1847,11 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', solar=False):
     print('Saved: [%s]' % saveFilename)
 
     # remove split files
+    if raysType == 'sample_localized':
+        return # likely want to keep them (per-halo)
+    
     for i in range(pSplitNum):
-        filename = _spectra_filepath(sP, ion, instrument=instrument, pSplit=[i,pSplitNum], solar=solar)
+        filename = _spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=[i,pSplitNum], solar=solar)
         unlink(filename)
 
     print('Split files removed.')

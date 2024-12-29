@@ -12,7 +12,7 @@ from os.path import isfile
 from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_filepath, \
                              lsf_matrix, varconvolve, _resample_spectrum, \
                              integrate_along_saved_rays, create_wavelength_grid, deposit_single_line, \
-                             lines, instruments
+                             lines, instruments, projAxis_def, nRaysPerDim_def, raysType_def
 from ..cosmo.spectrum_analysis import absorber_catalog, load_spectra_subset
 from ..util.helper import sampleColorTable, logZeroNaN
 from ..util import units
@@ -401,7 +401,8 @@ def instrument_lsf(instrument):
 
     for ax in axes[0:2]:
         ax.set_xlabel('Pixel Number')
-        ax.set_xticks(xx)
+        if lsf_size < 100:
+            ax.set_xticks(xx)
         ax.set_ylabel(f'{instrument} LSF')
 
         # first and second panels are identical, except second is y-log
@@ -431,8 +432,213 @@ def instrument_lsf(instrument):
     fig.savefig('lsf_%s.pdf' % instrument)
     plt.close(fig)
 
-def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0.1,1.0], 
-                          num=10, mode='random', inds=None, style='offset', 
+def cos_disptab():
+    """ Handle DISPTAB files, wavelength grids, and LSF files for HST-COS (pre-processing step). """
+    import glob
+    from astropy.io import fits
+    from ..util.helper import rootPath
+
+    basePath = rootPath + "tables/hst/"
+
+    files = glob.glob(basePath + '*.fits')
+
+    # https://spacetelescope.github.io/hst_notebooks/notebooks/COS/LSF/LSF.html
+    # https://www.stsci.edu/hst/instrumentation/cos/performance/spectral-resolution
+    # https://hst-docs.stsci.edu/cosihb/chapter-5-spectroscopy-with-cos/5-5-spanning-the-gap-with-multiple-cenwave-settings#id-5.5SpanningtheGapwithMultipleCENWAVESettings-Table5.3
+
+    aperture = 'PSA'
+
+    # NUV: have G185M from 1760-2127, (15 cenwave settings) 1664.2-2132.3 (0.035 spacing)
+    #           G225M from 2070-2527, (13 cenwave settings) 2069.8-2523.0 (0.032 spacing)
+    #           G285M from 2480-3229, (17 cenwave settings) 2476.4-3222.9 (0.037 spacing)
+    #           G230L from 1334-3560 (four cenwave settings) 1349.9-3585.0 (0.19 spacing)
+    # segments: A, B, and C
+    # 63p1559jl_disp.fits is the only NUV disptab, the rest are all FUV
+
+    # FUV: HSLA unifies G130M 892.5-1479.7 (0.00997 constant spacing), (8 cenwaves)
+    #           unifies G160M 1374.5-1810.3 (0.01223 constant spacing), (6 cenwaves)
+    #           unifies G140L 1026.8-2496.2 (0.083 constant spacing) (3 cenwaves)
+    # segments: A and B
+
+    # load all disptabs and print statistics
+    # note: LIFE_ADJ == LP (wavelength grids are the same)
+    for file in files:
+        # load
+        dtab = {}
+        with fits.open(file) as f:
+            for key in [col.name for col in f[1].data.columns]:
+                dtab[key] = f[1].data[key]
+
+        # gratings
+        gratings = np.unique(dtab['OPT_ELEM'])
+        gratings_minwave = {g:np.inf for g in gratings}
+        gratings_maxwave = {g:0.0 for g in gratings}
+        gratings_mindisp = {g:np.inf for g in gratings}
+        gratings_maxdisp = {g:0.0 for g in gratings}
+
+        # unique entries
+        cenwaves = np.unique(dtab['CENWAVE'])
+        segments = np.unique(dtab['SEGMENT'])
+
+        for cenwave in cenwaves:
+            for segment in segments:
+                index = np.where((dtab['CENWAVE'] == cenwave) & (dtab['SEGMENT'] == segment) & (dtab['APERTURE'] == aperture))[0]
+
+                if len(index) == 0:
+                    print(file,grating,cenwave,'SKIP')
+                    continue
+
+                grating = dtab['OPT_ELEM'][index][0]
+
+                coeffs = dtab['COEFF'][index][0]
+                coeffs = coeffs[::-1]
+
+                #d_tv03 = dtab['D_TV03'][index]  # Offset from WCA to PSA in Thermal Vac. 2003 data
+                #d_orbit = dtab['D'][index]  # Current offset from WCA to PSA
+                #delta_d = d_tv03 - d_orbit
+                
+                # pixel indices for a given detector
+                if 'NUV' in segment:
+                    pixel_inds = np.arange(1024)
+                if 'FUV' in segment:
+                    pixel_inds = np.arange(16384)
+
+                # sample polynomial mapping from pixel number to wavelength
+                # w = p[0]*x**3 + p[1]*x**2 + p[2]*x + p[3]
+                # and p[0] ~ 0.0, [1] ~ 0.0, such that p[2] is the constant ang per pixel, p[3] is the zeropoint
+                wave = np.polyval(p=coeffs, x=pixel_inds)
+
+                #print(file,grating,cenwave,segment,coeffs,wave.min(),wave.max())
+
+                if wave.min() < gratings_minwave[grating]:
+                    gratings_minwave[grating] = wave.min()
+                if wave.max() > gratings_maxwave[grating]:
+                    gratings_maxwave[grating] = wave.max()
+
+                disp = coeffs[2]
+                if disp < gratings_mindisp[grating]:
+                    gratings_mindisp[grating] = disp
+                if disp > gratings_maxdisp[grating]:
+                    gratings_maxdisp[grating] = disp
+
+        for grating in gratings:
+            print(grating, gratings_minwave[grating], gratings_maxwave[grating],
+                           gratings_mindisp[grating], gratings_maxdisp[grating])
+
+    # note: different cenwave settings sample the LSF at overlapping wavelengths
+    # switch as soon as possible in ascending cenwave order
+    inst_maxwaves = {'G130M_1055_LP2':940, 
+                     'G130M_1096_LP2':1067, 
+                     'G130M_1222_LP4':1134,
+                     'G130M_1291_LP4':1144,
+                     'G130M_1300_LP4':1154,
+                     'G130M_1309_LP4':1163,
+                     'G130M_1318_LP4':1172,
+                     'G130M_1327_LP4':np.inf,
+                     'G160M_1533_LP4':1386,
+                     'G160M_1577_LP4':1397,
+                     'G160M_1589_LP4':1409,
+                     'G160M_1600_LP4':1420,
+                     'G160M_1611_LP4':1432,
+                     'G160M_1623_LP4':np.inf,
+                     'G140L_0800_LP4':1118,
+                     'G140L_1105_LP4':1293,
+                     'G140L_1280_LP4':np.inf}
+    
+    save_lsf_waves = {g:[] for g in gratings}
+    save_lsfs = {g:[] for g in gratings}
+
+    # load LSFs (LP4 era for all except G130M at 1055 and 1096 which are LP2) and plot
+    for grating in gratings:
+        files = sorted(glob.glob(basePath + 'aa_LSFTable_%s_*_cn.dat' % grating))
+
+        for file in files:
+            # read
+            with open(file, 'r') as f:
+                lines = f.readlines()
+
+            # wavelengths where the LSFs are sampled, and the size (number of pixels) of each
+            lsf_samples = np.array([float(wave) for wave in lines[0].split(" ")], dtype='float32')
+            npx = len(lines) - 1
+
+            lsfs = np.zeros((lsf_samples.size, npx), dtype='float32')
+
+            instrument = file.split('LSFTable_')[1].split('_cn.dat')[0]
+            print(instrument, lsfs.shape, lsf_samples.min(), lsf_samples.max())
+            
+            for i, line in enumerate(lines[1:]):
+                lsfs[:,i] = np.array(line.split(" "), dtype='float32')
+
+            # plot
+            fig, ax = plt.subplots(figsize=figsize)
+
+            ax.set_xlabel('Pixel Number')
+            ax.set_ylabel('%s LSF' % instrument)
+            ax.set_xlim([0, npx])
+            ax.set_ylim([5e-6, 1e-1])
+            ax.set_yscale('log')
+
+            stride = lsfs.shape[0] // 8
+            for i in np.arange(lsfs.shape[0])[::stride]:
+                xx = np.arange(npx) # number of pixels in each LSF
+                ax.plot(xx, lsfs[i,:], '-', lw=lw, label=r'%d $\AA$' % lsf_samples[i])
+
+            ax.legend(loc='best')
+            fig.savefig('lsf_%s.pdf' % instrument)
+            plt.close(fig)
+
+            # save subset of LSFs into master set (for this grating)
+            for i, wave in enumerate(lsf_samples):
+                if wave > inst_maxwaves[instrument]:
+                    break
+                if instrument == 'G140L_1280_LP4' and wave < inst_maxwaves['G140L_1105_LP4']:
+                    continue
+
+                save_lsf_waves[grating].append(wave)
+                save_lsfs[grating].append(lsfs[i,:])
+
+    # LSFs are in pixel coordinates, leave as is (do not convert to wavelength space)
+    # the cenwave dependence of the disptab solution is not important (constant) for FUV
+    # while it is more important for NUV, but for NUV we anyways have only a single LSF file
+    # that is independent of cenwave and even grating
+    for grating in gratings:
+        save_lsf_waves[grating] = np.array(save_lsf_waves[grating])
+
+        # save
+        saveFilename = f'COS-{grating}.txt'
+        with open(saveFilename,'w') as f:
+            for i, wave in enumerate(save_lsf_waves[grating]):
+                line = '%.1f' % wave
+                for j in range(save_lsfs[grating][i].size):
+                    line += ' %.6e' % save_lsfs[grating][i][j]
+                f.write(line + '\n')
+
+        print('Saved: [%s].' % saveFilename)
+
+    # rewrite NUV into same format
+    file = basePath + 'nuv_model_lsf.dat'
+
+    with open(file, 'r') as f:
+        lines = f.readlines()
+
+    lsf_samples = np.array([float(wave) for wave in lines[0].split(" ")], dtype='float32')
+    lsfs = np.zeros((lsf_samples.size, len(lines) - 1), dtype='float32')
+    
+    for i, line in enumerate(lines[1:]):
+        lsfs[:,i] = np.array(line.split(" "), dtype='float32')
+
+    saveFilename = 'COS-NUV.txt'
+    with open(saveFilename,'w') as f:
+        for i, wave in enumerate(lsf_samples):
+            line = '%.1f' % wave
+            for j in range(lsfs[i,:].size):
+                line += ' %.6e' % lsfs[i,j]
+            f.write(line + '\n')
+        
+    print('Saved: [%s].' % saveFilename)
+
+def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', nRaysPerDim=nRaysPerDim_def, raysType=raysType_def, 
+                          EW_minmax=[0.1,1.0], num=10, mode='random', inds=None, style='offset', 
                           solar=False, SNR=None, dv=False, xlim=None):
     """ Plot a gallery of individual absorption profiles within a given EW range.
 
@@ -440,6 +646,8 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
       sim (:py:class:`~util.simParams`): simulation instance.
       ion (str): space separated species name and ionic number e.g. 'Mg II'.
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
+      raysType (str): either 'voronoi_fullbox' (equally spaced) or 'voronoi_rndfullbox' (random).
       EW_minmax (list[float]): minimum and maximum EW to plot [Ang].
       num (int): how many individual spectra to show.
       mode (str): either 'random', 'evenly', or 'inds'.
@@ -466,7 +674,9 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         print(f'Increaing {dv_window = } to {xlim[1]} km/s to cover requested xlim.')
         dv_window = xlim[1]
 
-    wave, flux, EW, N, lineNames = load_spectra_subset(sim, ion, instrument, solar, mode, num, EW_minmax, dv=dv_window if dv else 0.0)
+    wave, flux, EW, N, lineNames = load_spectra_subset(sim, ion, instrument, solar, mode, 
+                                                       nRaysPerDim=nRaysPerDim, raysType=raysType,
+                                                       num=num, EW_minmax=EW_minmax, dv=dv_window if dv else 0.0)
 
     # how many lines do we have? what is their span in wavelength?
     lines_wavemin = 0
@@ -495,7 +705,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         # automatic
         xlim = [np.inf, -np.inf]
 
-        for i in range(num):
+        for i in range(flux.shape[0]):
             w = np.where(flux[i,:] < 0.99)[0]
             if len(w) == 0:
                 continue
@@ -507,8 +717,8 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
             if xx_max > xlim[1]: xlim[1] = xx_max
 
         dx = (xlim[1] - xlim[0]) * 0.01
-        xlim[0] = np.floor((xlim[0]-dx)/10) * 10
-        xlim[1] = np.ceil((xlim[1]+dx)/10) * 10
+        xlim[0] = np.floor((xlim[0]-dx)/5) * 5
+        xlim[1] = np.ceil((xlim[1]+dx)/5) * 5
 
     if dv:
         # symmetrize
@@ -545,7 +755,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', EW_minmax=[0
         ax.set_yticks(np.arange(num+1)*spacingFac)
         ax.set_yticklabels(['%d' % i for i in range(num+1)])
 
-        for i in range(num):
+        for i in range(flux.shape[0]):
             # vertical offset by 1.0 for each spectrum
             y_offset = (i+1)*spacingFac - 1
 
