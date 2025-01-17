@@ -19,21 +19,35 @@ def magicCGMEmissionMaps(single=False, subhaloID=None):
     from os import path
     import hashlib
 
-    sP = simParams(run='tng50-1',redshift=0.3)
+    sP = simParams(run='tng50-1',redshift=0.5)
 
-    lines = ['H--1-1215.67A','H--1-1025.72A','C--4-1550.78A','C--4-1548.19A',
-             'O--6-1037.62A','O--6-1031.91A','C--3-977.020A','He-2-1640.43A']
-    #lines = ['Si-4-1393.75A','Si-4-1402.77A','Blnd-2798.00A']
+    lines = ['O--6-1037.62A',
+             'O--6-1031.91A',
+             'Si-2-1808.01A',
+             'Si-2-1526.71A',
+             'Si-3-1206.50A',
+             'H--1-1215.67A',
+             'H--1-1025.72A',
+             'C--3-977.020A',
+             'Si-4-1393.75A',
+             'Si-4-1402.77A',
+             'C--4-1550.78A',
+             'C--4-1548.19A',
+             'He-2-1640.43A',
+             'N--5-1238.82A',
+             'N--5-1242.80A']
 
-    massBins = [ [8.48,8.52], [8.97,9.03], [9.45,9.55], [9.97, 10.03], [10.4,10.6], [10.8,11.2] ]
-    distRvir = True
+    #massBins = [ [8.48,8.52], [8.97,9.03], [9.45,9.55], [9.97, 10.03], [10.4,10.6], [10.8,11.2] ]
+    massBins = [ [9.9, 10.1] ]
 
     # grid config (must recompute grids)
-    method    = 'sphMap' #'sphMap_global'
+    method    = 'sphMap_global'
     nPixels   = [800,800]
     axes      = [0,1] # random rotation
-    size      = 400.0 #1000.0
+    size      = 300.0 #1000.0
     sizeType  = 'kpc'
+
+    sP.createCloudyCache = True if '_global' in method else False
 
     if not single: # stack config
         partField = 'sb_' + lines[-1] + '_ergs'
@@ -49,8 +63,17 @@ def magicCGMEmissionMaps(single=False, subhaloID=None):
 
     panels = [{'partType':'gas'}]
 
+    # global pre-cache (to disk) of photoionization calculations
+    if 1:
+        for line in lines:
+            lineName = line.replace('-',' ')
+            print('Caching [%s] now...' % lineName, flush=True)
+            x = sP.snapshotSubset('gas', '%s flux' % lineName, indRange=[0,10])
+
     # load
     gc = sP.subhalos(['mstar_30pkpc_log','central_flag','rhalo_200_code','SubhaloPos'])
+
+    import pdb; pdb.set_trace()
 
     # global pre-cache of selected fields into memory
     if 0:
@@ -189,7 +212,7 @@ def magicCGMEmissionMaps(single=False, subhaloID=None):
         p = {'grid':stacks[i]['grid'],
              'labelZ':True if i == len(massBins)-1 else False,
              'subhaloInd':stacks[i]['sub_inds'][int(len(stacks[i]['sub_inds'])/2)],
-             'title':'log M$_{\\rm \star}$ = %.1f M$_\odot$' % np.mean(massBin)}
+             'title':r'log M$_{\\rm \star}$ = %.1f M$_\odot$' % np.mean(massBin)}
 
         panels.append(p)
 
@@ -230,3 +253,201 @@ def magicCGMEmissionTrends():
                                 xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                                 scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                                 maxPointsPerDex=maxPointsPerDex, legendLoc='upper left', pdf=None)
+
+def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
+    """ Hubble MST Proposal 2024 of Kate Rubin, and MAGIC-2 proposal. """
+    from ..vis.common import _get_dist_theta_grid
+    from ..vis.halo import subsampleRandomSubhalos
+
+    #sim = simParams(simname, redshift=0.36) # MCT
+    sim = simParams(simname, redshift=0.5) # MAGIC-2
+
+    # grid config
+    method    = 'sphMap' # sphMap_global
+    nPixels   = [1000,1000]
+    axes      = [0,1]
+    size      = 300.0 # 35 arcsec @ z=0.36 (SBC field of view is 35"x31")
+    sizeType  = 'kpc'
+
+    sim.createCloudyCache = True if '_global' in method else False
+
+    # config
+    #fields = ['sb_OVI_ergs','sb_O--6-1037.62A_ergs','sb_CIII_ergs'] # MCT
+    fields = ['sb_O--6-1037.62A_ergs',
+              'sb_O--6-1031.91A_ergs',
+              'sb_Si-2-1808.01A_ergs',
+              'sb_Si-2-1526.71A_ergs',
+              'sb_Si-3-1206.50A_ergs',
+              'sb_H--1-1215.67A_ergs',
+              'sb_H--1-1025.72A_ergs',
+              'sb_C--3-977.020A_ergs',
+              'sb_Si-4-1393.75A_ergs',
+              'sb_Si-4-1402.77A_ergs',
+              'sb_C--4-1550.78A_ergs',
+              'sb_C--4-1548.19A_ergs',
+              'sb_He-2-1640.43A_ergs',
+              'sb_N--5-1238.82A_ergs',
+              'sb_N--5-1242.80A_ergs'] # MAGIC-2
+    percs = [25,50,75]
+    distBins = [[20,30], [45,55]] # pkpc
+
+    # sample
+    mstar_min = 9.0
+    mstar_max = 11.5
+    num_per_dex = 100
+
+    subInds, mstar = subsampleRandomSubhalos(sim, num_per_dex, [mstar_min,mstar_max], cenOnly=True)
+
+    dist, _ = _get_dist_theta_grid(size, nPixels)
+    
+    # check for existence of cache
+    grids = {}
+    sb_percs = {}
+    cacheFile = sim.derivPath + 'cache/magic2_grids_z05.hdf5' # hstmst_grids.hdf5
+
+    if isfile(cacheFile):
+        # load cached result
+        with h5py.File(cacheFile,'r') as f:
+            for field in fields:
+                grids[field] = f[field][()]
+            for key in f['sb_percs']:
+                sb_percs[key] = f['sb_percs/%s' % key][()]
+
+            assert np.array_equal(subInds, f['subInds'][()])
+            assert np.array_equal(percs, f['percs'][()])
+            assert np.array_equal(distBins, f['distBins'][()])
+        print('Loaded: [%s]' % cacheFile)
+    else:
+        # compute now: allocate
+        for field in fields:
+            grids[field] = np.zeros((nPixels[0],nPixels[1],len(subInds)), dtype='float32')
+            sb_percs[field] = np.zeros((len(subInds),len(distBins),len(percs)), dtype='float32')
+
+        #sb_percs['OVI'] = np.zeros((len(subInds),len(distBins),len(percs)), dtype='float32')
+        #sb_percs['CIII'] = np.zeros((len(subInds),len(distBins),len(percs)), dtype='float32')
+
+        # loop over subhalos
+        class plotConfig:
+            saveFilename = 'dummy'
+
+        for i, subhaloInd in enumerate(subInds):
+            print(f'[{i:3d}] of [{len(subInds):3d}] {subhaloInd = }', flush=True)
+
+            for field in fields:
+                # project
+                sP = sim
+                panels = [{'partType':'gas', 'partField':field}]
+                grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+
+                # stamp
+                grids[field][:,:,i] = grid
+
+            # compute statistics
+            for j, distBin in enumerate(distBins):
+                # pixels in this annulus
+                w = np.where((dist >= distBin[0]) & (dist < distBin[1]))
+
+                # MCST: OVI doublet map and CIII map separately
+                #OVI_map = np.log10(10.0**grids['sb_OVI_ergs'][:,:,i] + 10.0**grids['sb_O--6-1037.62A_ergs'][:,:,i])
+                #CIII_map = grids['sb_CIII_ergs'][:,:,i]
+
+                #sb_percs['OVI'][i,j,:] = np.percentile(OVI_map[w], percs)
+                #sb_percs['CIII'][i,j,:] = np.percentile(CIII_map[w], percs)
+
+                # MAGIC-2
+                for field in fields:
+                    loc_grid = np.squeeze(grids[field][:,:,i])
+                    sb_percs[field][i,j,:] = np.percentile(loc_grid[w], percs)
+
+        # save cache
+        with h5py.File(cacheFile,'w') as f:
+            for field in fields:
+                f[field] = grids[field]
+            for key in sb_percs.keys():
+                f['sb_percs/%s' % key] = sb_percs[key]
+            f['subInds'] = subInds
+            f['percs'] = percs
+            f['distBins'] = distBins
+
+        print('Saved: [%s]' % cacheFile)
+
+    # write text file
+    with open('magic2_SBs_annuli_vs_mstar.txt','w') as f:
+        f.write('# %s z = %.1f\n' % (sim.name,sim.redshift))
+        f.write('# fields: %s\n' % ', '.join([f.replace('sb_','').replace('_ergs','') for f in fields]))
+        f.write('# distance bins [pkpc]: %s\n' % distBins)
+        f.write('# percentiles: %s\n' % percs)
+        f.write('# columns: subhaloInd mstar SBs\n')
+        f.write('# note that "SBs" are ordered by field, distance bin, and then percentile (each line has 6 entries in a row).\n')
+
+        for i, subhaloInd in enumerate(subInds):
+            s = '%6d %6.2f' % (subhaloInd, mstar[i])
+            for field in fields:
+                for j, distBin in enumerate(distBins):
+                    for k, perc in enumerate(percs):
+                        s += ' %.2f' % sb_percs[field][i,j,k]
+            f.write(s + '\n')
+
+    # MAGIC-2: multiple axes, grouping SBs by species
+    species = list(set([line.replace('sb_','').split('-',1)[0] for line in fields]))
+    nrows = int(np.sqrt(len(species)))
+    ncols = int(np.ceil(len(species) / nrows))
+
+    for i, distBin in enumerate(distBins):
+
+        # start figure
+        #fig, ax = plt.subplots(figsize=figsize) # MCST
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(figsize[0]*nrows,figsize[1]*ncols)) # MAGIC-2
+
+        for species_name, ax in zip(species,axes.flatten()): # MAGIC-2
+
+            ax.set_xlabel(r'Galaxy Stellar Mass [ log M$_\odot$ ]')
+            ax.set_ylabel(r'Surface Brightness [ log erg/s/cm$^2$/arcsec$^2$ ]')
+            ax.set_xlim([mstar_min,mstar_max])
+            ax.set_ylim([-24.5, -17])
+
+            if cQuant is not None:
+                #c_vals = sim.subhalos(cQuant)[subInds]
+                sim_cvals, clabel, cMinMax, cLog = sim.simSubhaloQuantity(cQuant, clean)
+                sim_cvals = sim_cvals[subInds]
+                if cLog: sim_cvals = logZeroNaN(sim_cvals)
+                clim = None
+                cmap = 'inferno'
+                cMinMax = cMinMax if clim is None else clim
+
+            # plot
+            count = 0
+
+            #for i, distBin in enumerate(distBins):
+            #for line, label in zip(['OVI','CIII'], ['OVI 1032+1038','CIII 977']): # MCST
+            for line in sb_percs.keys(): # MAGIC-2
+                if species_name+'-' not in line: # MAGIC-2
+                    continue # MAGIC-2
+
+                label = line.replace('sb_','').replace('_ergs','').replace('-',' ').replace('A',r'$\AA$')
+                y_mid = sb_percs[line][:,i,1]
+                y_err_lo = sb_percs[line][:,i,1] - sb_percs[line][:,i,0]
+                y_err_hi = sb_percs[line][:,i,2] - sb_percs[line][:,i,1]
+
+                label_loc = r'%s (%d$\pm$%d kpc)' % (label,np.mean(distBin),(distBin[1]-distBin[0])/2)
+                if cQuant is None:
+                    ax.errorbar(mstar, y_mid, yerr=[y_err_lo, y_err_hi], fmt='o', label=label_loc)
+                else:
+                    opts = {'vmin':cMinMax[0], 'vmax':cMinMax[1], 'c':sim_cvals, 'cmap':cmap, 'marker':markers[count]}
+                    sc = ax.scatter(mstar, y_mid, label=label_loc, **opts)
+                    count += 1
+
+            # finish and save plot
+            legend = ax.legend(loc='upper left', title=f'{sim.simName} z = {sim.redshift:.2f}')
+            legend._legend_box.align = "left"
+
+            if cQuant is not None:
+                cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+                cb = plt.colorbar(sc, cax=cax)
+                cb.set_alpha(1) # fix stripes
+                cb.draw_all()
+                cb.ax.set_ylabel(clabel)
+
+        fig.savefig('magic2_SBs_annuli_vs_mstar_%s_%dkpc.pdf' % (sim.simName,np.mean(distBin))) # 'mst_OVI_CIII_annuli_vs_mstar_%s.pdf'
+        plt.close(fig)
+        

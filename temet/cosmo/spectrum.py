@@ -17,13 +17,13 @@ from ..util.helper import closest, pSplitRange
 from ..util.voronoiRay import rayTrace
 
 # default configuration for ray generation
-projAxis_def = 2
-nRaysPerDim_def = 2000 # 10000 for frm_los
-raysType_def = 'voronoi_rndfullbox'
-
 #projAxis_def = 2
-#nRaysPerDim_def = 1000
-#raysType_def = 'voronoi_fullbox'
+#nRaysPerDim_def = 2000 # 10000 for frm_los
+#raysType_def = 'voronoi_rndfullbox'
+
+projAxis_def = 2
+nRaysPerDim_def = 1000
+raysType_def = 'voronoi_fullbox'
 
 # line data (e.g. AtomDB), name is ion plus wavelength in ang rounded down
 # (and Verner+96 https://www.pa.uky.edu/~verner/lines.html)
