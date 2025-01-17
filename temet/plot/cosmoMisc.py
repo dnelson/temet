@@ -14,7 +14,7 @@ from scipy.stats import binned_statistic
 
 from .cosmoGeneral import addRedshiftAxis
 from ..cosmo.util import snapNumToRedshift
-from ..util import simParams
+from ..util.simParams import simParams
 from ..util.helper import running_median, logZeroNaN, loadColorTable
 from ..plot.config import *
 
@@ -90,8 +90,8 @@ def plotMassFunctions():
 
         ax = fig.add_subplot(1,len(mass_ranges),j+1)
         ax.set_xlim(mass_range)
-        if j == 0: ax.set_xlabel('Halo Mass [ M$_{\\rm 200,crit}$  log M$_\odot$ ]')
-        if j == 1: ax.set_xlabel('Stellar Mass [ M$_\star(<2r_{\\rm 1/2,stars})$  centrals  log M$_\odot$ ]')
+        if j == 0: ax.set_xlabel(r'Halo Mass [ M$_{\\rm 200,crit}$  log M$_\odot$ ]')
+        if j == 1: ax.set_xlabel(r'Stellar Mass [ M$_\star(<2r_{\\rm 1/2,stars})$  centrals  log M$_\odot$ ]')
         ax.set_ylabel('N$_{\\rm bin=%.1f}$' % binSize)
         ax.set_xticks(np.arange(np.int32(mass_range[0]),np.int32(mass_range[1])+1))
         ax.set_yscale('log')
@@ -241,12 +241,12 @@ def simClustersComparison(masslimit='15'):
     ax.set_xscale('log')
     ax.set_yscale('log')
 
-    ax.set_ylabel('Baryon Mass Resolution [ M$_{\odot}$ ]')
-    ax.set_xlabel('Number of Massive Clusters ($M_{\\rm halo} \geq 10^{%s}$ M$_{\odot}$)' % masslimit)
+    ax.set_ylabel(r'Baryon Mass Resolution [ M$_{\odot}$ ]')
+    ax.set_xlabel(r'Number of Massive Clusters ($M_{\\rm halo} \geq 10^{%s}$ M$_{\odot}$)' % masslimit)
 
     # set simulation data (N_cl criterion: Mhalo > {1e14,1e14.5,1e15} at z=0)
     boxes = [{'name':'TNG50',                  'N_14':2,   'N_14.5':0,   'N_15':0,   'm_gas':8.0e4, 'Lbox_cMpch':35},
-             {'name':'TNG100$\,/\,$Illustris', 'N_14':14,  'N_14.5':3,   'N_15':0,   'm_gas':1.4e6, 'Lbox_cMpch':75},
+             {'name':r'TNG100$\,/\,$Illustris', 'N_14':14,  'N_14.5':3,   'N_15':0,   'm_gas':1.4e6, 'Lbox_cMpch':75},
              {'name':'TNG300',                 'N_14':280, 'N_14.5':41,  'N_15':4,   'm_gas':1.1e7, 'Lbox_cMpch':205},
              {'name':'Eagle',                  'N_14':7,   'N_14.5':1,   'N_15':0,   'm_gas':1.8e6, 'Lbox_cMpch':67.8},
              {'name':'MTNG',                   'N_14':-1,  'N_14.5':-1,  'N_15':-1,  'm_gas':3.1e7, 'Lbox_cMpch':500},
@@ -380,8 +380,8 @@ def simResolutionVolumeComparison():
     ax.set_xscale('log')
     ax.set_yscale('log')
 
-    ax.set_ylabel('Baryon Mass Resolution [ M$_{\odot}$ ]')
-    ax.set_xlabel('Number of Galaxies (resolved $M_\star \geq 10^9$ M$_{\odot}$)')
+    ax.set_ylabel(r'Baryon Mass Resolution [ M$_{\odot}$ ]')
+    ax.set_xlabel(r'Number of Galaxies (resolved $M_\star \geq 10^9$ M$_{\odot}$)')
 
     # add cMpc^3 volume axis as a second x-axis on the top
     volVals = [1e2,1e4,1e6,1e8] # cMpc^3
@@ -399,7 +399,7 @@ def simResolutionVolumeComparison():
 
     # set simulation data (N_gal criterion: M* > 1e9 at z=0), N_gal is total (cen+sat)
     boxes = [{'name':'TNG50',                  'N_gal':2.6e3, 'm_gas':8.0e4, 'Lbox_cMpch':35},
-             {'name':'TNG100$\,/\,$Illustris', 'N_gal':2.0e4, 'm_gas':1.4e6, 'Lbox_cMpch':75},
+             {'name':r'TNG100$\,/\,$Illustris', 'N_gal':2.0e4, 'm_gas':1.4e6, 'Lbox_cMpch':75},
              {'name':'TNG300',                 'N_gal':4.1e5, 'm_gas':1.1e7, 'Lbox_cMpch':205},
              {'name':'Eagle',                  'N_gal':1.2e4, 'm_gas':1.8e6, 'Lbox_cMpch':67.8},
              {'name':'OWLS',                   'N_gal':-1.0,  'm_gas':[1.9e6,1.5e7,1.2e8], 'Lbox_cMpch':[25,50,100]},
@@ -425,7 +425,7 @@ def simResolutionVolumeComparison():
              {'name':'FIRE-1',                  'N_cen':[1,2,1], 'N_gal':-1,    'm_gas':[5e3,2.35e4,1.5e5]}, # see Hopkins+14 Table 1 + Fig 4
              {'name':'FIRE-2',                  'N_cen':[7,7,9], 'N_gal':-1,    'm_gas':[5.6e4,7e3,4e3]}, # see Hopkins+17 Table 1, GK+18 (first = *_LowRes, third = romeo,juliet,thelma,louise,m12z, second = m11v,m11f,m12i,m12f,m12b,m12c,m12m)
              {'name':'Latte',                   'N_cen':1,       'N_gal':1,     'm_gas':7.1e3},
-             {'name':'Hydrangea$\,+\,$C-Eagle', 'N_cen':30,      'N_gal':2.4e4, 'm_gas':1.8e6}, # 24,442 galaxies within 10rvir, M* > 10^9, z=0 (Hy only)
+             {'name':r'Hydrangea$\,+\,$C-Eagle', 'N_cen':30,      'N_gal':2.4e4, 'm_gas':1.8e6}, # 24,442 galaxies within 10rvir, M* > 10^9, z=0 (Hy only)
              {'name':'RomulusC',                'N_cen':1,       'N_gal':227,   'm_gas':2.1e5}, # 227 = 'within virial radius, M* > 10^8, z=0'
              {'name':'300 Clusters',            'N_cen':324,     'N_gal':8.5e4, 'm_gas':3.5e8}, # see Wang+18 Table 1, total M* > 10^9.7 (~80 stars) for GX (w/ AGN), adjusted to 10^10.3 (as for 2hr using TNG300 SMF ref)
              #{'name':'Rhapsody-G',              'N_cen':10,      'N_gal':8e3,   'm_gas':1e8}, # see Hahn+16, don't know N_gal nor refined m_gas (this is initial)
@@ -493,7 +493,7 @@ def simResolutionVolumeComparison():
             ax.plot([sim['N_gal'],N_gal[1]], [sim['m_gas'],sim['m_gas']], linestyle='-', lw=lw, color=l.get_color(), alpha=alpha2*2)
             ax.plot([N_gal[1]], [sim['m_gas']], linestyle='None', marker='o', markersize=msize*fac, color=l.get_color(), alpha=alpha2*4)
             textOpts = {'fontsize':fs1+2, 'ha':'center', 'va':'top', 'alpha':alpha2*4}
-            ax.text(N_gal[1]*1.5, sim['m_gas']*1.35, '$M_\star \geq 10^7 \\rm{M}_\odot$', color=l.get_color(), **textOpts)
+            ax.text(N_gal[1]*1.5, sim['m_gas']*1.35, r'$M_\star \geq 10^7 \\rm{M}_\odot$', color=l.get_color(), **textOpts)
 
         if '512' in sim['name']: # draw marker at N_variants*N_gal, and connect
             N = 113
@@ -605,8 +605,8 @@ def simHydroResolutionComparison():
         # abstract out common elementes of all plots
         ax.set_xscale('log')
         ax.set_yscale('log')
-        ax.set_ylabel('Cumulative Volume [pMpc$^3$]')
-        ax.set_xlabel('Spatial Resolution $\Delta x$')
+        ax.set_ylabel(r'Cumulative Volume [pMpc$^3$]')
+        ax.set_xlabel(r'Spatial Resolution $\Delta x$')
 
         # plot indicators of certain volume achievements
         xx = [ ax.get_xlim()[0], ax.get_xlim()[1] ]
@@ -629,7 +629,7 @@ def simHydroResolutionComparison():
         if vol_cluster < ax.get_ylim()[1]:
             ax.plot([xx[0],xx[0]*0.1], [vol_cluster,vol_cluster], '-', lw=lwb, color=color)
             ax.plot([xx[0]*0.1, 0], [vol_cluster,vol_cluster], '-', lw=lw, color='#eee', alpha=0.2)
-            ax.text(xx[0]*0.88, vol_cluster, '$10^{15}\, M_\odot$ Cluster', **opts)
+            ax.text(xx[0]*0.88, vol_cluster, r'$10^{15}\, M_\odot$ Cluster', **opts)
 
         # Milky Way halo (z=0)
         rvir_mwhalo = 235.0 # pkpc, z=0, median of TNG100-1 halos 12.1<M200c<12.2
@@ -1105,113 +1105,186 @@ def simHighZComparison():
     """
     from matplotlib.patches import FancyArrowPatch
 
-    msize = 14.0 # marker size
-    fs1 = 14 # diagonal lines, cost labels
-    fs2 = 17 # sim name labels, upper right arrow label
-    fs3 = 14  # legend
+    msize = 10.0 # marker size
+    fs1 = 15 # diagonal lines, cost labels, legend
+    fs2 = 17 # sim name labels, particle number text
 
-    def _volumeToMassFunc(Lbox_cMpch):
-        """ Convert a box side-length [cMpc/h] into DM halo mass function using 
-        TNG300 as the scaling reference. """
-        tng300_size = 205
-        tng300_nobj = {'14':280, '14.5':41, '15':3}
-        vol_ratio = (np.array(Lbox_cMpch) / tng300_size)**3
-        return tng300_nobj * vol_ratio
+    redshift = 6.0 # reference redshift (for e.g. TNG50)
 
     # plot setup
-    fig = plt.figure(figsize=[figsize[0]*0.7, figsize[1]*0.9])
+    fig = plt.figure(figsize=[figsize[0]*1.1, figsize[1]*0.9])
     ax = fig.add_subplot(111)
+    ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
     
-    ax.set_xlim([1e8, 1e12])
-    ax.set_ylim([1e10,1e6])
+    ax.set_xlim([1.2e5, 1e0])
+    ax.set_ylim([5e8, 1.5e12])
     ax.set_xscale('log')
     ax.set_yscale('log')
 
-    ax.set_ylabel('Baryon Mass Resolution [ M$_{\odot}$ ]')
-    ax.set_xlabel('Halo Mass [ log M$_{\odot}$ ]')
+    ax.set_xlabel(r'Baryon Mass Resolution [ M$_{\odot}$ ]')
+    ax.set_ylabel(r'Halo Mass at $z=%d$ [ M$_{\odot}$ ]' % redshift)
+    
+    # raw MCST data (temporary, z=6)
+    mcst_h31619 = [9.1,9.0,8.38] # h31619_L15_ST8
+    mcst_h12688 = [9.02,8.78,9.04,8.59,8.49] # h12688_L14_ST8
+    mcst_h10677 = [9.0,8.9,8.85,8.79,8.66] # h10677_L14_ST8
+    mcst_h4182  = [9.7,9.52,9.10,8.96,8.55] # h4182_L14_ST8
+    mcst_h1242  = [9.93,9.51,9.29,9.27,9.31] # h1242_L13_ST8
 
-    # set simulation data (N_cl criterion: Mhalo > {1e14,1e14.5,1e15} at z=0)
-    boxes = [{'name':'TNG50',                  'M_halo':[10.5], 'm_gas':8.0e4, 'Lbox_cMpch':35},
-             {'name':'TNG100$\,/\,$Illustris', 'M_halo':[10.6], 'm_gas':1.4e6, 'Lbox_cMpch':75},
-             {'name':'Eagle',                  'M_halo':[11.1], 'm_gas':1.8e6, 'Lbox_cMpch':67.8},
-             {'name':'Magneticum-2hr',         'M_halo':[10.9,11.1,11.2], 'm_gas':2.0e8, 'Lbox_cMpch':352},
-             {'name':'Horizon-AGN',            'M_halo':[10.0], 'm_gas':2.0e6, 'Lbox_cMpch':100}]
+    mcst_halos = [mcst_h31619, mcst_h12688, mcst_h10677, mcst_h4182, mcst_h1242]
 
-    # set simulation data (for zoom projects)
-    zooms = [{'name':'TNG-Cluster',            'M_halo':[9.0], 'm_gas':1.2e7},
-             {'name':'MACSIS',                 'M_halo':[9.2], 'm_gas':1.1e9},
-             {'name':'Hydrangea/C-Eagle',      'M_halo':[9.4], 'm_gas':1.8e6},
-             {'name':'Rhapsody-G',             'M_halo':[8.2], 'm_gas':2.5e8},
-             {'name':'Rhapsody-C',             'M_halo':[10.2], 'm_gas':1.7e7},
-             {'name':'FABLE',                  'M_halo':[9.1,9.3,9.4], 'm_gas':1.5e7}]
+    mcst_mhalo = []
+    mcst_mgas = []
 
-    # for boxes we don't have access to, estimate M_halo distribution from volume
-    for box in boxes:
-        if box['M_halo'] == -1:
-            box['M_halo'] = _volumeToMassFunc(box['Lbox_cMpch'])
+    # h31619_L16_ST8 maybe
+    mcst_mhalo += mcst_h31619
+    mcst_mgas  += [3] * len(mcst_h31619)
+
+    # L15 and L14
+    for halo in mcst_halos:
+        mcst_mhalo += halo
+        mcst_mgas  += [24] * len(halo)
+        mcst_mhalo += halo
+        mcst_mgas  += [180] * len(halo)
+
+    # SERRA (the actual number of halos, and their mass distribution, is unclear) (Pallottini+22)
+    rng = np.random.default_rng(424242)
+    serra_mhalo = rng.uniform(low=11.0, high=np.log10(5e11), size=11)
+    serra_mgas = 1.2e4 # constant gas/star resolution in the zoom-in regions
+
+    # AURIGA 'Original' L2h6, L3h[6,16,18,21,23,24,27,38] all at z=6
+    au_mhalo = [10.46,10.46,10.61,10.52,10.58,10.36,10.17,10.31,10.25]
+    au_mgas = [800,  6e3,  6e3,  6e3,  6e3,  6e3,  6e3,  6e3,  6e3]
+
+    # L3 'Halos_1e11msol' at z=6
+    au_mhalo += [9.54,9.74,9.17,10.15,9.24,9.55,9.44,9.67,9.70,9.78,10.02,9.49]
+    au_mgas +=  [6e3, 6e3, 6e3, 6e3,  6e3, 6e3, 6e3, 6e3, 6e3, 6e3, 6e3,  6e3]
+
+    # L3 'Halos_1e10msol' at z=6
+    au_mhalo += [8.26,8.48,8.90,8.63,8.47,8.45,8.33,8.96,8.61,9.03,8.54,8.26,9.56,8.93]
+    au_mgas +=  [6e3, 6e3, 6e3, 6e3, 6e3, 6e3, 6e3, 6e3, 6e3, 6e3, 6e3, 6e3, 6e3, 6e3]
+
+    # FIRE-2 public release 'High redshift' suite of 22 halos (halo masses at z=5) (Table 3 of release paper)
+    f2_mhalo = [8.7e11,7.9e11,5.7e11,5.0e11,4.5e11,3.1e11,2.5e11,2.0e11,1.4e11,1.0e11] 
+    f2_mgas  = [7100] * len(f2_mhalo)
+    f2_mhalo += [7.6e10,5.2e10,4.0e10]
+    f2_mgas  += [891] * 3
+    f2_mhalo += [4.2e10,3.3e10,2.6e10,1.9e10,1.3e10,1.2e10]
+    f2_mgas  += [954] * 6
+    f2_mhalo += [6.6e9,3.9e9,2.4e9]
+    f2_mgas  += [119] * 3
+
+    f2_mhalo = np.log10(np.array(f2_mhalo) / 1.2 / 2.0) # adjust mvir to m200c, and z=5 to z=6 (roughly)
+
+    # EDGE (all z=0!)
+    edge_mhalo = [9.17,9.17] # Agertz+20 (many variations of this halo, including a few at the high res)
+    edge_mgas  = [161,20] # Agertz+20
+    edge_mhalo += [9.52,9.51,9.53,9.53,9.51,9.40,9.57,9.40,9.40,9.15] # Rey+20
+    edge_mgas  += [960*0.17] * 10 # 960 m_DM * 0.17 baryon fraction ~ 160 Msun for gas
+    edge_mhalo += [9.11,9.15,9.43,9.51,9.52,9.15,9.15] # Orkney+21
+    edge_mgas  += [18] * 7
+
+    # Smith+2019 (z=6 values, Fig 3)
+    s19_mhalo = np.log10(np.array([1.8e8,2.2e8,8e8,1.1e9,2.5e9,8e8]) / 1.2) # mvir -> m200c rough adjustment
+    s19_mgas = [287] * 5 + [15] # dwarf 1 repeated at 15 msun
+
+    # set simulation data (for zoom projects)    
+    zooms = [{'name':'MCST',    'M_halo':mcst_mhalo, 'm_gas' :mcst_mgas}, 
+             {'name':'LYRA',    'M_halo':[9.52,9.45,9.33,9.24,8.46], 'm_gas' :4.0}, # Lyra III (Gutcke+22) (currently z=0 values!)
+             {'name':'FIRE-2',  'M_halo':f2_mhalo, 'm_gas':f2_mgas},
+             {'name':'Auriga',  'M_halo':au_mhalo, 'm_gas' :au_mgas}, 
+             {'name':'SERRA',   'M_halo':serra_mhalo, 'm_gas':serra_mgas},
+             {'name':'MEGATRON', 'M_halo':9.0, 'm_gas':3.1e4}, # Katz+24 z=6 dwarf with many variations
+             {'name':'EDGE',     'M_halo':edge_mhalo, 'm_gas':edge_mgas},
+             {'name':'Azahar',   'M_halo':11.3, 'm_gas':7.6e4}, # Yuan+24
+             {'name':'Smith+19', 'M_halo':s19_mhalo, 'm_gas':s19_mgas},
+             {'name':'Pandora',  'M_halo':[np.log10(8e8/1.2)], 'm_gas':255}] # Martin-Alvazez+23 (dwarf 1 of Smith+19)
+
+    models_ismeos = ['Auriga']
+    models_z0 = ['LYRA','EDGE']
+
+    # load individual symbols for tng50-1
+    sim = simParams(run='tng50-1',redshift=redshift)
+    mhalo = sim.subhalos('m200c')
+    w = np.where(mhalo > ax.get_ylim()[0])
+
+    rng = np.random.default_rng(424242)
+    m_gas = np.zeros(w[0].size) + 7.0e4 + rng.uniform(-1.0,1.0,size=w[0].size) * 1.0e4
+    ax.scatter(m_gas, mhalo[w], s=4.0, marker='x', label='TNG50-1', color='#000', alpha=0.5, zorder=0)
+
+    # construct second y-axis for stellar mass, using a reference sim
+    mstar = sim.subhalos('mstar_30kpc')
+
+    ax2 = ax.twinx()
+    ax2.set_ylim(ax.get_ylim())
+    ax2.set_yscale('log')
+    ax2.set_ylabel(r'Stellar Mass at $z=%d$ [ M$_{\odot}$ ]' % redshift)
+
+    # running median
+    if 1:
+        # using TNG50-1 as reference
+        w = np.where((mhalo > ax.get_ylim()[0]) & (mstar > 0))
+        yy_right = np.log10(mstar[w])
+        yy_left = np.log10(mhalo[w])
+
+        ym_right, ym_left, _ = running_median(yy_right, yy_left, binSize=0.2)
+    else:
+        # using UniverseMachine as reference
+        from ..load.data import behrooziUM
+        um = behrooziUM(sim)
+        w = np.where(np.isfinite(um['mstar_mid']))
+        ym_right = um['mstar_mid'][w]
+        ym_left = um['haloMass'][w]    
+
+    mstar_ticks = np.array([6.0, 7.0, 8.0, 9.0, 10.0]) # cannot go above 1e10, as TNG50 has no sampling
+    mhalo_vals_at_these_ticks = np.interp(mstar_ticks, ym_right, ym_left)
+
+    ax2.set_yticks(10.0**mhalo_vals_at_these_ticks, labels=['$10^{%d}$' % int(x) for x in mstar_ticks])
+    ax2.minorticks_off()
+
+    # load individual symbols for SPHINX
+    path = '/virgotng/mpia/SPHINX/SPHINX-20-data/data/all_basic_data.csv'
+    data = np.genfromtxt(path,delimiter=',',names=True)
+
+    w = np.where(data['redshift'] == redshift) # 4.64, 5, 6, 7, 8, 9, 10 available
+    mhalo = 10.0**data['mvir'][w]
+    m_dm = 2.5e5 # SPHINX-20 DM particle mass
+    m_gas = 2.5e5 * sim.units.f_b # note: data release paper mentions stellar particles have 400 msun
+    m_gas = np.zeros(w[0].size) + m_gas + rng.uniform(-1.0,1.0,size=w[0].size) * 5.0e3
+
+    ax.scatter(m_gas, mhalo, s=12.0, marker='s', facecolors='none', label='SPHINX-20', edgecolor='#000', lw=1.0, alpha=0.5, zorder=0)
 
     # plot lines of constant number of particles (per halo)
-    if 0: # TODO
-        for i, N in enumerate([512,1024,2048,4096,8192]):
-            sim = simParams(run='tng100-1',redshift=0.0) # for units
-            xx = []
-            yy = []
-            for Lbox in [1e0, 1e4]: # cMpc/h
-                m_gas = sim.units.particleCountToMass(N, boxLength=Lbox)
-                n_gal = _volumeToNcluster(Lbox)
+    halo_mass = ax.get_ylim()
 
-                xx.append(n_gal)
-                yy.append(m_gas)
+    for N in [1e6,1e7,1e8]:
+        m_DM = np.array(halo_mass) / N
+        m_baryon = m_DM * sim.units.f_b
 
-            if N <= 1024:
-                continue
-            color = '#aaaaaa'
-            ax.plot(xx, yy, lw=lw, linestyle=':', alpha=0.4, color=color)
-            m = (yy[1] - yy[0]) / (xx[1] - xx[0])
-            x_target = 8e2
-            y_target = m * x_target + xx[0]
-            ax.text(x_target, y_target*1.05, '$%d^3$' % N, color=color, alpha=0.5, rotation=-45.0, fontsize=fs1, va='center', ha='right')
-
-    # plot arrows of computational work
-    if 1:
-        color = '#aaaaaa' 
-        arrowstyle ='simple, head_width=12, head_length=12, tail_width=3'
-        textOpts = {'color':color, 'fontsize':fs1, 'va':'top', 'ha':'left', 'multialignment':'center'}
-        xx = 6e2
-        yy = 6.0e6
-        p1 = FancyArrowPatch(posA=[xx,yy*1.05], posB=[xx, yy/4], arrowstyle=arrowstyle, alpha=1.0, color=color)
-        p2 = FancyArrowPatch(posA=[xx*0.95,yy], posB=[xx*4, yy], arrowstyle=arrowstyle, alpha=1.0, color=color)
-        ax.add_artist(p1)
-        ax.text(xx*0.86, yy*0.49, 'x10 cost', color=color, rotation=90.0, fontsize=fs1, ha='right', va='center')
-        ax.add_artist(p2)
-        ax.text(xx*1.9, yy*1.2, 'x5 cost', color=color, rotation=0.0, fontsize=fs1, ha='center', va='top')
-        ax.text(xx*2.2, yy*0.4, '(x4 mass res\nor x4 volume)', color=color, rotation=45.0, fontsize=fs1-2, ha='center', va='center')
-
-    # plot boxes
-    for sim in boxes:
-        x = 10.0**np.array(sim['M_halo'])
-        y = np.zeros(x.size) + sim['m_gas']
-        l, = ax.plot(x, y, ls='None', marker='o', ms=msize, label=sim['name'])
-
-        if 'TNG-Cluster' in sim['name']: # enlarge marker
-            fac = 1.7 if sim['name'] == 'TNG-Cluster' else 1.3
-            ax.plot(x, y, ls='None', marker='o', ms=msize*fac, color=l.get_color())
+        ax.plot(m_baryon, halo_mass, ':', lw=lw, color='#888', alpha=0.5)
+        xx = 10.0**np.mean(np.log10(m_baryon)) * 0.9
+        yy = 10.0**np.mean(np.log10(halo_mass))
+        ax.text(xx, yy, '$10^{%d}$' % int(np.log10(N)), color='#888', alpha=0.5, fontsize=fs2, ha='left', va='center', rotation=-45.0)
 
     # plot zooms
     ax.set_prop_cycle(None) # reset color cycle
     for sim in zooms:
-        x = 10.0**np.array(sim['M_halo'])
-        y = np.zeros(x.size) + sim['m_gas']
-        msize_loc = msize if sim['name'] != 'TNG-Cluster' else msize*1.3
-        l, = ax.plot(x, y, ls='None', marker='D', ms=msize_loc, label=sim['name'])
+        y = 10.0**np.array(sim['M_halo'])
+        x = np.zeros(y.size) + sim['m_gas']
+        msize_loc = msize #if sim['name'] != 'MCST' else msize*1.3
+        marker = 'o' if sim['name'] in models_ismeos else 'D'
+        l, = ax.plot(x, y, ls='None', marker=marker, ms=msize_loc, label=sim['name'])
 
-        if 'TNG' in sim['name'] : # label certain runs only
-            textOpts = {'color':l.get_color(), 'fontsize':fs2*1.4, 'ha':'center', 'va':'bottom'}
-            ax.text(x, y*0.7, sim['name'], **textOpts)
+        #if 'TNG' in sim['name'] : # label certain runs only
+        #    textOpts = {'color':l.get_color(), 'fontsize':fs2*1.4, 'ha':'center', 'va':'bottom'}
+        #    ax.text(x, y*0.8, sim['name'], **textOpts)
+
+        if sim['name'] in models_z0:
+            ax.text(x.min(), y.max()*1.2, '(z=0)', color=l.get_color(), alpha=0.7, fontsize=fs1-2, ha='center', va='bottom')
 
     # legend and finish
-    legParams = {'ncol':1, 'columnspacing':1.0, 'fontsize':fs3, 'markerscale':0.6} #, 'frameon':1, 'framealpha':0.9, 'fancybox':False}
-    legend = ax.legend(loc='lower left', **legParams)
+    legParams = {'ncol':2, 'columnspacing':1.0, 'fontsize':fs1, 'markerscale':0.9} #, 'frameon':1, 'framealpha':0.9, 'fancybox':False}
+    legend = ax.legend(loc='upper right', **legParams)
 
     fig.savefig('sim_comparison.pdf')
     plt.close(fig)

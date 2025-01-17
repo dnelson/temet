@@ -840,7 +840,7 @@ def vis_single_image(sP):
         plotStyle    = 'edged'
         colorbars    = True
         fontsize     = 28 # 24
-        saveFilename = '%s_%d.png' % (sP.simName,sP.snap)
+        saveFilename = '%s_%d.pdf' % (sP.simName,sP.snap)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -907,10 +907,10 @@ def paperPlots():
     #redshift = 5.0
 
     # testing:
-    variants = ['ST8','ST8m'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
-    res = [14,15] #[12,13,14,15]
+    variants = ['ST8','TNG'] #,'ST8m','ST8b'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
+    res = [15] #[12,13,14,15]
     hInds = [31619] #[31619]
-    redshift = 3.0 #4.15
+    redshift = 4.0 #4.15
 
     sims = _get_existing_sims(variants, res, hInds, redshift, all=True)
 
@@ -971,7 +971,7 @@ def paperPlots():
     # phase space diagram movie (note: must change save name from .pdf to .png manually)
     if 0:
         for snap in range(86):
-            sim = simParams(run='structures', hInd=31619, res=15, variant='ST8', snap=snap)
+            sim = simParams(run='structures', hInd=4182, res=14, variant='ST8', snap=snap)
             phase_diagram(sim)
 
     # single image
@@ -1139,6 +1139,6 @@ def paperPlots():
         # second legend
         ax.legend(loc='lower right')
 
-    fig.savefig('cosmic_sfrd_comp-%d.pdf' % len(sims))
-    plt.close(fig)
+        fig.savefig('cosmic_sfrd_comp-%d.pdf' % len(sims))
+        plt.close(fig)
     
