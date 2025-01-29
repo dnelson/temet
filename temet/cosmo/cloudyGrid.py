@@ -20,6 +20,7 @@ basePathTemp = expanduser("~") + "/data/cloudy_tables/"
 # to add in the future:
 #Fe 2 in the UV
 #O 1 in the UV (e.g. 1302)
+#O 5 doublet (~1218A)
 #C 2 in the UV (e.g. 1334)
 #Si 2                1304.37A
 #Si 2                1260.42A
