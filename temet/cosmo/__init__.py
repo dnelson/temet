@@ -3,6 +3,7 @@ from . import auxcatalog
 from . import cloudy
 #from . import clustering
 from . import color
+from . import cooling
 from . import hydrogen
 from . import kCorr
 from . import lightcone
