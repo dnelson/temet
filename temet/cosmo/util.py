@@ -3,15 +3,13 @@ Helper functions related to cosmo box simulations.
 """
 import numpy as np
 import h5py
-import illustris_python as il
-import copy
 from os.path import isfile, isdir
 from os import mkdir
 from ..util.helper import closest
 
 # --- snapshot configuration & spacing ---
 
-def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False):
+def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False, load=False):
     """ Convert one or more input redshifts to closest matching snapshot numbers for a given sP. """
     from ..util.helper import closest
     from ..load.snapshot import subboxVals
@@ -35,8 +33,13 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False):
     r = {}
     saveFilename = sP.derivPath + 'snapnum.' + sbStr1 + 'redshift.hdf5'
 
-    if not isdir(sP.derivPath):
-        mkdir(sP.derivPath)
+    save = True
+    try:
+        if not isdir(sP.derivPath):
+            mkdir(sP.derivPath)
+    except PermissionError:
+        print("Warning: Permission error creating directory [%s], skipping." % sP.derivPath)
+        save = False
 
     if isfile(saveFilename) and not recalculate:
         with h5py.File(saveFilename, 'r') as f:
@@ -70,12 +73,19 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False):
             r['nFound'] += 1
 
         # save
-        with h5py.File(saveFilename, 'w') as f:
-            for key in r.keys():
-                f[key] = r[key]
-
+        if save:
+            with h5py.File(saveFilename, 'w') as f:
+                for key in r.keys():
+                    f[key] = r[key]
+        else:
+            print("Warning: Permission error saving [%s], skipping." % saveFilename)
+    
     if np.sum(redshifts) == -1:
         raise Exception("Old behavior, used to return !NULL.")
+    
+    # return everything
+    if load:
+        return r
 
     # return array of snapshot numbers
     snaps = np.zeros( redshifts.size, dtype='int32' )
@@ -320,20 +330,12 @@ def snapNumToRedshift(sP, snap=None, time=False, all=False):
     r = {}
     saveFilename = sP.derivPath + 'snapnum.' + sbStr1 + 'redshift.hdf5'
 
-    if not isfile(saveFilename):
-        # redshiftToSnapNum() not yet run, do it now
-        redshifts = [2.22] if time is False else None
-        times = [0.5] if time is True else None
-        _ = redshiftToSnapNum(redshifts=redshifts, times=times, sP=sP)
-
-    with h5py.File(saveFilename, 'r') as f:
-        for key in f.keys():
-            r[key] = f[key][()]
+    snaps = redshiftToSnapNum(load=True, sP=sP)
 
     # scale factor or redshift?
-    val = r['redshifts']
+    val = snaps['redshifts']
     if time:
-        val = r['times']
+        val = snaps['times']
 
     # all values or a given scalar or array list?
     if all:

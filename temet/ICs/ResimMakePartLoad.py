@@ -565,7 +565,7 @@ def generate_set():
     if 0:
         # TNG50 dwarf zooms (MCST)
         sP = simParams(run='tng50-1', redshift=3.0)
-        zoomFac = 16 # 1 (8e4 msun/TNG50-1 res), 2 (1e4 msun), 4 (1320 msun), 8 (160 msun), 16 (20 msun)
+        zoomFac = 16 # 1 (8e4 msun/TNG50-1 res), 2 (1e4 msun), 4 (1320 msun), 8 (160 msun), 16 (20 msun), 32 (L16, 3msun)
 
         # Milky Way progenitors at z=3
         # haloIDs = [1242]

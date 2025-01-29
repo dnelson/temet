@@ -1112,8 +1112,9 @@ def simHighZComparison():
     redshift = 6.0 # reference redshift (for e.g. TNG50)
 
     # plot setup
-    fig = plt.figure(figsize=[figsize[0]*1.1, figsize[1]*0.9])
+    fig = plt.figure(figsize=[figsize[0]*1.2, figsize[1]*0.9])
     ax = fig.add_subplot(111)
+    fig.subplots_adjust(right=0.8)
     ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
     
     ax.set_xlim([1.2e5, 1e0])
@@ -1188,17 +1189,53 @@ def simHighZComparison():
     s19_mhalo = np.log10(np.array([1.8e8,2.2e8,8e8,1.1e9,2.5e9,8e8]) / 1.2) # mvir -> m200c rough adjustment
     s19_mgas = [287] * 5 + [15] # dwarf 1 repeated at 15 msun
 
+    # FirstLight (https://www.ita.uni-heidelberg.de/~ceverino/FirstLight/index.html)
+    # extracted from FirstLight_database_DR3.1.dat at z=6
+    fl_mhalo = np.log10(10.0**np.array([10.42,9.47,9.86,9.57,10.71,10.14,9.63,9.88,9.72,9.88,10.92,10.82,9.83,
+                9.79,10.23,9.84,10.51,9.24,9.81,10.67,9.62,10.23,9.75,10.72,9.66,10.28,
+                10.94,9.85,9.87,10.44,10.61,9.58,9.80,10.44,9.73,9.85,9.88,9.69,10.25,
+                10.71,9.48,9.89,9.72,9.75,10.68,10.98,9.55,10.29,9.55,9.77,9.42,9.39,9.85,
+                9.75,9.91,10.47,10.44,9.77,10.97,9.64,10.40,9.56,9.73,9.51,9.15,10.81,10.68,
+                9.72,10.02,10.09,10.43,10.60,10.01,9.98,10.20,10.35,9.66,9.98,10.00,10.75,
+                9.86,10.53,9.86,10.76,9.65,9.81,10.85,10.63,9.57,10.18,9.63,10.24,10.18,
+                9.88,10.46,9.53,10.81,10.61,10.33,9.94,9.60,9.72,9.85,9.39,9.78,9.73,10.28,
+                10.60,9.87,10.09,9.57,9.96,9.43,9.24,9.57,9.73,9.74,9.78,10.30,9.60,9.97,
+                10.30,10.05,9.88,9.84,9.77,10.35,9.41,9.63,10.17,10.65,10.43,9.62,10.14,9.64,
+                10.05,9.64,9.96,9.50,10.92,10.62,9.69,9.96,9.49,9.65,9.64,9.74,9.50,9.53,
+                10.49,10.17,10.14,9.64,10.56,9.85,9.81,9.73,9.44,9.86,10.00,10.70,9.64,10.26,
+                9.79,9.88,10.42,10.96,10.15,10.32,10.00,10.04,9.89,10.14,10.41,9.74,9.63,9.64,
+                10.52,10.62,10.03,10.09,9.64,9.57,9.87,9.50,10.21,9.65,9.90,10.78,9.73,9.54,
+                9.90,9.60,10.48,10.67,10.47,9.57,11.05,10.07,10.05,10.61,10.41,10.30,10.57,
+                9.80,9.97,10.56,9.87,10.87,10.66,10.03,10.28,9.64,10.17,9.98,10.26,9.71,9.52,
+                9.87,9.19,10.01,10.13,10.37,10.21,10.56,9.95,9.82,10.24,10.07,9.70,10.35,9.63,
+                9.89,10.02,10.51,9.45,9.88,9.61,9.38,9.70,9.68,9.76,9.63,9.75,9.44,10.18,9.69,
+                10.51,10.03,9.54,9.67,9.61,9.67,9.48,9.34]) / 1.2) # mvir -> m200
+    fl_mgas = 1.36e4 # 8e4 m_DM * 0.17 baryon fraction = 13600 msun
+
+    # VELA-6 (https://archive.stsci.edu/prepds/vela/) (Ceverino+23)
+    # extracted from the Source Catalog (hlsp_vela_multi_multi_vela_multi_v3_cat) at z=6
+    vela_mhalo = [10.73,10.86,11.06,10.84,10.51,10.21,11.02,10.27,10.62,11.04,10.27,9.83,11.33,
+                  11.02,11.07,10.68,10.40,10.79,10.49,10.53,11.35,9.81,10.14,10.76,11.15,10.38,
+                  10.30,10.46,11.19,10.67,10.85,10.30,10.45,10.72]
+    vela_mgas = 1.4e4 # 8.3e4 m_DM * 0.17 baryon fraction = 13600 msun
+
+    # Megatron (low-res, high-res, and 23 variants at medium-res)
+    k25_mhalo = [9.0,9.0] + list(rng.uniform(low=8.9, high=9.1, size=23))
+    k25_mgas = [4.0e4,653] + [5.2e3] * 23
+
     # set simulation data (for zoom projects)    
-    zooms = [{'name':'MCST',    'M_halo':mcst_mhalo, 'm_gas' :mcst_mgas}, 
-             {'name':'LYRA',    'M_halo':[9.52,9.45,9.33,9.24,8.46], 'm_gas' :4.0}, # Lyra III (Gutcke+22) (currently z=0 values!)
-             {'name':'FIRE-2',  'M_halo':f2_mhalo, 'm_gas':f2_mgas},
-             {'name':'Auriga',  'M_halo':au_mhalo, 'm_gas' :au_mgas}, 
-             {'name':'SERRA',   'M_halo':serra_mhalo, 'm_gas':serra_mgas},
-             {'name':'MEGATRON', 'M_halo':9.0, 'm_gas':3.1e4}, # Katz+24 z=6 dwarf with many variations
-             {'name':'EDGE',     'M_halo':edge_mhalo, 'm_gas':edge_mgas},
-             {'name':'Azahar',   'M_halo':11.3, 'm_gas':7.6e4}, # Yuan+24
-             {'name':'Smith+19', 'M_halo':s19_mhalo, 'm_gas':s19_mgas},
-             {'name':'Pandora',  'M_halo':[np.log10(8e8/1.2)], 'm_gas':255}] # Martin-Alvazez+23 (dwarf 1 of Smith+19)
+    zooms = [{'name':'MCST',       'M_halo':mcst_mhalo, 'm_gas' :mcst_mgas}, 
+             {'name':'LYRA',       'M_halo':[9.52,9.45,9.33,9.24,8.46], 'm_gas' :4.0}, # Lyra III (Gutcke+22) (currently z=0 values!)
+             {'name':'FIRE-2',     'M_halo':f2_mhalo, 'm_gas':f2_mgas},
+             {'name':'Auriga',     'M_halo':au_mhalo, 'm_gas' :au_mgas}, 
+             {'name':'SERRA',      'M_halo':serra_mhalo, 'm_gas':serra_mgas},
+             {'name':'FirstLight', 'M_halo':fl_mhalo, 'm_gas':fl_mgas},
+             {'name':'VELA-6',     'M_halo':vela_mhalo, 'm_gas':vela_mgas},
+             {'name':'EDGE',       'M_halo':edge_mhalo, 'm_gas':edge_mgas},
+             {'name':'MEGATRON',   'M_halo':k25_mhalo, 'm_gas':k25_mgas}, # Katz+24 z=6 dwarf with many variations
+             {'name':'Azahar',     'M_halo':11.3, 'm_gas':7.6e4}, # Yuan+24
+             {'name':'Smith+19',   'M_halo':s19_mhalo, 'm_gas':s19_mgas},
+             {'name':'Pandora',    'M_halo':[np.log10(8e8/1.2)], 'm_gas':255}] # Martin-Alvazez+23 (dwarf 1 of Smith+19)
 
     models_ismeos = ['Auriga']
     models_z0 = ['LYRA','EDGE']
@@ -1213,34 +1250,52 @@ def simHighZComparison():
     ax.scatter(m_gas, mhalo[w], s=4.0, marker='x', label='TNG50-1', color='#000', alpha=0.5, zorder=0)
 
     # construct second y-axis for stellar mass, using a reference sim
-    mstar = sim.subhalos('mstar_30kpc')
-
     ax2 = ax.twinx()
     ax2.set_ylim(ax.get_ylim())
     ax2.set_yscale('log')
-    ax2.set_ylabel(r'Stellar Mass at $z=%d$ [ M$_{\odot}$ ]' % redshift)
+    ax2.set_ylabel(r'Stellar Mass at $z=%d$ TNG50 [ M$_{\odot}$ ]' % redshift)
 
-    # running median
-    if 1:
-        # using TNG50-1 as reference
-        w = np.where((mhalo > ax.get_ylim()[0]) & (mstar > 0))
-        yy_right = np.log10(mstar[w])
-        yy_left = np.log10(mhalo[w])
+    mstar = sim.subhalos('mstar_30kpc')
+    w = np.where((mhalo > ax.get_ylim()[0]) & (mstar > 0))
+    yy_right = np.log10(mstar[w])
+    yy_left = np.log10(mhalo[w])
 
-        ym_right, ym_left, _ = running_median(yy_right, yy_left, binSize=0.2)
-    else:
-        # using UniverseMachine as reference
-        from ..load.data import behrooziUM
-        um = behrooziUM(sim)
-        w = np.where(np.isfinite(um['mstar_mid']))
-        ym_right = um['mstar_mid'][w]
-        ym_left = um['haloMass'][w]    
+    ym_right, ym_left, _ = running_median(yy_right, yy_left, binSize=0.2)
 
     mstar_ticks = np.array([6.0, 7.0, 8.0, 9.0, 10.0]) # cannot go above 1e10, as TNG50 has no sampling
     mhalo_vals_at_these_ticks = np.interp(mstar_ticks, ym_right, ym_left)
 
     ax2.set_yticks(10.0**mhalo_vals_at_these_ticks, labels=['$10^{%d}$' % int(x) for x in mstar_ticks])
     ax2.minorticks_off()
+
+    # construct third y-axis for stellar mass (also on the right), using UniverseMachine as a reference
+    ax3 = ax.twinx()
+    ax3.spines['right'].set_position(('axes', 1.15))
+    
+    def make_patch_spines_invisible(axis):
+        axis.set_frame_on(True)
+        axis.patch.set_visible(False)
+        for sp in axis.spines.values():
+            sp.set_visible(False)
+
+    make_patch_spines_invisible(ax3)
+    ax3.spines['right'].set_visible(True)
+
+    ax3.set_ylim(ax.get_ylim())
+    ax3.set_yscale('log')
+    ax3.set_ylabel(r'Stellar Mass at $z=%d$ UM [ M$_{\odot}$ ]' % redshift)
+
+    from ..load.data import behrooziUM
+    um = behrooziUM(sim)
+    w = np.where(np.isfinite(um['mstar_mid']))
+    ym_right = um['mstar_mid'][w]
+    ym_left = um['haloMass'][w]    
+
+    mstar_ticks = np.array([5.0, 6.0, 7.0, 8.0, 9.0, 10.0]) # cannot go above 1e10, as TNG50 has no sampling
+    mhalo_vals_at_these_ticks = np.interp(mstar_ticks, ym_right, ym_left)
+
+    ax3.set_yticks(10.0**mhalo_vals_at_these_ticks, labels=['$10^{%d}$' % int(x) for x in mstar_ticks])
+    ax3.minorticks_off()
 
     # load individual symbols for SPHINX
     path = '/virgotng/mpia/SPHINX/SPHINX-20-data/data/all_basic_data.csv'
@@ -1252,7 +1307,7 @@ def simHighZComparison():
     m_gas = 2.5e5 * sim.units.f_b # note: data release paper mentions stellar particles have 400 msun
     m_gas = np.zeros(w[0].size) + m_gas + rng.uniform(-1.0,1.0,size=w[0].size) * 5.0e3
 
-    ax.scatter(m_gas, mhalo, s=12.0, marker='s', facecolors='none', label='SPHINX-20', edgecolor='#000', lw=1.0, alpha=0.5, zorder=0)
+    ax.scatter(m_gas, mhalo, s=12.0, marker='*', facecolors='none', label='SPHINX-20', edgecolor='#000', lw=1.0, alpha=0.5, zorder=0)
 
     # plot lines of constant number of particles (per halo)
     halo_mass = ax.get_ylim()
@@ -1268,12 +1323,33 @@ def simHighZComparison():
 
     # plot zooms
     ax.set_prop_cycle(None) # reset color cycle
-    for sim in zooms:
+    for i, sim in enumerate(zooms):
         y = 10.0**np.array(sim['M_halo'])
         x = np.zeros(y.size) + sim['m_gas']
-        msize_loc = msize #if sim['name'] != 'MCST' else msize*1.3
-        marker = 'o' if sim['name'] in models_ismeos else 'D'
-        l, = ax.plot(x, y, ls='None', marker=marker, ms=msize_loc, label=sim['name'])
+        zorder = 1
+
+        if i == 10: ax.plot([],[]) # skip first color i.e. red (given to MCST) to avoid confusion
+        marker_normal = 'D' if i < 10 else 's' # colors start to repeat
+
+        marker = 'o' if sim['name'] in models_ismeos else marker_normal
+        opts = {'ms':msize, 'zorder':1}
+
+        # outline all markers in white
+        #opts['markeredgewidth'] = 1
+        #opts['markeredgecolor'] = 'white'
+
+        if sim['name'] in models_z0:
+            opts['markeredgewidth'] = lw
+            opts['markerfacecolor'] = 'none'
+            opts['ms'] -= 2
+
+        if sim['name'] == 'MCST':
+            opts['zorder'] = 10
+            opts['ms'] += 2
+            #opts['markeredgewidth'] = 1
+            #opts['markeredgecolor'] = 'black'
+
+        l, = ax.plot(x, y, ls='None', marker=marker, label=sim['name'], **opts)
 
         #if 'TNG' in sim['name'] : # label certain runs only
         #    textOpts = {'color':l.get_color(), 'fontsize':fs2*1.4, 'ha':'center', 'va':'bottom'}

@@ -819,22 +819,28 @@ def vis_single_image(sP):
     nPixels    = [960,960]
     size       = 1.0 if sP.hInd > 20000 else 5.0
     sizeType   = 'kpc'
-    labelSim   = True
+    labelSim   = False # True
     labelHalo  = 'mhalo,mstar,haloid'
     labelZ     = True
     labelScale = 'physical'
     relCoords  = True
     if 1:
         axes = [0,1]
-        rotation   = 'face-on'
+        #rotation   = 'edge-on' #'face-on'
 
     #subhaloInd = sP.zoomSubhaloInd
     #subhaloInd = sP.halo(1)['GroupFirstSub']
 
     # panels (can vary hInd, variant, res)
     panels = []
-    panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5]} )
-    panels.append( {'partType':'stars', 'partField':'stellarComp'} )
+    panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5], 'rotation':'face-on'} )
+    panels.append( {'partType':'stars', 'partField':'stellarComp', 'rotation':'face-on'} )
+
+    # add skinny edge-on panels below:
+    panels.append( {'partType':'gas', 'partField':'HI', 'nPixels':[960,240], 'valMinMax':[20.5,23.0], 
+                    'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
+    panels.append( {'partType':'stars', 'partField':'stellarComp', 'nPixels':[960,240], 
+                    'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
 
     class plotConfig:
         plotStyle    = 'edged'
@@ -891,6 +897,365 @@ def vis_movie(sP, frame=None):
         plotConfig.saveFilename = '%s_%03d.png' % (sP.simName,sP.snap)
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
+# -------------------------------------------------------------------------------------------------
+
+def diagnostic_vis_timebins(sP):
+        nPixels    = 500
+        axes       = [0,1] # x,y
+        labelZ     = True
+        labelScale = True
+        labelSim   = True
+        plotHalos  = 100
+        method     = 'histo_minIP' # sphMap, sphMap_minIP, sphMap_maxIP
+        zoomFac    = 0.01 #0.15 # fraction of box-size
+        sliceFac   = zoomFac # same projection depth as zoom
+        minmax     = [40, 47]
+        #ctName     = 'plasma_r'
+
+        absCenPos  = sP.subhalo(sP.zoomSubhaloID)['SubhaloPos']
+        relCenPos  = None
+
+        numColors = minmax[1] - minmax[0] # discrete colorbar
+        panels = [{'partType':'gas', 'partField':'TimebinHydro', 'valMinMax':minmax}]
+
+        class plotConfig:
+            plotStyle  = 'open'
+            #rasterPx   = 1000
+            saveFilename = './boxImage_%s_%s.png' % (sP.simName,panels[0]['partField'])
+
+        renderBox(panels, plotConfig, locals())
+
+def diagnostic_numhalos_uncontaminated(sims):
+    """ Visualize number of non-contaminated halos vs redshift, and their contamination fractions. """
+    ymin = 1e-6
+
+    fig, ax = plt.subplots()
+    ax.set_ylim([ymin, 1.0])
+    ax.set_xlim([14, 2.9])
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.xaxis.set_major_formatter(ScalarFormatter())
+    ax.xaxis.set_minor_formatter(ScalarFormatter())
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel('Low-resolution DM Contamination Fraction')
+
+    max_num = 0
+
+    for sim in sims:
+        # loop over snapshots
+        for snap in sim.validSnapList():
+            # load
+            sim.setSnap(snap)
+
+            contam_frac = sim.subhalos('contam_frac')
+            cen_flag = sim.subhalos('cen_flag')
+            mstar = sim.subhalos('mstar2_log')
+
+            # select subhalos of interest
+            subhaloIDs = np.where((cen_flag == 1) & (mstar > 0) & np.isfinite(mstar))[0]
+            mstar = mstar[subhaloIDs]
+            contam_frac = contam_frac[subhaloIDs]
+
+            max_num = np.max([max_num, len(subhaloIDs)])
+
+            print(snap, mstar)
+
+            # plot
+            for j, subhaloID in enumerate(subhaloIDs):
+                yy = contam_frac[j] if contam_frac[j] > ymin else ymin*1.5
+                ms = mstar[j] * 1.5
+                ax.plot(sim.redshift, yy, marker=markers[0], ms=ms, color=colors[j])
+
+    # legend
+    handles = [plt.Line2D( (0,0), (0,0), ls='-', color='black', lw=0)]
+    labels = [sim.simName]
+
+    for i in range(max_num):
+        handles.append(plt.Line2D( (0,1), (0,0), marker=markers[0], color=colors[i], lw=0))
+        labels.append('Halo ID#%d' % i)
+
+    legend = ax.legend(handles, labels, loc='upper left')
+    
+    fig.savefig('contam_frac_z_%s.pdf' % sims[0].simName)
+    plt.close(fig)
+
+def diagnostic_snapshot_spacing(sims):
+    """ Visualize snapshot time spacing for different setups. """
+    fig, ax = plt.subplots()
+    ax.set_ylim([0, 20])
+    ax.set_xlim([20, 2.9])
+    ax.set_xscale('log')
+    ax.xaxis.set_major_formatter(ScalarFormatter())
+    ax.xaxis.set_minor_formatter(ScalarFormatter())
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel('Snapshot Spacing [Myr]')
+
+    ax.plot(ax.get_xlim(), [10,10], '-', color='#999', alpha=0.5)
+
+    for sim in sims:
+        snaps = sim.validSnapList()
+        redshifts = sim.snapNumToRedshift(snaps)
+        tage = sim.units.redshiftToAgeFlat(redshifts) * 1000 # Myr
+        dt = np.diff(tage)
+
+        ax.plot(redshifts[1:], dt, 'o-', ms=6.0, label=f'{sim} saved')
+
+    # load request
+    fname1 = '/u/dnelson/sims.structures/arepo0/outputlist_10Myr_z10-3.txt'
+    fname2 = '/u/dnelson/sims.structures/arepo0/outputlist_1Myr_z20-3.txt'
+
+    for i, fname in enumerate([fname1,fname2]):
+        with open(fname,'r') as f:
+            times = np.array([float(line.split()[0]) for line in f.readlines()[1:]])
+            redshifts = 1/times - 1
+            tage = sims[0].units.redshiftToAgeFlat(redshifts) * 1000 # Myr
+            dt = np.diff(tage)
+            c = ['#666','#000'][i]
+            label = fname.split('/')[-1].replace('outputlist_','').replace('.txt','')
+            ax.plot(redshifts[1:], dt, 'o-', ms=4.0, color=c, label='%s request' % label)
+
+    ax.legend()
+    
+    fig.savefig('snapshot_spacing_%s.pdf' % sims[0].simName)
+    plt.close(fig)
+
+def diagnostic_box_sfrd(sims):
+    """ Comparison of global box SFRD between runs, to avoid halo selection issues. """
+    from ..load.data import sfrTxt
+
+    fig, ax = plt.subplots()
+    ax.set_ylim([1e-10, 1e-4])
+    ax.set_xlim([14, 9.0])
+    #ax.set_ylim([1e-9, 3e-2])
+    #ax.set_xlim([14, 3.0])
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.xaxis.set_major_formatter(ScalarFormatter())
+    ax.xaxis.set_minor_formatter(ScalarFormatter())
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel('SFRD [ M$_{\\rm sun}$  yr$^{-1}$  Mpc$^{-3}$]')
+
+    for sim in sims:
+        # load sfr.txt file
+        s = sfrTxt(sim)
+
+        ax.plot(s['redshift'], s['sfrd'], '-', lw=lw, label=sim.simName)
+
+    # second legend
+    ax.legend(loc='lower right')
+
+    fig.savefig('cosmic_sfrd_comp-%d.pdf' % len(sims))
+    plt.close(fig)
+
+def diagnostic_sfr_jeans_mass(sims, haloID=0):
+    """ CHECK: load all gas properties, convert to proper, calculate the jeans mass and 
+        cell diameter yourself, calculate SFR yourself, plot against what the code is reporting 
+        (what is in the snap), should be 1-to-1, if not may be a factor of a or h missing. """
+    
+    # AREPO/SFR_MCS calculation:
+    # dens = SphP[i].Density;
+    # Sfr = 0.0;
+    
+    # /* Used for only SF when local Jeans mass < All.SfrCritJeansMassN * mcell */
+    # All.SfrCritFactor  = pow(GAMMA, 1.5) * pow(M_PI, 2.5) / (6.0 * pow(All.G, 1.5) * All.SfrCritJeansMassN);
+
+    # if((P[i].Mass * dens * dens * sqrt(All.cf_a3inv) / pow(SphP[i].Pressure, 1.5)) < All.SfrCritFactor)
+    #   continue;
+
+    # All.cf_a3inv    = 1 / (All.Time * All.Time * All.Time);
+    # All.G = GRAVITY / pow(All.UnitLength_in_cm, 3) * All.UnitMass_in_g * pow(All.UnitTime_in_s, 2);
+    # so All.G is G in code units (no cosmo factors)
+    # t_ff = sqrt(3.0 * M_PI / (32.0 * All.G * dens * All.cf_a3inv)); # code time
+
+    # Sfr = All.SfrEfficiency * P[i].Mass / t_ff; # [code mass/code time]
+    # SphP[i].Sfr *= (All.UnitMass_in_g / SOLAR_MASS) / (All.UnitTime_in_s / SEC_PER_YEAR); # msun/yr units
+
+    for sim in sims:
+        # parameters
+        print(sim)
+
+        eps_sf = sim.params['SfrEfficiency']
+        N_J = sim.params['SfrCritJeansMassN']
+        N_J_crit = sim.params['SfrForceJeansMassN'] # all these runs have SFR_MCS_FORCE==0
+
+        # load
+        M_J = sim.snapshotSubset('gas', 'mjeans', haloID=haloID) # msun
+        
+        mass = sim.snapshotSubset('gas', 'mass_msun', haloID=haloID) # msun
+        dens = sim.snapshotSubset('gas', 'dens', haloID=haloID) # code
+        dens = sim.units.codeDensToPhys(dens, cgs=True, numDens=True) # physical [1/cm^3]
+
+        rad_rvir = sim.snapshotSubset('gas', 'rad_rvir', haloID=haloID)
+        
+        tff = sim.snapshotSubset('gas', 'tff_local', haloID=haloID) # yr
+
+        # calculate SFR that we would expect
+        sfr_calc = np.zeros(mass.size, dtype='float32')
+
+        w = np.where(M_J < N_J * mass)[0]
+        sfr_calc[w] = eps_sf * (mass[w] / tff[w]) # msun/yr
+
+        if 'SFR_MCS_FORCE' in sim.config:
+            assert sim.config['SFR_MCS_FORCE'] == 0 # set efficiency to 1.0
+            w = np.where(M_J < N_J_crit * mass)[0]
+            sfr_calc[w] = 1.0 * (mass[w] / tff[w])
+
+        #sfr_calc = eps_sf * (mass / tff) # msun/yr
+
+        # if M_J > N_J * m_cell, then SFR = 0 (handled above)
+        #ww = np.where(M_J > N_J * mass)[0]
+        #frac = len(ww) / len(mass)
+        #print('Found [%d/%d] cells (%.2f%%) with M_J > N_J * m_cell (not star-forming).' % (len(ww),len(mass),frac*100))
+        #sfr_calc[ww] = 0.0
+        
+        # compare to SFR in snapshot
+        sfr_snap = sim.snapshotSubset('gas', 'sfr', haloID=haloID) # msun/yr
+
+        print('Number of SFRs>0: snap = [%d], calc = [%d]' % (np.count_nonzero(sfr_snap),np.count_nonzero(sfr_calc)))
+
+        w1 = np.where(sfr_calc == 0)[0]
+        w2 = np.where(sfr_snap == 0)[0]
+        print('Entries that are zero agree: ', np.array_equal(w1,w2))
+
+        w3 = np.where(sfr_calc > 0)[0]
+
+        if len(w3) > 0:
+            diff = sfr_calc[w3] - sfr_snap[w3]
+            ratio = sfr_calc[w3] / sfr_snap[w3]
+            print('SFR diff calc vs snap: min = %g, max = %g, mean = %g' % (diff.min(), diff.max(), diff.mean()))
+            print('SFR ratio calc vs snap: min = %g, max = %g, mean = %g' % (ratio.min(), ratio.max(), ratio.mean()))
+        print('All close: ', np.allclose(sfr_calc,sfr_snap))
+        print('All non-zero close: ', np.allclose(sfr_calc[w3],sfr_snap[w3]))
+
+        # plot
+        fig, ax = plt.subplots()
+        ax.set_yscale('log')
+        ax.set_xlabel('log( M$_{\\rm Jeans}$ / M$_{\\rm cell}$ )')
+        ax.set_ylabel('N')
+
+        for rad_cut in [1.0,0.1,0.02]:
+            # select
+            w_rad = np.where(rad_rvir < rad_cut)
+            M_J_loc = M_J[w_rad]
+            mass_loc = mass[w_rad]
+            
+            # calc
+            N_J_realized = M_J_loc / mass_loc
+
+            w_N1 = np.where(N_J_realized < 1.0)
+            w_N8 = np.where(N_J_realized < 8.0)
+            frac_N1 = np.sum(mass_loc[w_N1]) / np.sum(mass_loc)
+            frac_N8 = np.sum(mass_loc[w_N8]) / np.sum(mass_loc)
+
+            N_J_realized = np.log10(N_J_realized)
+
+            # plot hist
+            label = '(r/r200 < %.2f) frac$_{<1}$: %.3f, frac$_{<8}$: %.3f' % (rad_cut, frac_N1, frac_N8)
+            ax.hist(N_J_realized, bins=100, histtype='step', lw=lw, label=label)
+
+        # select dens
+        if 1:
+            dens_cut = 1.0
+            w_dens = np.where(dens > dens_cut)
+            M_J_loc = M_J[w_dens]
+            mass_loc = mass[w_dens]
+            
+            # calc
+            N_J_realized = M_J_loc / mass_loc
+
+            w_N1 = np.where(N_J_realized < 1.0)
+            w_N8 = np.where(N_J_realized < 8.0)
+            frac_N1 = np.sum(mass_loc[w_N1]) / np.sum(mass_loc)
+            frac_N8 = np.sum(mass_loc[w_N8]) / np.sum(mass_loc)
+
+            N_J_realized = np.log10(N_J_realized)
+
+            # plot hist
+            label = '(dens > %.1f) frac$_{<1}$: %.3f, frac$_{<8}$: %.3f' % (dens_cut, frac_N1, frac_N8)
+            ax.hist(N_J_realized, bins=100, histtype='step', lw=lw, label=label)
+
+        ax.plot(np.log10([1.0,1.0]), [0,np.max(ax.get_ylim())*0.6], '-', color='black', alpha=0.3)
+        ax.plot(np.log10([8.0,8.0]), [0,np.max(ax.get_ylim())*0.6], '-', color='black', alpha=0.3)
+
+        ax.legend(loc='best')
+        fig.savefig('mjeans_%s.pdf' % sim)
+        plt.close(fig)
+
+    # plot cumulative fraction of mass with N_J > x
+    fig, (ax1,ax2) = plt.subplots(ncols=2, figsize=(13,7))
+    ylim = [1e-6,1e-0]
+    ax1.set_ylim(ylim)
+    ax1.set_xlim([-2, 2])
+    ax1.set_yscale('log')
+    ax1.set_xlabel('log( M$_{\\rm Jeans}$ / M$_{\\rm cell}$ )')
+    ax1.set_ylabel('Fraction of Mass with N$_{\\rm J}$ < x-axis')
+
+    ax1.plot(np.log10([1.0,1.0]), ylim, '-', color='black', alpha=0.3)
+    ax1.plot(np.log10([8.0,8.0]), ylim, '-', color='black', alpha=0.3)
+
+    for sim in sims:
+        # load
+        M_J = sim.snapshotSubset('gas', 'mjeans', haloID=haloID) # msun
+        mass = sim.snapshotSubset('gas', 'mass_msun', haloID=haloID) # msun
+
+        #rad_rvir = sim.snapshotSubset('gas', 'rad_rvir', haloID=haloID) # little impact
+        #w = np.where(rad_rvir < 1.0)
+        #M_J = M_J[w]
+        #mass = mass[w]
+
+        # calc
+        N_J_realized = M_J / mass
+
+        inds = np.argsort(N_J_realized)
+        N_J_realized = N_J_realized[inds]
+        mass = mass[inds]
+
+        cum_mass = np.cumsum(mass)
+        cum_mass /= np.sum(mass)
+
+        ax1.plot(np.log10(N_J_realized), cum_mass, '-', lw=lw, label=sim)
+
+    ax1.legend(loc='lower right')
+
+    # plot cumulative mass
+    ylim = [1e2,1e8]
+    ax2.set_ylim(ylim)
+    ax2.set_yscale('log')
+    ax2.set_xlim([-2, 2])
+    ax2.set_xlabel('log( M$_{\\rm Jeans}$ / M$_{\\rm cell}$ )')
+    ax2.set_ylabel('Total Gas Mass with N$_{\\rm J}$ < x-axis [M$_{\\rm sun}$]')
+
+    ax2.plot(np.log10([1.0,1.0]), ylim, '-', color='black', alpha=0.3)
+    ax2.plot(np.log10([8.0,8.0]), ylim, '-', color='black', alpha=0.3)
+
+    for sim in sims:
+        # load
+        M_J = sim.snapshotSubset('gas', 'mjeans', haloID=haloID) # msun
+        mass = sim.snapshotSubset('gas', 'mass_msun', haloID=haloID) # msun
+
+        #rad_rvir = sim.snapshotSubset('gas', 'rad_rvir', haloID=haloID)
+        #w = np.where(rad_rvir < 1.0)
+        #M_J = M_J[w]
+        #mass = mass[w]
+
+        # calc
+        N_J_realized = M_J / mass
+
+        inds = np.argsort(N_J_realized)
+        N_J_realized = N_J_realized[inds]
+        mass = mass[inds]
+
+        cum_mass = np.cumsum(mass)
+
+        ax2.plot(np.log10(N_J_realized), cum_mass, '-', lw=lw, label=sim)
+
+    ax2.legend(loc='lower right')
+
+    fig.savefig('mjeans_cumsum_n%d_z%d.pdf' % (len(sims),sims[0].redshift))
+    plt.close(fig)
+
+# -------------------------------------------------------------------------------------------------
+
 def paperPlots():
     """ Plots for MCST intro paper. """
 
@@ -907,10 +1272,10 @@ def paperPlots():
     #redshift = 5.0
 
     # testing:
-    variants = ['ST8','TNG'] #,'ST8m','ST8b'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
-    res = [15] #[12,13,14,15]
+    variants = ['ST8','ST8b','ST8s'] #,'TNG'] #,'ST8m','ST8b'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
+    res = [14] #[12,13,14,15]
     hInds = [31619] #[31619]
-    redshift = 4.0 #4.15
+    redshift = 3.0
 
     sims = _get_existing_sims(variants, res, hInds, redshift, all=True)
 
@@ -958,25 +1323,25 @@ def paperPlots():
         stellar_mzr(sims)
 
     # figure - phase space diagrams (one per run)
-    if 0:
+    if 1:
         for sim in sims:
             phase_diagram(sim)
 
-    # ------------
-
-    # simulation comparison plot
+    # simulation comparison meta-plot
     if 0:
         simHighZComparison()
+
+    # single image, gas and stars
+    if 0:
+        vis_single_image(sims[0])
+
+    # ------------
 
     # phase space diagram movie (note: must change save name from .pdf to .png manually)
     if 0:
         for snap in range(86):
             sim = simParams(run='structures', hInd=4182, res=14, variant='ST8', snap=snap)
             phase_diagram(sim)
-
-    # single image
-    if 0:
-        vis_single_image(sims[0])
 
     # movie
     if 0:
@@ -987,158 +1352,30 @@ def paperPlots():
         from ..vis.haloMovieDrivers import structuresEvo
         structuresEvo(conf='one') # one, two, three, four
 
-    # CPU times
+    # diagnostic: CPU times
     if 0:
         from ..cosmo.perf import plotCpuTimes
         plotCpuTimes(sims, xlim=[0.0, 0.25])
 
     # diagnostic: timebin spatial distribution
     if 0:
-        sP = sims[0]
-        nPixels    = 500
-        axes       = [0,1] # x,y
-        labelZ     = True
-        labelScale = True
-        labelSim   = True
-        plotHalos  = 100
-        method     = 'histo_minIP' # sphMap, sphMap_minIP, sphMap_maxIP
-        zoomFac    = 0.01 #0.15 # fraction of box-size
-        sliceFac   = zoomFac # same projection depth as zoom
-        minmax     = [40, 47]
-        #ctName     = 'plasma_r'
-
-        absCenPos  = sP.subhalo(sP.zoomSubhaloID)['SubhaloPos']
-        relCenPos  = None
-
-        numColors = minmax[1] - minmax[0] # discrete colorbar
-        panels = [{'partType':'gas', 'partField':'TimebinHydro', 'valMinMax':minmax}]
-
-        class plotConfig:
-            plotStyle  = 'open'
-            #rasterPx   = 1000
-            saveFilename = './boxImage_%s_%s.png' % (sP.simName,panels[0]['partField'])
-
-        renderBox(panels, plotConfig, locals())
+        diagnostic_vis_timebins(sims[0])
 
     # diagnostic: snapshot spacing
     if 0:
-        fig, ax = plt.subplots()
-        ax.set_ylim([0, 20])
-        ax.set_xlim([20, 2.9])
-        ax.set_xscale('log')
-        ax.xaxis.set_major_formatter(ScalarFormatter())
-        ax.xaxis.set_minor_formatter(ScalarFormatter())
-        ax.set_xlabel('Redshift')
-        ax.set_ylabel('Snapshot Spacing [Myr]')
-
-        ax.plot(ax.get_xlim(), [10,10], '-', color='#999', alpha=0.5)
-
-        for sim in sims:
-            snaps = sim.validSnapList()
-            redshifts = sim.snapNumToRedshift(snaps)
-            tage = sim.units.redshiftToAgeFlat(redshifts) * 1000 # Myr
-            dt = np.diff(tage)
-
-            ax.plot(redshifts[1:], dt, 'o-', ms=6.0, label=f'{sim} saved')
-
-        # load request
-        fname1 = '/u/dnelson/sims.structures/arepo0/outputlist_10Myr_z10-3.txt'
-        fname2 = '/u/dnelson/sims.structures/arepo0/outputlist_1Myr_z20-3.txt'
-
-        for i, fname in enumerate([fname1,fname2]):
-            with open(fname,'r') as f:
-                times = np.array([float(line.split()[0]) for line in f.readlines()[1:]])
-                redshifts = 1/times - 1
-                tage = sims[0].units.redshiftToAgeFlat(redshifts) * 1000 # Myr
-                dt = np.diff(tage)
-                c = ['#666','#000'][i]
-                label = fname.split('/')[-1].replace('outputlist_','').replace('.txt','')
-                ax.plot(redshifts[1:], dt, 'o-', ms=4.0, color=c, label='%s request' % label)
-
-        ax.legend()
-        
-        fig.savefig('snapshot_spacing_%s.pdf' % sims[0].simName)
-        plt.close(fig)
+        diagnostic_snapshot_spacing(sims)
 
     # diagnostic: number of non-contaminated halos vs redshift
     if 0:
-        ymin = 1e-6
-
-        fig, ax = plt.subplots()
-        ax.set_ylim([ymin, 1.0])
-        ax.set_xlim([14, 2.9])
-        ax.set_xscale('log')
-        ax.set_yscale('log')
-        ax.xaxis.set_major_formatter(ScalarFormatter())
-        ax.xaxis.set_minor_formatter(ScalarFormatter())
-        ax.set_xlabel('Redshift')
-        ax.set_ylabel('Low-resolution DM Contamination Fraction')
-
-        max_num = 0
-
-        for sim in sims:
-            # loop over snapshots
-            for snap in sim.validSnapList():
-                # load
-                sim.setSnap(snap)
-
-                contam_frac = sim.subhalos('contam_frac')
-                cen_flag = sim.subhalos('cen_flag')
-                mstar = sim.subhalos('mstar2_log')
-
-                # select subhalos of interest
-                subhaloIDs = np.where((cen_flag == 1) & (mstar > 0) & np.isfinite(mstar))[0]
-                mstar = mstar[subhaloIDs]
-                contam_frac = contam_frac[subhaloIDs]
-
-                max_num = np.max([max_num, len(subhaloIDs)])
-
-                print(snap, mstar)
-
-                # plot
-                for j, subhaloID in enumerate(subhaloIDs):
-                    yy = contam_frac[j] if contam_frac[j] > ymin else ymin*1.5
-                    ms = mstar[j] * 1.5
-                    ax.plot(sim.redshift, yy, marker=markers[0], ms=ms, color=colors[j])
-
-        # legend
-        handles = [plt.Line2D( (0,0), (0,0), ls='-', color='black', lw=0)]
-        labels = [sim.simName]
-
-        for i in range(max_num):
-            handles.append(plt.Line2D( (0,1), (0,0), marker=markers[0], color=colors[i], lw=0))
-            labels.append('Halo ID#%d' % i)
-
-        legend = ax.legend(handles, labels, loc='upper left')
-        
-        fig.savefig('contam_frac_z_%s.pdf' % sims[0].simName)
-        plt.close(fig)
+        diagnostic_numhalos_uncontaminated(sims)
 
     # diagnostic: global box sfrd
     if 0:
-        from ..load.data import sfrTxt
-
-        fig, ax = plt.subplots()
-        ax.set_ylim([1e-10, 1e-4])
-        ax.set_xlim([14, 9.0])
-        #ax.set_ylim([1e-9, 3e-2])
-        #ax.set_xlim([14, 3.0])
-        ax.set_xscale('log')
-        ax.set_yscale('log')
-        ax.xaxis.set_major_formatter(ScalarFormatter())
-        ax.xaxis.set_minor_formatter(ScalarFormatter())
-        ax.set_xlabel('Redshift')
-        ax.set_ylabel('SFRD [ M$_{\\rm sun}$  yr$^{-1}$  Mpc$^{-3}$]')
-
-        for sim in sims:
-            # load sfr.txt file
-            s = sfrTxt(sim)
-
-            ax.plot(s['redshift'], s['sfrd'], '-', lw=lw, label=sim.simName)
-
-        # second legend
-        ax.legend(loc='lower right')
-
-        fig.savefig('cosmic_sfrd_comp-%d.pdf' % len(sims))
-        plt.close(fig)
+        diagnostic_box_sfrd(sims)
     
+    # diagnostic: SFR debug
+    if 0:
+        diagnostic_sfr_jeans_mass(sims, haloID=0)
+
+    # diagnostic: equilibrium curves of new grackle tables
+    # TODO

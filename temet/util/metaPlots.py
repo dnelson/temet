@@ -28,7 +28,7 @@ def plotUsersData():
               "Number of Downloads: LHaloTree","Number of Downloads: Sublink",
               "Cutout Requests: Subhalos","Cutout Requests: Sublink"]
 
-    pStyle = 'black' # 'white', 'black'
+    pStyle = 'white' # 'white', 'black'
     fac2 = 1.05
 
     # load
@@ -158,7 +158,7 @@ def plotNumPublicationsVsTime():
 
     today_ts = mktime(datetime.now().timetuple())
 
-    pStyle = 'black' # 'white', 'black'
+    pStyle = 'white' # 'white', 'black'
     color1, color2, _, _ = getWhiteBlackColors(pStyle)  
 
     # load Illustris and TNG
@@ -193,7 +193,7 @@ def plotNumPublicationsVsTime():
         pub_sets['Millennium'].append(pub)
 
     # start plot
-    fig = plt.figure(figsize=(figsize[0]*0.7,figsize[1]*0.7), facecolor=color1)
+    fig = plt.figure(figsize=(figsize[0]*0.8,figsize[1]*0.8), facecolor=color1)
     ax = fig.add_subplot(111, facecolor=color1)
     ax.set_ylabel('Number of Publications')
     ax.set_xlabel('Number of Years since %s Publication' % \
@@ -203,9 +203,9 @@ def plotNumPublicationsVsTime():
     setAxisColors(ax, color2)
 
     ax.set_xlim(xlim)
-    ax.set_ylim([10, 1200]) #len(pub_sets['TNG'])*1.05])
-
-    ax.set_yscale('log')
+    ax.set_ylim([0, len(pub_sets['TNG'])*1.05])
+    #ax.set_ylim([10, 1200])
+    #ax.set_yscale('log')
 
     for sim_name, pub_set in pub_sets.items():
         xx = np.array([pub['ts'] for pub in pub_set])

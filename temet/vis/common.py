@@ -146,7 +146,7 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
             if not sP.snapHasField(partType, 'SubfindHsml'):
                 if indRange is None: print('Warning: Computing DM hsml for global snapshot.')
                 pos = sP.snapshotSubsetP(partType, 'pos', indRange=indRange)
-                treePrec = 'single' if pos.dtype == np.float32 else 'double'
+                #treePrec = 'single' if pos.dtype == np.float32 else 'double'
                 nNGBDev = int( np.sqrt(nNGB)/2 )
                 hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=nNGBDev, treePrec='double')
             else:
@@ -460,6 +460,10 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
         if band0_grid.max() < 1e2:
             minVal = 0.6
             maxVal = 3.60
+    
+        if band0_grid.max() > 5e4:
+            minVal = 3.2
+            maxVal = 6.6
 
         minValLog = np.array([minVal,minVal,minVal]) 
         minValLog = np.log10( (10.0**minValLog) * (pxArea/pxArea0*resFac) )
@@ -634,7 +638,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         lineName = partField.split("_")[1].replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
 
         # compute line emission flux for each gas cell in [erg/s/cm^2] or [photon/s/cm^2]
-        if 0:
+        if 1:
             # use cache
             assert not zeroSfr # not implemented in cache
             assert not lumUnits # not implemented in cache
@@ -2030,7 +2034,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         with h5py.File(saveFilename,'w') as f:
             f['grid'] = grid_master
         if getuser() != 'wwwrun':
-            print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
+            print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1], flush=True)
 
     # smooth down to some resolution by convolving with a Gaussian? (before log if applicable)
     if smoothFWHM is not None:
@@ -3307,8 +3311,10 @@ def renderMultiPanel(panels, conf):
                     rowHeightRatio = p['nPixels'][1] / p['nPixels'][0] # e.g. 0.25 for 4x longer than tall
                     nShortPanels += 1
 
-        if varRowHeights and nRows == 2 and nCols == 1: # single face-on edge-on combination
-            barAreaBottom *= (1-rowHeightRatio/2)
+        #if varRowHeights and nRows == 2 and nCols == 1: # single face-on edge-on combination
+        #    barAreaBottom *= (1-rowHeightRatio/2)
+        if varRowHeights and nRows == 2:
+            barAreaTop = 0.0 # disable top set of bars
 
         assert nShortPanels/nCols == np.round(nShortPanels/nCols) # exact number of panels to make full rows
         nShortRows = nShortPanels / nCols
@@ -3453,13 +3459,13 @@ def renderMultiPanel(panels, conf):
 
             if nRows == 2:
                 # both above and below, one per column
-                if curRow == 0:
-                    addCustomColorbars(fig, ax, conf, config, heightFac*0.6, 0.0, barTop, color2, 
-                                       rowHeight, colWidth, bottomNorm, leftNorm)
+                if curRow == 0 and barAreaTop > 0:
+                    addCustomColorbars(fig, ax, conf, config, heightFac*1.0, 0.0, barTop, color2, 
+                                       rowHeight, colWidth, bottomNorm, leftNorm, hOffset=0.4)
 
-                if curRow == nRows-1:
-                    addCustomColorbars(fig, ax, conf, config, heightFac*0.6, barBottom, 0.0, color2, 
-                                       rowHeight, colWidth, bottomNorm, leftNorm)
+                if curRow == nRows-1 and barAreaBottom > 0:
+                    addCustomColorbars(fig, ax, conf, config, heightFac*1.0, barBottom, 0.0, color2, 
+                                       rowHeight, colWidth, bottomNorm, leftNorm, hOffset=-1.0)
             
             if nRows == 1 or (nRows > 2 and curRow == nRows-1):
                 # only below, one per column

@@ -393,13 +393,50 @@ def cs(sim, partType, field, args):
     u    = sim.snapshotSubset(partType, 'u', **args)
     dens = sim.snapshotSubset(partType, 'dens', **args)
 
-    return sim.calcSoundSpeedKmS(u, dens)
+    return sim.units.calcSoundSpeedKmS(u, dens)
 
 cs.label = 'Sound Speed'
 cs.units = r'$\rm{km/s}$'
 cs.limits = [-9.0, 3.0]
 cs.limits_halo = [-3.0, 2.0]
 cs.log = False
+
+@snap_field(aliases=['jeans_mass'])
+def mjeans(sim, partType, field, args):
+    """ Local (per-cell) Jeans mass. """
+    cs   = sim.snapshotSubset(partType, 'cs', **args).astype('float64') # km/s
+    cs   *= 1e5 # km/s -> cm/s
+    dens = sim.snapshotSubset(partType, 'dens', **args)
+    dens = sim.units.codeDensToPhys(dens, cgs=True) # g/cm^3
+
+    mJ = np.pi**(5/2) * cs**3 / (6 * sim.units.Gravity**(3/2) * dens**(1/2)) # g
+
+    mJ /= sim.units.Msun_in_g # Msun
+
+    return mJ.astype('float32')
+
+mjeans.label = 'Jeans Mass'
+mjeans.units = r'$\rm{M_{sun}}$'
+mjeans.limits = [0.0, 6.0]
+mjeans.limits_halo = [2.0, 6.0]
+mjeans.log = True
+
+@snap_field(alias='tff_cell')
+def tff_local(sim, partType, field, args):
+    """ Local (per-cell) free-fall time. """
+    dens = sim.snapshotSubset(partType, 'dens', **args)
+    dens = sim.units.codeDensToPhys(dens,cgs=True) # g/cm^3
+
+    tff = np.sqrt(3 * np.pi / (32 * sim.units.Gravity * dens)) # s
+    tff /= sim.units.s_in_yr # yr
+
+    return tff
+
+tff_local.label = 'Free-fall Time'
+tff_local.units = r'$\rm{yr}$'
+tff_local.limits = [0.0, 6.0]
+tff_local.limits_halo = [2.0, 6.0]
+tff_local.log = True
 
 @snap_field(alias='vol')
 def volume(sim, partType, field, args):

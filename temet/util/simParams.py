@@ -222,8 +222,7 @@ class simParams:
         from ..cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs, \
             inverseMapPartIndicesToHaloIDs
         from ..load.snapshot import snapshotSubset, snapshotHeader, snapshotSubsetParallel, snapHasField, \
-            snapFields, snapNumChunks, \
-            snapPath, snapConfigVars, snapParameterVars, subboxVals, haloOrSubhaloSubset, \
+            snapFields, snapNumChunks, snapPath, subboxVals, haloOrSubhaloSubset, \
             snapshotSubsetLoadIndicesChunked
         from ..load.auxcat import auxCat
         from ..load.groupcat import groupCat, groupCatSingle, groupCatHeader, \
@@ -255,8 +254,6 @@ class simParams:
         self.snapHasField = partial(snapHasField, self)
         self.snapFields = partial(snapFields, self)
         self.snapNumChunks = partial(snapNumChunks, self.simPath)
-        self.snapConfigVars = partial(snapConfigVars, self)
-        self.snapParameterVars = partial(snapParameterVars, self)
         self.snapPath = partial(snapPath, self.simPath)
         self.subboxVals = partial(subboxVals, self.subbox)
         self.gcPath = partial(gcPath, self.simPath)
@@ -1800,6 +1797,18 @@ class simParams:
         core_hours = final_timestep_sec_per_cpu * data['numCPUs'] / 3600
 
         return core_hours
+    
+    @property
+    def config(self):
+        """ Return Config.sh variable dict (from snapshot metadata). """
+        from ..load.snapshot import snapConfigVars, snapParameterVars
+        return snapConfigVars(self)
+    
+    @property
+    def params(self):
+        """ Return param.txt variable dict (from snapshot metadata). """
+        from ..load.snapshot import snapConfigVars, snapParameterVars
+        return snapParameterVars(self)
 
     # operator overloads
     def __eq__(self, other): 
