@@ -900,30 +900,81 @@ def vis_movie(sP, frame=None):
 # -------------------------------------------------------------------------------------------------
 
 def diagnostic_vis_timebins(sP):
-        nPixels    = 500
-        axes       = [0,1] # x,y
-        labelZ     = True
-        labelScale = True
-        labelSim   = True
-        plotHalos  = 100
-        method     = 'histo_minIP' # sphMap, sphMap_minIP, sphMap_maxIP
-        zoomFac    = 0.01 #0.15 # fraction of box-size
-        sliceFac   = zoomFac # same projection depth as zoom
-        minmax     = [40, 47]
-        #ctName     = 'plasma_r'
+    """ Visualize spatial distribution of gas timebins across the box. """
+    nPixels    = 500
+    axes       = [0,1] # x,y
+    labelZ     = True
+    labelScale = True
+    labelSim   = True
+    plotHalos  = 100
+    method     = 'histo_minIP' # sphMap, sphMap_minIP, sphMap_maxIP
+    zoomFac    = 0.01 #0.15 # fraction of box-size
+    sliceFac   = zoomFac # same projection depth as zoom
+    minmax     = [40, 47]
+    #ctName     = 'plasma_r'
 
-        absCenPos  = sP.subhalo(sP.zoomSubhaloID)['SubhaloPos']
-        relCenPos  = None
+    absCenPos  = sP.subhalo(sP.zoomSubhaloID)['SubhaloPos']
+    relCenPos  = None
 
-        numColors = minmax[1] - minmax[0] # discrete colorbar
-        panels = [{'partType':'gas', 'partField':'TimebinHydro', 'valMinMax':minmax}]
+    numColors = minmax[1] - minmax[0] # discrete colorbar
+    panels = [{'partType':'gas', 'partField':'TimebinHydro', 'valMinMax':minmax}]
 
-        class plotConfig:
-            plotStyle  = 'open'
-            #rasterPx   = 1000
-            saveFilename = './boxImage_%s_%s.png' % (sP.simName,panels[0]['partField'])
+    class plotConfig:
+        plotStyle  = 'open'
+        #rasterPx   = 1000
+        saveFilename = './boxImage_%s_%s.png' % (sP.simName,panels[0]['partField'])
 
-        renderBox(panels, plotConfig, locals())
+    renderBox(panels, plotConfig, locals())
+
+def diagnostic_vis_box(sP, partType='dm'):
+    """ Visualize large-scale region that bounds all high-res DM. """
+    # determine bounding box (always use high-res
+    pos = sP.dm('pos')
+
+    boxsize = 0.0
+    absCenPos = [0,0,0]
+
+    for i in range(3):
+        absCenPos[i] = np.mean(pos[:,i])
+
+        min_v = absCenPos[i] - pos[:,i].min()
+        max_v = pos[:,i].max() - absCenPos[i]
+
+        boxsize = np.max([boxsize, min_v, max_v])
+
+    boxsize = np.ceil((boxsize * 2)/10) * 10
+
+    #boxsize /= 10 # zoom in more
+    #boxsize /= 4 # zoom in more
+
+    nPixels    = 1000
+    axes       = [0,2] # x,y
+    labelZ     = True
+    labelScale = True
+    labelSim   = True
+    plotHalos  = 100
+    relCenPos  = None # specified in absCenPos
+    method     = 'sphMap'
+    zoomFac    = boxsize / sP.boxSize # fraction of box-size
+    sliceFac   = zoomFac # same projection depth as zoom
+
+    absCenPos = [absCenPos[axes[0]],absCenPos[axes[1]],absCenPos[3-axes[0]-axes[1]]]
+
+    if partType == 'dm':
+        panels = [{'partField':'coldens_msunkpc2', 'valMinMax':[5.5,8.5]}]
+
+    if partType == 'gas':
+        # only high-res, no buffer
+        ptRestrictions = {'Masses':['lt',sP.targetGasMass * 3]}
+        panels = [{'partField':'coldens_msunkpc2', 'valMinMax':[4.8,7.5]}]
+
+    class plotConfig:
+        plotStyle  = 'edged_black'
+        #colorbars  = False
+        colorbarOverlay = True
+        saveFilename = './boxImage_%s_%s-%s.png' % (sP.simName,partType,panels[0]['partField'])
+
+    renderBox(panels, plotConfig, locals(), skipExisting=False)
 
 def diagnostic_numhalos_uncontaminated(sims):
     """ Visualize number of non-contaminated halos vs redshift, and their contamination fractions. """
@@ -1258,7 +1309,6 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
 
 def paperPlots():
     """ Plots for MCST intro paper. """
-
     # list of sims to include
     #variants = ['TNG','ST8','ST8e'] # TNG, ST5*, ST6, ST6b
     #res = [11, 12, 13, 14, 15] # [11, 12, 13, 14]
@@ -1272,10 +1322,10 @@ def paperPlots():
     #redshift = 5.0
 
     # testing:
-    variants = ['ST8','ST8b','ST8s'] #,'TNG'] #,'ST8m','ST8b'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
-    res = [14] #[12,13,14,15]
+    variants = ['ST8s'] #,'TNG'] #,'ST8m','ST8b'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
+    res = [16] #[12,13,14,15]
     hInds = [31619] #[31619]
-    redshift = 3.0
+    redshift = 18.8
 
     sims = _get_existing_sims(variants, res, hInds, redshift, all=True)
 
@@ -1323,7 +1373,7 @@ def paperPlots():
         stellar_mzr(sims)
 
     # figure - phase space diagrams (one per run)
-    if 1:
+    if 0:
         for sim in sims:
             phase_diagram(sim)
 
@@ -1372,6 +1422,10 @@ def paperPlots():
     # diagnostic: global box sfrd
     if 0:
         diagnostic_box_sfrd(sims)
+
+    # diagnostic: full high-res region vis
+    if 0:
+        diagnostic_vis_box(sims[0], partType='dm')
     
     # diagnostic: SFR debug
     if 0:

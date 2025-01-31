@@ -1677,6 +1677,14 @@ def plot2d(grid, label='', minmax=None, filename='plot.pdf'):
 
 # --- I/O ---
 
+def xypairs_to_np(s):
+    """ Convert a string of comma-separated x,y pairs, each pair separated by a newline, into
+    two separate x and y ndarrays. """
+    x = np.array([float(x.split(',')[0]) for x in s.split('\n')])
+    y = np.array([float(x.split(',')[1]) for x in s.split('\n')])
+
+    return x, y
+
 def curRepoVersion():
     """ Return a hash of the current state of the mercurial python repo. """
     import subprocess

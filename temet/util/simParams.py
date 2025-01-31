@@ -739,7 +739,7 @@ class simParams:
             assert hInd is not None
             #assert self.variant in ['DM','SN','SNU1','SNU2','SNPIPE','TNG','ST','ST2'] # too many
 
-            self.validResLevels = [11,12,13,14,15]
+            self.validResLevels = [11,12,13,14,15,16]
             self.groupOrdered = True
 
             # TNG50-1 zooms to z=3
@@ -749,7 +749,7 @@ class simParams:
 
             self.gravSoft = 0.390 / (res-10)
             if self.variant != 'DM':
-                self.targetGasMass = 5.73879e-6 / (res-10)**3
+                self.targetGasMass = 5.73879e-6 / 8**(res-11)
             self.boxSize = 35000.0 # ckpc/h
 
             # common: Planck2015 TNG cosmology
