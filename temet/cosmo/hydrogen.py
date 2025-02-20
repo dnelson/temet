@@ -239,13 +239,14 @@ def neutral_fraction(nH, sP, temp=1e4, redshift=None):
     if redshift is None:
         redshift = sP.redshift
 
-    _, gamma_UVB_z = uvbPhotoionAtten(np.log10(nH), np.log10(temp), redshift)
+    photUVBratio, gamma_UVB_z = uvbPhotoionAtten(np.log10(nH), np.log10(temp), redshift)
+    gamma_phot = photUVBratio * gamma_UVB_z
 
     # A6 from Theuns 98
     LambdaT = 1.17e-10*temp**0.5*np.exp(-157809.0/temp)/(1+np.sqrt(temp/1e5))
 
     A = alpha_A + LambdaT
-    B = 2*alpha_A + gamma_UVB_z/nH + LambdaT
+    B = 2*alpha_A + gamma_phot/nH + LambdaT
 
     return (B - np.sqrt(B**2-4*A*alpha_A))/(2*A)
 
