@@ -2311,11 +2311,12 @@ def addBoxMarkers(p, conf, ax, pExtent):
                     text = ''
                     for key in labelVals.keys():
                         text += key % labelVals[key][gcInd] + '\n'
+                    text = text.strip()
 
                     # draw text string
-                    xPosText = xPos + rad + p['boxSizeImg'][0]/100
-                    yPosText = yPos - rad/4
-                    ax.text( xPosText, yPosText, text, **textOpts)
+                    xPosText = xPos + rad + p['boxSizeImg'][0]/200
+                    yPosText = yPos
+                    ax.text(xPosText, yPosText, text, **textOpts)
 
             gcInd += 1
             if gcInd >= pos.shape[0] and countAdded < numToAdd:
@@ -2334,6 +2335,16 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
             c = plt.Circle((xyzpos[p['axes'][0]],xyzpos[p['axes'][1]]), rad, color='red', alpha=alpha, linewidth=2.0, fill=False)
             ax.add_artist(c)
+
+        # special heavior: highlight a specific set of (sub)halo inds
+        if 0:
+            halo_inds = [0,1,2,5]
+            for halo_ind in halo_inds:
+                halo_loc = p['sP'].halo(halo_ind)
+                xyzpos = halo_loc['GroupPos']
+                rad = halo_loc['Group_R_Crit200'] * 2.0
+                c = plt.Circle((xyzpos[p['axes'][0]],xyzpos[p['axes'][1]]), rad, color='red', alpha=alpha, linewidth=2.0, fill=False)
+                ax.add_artist(c)
 
         # special behavior: visualize PMGRID cells next to a periodic boundary
         if 0:
@@ -2366,12 +2377,14 @@ def addBoxMarkers(p, conf, ax, pExtent):
                 labelVals = {}
                 if 'mstar' in p['labelHalos']: # label with M*
                     labelVals[r'M$_\star$ = 10$^{%.1f}$ M$_\odot$'] = gc_s[sub_ids]
+                #if 'mhalo' in p['labelHalos']: # label with M200
+                #    labelVals[r'M$_{\rm h}$ = 10$^{%.1f}$ M$_\odot$'] = halo_mass_logmsun
                 if 'mhalo' in p['labelHalos']: # label with M200
-                    labelVals[r'M$_{\\rm h}$ = 10$^{%.1f}$ M$_\odot$'] = halo_mass_logmsun
+                    labelVals[r'%.1f'] = halo_mass_logmsun
                 if 'id' in p['labelHalos']:
                     labelVals['[%d]'] = halo_id
 
-            _addCirclesHelper(p, ax, gc['GroupPos'], gc['Group_R_Crit200'], p['plotHalos'], labelVals)
+            _addCirclesHelper(p, ax, gc['GroupPos'], gc['Group_R_Crit200'], p['plotHalos'], labelVals, alpha=0.5)
 
     if 'plotSubhalos' in p and p['plotSubhalos'] > 0:
         # plotting N most massive child subhalos in visible area

@@ -1672,7 +1672,14 @@ class simParams:
         if self.redshift is None:
             raise Exception("Need sP.redshift")
         return self.units.redshiftToAgeFlat(self.redshift)
-    
+   
+    @property
+    def tlookback(self):
+        """ Current lookback time [Gyr]. """
+        if self.redshift is None:
+            raise Exception("Need sP.redshift")
+        return self.units.redshiftToLookbackTime(self.redshift)
+
     @property
     def boxSizeCubicPhysicalMpc(self):
         #if self.redshift != 0.0:

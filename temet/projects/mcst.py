@@ -385,12 +385,15 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
 
         print(f'[{quant}] Showing {len(subhaloIDs)} subhalos for {sim.simName}.')
 
+        # load
+        vals, _, _, valLog = sim.simSubhaloQuantity(quant, clean, tight=True)
+
         # loop over each subhalo
         for j, subhaloID in enumerate(subhaloIDs):
-            # load
-            vals, _, _, valLog = sim.simSubhaloQuantity(quant, clean, tight=True)
             val = vals[subhaloID]
             if valLog and not sfh_lin: val = logZeroNaN(val)
+
+            print(f' {subhaloID:6d} mstar = {mstar[subhaloID]:.2f} contam_frac = {contam_frac[subhaloID]:.4f}')
 
             # color set by hInd
             c = colors[hInds.index(sim.hInd)]
@@ -400,7 +403,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
             linestyle = linestyles[variants.index(sim.variant)]
 
             # marker size set by resolution
-            ms_loc = (sim.res - 10) * 2.5 + 4
+            ms_loc = (sim.res - 10) * 2.5 + 3
             lw_loc = lw #(sim.res - 10) if len(res) > 1 else lw
             alpha_loc = 1.0 #0.6 if len(res) > 1 else 1.0
 
@@ -415,8 +418,9 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
                     c = colors[res.index(sim.res)]
                 if len(res) > 1 and len(variants) > 1:
                     c = colors[res.index(sim.res)]
+                    linestyle = linestyles[variants.index(sim.variant)]
 
-                if len(subhaloIDs) > 1:
+                if len(subhaloIDs) > 1 and len(variants) == 1:
                     linestyle = linestyles[j]
 
             # final redshift marker
@@ -818,6 +822,7 @@ def vis_single_image(sP):
     fracsType  = 'rHalfMassStars'
     nPixels    = [960,960]
     size       = 1.0 if sP.hInd > 20000 else 5.0
+    #size       = 0.05 # z=12 test
     sizeType   = 'kpc'
     labelSim   = False # True
     labelHalo  = 'mhalo,mstar,haloid'
@@ -832,12 +837,13 @@ def vis_single_image(sP):
     #subhaloInd = sP.halo(1)['GroupFirstSub']
 
     # panels (can vary hInd, variant, res)
+    zfac = 0.0 #1.0
     panels = []
-    panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5], 'rotation':'face-on'} )
+    panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0+zfac,22.5+zfac], 'rotation':'face-on'} )
     panels.append( {'partType':'stars', 'partField':'stellarComp', 'rotation':'face-on'} )
 
     # add skinny edge-on panels below:
-    panels.append( {'partType':'gas', 'partField':'HI', 'nPixels':[960,240], 'valMinMax':[20.5,23.0], 
+    panels.append( {'partType':'gas', 'partField':'HI', 'nPixels':[960,240], 'valMinMax':[20.5+zfac,23.0+zfac], 
                     'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
     panels.append( {'partType':'stars', 'partField':'stellarComp', 'nPixels':[960,240], 
                     'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
@@ -846,7 +852,7 @@ def vis_single_image(sP):
         plotStyle    = 'edged'
         colorbars    = True
         fontsize     = 28 # 24
-        saveFilename = '%s_%d.pdf' % (sP.simName,sP.snap)
+        saveFilename = '%s_%d.png' % (sP.simName,sP.snap)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -869,10 +875,10 @@ def vis_movie(sP, frame=None):
     #subhaloInd = sP.halo(1)['GroupFirstSub']
 
     # panels
-    if 0:
-        panels = []
-        panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5]} )
-        panels.append( {'partType':'stars', 'partField':'stellarComp'} )
+    panels = []
+
+    panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5]} )
+    panels.append( {'partType':'stars', 'partField':'stellarComp'} )
 
     class plotConfig:
         plotStyle    = 'edged_black'
@@ -884,15 +890,16 @@ def vis_movie(sP, frame=None):
     for snap in snapList:
         sP.setSnap(snap)
 
-        # custom: decide switch (h31619)
-        inds = [0, sP.halo(1)['GroupFirstSub']]
-        if snap in [9,10,36,37,40,41,42,43,44,45,46,65,68,69,71,72,73,74,75,76,77,78,79,80,
-                    81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101]:
-            inds = inds[::-1]
+        if 0:
+            # custom: decide switch (h31619)
+            inds = [0, sP.halo(1)['GroupFirstSub']]
+            if snap in [9,10,36,37,40,41,42,43,44,45,46,65,68,69,71,72,73,74,75,76,77,78,79,80,
+                        81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101]:
+                inds = inds[::-1]
 
-        panels = []
-        panels.append( {'partType':'stars', 'partField':'stellarComp', 'subhaloInd':inds[0]} )
-        panels.append( {'partType':'stars', 'partField':'stellarComp', 'subhaloInd':inds[1]} )
+            panels = []
+            panels.append( {'partType':'stars', 'partField':'stellarComp', 'subhaloInd':inds[0]} )
+            panels.append( {'partType':'stars', 'partField':'stellarComp', 'subhaloInd':inds[1]} )
 
         plotConfig.saveFilename = '%s_%03d.png' % (sP.simName,sP.snap)
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
@@ -928,7 +935,7 @@ def diagnostic_vis_timebins(sP):
 
 def diagnostic_vis_box(sP, partType='dm'):
     """ Visualize large-scale region that bounds all high-res DM. """
-    # determine bounding box (always use high-res
+    # determine bounding box (always use high-res DM particles)
     pos = sP.dm('pos')
 
     boxsize = 0.0
@@ -953,6 +960,7 @@ def diagnostic_vis_box(sP, partType='dm'):
     labelScale = True
     labelSim   = True
     plotHalos  = 100
+    labelHalos = 'mhalo'
     relCenPos  = None # specified in absCenPos
     method     = 'sphMap'
     zoomFac    = boxsize / sP.boxSize # fraction of box-size
@@ -1305,6 +1313,16 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
     fig.savefig('mjeans_cumsum_n%d_z%d.pdf' % (len(sims),sims[0].redshift))
     plt.close(fig)
 
+def blackhole_details():
+    """ Test. """
+    #data = np.loadtxt('blackhole_details.txt')
+    data = np.genfromtxt('blackhole_details.txt', dtype=None)
+
+    ids = data[:][0]
+    unique_ids = np.unique(ids)
+
+    import pdb; pdb.set_trace()
+
 # -------------------------------------------------------------------------------------------------
 
 def paperPlots():
@@ -1325,7 +1343,7 @@ def paperPlots():
     variants = ['ST8s'] #,'TNG'] #,'ST8m','ST8b'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
     res = [16] #[12,13,14,15]
     hInds = [31619] #[31619]
-    redshift = 18.8
+    redshift = 5.5
 
     sims = _get_existing_sims(variants, res, hInds, redshift, all=True)
 
@@ -1336,8 +1354,8 @@ def paperPlots():
     # figure - SFH (stellar mass vs redshift evo)
     if 0:
         quant = 'mstar2_log'
-        xlim = [13.1, 8.9] #[12.1, 2.95]
-        ylim = [4.0, 8.0] #[5.0, 8.5]
+        xlim = [13.1, 5.9] #[12.1, 2.95]
+        ylim = [4.6, 8.0] #[5.0, 8.5]
 
         quantVsRedshift(sims, quant, xlim, ylim)
 
@@ -1394,7 +1412,7 @@ def paperPlots():
             phase_diagram(sim)
 
     # movie
-    if 0:
+    if 1:
         vis_movie(sims[0])
 
     # movies
@@ -1425,11 +1443,13 @@ def paperPlots():
 
     # diagnostic: full high-res region vis
     if 0:
-        diagnostic_vis_box(sims[0], partType='dm')
+        diagnostic_vis_box(sims[0], partType='gas')
     
     # diagnostic: SFR debug
     if 0:
         diagnostic_sfr_jeans_mass(sims, haloID=0)
 
     # diagnostic: equilibrium curves of new grackle tables
-    # TODO
+    if 0:
+        from ..cosmo.cooling import grackle_equil
+        grackle_equil()

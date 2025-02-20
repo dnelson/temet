@@ -562,31 +562,26 @@ def generate_set():
         haloIDs = [21] #[11]
         sizeFac = 256.0
 
-    if 0:
+    if 1:
         # TNG50 dwarf zooms (MCST)
-        sP = simParams(run='tng50-1', redshift=3.0)
-        zoomFac = 16 # 1 (8e4 msun/TNG50-1 res), 2 (1e4 msun), 4 (1320 msun), 8 (160 msun), 16 (20 msun), 32 (L16, 3msun)
+        #sP = simParams(run='tng50-1', redshift=3.0)
+        #haloIDs = [1242] # Milky Way progenitors at z=3
+        #haloIDs = [302, 437, 556, 600, 627, 684, 730, 793, 869] # mstar = 1e9 at z=3
+        #haloIDs = [607, 2485, 3051, 3345, 3545, 3729, 3938, 4182, 4382, 4697, 5145] # mstar = 1e8 at z=3
+        #haloIDs = [3272, 10677, 12688, 14043, 14997, 15998, 16996, 18203, 19761] # mstar = 1e7 at z=3
+        #haloIDs = [8795, 31619, 37411, 40928, 43571, 45925, 48539, 51074, 53960, 57526, 63330] # mstar = 1e6 at z=3
 
-        # Milky Way progenitors at z=3
-        # haloIDs = [1242]
+        sP = simParams(run='tng50-1', redshift=5.5)
+        haloIDs = [21240,38419] # z=5.5 grnr[np.where( (mhalo>8.5) & (mhalo<8.51) )[0][0:5]]
+        #haloIDs += [6300, 6597] # z=5.5 grnr[np.where( (mhalo>9.0) & (mhalo<9.1) )[0][0:5]]
+        #haloIDs += [4352, 4646] # z=5.5 grnr[np.where( (mhalo>9.5) & (mhalo<9.51) )[0][0:5]]
+        #haloIDs += [1142, 1289] # z=5.5 grnr[np.where( (mhalo>10.0) & (mhalo<10.01) )[0][0:5]]
+        #haloIDs += [167, 347] # z=5.5 grnr[np.where( (mhalo>10.5) & (mhalo<10.51) )[0][0:5]]
+        #haloIDs += [46, 51] # z=5.5 grnr[np.where( (mhalo>11.0) & (mhalo<11.1) )[0][0:5]]
+        #haloIDs += [10, 12, 19] #z=5.5 grnr[np.where( (mhalo>11.5) & (mhalo<11.6) )[0]]
 
-        # mstar = 1e9 at z=3
-        # grnr[np.where( (mstar>8.9) & (mstar<9.1) & (mhalo>11.1) & (mhalo<11.3) & (cen_flag) )[0][::10]]
-        #haloIDs = [302, 437, 556, 600, 627, 684, 730, 793, 869]
-
-        # mstar = 1e8 at z=3
-        # grnr[np.where( (mstar>7.9) & (mstar<8.1) & (mhalo>10.4) & (mhalo<10.6) & (cen_flag) )[0][::50]]
-        haloIDs = [607, 2485, 3051, 3345, 3545, 3729, 3938, 4182, 4382, 4697, 5145]
-
-        # mstar = 1e7 at z=3
-        # grnr[np.where( (mstar>6.9) & (mstar<7.1) & (mhalo>9.8) & (mhalo<10.0) & (cen_flag) )[0][::200]]
-        #haloIDs += [3272, 10677, 12688, 14043, 14997, 15998, 16996, 18203, 19761]
-
-        # mstar = 1e6 at z=3
-        # grnr[np.where( (mstar>5.9) & (mstar<6.1) & (mhalo>9.3) & (mhalo<9.5) & (cen_flag) )[0][::400]]
-        #haloIDs += [8795, 31619, 37411, 40928, 43571, 45925, 48539, 51074, 53960, 57526, 63330]
-
-        sizeFac = 4.0 # 6.0
+        zoomFac = 16 # 1 (L11), 2 (L12), 4 (L13), 8 (L14), 16 (L15), 32 (L16)
+        #sizeFac = 6.0 # 4, 6, 8
 
     if 0:
         # byrohl P-ResimICs test
@@ -598,5 +593,6 @@ def generate_set():
 
     # run
     for haloID in haloIDs:
-        #for zoomFac in [1,2,4,8]:
-        generate(sP, fofID=haloID, ZoomFactor=zoomFac, EnlargeHighResFactor=sizeFac)
+        for sizeFac in [4,6,8]:
+            for zoomFac in [8,16]:
+                generate(sP, fofID=haloID, ZoomFactor=zoomFac, EnlargeHighResFactor=sizeFac)

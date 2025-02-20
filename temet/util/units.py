@@ -258,7 +258,8 @@ class units(object):
             meanmolwt = self.meanmolwt(Y=0.25, Z=0.0) # default is primordial
 
         # mass to msun
-        mass_msun = mass.astype('float32') * self.UnitMass_in_g / self.Msun_in_g
+        print(mass)
+        mass_msun = np.array(mass).astype('float64') * self.UnitMass_in_g / self.Msun_in_g
 
         little_h = 1.0 # do not multiply by h since mass_msun is already over h
 
@@ -275,7 +276,7 @@ class units(object):
              
         if log:
             Tvir = logZeroSafe(Tvir)
-        return Tvir
+        return Tvir.astype('float32')
 
     def codeMassOverTimeToMsunPerYear(self, mass_over_time_val):
         """ Convert a code [mass/time] value (e.g. BH_Mdot) into [Msun/yr]. The usual 10.22 factor. """

@@ -1800,6 +1800,37 @@ z_form.units = '' # dimensionless
 z_form.limits = lambda sim,pt,f: [np.clip(np.floor(sim.redshift),0,5), 6.0]
 z_form.log = False
 
+# -------------------- stars (MCST) ---------------------------------------------------------------
+
+@snap_field
+def stellar_masshist(sim, partType, field, args):
+    """ Stellar mass histogram (binned by mass) for a given snapshot. MCST model. """
+    assert 0 # needs verification
+    StellarArray = sim.snapshotSubset(partType, 'StellarArray', **args)
+
+    STAR_BIN_SIZE = 4
+    N_BINS = 64
+
+    Nbin_per_element = N_BINS/STAR_BIN_SIZE
+    fullblock = np.array([15],dtype='uint64')
+
+    result = np.zeros((StellarArray.shape[0],N_BINS), dtype='uint64')
+
+    # loop over bins
+    for i in range(N_BINS):
+
+        el_loc = int(i // Nbin_per_element)
+        nibble_shift = np.uint64(STAR_BIN_SIZE * (i % Nbin_per_element))
+
+        StellarArray_loc = np.right_shift(StellarArray[:,el_loc],nibble_shift)
+        result[:,i] = np.bitwise_and(fullblock, StellarArray_loc)
+
+        # loop over star particles
+        #for j in np.arange(StellarArray.shape[0]):
+        #    result[j,i] = np.bitwise_and(fullblock,np.right_shift(StellarArray[j,el_loc],nibble_shift))[0]
+
+    return result
+
 # -------------------- black holes ----------------------------------------------------------------
 
 @snap_field(aliases=['bh_bollum','bh_bollum_obscured'])

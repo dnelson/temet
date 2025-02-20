@@ -10,7 +10,7 @@ from ..plot.config import *
 from ..util.units import units
 from ..util.helper import xypairs_to_np
 
-def grackle_cooling(densities, metallicity, uvb='fg20_shielded', redshift=0.0, ssm=0, plot=False):
+def grackle_cooling(densities, metallicity, uvb='fg20_shielded', redshift=0.0, ssm=0, PE=False, plot=False):
     """ This will initialize a single cell at a given temperature,
     iterate the cooling solver for a fixed time, and output the
     temperature vs. time. """
@@ -56,7 +56,34 @@ def grackle_cooling(densities, metallicity, uvb='fg20_shielded', redshift=0.0, s
     my_chemistry.grackle_data_file = grackle_data_file
 
     #my_chemistry.photoelectric_heating # yes if GRACKLE_PHOTOELECTRIC
-    #my_chemistry.use_volumetric_heating_rate = 1 # yes for PE_MCS
+
+    if PE:
+        #my_chemistry.use_volumetric_heating_rate = 1 # yes for PE_MCS
+        my_chemistry.photoelectric_heating = 1
+
+        # volumetric_heating_rate = calculate_pe_heating_rate(sph_idx);
+        # #define HABING_UNIT 5.29e-14 /*in erg cm^-3*/ // energy density of the average ISRF UV field
+
+        u_draine = 8.93e-14 # Draine (1978) has u = 8.93e-14 # erg/cm^3 between 6-13.6 eV (G=1.68)
+        G_0 = u_draine / 5.29e-14 # G0 = u_{6-13.6eV} / 5.29e-14 erg/cm^3
+
+        G_0 *= 10.0 # i.e. chi_0 of Kim+23
+
+        D = 0.001 # todo: replace with DGR() function
+        n = 10.0 # cm^-3 # todo: inconsistent with densities array!
+        rho = n * units.mass_proton # g/cm^3
+        temp = 1e2 # K
+        cs = np.sqrt(units.gamma * units.boltzmann * temp / units.mass_proton) # cm/s
+        lambda_jeans = cs / (units.Gravity * rho)**0.5 # cm
+        G_eff = G_0 * np.exp(-1.33e-21 * D * n * lambda_jeans)
+
+        eps = np.min([0.041, 8.71e-3 * n**0.235])
+
+        gamma_pe = 1.3e-24 * eps * D * G_eff * n # erg s^-1 cm^-3
+
+        print(G_0, G_eff, gamma_pe)
+
+        my_chemistry.photoelectric_heating_rate = gamma_pe
 
     # Set units
     my_chemistry.comoving_coordinates = 0 # proper units
@@ -133,6 +160,7 @@ def grackle_cooling(densities, metallicity, uvb='fg20_shielded', redshift=0.0, s
                    'z = %s' % redshift,
                   '(UVB = %s)' % uvb,
                   '(self_shielding_method = %d)' % ssm]
+        if PE: labels.append('(w/ PE heating)')
         handles = [plt.Line2D( (0,1), (0,0), color='black', lw=0) for _ in range(len(labels))]
         #ax.add_artist(ax.legend(handles, labels, loc='lower left', handlelength=0))
         ax2.add_artist(ax2.legend(handles, labels, loc='upper left', handlelength=0))
