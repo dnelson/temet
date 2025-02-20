@@ -6,6 +6,7 @@ docs/quants*custom.rst
 *.png
 *.hdf5
 *.fits
+*.mp4
 *.pth
 .pyc
 .so
@@ -21,3 +22,4 @@ temet/util/*.so
 .DS_Store
 ._.DS_Store
 .vscode
+wandb/
