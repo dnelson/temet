@@ -9,11 +9,11 @@ from ..util import simParams
 from ..plot.config import *
 from ..vis.halo import renderSingleHalo
 
-def magicCGMEmissionMaps(subhaloID=None):
+def magicCGMEmissionMaps(vis_indiv=False):
     """ Emission maps (single, or in stacked M* bins) for MAGIC-II proposal.
     
     Args:
-      subhaloID (int): if not None, just visualize this specific subhalo.
+      vis_indiv (bool): if True, render visualizations of each subhalo.
     """
     from os import path
     import hashlib
@@ -51,8 +51,6 @@ def magicCGMEmissionMaps(subhaloID=None):
     valMinMax = [-22, -18]
     labelScale = 'physical'
 
-    panels = [{'partType':'gas'}]
-
     # global pre-cache (to disk) of photoionization calculations
     if 0:
         for line in lines:
@@ -60,11 +58,18 @@ def magicCGMEmissionMaps(subhaloID=None):
             print('Caching [%s] now...' % lineName, flush=True)
             x = sP.snapshotSubset('gas', '%s flux' % lineName, indRange=[0,10])
 
-    # load
+    # load and select subhalos
     gc = sP.subhalos(['mstar_30pkpc_log','central_flag','rhalo_200_code','SubhaloPos'])
 
+    subInds = []
+
+    for massBin in massBins:
+        subInds_loc = np.where( (gc['mstar_30pkpc_log']>massBin[0]) & \
+                                (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )[0]
+        subInds.append(subInds_loc)
+
     # global pre-cache of selected fields into memory
-    if 1:
+    if 0:
         # restrict to sub-volumes around targets
         print('Caching [Coordinates] now...', flush=True)
         pos = sP.snapshotSubsetP('gas', 'pos', float32=True)
@@ -73,11 +78,9 @@ def magicCGMEmissionMaps(subhaloID=None):
         mask = np.zeros(pos.shape[0], dtype='bool')
 
         with np.errstate(invalid='ignore'):
-            for massBin in massBins:
-                subInds = np.where( (gc['mstar_30pkpc_log']>massBin[0]) & \
-                              (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )[0]
-                for i, subInd in enumerate(subInds):
-                    print(' mask [%3d of %3d] ind = %d' % (i,len(subInds),subInd), flush=True)
+            for i, massBin in enumerate(massBins):
+                for j, subInd in enumerate(subInds[i]):
+                    print(' mask [%3d of %3d] ind = %d' % (j,len(subInds),subInd), flush=True)
                     dists = sP.periodicDistsN(gc['SubhaloPos'][subInd,:],pos,squared=True)
 
                     if sizeType == 'kpc':
@@ -89,6 +92,8 @@ def magicCGMEmissionMaps(subhaloID=None):
 
                     w = np.where(dists <= size_loc**2) # confortable padding, only need d<sqrt(2)*size/2
                     mask[w] = 1
+
+                    print(i, j, size_loc, len(w[0]), flush=True)
 
         pInds = np.nonzero(mask)[0]
         mask = None
@@ -119,42 +124,36 @@ def magicCGMEmissionMaps(subhaloID=None):
 
     for i, massBin in enumerate(massBins):
         # select subhalos
-        with np.errstate(invalid='ignore'):
-            w = np.where( (gc['mstar_30pkpc_log']>massBin[0]) & (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )
-        sub_inds = w[0]
+        sub_inds = subInds[i]
 
-        print('%s z = %.1f [%.2f - %.2f] Processing [%d] halos...' % (sP.simName,sP.redshift,massBin[0],massBin[1],len(w[0])), flush=True)
+        print('%s z = %.1f [%.2f - %.2f] Processing [%d] halos...' % (sP.simName,sP.redshift,massBin[0],massBin[1],sub_inds.size), flush=True)
+
+        sub_inds = sub_inds[0:3]
 
         # plot config
         class plotConfig:
-            plotStyle    = 'edged'
-            rasterPx     = nPixels[0] * 1.6
+            plotStyle    = 'open'
+            rasterPx     = nPixels[0] * 2.3
             colorbars    = True
-            #fontsize     = 24
-            saveFilename = './stacked_%d.pdf' % (i)
 
-        if subhaloID is not None:
-            sub_inds = [subhaloID] # user specified override
-            if i > 0: continue # just use the first 'mass bin' to do the vis
+        if vis_indiv:
+            # render multiple views of each subhalo (in this mass bin)                    
+            for sub_ind in sub_inds:
+                panels = []
+                print(f' vis individual {sub_ind = }')
+                plotConfig.saveFilename = './%s-s%d-sh%d.pdf' % (sP.simName,sP.snap,sub_ind)
+                plotConfig.nRows = 3
 
-            # render multiple views of first subhalo in this mass bin
-            subhaloInd = sub_inds[0]
-            print(subhaloInd,massBin)
-            plotConfig.saveFilename = './%s-s%d-sh%d.pdf' % (sP.simName,sP.snap,subhaloInd)
-            plotConfig.nRows = 2
-            plotConfig.rasterPx *= 1.4
-            panels = []
+                for j, line in enumerate(lines):
+                    field = 'sb_' + line + '_ergs'
+                    panels.append({'partType':'gas', 'partField':field, 'subhaloInd':sub_ind,
+                                    'labelHalo':(j==0), 'labelSim':(j==2), 'labelZ':(j==2)})
 
-            for j, line in enumerate(lines):
-                field = 'sb_' + line + '_ergs'
-                panels.append({'partField':field, #'contour':['gas',field], 
-                                'labelHalo':(j==0), 'labelSim':(j==2), 'labelZ':(j==2)})
-            renderSingleHalo(panels, plotConfig, locals())
-            continue
+                renderSingleHalo(panels, plotConfig, locals())
 
         # loop over lines
         for line in lines:
-            panels[0]['partField'] = 'sb_' + line + '_ergs'
+            panels = [{'partType':'gas', 'partField':'sb_' + line + '_ergs'}]
             print('Processing [%s]...' % line, flush=True)
 
             # check for existence of cache
@@ -162,7 +161,7 @@ def magicCGMEmissionMaps(subhaloID=None):
             m = hashlib.sha256(hashStr.encode('utf-8')).hexdigest()[::4]
             cacheFile = sP.derivPath + 'cache/stacked_proj_grids_%s_%s.hdf5' % (panels[0]['partField'],m)
         
-            if path.isfile(cacheFile):
+            if 0 and path.isfile(cacheFile):
                 # load cached result
                 with h5py.File(cacheFile,'r') as f:
                     grid_global = f['grid_global'][()]
@@ -170,35 +169,32 @@ def magicCGMEmissionMaps(subhaloID=None):
                 print('Loaded: [%s]' % cacheFile)
             else:
                 # allocate for full stack
-                grid_global  = np.zeros( (nPixels[0],nPixels[1],len(sub_inds)), dtype='float32' )
+                grid_global = np.zeros( (nPixels[0],nPixels[1],len(sub_inds)), dtype='float32' )
 
-                for j, subhaloInd in enumerate(sub_inds):
-                    # render
-                    grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-
-                    # stamp
-                    grid_global[:,:,j] = grid
+                for j, sub_ind in enumerate(sub_inds):
+                    # render and stamp
+                    panels[0]['subhaloInd'] = sub_ind
+                    grid_global[:,:,j], _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
 
                 # save cache
-                with h5py.File(cacheFile,'w') as f:
-                    f['grid_global'] = grid_global
-                    f['sub_inds'] = sub_inds
-
-                print('Saved: [%s]' % cacheFile)
+                #with h5py.File(cacheFile,'w') as f:
+                #    f['grid_global'] = grid_global
+                #    f['sub_inds'] = sub_inds
+                #print('Saved: [%s]' % cacheFile)
 
             # create stack
-            grid_stacked = np.nanmedian(grid_global, axis=2)
-            stacks.append({'grid':grid_stacked,'sub_inds':sub_inds})
+            #grid_stacked = np.nanmedian(grid_global, axis=2)
+            #stacks.append({'grid':grid_stacked,'sub_inds':sub_inds})
 
             # make plot of this mass bin
+            #plotConfig.saveFilename = './stacked_%d_%s.pdf' % (i,line)
             #panels[0]['grid'] = grid_stacked # override
             #panels[0]['subhaloInd'] = sub_inds[int(len(sub_inds)/2)] # dummy
             #renderSingleHalo(panels, plotConfig, locals())
 
-    if subhaloID is not None:
-        return
+    # make plot of stacked result over the mass bins
+    return
 
-    # make final stacked plot
     labelScale = 'physical'
     valMinMax = [8.0, 14.5]
 
@@ -209,8 +205,9 @@ def magicCGMEmissionMaps(subhaloID=None):
         #fontsize     = 24
         saveFilename = './stack_%s_z%.1f_%s.pdf' % (sP.simName,sP.redshift,panels[0]['partField'])
 
+    panels = []
     for i, massBin in enumerate(massBins):
-        if i % 2 == 0: continue # only every other
+        #if i % 2 == 0: continue # only every other
 
         p = {'grid':stacks[i]['grid'],
              'labelZ':True if i == len(massBins)-1 else False,
