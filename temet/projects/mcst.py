@@ -3,9 +3,11 @@ MCST: exploratory plots / intro paper.
 https://arxiv.org/abs/xxxx.xxxxx
 """
 import numpy as np
+import h5py
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 from scipy.signal import savgol_filter
+from os.path import isfile
 
 from ..util.simParams import simParams
 from ..plot.config import *
@@ -856,7 +858,7 @@ def vis_single_image(sP):
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def vis_movie(sP, frame=None):
+def vis_movie(sP, haloID=0, frame=None):
     """ Visualization: movie of a single halo. """
     rVirFracs  = [1.0]
     fracsType  = 'rHalfMassStars'
@@ -872,7 +874,7 @@ def vis_movie(sP, frame=None):
         axes = [0,1]
         rotation   = 'face-on'
 
-    #subhaloInd = sP.halo(1)['GroupFirstSub']
+    subhaloInd = sP.halo(haloID)['GroupFirstSub']
 
     # panels
     panels = []
@@ -885,24 +887,71 @@ def vis_movie(sP, frame=None):
         colorbars    = True
         fontsize     = 28
 
-    snapList = [frame] if frame is not None else sP.validSnapList()[::-1]
+    snapList = sP.validSnapList()[::-1]
+
+    # use tree-based tracking?
+    filename = sP.postPath + '/trees/SubLink/tree.hdf5'
+
+    if isfile(filename):
+        # use tree.hdf5 file for manual MPB
+        print(f'Using [{filename}] for tree-based tracking.')
+
+        with h5py.File(filename,'r') as f:
+            tree = f['Tree'][()]
+
+        # what subhalo do we search for?
+        sP.setSnap(snapList[0]) # at largest snapshot number from validSnapList()
+        halo = sP.halo(haloID)
+        SubfindID_starting = halo['GroupFirstSub']
+
+        ind = np.where((tree['SnapNum'] == snapList[0]) & (tree['SubfindID'] == SubfindID_starting))[0]
+        assert len(ind) == 1
+        ind = ind[0]
+
+        # get MPB
+        SubhaloID = tree['SubhaloID'][ind]
+        MainLeafProgID = tree['MainLeafProgenitorID'][ind]
+
+        if MainLeafProgID == SubhaloID:
+            # did not find MPB, i.e. subhalo has no tree, search one snapshot prior
+            ind = np.where((tree['SnapNum'] == snapList[0]-1) & (tree['SubfindID'] == SubfindID_starting))[0]
+            assert len(ind) == 1
+            ind = ind[0]
+
+            SubhaloID = tree['SubhaloID'][ind]
+            MainLeafProgID = tree['MainLeafProgenitorID'][ind]
+
+        ind_stop = ind + (MainLeafProgID - SubhaloID)
+
+        assert ind_stop > ind
+
+        snaps = tree['SnapNum'][ind:ind_stop]
+        subids = tree['SubfindID'][ind:ind_stop]
+
+        #print(f'{ind = }, {ind_stop = }')
+        #print(f'{snaps = }')
+        #print(f'{subids = }')
+        #import pdb; pdb.set_trace()
+
+    if frame is not None:
+        snapList = [frame]
 
     for snap in snapList:
         sP.setSnap(snap)
 
-        if 0:
-            # custom: decide switch (h31619)
-            inds = [0, sP.halo(1)['GroupFirstSub']]
-            if snap in [9,10,36,37,40,41,42,43,44,45,46,65,68,69,71,72,73,74,75,76,77,78,79,80,
-                        81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101]:
-                inds = inds[::-1]
+        halo = sP.halo(haloID)
 
-            panels = []
-            panels.append( {'partType':'stars', 'partField':'stellarComp', 'subhaloInd':inds[0]} )
-            panels.append( {'partType':'stars', 'partField':'stellarComp', 'subhaloInd':inds[1]} )
+        if isfile(filename):
+            # use MPB tree from above
+            w = np.where(snaps == snap)[0]
+            if len(w) == 0:
+                subhaloInd = halo['GroupFirstSub']
+            else:
+                subhaloInd = subids[w[0]]
+            print(f' snap [{snap:3d}] using subid = {subhaloInd:5d}')
 
         plotConfig.saveFilename = '%s_%03d.png' % (sP.simName,sP.snap)
-        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
 # -------------------------------------------------------------------------------------------------
 
@@ -1341,7 +1390,7 @@ def paperPlots():
 
     # testing:
     variants = ['ST8s'] #,'TNG'] #,'ST8m','ST8b'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
-    res = [16] #[12,13,14,15]
+    res = [15] #[12,13,14,15]
     hInds = [31619] #[31619]
     redshift = 5.5
 
@@ -1412,8 +1461,8 @@ def paperPlots():
             phase_diagram(sim)
 
     # movie
-    if 1:
-        vis_movie(sims[0])
+    if 0:
+        vis_movie(sims[0], haloID=0)
 
     # movies
     if 0:
