@@ -1134,6 +1134,7 @@ def HIMassFraction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[No
 
 def HIvsHaloMass(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
     """ HI mass (M_HI) vs M_halo at redshift zero. """
+    # todo: https://arxiv.org/abs/2502.00110
     acFields = ['Subhalo_Mass_FoF_HI','Subhalo_Mass_HI']
 
     # plot setup

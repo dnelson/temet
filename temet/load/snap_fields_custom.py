@@ -1934,7 +1934,6 @@ bh_dedt.log = True
 @snap_field(aliases=['pos_rel_kpc','pos_rel_rvir'])
 def pos_rel(sim, partType, field, args):
     """ 3D (xyz) position, relative to the halo/subhalo center. """
-    assert not sim.isZoom # otherwise need to generalize as below for 'rad'
     assert args['haloID'] is not None or args['subhaloID'] is not None
 
     pos = sim.snapshotSubset(partType, 'pos', **args)

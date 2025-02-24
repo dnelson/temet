@@ -66,7 +66,7 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
     legend = ax.legend(handles, labels, loc='upper left', ncols=1)
     ax.add_artist(legend)
 
-    if len(hInds) == 1:
+    if len(hInds) == 1 and lineplot:
         return
         
     # legend two
@@ -108,10 +108,35 @@ def _load_mpb_quants(sim, subhaloInd, quants, smooth=False):
 
     return r
 
+def _zoomSubhaloIDsToPlot(sim):
+    """ Define a common rule for which subhalo(s) to plot for a given zoom run. """
+    subhaloIDs = [sim.zoomSubhaloID]
+
+    # all centrals with stellar mass and low contamination
+    contam_frac = sim.subhalos('contam_frac')
+    #num_lowres = sim.subhalos('SubhaloLenType')[:,sim.ptNum('dmlowres')]
+    cen_flag = sim.subhalos('cen_flag')
+    mstar = sim.subhalos('mstar2_log')
+    mhalo = sim.subhalos('mhalo_log')
+    grnr = sim.subhalos('SubhaloGrNr')
+
+    w = np.where((contam_frac < 1e-3) & (cen_flag == 1) & (mstar > 0))[0]
+
+    subhaloIDs = w
+
+    print(f'[{sim}] Showing {len(subhaloIDs)} subhalos.')
+    
+    for subid in subhaloIDs:
+        #lowres_dist = sim.snapshotSubset('dmlowres', 'rad_kpc', subhaloID=subid)
+        #import pdb; pdb.set_trace()
+        print(f' h[{grnr[subid]}] sub[{subid:4d}] mhalo = {mhalo[subid]:.2f} mstar = {mstar[subid]:.2f} contam_frac = {contam_frac[subid]:.4f}')
+
+    return subhaloIDs
+
 def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=True, tracks=False,
                         f_pre=None, f_post=None):
     """ Scatterplot between two quantities, optionally including time evolution tracks through this plane.
-    Designed for comparison between many zoom runs, including the target subhalo (only) from each.
+    Designed for comparison between many zoom runs, including the target subhalo(s) from each.
 
     Args:
       sims (list[simParams]): list of simulation objects to compare.
@@ -182,39 +207,44 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Tru
         xvals, _, _, _ = sim.simSubhaloQuantity(xQuant, clean, tight=True)
         yvals, _, _, _ = sim.simSubhaloQuantity(yQuant, clean, tight=True)
 
-        xval = xvals[sim.zoomSubhaloID]
-        yval = yvals[sim.zoomSubhaloID]
+        if xLog: xvals = logZeroNaN(xvals)
+        if yLog: yvals = logZeroNaN(yvals)
 
-        if xLog: xval = logZeroNaN(xval)
-        if yLog: yval = logZeroNaN(yval)
+        # which subhalo(s) to include?
+        subhaloIDs = _zoomSubhaloIDsToPlot(sim)
 
-        if np.isnan(xval) or np.isnan(yval):
-            print(f'NaN in {sim.simName} {xQuant}={xval} {yQuant}={yval}')
-        if xval < xMinMax[0] or xval > xMinMax[1] or yval < yMinMax[0] or yval > yMinMax[1]:
-            print(f'Out of bounds in {sim.simName} {xQuant}={xval} {yQuant}={yval}')
+        # loop over each subhalo
+        for j, subhaloID in enumerate(subhaloIDs):
+            xval = xvals[subhaloID]
+            yval = yvals[subhaloID]
 
-        if np.isnan(yval) or yval < yMinMax[0]:
-            yval = yMinMax[0] + (yMinMax[1]-yMinMax[0])/100
-            print(f' set {yQuant}={yval} for visibility.')
-                                          
-        # color set by hInd
-        c = colors[hInds.index(sim.hInd)]
+            if np.isnan(xval) or np.isnan(yval):
+                print(f'NaN in {sim.simName} {xQuant}={xval} {yQuant}={yval}')
+            if xval < xMinMax[0] or xval > xMinMax[1] or yval < yMinMax[0] or yval > yMinMax[1]:
+                print(f'Out of bounds in {sim.simName} {xQuant}={xval} {yQuant}={yval}')
 
-        # marker set by variant
-        marker = markers[variants.index(sim.variant)]
+            if np.isnan(yval) or yval < yMinMax[0]:
+                yval = yMinMax[0] + (yMinMax[1]-yMinMax[0])/100
+                print(f' set {yQuant}={yval} for visibility.')
+                                            
+            # color set by hInd
+            c = colors[hInds.index(sim.hInd)]
 
-        # marker size set by resolution
-        ms_loc = (sim.res - 10) * 2.5 + 4
-        lw_loc = (sim.res - 10)
+            # marker set by variant
+            marker = markers[variants.index(sim.variant)]
 
-        l, = ax.plot(xval, yval, marker, color=c, markersize=ms_loc, label='') # sim.simName
+            # marker size set by resolution
+            ms_loc = (sim.res - 10) * 2.5 + 4
+            lw_loc = (sim.res - 10)
 
-        if tracks:
-            # load
-            mpb = _load_mpb_quants(sim, sim.zoomSubhaloID, quants=[xQuant,yQuant], smooth=True)
+            l, = ax.plot(xval, yval, marker, color=c, markersize=ms_loc, label='') # sim.simName
 
-            # plot
-            ax.plot(mpb[xQuant], mpb[yQuant], '-', lw=lw_loc, color=l.get_color(), alpha=0.5)
+            if tracks:
+                # load
+                mpb = _load_mpb_quants(sim, sim.zoomSubhaloID, quants=[xQuant,yQuant], smooth=True)
+
+                # plot
+                ax.plot(mpb[xQuant], mpb[yQuant], '-', lw=lw_loc, color=l.get_color(), alpha=0.5)
 
     # halos from parent box: at the same redshift as the zooms?
     sim_parent = sims[0].sP_parent.copy()
@@ -375,17 +405,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
     # individual zoom runs
     for i, sim in enumerate(sims):
         # which subhalo(s) to include?
-        subhaloIDs = [sim.zoomSubhaloID]
-
-        # all centrals with stellar mass and low contamination
-        contam_frac = sim.subhalos('contam_frac')
-        cen_flag = sim.subhalos('cen_flag')
-        mstar = sim.subhalos('mstar2_log')
-        w = np.where((contam_frac < 0.01) & (cen_flag == 1) & (mstar > 0))[0]
-
-        subhaloIDs = w
-
-        print(f'[{quant}] Showing {len(subhaloIDs)} subhalos for {sim.simName}.')
+        subhaloIDs = _zoomSubhaloIDsToPlot(sim)
 
         # load
         vals, _, _, valLog = sim.simSubhaloQuantity(quant, clean, tight=True)
@@ -394,8 +414,6 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False):
         for j, subhaloID in enumerate(subhaloIDs):
             val = vals[subhaloID]
             if valLog and not sfh_lin: val = logZeroNaN(val)
-
-            print(f' {subhaloID:6d} mstar = {mstar[subhaloID]:.2f} contam_frac = {contam_frac[subhaloID]:.4f}')
 
             # color set by hInd
             c = colors[hInds.index(sim.hInd)]
@@ -591,7 +609,7 @@ def mbh_vs_mhalo(sims):
     xQuant = 'mhalo_200_log'
     yQuant = 'mass_smbh' # largest BH_Mass in each subhalo
     # yQuant = 'BH_mass' # sum of all BH_Mass in each subhalo
-    xlim = [9.25, 11.25] # mhalo
+    xlim = [8.0, 11.25] # mhalo
     ylim = [2.8, 7.0] # msmbh, MCST seeds at 1e3, TNG seeds at ~1e6
 
     def _draw_data(ax, sims):
@@ -1363,14 +1381,104 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
     plt.close(fig)
 
 def blackhole_details():
-    """ Test. """
-    #data = np.loadtxt('blackhole_details.txt')
-    data = np.genfromtxt('blackhole_details.txt', dtype=None)
+    """ Convert a concatenated blackhole_details.txt file into MPB-like time series of
+    SMBH mass and accretion rates. """
+    # cat blackhole_details_*.txt | sed -r 's/^BH=//' > blackhole_details.txt
+    # cat blackhole_mergers_*.txt > blackhole_mergers.txt
 
-    ids = data[:][0]
-    unique_ids = np.unique(ids)
+    # load details, columns: ID time BH_Mass mdot rho csnd
+    filename = 'blackhole_details_L15.txt'
+    cachefile = 'blackhole_details_L15.hdf5'
 
-    import pdb; pdb.set_trace()
+    ids = np.loadtxt(filename, usecols=[0], dtype='int32')
+    data = np.loadtxt(filename, usecols=[1,2,3,4,5], dtype='float32')
+
+    # load mergers, columns: thistask time id_accretor mass_accretor id_accreted mass_accreted
+    # where accretor is the SMBH that remains, and accreted is the SMBH that is removed
+    filename2 = filename.replace('details','mergers')
+    mergers_ids = np.loadtxt(filename2, usecols=[2,4], dtype='int32')
+    merger_times = np.loadtxt(filename2, usecols=[1], dtype='float32')
+
+    smbhs = {}
+
+    if isfile(cachefile):
+        with h5py.File(cachefile,'r') as f:
+            for smbh_id in f:
+                smbhs[smbh_id] = {}
+                for k in f[smbh_id].keys():
+                    smbhs[smbh_id][k] = f[smbh_id][k][()]
+        print(f'Loaded [{cachefile}].')
+    else: 
+        # calculate
+        unique_ids = np.unique(ids)
+
+        for smbh_id in unique_ids:
+            # select
+            w = np.where(ids == smbh_id)[0]
+            time = data[w,0]
+            mass = data[w,1]
+            mdot = data[w,2]
+
+            # sort by time, remove duplicate entries
+            _, inds = np.unique(time, return_index=True)
+
+            print(f'SMBH [{smbh_id:12d}] found [{len(inds):6d} / {len(time):6d}] unique entries.')
+
+            time = time[inds]
+            mass = mass[inds]
+            mdot = mdot[inds]
+
+            smbhs[smbh_id] = {'time':time, 'mass':mass, 'mdot':mdot}
+
+        # handle mergers: if this ID ever appears in a merger pair, then 
+        # decide which of the two IDs to keep i.e. attach the earlier data from
+        for smbh_id in unique_ids:
+            w = np.where(merger_ids == smbh_id)[0]
+            import pdb; pdb.set_trace()
+
+        # save
+        with h5py.File(cachefile,'w') as f:
+            for smbh_id in smbhs.keys():
+                f['%d/time' % smbh_id] = time
+                f['%d/mass' % smbh_id] = mass
+                f['%d/mdot' % smbh_id] = mdot
+        print(f'Saved [{cachefile}].')
+
+    # debug plots
+    for smbh_id in smbhs.keys():
+        # unit conversions (todo)
+        print('plot: ', smbh_id)
+
+        time = smbhs[smbh_id]['time']
+        mass = np.log10(smbhs[smbh_id]['mass'] * 1e10 / 0.6774) # log msun (check)
+        mdot = logZeroNaN(smbhs[smbh_id]['mdot']) # log msun/yr (check)
+
+        # plot
+        step = 1
+
+        fig, ax = plt.subplots(nrows=3, figsize=(12,12), sharex=True)
+        ax[0].set_xlabel('Scale factor')
+        ax[0].set_ylabel(r'Mass [ log M$_{\rm sun}$ ]')
+
+        ax[0].plot(time[::step], mass[::step], lw=lw, zorder=0)
+
+        ax[1].set_xlabel('Scale factor')
+        ax[1].set_ylabel(r'Mdot [ log M$_{\rm sun}$ yr$^{-1}$ ]')
+        ax[1].set_ylim([-4.0, 0.0])
+
+        ax[1].plot(time[::step], mdot[::step], lw=lw, zorder=0)
+
+        ax[2].set_xlabel('Scale factor')
+        ax[2].set_ylabel(r'Mdot [ log M$_{\rm sun}$ yr$^{-1}$ ]')
+
+        ax[2].plot(time[::step], mdot[::step], lw=lw, zorder=0)
+
+        for a in ax: a.set_rasterization_zorder(1) # elements below z=1 are rasterized
+
+        fig.savefig(f'blackhole_mass_mdot_vs_time_{smbh_id}.pdf')
+        plt.close(fig)
+
+    
 
 # -------------------------------------------------------------------------------------------------
 
@@ -1390,7 +1498,7 @@ def paperPlots():
 
     # testing:
     variants = ['ST8s'] #,'TNG'] #,'ST8m','ST8b'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
-    res = [15] #[12,13,14,15]
+    res = [14,15] #[12,13,14,15]
     hInds = [31619] #[31619]
     redshift = 5.5
 
