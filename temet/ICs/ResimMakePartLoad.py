@@ -572,15 +572,22 @@ def generate_set():
         #haloIDs = [8795, 31619, 37411, 40928, 43571, 45925, 48539, 51074, 53960, 57526, 63330] # mstar = 1e6 at z=3
 
         sP = simParams(run='tng50-1', redshift=5.5)
-        haloIDs = [21240,38419] # z=5.5 grnr[np.where( (mhalo>8.5) & (mhalo<8.51) )[0][0:5]]
+        #haloIDs = [21240,38419] # z=5.5 grnr[np.where( (mhalo>8.5) & (mhalo<8.51) )[0][0:5]]
         #haloIDs += [6300, 6597] # z=5.5 grnr[np.where( (mhalo>9.0) & (mhalo<9.1) )[0][0:5]]
         #haloIDs += [4352, 4646] # z=5.5 grnr[np.where( (mhalo>9.5) & (mhalo<9.51) )[0][0:5]]
         #haloIDs += [1142, 1289] # z=5.5 grnr[np.where( (mhalo>10.0) & (mhalo<10.01) )[0][0:5]]
         #haloIDs += [167, 347] # z=5.5 grnr[np.where( (mhalo>10.5) & (mhalo<10.51) )[0][0:5]]
-        #haloIDs += [46, 51] # z=5.5 grnr[np.where( (mhalo>11.0) & (mhalo<11.1) )[0][0:5]]
-        #haloIDs += [10, 12, 19] #z=5.5 grnr[np.where( (mhalo>11.5) & (mhalo<11.6) )[0]]
 
-        zoomFac = 16 # 1 (L11), 2 (L12), 4 (L13), 8 (L14), 16 (L15), 32 (L16)
+        # see temet.projects.mcst.select_ics()
+        haloIDs = [844537, 848864, 836397, 857253, 768227] # mhalo = 8.0
+        haloIDs += [219612, 199174, 224856, 311384, 323459] # mhalo = 8.5
+        haloIDs += [73172, 72077, 66262, 73547, 62879] # mhalo = 9.0
+        haloIDs += [17824, 15581, 23908, 22723, 12739] # mhalo = 9.5
+        haloIDs += [1958, 5072, 5196, 5922, 3357] # mhalo = 10.0
+        #haloIDs += [513 772 957 807 400] # mhalo = 10.5
+        #haloIDs += [137 175 174 139 145] # mhalo = 11.0
+
+        #zoomFac = 16 # 1 (L11), 2 (L12), 4 (L13), 8 (L14), 16 (L15), 32 (L16)
         #sizeFac = 6.0 # 4, 6, 8
 
     if 0:
@@ -594,5 +601,5 @@ def generate_set():
     # run
     for haloID in haloIDs:
         for sizeFac in [4,6,8]:
-            for zoomFac in [8,16]:
+            for zoomFac in [8]:#,16]:
                 generate(sP, fofID=haloID, ZoomFactor=zoomFac, EnlargeHighResFactor=sizeFac)

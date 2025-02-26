@@ -2434,12 +2434,12 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, proj2D=None, subRes
       proj2D (list or None): if not None, do 3D profiles, otherwise 2-tuple specifying (i) integer coordinate axis in 
         [0,1,2] to project along or 'face-on' or 'edge-on', and (ii) depth in code units (None for full box). 
       subRestrictions (list): apply cuts to which subhalos are searched over. Each item in the list is a 
-        3-tuple consisting of {field name, min value, max value}, where e.g. np.inf can be used as a 
+        3-tuple consisting of (field name, min value, max value), where e.g. np.inf can be used as a 
         maximum to enforce a minimum threshold only.
         This is the only option which modifies the search target sample, as opposite to the search origin sample.
-      subRestrictionsRel (dict): as above, but every field is understood to be relative to the current
-        subhalo value, which is the normalization, e.g. {'gt':1.0} requires that neighbors have a strictly 
-        larger value, while {'lt':0.5} requires neighbors have a value half as large or smaller.
+      subRestrictionsRel (list): as above, but every field is understood to be relative to the current
+        subhalo value, which is the normalization, e.g. ('mstar2','gt',1.0) requires that neighbors have a 
+        strictly larger value, while ('mstar2','gt',0.5) requires neighbors have a value half as large or smaller.
       minStellarMass (str or float): minimum stellar mass of subhalo to compute in log msun (optional).
       minHaloMass (str or float): minimum halo mass to compute, in log msun (optional).
       cenSatSelect (str): exclusively process 'cen', 'sat', or 'all'.
@@ -2633,8 +2633,8 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, proj2D=None, subRes
 
     # loop over subhalos
     for i, subhaloID in enumerate(subhaloIDsTodo):
-        if i % np.max([1,int(nSubsDo/10.0)]) == 0 and i <= nSubsDo and username != 'wwwrun':
-            print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo)) 
+        if i % np.max([1,int(nSubsDo/100.0)]) == 0 and i <= nSubsDo and username != 'wwwrun':
+            print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo), flush=True)
 
         loc_search_pos = gc_search['SubhaloPos']
 

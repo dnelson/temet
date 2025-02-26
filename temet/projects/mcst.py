@@ -1387,16 +1387,16 @@ def blackhole_details():
     # cat blackhole_mergers_*.txt > blackhole_mergers.txt
 
     # load details, columns: ID time BH_Mass mdot rho csnd
-    filename = 'blackhole_details_L15.txt'
-    cachefile = 'blackhole_details_L15.hdf5'
+    filename = 'blackhole_details.txt'
+    cachefile = 'blackhole_details.hdf5'
 
     ids = np.loadtxt(filename, usecols=[0], dtype='int32')
     data = np.loadtxt(filename, usecols=[1,2,3,4,5], dtype='float32')
 
-    # load mergers, columns: thistask time id_accretor mass_accretor id_accreted mass_accreted
-    # where accretor is the SMBH that remains, and accreted is the SMBH that is removed
+    # load mergers, columns: thistask time id0 mass0 id1 mass1
+    # where id0 is the SMBH that remains, and id1 is the SMBH that is removed
     filename2 = filename.replace('details','mergers')
-    mergers_ids = np.loadtxt(filename2, usecols=[2,4], dtype='int32')
+    merger_ids = np.loadtxt(filename2, usecols=[2,4], dtype='int32')
     merger_times = np.loadtxt(filename2, usecols=[1], dtype='float32')
 
     smbhs = {}
@@ -1434,7 +1434,8 @@ def blackhole_details():
         # decide which of the two IDs to keep i.e. attach the earlier data from
         for smbh_id in unique_ids:
             w = np.where(merger_ids == smbh_id)[0]
-            import pdb; pdb.set_trace()
+            if len(w) > 0:
+                import pdb; pdb.set_trace() # todo
 
         # save
         with h5py.File(cachefile,'w') as f:
@@ -1478,7 +1479,111 @@ def blackhole_details():
         fig.savefig(f'blackhole_mass_mdot_vs_time_{smbh_id}.pdf')
         plt.close(fig)
 
-    
+def select_ics():
+    """ Helper to select halos from TNG50 for resimulation. """
+    import illustris_python as il
+
+    sim = simParams(run='tng50-1', redshift=5.5)
+
+    mhalo_min = 8.0
+    dist_threshold = 1000.0 # code units (ckpc/h), within which no other more massive halo
+
+    # check existence of cache file, if not, compute now
+    cachefile = sim.derivPath + f'cache/mpb_ids_{sim.simName}_{sim.snap}_{mhalo_min:.1f}_{dist_threshold:.0f}.hdf5'
+
+    # load halo massees at target redshift (all centrals by definition)
+    mhalo = sim.subhalos('mhalo_log')
+    mstar = sim.subhalos('mstar2_log')
+    grnr = sim.subhalos('SubhaloGrNr')
+
+    if isfile(cachefile):
+        # load
+        with h5py.File(cachefile,'r') as f:
+            z_target_mpb_ids = f['z_target_mpb_ids'][()]
+            sub_ids = f['sub_ids'][()]
+        print(f'Loaded [{cachefile}].')
+    else:
+        # load at target redshift (all centrals by definition)
+        sub_ids = np.where(mhalo >= mhalo_min)[0]
+
+        print(f'Found [{len(sub_ids)}] halos with Mhalo >= {mhalo_min}.')
+
+        # env measure
+        ac = 'Subhalo_Env_Closest_Distance_MhaloRel_GtSelf'
+        dist_closest = sim.auxCat(ac, expandPartial=True)[ac]
+
+        w = np.where(dist_closest[sub_ids] > dist_threshold)[0]
+
+        print(f'Found [{len(w)}] of these halos with no more massive neighbor within {dist_threshold} ckpc/h.')
+
+        sub_ids = sub_ids[w]
+
+        z_target_mpb_ids = np.zeros(sub_ids.size, dtype='int32') - 1
+
+        for i, sub_id in enumerate(sub_ids):
+            # load MDB to z=0, then load MPB to z_target, and save
+            print(i, sub_id)
+            fields = ['SnapNum','SubfindID']
+            mdb = sim.loadMDB(sub_id, fields=fields)
+
+            snap_z0 = 99
+            w = np.where(mdb['SnapNum'] == snap_z0)[0]
+            if len(w) == 0:
+                continue
+
+            z0_id = mdb['SubfindID'][w[0]]
+
+            # then load MPB to z_target
+            mpb = il.sublink.loadTree(sim.simPath, snap_z0, z0_id, fields=fields, onlyMPB=True)
+
+            # check if same
+            w = np.where(mpb['SnapNum'] == sim.snap)[0]
+            if len(w) == 0:
+                continue
+
+            z_target_mpb_ids[i] = mpb['SubfindID'][w[0]]
+
+        # save
+        with h5py.File(cachefile,'w') as f:
+            f['z_target_mpb_ids'] = z_target_mpb_ids
+            f['sub_ids'] = sub_ids
+        print(f'Saved [{cachefile}].')
+
+    # sub-select halos that are on their own MPBs
+    w = np.where(z_target_mpb_ids == sub_ids)
+
+    sub_ids = sub_ids[w]
+
+    # halo masses and IDs
+    mhalo = mhalo[sub_ids]
+    mstar = mstar[sub_ids]
+
+    # bin in halo masses
+    rng = np.random.default_rng(42424242)
+
+    massbins = [[8.0,8.1], [8.5,8.6], [9.0,9.1], [9.5,9.6], [10.0, 10.1], [10.5,10.6], [11.0,11.1]]
+    mstar_tol = 0.2
+
+    for massbin in massbins:
+        # select in halo mass alone (after prior selections above)
+        w = np.where((mhalo >= massbin[0]) & (mhalo < massbin[1]))[0]
+        print(massbin, len(w), mhalo[w].mean(), np.nanmean(mstar[w]))
+
+        # select as non-extreme outliers on the mstar-mhalo relation at z_target according to TNG50
+        if np.count_nonzero(np.isfinite(mstar[w])):
+            mstar_median = np.nanmedian(mstar[w])
+
+            w = np.where((mhalo >= massbin[0]) & (mhalo < massbin[1]) & \
+                        (mstar >= mstar_median-mstar_tol) & (mstar < mstar_median+mstar_tol))[0]
+
+            print(' with mstar constraint: ', len(w), mhalo[w].mean(), np.nanmean(mstar[w]))
+        else:
+            print(' no mstar constraint (all nan)')
+
+        sub_ids_bin = sub_ids[w]
+        halo_ids = grnr[sub_ids_bin]
+        rng.shuffle(halo_ids)
+        print(' haloIDs: ', halo_ids[0:5])
 
 # -------------------------------------------------------------------------------------------------
 

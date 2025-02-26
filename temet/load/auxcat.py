@@ -280,6 +280,7 @@ def _expand_partial(sP, r, field):
 
         new_data[r['subhaloIDs'],...] = r[field]
         print(' Auxcat Expanding [%d] to [%d] elements for [%s].' % (r[field].shape[0],new_data.shape[0],field))
+        print(' Auxcat WARNING: "subhaloIDs" in return is unchanged (sparse).')
 
         return new_data
 
@@ -1188,6 +1189,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloCatNeighborQuant,quant=None,op='closest_rad',subRestrictionsRel=[['mstar_30pkpc',0.5,np.inf]],cenSatSelect='cen'),
    'Subhalo_Env_d5_MstarRel_GtHalf' : \
      partial(subhaloCatNeighborQuant,quant=None,op='d5_rad',subRestrictionsRel=[['mstar_30pkpc',0.5,np.inf]],cenSatSelect='cen'),
+   'Subhalo_Env_Closest_Distance_MhaloRel_GtSelf' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='closest_rad',subRestrictionsRel=[['mhalo',1.0,np.inf]],cenSatSelect='cen',minHaloMass=8.0),
 
    'Subhalo_Env_Closest_SubhaloID_MstarRel_GtHalf' : \
      partial(subhaloCatNeighborQuant,quant='id',op='closest_quant',subRestrictionsRel=[['mstar_30pkpc',0.5,np.inf]],cenSatSelect='cen'),
