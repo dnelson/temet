@@ -39,7 +39,7 @@ def plotUVB(uvb='FG11'):
 
     ax.set_title('')
     ax.set_xlabel('$\\nu$ [ Ryd ]')
-    ax.set_ylabel('log J$_{\\nu}(\\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]')
+    ax.set_ylabel(r'log J$_{\\nu}(\\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]')
 
     for u in uvbs:
         ax.plot(u['freqRyd'], u['J_nu'], lw=lw, label='z = '+str(u['redshift']))
@@ -56,7 +56,7 @@ def plotUVB(uvb='FG11'):
 
     ax.set_title('')
     ax.set_xlabel('Redshift')
-    ax.set_ylabel('log J$_{\\nu}(\\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]')
+    ax.set_ylabel(r'log J$_{\\nu}(\\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]')
 
     for nuRyd in nusRyd:
         xx = []
@@ -95,7 +95,7 @@ def plotUVB(uvb='FG11'):
     contourf(XX, YY, z, 40)
 
     cb = plt.colorbar()
-    cb.ax.set_ylabel('log J$_{\\nu}(\\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]')
+    cb.ax.set_ylabel(r'log J$_{\\nu}(\\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]')
 
     # finish
     fig.savefig('uvb_%s.pdf' % uvb)
@@ -362,7 +362,7 @@ def grackleTable():
                 ax.set_xlim(temp_range)
                 ax.set_ylim(lambdanet_range)
                 ax.set_xlabel('Temperature [log K]')
-                ax.set_ylabel('$\Lambda$')
+                ax.set_ylabel(r'$\Lambda$')
 
                 # derive values and net rates
                 cool_z = data['Metals']['Cooling'][j,redshift_ind,:]
@@ -681,7 +681,7 @@ def uvbEnergyDens():
 
     # config
     uvb_names = ['HM12','P19','FG11','FG20']
-    eV_min = 6.0
+    eV_min = 6.0 # 11.2
     eV_max = 13.6
 
     # load
@@ -724,6 +724,23 @@ def uvbEnergyDens():
             f['%s' % uvb_name].attrs['created_by'] = 'dnelson'.encode('ascii')
             f['%s' % uvb_name].attrs['created_on'] = datetime.now().strftime("%d-%m-%Y").encode('ascii')
 
+    # add directly to (production) grackle table
+    if 0:
+        print('Careful.')
+
+        if eV_min == 6.0 and eV_max == 13.6:
+            name = '6-13.6eV'
+        elif eV_min == 11.2 and eV_max == 13.6:
+            name = '11.2-13.6eV'
+        else:
+            assert 0
+
+        with h5py.File('/virgotng/mpia/MCST/arepo1_setups/grid_cooling_UVB=FG20.hdf5','r+') as f:
+            i = uvb_names.index('FG20')
+            if 'UVBEnergyDens/Redshift' not in f:
+                f['UVBEnergyDens/Redshift'] = uvbs_z[i].astype('float32')
+            f['UVBEnergyDens/EnergyDensity_' + name] = uvbs_u[i]
+
     # plot
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
@@ -738,7 +755,8 @@ def uvbEnergyDens():
         #if uvb_name == 'FG11':
         #    ax.plot(uvbs_z[i][bad_inds], uvbs_u[i][bad_inds], 's', lw=lw, color='black')
 
-    ax.plot([0.0], np.log10(1.71e-16), marker='o', color='black', label='HM12 (old z=0 value)')
+    val_HM12 = np.log10(1.71e-16) # 0.00324 * 5.29e-14 # erg/cm^3
+    ax.plot([0.0], val_HM12, marker='o', color='black', label='HM12 (old z=0 value)')
 
     ax.legend(loc='lower left')
 
