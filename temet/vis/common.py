@@ -2542,6 +2542,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
         else:
             zStr = r"z$\,$=$\,$%.2f" % p['sP'].redshift
 
+        if p['sP'].redshift < 1e-3:
+            zStr = r"z$\,$=$\,$0"
+
         if p['labelZ'] == 'tage':
             zStr = "%5.2f billion years after the Big Bang" % p['sP'].units.redshiftToAgeFlat(p['sP'].redshift)
 
@@ -2977,6 +2980,7 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     # tick labels, 5 evenly spaced inside bar
     colorsA = [(1,1,1),(0.9,0.9,0.9),(0.8,0.8,0.8),(0.2,0.2,0.2),(0,0,0)]
     colorsB = ['white','white','white','black','black']
+    colorsB = ['white','white','white','white','white']
 
     formatStr = "%.1f" if np.max(np.abs(valLimits)) < 100.0 else "%d"
     if np.max(np.abs(valLimits)) < 0.01: formatStr = '%.0e'
