@@ -1981,7 +1981,15 @@ def galaxy_number_profile(sim, criterion='Mr_lt205_2D'):
     plt.close(fig)
 
 def halo_properties_table(sim):
-    """ Write out a table of primary target halo properties (in several formats). """
+    """ Write out a table of primary target halo properties (in several formats). 
+    To then overwrite publicly available data: 
+    rsync -tr --progress TNG-Cluster_Catalog.* freyator:/var/www/html/files/ 
+    """
+    import zarr
+    import pyarrow
+    import pyarrow.parquet
+    from astropy.table import Table
+
     cc_str = {0 : 'CC', 1 : 'WCC', 2 : 'NCC'}
 
     # TNG-Cluster: all primary zoom targets
@@ -1992,7 +2000,10 @@ def halo_properties_table(sim):
     subhalos = sim.subhalos(['mhalo_200_log','mhalo_500_log','r200','r500','mstar_30kpc_log',
                              'mstar_100kpc_log','mhi_halo_log',
                              'mass_smbh_log','szy_r500c_3d_log','zform',
-                             'coolcore_flag','coolcore_tcool','coolcore_entropy'])
+                             'coolcore_flag','coolcore_tcool','coolcore_entropy','coolcore_ne',
+                             'coolcore_ne_slope','coolcore_c_phys','coolcore_c_scaled',
+                             'peakoffset_xray_x','peakoffset_xray_y','peakoffset_xray_z',
+                             'peakoffset_sz_x','peakoffset_sz_y','peakoffset_sz_z'])
 
     for field in ['fgas_r500','sfr_30pkpc_log','xray_0.5-2.0kev_r500_halo_log']:
         quant, _, _, _ = sim.simSubhaloQuantity(field)
@@ -2018,6 +2029,12 @@ def halo_properties_table(sim):
         data = sim.auxCat(ac)
         #assert np.array_equal(data['subhaloIDs'],subhaloIDs) # else take subset
         subhalos[ac] = data[ac]
+
+    # custom files
+    assert sim.snap == 99 and sim.simName == 'TNG-Cluster'
+    with h5py.File(sim.postPath + 'released/PerseusLike_Flags_099.hdf5','r') as f:
+        halos['perseus_like_flag'] = f['FoF_Flags'][()]
+        assert halos['perseus_like_flag'].size == sim.numHalos
 
     # take subset
     for key in subhalos:
@@ -2069,7 +2086,7 @@ def halo_properties_table(sim):
             'szy_r500c':[subhalos['szy_r500c_3d_log'], # [14]
                          'Integrated Y_SZ parameter within r500c in 3D [log Mpc$^2$]',
                          '%5.2f'],
-            'Bmag_uG_10kpc':[subhalos['Subhalo_Bmag_uG_10kpc_hot_massWt'], # [15]
+            'Bmag_10kpc':[subhalos['Subhalo_Bmag_uG_10kpc_hot_massWt'], # [15]
                              'Magnetic field magnitude within 10 kpc, mass-weighted mean of log(T)>5.5 gas [micro Gauss]',
                              '%6.2f'],
             'ne_10kpc':[np.log10(subhalos['Subhalo_ne_10kpc_hot_massWt']), # [16]
@@ -2093,15 +2110,49 @@ def halo_properties_table(sim):
             'richness_11.0':[halos['richness_11.0'], # [22]
                              'Number of satellite galaxies with log(M*) (30pkpc) > 11.0 Msun [unitless]',
                              '%3d'],
-            'coolcore_flag':[[cc_str[int(flag)] for flag in subhalos['coolcore_flag']], # [23]
-                             'Cool core status, based on central cooling time (CC, WCC, or NCC) {Source: Lehle+2024}',
+            'coolcore_flag':[subhalos['coolcore_flag'].astype('int32'), # [23]
+                             'Cool core status, based on central cooling time (0=CC, 1=WCC, or 2=NCC) {Source: Lehle+2024}',
                              '%3s'],
             'coolcore_tcool':[subhalos['coolcore_tcool'], # [24]
-                              'Central cooling time, computed within a 3D aperture of 0.012r500c {Source: Lehle+2024} [Gyr]',
+                              'Central cooling time, computed within a 3D aperture of 0.012*r500c {Source: Lehle+2024} [Gyr]',
                               '%5.2f'],
             'coolcore_entropy':[subhalos['coolcore_entropy'], # [25]
-                                'Central entropy, computed within a 3D aperture of 0.012r500c {Source: Lehle+2024} [keV cm$^2$]',
-                                '%6.2f']}
+                                'Central entropy, computed within a 3D aperture of 0.012*r500c {Source: Lehle+2024} [keV cm$^2$]',
+                                '%6.2f'],
+            'coolcore_ne':[np.log10(subhalos['coolcore_ne']), # [26]
+                           'Central electron density, computed within a 3D aperture of 0.012*r500c {Source: Lehle+2024} [log cm$^{-3}$]',
+                            '%6.2f'],
+            'coolcore_ne_slope':[subhalos['coolcore_ne_slope'], # [27]
+                                 'Central electron density slope (alpha), computed at 0.04*r500c {Source: Lehle+2024} [unitless]',
+                                 '%5.2f'],
+            'coolcore_C_phys':[subhalos['coolcore_c_phys'], # [28]
+                                'X-ray concentration parameter C_phys, computed for 40kpc versus 400kpc. {Source: Lehle+2024} [unitless]',
+                                '%4.2f'],
+            'coolcore_C_scaled':[subhalos['coolcore_c_scaled'], # [29]
+                                'X-ray concentration parameter C_scaled, computed for 0.15*r500c versus r500c. {Source: Lehle+2024} [unitless]',
+                                '%4.2f'],
+            'perseus_like_flag':[halos['perseus_like_flag'], # [30]
+                                 'Perseus-like flag (0=no, 1=yes) {Source: Truong+2024} [unitless]',
+                                 '%1d'],
+            'peakoffset_xray_x':[np.log10(subhalos['peakoffset_xray_x']), # [31]
+                                'X-ray peak offset in x-direction [log pkpc]',
+                                '%5.2f'],
+            'peakoffset_xray_y':[np.log10(subhalos['peakoffset_xray_y']), # [32]
+                                'X-ray peak offset in y-direction [log pkpc]',
+                                '%5.2f'],
+            'peakoffset_xray_z':[np.log10(subhalos['peakoffset_xray_z']), # [33]
+                                'X-ray peak offset in z-direction [log pkpc]',
+                                '%5.2f'],
+            'peakoffset_sz_x':[np.log10(subhalos['peakoffset_sz_x']), # [34]
+                                'SZ peak offset in x-direction [log pkpc]',
+                                '%5.2f'],
+            'peakoffset_sz_y':[np.log10(subhalos['peakoffset_sz_y']), # [35]
+                                'SZ peak offset in y-direction [log pkpc]',
+                                '%5.2f'],
+            'peakoffset_sz_z':[np.log10(subhalos['peakoffset_sz_z']), # [36]
+                                'SZ peak offset in z-direction [log pkpc]',
+                                '%5.2f']
+            }
 
     # write (text file export)
     filename = 'TNG-Cluster_Catalog.txt'
@@ -2121,7 +2172,8 @@ def halo_properties_table(sim):
     for i in range(len(haloIDs)):
         line = ''
         for key in fields:
-            line += fields[key][2] % fields[key][0][i] + ' '
+            val = fields[key][0][i] if key != 'coolcore_flag' else cc_str[fields[key][0][i]]
+            line += fields[key][2] % val + ' '
         f.write(line + '\n')
     f.close()
     print(f'Wrote: [{filename}].')
@@ -2145,14 +2197,36 @@ def halo_properties_table(sim):
 
     # write (zarr file export)
     filename = 'TNG-Cluster_Catalog.zarr'
-    import zarr
 
+    z = zarr.group(filename)
+
+    for key in fields:
+        z[key] = np.array(fields[key][0])
+        z[key].attrs['Description'] = fields[key][1]
+
+    print(f'Wrote: [{filename}].')
 
     # write (FITS)
+    filename = 'TNG-Cluster_Catalog.fits'
 
+    cols = [val[0] for _, val in fields.items()]
+    descriptions = [val[1] for _, val in fields.items()]
+    names = [key for key, _ in fields.items()]
+
+    t = Table(cols, names=names, descriptions=descriptions)
+    t.write(filename, format='fits', overwrite=True)
+
+    print(f'Wrote: [{filename}].')
 
     # write (parquet)
+    filename = 'TNG-Cluster_Catalog.parquet'
 
+    metadata = {key:val[1] for key, val in fields.items()} # name:description pairs
+    t = pyarrow.Table.from_arrays(cols, names=names, metadata=metadata)
+
+    pyarrow.parquet.write_table(t, filename)
+
+    print(f'Wrote: [{filename}].')
 
     # write (original latex table for intro paper)
     filename = 'TNG-Cluster_Catalog.tex'

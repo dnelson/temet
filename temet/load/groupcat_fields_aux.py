@@ -809,53 +809,152 @@ lgal_.units = '' # variable (todo)
 lgal_.limits = [] # variable (todo)
 lgal_.log = False # variable (todo)
 
+def _coolcore_load(sim, field):
+    """ Helper function to load coolcore_criteria data. """
+    filePath = sim.postPath + '/released/coolcore_criteria.hdf5'
+
+    with h5py.File(filePath,'r') as f:
+        HaloIDs = f['HaloIDs'][()]
+        data = f[field][:, sim.snap]
+
+    # expand from value per primary target to value per subhalo
+    vals = np.zeros(sim.numSubhalos, dtype='float32')
+    vals.fill(np.nan)
+
+    vals[sim.halos('GroupFirstSub')[HaloIDs]] = data
+
+    return vals
+
 @catalog_field
 def coolcore_flag(sim, partType, field, args):
     """ Postprocessing/coolcore_criteria: flag (0=SCC, 1=WCC, 2=NCC) based on Lehle+24 central cooling time fiducial definition. """
-    filePath = sim.postPath + '/released/coolcore_criteria.hdf5'
+    return _coolcore_load(sim, 'centralCoolingTime_flag')
 
-    with h5py.File(filePath,'r') as f:
-        HaloIDs = f['HaloIDs'][()]
-        flags = f['centralCoolingTime_flag'][:, sim.snap]
-
-    # expand from value per primary target to value per subhalo
-    vals = np.zeros(sim.numSubhalos, dtype='float32')
-    vals.fill(np.nan)
-
-    vals[sim.halos('GroupFirstSub')[HaloIDs]] = flags
-
-    return vals
+coolcore_flag.label = 'Cool-core Flag (0=CC, 1=WCC, 2=NCC)'
+coolcore_flag.units = '' # linear dimensionless
+coolcore_flag.limits = [0.0, 2.0]
+coolcore_flag.log = False
 
 @catalog_field(alias='tcool0')
 def coolcore_tcool(sim, partType, field, args):
-    """ Postprocessing/coolcore_criteria: Lehle+23 central cooling time. """
-    filePath = sim.postPath + '/released/coolcore_criteria.hdf5'
+    """ Postprocessing/coolcore_criteria: Lehle+24 central cooling time. """
+    return _coolcore_load(sim, 'centralCoolingTime')
 
-    with h5py.File(filePath,'r') as f:
-        HaloIDs = f['HaloIDs'][()]
-        data = f['centralCoolingTime'][:, sim.snap]
-
-    # expand from value per primary target to value per subhalo
-    vals = np.zeros(sim.numSubhalos, dtype='float32')
-    vals.fill(np.nan)
-
-    vals[sim.halos('GroupFirstSub')[HaloIDs]] = data
-
-    return vals
+coolcore_tcool.label = r'Central $t_{\rm cool}'
+coolcore_tcool.units = 'Gyr'
+coolcore_tcool.limits = [0.0, 10.0]
+coolcore_tcool.log = False
 
 @catalog_field(alias='K0')
 def coolcore_entropy(sim, partType, field, args):
-    """ Postprocessing/coolcore_criteria: Lehle+23 central cooling time. """
-    filePath = sim.postPath + '/released/coolcore_criteria.hdf5'
+    """ Postprocessing/coolcore_criteria: Lehle+24 central cooling time. """
+    return _coolcore_load(sim, 'centralEntropy')
+
+coolcore_entropy.label = r'Central $K_0$'
+coolcore_entropy.units = 'keV cm$^2$'
+coolcore_entropy.limits = [1.0, 2.5]
+coolcore_entropy.log = True
+
+@catalog_field
+def coolcore_ne(sim, partType, field, args):
+    """ Postprocessing/coolcore_criteria: Lehle+24 central electron number density. """
+    return _coolcore_load(sim, 'centralNumDens')
+
+coolcore_ne.label = r'Central $n_e$'
+coolcore_ne.units = 'cm$^{-3}$'
+coolcore_ne.limits = [-3.0, 1.0]
+coolcore_ne.log = True
+
+@catalog_field
+def coolcore_ne_slope(sim, partType, field, args):
+    """ Postprocessing/coolcore_criteria: Lehle+24 central slope of number density. """
+    return _coolcore_load(sim, 'slopeNumDens')
+
+coolcore_ne_slope.label = r'n_{\rm e} slope ($\alpha$'
+coolcore_ne_slope.units = '' # linear dimensionless
+coolcore_ne_slope.limits = [0.0, 1.0]
+coolcore_ne_slope.log = False
+
+@catalog_field
+def coolcore_c_phys(sim, partType, field, args):
+    """ Postprocessing/coolcore_criteria: Lehle+24 X-ray concentration (40kpc vs 400kpc), physical. """
+    return _coolcore_load(sim, 'concentrationPhys')
+
+coolcore_c_phys.label = r'C_{\rm phys}'
+coolcore_c_phys.units = '' # linear dimensionless
+coolcore_c_phys.limits = [0.0, 1.0]
+coolcore_c_phys.log = False
+
+@catalog_field
+def coolcore_c_scaled(sim, partType, field, args):
+    """ Postprocessing/coolcore_criteria: Lehle+24 X-ray concentration (40kpc vs 400kpc), scaled. """
+    return _coolcore_load(sim, 'concentrationScaled')
+
+coolcore_c_scaled.label = r'C_{\rm phys}'
+coolcore_c_scaled.units = '' # linear dimensionless
+coolcore_c_scaled.limits = [0.0, 1.0]
+coolcore_c_scaled.log = False
+
+@catalog_field(aliases=['peakoffset_xray_x','peakoffset_xray_y','peakoffset_xray_z'])
+def peakoffset_xray(sim, partType, field, args):
+    """ Postprocessing/released: Nelson+24 offsets of X-ray peaks. [pkpc] """
+    filePath = sim.postPath + '/released/XrayOffsets_%03d.hdf5' % sim.snap
 
     with h5py.File(filePath,'r') as f:
-        HaloIDs = f['HaloIDs'][()]
-        data = f['centralEntropy'][:, sim.snap]
+        data = f['Subhalo_XrayOffset_2D'][()]
+
+    # convert code lengths to pkpc
+    data = sim.units.codeLengthToKpc(data)
 
     # expand from value per primary target to value per subhalo
+    pri_target = sim.halos('GroupPrimaryZoomTarget')
+    HaloIDs = np.where(pri_target == 1)[0]
+    assert HaloIDs.size == data.shape[0]
+
     vals = np.zeros(sim.numSubhalos, dtype='float32')
     vals.fill(np.nan)
+
+    # choose viewing direction
+    xyz_index = {'xray':0, 'x':0, 'y':1 ,'z':2}[field.split("_")[-1]]
+    data = data[:,xyz_index]
 
     vals[sim.halos('GroupFirstSub')[HaloIDs]] = data
 
     return vals
+
+peakoffset_xray.label = r'$\Delta x_{\rm X-ray}$'
+peakoffset_xray.units = '$\rm{kpc}$'
+peakoffset_xray.limits = [-1.5, 2.5]
+peakoffset_xray.log = True
+
+@catalog_field(aliases=['peakoffset_sz_x','peakoffset_sz_y','peakoffset_sz_z'])
+def peakoffset_sz(sim, partType, field, args):
+    """ Postprocessing/released: Nelson+24 offsets of SZ peaks. [pkpc] """
+    filePath = sim.postPath + '/released/SZOffsets_%03d.hdf5' % sim.snap
+
+    with h5py.File(filePath,'r') as f:
+        data = f['Subhalo_SZOffset_2D'][()]
+
+    # convert code lengths to pkpc
+    data = sim.units.codeLengthToKpc(data)
+
+    # expand from value per primary target to value per subhalo
+    pri_target = sim.halos('GroupPrimaryZoomTarget')
+    HaloIDs = np.where(pri_target == 1)[0]
+    assert HaloIDs.size == data.shape[0]
+
+    vals = np.zeros(sim.numSubhalos, dtype='float32')
+    vals.fill(np.nan)
+
+    # choose viewing direction
+    xyz_index = {'xray':0, 'x':0, 'y':1 ,'z':2}[field.split("_")[-1]]
+    data = data[:,xyz_index]
+
+    vals[sim.halos('GroupFirstSub')[HaloIDs]] = data
+
+    return vals
+
+peakoffset_sz.label = r'$\Delta x_{\rm SZ}$'
+peakoffset_sz.units = '$\rm{kpc}$'
+peakoffset_sz.limits = [-1.5, 2.5]
+peakoffset_sz.log = True
