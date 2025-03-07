@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 
 from ..load.data import *
+from ..load.simtxt import sfrTxt
 from ..util.helper import running_median, running_histogram, logZeroNaN, iterable
 from ..plot.sizes import galaxySizes, galaxyHISizeMass
 from ..plot.cosmoGeneral import addRedshiftAgeAxes, quantMedianVsSecondQuant

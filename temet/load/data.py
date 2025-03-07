@@ -11,7 +11,7 @@ from scipy.signal import savgol_filter
 from collections import OrderedDict
 from pathlib import Path
 
-from ..util.helper import evenlySample, running_median, closest
+from ..util.helper import running_median, closest
 
 logOHp12_solar = 8.69 # Asplund+ (2009) Table 1
 
@@ -3501,72 +3501,5 @@ def loadSDSSFits(redshiftBounds=[0.0,0.1]):
         r[quantName] = {'xm':xm,'ym':ym,'sm':sm,'pm':pm}
 
     r['label'] = 'SDSS z<0.1'
-
-    return r
-
-def sfrTxt(sP):
-    """ Load and parse sfr.txt. """
-    nPts = 2000
-
-    # cached? in sP object or on disk?
-    if 'sfrd' in sP.data:
-        return sP.data['sfrd']
-
-    saveFilenames = sorted(glob.glob(sP.derivPath + 'sfrtxt_*.hdf5'))
-
-    if len(saveFilenames):
-        print(' Loaded: [%s]' % saveFilenames[-1].split(sP.derivPath)[1])
-        r = {}
-        with h5py.File(saveFilenames[-1],'r') as f:
-            for key in f:
-                r[key] = f[key][()]
-        return r
-
-    # check possible locations for 'sfr.txt' file
-    path = sP.simPath + 'sfr.txt'
-    if not isfile(path):
-        path = sP.simPath + 'txt-files/sfr.txt'
-    if not isfile(path):
-        path = sP.derivPath + 'sfr.txt'
-
-    # does not exist? create similar, but snapshot time-spaced, data
-    if not isfile(path):
-        print('WARNING: Cannot find [sfr.txt] file, deriving data from snapshots.')
-        keys = ['scaleFac','totSfrRate'] #['totalSm','sfrMsunPerYr','totalSumMassStars']
-        r = {k:[] for k in keys}
-
-        sim = sP.copy()
-        for snap in sim.validSnapList():
-            sim.setSnap(snap)
-            print(f'[{snap = :3d}] at z = {sim.redshift:5.2f}')
-
-            r['scaleFac'].append(sim.units.scalefac)
-            r['totSfrRate'].append(np.sum(sim.gas('sfr'))) # msun/yr
-
-        r['scaleFac'] = np.array(r['scaleFac'])
-        r['totSfrRate'] = np.array(r['totSfrRate'])
-
-    else:
-        # columns: All.Time, total_sm, totsfrrate, rate_in_msunperyear, total_sum_mass_stars, cum_mass_stars
-        data = np.loadtxt(path)
-
-        r = { 'scaleFac'          : evenlySample(data[:,0],nPts,logSpace=True),
-              'totalSm'           : evenlySample(data[:,1],nPts,logSpace=True), # from probabilistic formula
-              'totSfrRate'        : evenlySample(data[:,2],nPts,logSpace=True), # sum of TimeBinSfr (i.e. gas cells)
-              'sfrMsunPerYr'      : evenlySample(data[:,3],nPts,logSpace=True), # totalSm divided by timestep
-              'totalSumMassStars' : evenlySample(data[:,4],nPts,logSpace=True), # actual star particle mass formed
-              'cumMassStars'      : evenlySample(data[:,5],nPts,logSpace=True) } # sum of above (somehow strange)
-
-    r['redshift'] = 1.0/r['scaleFac'] - 1.0
-    r['sfrd']     = r['totSfrRate'] / sP.boxSizeCubicComovingMpc # a constant cMpc^3 (equals pMpc^3 at z=0)
-
-    # save
-    saveFilename = sP.derivPath + 'sfrtxt_%.2f.hdf5' % r['scaleFac'].max()
-    with h5py.File(saveFilename,'w') as f:
-        for key in r:
-            f[key] = r[key]
-    print(' Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
-
-    sP.data['sfrd'] = r # attach to sP as cache
 
     return r

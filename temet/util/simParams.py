@@ -1797,7 +1797,7 @@ class simParams:
     @property
     def cpuHours(self):
         """ Return CPU core hours to z=0 for this simulation. """
-        from ..cosmo.perf import loadCpuTxt
+        from ..load.simtxt import loadCpuTxt
         data = loadCpuTxt(self.arepoPath, keys=['total','numCPUs'])
         
         final_timestep_sec_per_cpu = np.squeeze(data['total'])[-1,2] # cumulative

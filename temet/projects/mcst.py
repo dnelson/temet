@@ -16,6 +16,7 @@ from ..plot.general import plotPhaseSpace2D
 from ..plot.cosmoMisc import simHighZComparison
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
+from ..load.simtxt import sfrTxt, blackhole_details_mergers
 
 def _get_existing_sims(variants, res, hInds, redshift, all=False):
     """ Return a list of simulation objects, only for those runs which exist (and have reached redshift). """
@@ -842,7 +843,6 @@ def vis_single_image(sP):
     fracsType  = 'rHalfMassStars'
     nPixels    = [960,960]
     size       = 1.0 if sP.hInd > 20000 else 5.0
-    #size       = 0.05 # z=12 test
     sizeType   = 'kpc'
     labelSim   = False # True
     labelHalo  = 'mhalo,mstar,haloid'
@@ -856,8 +856,13 @@ def vis_single_image(sP):
     #subhaloInd = sP.zoomSubhaloInd
     #subhaloInd = sP.halo(1)['GroupFirstSub']
 
+    # redshift-dependent vis (h31619 L16 tests)
+    zfac = 0.0
+    if sP.redshift >= 9.9:
+        size = 0.05 # z=10, 11, 12 tests of L16
+        zfac = 1.0
+
     # panels (can vary hInd, variant, res)
-    zfac = 0.0 #1.0
     panels = []
     panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0+zfac,22.5+zfac], 'rotation':'face-on'} )
     panels.append( {'partType':'stars', 'partField':'stellarComp', 'rotation':'face-on'} )
@@ -1147,8 +1152,6 @@ def diagnostic_snapshot_spacing(sims):
 
 def diagnostic_box_sfrd(sims):
     """ Comparison of global box SFRD between runs, to avoid halo selection issues. """
-    from ..load.data import sfrTxt
-
     fig, ax = plt.subplots()
     ax.set_ylim([1e-10, 1e-4])
     ax.set_xlim([14, 9.0])
@@ -1380,70 +1383,10 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
     fig.savefig('mjeans_cumsum_n%d_z%d.pdf' % (len(sims),sims[0].redshift))
     plt.close(fig)
 
-def blackhole_details():
-    """ Convert a concatenated blackhole_details.txt file into MPB-like time series of
-    SMBH mass and accretion rates. """
-    # cat blackhole_details_*.txt | sed -r 's/^BH=//' > blackhole_details.txt
-    # cat blackhole_mergers_*.txt > blackhole_mergers.txt
 
-    # load details, columns: ID time BH_Mass mdot rho csnd
-    filename = 'blackhole_details.txt'
-    cachefile = 'blackhole_details.hdf5'
-
-    ids = np.loadtxt(filename, usecols=[0], dtype='int32')
-    data = np.loadtxt(filename, usecols=[1,2,3,4,5], dtype='float32')
-
-    # load mergers, columns: thistask time id0 mass0 id1 mass1
-    # where id0 is the SMBH that remains, and id1 is the SMBH that is removed
-    filename2 = filename.replace('details','mergers')
-    merger_ids = np.loadtxt(filename2, usecols=[2,4], dtype='int32')
-    merger_times = np.loadtxt(filename2, usecols=[1], dtype='float32')
-
-    smbhs = {}
-
-    if isfile(cachefile):
-        with h5py.File(cachefile,'r') as f:
-            for smbh_id in f:
-                smbhs[smbh_id] = {}
-                for k in f[smbh_id].keys():
-                    smbhs[smbh_id][k] = f[smbh_id][k][()]
-        print(f'Loaded [{cachefile}].')
-    else: 
-        # calculate
-        unique_ids = np.unique(ids)
-
-        for smbh_id in unique_ids:
-            # select
-            w = np.where(ids == smbh_id)[0]
-            time = data[w,0]
-            mass = data[w,1]
-            mdot = data[w,2]
-
-            # sort by time, remove duplicate entries
-            _, inds = np.unique(time, return_index=True)
-
-            print(f'SMBH [{smbh_id:12d}] found [{len(inds):6d} / {len(time):6d}] unique entries.')
-
-            time = time[inds]
-            mass = mass[inds]
-            mdot = mdot[inds]
-
-            smbhs[smbh_id] = {'time':time, 'mass':mass, 'mdot':mdot}
-
-        # handle mergers: if this ID ever appears in a merger pair, then 
-        # decide which of the two IDs to keep i.e. attach the earlier data from
-        for smbh_id in unique_ids:
-            w = np.where(merger_ids == smbh_id)[0]
-            if len(w) > 0:
-                import pdb; pdb.set_trace() # todo
-
-        # save
-        with h5py.File(cachefile,'w') as f:
-            for smbh_id in smbhs.keys():
-                f['%d/time' % smbh_id] = time
-                f['%d/mass' % smbh_id] = mass
-                f['%d/mdot' % smbh_id] = mdot
-        print(f'Saved [{cachefile}].')
+def blackhole_plot(sim):
+    # load
+    smbhs = blackhole_details_mergers(sim)
 
     # debug plots
     for smbh_id in smbhs.keys():
@@ -1453,6 +1396,8 @@ def blackhole_details():
         time = smbhs[smbh_id]['time']
         mass = np.log10(smbhs[smbh_id]['mass'] * 1e10 / 0.6774) # log msun (check)
         mdot = logZeroNaN(smbhs[smbh_id]['mdot']) # log msun/yr (check)
+
+        redshift = 1.0 / time - 1
 
         # plot
         step = 1
@@ -1603,9 +1548,9 @@ def paperPlots():
 
     # testing:
     variants = ['ST8s'] #,'TNG'] #,'ST8m','ST8b'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
-    res = [14,15] #[12,13,14,15]
+    res = [16] #[12,13,14,15]
     hInds = [31619] #[31619]
-    redshift = 5.5
+    redshift = 11.5
 
     sims = _get_existing_sims(variants, res, hInds, redshift, all=True)
 
@@ -1662,7 +1607,7 @@ def paperPlots():
         simHighZComparison()
 
     # single image, gas and stars
-    if 0:
+    if 1:
         vis_single_image(sims[0])
 
     # ------------

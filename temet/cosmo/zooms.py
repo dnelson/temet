@@ -10,7 +10,7 @@ from scipy.signal import savgol_filter
 from collections import OrderedDict
 from glob import glob
 
-from ..cosmo.perf import getCpuTxtLastTimestep
+from ..load.simtxt import getCpuTxtLastTimestep
 from ..util.simParams import simParams
 from ..util.helper import logZeroNaN, running_median
 from ..vis.halo import renderSingleHalo
