@@ -2239,7 +2239,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
     color = '#ffffff'
 
     def _addCirclesHelper(p, ax, pos, radii, numToAdd, labelVals=None, lw=1.5, alpha=0.3, marker='o'):
-        """ Helper function to add a number of circle markers for halos/subhalos, within the panel. """
+        """ Helper function to add a number of circle markers for halos/subhalos/SMBHs, within the panel. """
         fontsize = 16 # for text only
 
         circOpts = {'color':color, 'alpha':alpha, 'linewidth':lw, 'fill':False}
@@ -2404,6 +2404,16 @@ def addBoxMarkers(p, conf, ax, pExtent):
             gc['SubhaloHalfmassRad'] = gc['SubhaloHalfmassRad'][subInds]
 
             _addCirclesHelper(p, ax, gc['SubhaloPos'], gc['SubhaloHalfmassRad'], p['plotSubhalos'])
+
+    if 'plotBHs' in p and p['plotBHs'] > 0:
+        # plotting N most massive PartType5 in visible area
+        if p['sP'].numPart[p['sP'].ptNum('bhs')] > 0:
+            # global load entire snapshot
+            smbh_pos = p['sP'].snapshotSubset('bhs', 'pos')
+            smbh_mass = p['sP'].snapshotSubset('bhs', 'BH_Mass')
+            smbh_rad = p['sP'].units.codeMassToLogMsun(smbh_mass) + 10.0
+
+            _addCirclesHelper(p, ax, smbh_pos, smbh_rad, p['plotBHs'])
 
     if 'plotHaloIDs' in p:
         # plotting halos/groups specified by ID, in visible area

@@ -130,8 +130,16 @@ def _zoomSubhaloIDsToPlot(sim):
     
     for subid in subhaloIDs:
         #lowres_dist = sim.snapshotSubset('dmlowres', 'rad_kpc', subhaloID=subid)
-        #import pdb; pdb.set_trace()
-        print(f' h[{grnr[subid]}] sub[{subid:4d}] mhalo = {mhalo[subid]:.2f} mstar = {mstar[subid]:.2f} contam_frac = {contam_frac[subid]:.4f}')
+        print(f' h[{grnr[subid]}] sub[{subid:4d}] mhalo = {mhalo[subid]:.2f} mstar = {mstar[subid]:.2f} contam_frac = {contam_frac[subid]:.3g}')
+
+    # go through first 10 halos also, just for information purposes
+    firstsub = sim.halos('GroupFirstSub')
+    num_lowres = sim.halos('GroupLenType')[:,sim.ptNum('dmlowres')]
+
+    print('first ten halos:')
+    for i in range(10):
+        subid = firstsub[i]
+        print(f' h[{i}] sub[{subid:5d}] mhalo = {mhalo[subid]:.2f} mstar = {mstar[subid]:.1f} {num_lowres[i] =:4d} contam_frac = {contam_frac[subid]:.3g}')
 
     return subhaloIDs
 
@@ -838,8 +846,9 @@ def phase_diagram(sim):
     plotPhaseSpace2D(sim, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs, qRestrictions=qRestrictions,
         xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, f_post=_f_post)
 
-def vis_single_image(sP):
-    """ Visualization: single image of a halo. """
+def vis_single_image(sP, haloID=0):
+    """ Visualization: single image of a halo. 
+    Cannot use for a movie since the face-on/edge-on rotations have random orientations each frame. """
     rVirFracs  = [1.0]
     fracsType  = 'rHalfMassStars'
     nPixels    = [960,960]
@@ -849,30 +858,33 @@ def vis_single_image(sP):
     labelHalo  = 'mhalo,mstar,haloid'
     labelZ     = True
     labelScale = 'physical'
+    #plotBHs    = 10 # to finish
     relCoords  = True
     if 1:
         axes = [0,1]
         #rotation   = 'edge-on' #'face-on'
 
-    #subhaloInd = sP.zoomSubhaloInd
-    #subhaloInd = sP.halo(1)['GroupFirstSub']
+    subhaloInd = sP.halo(haloID)['GroupFirstSub']
 
     # redshift-dependent vis (h31619 L16 tests)
     zfac = 0.0
     if sP.redshift >= 9.9:
-        size = 0.05 # z=10, 11, 12 tests of L16
         zfac = 1.0
+        size = 0.05 # z=10, 11, 12 tests of L16
 
     # panels (can vary hInd, variant, res)
     panels = []
-    panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0+zfac,22.5+zfac], 'rotation':'face-on'} )
-    panels.append( {'partType':'stars', 'partField':'stellarComp', 'rotation':'face-on'} )
 
-    # add skinny edge-on panels below:
-    panels.append( {'partType':'gas', 'partField':'HI', 'nPixels':[960,240], 'valMinMax':[20.5+zfac,23.0+zfac], 
-                    'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
-    panels.append( {'partType':'stars', 'partField':'stellarComp', 'nPixels':[960,240], 
-                    'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
+    if 1:
+        gas_field = 'coldens_msunkpc2' # 'HI'
+        panels.append( {'partType':'gas', 'partField':gas_field, 'valMinMax':[20.0+zfac,22.5+zfac], 'rotation':'face-on'} )
+        panels.append( {'partType':'stars', 'partField':'stellarComp', 'rotation':'face-on'} )
+
+        # add skinny edge-on panels below:
+        panels.append( {'partType':'gas', 'partField':gas_field, 'nPixels':[960,240], 'valMinMax':[20.5+zfac,23.0+zfac], 
+                        'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
+        panels.append( {'partType':'stars', 'partField':'stellarComp', 'nPixels':[960,240], 
+                        'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
 
     class plotConfig:
         plotStyle    = 'edged'
@@ -883,7 +895,8 @@ def vis_single_image(sP):
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 def vis_movie(sP, haloID=0, frame=None):
-    """ Visualization: movie of a single halo. """
+    """ Visualization: movie of a single halo. Use minimal SubLink MPB tracking.
+    Cannot use rotation for face-on/edge-on since it has random orientations each frame. """
     rVirFracs  = [1.0]
     fracsType  = 'rHalfMassStars'
     nPixels    = [960,960]
@@ -894,9 +907,7 @@ def vis_movie(sP, haloID=0, frame=None):
     labelZ     = True
     labelScale = 'physical'
     relCoords  = True
-    if 0:
-        axes = [0,1]
-        rotation   = 'face-on'
+    #axes = [0,1]
 
     subhaloInd = sP.halo(haloID)['GroupFirstSub']
 
@@ -1389,10 +1400,10 @@ def blackhole_diagnostics_vs_time(sim):
     # load
     smbhs = blackhole_details_mergers(sim, overwrite=False)
 
-    xlim = [8.1, 5.5]
+    xlim = [10.1, 5.5]
     ageVals = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
-    # debug plots
+    # make a multi-panel time series plot for each SMBH
     for smbh_id in smbhs.keys():
         if smbh_id == 'mergers':
             continue
@@ -1401,7 +1412,8 @@ def blackhole_diagnostics_vs_time(sim):
         print('plot: ', smbh_id)
 
         time = smbhs[smbh_id]['time']
-        mass = np.log10(smbhs[smbh_id]['mass'] * 1e10 / 0.6774) # log msun (check)
+        mass_code = smbhs[smbh_id]['mass']
+        mass = sim.units.codeMassToLogMsun(mass_code) # log msun
         mdot = logZeroNaN(smbhs[smbh_id]['mdot']) # log msun/yr (check)
 
         redshift = 1.0 / time - 1
@@ -1409,6 +1421,10 @@ def blackhole_diagnostics_vs_time(sim):
         # plot
         step = 1
 
+        mdot_edd = np.log10(sim.units.codeBHMassToMdotEdd(mass_code[::step]))
+        mdot_limit = np.log10(10.0**mdot_edd * sim.params['BlackHoleEddingtonFactor'])
+
+        # mass
         fig, ax = plt.subplots(nrows=3, figsize=(12,12))#, sharex=True)
         ax[0].set_xlabel('Redshift')
         ax[0].set_xlim(xlim)
@@ -1417,18 +1433,28 @@ def blackhole_diagnostics_vs_time(sim):
         ax[0].plot(redshift[::step], mass[::step], lw=lw, zorder=0)
         addUniverseAgeAxis(ax[0], sim, ageVals=ageVals)
 
+        # mdot: full range
         ax[1].set_xlabel('Redshift')
         ax[1].set_xlim(xlim)
         ax[1].set_ylabel(r'$\dot{M}_{\rm SMBH}$ [ log M$_{\rm sun}$ yr$^{-1}$ ]')
-        ax[1].set_ylim([-4.0, 0.0])
 
         ax[1].plot(redshift[::step], mdot[::step], lw=lw, zorder=0)
 
+        # overplot eddington
+        ax[1].plot(redshift[::step], mdot_edd, lw=lw, color='black', label='Eddington')
+        ax[1].plot(redshift[::step], mdot_limit, lw=lw, color='black', alpha=0.4, label='Limit')
+
+        # mdot: high values only
         ax[2].set_xlabel('Redshift')
         ax[2].set_xlim(xlim)
         ax[2].set_ylabel(r'$\dot{M}_{\rm SMBH}$ [ log M$_{\rm sun}$ yr$^{-1}$ ]')
+        ax[2].set_ylim([-5.2, 0.0])
 
         ax[2].plot(redshift[::step], mdot[::step], lw=lw, zorder=0)
+        ax[2].plot(redshift[::step], mdot_edd, lw=lw, color='black', label='Eddington')
+        ax[2].plot(redshift[::step], mdot_limit, lw=lw, color='black', alpha=0.4, label='Limit')
+
+        ax[2].legend(loc='best')
 
         for a in ax: a.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
@@ -1559,11 +1585,15 @@ def paperPlots():
 
     # testing:
     variants = ['ST8s'] #,'TNG'] #,'ST8m','ST8b'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
-    res = [16] #[12,13,14,15]
+    res = [14] #[12,13,14,15]
     hInds = [31619] #[31619]
-    redshift = 11.5
+    redshift = 12.0
 
     sims = _get_existing_sims(variants, res, hInds, redshift, all=True)
+
+    # contamination diagnostic printout (info only)
+    for sim in sims:
+        _ = _zoomSubhaloIDsToPlot(sim)
 
     # figure - smhm relation
     if 0:
@@ -1619,7 +1649,7 @@ def paperPlots():
 
     # single image, gas and stars
     if 1:
-        vis_single_image(sims[0])
+        vis_single_image(sims[0], haloID=0)
 
     # ------------
 

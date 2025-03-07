@@ -53,7 +53,7 @@ def addUniverseAgeAxis(ax, sP, ageVals=[0.7,1.0,1.5,2.0,3.0,4.0,6.0,9.0]):
     axTop.set_xscale(ax.get_xscale())
     axTop.set_xticks(axTickVals[w])
     axTop.set_xticklabels(ageVals[w])
-    axTop.set_xlabel("Age of the Universe [Gyr]")
+    axTop.set_xlabel("Age of the Universe [Gyr]", labelpad=8.0)
 
 def addRedshiftAgeAxes(ax, sP, xrange=[-1e-4,8.0], xlog=True):
     """ Add bottom vs. redshift (and top vs. universe age) axis for standard X vs. redshift plots. """

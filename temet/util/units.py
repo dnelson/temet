@@ -246,10 +246,14 @@ class units(object):
     def codeMassToLogMsun(self, mass):
         """ Convert mass from code units (10**10 msun/h) to (log msun). """
         return logZeroNaN( self.codeMassToMsun(mass) )
+    
+    def msunToCodeMass(self, mass):
+        """ Convert mass in [msun] to code units. """
+        return (mass / self.UnitMass_in_Msun * self._sP.HubbleParam)
 
     def logMsunToCodeMass(self, mass):
         """ Convert mass in (log msun) to code units. """
-        return (10.0**mass / self.UnitMass_in_Msun * self._sP.HubbleParam)
+        return self.msunToCodeMass(10.0**mass)
 
     def codeMassToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert from halo mass in code units to virial temperature in Kelvin, 
