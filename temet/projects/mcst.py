@@ -14,6 +14,7 @@ from ..plot.config import *
 from ..util.helper import running_median, logZeroNaN, closest
 from ..plot.general import plotPhaseSpace2D
 from ..plot.cosmoMisc import simHighZComparison
+from ..plot.cosmoGeneral import addUniverseAgeAxis
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
 from ..load.simtxt import sfrTxt, blackhole_details_mergers
@@ -1383,13 +1384,19 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
     fig.savefig('mjeans_cumsum_n%d_z%d.pdf' % (len(sims),sims[0].redshift))
     plt.close(fig)
 
-
-def blackhole_plot(sim):
+def blackhole_diagnostics_vs_time(sim):
+    """ Plot SMBH mass growth and accretion rates vs time, from the txt files. """
     # load
-    smbhs = blackhole_details_mergers(sim)
+    smbhs = blackhole_details_mergers(sim, overwrite=False)
+
+    xlim = [8.1, 5.5]
+    ageVals = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
     # debug plots
     for smbh_id in smbhs.keys():
+        if smbh_id == 'mergers':
+            continue
+
         # unit conversions (todo)
         print('plot: ', smbh_id)
 
@@ -1402,26 +1409,30 @@ def blackhole_plot(sim):
         # plot
         step = 1
 
-        fig, ax = plt.subplots(nrows=3, figsize=(12,12), sharex=True)
-        ax[0].set_xlabel('Scale factor')
-        ax[0].set_ylabel(r'Mass [ log M$_{\rm sun}$ ]')
+        fig, ax = plt.subplots(nrows=3, figsize=(12,12))#, sharex=True)
+        ax[0].set_xlabel('Redshift')
+        ax[0].set_xlim(xlim)
+        ax[0].set_ylabel(r'SMBH Mass [ log M$_{\rm sun}$ ]')
 
-        ax[0].plot(time[::step], mass[::step], lw=lw, zorder=0)
+        ax[0].plot(redshift[::step], mass[::step], lw=lw, zorder=0)
+        addUniverseAgeAxis(ax[0], sim, ageVals=ageVals)
 
-        ax[1].set_xlabel('Scale factor')
-        ax[1].set_ylabel(r'Mdot [ log M$_{\rm sun}$ yr$^{-1}$ ]')
+        ax[1].set_xlabel('Redshift')
+        ax[1].set_xlim(xlim)
+        ax[1].set_ylabel(r'$\dot{M}_{\rm SMBH}$ [ log M$_{\rm sun}$ yr$^{-1}$ ]')
         ax[1].set_ylim([-4.0, 0.0])
 
-        ax[1].plot(time[::step], mdot[::step], lw=lw, zorder=0)
+        ax[1].plot(redshift[::step], mdot[::step], lw=lw, zorder=0)
 
-        ax[2].set_xlabel('Scale factor')
-        ax[2].set_ylabel(r'Mdot [ log M$_{\rm sun}$ yr$^{-1}$ ]')
+        ax[2].set_xlabel('Redshift')
+        ax[2].set_xlim(xlim)
+        ax[2].set_ylabel(r'$\dot{M}_{\rm SMBH}$ [ log M$_{\rm sun}$ yr$^{-1}$ ]')
 
-        ax[2].plot(time[::step], mdot[::step], lw=lw, zorder=0)
+        ax[2].plot(redshift[::step], mdot[::step], lw=lw, zorder=0)
 
         for a in ax: a.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
-        fig.savefig(f'blackhole_mass_mdot_vs_time_{smbh_id}.pdf')
+        fig.savefig(f'smbh_vs_time_{sim}_{smbh_id}.pdf')
         plt.close(fig)
 
 def select_ics():

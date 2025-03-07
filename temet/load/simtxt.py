@@ -4,10 +4,11 @@ Load AREPO .txt diagnostic and output files (by converting and cachine to HDF5).
 import numpy as np
 import h5py
 import glob
-from os.path import isfile
+from os import remove
+from os.path import isfile, isdir, expanduser
 import subprocess
 
-from ..util.helper import evenlySample
+from ..util.helper import evenlySample, tail
 
 def sfrTxt(sim):
     """ Load and parse sfr.txt. """
@@ -453,82 +454,117 @@ def loadMemoryTxt(basePath):
 
     return largest_alloc, largest_alloc_wo_generic
 
-def blackhole_details_mergers(sim):
+def blackhole_details_mergers(sim, overwrite=False):
     """ Convert the blackhole_details/ and blackhole_mergers/ files into HDF5.
     Then: derive MPB-like time series of SMBH mass and accretion rates. """
-    # cat blackhole_details_*.txt | sed -r 's/^BH=//' > blackhole_details.txt
-    # cat blackhole_mergers_*.txt > blackhole_mergers.txt
-    cachefile = sim.cachePath + 'blackhole_details.hdf5'
+    cmd1 = 'cat blackhole_details_*.txt | sed -r "s/^BH=//" > blackhole_details.txt'
+    cmd2 = 'cat blackhole_mergers_*.txt > blackhole_mergers.txt'
 
-    # load details, columns: ID time BH_Mass mdot rho csnd
-    path1 = sim.outputPath + 'txt-files/blackhole_details/'
-    path2 = sim.outputPath + 'txt-files/blackhole_mergers/'
-    filename = path1 + 'blackhole_details.txt'
-    
-    if not isfile(filename):
-        # concat file is missing, check for individual files
-        filename = filename.replace('.txt','_0.txt')
-        if isfile(filename):
-            # run concat
-            r = subprocess.Popen('cat blackhole_details_*.txt | sed -r "s/^BH=//" > blackhole_details.txt', cwd=path1)
-            r = subprocess.Popen('cat blackhole_mergers_*.txt > blackhole_mergers.txt', cwd=path2)
-        else:
-            # individual txt files also missing, likely already compressed
-            import pdb; pdb.set_trace()
-
-    ids = np.loadtxt(filename, usecols=[0], dtype='int32')
-    data = np.loadtxt(filename, usecols=[1,2,3,4,5], dtype='float32')
-
-    # load mergers, columns: thistask time id0 mass0 id1 mass1
-    # where id0 is the SMBH that remains, and id1 is the SMBH that is removed
-    filename2 = filename.replace('details','mergers')
-    merger_ids = np.loadtxt(filename2, usecols=[2,4], dtype='int32')
-    merger_times = np.loadtxt(filename2, usecols=[1], dtype='float32')
+    cachefile = sim.derivPath + 'blackhole_details.hdf5'
 
     smbhs = {}
 
-    if isfile(cachefile):
+    # check for existence of cache
+    if isfile(cachefile) and not overwrite:
         with h5py.File(cachefile,'r') as f:
             for smbh_id in f:
                 smbhs[smbh_id] = {}
                 for k in f[smbh_id].keys():
                     smbhs[smbh_id][k] = f[smbh_id][k][()]
         print(f'Loaded [{cachefile}].')
-    else: 
-        # calculate
-        unique_ids = np.unique(ids)
 
-        for smbh_id in unique_ids:
-            # select
-            w = np.where(ids == smbh_id)[0]
-            time = data[w,0]
-            mass = data[w,1]
-            mdot = data[w,2]
+        return smbhs
 
-            # sort by time, remove duplicate entries
-            _, inds = np.unique(time, return_index=True)
+    # concatenate txt files if needed
+    path = sim.simPath + 'txt-files/'
 
-            print(f'SMBH [{smbh_id:12d}] found [{len(inds):6d} / {len(time):6d}] unique entries.')
+    if isdir(sim.simPath + 'blackhole_details/'):
+        # txt-files/ is not present yet, run is likely still in progress
+        path = sim.simPath
 
-            time = time[inds]
-            mass = mass[inds]
-            mdot = mdot[inds]
+    path1 = path + 'blackhole_details/'
+    path2 = path + 'blackhole_mergers/'
 
-            smbhs[smbh_id] = {'time':time, 'mass':mass, 'mdot':mdot}
+    filename = path1 + 'blackhole_details.txt'
+    filename2 = filename.replace('details','mergers')
+    
+    if not isfile(filename):
+        # .tar.gz files present and directories not? decompress
+        decompressed = False
+        if isfile(path + 'blackhole_details.tar.gz') and not isdir(path1):
+            assert 'txt-files/' in path # should not occur otherwise
 
-        # save
-        with h5py.File(cachefile,'w') as f:
-            for smbh_id in smbhs.keys():
-                f['%d/time' % smbh_id] = time
-                f['%d/mass' % smbh_id] = mass
-                f['%d/mdot' % smbh_id] = mdot
+            print('Decompressing blackhole_details.tar.gz...')
+            r = subprocess.run(['tar','-xzf','blackhole_details.tar.gz'], cwd=path)
+            print('Decompressing blackhole_mergers.tar.gz...')
+            r = subprocess.run(['tar','-xzf','blackhole_mergers.tar.gz'], cwd=path)
+            decompressed = True
 
-            # also write mergers
-            f['mergers/times'] = merger_times
-            f['mergers/ids'] = merger_ids
-        print(f'Saved [{cachefile}].')
+        # concat file is missing, check for individual files
+        filename_indiv = filename.replace('.txt','_0.txt')
+        if isfile(filename_indiv):
+            # run concat
+            print('Concat blackhole_details*.txt...')
+            r = subprocess.run(cmd1, cwd=path1, shell=True)
 
-        smbhs['mergers'] = {'times':merger_times, 'ids':merger_ids}
+            # remove all lines containing "BH=" (stdout races/bad data)
+            r = subprocess.run('sed -i "/BH=/d" blackhole_details.txt', cwd=path1, shell=True)
+
+            print('Concat blackhole_mergers*.txt...')
+            r = subprocess.run(cmd2, cwd=path2, shell=True)
+
+    # load details, columns: ID time BH_Mass mdot rho csnd
+    ids = np.loadtxt(filename, usecols=[0], dtype='int32')
+    data = np.loadtxt(filename, usecols=[1,2,3,4,5], dtype='float32')
+
+    # load mergers, columns: thistask time id0 mass0 id1 mass1
+    # where id0 is the SMBH that remains, and id1 is the SMBH that is removed
+    merger_ids = np.loadtxt(filename2, usecols=[2,4], dtype='int32')
+    merger_times = np.loadtxt(filename2, usecols=[1], dtype='float32')
+
+    # calculate
+    unique_ids = np.unique(ids)
+
+    for smbh_id in unique_ids:
+        # select
+        w = np.where(ids == smbh_id)[0]
+        time = data[w,0]
+        mass = data[w,1]
+        mdot = data[w,2]
+
+        # sort by time, remove duplicate entries
+        _, inds = np.unique(time, return_index=True)
+
+        print(f'SMBH [{smbh_id:12d}] found [{len(inds):6d} / {len(time):6d}] unique entries.')
+
+        time = time[inds]
+        mass = mass[inds]
+        mdot = mdot[inds]
+
+        smbhs[int(smbh_id)] = {'time':time, 'mass':mass, 'mdot':mdot}
+
+    # save
+    with h5py.File(cachefile,'w') as f:
+        for smbh_id in smbhs.keys():
+            f['%d/time' % smbh_id] = smbhs[smbh_id]['time']
+            f['%d/mass' % smbh_id] = smbhs[smbh_id]['mass']
+            f['%d/mdot' % smbh_id] = smbhs[smbh_id]['mdot']
+
+        # also write mergers
+        f['mergers/times'] = merger_times
+        f['mergers/ids'] = merger_ids
+
+    print(f'Saved [{cachefile}].')
+
+    # delete decompressed files
+    if decompressed:
+        assert 'txt-files/' in path
+        print('Deleting decompressed files...')
+        r = subprocess.run(['rm','-r','blackhole_details'], cwd=path)
+        r = subprocess.run(['rm','-r','blackhole_mergers'], cwd=path)
+
+    # add mergers to return
+    smbhs['mergers'] = {'times':merger_times, 'ids':merger_ids}
 
     # handle mergers: if this ID ever appears in a merger pair, then 
     # decide which of the two IDs to keep i.e. attach the earlier data from

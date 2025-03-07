@@ -22,26 +22,37 @@ from ..plot.config import *
 
 def addRedshiftAxis(ax, sP, zVals=[0.0,0.25,0.5,0.75,1.0,1.5,2.0,3.0,4.0,6.0,10.0]):
     """ Add a redshift axis as a second x-axis on top (assuming bottom axis is Age of Universe [Gyr]). """
+    zVals = np.array(zVals)
     axTop = ax.twiny()
-    axTickVals = sP.units.redshiftToAgeFlat( np.array(zVals) )
+    tlim = ax.get_xlim()
+
+    axTickVals = sP.units.redshiftToAgeFlat(zVals)
+    w = np.where((axTickVals >= tlim[0]) & (axTickVals <= tlim[1]))
 
     axTop.set_xlim(ax.get_xlim())
     axTop.set_xscale(ax.get_xscale())
-    axTop.set_xticks(axTickVals)
-    axTop.set_xticklabels(zVals)
+    axTop.set_xticks(axTickVals[w])
+    axTop.set_xticklabels(zVals[w])
     axTop.set_xlabel("Redshift")
 
 def addUniverseAgeAxis(ax, sP, ageVals=[0.7,1.0,1.5,2.0,3.0,4.0,6.0,9.0]):
     """ Add a age of the universe [Gyr] axis as a second x-axis on top (assuming bottom is redshift). """
     axTop = ax.twiny()
+    zlim = ax.get_xlim()
 
-    ageVals.append( sP.units.redshiftToAgeFlat([0.0]).round(2) )
-    axTickVals = sP.units.ageFlatToRedshift( np.array(ageVals) )
+    ageVals.append(sP.units.redshiftToAgeFlat([0.0]).round(2))
+    ageVals = np.array(ageVals)
+    axTickVals = sP.units.ageFlatToRedshift(ageVals)
 
-    axTop.set_xlim(ax.get_xlim())
+    if zlim[0] < zlim[1]:
+        w = np.where((axTickVals >= zlim[0]) & (axTickVals <= zlim[1]))
+    else:
+        w = np.where((axTickVals <= zlim[0]) & (axTickVals >= zlim[1]))
+
+    axTop.set_xlim(zlim)
     axTop.set_xscale(ax.get_xscale())
-    axTop.set_xticks(axTickVals)
-    axTop.set_xticklabels(ageVals)
+    axTop.set_xticks(axTickVals[w])
+    axTop.set_xticklabels(ageVals[w])
     axTop.set_xlabel("Age of the Universe [Gyr]")
 
 def addRedshiftAgeAxes(ax, sP, xrange=[-1e-4,8.0], xlog=True):

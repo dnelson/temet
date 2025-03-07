@@ -7,13 +7,11 @@ import matplotlib.pyplot as plt
 
 from datetime import datetime, timedelta
 from matplotlib.backends.backend_pdf import PdfPages
-from os.path import isfile, isdir, expanduser
-from os import mkdir
-from os import remove, rename
+from os.path import expanduser
 from glob import glob
 from scipy.interpolate import interp1d
 
-from ..util.helper import closest, tail, getWhiteBlackColors
+from ..util.helper import closest, getWhiteBlackColors
 from ..vis.common import setAxisColors
 from ..load.simtxt import *
 from ..plot.config import *
