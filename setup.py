@@ -18,11 +18,11 @@ def post_install():
     home = Path.home()
 
     # matplotlibrc
-    mpl = home / ".config/matplotlib"
-    mpl.mkdir(parents=True, exist_ok=True)
+    #mpl = home / ".config/matplotlib"
+    #mpl.mkdir(parents=True, exist_ok=True)
 
-    if not (mpl / "matplotlibrc").exists():
-        (mpl / "matplotlibrc").symlink_to(install_path / "matplotlibrc")
+    #if not (mpl / "matplotlibrc").exists():
+    #    (mpl / "matplotlibrc").symlink_to(install_path / "matplotlibrc")
    
     # Roboto font
 
