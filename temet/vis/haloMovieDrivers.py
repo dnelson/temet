@@ -295,7 +295,7 @@ def _create_global_subset_saves(doInds=False):
         print('All loading done.', flush=True)
 
         for shID in shIDs:
-            saveFilename = sP.derivPath + 'cache/vis_static_halo_rotation_fullbox_sh%d_s%d.hdf5' % (shID,sP.snap)
+            saveFilename = sP.cachePath + 'vis_static_halo_rotation_fullbox_sh%d_s%d.hdf5' % (shID,sP.snap)
 
             # load subhalo info
             subhalo = sP.groupCatSingle(subhaloID=shID)
@@ -390,7 +390,7 @@ def static_halo_rotation_fullbox(objInd=10, conf='one'):
     # global pre-cache of selected fields into memory, as we do global renders
     dataCache = {}
 
-    saveFilename = sP.derivPath + 'cache/vis_static_halo_rotation_fullbox_sh%d_s%d.hdf5' % (subhaloInd,sP.snap)
+    saveFilename = sP.cachePath + 'vis_static_halo_rotation_fullbox_sh%d_s%d.hdf5' % (subhaloInd,sP.snap)
 
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:

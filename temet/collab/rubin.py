@@ -155,7 +155,7 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
     # check for existence of cache
     grids = {}
     sb_percs = {}
-    cacheFile = sim.derivPath + 'cache/hstmst_grids.hdf5'
+    cacheFile = sim.cachePath + 'hstmst_grids.hdf5'
 
     if isfile(cacheFile):
         # load cached result
@@ -279,7 +279,7 @@ def hubbleMCT_emissionTrendsVsSim():
     for simname in sims:
         print(simname)
         sim = simParams(simname, redshift=redshift)
-        cacheFile = sim.derivPath + 'cache/hstmst_grids.hdf5'
+        cacheFile = sim.cachePath + 'hstmst_grids.hdf5'
 
         with h5py.File(cacheFile,'r') as f:
             for key in f['sb_percs']:

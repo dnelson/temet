@@ -242,7 +242,7 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
     psfSigma_px = psfFWHM_px / 2.3548
 
     def _cachefile(sP):
-        return sP.derivPath + 'cache/mg2emission_%d_sbr_%d_%d_%s_%d.hdf5' % (sP.snap,massBin[0]*10,massBin[1]*10,rotation,size)
+        return sP.cachePath + 'mg2emission_%d_sbr_%d_%d_%s_%d.hdf5' % (sP.snap,massBin[0]*10,massBin[1]*10,rotation,size)
 
     def _rad_profile(rad_pts, sb_pts):
         """ Profile helper. """
@@ -575,7 +575,7 @@ def gridPropertyVsInclinations(sP, propName='mg2_lumsize'):
     maxPointsPerDex = 100
     numInclinations = 5
 
-    saveFilename = sP.derivPath + 'cache/gridprops_%s_inclination_%d_%.1f_%.1f_%d_%d.hdf5' % \
+    saveFilename = sP.cachePath + 'gridprops_%s_inclination_%d_%.1f_%.1f_%d_%d.hdf5' % \
       (propName,sP.snap,mstarBin[0],mstarBin[1],maxPointsPerDex,numInclinations)
 
     if isfile(saveFilename):

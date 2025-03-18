@@ -1369,9 +1369,8 @@ def _cloudy_load(sim, partType, field, args):
     if hasattr(sim,'createCloudyCache') and not sim.createCloudyCache:
         createCache = False
 
-    cachePath = sim.derivPath + 'cache/'
     sbStr = 'sb%d_' % sim.subbox if sim.subbox is not None else ''
-    cacheFile = cachePath + 'cached_%s_%s_%s%d.hdf5' % (partType,field.replace(" ","-"),sbStr,sim.snap)
+    cacheFile = sim.cachePath + 'cached_%s_%s_%s%d.hdf5' % (partType,field.replace(" ","-"),sbStr,sim.snap)
     indRangeAll = [0, sim.numPart[sim.ptNum(partType)]]
 
     if useCache:
@@ -1390,13 +1389,10 @@ def _cloudy_load(sim, partType, field, args):
                     nChunksDone = f.attrs['nChunksDone'] if 'nChunksDone' in f.attrs else nChunks # fallback
                 if nChunksDone != nChunks:
                     print('Warning: Found cache file [%s], but only has [%d] of [%d] chunks done, remaking.' % \
-                        (cacheFile.split(cachePath)[1],nChunksDone,nChunks))
+                        (cacheFile.split(sim.cachePath)[1],nChunksDone,nChunks))
                     remakeCacheFile = True
 
         if createCache and (not isfile(cacheFile) or remakeCacheFile):
-            if not isdir(cachePath):
-                mkdir(cachePath)
-
             # compute for indRange == None (whole snapshot) with a reasonable pSplit
             print('Creating [%s] for [%d] particles in [%d] chunks (set sP.createCloudyCache = False to disable).' % \
                 (cacheFile.split(sim.derivPath)[1], indRangeAll[1], nChunks) )

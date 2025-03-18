@@ -360,7 +360,7 @@ def stackedRadialProfiles(sim, haloIDs, b, addObsThresholds=True):
     ylim = [2e31, 2e36] # erg/s/kpc^2
 
     # cache
-    cacheFile = sim.derivPath + 'cache/iltis_profiles_%s-%d_nh%d_b%s.hdf5' % (sim.simName,sim.snap,len(haloIDs),b) #sim.cachePath + ''
+    cacheFile = sim.cachePath + 'iltis_profiles_%s-%d_nh%d_b%s.hdf5' % (sim.simName,sim.snap,len(haloIDs),b) #sim.cachePath + ''
 
     if isfile(cacheFile):
         with h5py.File(cacheFile,'r') as f:
@@ -697,7 +697,7 @@ def imageSBgallery(sim, haloIDs, b):
         sfr = subhalo['SubhaloSFRinRad']
 
         # cache
-        cacheFile = sim.derivPath + 'cache/iltis_sbimage_%s-%d_%d_b%s_s%d.hdf5' % (sim.simName,sim.snap,haloID,b,size)
+        cacheFile = sim.cachePath + 'iltis_sbimage_%s-%d_%d_b%s_s%d.hdf5' % (sim.simName,sim.snap,haloID,b,size)
 
         if isfile(cacheFile):
             with h5py.File(cacheFile,'r') as f:
@@ -1055,7 +1055,7 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
     lum_aperture_kpc = 10.0 # pkpc for L_OVIIr calculation
 
     # calculate enhancement factor
-    cacheFile = sim.derivPath + 'cache/iltis_enhancefac_%s-%d_nh%d_b%s.hdf5' % (sim.simName,sim.snap,len(haloIDs),b) #sim.cachePath + ''
+    cacheFile = sim.cachePath + 'iltis_enhancefac_%s-%d_nh%d_b%s.hdf5' % (sim.simName,sim.snap,len(haloIDs),b) #sim.cachePath + ''
 
     subhaloIDs = sim.halos('GroupFirstSub')[haloIDs]
 
@@ -1291,7 +1291,7 @@ def enhancementTrendVsMass(sim, haloIDs, b):
     # config - must recompute cache
     size = 250.0 # pkpc for imaging
 
-    cacheFile = sim.derivPath + 'cache/iltis_enhancefac_%s-%d_nh%d_b%s.hdf5' % (sim.simName,sim.snap,len(haloIDs),b) #sim.cachePath + ''
+    cacheFile = sim.cachePath + 'iltis_enhancefac_%s-%d_nh%d_b%s.hdf5' % (sim.simName,sim.snap,len(haloIDs),b) #sim.cachePath + ''
 
     if isfile(cacheFile):
         with h5py.File(cacheFile,'r') as f:

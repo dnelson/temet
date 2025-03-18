@@ -317,7 +317,7 @@ def local_gas_subset(sP, haloID=0, maxRadR200=5.2, useTree=True):
     gas_local = {}
 
     # cache
-    cacheFilename = sP.derivPath + '/cache/rshock_subset_%d_h%d_r%.1f.hdf5' % (sP.snap,haloID,maxRadR200)
+    cacheFilename = sP.cachePath + 'rshock_subset_%d_h%d_r%.1f.hdf5' % (sP.snap,haloID,maxRadR200)
 
     if isfile(cacheFilename):
         print('Loading: [%s]' % cacheFilename)

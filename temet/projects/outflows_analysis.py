@@ -1414,7 +1414,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
             dsetName = '%s.%s.%s' % (firstQuant,secondQuant,thirdQuant)
 
     selStr = '' if selNum is None else '_sel%d' % selNum
-    cacheFile = sP.derivPath + 'cache/%s_%s-%s-%s-%s%s%s_%d.hdf5' % (acField,firstQuant,secondQuant,thirdQuant,fourthQuant,selStr,flowStr,sP.snap)
+    cacheFile = sP.cachePath + '%s_%s-%s-%s-%s%s%s_%d.hdf5' % (acField,firstQuant,secondQuant,thirdQuant,fourthQuant,selStr,flowStr,sP.snap)
 
     # overrides (after cache filename)
     dsetNameOrig = dsetName

@@ -277,8 +277,8 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
               (method,nPixels,axes,rotation,size,sizeType,ptRestrictions,sP.snap,subInds)
             if weightField != 'mass': hashStr += weightField
             m = hashlib.sha256(hashStr.encode('utf-8')).hexdigest()[::4]
-            cacheFile = sP.derivPath + 'cache/aziangle_grids_%s_%s.hdf5' % (dataField,m)
-            cacheFileHI = sP.derivPath + 'cache/aziangle_grids_%s_%s.hdf5' % ('HI',m)
+            cacheFile = sP.cachePath + 'aziangle_grids_%s_%s.hdf5' % (dataField,m)
+            cacheFileHI = sP.cachePath + 'aziangle_grids_%s_%s.hdf5' % ('HI',m)
 
             if path.isfile(cacheFile) and (not loadHI or path.isfile(cacheFileHI)):
                 # load cached result
@@ -501,7 +501,7 @@ def stackedImageProjection():
         # check for existence of cache
         hashStr = "%s-%s-%s-%s-%s-%s-%s" % (method,nPixels,axes,size,sizeType,sP.snap,sub_inds)
         m = hashlib.sha256(hashStr.encode('utf-8')).hexdigest()[::4]
-        cacheFile = sP.derivPath + 'cache/stacked_proj_grids_%s_%s.hdf5' % (dataField,m)
+        cacheFile = sP.cachePath + 'stacked_proj_grids_%s_%s.hdf5' % (dataField,m)
 
         # plot config
         class plotConfig:

@@ -159,7 +159,7 @@ def magicCGMEmissionMaps(vis_indiv=False):
             # check for existence of cache
             hashStr = "%s-%s-%s-%s-%s-%s-%s" % (method,nPixels,axes,size,sizeType,sP.snap,sub_inds)
             m = hashlib.sha256(hashStr.encode('utf-8')).hexdigest()[::4]
-            cacheFile = sP.derivPath + 'cache/stacked_proj_grids_%s_%s.hdf5' % (panels[0]['partField'],m)
+            cacheFile = sP.cachePath + 'stacked_proj_grids_%s_%s.hdf5' % (panels[0]['partField'],m)
         
             if 0 and path.isfile(cacheFile):
                 # load cached result
@@ -303,7 +303,7 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
     # check for existence of cache
     grids = {}
     sb_percs = {}
-    cacheFile = sim.derivPath + 'cache/magic2_grids_z05.hdf5' # hstmst_grids.hdf5
+    cacheFile = sim.cachePath + 'magic2_grids_z05.hdf5' # hstmst_grids.hdf5
 
     if isfile(cacheFile):
         # load cached result

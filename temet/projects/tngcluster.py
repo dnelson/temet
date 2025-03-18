@@ -346,7 +346,7 @@ def sample_halomasses_vs_redshift(sPs):
     # load simulations and plot
     for i, sP in enumerate(sPs):
         # cache file
-        cache_file = sP.derivPath + 'cache/clusters_m500_evo.hdf5'
+        cache_file = sP.cachePath + 'clusters_m500_evo.hdf5'
 
         if isfile(cache_file):
             print('Loading [%s]' % cache_file)

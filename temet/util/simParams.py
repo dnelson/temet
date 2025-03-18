@@ -117,6 +117,7 @@ class simParams:
     simPath     = ''    #: path (root) containing 'output' directory with simulation snapshots and group catalogs
     arepoPath   = ''    #: path to Arepo binary, Config.sh and param.txt files of this run
     derivPath   = ''    #: path to put derivative files ("data.files/")
+    cachePath   = ''    #: path to put cache files ("data.files/cache/")
     postPath    = ''    #: path to put postprocessed files ("postprocessing/")
 
     simName     = ''    #: label to add to plot legends (e.g. "Illustris-2", "TNG300-1")
@@ -1239,6 +1240,7 @@ class simParams:
         self.simPath   = self.arepoPath + 'output/'
         self.derivPath = self.arepoPath + 'data.files/'
         self.postPath  = self.arepoPath + 'postprocessing/'
+        self.cachePath = self.arepoPath + 'data.files/cache/'
 
         if self.simNameAlt == '':
             self.simNameAlt = self.simName
@@ -1249,6 +1251,10 @@ class simParams:
         # if data.files/ doesn't exist but postprocessing does (e.g. dev runs), use postprocessing/ for all
         if not path.isdir(self.derivPath):
             self.derivPath = self.postPath
+        else:
+            # if cache/ doesn't exist, make it
+            if not path.isdir(self.cachePath):
+                mkdir(self.cachePath)
 
         # if wwwrun user, override derivPath with a local filesystem cache location
         if getpass.getuser() == 'wwwrun':

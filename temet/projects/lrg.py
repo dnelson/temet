@@ -237,7 +237,7 @@ def _getStackedGrids(sP, ion, haloMassBin, fullDepth, radRelToVirRad, ConfigLan=
         eStr = '_2k'
 
     # quick caching
-    cacheSaveFile = sP.derivPath + 'cache/ionColumnsVsImpact2D_%s_%d_%s_%.1f-%.1f_rvir=%s_fd=%s%s_a%d.hdf5' % \
+    cacheSaveFile = sP.cachePath + 'ionColumnsVsImpact2D_%s_%d_%s_%.1f-%.1f_rvir=%s_fd=%s%s_a%d.hdf5' % \
       (sP.simName,sP.snap,ion,haloMassBin[0],haloMassBin[1],radRelToVirRad,fullDepth,eStr,len(axesSets))
 
     if isfile(cacheSaveFile):
@@ -1481,7 +1481,7 @@ def clumpTracerTracksLoad(sP, haloID, clumpID, sbNum=None, posOnly=False):
     """ Load subbox time evolution tracks and make analysis for the time evolution of 
     clump cell/integral properties vs time. Helper for the plot function below.
     If sbNum is None, then use fullbox snapshot (time spacing), otherwise use specified subbox. """
-    saveFilename = sP.derivPath + 'cache/cache_clump_%s_%d-%d_sb%s.hdf5' % (sP.simName,haloID,clumpID,sbNum)
+    saveFilename = sP.cachePath + 'cache_clump_%s_%d-%d_sb%s.hdf5' % (sP.simName,haloID,clumpID,sbNum)
 
     if posOnly:
         saveFilename = saveFilename.replace(".hdf5", "_pos.hdf5")
@@ -2091,7 +2091,7 @@ def clumpRadialProfiles(sP, haloID, selections, norm=False):
         selStr = '-'.join(['%s-%g-%g' % (key,bound[0],bound[1]) for key,bound in selection.items()])
         if xlim[1] != 5.0: selStr += '_xmax=%d' % xlim[1]
         if norm: selStr += '_normT5'
-        saveFilename = sP.derivPath + 'cache/cache_clumpprofs_%s_%d_%s_props%d.hdf5' % (sP.simName,haloID,selStr,len(props))
+        saveFilename = sP.cachePath + 'cache_clumpprofs_%s_%d_%s_props%d.hdf5' % (sP.simName,haloID,selStr,len(props))
 
         result = {}
 

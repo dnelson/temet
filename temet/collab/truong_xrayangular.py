@@ -358,7 +358,7 @@ def stackedPropVsTheta(sP, mStarBin, distBins, conf=0, depthFac=1.0, stack2Dmaps
         hashStr = "%s-%s-%s-%s-%s-%s-%s-%s-%s" % \
           (method,nPixels,axes,rotation,size,sizeType,ptRestrictions,sP.snap,subhaloIDs)
         m = hashlib.sha256(hashStr.encode('utf-8')).hexdigest()[::4]
-        cacheFile = sP.derivPath + 'cache/aziangle_grids_%s_%s.hdf5' % (dataField,m)
+        cacheFile = sP.cachePath + 'aziangle_grids_%s_%s.hdf5' % (dataField,m)
 
         if isfile(cacheFile):
             # load cached result

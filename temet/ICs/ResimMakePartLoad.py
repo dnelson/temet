@@ -291,7 +291,7 @@ def _get_ic_inds(sP, dmIDs_halo, simpleMethod=False):
         return inds_ics
 
     # NEW method
-    idCacheFile = sP.derivPath + 'cache/sorted_dm_ids_ics.hdf5'
+    idCacheFile = sP.cachePath + 'sorted_dm_ids_ics.hdf5'
     if not isfile(idCacheFile):
         # make new
         dmIDs_ics = sP.snapshotSubsetP('dm', 'ids')

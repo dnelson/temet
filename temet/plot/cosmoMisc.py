@@ -534,9 +534,7 @@ def simHydroResolutionComparison():
 
     def _load_vols(sP, nbins=100):
         # helper: derive new dataset for a simulation we have
-        if not isdir(sP.derivPath + 'cache/'):
-            mkdir(sP.derivPath + 'cache/')
-        saveFile = sP.derivPath + 'cache/volume_vs_cellsize_%d.hdf5' % sP.snap
+        saveFile = sP.cachePath + 'volume_vs_cellsize_%d.hdf5' % sP.snap
 
         if isfile(saveFile):
             with h5py.File(saveFile,'r') as f:
@@ -774,9 +772,7 @@ def simHydroResolutionProfileComparison(onlyCold=False, ckpc=False):
 
     def _load_profile(sP, nbins=40, radmin=0.0, radmax=1.0):
         # helper: derive new dataset for a simulation we have (rad in units of r200c)
-        if not isdir(sP.derivPath + 'cache/'):
-            mkdir(sP.derivPath + 'cache/')
-        saveFile = sP.derivPath + 'cache/cellsize_radprof_%d%s%s.hdf5' % \
+        saveFile = sP.cachePath + 'cellsize_radprof_%d%s%s.hdf5' % \
             (sP.snap,'_cold' if onlyCold else '','_ckpc' if ckpc else '')
 
         res_field = 'cellrad_kpc' if not ckpc else 'cellrad_ckpc'
