@@ -2387,12 +2387,13 @@ def subhalo_id(sim, partType, field, args):
     indRange = args['indRange']
     if args['haloID'] is not None or args['subhaloID'] is not None:
         indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
+        indRange[1] += 1 # inverseMapPartIndicesToSubhaloIDs() is numpy convention i.e. excludes last index
 
     # make explicit list of indices
     if indRange is not None:
-        inds = np.arange(indRange[0], indRange[1]+1)
+        inds = np.arange(indRange[0], indRange[1])
     else:
-        inds = np.arange(0, sim.numPart[sim.ptNum(partType)]+1)
+        inds = np.arange(0, sim.numPart[sim.ptNum(partType)])
 
     # inverse map back to parent [sub]halo ID
     return sim.inverseMapPartIndicesToSubhaloIDs(inds, partType)
@@ -2408,12 +2409,13 @@ def halo_id(sim, partType, field, args):
     indRange = args['indRange']
     if args['haloID'] is not None or args['subhaloID'] is not None:
         indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args['haloID'], subhaloID=args['subhaloID'])
+        indRange[1] += 1
 
     # make explicit list of indices
     if indRange is not None:
-        inds = np.arange(indRange[0], indRange[1]+1)
+        inds = np.arange(indRange[0], indRange[1])
     else:
-        inds = np.arange(0, sim.numPart[sim.ptNum(partType)]+1)
+        inds = np.arange(0, sim.numPart[sim.ptNum(partType)])
 
     # inverse map back to parent [sub]halo ID
     return sim.inverseMapPartIndicesToHaloIDs(inds, partType)
