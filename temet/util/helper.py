@@ -1,11 +1,13 @@
 """
 General helper functions, small algorithms, basic I/O, etc.
 """
-import copy
 import numpy as np
 import matplotlib.pyplot as plt
 import collections.abc as collections
-from scipy.optimize import leastsq, least_squares, curve_fit
+import h5py
+from functools import wraps
+from os.path import isfile
+from scipy.optimize import leastsq, least_squares
 from scipy.ndimage.filters import gaussian_filter
 from scipy.stats import binned_statistic
 from numba import jit
@@ -158,6 +160,59 @@ def tail(fileName, nLines):
     if isinstance(lines,bytes):
         lines = lines.decode('utf-8')
     return lines
+
+# --- decorators ---
+
+def cache(_func=None, *, overwrite=False):
+    """ Decorator to cache the return (dict) of a function. Cache filename depends on arguments. """
+    from ..util.simParams import simParams
+
+    def decorator_cache(func):
+        @wraps(_func)
+        def wrapper(*args, **kwargs):
+            # identify simParams in args
+            sim = None
+            for arg in args:
+                if isinstance(arg, simParams):
+                    assert sim is None # should only be one
+                    sim = arg
+            assert sim is not None # should be one, our path is sP-dependent
+
+            if len(args) > 1 or len(kwargs) > 0:
+                # args and kwargs are not empty, so we can't cache
+                print(f'Function [{func.__name__}] has additional arguments, not caching.')
+                return func(*args, **kwargs)
+
+            cachefile = sim.cachePath + f'f_{func.__name__}.hdf5'
+            # todo: cachefile name can include hash that depends on args and source code of func
+            # or this hash can be within the file, and used to invalidate the cache and overwrite
+
+            if isfile(cachefile) and not overwrite:
+                # load cached
+                with h5py.File(cachefile,'r') as f:
+                    data = {key: f[key][()] for key in f.keys()}
+                print(f'Loaded [{cachefile}].')
+            else:
+                # call i.e. compute
+                data = func(*args, **kwargs)
+
+                if isinstance(data,dict):
+                    # save cache
+                    with h5py.File(cachefile,'w') as f:
+                        for key in data:
+                            f[key] = data[key]
+                    print(f'Saved [{cachefile}].')
+                else:
+                    print(f'Function [{f.__name__}] did not return a dict, not saving cache.')
+
+            return data
+        return wrapper
+    
+    if _func is None:
+        return decorator_cache
+    else:
+        return decorator_cache(_func)
+
 
 # --- general algorithms ---
 

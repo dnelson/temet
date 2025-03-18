@@ -566,11 +566,4 @@ def blackhole_details_mergers(sim, overwrite=False):
     # add mergers to return
     smbhs['mergers'] = {'times':merger_times, 'ids':merger_ids}
 
-    # handle mergers: if this ID ever appears in a merger pair, then 
-    # decide which of the two IDs to keep i.e. attach the earlier data from
-    for smbh_id in unique_ids:
-        w = np.where(merger_ids == smbh_id)[0]
-        if len(w) > 0:
-            import pdb; pdb.set_trace() # todo
-
     return smbhs

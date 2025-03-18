@@ -11,7 +11,7 @@ from os.path import isfile
 
 from ..util.simParams import simParams
 from ..plot.config import *
-from ..util.helper import running_median, logZeroNaN, closest
+from ..util.helper import running_median, logZeroNaN, closest, cache
 from ..plot.general import plotPhaseSpace2D
 from ..plot.cosmoMisc import simHighZComparison
 from ..plot.cosmoGeneral import addUniverseAgeAxis
@@ -1403,18 +1403,28 @@ def blackhole_diagnostics_vs_time(sim):
     xlim = [10.1, 5.5]
     ageVals = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
+    # handle mergers: if this ID ever appears in a merger pair, then 
+    # decide which of the two IDs to keep i.e. attach the earlier data from
+    for smbh_id in smbhs.keys():
+        if smbh_id == 'mergers':
+            continue
+        
+        w = np.where(smbhs['merger_ids'] == smbh_id)[0]
+        if len(w) > 0:
+            import pdb; pdb.set_trace() # todo
+
     # make a multi-panel time series plot for each SMBH
     for smbh_id in smbhs.keys():
         if smbh_id == 'mergers':
             continue
 
-        # unit conversions (todo)
+        # unit conversions
         print('plot: ', smbh_id)
 
         time = smbhs[smbh_id]['time']
         mass_code = smbhs[smbh_id]['mass']
         mass = sim.units.codeMassToLogMsun(mass_code) # log msun
-        mdot = logZeroNaN(smbhs[smbh_id]['mdot']) # log msun/yr (check)
+        mdot = logZeroNaN(smbhs[smbh_id]['mdot']) # log msun/yr
 
         redshift = 1.0 / time - 1
 
@@ -1458,7 +1468,102 @@ def blackhole_diagnostics_vs_time(sim):
 
         for a in ax: a.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
-        fig.savefig(f'smbh_vs_time_{sim}_{smbh_id}.pdf')
+        fig.savefig(f'smbh_vs_time_{sim.simName}_{smbh_id}.pdf')
+        plt.close(fig)
+
+@cache #(overwrite=True)
+def _blackhole_position_vs_time(sim):
+    """ Plot (relative) position of SMBHs vs time. """
+    # load
+    r = {}
+
+    for snap in sim.validSnapList()[::-1]:
+        sim.setSnap(snap)
+
+        if sim.numPart[sim.ptNum('bhs')] == 0:
+            continue
+
+        # load all black holes IDs and positions, parent subhalos, relative positions
+        ids_loc = sim.bhs('ids')
+        pos_loc = sim.bhs('pos')
+        sub_ids_loc = sim.bhs('subhalo_id')
+        sub_pos_loc = sim.subhalos('SubhaloPos')
+
+        print(snap, sim.redshift, ids_loc.size)
+
+        pos_rel_loc = pos_loc - sub_pos_loc[sub_ids_loc]
+        sim.correctPeriodicDistVecs(pos_rel_loc)
+
+        ww = np.where(sub_ids_loc == -1)[0]
+        if len(ww) > 0:
+            pos_rel_loc[ww,:] = np.nan
+
+        dist_loc = np.linalg.norm(pos_rel_loc, axis=1)
+        dist_loc_pc = sim.units.codeLengthToPc(dist_loc)
+
+        time = np.zeros(ids_loc.size, dtype='float32') + sim.tage
+        z = np.zeros(ids_loc.size, dtype='float32') + sim.redshift
+
+        # append
+        if len(r) == 0:
+            r['ids'] = ids_loc
+            r['pos'] = pos_loc
+            r['sub_ids'] = sub_ids_loc
+            r['pos_rel'] = pos_rel_loc
+            r['dist_pc'] = dist_loc_pc
+            r['time'] = time
+            r['z'] = z
+        else:
+            r['ids'] = np.hstack((r['ids'], ids_loc))
+            r['pos'] = np.vstack((r['pos'], pos_loc))
+            r['sub_ids'] = np.hstack((r['sub_ids'], sub_ids_loc))
+            r['pos_rel'] = np.vstack((r['pos_rel'], pos_rel_loc))
+            r['dist_pc'] = np.hstack((r['dist_pc'], dist_loc_pc))
+            r['time'] = np.hstack((r['time'], time))
+            r['z'] = np.hstack((r['z'], z))
+
+    # convert to numpy arrays
+    return r
+
+def blackhole_position_vs_time(sim):
+    """ Plot (relative) position of SMBHs vs time. """
+    data = _blackhole_position_vs_time(sim)
+
+    # loop over unique IDs
+    smbh_ids = np.unique(data['ids'])
+    for smbh_id in smbh_ids:
+        print('plot: ', smbh_id)
+
+        # get data subset
+        w = np.where(data['ids'] == smbh_id)[0]
+        sort_inds = np.argsort(data['time'][w])
+        w = w[sort_inds]
+
+        pos_rel = data['pos_rel'][w]
+        z = data['z'][w]
+        dist_pc = data['dist_pc'][w]
+
+        # plot: distance from center vs. time
+        fig, (ax1,ax2) = plt.subplots(ncols=2, figsize=(14,7.5))
+        ax1.set_xlabel('Redshift')
+        ax1.set_ylabel('Distance from Subhalo Center [pc]')
+
+        ax1.plot(z, dist_pc, lw=lw)
+
+        ageVals = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+        addUniverseAgeAxis(ax1, sim, ageVals=ageVals)
+
+        # plot: projected position in xy plane
+        ax2.set_xlabel('x [cpc/h]')
+        ax2.set_ylabel('y [cpc/h]')
+        ax2.set_box_aspect(1.0)
+        ax2.set_xlim([-120,120])
+        ax2.set_ylim([-120,120])
+
+        ax2.plot(pos_rel[:,0] * 1000, pos_rel[:,1] * 1000, lw=lw)
+
+        # save
+        fig.savefig(f'smbh_pos_vs_time_{sim.simName}_{smbh_id}.pdf')
         plt.close(fig)
 
 def select_ics():
@@ -1471,7 +1576,7 @@ def select_ics():
     dist_threshold = 1000.0 # code units (ckpc/h), within which no other more massive halo
 
     # check existence of cache file, if not, compute now
-    cachefile = sim.derivPath + f'cache/mpb_ids_{sim.simName}_{sim.snap}_{mhalo_min:.1f}_{dist_threshold:.0f}.hdf5'
+    cachefile = sim.cachePath + f'mpb_ids_{sim.simName}_{sim.snap}_{mhalo_min:.1f}_{dist_threshold:.0f}.hdf5'
 
     # load halo massees at target redshift (all centrals by definition)
     mhalo = sim.subhalos('mhalo_log')
@@ -1585,9 +1690,9 @@ def paperPlots():
 
     # testing:
     variants = ['ST8s'] #,'TNG'] #,'ST8m','ST8b'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
-    res = [14] #[12,13,14,15]
+    res = [15] #[12,13,14,15]
     hInds = [31619] #[31619]
-    redshift = 12.0
+    redshift = 10.0
 
     sims = _get_existing_sims(variants, res, hInds, redshift, all=True)
 
@@ -1648,8 +1753,13 @@ def paperPlots():
         simHighZComparison()
 
     # single image, gas and stars
-    if 1:
+    if 0:
         vis_single_image(sims[0], haloID=0)
+
+    # black hole time evolution
+    if 1:
+        #blackhole_diagnostics_vs_time(sims[0])
+        blackhole_position_vs_time(sims[0])
 
     # ------------
 
