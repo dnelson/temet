@@ -188,7 +188,7 @@ def vis_test(conf=0):
     import h5py
     import matplotlib.pyplot as plt
 
-    path = '/u/dnelson/sims.idealized/sims.turbbox/test/output/'
+    path = '/u/dnelson/sims.idealized/sims.turbbox/gamma53_64/output/'
 
     cmap = 'viridis'
 
@@ -197,9 +197,9 @@ def vis_test(conf=0):
     for snap in np.arange(num_snaps):
         outfile = 'frame%d_%03d.png' % (conf,snap)
         print(outfile)
-        if isfile(outfile):
-            print(' skip')
-            continue
+        #if isfile(outfile):
+        #    print(' skip')
+        #    continue
 
         # load
         with h5py.File(path + 'snap_%03d.hdf5' % snap, 'r') as f:
@@ -208,9 +208,9 @@ def vis_test(conf=0):
             vel = f['PartType0']['Velocities'][()]
             dens = f['PartType0']['Density'][()]
 
-            print(' dens: ',dens.mean(),dens.min(),dens.max())
-            vmag = np.sqrt(vel[:,0]**2 + vel[:,1]**2 + vel[:,2]**2)
-            print(' vmag: ',vmag.mean(),vmag.min(),vmag.max())
+        vmag = np.sqrt(vel[:,0]**2 + vel[:,1]**2 + vel[:,2]**2)
+        print(' dens: ',dens.mean(),dens.min(),dens.max())
+        #print(' vmag: ',vmag.mean(),vmag.min(),vmag.max())
 
         # shuffle
         rng = np.random.default_rng(424242)
@@ -234,11 +234,20 @@ def vis_test(conf=0):
 
         if conf == 2:
             cmap = plt.get_cmap(cmap)
-            norm = plt.Normalize(vmin=0.0, vmax=0.1)
-            #colors = cmap(norm(dens)) # always 1.0 with gamma=1.0?
-            colors = cmap(norm(vmag))
+            norm = plt.Normalize(vmin=0.95, vmax=1.05) # vmin=0.0, vmax=0.5 for vmag
 
-            ax.quiver(pos[:,0], pos[:,1], vel[:,0], vel[:,1], scale_units='xy', scale=0.4, color=colors, cmap=cmap)
+            # select slice
+            n = dens.size**(1/3)
+            slice_depth = boxsize / n * 1.5
+            boxcenter = boxsize / 2
+
+            w = np.where( (pos[:,2] > boxcenter-slice_depth/2) & (pos[:,2] < boxcenter+slice_depth/2) )[0]
+
+            # colors?
+            colors = cmap(norm(dens[w])) # always 1.0 with gamma=1.0?
+            #colors = cmap(norm(vmag[w]))
+
+            ax.quiver(pos[w,0], pos[w,1], vel[w,0], vel[w,1], scale=4.0, color=colors, cmap=cmap)
 
         if conf == 3:
             # define (x,y) pixel centers

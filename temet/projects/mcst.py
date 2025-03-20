@@ -15,9 +15,8 @@ from ..util.helper import running_median, logZeroNaN, closest, cache
 from ..plot.general import plotPhaseSpace2D
 from ..plot.cosmoMisc import simHighZComparison
 from ..plot.cosmoGeneral import addUniverseAgeAxis
-from ..vis.halo import renderSingleHalo
-from ..vis.box import renderBox
 from ..load.simtxt import sfrTxt, blackhole_details_mergers
+from ..projects.mcst_vis import *
 
 def _get_existing_sims(variants, res, hInds, redshift, all=False):
     """ Return a list of simulation objects, only for those runs which exist (and have reached redshift). """
@@ -846,228 +845,6 @@ def phase_diagram(sim):
     plotPhaseSpace2D(sim, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs, qRestrictions=qRestrictions,
         xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, f_post=_f_post)
 
-def vis_single_image(sP, haloID=0):
-    """ Visualization: single image of a halo. 
-    Cannot use for a movie since the face-on/edge-on rotations have random orientations each frame. """
-    rVirFracs  = [1.0]
-    fracsType  = 'rHalfMassStars'
-    nPixels    = [960,960]
-    size       = 1.0 if sP.hInd > 20000 else 5.0
-    sizeType   = 'kpc'
-    labelSim   = False # True
-    labelHalo  = 'mhalo,mstar,haloid'
-    labelZ     = True
-    labelScale = 'physical'
-    #plotBHs    = 10 # to finish
-    relCoords  = True
-    if 1:
-        axes = [0,1]
-        #rotation   = 'edge-on' #'face-on'
-
-    subhaloInd = sP.halo(haloID)['GroupFirstSub']
-
-    # redshift-dependent vis (h31619 L16 tests)
-    zfac = 0.0
-    if sP.redshift >= 9.9:
-        zfac = 1.0
-        size = 0.05 # z=10, 11, 12 tests of L16
-
-    # panels (can vary hInd, variant, res)
-    panels = []
-
-    if 1:
-        gas_field = 'coldens_msunkpc2' # 'HI'
-        panels.append( {'partType':'gas', 'partField':gas_field, 'valMinMax':[20.0+zfac,22.5+zfac], 'rotation':'face-on'} )
-        panels.append( {'partType':'stars', 'partField':'stellarComp', 'rotation':'face-on'} )
-
-        # add skinny edge-on panels below:
-        panels.append( {'partType':'gas', 'partField':gas_field, 'nPixels':[960,240], 'valMinMax':[20.5+zfac,23.0+zfac], 
-                        'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
-        panels.append( {'partType':'stars', 'partField':'stellarComp', 'nPixels':[960,240], 
-                        'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
-
-    class plotConfig:
-        plotStyle    = 'edged'
-        colorbars    = True
-        fontsize     = 28 # 24
-        saveFilename = '%s_%d.png' % (sP.simName,sP.snap)
-
-    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
-
-def vis_movie(sP, haloID=0, frame=None):
-    """ Visualization: movie of a single halo. Use minimal SubLink MPB tracking.
-    Cannot use rotation for face-on/edge-on since it has random orientations each frame. """
-    rVirFracs  = [1.0]
-    fracsType  = 'rHalfMassStars'
-    nPixels    = [960,960]
-    size       = 2.0 if sP.hInd > 20000 else 5.0
-    sizeType   = 'kpc'
-    labelSim   = True
-    labelHalo  = 'mhalo,mstar'
-    labelZ     = True
-    labelScale = 'physical'
-    relCoords  = True
-    #axes = [0,1]
-
-    subhaloInd = sP.halo(haloID)['GroupFirstSub']
-
-    # panels
-    panels = []
-
-    panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5]} )
-    panels.append( {'partType':'stars', 'partField':'stellarComp'} )
-
-    class plotConfig:
-        plotStyle    = 'edged_black'
-        colorbars    = True
-        fontsize     = 28
-
-    snapList = sP.validSnapList()[::-1]
-
-    # use tree-based tracking?
-    filename = sP.postPath + '/trees/SubLink/tree.hdf5'
-
-    if isfile(filename):
-        # use tree.hdf5 file for manual MPB
-        print(f'Using [{filename}] for tree-based tracking.')
-
-        with h5py.File(filename,'r') as f:
-            tree = f['Tree'][()]
-
-        # what subhalo do we search for?
-        sP.setSnap(snapList[0]) # at largest snapshot number from validSnapList()
-        halo = sP.halo(haloID)
-        SubfindID_starting = halo['GroupFirstSub']
-
-        ind = np.where((tree['SnapNum'] == snapList[0]) & (tree['SubfindID'] == SubfindID_starting))[0]
-        assert len(ind) == 1
-        ind = ind[0]
-
-        # get MPB
-        SubhaloID = tree['SubhaloID'][ind]
-        MainLeafProgID = tree['MainLeafProgenitorID'][ind]
-
-        if MainLeafProgID == SubhaloID:
-            # did not find MPB, i.e. subhalo has no tree, search one snapshot prior
-            ind = np.where((tree['SnapNum'] == snapList[0]-1) & (tree['SubfindID'] == SubfindID_starting))[0]
-            assert len(ind) == 1
-            ind = ind[0]
-
-            SubhaloID = tree['SubhaloID'][ind]
-            MainLeafProgID = tree['MainLeafProgenitorID'][ind]
-
-        ind_stop = ind + (MainLeafProgID - SubhaloID)
-
-        assert ind_stop > ind
-
-        snaps = tree['SnapNum'][ind:ind_stop]
-        subids = tree['SubfindID'][ind:ind_stop]
-
-        #print(f'{ind = }, {ind_stop = }')
-        #print(f'{snaps = }')
-        #print(f'{subids = }')
-        #import pdb; pdb.set_trace()
-
-    if frame is not None:
-        snapList = [frame]
-
-    for snap in snapList:
-        sP.setSnap(snap)
-
-        halo = sP.halo(haloID)
-
-        if isfile(filename):
-            # use MPB tree from above
-            w = np.where(snaps == snap)[0]
-            if len(w) == 0:
-                subhaloInd = halo['GroupFirstSub']
-            else:
-                subhaloInd = subids[w[0]]
-            print(f' snap [{snap:3d}] using subid = {subhaloInd:5d}')
-
-        plotConfig.saveFilename = '%s_%03d.png' % (sP.simName,sP.snap)
-        renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
-
-# -------------------------------------------------------------------------------------------------
-
-def diagnostic_vis_timebins(sP):
-    """ Visualize spatial distribution of gas timebins across the box. """
-    nPixels    = 500
-    axes       = [0,1] # x,y
-    labelZ     = True
-    labelScale = True
-    labelSim   = True
-    plotHalos  = 100
-    method     = 'histo_minIP' # sphMap, sphMap_minIP, sphMap_maxIP
-    zoomFac    = 0.01 #0.15 # fraction of box-size
-    sliceFac   = zoomFac # same projection depth as zoom
-    minmax     = [40, 47]
-    #ctName     = 'plasma_r'
-
-    absCenPos  = sP.subhalo(sP.zoomSubhaloID)['SubhaloPos']
-    relCenPos  = None
-
-    numColors = minmax[1] - minmax[0] # discrete colorbar
-    panels = [{'partType':'gas', 'partField':'TimebinHydro', 'valMinMax':minmax}]
-
-    class plotConfig:
-        plotStyle  = 'open'
-        #rasterPx   = 1000
-        saveFilename = './boxImage_%s_%s.png' % (sP.simName,panels[0]['partField'])
-
-    renderBox(panels, plotConfig, locals())
-
-def diagnostic_vis_box(sP, partType='dm'):
-    """ Visualize large-scale region that bounds all high-res DM. """
-    # determine bounding box (always use high-res DM particles)
-    pos = sP.dm('pos')
-
-    boxsize = 0.0
-    absCenPos = [0,0,0]
-
-    for i in range(3):
-        absCenPos[i] = np.mean(pos[:,i])
-
-        min_v = absCenPos[i] - pos[:,i].min()
-        max_v = pos[:,i].max() - absCenPos[i]
-
-        boxsize = np.max([boxsize, min_v, max_v])
-
-    boxsize = np.ceil((boxsize * 2)/10) * 10
-
-    #boxsize /= 10 # zoom in more
-    #boxsize /= 4 # zoom in more
-
-    nPixels    = 1000
-    axes       = [0,2] # x,y
-    labelZ     = True
-    labelScale = True
-    labelSim   = True
-    plotHalos  = 100
-    labelHalos = 'mhalo'
-    relCenPos  = None # specified in absCenPos
-    method     = 'sphMap'
-    zoomFac    = boxsize / sP.boxSize # fraction of box-size
-    sliceFac   = zoomFac # same projection depth as zoom
-
-    absCenPos = [absCenPos[axes[0]],absCenPos[axes[1]],absCenPos[3-axes[0]-axes[1]]]
-
-    if partType == 'dm':
-        panels = [{'partField':'coldens_msunkpc2', 'valMinMax':[5.5,8.5]}]
-
-    if partType == 'gas':
-        # only high-res, no buffer
-        ptRestrictions = {'Masses':['lt',sP.targetGasMass * 3]}
-        panels = [{'partField':'coldens_msunkpc2', 'valMinMax':[4.8,7.5]}]
-
-    class plotConfig:
-        plotStyle  = 'edged_black'
-        #colorbars  = False
-        colorbarOverlay = True
-        saveFilename = './boxImage_%s_%s-%s.png' % (sP.simName,partType,panels[0]['partField'])
-
-    renderBox(panels, plotConfig, locals(), skipExisting=False)
-
 def diagnostic_numhalos_uncontaminated(sims):
     """ Visualize number of non-contaminated halos vs redshift, and their contamination fractions. """
     ymin = 1e-6
@@ -1748,16 +1525,20 @@ def paperPlots():
         for sim in sims:
             phase_diagram(sim)
 
-    # simulation comparison meta-plot
+    # fig 2: simulation comparison meta-plot
     if 0:
         simHighZComparison()
 
-    # single image, gas and stars
+    # vis: single image, gas and stars
     if 0:
         vis_single_image(sims[0], haloID=0)
 
-    # black hole time evolution
+    # vis: parent box
     if 1:
+        vis_parent_box(sims[0].sP_parent)
+
+    # black hole time evolution
+    if 0:
         #blackhole_diagnostics_vs_time(sims[0])
         blackhole_position_vs_time(sims[0])
 
@@ -1801,7 +1582,7 @@ def paperPlots():
 
     # diagnostic: full high-res region vis
     if 0:
-        diagnostic_vis_box(sims[0], partType='gas')
+        vis_highres_region(sims[0], partType='gas')
     
     # diagnostic: SFR debug
     if 0:

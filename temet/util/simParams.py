@@ -746,7 +746,7 @@ class simParams:
             # TNG50-1 zooms to z=3
             parentRes = 2160
             self.zoomLevel = self.res # L11 (TNG50-1)
-            self.sP_parent = simParams(res=parentRes, run='tng', redshift=3.0)
+            self.sP_parent = simParams(res=parentRes, run='tng', redshift=5.5)
 
             self.gravSoft = 0.390 / (res-10)
             if self.variant != 'DM':

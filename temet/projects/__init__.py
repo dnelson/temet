@@ -7,6 +7,7 @@ from . import color_analysis
 from . import color
 from . import lrg
 from . import mcst
+from . import mcst_vis
 from . import mg2emission
 from . import mockspec
 from . import outflows_vis
