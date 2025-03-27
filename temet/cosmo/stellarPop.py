@@ -290,7 +290,9 @@ class sps():
              'megacam_i', 'b', 'wfc3_ir_f105w', 'galex_fuv', 'mips_160', 'v', 'uvot_w1', 'jwst_f444w', 'wfc3_uvis_f555w', 'wfc3_uvis_f275w', 
              'wfcam_j', 'spire_350', 'wfcam_h', 'jwst_f200w', 'pacs_160', 'jwst_f150w', 'wfpc2_f255w', 'wfc_acs_f775w', 'jwst_f115w', 
              'spire_250', 'scuba_850wb', 'wfpc2_f606w', 'ps1_g', 'iras_60', 'nicmos_f110w', 'pacs_70', 'megacam_z', 'irac_4', 'irac_2', 
-             'irac_3', 'irac_1', 'megacam_g', 'cfht_i', 'suprimecam_g', 'cfht_b', 'u', 'steidel_i', 'steidel_g', 'jwst_f090w', 'cfht_r']
+             'irac_3', 'irac_1', 'megacam_g', 'cfht_i', 'suprimecam_g', 'cfht_b', 'u', 'steidel_i', 'steidel_g', 'jwst_f090w', 'cfht_r',
+             'lsst_u', 'lsst_g', 'lsst_r', 'lsst_i', 'lsst_z', 'lsst_z', 'lsst_y', 'euclid_vis', 'euclid_y', 'euclid_j', 'euclid_h',
+             'roman_f062', 'roman_f087', 'roman_f106', 'roman_f129', 'roman_f158', 'roman_f184']
 
     def __init__(self, sP, iso='padova07', imf='chabrier', dustModel='cf00_res_conv', order=3, 
                  redshifted=False, emlines=False):
@@ -313,7 +315,7 @@ class sps():
         self.data  = {} # band magnitudes
         self.spec  = {} # spectra
         self.order = order # bicubic interpolation by default (1 = bilinear)
-        self.bands = fsps.find_filter('') # do them all (previously 138, now 143 with ps1*)
+        self.bands = fsps.find_filter('') # do them all (previously 138, then 143, now 159)
         self.redshifted = redshifted
         self.emlines = emlines
 
