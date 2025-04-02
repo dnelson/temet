@@ -450,31 +450,42 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
     else:
         # typical custom technique for JWST (rest-frame) composites
         pxArea = (boxSizeImg[axes[1]] / nPixels[0]) * (boxSizeImg[axes[0]] / nPixels[1])
-        pxArea0 = (80.0/960)**2.0 # at which the following ranges were calibrated
-        resFac = 1.0 #(512.0/sP.res)**2.0
 
-        # 2.2 for twelve, 1.4 for thirteen
-        minVal = 2.2 # 0.6, 1.4, previous: 2.2 = best recent option, 2.8, 3.3 (nice control of low-SB features)
-        maxVal = 5.60 # control clipping of high-SB features
+        if 0:
+            pxArea0 = (80.0/960)**2.0 # at which the following ranges were calibrated
+            resFac = 1.0 #(512.0/sP.res)**2.0
 
-        if band0_grid.max() < 1e2:
-            minVal = 0.6
-            maxVal = 3.60
-    
-        if band0_grid.max() > 5e4:
-            minVal = 3.2
-            maxVal = 6.6
+            # 2.2 for twelve, 1.4 for thirteen
+            minVal = 2.2 # 0.6, 1.4, previous: 2.2 = best recent option, 2.8, 3.3 (nice control of low-SB features)
+            maxVal = 5.60 # control clipping of high-SB features
 
-        minValLog = np.array([minVal,minVal,minVal]) 
-        minValLog = np.log10( (10.0**minValLog) * (pxArea/pxArea0*resFac) )
+            #if band0_grid.max() < 1e2:
+            #    minVal = 0.6
+            #    maxVal = 3.60
+        
+            if band0_grid.max() > 5e4:
+                minVal = 3.2
+                maxVal = 6.6
 
-        #maxValLog = np.array([5.71, 5.68, 5.36])*0.9 # jwst f200w, f115w, f070w # previous
-        maxValLog = np.array([maxVal, maxVal+0.08, maxVal-0.24]) # little less clipping, more yellow/red color (fiducial)
-        #maxValLog = np.array([5.40, 5.48, 5.16]) # TNG50 sb0sh481167 movie: galaxy three only
-        #maxValLog = np.array([6.70, 6.78, 6.46]) # TNG50 sb2sh0 movie: galaxy two only
+            minValLog = np.array([minVal,minVal,minVal]) 
+            minValLog = np.log10( (10.0**minValLog) * (pxArea/pxArea0*resFac) )
 
-        maxValLog = np.log10( (10.0**maxValLog) * (pxArea/pxArea0*resFac) )
-        #print('pxArea*res mod: ',(pxArea/pxArea0*resFac))
+            #maxValLog = np.array([5.71, 5.68, 5.36])*0.9 # jwst f200w, f115w, f070w # previous
+            maxValLog = np.array([maxVal, maxVal+0.08, maxVal-0.24]) # little less clipping, more yellow/red color (fiducial)
+            #maxValLog = np.array([5.40, 5.48, 5.16]) # TNG50 sb0sh481167 movie: galaxy three only
+            #maxValLog = np.array([6.70, 6.78, 6.46]) # TNG50 sb2sh0 movie: galaxy two only
+
+            maxValLog = np.log10( (10.0**maxValLog) * (pxArea/pxArea0*resFac) )
+            #print('pxArea*res mod: ',(pxArea/pxArea0*resFac))
+
+        if 1:
+            # new auto bounds
+            band_vals = np.log10(band0_grid[band0_grid>0])
+
+            percs = np.nanpercentile(band_vals, [20,99.5])
+
+            minValLog = percs[[0,0,0]]
+            maxValLog = np.array([percs[1],percs[1]+0.08,percs[1]-0.24])
 
         for i in range(3):
             if i == 0: grid_loc = band0_grid
@@ -517,7 +528,7 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
             print(' adjusted saturation')
 
         # contrast adjust
-        if 1:
+        if 0:
             C = 20.0
             F = 259*(C+255) / (255*(259-C))
             for i in range(3):

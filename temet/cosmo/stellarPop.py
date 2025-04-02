@@ -669,7 +669,7 @@ class sps():
         self.wave_ang = self.wave * 10.0
 
         for band in self.bands:
-            if 'suprimecam' in band or 'ps1_' in band:
+            if 'suprimecam' in band or 'ps1_' in band or 'roman_f184' in band:
                 continue # missing transmission data
 
             f = fsps.get_filter(band)

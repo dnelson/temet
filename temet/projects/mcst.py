@@ -1175,9 +1175,9 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
 def blackhole_diagnostics_vs_time(sim):
     """ Plot SMBH mass growth and accretion rates vs time, from the txt files. """
     # load
-    smbhs = blackhole_details_mergers(sim, overwrite=False)
+    smbhs = blackhole_details_mergers(sim) #, overwrite=True)
 
-    xlim = [10.1, 5.5]
+    xlim = [12.1, 5.5]
     ageVals = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
     # handle mergers: if this ID ever appears in a merger pair, then 
@@ -1186,7 +1186,7 @@ def blackhole_diagnostics_vs_time(sim):
         if smbh_id == 'mergers':
             continue
         
-        w = np.where(smbhs['merger_ids'] == smbh_id)[0]
+        w = np.where(smbhs['mergers']['ids'] == smbh_id)[0]
         if len(w) > 0:
             import pdb; pdb.set_trace() # todo
 
@@ -1247,6 +1247,24 @@ def blackhole_diagnostics_vs_time(sim):
 
         fig.savefig(f'smbh_vs_time_{sim.simName}_{smbh_id}.pdf')
         plt.close(fig)
+
+        # plot additional fields if available
+        if 'ngbmaxdist' in smbhs[smbh_id]:
+            ngbmaxdist = smbhs[smbh_id]['ngbmaxdist']
+
+            # mass
+            fig, ax = plt.subplots()
+            ax.set_xlabel('Redshift')
+            ax.set_xlim(xlim)
+            ax.set_ylabel(r'NGB Max Dist [ ckpc/h ]')
+
+            ax.plot(redshift[::step], ngbmaxdist[::step], lw=lw, zorder=0)
+            addUniverseAgeAxis(ax, sim, ageVals=ageVals)
+
+            ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
+
+            fig.savefig(f'smbh_vs_time_ngbmaxdist_{sim.simName}_{smbh_id}.pdf')
+            plt.close(fig)
 
 @cache #(overwrite=True)
 def _blackhole_position_vs_time(sim):
@@ -1324,6 +1342,7 @@ def blackhole_position_vs_time(sim):
         fig, (ax1,ax2) = plt.subplots(ncols=2, figsize=(14,7.5))
         ax1.set_xlabel('Redshift')
         ax1.set_ylabel('Distance from Subhalo Center [pc]')
+        #ax1.set_ylim([-1, 10])
 
         ax1.plot(z, dist_pc, lw=lw)
 
@@ -1467,7 +1486,7 @@ def paperPlots():
 
     # testing:
     variants = ['ST8s'] #,'TNG'] #,'ST8m','ST8b'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
-    res = [15] #[12,13,14,15]
+    res = [16] #[12,13,14,15]
     hInds = [31619] #[31619]
     redshift = 10.0
 
@@ -1477,10 +1496,29 @@ def paperPlots():
     for sim in sims:
         _ = _zoomSubhaloIDsToPlot(sim)
 
-    # figure - smhm relation
+    # ------------
+
+    # fig 1: equilibrium curves of new grackle tables
+    if 0:
+        from ..cosmo.cooling import grackle_equil
+        grackle_equil()
+
+    # fig 2: simulation comparison meta-plot
+    if 0:
+        simHighZComparison()
+
+    # fig 3: composite vis (i) parent box dm, (ii) halo-scale gas, (iii) galaxy-scale gas+stars
+    if 0:
+        sim_parent = simParams('tng50-1', redshift=6.0) # z=5.5 is a mini snap, no DM hsml
+        vis_parent_box(sim_parent)
+        vis_single_halo(sims[0], haloID=0)
+        vis_single_galaxy(sims[0], haloID=0)
+
+    # fig 4: smhm relation
     if 0:
         smhm_relation(sims)
 
+    # ------------
     # figure - SFH (stellar mass vs redshift evo)
     if 0:
         quant = 'mstar2_log'
@@ -1525,21 +1563,14 @@ def paperPlots():
         for sim in sims:
             phase_diagram(sim)
 
-    # fig 2: simulation comparison meta-plot
-    if 0:
-        simHighZComparison()
-
     # vis: single image, gas and stars
     if 0:
-        vis_single_image(sims[0], haloID=0)
-
-    # vis: parent box
-    if 1:
-        vis_parent_box(sims[0].sP_parent)
+        vis_single_galaxy(sims[0], haloID=0)
+        #vis_single_halo(sims[0], haloID=0)
 
     # black hole time evolution
     if 0:
-        #blackhole_diagnostics_vs_time(sims[0])
+        blackhole_diagnostics_vs_time(sims[0])
         blackhole_position_vs_time(sims[0])
 
     # ------------
@@ -1588,7 +1619,4 @@ def paperPlots():
     if 0:
         diagnostic_sfr_jeans_mass(sims, haloID=0)
 
-    # diagnostic: equilibrium curves of new grackle tables
-    if 0:
-        from ..cosmo.cooling import grackle_equil
-        grackle_equil()
+

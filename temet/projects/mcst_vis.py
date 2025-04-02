@@ -9,8 +9,8 @@ from os.path import isfile
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
 
-def vis_single_image(sP, haloID=0):
-    """ Visualization: single image of a halo. 
+def vis_single_galaxy(sP, haloID=0):
+    """ Visualization: single image of a galaxy. 
     Cannot use for a movie since the face-on/edge-on rotations have random orientations each frame. """
     rVirFracs  = [1.0]
     fracsType  = 'rHalfMassStars'
@@ -33,14 +33,15 @@ def vis_single_image(sP, haloID=0):
     zfac = 0.0
     if sP.redshift >= 9.9:
         zfac = 1.0
-        size = 0.05 # z=10, 11, 12 tests of L16
+        size = 0.05 #0.1 # z=10, 11, 12 tests of L16
 
     # panels (can vary hInd, variant, res)
     panels = []
 
     if 1:
         gas_field = 'coldens_msunkpc2' # 'HI'
-        panels.append( {'partType':'gas', 'partField':gas_field, 'valMinMax':[20.0+zfac,22.5+zfac], 'rotation':'face-on'} )
+        gas_mm = [6.0+zfac,8.5+zfac] #[20.0+zfac,22.5+zfac]
+        panels.append( {'partType':'gas', 'partField':gas_field, 'valMinMax':gas_mm, 'rotation':'face-on'} )
         panels.append( {'partType':'stars', 'partField':'stellarComp', 'rotation':'face-on'} )
 
         # add skinny edge-on panels below:
@@ -53,7 +54,50 @@ def vis_single_image(sP, haloID=0):
         plotStyle    = 'edged'
         colorbars    = True
         fontsize     = 28 # 24
-        saveFilename = '%s_%d.png' % (sP.simName,sP.snap)
+        saveFilename = 'galaxy_%s_%d_h%d.pdf' % (sP.simName,sP.snap,haloID)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+def vis_single_halo(sP, haloID=0):
+    """ Visualization: single image of a halo.  """
+    rVirFracs  = [1.0]
+    fracsType  = 'rVirial'
+    nPixels    = [960,960]
+    size       = 3.5 #2.5
+    sizeType   = 'rVirial'
+    labelSim   = False # True
+    labelHalo  = False # 'mhalo'
+    labelZ     = True
+    labelScale = 'physical'
+    #plotBHs    = 10 # to finish
+    relCoords  = True
+    if 1:
+        axes = [0,1]
+        #rotation   = 'edge-on' #'face-on'
+
+    subhaloInd = sP.halo(haloID)['GroupFirstSub']
+
+    # redshift-dependent vis (h31619 L16 tests)
+    zfac = 0.0
+    if sP.redshift >= 9.9:
+        zfac = 1.5
+        #size = 0.05 # z=10, 11, 12 tests of L16
+
+    # panels (can vary hInd, variant, res)
+    panels = []
+
+    if 1:
+        gas_field = 'coldens_msunkpc2' # 'HI'
+        panels.append( {'partType':'gas', 'partField':gas_field, 'valMinMax':[4.5+zfac,7.0+zfac]} )
+    if 0:
+        panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[3.0,4.5]} )
+
+    class plotConfig:
+        plotStyle    = 'edged_black'
+        colorbars    = True
+        colorbarOverlay = True
+        fontsize     = 28 # 24
+        saveFilename = 'halo_%s_%d_h%d.pdf' % (sP.simName,sP.snap,haloID)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -235,17 +279,19 @@ def vis_parent_box(sP, partType='dm'):
     """ Visualize large-scale region that bounds all high-res DM. """
     nPixels    = 2000
     axes       = [0,2] # x,y
-    labelZ     = True
+    labelZ     = False
     labelScale = True
     labelSim   = True
-    plotHalos  = 100 # TODO: label the specific zoom targets (only)
+    plotHalos  = 100 # TODO: label the specific zoom targets (only) (at z=6)
     labelHalos = 'mhalo'
     method     = 'sphMap'
+
+    sP.setRedshift(6.0) # z=5.5 is not a full snap, do not have SubfindHsml for DM, headache
 
     panels = [{'partField':'coldens_msunkpc2'}]
 
     if partType == 'dm':
-        panels[0]['valMinMax'] = [5.5, 8.5]
+        panels[0]['valMinMax'] = [7.6, 8.8]
 
     if partType == 'gas':
         panels[0]['valMinMax'] = [4.8,7.5]

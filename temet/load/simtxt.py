@@ -488,9 +488,10 @@ def blackhole_details_mergers(sim, overwrite=False):
     filename = path1 + 'blackhole_details.txt'
     filename2 = filename.replace('details','mergers')
     
+    decompressed = False
+
     if not isfile(filename):
         # .tar.gz files present and directories not? decompress
-        decompressed = False
         if isfile(path + 'blackhole_details.tar.gz') and not isdir(path1):
             assert 'txt-files/' in path # should not occur otherwise
 
@@ -513,13 +514,23 @@ def blackhole_details_mergers(sim, overwrite=False):
             print('Concat blackhole_mergers*.txt...')
             r = subprocess.run(cmd2, cwd=path2, shell=True)
 
-    # load details, columns: ID time BH_Mass mdot rho csnd
-    ids = np.loadtxt(filename, usecols=[0], dtype='int32')
-    data = np.loadtxt(filename, usecols=[1,2,3,4,5], dtype='float32')
+    # determine number of columns in details
+    with open(filename, 'r') as f:
+        line = f.readline()
+        ncols = len(line.split())
+
+    #if ncols == 6: # v0: columns: ID time BH_Mass mdot rho csnd
+    #if ncols == 8: # v1 (starting ST8f): columns: ID time BH_Mass mdot rho cs hsml ngbmaxdist
+    #if ncols == 9: # v1 (starting ST8f): columns: ID time BH_Mass mdot rho cs hsml ngbmaxdist spin
+    #if ncols == 14: # v2: columns: ID time BH_Mass mdot rho cs hsml ngbmaxdist x y z vx vy vz
+
+    # load details, 
+    ids = np.loadtxt(filename, usecols=[0], dtype='int64')
+    data = np.loadtxt(filename, usecols=np.arange(1,ncols), dtype='float32')
 
     # load mergers, columns: thistask time id0 mass0 id1 mass1
     # where id0 is the SMBH that remains, and id1 is the SMBH that is removed
-    merger_ids = np.loadtxt(filename2, usecols=[2,4], dtype='int32')
+    merger_ids = np.loadtxt(filename2, usecols=[2,4], dtype='int64')
     merger_times = np.loadtxt(filename2, usecols=[1], dtype='float32')
 
     # calculate
@@ -543,12 +554,29 @@ def blackhole_details_mergers(sim, overwrite=False):
 
         smbhs[int(smbh_id)] = {'time':time, 'mass':mass, 'mdot':mdot}
 
+        # additional columns
+        if ncols >= 8:
+            ngbmaxdist = data[w,6]
+            smbhs[int(smbh_id)]['ngbmaxdist'] = ngbmaxdist[inds]
+        if ncols >= 14:
+            x = data[w,7]
+            y = data[w,8]
+            z = data[w,9]
+            vx = data[w,10]
+            vy = data[w,11]
+            vz = data[w,12]
+            smbhs[int(smbh_id)]['x'] = x[inds]
+            smbhs[int(smbh_id)]['y'] = y[inds]
+            smbhs[int(smbh_id)]['z'] = z[inds]
+            smbhs[int(smbh_id)]['vx'] = vx[inds]
+            smbhs[int(smbh_id)]['vy'] = vy[inds]
+            smbhs[int(smbh_id)]['vz'] = vz[inds]
+
     # save
     with h5py.File(cachefile,'w') as f:
         for smbh_id in smbhs.keys():
-            f['%d/time' % smbh_id] = smbhs[smbh_id]['time']
-            f['%d/mass' % smbh_id] = smbhs[smbh_id]['mass']
-            f['%d/mdot' % smbh_id] = smbhs[smbh_id]['mdot']
+            for key in smbhs[smbh_id].keys():
+                f['%d/%s' % (smbh_id,key)] = smbhs[smbh_id][key]
 
         # also write mergers
         f['mergers/times'] = merger_times
