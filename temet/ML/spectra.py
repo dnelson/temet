@@ -431,17 +431,17 @@ def plot_true_vs_predicted(model_type='cnn', params=None):
         Y = np.squeeze(Y)
 
     # plot
-    fig, ax = plt.subplots(figsize=(figsize[1],figsize[1]))
+    fig, ax = plt.subplots(figsize=(figsize[1]*0.8,figsize[1]*0.8))
 
     if coldens:
-        ax.set_ylabel(r'N$_{\rm %s,predicted}$ [ $\AA$ ]' % (ion))
-        ax.set_xlabel(r'N$_{\rm %s,true}$ [ $\AA$ ]' % (ion))
+        ax.set_ylabel(r'N$_{\rm %s,predicted}$ [ cm$^{-2}$ ]' % (ion))
+        ax.set_xlabel(r'N$_{\rm %s,true}$ [ cm$^{-2}$ ]' % (ion))
     else:
         ax.set_ylabel(r'EW$_{\rm %s\,%s,predicted}$ [ $\AA$ ]' % (ion,data.lineNames))
         ax.set_xlabel(r'EW$_{\rm %s\,%s,true}$ [ $\AA$ ]' % (ion,data.lineNames))
 
     lim = [EW_minmax[0]-1.0, EW_minmax[1]+1.0]
-    if coldens: lim = [13.0, 16.0]
+    if coldens: lim = [13.6, 15.5]
 
     ax.set_ylim(lim)
     ax.set_xlim(lim)
@@ -456,9 +456,10 @@ def plot_true_vs_predicted(model_type='cnn', params=None):
     ax.plot(X, Y, 'o', ls='None', ms=4, alpha=0.5, label=label, zorder=0)
     ax.plot(lim, lim, '-', lw=lw, color='black', alpha=0.7, label='1-to-1')
 
-    xx, yy_med, _, yy_percs = running_median(X, Y, nBins=30, percs=percs)
-    l, = ax.plot(xx[:-2], yy_med[:-2], '-', lw=lw, alpha=0.7, label='median')
-    ax.fill_between(xx[:-2], yy_percs[0,:-2], yy_percs[-1,:-2], color=l.get_color(), alpha=0.3)
+    if not coldens:
+        xx, yy_med, _, yy_percs = running_median(X, Y, nBins=30, percs=percs)
+        l, = ax.plot(xx[:-2], yy_med[:-2], '-', lw=lw, alpha=0.7, label='median')
+        ax.fill_between(xx[:-2], yy_percs[0,:-2], yy_percs[-1,:-2], color=l.get_color(), alpha=0.3)
 
     ax.legend(loc='upper left')
     fig.savefig('%s.pdf' % modelFilename.replace('_model_','_EW-comp_').replace('.pth',''))
@@ -470,5 +471,5 @@ def run():
     #model_params = {'hidden_size': 8, 'num_hidden_layers': 1, 'kernel_size': 0} # mlp
     model_params = {'hidden_size': 64, 'num_hidden_layers': 2, 'kernel_size': 3} # cnn
 
-    best_loss = train(model_type, model_params)
+    #best_loss = train(model_type, model_params)
     plot_true_vs_predicted(model_type, model_params)

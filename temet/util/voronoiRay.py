@@ -309,9 +309,6 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
 
         #if debug: print(f'[{n_step:3d}] {dl = :7.3f} {ray_pos = } {cur_cell_ind = }')
 
-        #if n_step > 10:
-        #    import pdb; pdb.set_trace()
-
         if verify:
             dists = periodicDistsN(ray_pos, cell_pos, boxSize)
             mindist_cell_ind = np.where(dists == dists.min())[0][0]
@@ -325,7 +322,7 @@ def trace_ray_through_voronoi_mesh_treebased(cell_pos, NextNode, length, center,
         raylength_left = 0.0
         raylength_right = total_dl - dl # total remaining length
 
-        # clip maximum rightward step to a quarter of the boxsize to avoid distanat periodic issues
+        # clip maximum rightward step to a quarter of the boxsize to avoid distant periodic issues
         if raylength_right > 0.25 * boxSize:
             raylength_right = 0.25 * boxSize
 
@@ -828,7 +825,7 @@ def benchmark_test_raytracing():
 
     # loop over:
     total_dls = [5000.0, 10000.0] # [1000.0, 5000.0]
-    nThreads = [1,1,2,4,8,16,32]
+    nThreads = [1,1,2,4,8,16,32,64]
 
     # load global cell positions
     print('Loading...')

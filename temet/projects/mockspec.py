@@ -8,13 +8,17 @@ The Virtual Universe in Absorption (VUA): a billion synthetic absorption sightli
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+import glob
 from matplotlib.gridspec import GridSpec
+from matplotlib.ticker import ScalarFormatter
 from os.path import isfile
 
-from ..cosmo.spectrum import _spectra_filepath, lines
+from ..cosmo.spectrum import _spectra_filepath, lines, instruments
 #from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
 from ..plot.spectrum import spectra_gallery_indiv, EW_distribution, dNdz_evolution, EW_vs_coldens, instrument_lsf
 from ..plot.config import *
+from ..vis.halo import renderSingleHalo
+from ..vis.box import renderBox
 
 def metalAbundancesVsSolar(sim, ion='Mg II'):
     """ Diagnostic plot of how much various metal abundances actual vary vs. the solar abundance ratio. """
@@ -335,15 +339,196 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None):
     fig.savefig('spectrum_lightcone_%s_%s_%s%s.pdf' % (sim.simName,ion.replace(' ',''),instrument,linesStr))
     plt.close(fig)
 
+def vis_overview(sP, haloID=None):
+    """ Visualize large-scale box, and halo-scale zoom, in an ion column density. """
+    nPixels    = 2000
+    axes       = [0,2] # x,y
+    labelZ     = True
+    labelScale = True
+    labelSim   = True
+    method     = 'sphMap'
+
+    partType = 'gas'
+    partField = 'O VI' if sP.redshift < 0.5 else 'Ne VIII'
+    
+    panels = [{}]
+
+    class plotConfig:
+        plotStyle  = 'edged'
+        #colorbars  = False
+        colorbarOverlay = True
+        
+    if haloID is None:
+        # large-scale box
+        valMinMax = [12.0, 15.0]
+        plotConfig.saveFilename = './boxImage_%s_%s-%s.pdf' % (sP.simName,partType,partField)
+
+        renderBox(panels, plotConfig, locals(), skipExisting=False)
+    else:
+        # single halo
+        valMinMax = [13.5, 15.0]
+        nPixels    = 1000
+        size       = 3.5 #2.5
+        sizeType   = 'rVirial'
+        labelScale = 'physical'
+        labelHalo  = 'mhalo,mstar,id'
+        method     = 'sphMap_global'
+
+        subhaloInd = sP.halo(haloID)['GroupFirstSub']
+
+        plotConfig.saveFilename = './haloImage_%s_%d_%s-%s.pdf' % (sP.simName,haloID,partType,partField)
+        plotConfig.rasterPx = [600,600]
+
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+def ion_redshift_coverage(sim, all=True, lowz=False):
+    """ Schematic plot showing ion/redshift/instrument/etc coverage of available mock spectra files. 
+    If 'all' is True, then show all possible. Otherwise, only show existing. 
+    If 'lowz' is True, then make a log-log plot that focuses on low redshift. """
+    # config
+    line_alpha = 0.3
+
+    # dataset selection
+    datasets = []
+
+    # (A) actually done
+    path = sim.derivPath + 'rays/spectra_*fullbox*combined.hdf5'
+    files = sorted(glob.glob(path))
+
+    for file in files:
+        with h5py.File(file,'r') as f:
+            lineNames = f.attrs['lineNames']
+
+        filename = file.split('spectra_')[1]
+        simname, z, config, inst, ion, _ = filename.split('_')
+        z = float(z.replace('z',''))
+        datasets.append([ion,inst,z,config,lineNames,True])
+    
+    ions = list(set([ds[0] for ds in datasets]))
+    insts = list(set([ds[1] for ds in datasets]))
+
+    insts += ['COS-G230L']
+
+    # (B) all possible
+    if all:
+        #ions = ['H I','Mg II','Fe II','Si II','Si III','Si IV','N V','C II','C IV','O VI','Ca II','Zn II']
+        insts_to_fill = insts #['COS-G130M']#, 'SDSS-BOSS', '4MOST-HRS'] # insts
+        config = 'dummy'
+        redshifts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0]
+
+        for line, props in lines.items():
+            ion = props['ion'].replace(' ','')
+            for inst in insts_to_fill:
+                for z in redshifts:
+                    wave_z = props['wave0'] * (1 + z)
+
+                    if wave_z > instruments[inst]['wave_min'] and wave_z < instruments[inst]['wave_max']:
+                        datasets.append([ion,inst,z,config,[line],False])
+
+        #ions = list(dict.fromkeys([info['ion'] for line,info in lines.items()])) # unique
+        ions = list(set([ds[0] for ds in datasets]))
+
+    # start plot
+    fig = plt.figure(figsize=[figsize[0]*1.2, figsize[1]*0.9])
+    ax = fig.add_subplot(111)
+    #ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
+
+    ax.set_xlabel('Observed Wavelength [ Ang ]')
+    ax.set_ylabel('Redshift')
+
+    if lowz: # low-z focused (log-log)
+        xlim = [950, 10000]
+        xticks = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000]
+        ylim = [0.08, 6] # z=0.1 minimum currently used
+        yticks = [0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 2.0, 3.0, 4.0, 5.0]
+        ax.set_yscale('log')
+        ax.set_xscale('log')
+    else: # high-z focused (linear)
+        xlim = [900, 10500]
+        if all: xlim[0] = 400
+        xticks = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]
+        ylim = [0.0,5.2]
+        yticks = [0.1, 0.5, 0.7, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+
+    ax.set_yticks(yticks)
+    ax.get_yaxis().set_major_formatter(ScalarFormatter())
+    ax.set_xticks(xticks)
+    ax.get_xaxis().set_major_formatter(ScalarFormatter())
+
+    # loop over ions
+    ncolors = len(plt.rcParams['axes.prop_cycle'].by_key()['color'])
+    colors = {}
+
+    for i, ion in enumerate(ions):
+        lines_loc = []
+        wave0_loc = []
+        for line, props in lines.items():
+            if props['ion'].replace(' ','') == ion:
+                lines_loc.append(line)
+                wave0_loc.append(props['wave0'])
+
+        # draw line for each transition
+        z = np.logspace(-2.0, np.log10(ylim[1]), 40)
+        
+        for j, (line, wave0) in enumerate(zip(lines_loc, wave0_loc)):
+            wave_z = wave0 * (1 + z)
+
+            label = ion if j == 0 else ''
+            c = l.get_color() if j > 0 else None
+            ls = linestyles[i // ncolors]
+            l, = ax.plot(wave_z, z, ls, lw=1, c=c, alpha=line_alpha, zorder=0)#, label=label)
+
+        colors[ion] = c
+
+    # loop over datasets
+    labels = []
+
+    for dataset in datasets:
+        ion, inst, z, config, lineNames, exists = dataset
+
+        for lineName in lineNames:
+            wave_z = lines[lineName.replace('_',' ')]['wave0'] * (1 + z)
+            label = ion if ion not in labels else ''
+            labels.append(ion)
+            marker = markers[insts.index(inst)]
+
+            style = {'fillstyle':'full', 'ms':8}
+            if not exists:
+                style['fillstyle'] = 'none'
+                style['ms'] = 4
+                style['markeredgewidth'] = 1
+
+            # vertical offset (in display coordinate space) based on inst, to separate out overlapping pts
+            z_plot = z
+            if len(insts) > 1:
+                _, z_display = ax.transData.transform((wave_z,z))
+                z_display += 7.0 * (insts.index(inst) - len(insts)/2)
+                _, z_plot = ax.transData.inverted().transform((wave_z,z_display))
+
+            ax.plot(wave_z, z_plot, marker, c=colors[ion], label=label, **style)
+
+    # second legend (instrument markers)
+    handles = [plt.Line2D((0,0), (0,0), color='black', lw=0, marker=markers[j]) for j in range(len(insts))]
+    labels = insts
+
+    legend2 = ax.legend(handles, labels, loc='lower right')
+    ax.add_artist(legend2)
+
+    # first legend
+    handles = [plt.Line2D((0,0), (0,1), color=colors[ion], lw=lw, ls=linestyles[i // ncolors]) for i, ion in enumerate(ions)]
+    labels = ions
+    legend = ax.legend(handles, labels, ncols=4 if lowz else 2, handlelength=1.3, columnspacing=0.8, loc='upper left')
+
+    fig.savefig('ion_redshift_inst_coverage_%s%s%s.pdf' % (sim.simName, '_all' if all else '','_lowz' if lowz else ''))
+    plt.close(fig)
+
 def paperPlots():
     from ..util.simParams import simParams
-    # https://arxiv.org/abs/2404.00193
-
+    
     # pre-computed sightlines and spectra:
-    redshifts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0]
-    instruments = ['4MOST-HRS','SDSS-BOSS','DESI','KECK-HIRES'] # todo: add cos, and something NIR (XS or GNIRS?)
-    ions = ['HI','MgII','FeII','SiII','NV','CIV','OVI','CaII','ZnII'] # CaII and ZnII with solar abunds
-
     # {1M-uni} 4MOST-HRS    SDSS-BOSS    KECK-HIRES     UVES      COS          DESI          XSHOOTER (something NIR/high-z)
     #          ---------    ---------    ----------     ----      ---          ----          --------
     # HI       [ ]          [X] 2-4      [X] 1.5-5      [ ]       [ ]          [ ]           [ ] 
@@ -353,6 +538,7 @@ def paperPlots():
     # SiIII    [ ]          [X] 2-5      [X] 1.5-5      [ ]       [ ]          [ ]           [ ]
     # SiIV     [ ]          [X] 1.5-5    [X] 1.5-5      [ ]       [ ]          [ ]           [ ] 
     # NV       [ ]          [X] 2-5      [X] 1.5-5      [ ]       [ ]          [ ]           [ ]
+    # NeVIII   [ ]          [ ]          [ ]            [ ]       [.]          [ ]           [ ] 
     # CII      [ ]          [X] 1.5-5    [X] 1.5-5      [ ]       [ ]          [ ]           [ ]
     # CIV      [ ]          [X] 1.5-5    [X] 1-5        [ ]       [ ]          [ ]           [ ] 
     # OVI      [ ]          [X] 3-5      [X] 2-5        [ ]       [ ]          [ ]           [ ] 
@@ -360,7 +546,29 @@ def paperPlots():
     # ZnII     [ ]          [ ]          [ ]            [ ]       [ ]          [ ]           [ ] 
     # future: {4M-rnd} ?
 
-    # fig 1: individual spectra galleries
+    # fig 1: visual overview: full box TNG50 of N_ion, halo zoom, draw sightline going through
+    if 0:
+        sP = simParams('tng50-1', redshift=0.7) # OVI at z=0.2 or NeVIII at z=0.7
+        vis_overview(sP, haloID=None) # full box
+        #for haloID in [200,300,400,500,600]:
+        #    vis_overview(sP, haloID=haloID) # random
+        # todo: single spectrum vis
+
+    # fig 2: redshift coverage for transitions/instruments/configurations (given a sim)
+    if 0:
+        sim = simParams(run='tng50-1')
+        ion_redshift_coverage(sim, all=True, lowz=True)
+
+    # fig 3: (dense) spectra galleries
+    if 0:
+        # C IV
+        sim = simParams(run='tng50-1', redshift=2.0)
+        inst = 'SDSS-BOSS' #'KECK-HIRES-B14'
+        opts = {'ion':'C IV', 'instrument':inst, 'num':121, 'SNR':50, 'dv':True, 'xlim':[-900,900]}
+
+        spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='evenly', style='grid', **opts)
+
+    # fig 4: individual spectra galleries
     if 0:
         # Mg II
         sim = simParams(run='tng50-1', redshift=0.5)
@@ -391,16 +599,7 @@ def paperPlots():
         spectra_gallery_indiv(sim, EW_minmax=[0.01, 0.4], mode='evenly', **opts)
         spectra_gallery_indiv(sim, EW_minmax=[3.0, 6.0], mode='random', **opts)
 
-    # fig 1b: (dense) spectra galleries
-    if 0:
-        # C IV
-        sim = simParams(run='tng50-1', redshift=2.0)
-        inst = 'SDSS-BOSS' #'KECK-HIRES-B14'
-        opts = {'ion':'C IV', 'instrument':inst, 'num':121, 'SNR':50, 'dv':True, 'xlim':[-900,900]}
-
-        spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='evenly', style='grid', **opts)
-
-    # fig 2: 2d spectra visualization
+    # fig 5: 2d spectra visualization
     if 0:
         # C IV
         sim = simParams(run='tng50-1', redshift=2.0)
@@ -409,7 +608,12 @@ def paperPlots():
 
         spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='all', style='2d', **opts)
 
-    # fig 3: MgII EW distribution functions vs. data
+    # fig 6: EW vs coldens vs CoG
+    if 0:
+        sim = simParams('tng50-1', redshift=2.0)
+        EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS')
+
+    # fig ?: MgII EW distribution functions vs. data
     if 0:
         sim = simParams(run='tng50-1')
         line = 'MgII 2796'
@@ -420,7 +624,7 @@ def paperPlots():
 
         EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, indivEWs=False, **opts)
 
-    # fig 3b: CIV EW distribution
+    # fig ?: CIV EW distribution
     if 0:
         sim = simParams(run='tng50-1')
         line = 'CIV 1548'
@@ -431,7 +635,7 @@ def paperPlots():
 
         EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, indivEWs=indivEWs, **opts)
 
-    # fig 4: dN/dz (absorber incidence s a function of redshift) vs. data
+    # fig ?: dN/dz (absorber incidence s a function of redshift) vs. data
     if 0:
         sim = simParams(run='tng50-1')
         line = 'MgII 2796'
@@ -440,15 +644,9 @@ def paperPlots():
 
         dNdz_evolution(sim, redshifts=redshifts, line=line, instrument=inst, solar=solar)
 
-    # fig 5: EW vs coldens vs CoG
+    # fig X: 2D optical depth map
     if 0:
-        sim = simParams('tng50-1', redshift=2.0)
-        EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS')
-
-    # fig X: abundances vs solar i.e. for mini-snaps
-    if 0:
-        sim = simParams(run='tng50-1', redshift=0.5)
-        metalAbundancesVsSolar(sim, 'Mg II')
+        pass # e.g. usual Steidel+/KBSS style (https://arxiv.org/abs/2503.20037)
 
     # fig X: instrumental LSFs
     if 0:
@@ -470,14 +668,6 @@ def paperPlots():
         num = 10
 
         spectra_gallery_indiv(sim, ion='H I', instrument=inst, EW_minmax=None, num=num, mode='random', xlim='full', SNR=None)
-
-    # fig X: EW_solar/EW_sim vs EW_sim test
-    if 0:
-        pass
-
-    # fig X: redshift coverage for transitions, given an instrument
-    if 0:
-        pass # x-axis: redshift?
 
     # table: transitions
     if 0:

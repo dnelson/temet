@@ -1,4 +1,4 @@
-# Perruchot+ (2021)
+# Perruchot+ (2020)
 # https://arxiv.org/abs/2101.12181 (Figure 11, SM9 measurements)
 # note: non-monotonic transition between the green and red arm is approximate only!
 # wavelength [Ang], R = lambda/dlambda where dlambda is the FWHM
