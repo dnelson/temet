@@ -942,6 +942,10 @@ class sps():
             metal = stars.get('GFM_Metallicity', stars.get('Metallicity'))
             imass = stars.get('GFM_InitialMass', stars.get('InitialMass'))
 
+            if metal.ndim == 2:
+                print('TODO REMOVE MCS ST9 HACK')
+                metal = np.squeeze(metal[:,0]) # bug in io_fields.c
+
             mags = self.mags_code_units(sP, band, sftime, metal, imass, retFullSize=True)
 
         # convert to luminosities in [Lsun/Hz]

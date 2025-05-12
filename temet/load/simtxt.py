@@ -520,9 +520,7 @@ def blackhole_details_mergers(sim, overwrite=False):
         ncols = len(line.split())
 
     #if ncols == 6: # v0: columns: ID time BH_Mass mdot rho csnd
-    #if ncols == 8: # v1 (starting ST8f): columns: ID time BH_Mass mdot rho cs hsml ngbmaxdist
-    #if ncols == 9: # v1 (starting ST8f): columns: ID time BH_Mass mdot rho cs hsml ngbmaxdist spin
-    #if ncols == 14: # v2: columns: ID time BH_Mass mdot rho cs hsml ngbmaxdist x y z vx vy vz
+    #if ncols == 15: # v2: columns: ID time BH_Mass mdot rho cs hsml ngbmaxdist spin x y z vx vy vz
 
     # load details, 
     ids = np.loadtxt(filename, usecols=[0], dtype='int64')
@@ -555,22 +553,16 @@ def blackhole_details_mergers(sim, overwrite=False):
         smbhs[int(smbh_id)] = {'time':time, 'mass':mass, 'mdot':mdot}
 
         # additional columns
-        if ncols >= 8:
-            ngbmaxdist = data[w,6]
-            smbhs[int(smbh_id)]['ngbmaxdist'] = ngbmaxdist[inds]
-        if ncols >= 14:
-            x = data[w,7]
-            y = data[w,8]
-            z = data[w,9]
-            vx = data[w,10]
-            vy = data[w,11]
-            vz = data[w,12]
-            smbhs[int(smbh_id)]['x'] = x[inds]
-            smbhs[int(smbh_id)]['y'] = y[inds]
-            smbhs[int(smbh_id)]['z'] = z[inds]
-            smbhs[int(smbh_id)]['vx'] = vx[inds]
-            smbhs[int(smbh_id)]['vy'] = vy[inds]
-            smbhs[int(smbh_id)]['vz'] = vz[inds]
+        if ncols > 6:
+            w = w[inds] # sorted, de-duplicated subset
+            smbhs[int(smbh_id)]['ngbmaxdist'] = data[w,6]
+            smbhs[int(smbh_id)]['spin'] = data[w,7]
+            smbhs[int(smbh_id)]['x'] = data[w,8]
+            smbhs[int(smbh_id)]['y'] = data[w,9]
+            smbhs[int(smbh_id)]['z'] = data[w,10]
+            smbhs[int(smbh_id)]['vx'] = data[w,11]
+            smbhs[int(smbh_id)]['vy'] = data[w,12]
+            smbhs[int(smbh_id)]['vz'] = data[w,13]
 
     # save
     with h5py.File(cachefile,'w') as f:

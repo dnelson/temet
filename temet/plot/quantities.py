@@ -2139,6 +2139,8 @@ def simParticleQuantity(sP, ptType, ptProperty, haloLims=False, u=False):
 
         log = getattr(custom_fields[prop], 'log', True)
 
+    assert label is not None, f'Snapshot quantity [{ptType}] [{ptProperty}] not found.'
+
     # any of these fields could be functions, in which case our convention is to call with 
     # (sP,pt,field) as the arguments, i.e. in order to make redshift-dependent decisions
     if callable(label):

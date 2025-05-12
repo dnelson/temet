@@ -58,12 +58,12 @@ def vis_single_galaxy(sP, haloID=0):
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def vis_single_halo(sP, haloID=0):
+def vis_single_halo(sP, haloID=0, size=3.5):
     """ Visualization: single image of a halo.  """
     rVirFracs  = [1.0]
     fracsType  = 'rVirial'
     nPixels    = [960,960]
-    size       = 3.5 #2.5
+    #size       = 3.5 #2.5
     sizeType   = 'rVirial'
     labelSim   = False # True
     labelHalo  = False # 'mhalo'
@@ -87,10 +87,11 @@ def vis_single_halo(sP, haloID=0):
     panels = []
 
     if 1:
-        gas_field = 'coldens_msunkpc2' # 'HI'
-        panels.append( {'partType':'gas', 'partField':gas_field, 'valMinMax':[4.5+zfac,7.0+zfac]} )
+        panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5+zfac,7.0+zfac]} )
     if 0:
         panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[3.0,4.5]} )
+    if 0:
+        panels.append( {'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.0]} )
 
     class plotConfig:
         plotStyle    = 'edged_black'

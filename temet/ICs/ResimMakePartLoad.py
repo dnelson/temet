@@ -363,7 +363,8 @@ def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
 
     # config
     MaxLevel = 11 # 2^N, should match closest to res of original run, 9=512^3, 11=2048^3
-    MinLevel = 6 # 2^N coarsest background at large distance away from the edge of the zoom region, 2^6=64
+    MinLevel = 7  # 2^N coarsest background at large distance away from the edge of the zoom region, 2^6=64
+    print('NOTE: MinLevel = 7 (128^3 background) since May 2025.')
 
     MaxLevel_ideal = int(np.round(np.log2(sP.res)))
     if MaxLevel_ideal != MaxLevel:
@@ -452,14 +453,14 @@ def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
     _build_parent_grid(Grids, GridsOffset, MaxLevel)
 
     # count particles that will be generated, and allocate P[]
-    PartCount = np.zeros( 6, dtype='int32' )
+    PartCount = np.zeros(6, dtype='int64')
 
     _find_partload_size(0,0,0,0,Radius,Angle,PartCount,sP.boxSize,MaxLevel,MinLevel,ZoomFactor,Grids,GridsOffset)
 
-    NumPartTot = PartCount.sum()
-    P_Type = np.zeros( NumPartTot, dtype='int32' )
-    P_Pos  = np.zeros( (NumPartTot,3), dtype=floatType )
-    P_Mass = np.zeros( NumPartTot, dtype=floatType )
+    NumPartTot = np.sum(PartCount, dtype='int64')
+    P_Type = np.zeros(NumPartTot, dtype='int32')
+    P_Pos  = np.zeros((NumPartTot,3), dtype=floatType)
+    P_Mass = np.zeros(NumPartTot, dtype=floatType)
 
     # create grid
     pIndex = np.zeros(1, dtype=idType)
@@ -530,8 +531,8 @@ def generate_set():
     if 0:
         # TNG-Cluster: Wonki SIDM project
         sP = simParams(res=2048,run='tng_dm',redshift=0.0)
-        zoomFac = 4 # zoomFac = 2 for L12 low-res
-        haloIDs = [6, 5122]
+        zoomFac = 4 # zoomFac = 2 for L12 low-res, zoomFac = 4 for fiducial TNG-Cluster res
+        haloIDs = [6, 210, 5122]
         sizeFac = 3.0 # fiducial choice, [2.0,3.0,4.0]
 
     if 0:
@@ -562,7 +563,7 @@ def generate_set():
         haloIDs = [21] #[11]
         sizeFac = 256.0
 
-    if 1:
+    if 0:
         # TNG50 dwarf zooms (MCST)
         #sP = simParams(run='tng50-1', redshift=3.0)
         #haloIDs = [1242] # Milky Way progenitors at z=3
@@ -579,16 +580,17 @@ def generate_set():
         #haloIDs += [167, 347] # z=5.5 grnr[np.where( (mhalo>10.5) & (mhalo<10.51) )[0][0:5]]
 
         # see temet.projects.mcst.select_ics()
-        haloIDs = [844537, 848864, 836397, 857253, 768227] # mhalo = 8.0
-        haloIDs += [219612, 199174, 224856, 311384, 323459] # mhalo = 8.5
-        haloIDs += [73172, 72077, 66262, 73547, 62879] # mhalo = 9.0
-        haloIDs += [17824, 15581, 23908, 22723, 12739] # mhalo = 9.5
-        haloIDs += [1958, 5072, 5196, 5922, 3357] # mhalo = 10.0
+        #haloIDs = [844537, 848864, 836397, 857253, 768227] # mhalo = 8.0
+        #haloIDs += [219612, 199174, 224856, 311384, 323459] # mhalo = 8.5
+        #haloIDs += [73172, 72077, 66262, 73547, 62879] # mhalo = 9.0
+        #haloIDs += [17824, 15581, 23908, 22723, 12739] # mhalo = 9.5
+        #haloIDs += [1958, 5072, 5196, 5922, 3357] # mhalo = 10.0
         #haloIDs += [513 772 957 807 400] # mhalo = 10.5
         #haloIDs += [137 175 174 139 145] # mhalo = 11.0
 
-        #zoomFac = 16 # 1 (L11), 2 (L12), 4 (L13), 8 (L14), 16 (L15), 32 (L16)
-        #sizeFac = 6.0 # 4, 6, 8
+        haloIDs = [5072, 15581, 73172, 219612, 844537] # z5.5 set
+        #zoomFac = 32 # 1 (L11), 2 (L12), 4 (L13), 8 (L14), 16 (L15), 32 (L16)
+        sizeFac = 4.0 # 4, 6, 8
 
     if 0:
         # byrohl P-ResimICs test
@@ -600,6 +602,5 @@ def generate_set():
 
     # run
     for haloID in haloIDs:
-        for sizeFac in [4,6,8]:
-            for zoomFac in [8]:#,16]:
-                generate(sP, fofID=haloID, ZoomFactor=zoomFac, EnlargeHighResFactor=sizeFac)
+        for zoomFac in [4,8,16,32]:
+            generate(sP, fofID=haloID, ZoomFactor=zoomFac, EnlargeHighResFactor=sizeFac)

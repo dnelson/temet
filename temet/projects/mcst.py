@@ -26,9 +26,11 @@ def _get_existing_sims(variants, res, hInds, redshift, all=False):
             for r in res:
                 try:
                     sim = simParams(run='structures', res=r, hInd=hInd, variant=variant, redshift=redshift)
-                    if np.abs(sim.redshift - redshift) < 0.1 or all:
+                    if np.abs(sim.redshift - redshift) < 0.3 or all:
                         sims.append(sim)
                         print(sim, ' [OK]')
+                    else:
+                        raise Exception
                 except:
                     print(f'h{hInd}_L{r}_{variant} z={redshift:.0f}  [skip]')
 
@@ -36,6 +38,9 @@ def _get_existing_sims(variants, res, hInds, redshift, all=False):
 
 def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
     """ Plot helper to add two legends: one showing hInds (color), one showing res/variants (symbols and markersizes). """
+    locs = ['upper left', 'lower right']
+    if r'1/2,\star' in ax.get_ylabel(): locs = locs[::-1]
+
     # legend one
     handles, labels = ax.get_legend_handles_labels()
 
@@ -64,7 +69,7 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
             handles.append(plt.Line2D( (0,1), (0,0), color=c, ls='-', lw=lw))
             labels.append('h%d' % hInd)
 
-    legend = ax.legend(handles, labels, loc='upper left', ncols=1)
+    legend = ax.legend(handles, labels, loc=locs[0], ncols=1)
     ax.add_artist(legend)
 
     if len(hInds) == 1 and lineplot:
@@ -83,7 +88,7 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
             handles.append(plt.Line2D((0,1), (0,0), color='black', lw=0, marker=marker, ms=ms))
             labels.append('L%d_%s' % (r,variant))
 
-    legend2 = ax.legend(handles, labels, loc='lower right', ncols=len(variants))
+    legend2 = ax.legend(handles, labels, loc=locs[1], ncols=len(variants))
     ax.add_artist(legend2)
 
 def _load_mpb_quants(sim, subhaloInd, quants, smooth=False):
@@ -142,8 +147,8 @@ def _zoomSubhaloIDsToPlot(sim):
 
     return subhaloIDs
 
-def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=True, tracks=False,
-                        f_pre=None, f_post=None):
+def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=False, vstng50=True, 
+                        tracks=False, f_pre=None, f_post=None):
     """ Scatterplot between two quantities, optionally including time evolution tracks through this plane.
     Designed for comparison between many zoom runs, including the target subhalo(s) from each.
 
@@ -154,6 +159,7 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Tru
       xlim (list[float][2]): if not None, override default x-axis limits.
       ylim (list[float][2]): if not None, override default y-axis limits.
       vstng100 (bool): if True, plot the TNG100-1 relation for comparison.
+      vstng50 (bool): if True, plot the TNG100-1 relation for comparison.
       tracks (bool): if True, plot tracks of individual galaxies. If False, only plot final redshift values.
       f_pre (function): if not None, this 'custom' function hook is called just before plotting.
         It must accept two arguments: the figure axis, and a list of simulation objects.
@@ -179,6 +185,8 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Tru
 
     if vstng100:
         sim_parent_relation = simParams(run='tng100-1', redshift=sim_parent.redshift)
+    if vstng50:
+        sim_parent_relation = simParams(run='tng50-1', redshift=sim_parent.redshift)
 
     parent_xvals, xlabel, xMinMax, xLog = sim_parent_relation.simSubhaloQuantity(xQuant, clean, tight=True)
     if xlim is not None: xMinMax = xlim
@@ -246,7 +254,13 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Tru
             ms_loc = (sim.res - 10) * 2.5 + 4
             lw_loc = (sim.res - 10)
 
-            l, = ax.plot(xval, yval, marker, color=c, markersize=ms_loc, label='') # sim.simName
+            # filled for main target, open for additional halos
+            style = {'color':c, 'ms':ms_loc, 'fillstyle':'full'}
+            if j > 0:
+                style['fillstyle'] = 'none'
+                style['markeredgewidth'] = 2
+
+            l, = ax.plot(xval, yval, marker, label='', **style)
 
             if tracks:
                 # load
@@ -521,11 +535,11 @@ def smhm_relation(sims):
     ylim = [5.7, 10.2] # mstar
 
     if sims[0].redshift >= 4.5:
-        xlim = [8.5, 10.5]
-        ylim = [4.9, 9.5]
+        xlim = [7.5, 10.5]
+        ylim = [4.4, 9.0]
     if sims[0].redshift >= 7.5:
-        xlim = [8.0, 10.0]
-        ylim = [3.9, 8.5]
+        xlim = [7.0, 10.0]
+        ylim = [3.9, 8.0]
 
     def _draw_data(ax, sims):
         xlim = ax.get_xlim()
@@ -653,7 +667,7 @@ def sizes_vs_mstar(sims):
 
     xQuant = 'mstar2_log'
     yQuant = 'rhalf_stars'
-    ylim = [-1.7, 1.5] # log pkpc
+    ylim = [-2.5, 1.0] # log pkpc
     xlim = [5.7, 10.2] # log mstar
 
     def _draw_data(ax, sims):
@@ -820,7 +834,8 @@ def phase_diagram(sim):
     xlim = [-6.5, 7.0]
     ylim = [1.0, 7.0]
     haloIDs = None #[0]
-    qRestrictions = [['rad_rvir',0.0,5.0]] # None # 
+    qRestrictions = [['rad_rvir',0.0,5.0]] # within 5rvir only
+    qRestrictions.append(['mass',0.0,sim.targetGasMass*4]) # high-res only                     
     clim = [-4.0, -0.2]
     
     # MCS model: star formation threshold
@@ -1485,16 +1500,16 @@ def paperPlots():
     #redshift = 5.0
 
     # testing:
-    variants = ['ST8s'] #,'TNG'] #,'ST8m','ST8b'] #['ST8','ST8m','ST8b'] #['ST8','ST8m']
-    res = [16] #[12,13,14,15]
-    hInds = [31619] #[31619]
-    redshift = 10.0
+    variants = ['ST9']
+    res = [13,14,15] #[12,13,14,15]
+    hInds = [5072, 15581, 73172, 219612, 844537]
+    redshift = 5.5
 
-    sims = _get_existing_sims(variants, res, hInds, redshift, all=True)
+    sims = _get_existing_sims(variants, res, hInds, redshift, all=False) # if False, only dz < 0.1 matches
 
     # contamination diagnostic printout (info only)
-    for sim in sims:
-        _ = _zoomSubhaloIDsToPlot(sim)
+    #for sim in sims:
+    #    _ = _zoomSubhaloIDsToPlot(sim)
 
     # ------------
 
@@ -1565,8 +1580,13 @@ def paperPlots():
 
     # vis: single image, gas and stars
     if 0:
-        vis_single_galaxy(sims[0], haloID=0)
-        #vis_single_halo(sims[0], haloID=0)
+        for sim in sims:
+            print('TODO REMOVE (take most recent full snap, for InitialMass field)')
+            sim.setSnap(sim.validSnapList(onlyFull=True)[-1])
+
+            vis_single_galaxy(sim, haloID=0)
+            #vis_single_halo(sim, haloID=0)
+            #vis_single_halo(sim, haloID=0, size=20.0)
 
     # black hole time evolution
     if 0:

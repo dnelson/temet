@@ -23,8 +23,11 @@ def write_ic_file(fileName, partTypes, boxSize, massTable=None, headerExtra=None
             for field in partTypes[ptName]:
                 g[field] = partTypes[ptName][field]
 
-        # set particle counts
-        NumPart = np.zeros( nPartTypes, dtype='int32' )
+        # set particle counts (int64 NumPart, instead of _HighWord, supported)
+        maxNumByType = np.max([partTypes[pt]['ParticleIDs'].size for pt in partTypes.keys()])
+        dtype = 'int32' if maxNumByType < np.iinfo('int32').max else 'int64'
+
+        NumPart = np.zeros(nPartTypes, dtype=dtype)
         for ptName in partTypes.keys():
             ptNum = int(ptName[-1])
             NumPart[ptNum] = partTypes[ptName]['ParticleIDs'].size
@@ -35,7 +38,7 @@ def write_ic_file(fileName, partTypes, boxSize, massTable=None, headerExtra=None
         h.attrs['NumFilesPerSnapshot'] = 1
         h.attrs['NumPart_ThisFile'] = NumPart
         h.attrs['NumPart_Total'] = NumPart
-        h.attrs['NumPart_Total_HighWord'] = np.zeros( nPartTypes, dtype='int32' )
+        h.attrs['NumPart_Total_HighWord'] = np.zeros(nPartTypes, dtype=dtype)
 
         if headerExtra is not None:
             for key in headerExtra.keys():

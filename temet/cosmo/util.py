@@ -249,7 +249,6 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=
         if sP.simName == 'Eagle100':
             pass # all snaps are full
         else:
-            assert 'TNG' in sP.simName # otherwise generalize
             snaps = w
             w = []
 
@@ -257,7 +256,16 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=
                 fileName = sP.snapPath(snap, subbox=sP.subbox, checkExists=True)
                 if fileName is None: continue
                 with h5py.File(fileName,'r') as f:
-                    if '/PartType0/MagneticField' in f:
+                    # handle different criterion/simulation types
+                    if 'TNG' in sP.simName:
+                        fullSnap = '/PartType0/MagneticField' in f
+                    elif sP.winds == 4: # MCST
+                        fullSnap = '/PartType0/GrackleCoolTime' in f
+                    else:
+                        assert 0, 'Unhandled case for determining full snaps.'
+
+                    # keep only full snaps
+                    if fullSnap:
                         w.append(snap)
 
             w = np.array(w)

@@ -187,9 +187,9 @@ class simParams:
     data   = None # per session memory-based cache
     
     # physical models: GFM and other indications of optional snapshot fields
-    metals    = None  # set to list of string labels for GFM runs outputting abundances by metal
-    BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=ST model)
-    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=MCS/ST model)
+    metals    = None  # list of string labels for runs saving abundances by species
+    BHs       = False # >0 for BLACK_HOLES (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=MCST model)
+    winds     = False # >0 for GFM_WINDS or SN feedback (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=MCST model)
 
     def __init__(self, run, res=None, variant=None, redshift=None, time=None, snap=None, 
                        hInd=None, haloInd=None, subhaloInd=None, arepoPath=None,
@@ -280,6 +280,7 @@ class simParams:
 
         self.gas = partial(snapshotSubsetParallel, self, 'gas')
         self.dm = partial(snapshotSubsetParallel, self, 'dm')
+        self.dmlowres = partial(snapshotSubsetParallel, self, 'dmlowres')
         self.stars = partial(snapshotSubsetParallel, self, 'stars')
         self.bhs = partial(snapshotSubsetParallel, self, 'bhs')
         self.blackholes = partial(snapshotSubsetParallel, self, 'bhs')
@@ -765,19 +766,21 @@ class simParams:
                 self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
                 self.winds = 2
                 self.BHs   = 2
-            elif self.variant in ['SN','SNPIPE']:
+            if 'ST' in self.variant: # todo: set to ST9+ only
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
-                self.metals = None
-                self.winds = 4 # MCS
-                self.BHs   = None
-            elif self.variant == 'ST':
-                self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
-                self.metals = None
-                self.winds = 4 # MCS/ST
-                self.BHs   = 4 # ST
+                #self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe'] # TRACK_ELEMENT_MCS=1
+                #self.metals = ['H','He','C','N','O','Ne','Mg','Si','S','Ca','Fe'] # TRACK_ELEMENT_MCS=2
+                # TRACK_ELEMENT_MCS=3
+                self.metals = ['H','He','C','N','O','F','Ne','Na','Mg','Al','Si','P','S','Cl',
+                               'Ar','K','Ca','Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn','other']
+                # todo: double-check order
+                # note: 'ElementFraction' is larger in shape[0] by 2 for stars than for gas, since it includes H,He
+                # whereas for gas these values are in the separate Grackle fields. the above is for stars.
+                self.winds = 4 # MCST fiducial
+                self.BHs   = 4 # MCST fiducial
 
             # paths
-            dirStr = 'L%dn%dTNG_h%d_z3_L%d_%s' % (int(self.boxSize/1000.0),parentRes,self.hInd,self.zoomLevel,self.variant)
+            dirStr = 'L%dn%dTNG_h%d_L%d_%s' % (int(self.boxSize/1000.0),parentRes,self.hInd,self.zoomLevel,self.variant)
             icsStr = 'ics_zoom_%s_halo%d_L%d_sf6.0.hdf5' % (self.sP_parent.simName,self.hInd,self.zoomLevel)
 
             self.icsPath    = self.basePath + 'sims.structures/ICs/output/' + icsStr
@@ -1251,6 +1254,7 @@ class simParams:
         # if data.files/ doesn't exist but postprocessing does (e.g. dev runs), use postprocessing/ for all
         if not path.isdir(self.derivPath):
             self.derivPath = self.postPath
+            self.cachePath = self.postPath + 'cache/'
         else:
             # if cache/ doesn't exist, make it
             if not path.isdir(self.cachePath):
