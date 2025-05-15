@@ -15,7 +15,7 @@ from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_fi
                              lines, instruments, projAxis_def, nRaysPerDim_def, raysType_def
 from ..cosmo.spectrum_analysis import absorber_catalog, load_spectra_subset
 from ..util.helper import sampleColorTable, logZeroNaN
-from ..util import units
+from ..util.units import units
 from ..plot.config import *
 
 def _cog(lines, N, b, nPts=401):
@@ -417,15 +417,19 @@ def instrument_lsf(instrument):
             lsf_kernel = lsf[ind,:]
 
             label = r'$\rm{\lambda = %.1f \AA}$' % wave_mid[ind]
-            ax.plot(xx, lsf_kernel, 'o-', label=label)
+
+            if xx.size < 100:
+                ax.plot(xx, lsf_kernel, 'o-', label=label)
+            else:
+                ax.plot(xx, lsf_kernel, lw=lw, label=label)
         
-        ax.plot([xx[cen_i],xx[cen_i]], [0, ax.get_ylim()[1]], '--', color='#ccc')
+        ax.plot([xx[cen_i],xx[cen_i]], [0, ax.get_ylim()[1]], '--', lw=lw, color='#ccc')
 
     # bottom panel: FWHM vs wave
     axes[-1].set_xlabel(r'Wavelength [ $\rm{\AA}$ ]')
     axes[-1].set_ylabel(r'FWHM [ $\rm{\AA}$ ]')
         
-    axes[-1].plot(wave_mid, lsf_fwhm)
+    axes[-1].plot(wave_mid, lsf_fwhm, lw=lw)
 
     # finish plot
     axes[0].legend(loc='upper right')
@@ -674,9 +678,9 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', nRaysPerDim=
         print(f'Increaing {dv_window = } to {xlim[1]} km/s to cover requested xlim.')
         dv_window = xlim[1]
 
-    wave, flux, EW, N, lineNames = load_spectra_subset(sim, ion, instrument, solar, mode, 
+    wave, flux, EW, _, lineNames = load_spectra_subset(sim, ion, instrument, solar, mode, 
                                                        nRaysPerDim=nRaysPerDim, raysType=raysType,
-                                                       num=num, EW_minmax=EW_minmax, dv=dv_window if dv else 0.0)
+                                                       num=num, inds=inds, EW_minmax=EW_minmax, dv=dv_window if dv else 0.0)
 
     # how many lines do we have? what is their span in wavelength?
     lines_wavemin = 0
@@ -728,6 +732,8 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', nRaysPerDim=
     title = r'%s ($\rm{z \simeq %.1f}$) %s' % (ion,sim.redshift,instrument)
     xlabel = r'$\Delta v$ [ km/s ]' if dv else 'Wavelength [ Ang ]'
     ylabel = 'Relative Flux'
+
+    if num is None and inds is not None: num = len(inds)
 
     if style == 'offset':
         # plot - single panel, with spectra vertically offset
@@ -893,7 +899,7 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
         xlim = [0, 8] # ang
         if log: xlim = [-1.0, 1.4] # log[ang]
         
-    nBins = 80
+    nBins = 40
 
     # load: loop over requested redshifts
     EWs = {}
@@ -995,7 +1001,7 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
     fig.savefig('EW_histogram_%s_%s%s_%s.pdf' % (sim.simName,line.replace(' ','-'),'_log' if log else '',instrument))
     plt.close(fig)
 
-def EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS', 
+def EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS', bvals = [5, 10, 25, 50, 100, 150],
                     xlim=[12.5,16.0], ylim=[-1.7,0.5], solar=False, log=False):
     """ Plot the relationship between EW and column density, and compare to the CoG.
 
@@ -1003,6 +1009,7 @@ def EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS',
       sim (:py:class:`~util.simParams`): simulation instance.
       line (str): string specifying the line transition.
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      bvals (list[float]): set of Doppler values to calculate and overplot CoG for.
       xlim (list[float]): min and max column density [log 1/cm^2].
       ylim (list[float]): min and max equivalent width [log Ang].
       solar (bool): use the (constant) solar value instead of simulation-tracked metal abundances.
@@ -1037,7 +1044,7 @@ def EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS',
     coldens = coldens[w]
 
     # start plot
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=[figsize[0]*0.8, figsize[1]*0.8])
     ax = fig.add_subplot(111)
 
     ax.set_xlim(xlim)
@@ -1060,7 +1067,7 @@ def EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS',
 
     # overplot curve of growth
     Nvals = np.linspace(xlim[0], xlim[1], 100)
-    bvals = [5, 10, 25, 50, 100, 150] # km/s
+    
 
     for b in bvals:
         EWs = np.zeros(Nvals.size, dtype='float32')
@@ -1096,7 +1103,7 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
     EW_thresholds = z13['EW0'] # match to obs data
 
     xlim = [0.0, np.max(redshifts)+1]
-    ylim = [8e-4, 4.0]
+    ylim = [2e-4, 4.0]
 
     # load: loop over all available redshifts
     zz = []
@@ -1181,7 +1188,7 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
     ax.set_yscale('log')
 
     for EW_thresh in EW_thresholds:
-        ax.plot(zz, dNdX[EW_thresh], '-', label=r'EW > %.1f$\,\rm{\AA}$' % EW_thresh)
+        ax.plot(zz, dNdX[EW_thresh], '-', lw=lw, label=r'EW > %.1f$\,\rm{\AA}$' % EW_thresh)
 
     # observational data
     if line == 'MgII 2796':

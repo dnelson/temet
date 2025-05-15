@@ -13,7 +13,7 @@ from ..cosmo.spectrum import generate_rays_voronoi_fullbox, integrate_along_save
 from ..plot.config import *
 
 def load_spectra_subset(sim, ion, instrument, solar, mode, nRaysPerDim=nRaysPerDim_def, 
-                        raysType=raysType_def, num=None, EW_minmax=None, dv=0.0):
+                        raysType=raysType_def, num=None, inds=None, EW_minmax=None, dv=0.0, coldens=False):
     """ Load a subset of spectra from a given simulation and ion.
 
     Args:
@@ -22,15 +22,16 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, nRaysPerDim=nRaysPerD
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
       solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
         use the (constant) solar value.
-      num (int): how many individual spectra to show.
       mode (str): either 'all', 'random', 'evenly', or 'inds'.
       nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
       raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or 
         'sample_localized' (distributed around a given set of subhalos).
+      num (int): how many individual spectra to show.
       inds (list[int]): if mode is 'inds', then the list of specific spectra indices to plot. num is ignored.
       EW_minmax (list[float]): minimum and maximum EW to plot [Ang].
       dv (float): if not zero, then take as a velocity window (+/-), convert 
         the wavelength axis to velocity, and subset spectra to only this vel range.
+      coldens(bool): if True, also load/compute total column densities for this ion along each ray.
     """
     assert mode in ['all','random','evenly','inds']
     if mode in ['random','evenly']:
@@ -54,10 +55,10 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, nRaysPerDim=nRaysPerD
     # select
     if EW_minmax is not None:
         inds_all = np.where( (EW>EW_minmax[0]) & (EW<=EW_minmax[1]) )[0]
-        print(f'[{ion}] Found [{len(inds_all)}] of [{EW.size}] spectra in EW range [{EW_minmax[0]}-{EW_minmax[1]}] Ang.')
+        print(f'[{ion}] [{instrument}] Found [{len(inds_all)}] of [{EW.size}] spectra in EW range [{EW_minmax[0]}-{EW_minmax[1]}] Ang.')
     else:
         inds_all = np.arange(EW.size)
-        print(f'[{ion}] Loaded [{len(inds_all)}] spectra, no EW range window.')
+        print(f'[{ion}] [{instrument}] Loaded [{len(inds_all)}] spectra, no EW range window.')
 
     rng = np.random.default_rng(4242+inds_all[0]+inds_all[-1])
 
@@ -98,19 +99,24 @@ def load_spectra_subset(sim, ion, instrument, solar, mode, nRaysPerDim=nRaysPerD
             flux = f['flux'][()][inds]
 
     EW = EW[inds]
-    
-    # load column densities (per spectrum)
-    field = ion + ' numdens'
-    N = integrate_along_saved_rays(sim, field, nRaysPerDim=nRaysPerDim, raysType=raysType) # linear cm^-2
-    N = N[inds]
-    N = logZeroMin(N) # log cm^-2
+
+    # load column densities (per spectrum) (for information only)
+    N = None
+
+    if coldens:
+        field = ion + ' numdens'
+        print('TODO: if not already computed, need to do pSplit, since the ray files are always split.')
+        N = integrate_along_saved_rays(sim, field, nRaysPerDim=nRaysPerDim, raysType=raysType) # linear cm^-2
+        N = N[inds]
+        N = logZeroMin(N) # log cm^-2
 
     # re-sort
     if mode == 'evenly':
         sort_inds = np.argsort(EW)
         flux = flux[sort_inds]
         EW = EW[sort_inds]
-        N = N[sort_inds]
+        if N is not None:
+            N = N[sort_inds]
         
     # x-axis in velocity space? keep global spectra, shift wave axis
     if 0 and dv:

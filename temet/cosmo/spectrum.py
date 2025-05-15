@@ -1091,6 +1091,10 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
     if pSplit is not None:
         path = sP.derivPath + 'rays/%s%s_n%dd%d_%03d-split-%d-%d.hdf5' % \
                (raysType,iqStr,nRaysPerDim,projAxis,sP.snap,pSplit[0],pSplit[1])
+    
+    if pSplit is None and not isfile(path):
+        print(f'Did not find: [{path}], likely expecting it to already exist.')
+        assert 0
 
     # total requested pathlength (equal to box length)
     total_dl = sP.boxSize
@@ -1143,7 +1147,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
         return
 
     pSplitStr = ' (split %d of %d)' % (pSplit[0],pSplit[1]) if pSplit is not None else ''
-    print('Compute and save: [%s z=%.1f] [%s]%s' % (sP.simName,sP.redshift,raysType,pSplitStr))
+    print('Compute and save rays: [%s z=%.1f] [%s]%s' % (sP.simName,sP.redshift,raysType,pSplitStr))
     print('Total number of rays: %d x %d = %d' % (nRaysPerDim,nRaysPerDim,nRaysPerDim**2))
 
     # spatial decomposition
@@ -1475,6 +1479,14 @@ def integrate_along_saved_rays(sP, field, nRaysPerDim=nRaysPerDim_def, raysType=
         with h5py.File(saveFilename,'r') as f:
             result = f['result'][()]
         return result
+
+    # calculating, but no pSplit? rays are only kept split, so loop over now
+    if pSplit is None:
+        print(f'Calculating [{saveFilename}] now...')
+        for i in range(16):
+            _ = integrate_along_saved_rays(sP, field, nRaysPerDim, raysType, subhaloIDs, pSplit=[i,16])
+        concat_integrals(sP, field, nRaysPerDim, raysType)
+        return integrate_along_saved_rays(sP, field, nRaysPerDim, raysType, subhaloIDs)
 
     # load rays
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \

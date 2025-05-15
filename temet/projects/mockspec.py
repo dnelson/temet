@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import glob
 from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import ScalarFormatter
+from matplotlib.patches import ConnectionPatch
 from os.path import isfile
 
 from ..cosmo.spectrum import _spectra_filepath, lines, instruments
@@ -259,7 +260,7 @@ def lightconeSpectra(sim, instrument, ion, solar=False, add_lines=None):
 
     return wave, flux
 
-def plotLightconeSpectrum(sim, instrument, ion, add_lines=None):
+def plotLightconeSpectrum(sim, instrument, ion, add_lines=None, SNR=None):
     """ Plot a single lightcone spectrum.
 
     Args:
@@ -267,7 +268,15 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None):
       instrument (str): specify observational instrument (from ..cosmo.spectrum.instruments).
       ion (str): space-separated name of ion e.g. 'Mg II'.
       add_lines (list[str] or None): if not None, then a list of lines to include. otherwise, include all for this ion.
+      SNR (float): if not None, then add noise to achieve this signal to noise ratio.
     """
+    # zoom panel specifications (could be made into arguments)
+    if ion == 'H I':
+        zooms = [[3200,3300], [5550,5600], [6840, 6900]]
+        zooms_y = [[0.02,1.0], [-0.01,0.4], [-0.01,0.70]]
+    if ion == 'C IV':
+        zooms = [[3400, 3450], [5430,5450], [7870, 7900]]
+        zooms_y = [[0.9,1.03], [-0.03,1.03], [0.58,1.03]]
 
     # generate, quick caching
     linesStr = '' if add_lines is None else ('_'+'-'.join(add_lines))
@@ -287,35 +296,32 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None):
             f['flux'] = flux
         print(f'Saved: [{cache_file}]')
 
+    # add noise? ("signal" is now 1.0)
+    if SNR is not None:
+        rng = np.random.default_rng(424242)
+        noise = rng.normal(loc=0.0, scale=1/SNR, size=flux.shape)
+        flux_noisefree = flux.copy()
+        flux += noise
+        # achieved SNR = 1/stddev(noise)
+        flux = np.clip(flux, 0, np.inf) # clip negative values at zero
+
     # plot
-    fig = plt.figure(figsize=(figsize[0]*2,figsize[1]*1.5))
+    fig = plt.figure(figsize=(figsize[0]*1.6,figsize[1]*1.2))
     #(ax_top, ax_top_zoom), (ax_bottom, ax_bottom_zoom) = fig.subplots(nrows=2, ncols=2)
-    gs = GridSpec(2, 2, width_ratios=[2,1])
-    ax_top, ax_top_zoom, ax_bottom, ax_bottom_zoom = [plt.subplot(spec) for spec in gs]
+    gs = GridSpec(2, len(zooms))
+    ax_top = fig.add_subplot(gs[0,:])
+    ax_zooms = [fig.add_subplot(gs[1,i]) for i in range(len(zooms))]
+
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
     # top panel: strong absorbers, down to saturation
-    ax_top.set_ylim([-0.05,1.05])
+    ax_top.set_ylim([-0.03,1.05])
     ax_top.set_xlim([wave.min(),wave.max()])
     ax_top.set_xlabel('Wavelength [ Ang ]')
-    ax_top.set_ylabel('Continuum Normalized Flux')
+    ax_top.set_ylabel('Normalized Flux')
 
-    ax_top.step(wave, flux, '-', where='mid', lw=lw, label='%s %s' % (instrument,ion))
+    ax_top.step(wave, flux, '-', where='mid', lw=1, c='black', label='%s %s' % (instrument,ion))
     ax_top.legend(loc='best')
-
-    # top zoom panel (detail)
-    ax_top_zoom.set_ylim([-0.05,1.05])
-    ax_top_zoom.set_xlim([5550,5600])
-    ax_top_zoom.set_xlabel('Wavelength [ Ang ]')
-
-    ax_top_zoom.step(wave, flux, '-', where='mid', lw=lw)
-
-    # bottom panel: weak absorbers, 1% from the continuum
-    ax_bottom.set_ylim([0.95,1.001])
-    ax_bottom.set_xlim([wave.min(),wave.max()])
-    ax_bottom.set_xlabel('Wavelength [ Ang ]')
-    ax_bottom.set_ylabel('Continuum Normalized Flux')
-
-    ax_bottom.step(wave, flux, '-', where='mid', lw=lw)
 
     # debugging: (we have some small wavelength regions which are covered by no volume, due to 
     # requirement of sampling integer numbers of boxes -- not important for rare absorption, but
@@ -323,17 +329,44 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None):
     if 0:
         for z in [4.897,4.795,4.696,4.600,4.506]:
             z_obs = lines['LyA']['wave0'] * (1+z)
-            ax_bottom.plot([z_obs,z_obs], ax_bottom.get_ylim(), '-', color='black')
+            ax_top.plot([z_obs,z_obs], ax_top.get_ylim(), '-', color='black')
         for z in [4.420,4.340,4.262,4.186,4.112,4.039,3.968,3.898,3.829,3.762,3.697,3.632,3.569,3.507]:
             z_obs = lines['LyA']['wave0'] * (1+z)
-            ax_bottom.plot([z_obs,z_obs], ax_bottom.get_ylim(), '-', color='green')
+            ax_top.plot([z_obs,z_obs], ax_top.get_ylim(), '-', color='green')
 
-    # bottom zoom panel (detail)
-    ax_bottom_zoom.set_ylim([-0.01,0.20])
-    ax_bottom_zoom.set_xlim([6000,6100])
-    ax_bottom_zoom.set_xlabel('Wavelength [ Ang ]')
+    # helper function for lower zoom detail(s)
+    def _add_connecting_lines(ax):
+        xlim = ax.get_xlim()
+        ylim_top = ax_top.get_ylim()
+        c1 = ConnectionPatch(xyA=[xlim[0],ax.get_ylim()[1]], xyB=[xlim[0],ax_top.get_ylim()[0]], 
+                            coordsA="data", coordsB="data", axesA=ax, axesB=ax_top, 
+                            color='black', lw=1, alpha=0.3, arrowstyle="-")
+        c2 = ConnectionPatch(xyA=[xlim[1],ax.get_ylim()[1]], xyB=[xlim[1],ax_top.get_ylim()[0]], 
+                            coordsA="data", coordsB="data", axesA=ax, axesB=ax_top, 
+                            color='black', lw=1, alpha=0.3, arrowstyle="-")
+        ax_top.add_artist(c1)
+        ax_top.add_artist(c2)
 
-    ax_bottom_zoom.step(wave, flux, '-', where='mid', lw=lw)
+        ax_top.fill_between(xlim, [ylim_top[0],ylim_top[0]], [ylim_top[1],ylim_top[1]], color='black', alpha=0.1)
+        ax_top.plot([xlim[0],xlim[0]], ylim_top, color='black', alpha=0.3, lw=1)
+        ax_top.plot([xlim[1],xlim[1]], ylim_top, color='black', alpha=0.3, lw=1)
+
+        w = np.where((wave > xlim[0]) & (wave <= xlim[1]))
+        ax_top.step(wave[w], flux[w], '-', where='mid', lw=1, c=ax.get_lines()[0].get_color())
+
+    # plot lower zoom detail(s)
+    for i in range(len(zooms)):
+        ax_zooms[i].set_ylim(zooms_y[i])
+        ax_zooms[i].set_xlim(zooms[i])
+        ax_zooms[i].set_xlabel('Wavelength [ Ang ]')
+        ax_zooms[i].set_ylabel('Normalized Flux')
+
+        ax_zooms[i].step(wave, flux, '-', where='mid', c=colors[i], lw=lw)
+
+        #if SNR is not None and i == 0: # custom
+        #    ax_zooms[i].step(wave, flux_noisefree, '-', where='mid', c=colors[len(zooms)+i], lw=lw)
+
+        _add_connecting_lines(ax_zooms[i])
 
     # finish
     fig.savefig('spectrum_lightcone_%s_%s_%s%s.pdf' % (sim.simName,ion.replace(' ',''),instrument,linesStr))
@@ -527,7 +560,7 @@ def ion_redshift_coverage(sim, all=True, lowz=False):
 
 def paperPlots():
     from ..util.simParams import simParams
-    
+
     # pre-computed sightlines and spectra:
     # {1M-uni} 4MOST-HRS    SDSS-BOSS    KECK-HIRES     UVES      COS          DESI          XSHOOTER (something NIR/high-z)
     #          ---------    ---------    ----------     ----      ---          ----          --------
@@ -548,11 +581,17 @@ def paperPlots():
 
     # fig 1: visual overview: full box TNG50 of N_ion, halo zoom, draw sightline going through
     if 0:
-        sP = simParams('tng50-1', redshift=0.7) # OVI at z=0.2 or NeVIII at z=0.7
-        vis_overview(sP, haloID=None) # full box
-        #for haloID in [200,300,400,500,600]:
-        #    vis_overview(sP, haloID=haloID) # random
-        # todo: single spectrum vis
+        sim = simParams('tng50-1', redshift=0.7) # OVI at z=0.2 or NeVIII at z=0.7
+        vis_overview(sim, haloID=None) # full box
+        vis_overview(sim, haloID=300) # randomly selected, nice outflow features
+
+        # single spectrum vis
+        opts = {'num':None, 'mode':'inds', 'dv':True, 'xlim':[-900,900]}
+        sim.setRedshift(2.0)
+        spectra_gallery_indiv(sim, inds=[739610], ion='C IV', SNR=20, instrument='KECK-HIRES-B14', **opts)
+
+        sim.setRedshift(0.7)
+        spectra_gallery_indiv(sim, inds=[905323], ion='Ne VIII', SNR=20, instrument='COS-G130M', **opts)
 
     # fig 2: redshift coverage for transitions/instruments/configurations (given a sim)
     if 0:
@@ -576,28 +615,24 @@ def paperPlots():
         opts = {'ion':'Mg II', 'instrument':inst, 'num':10, 'solar':False, 'SNR':20}
 
         spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='evenly', **opts)
-        spectra_gallery_indiv(sim, EW_minmax=[0.01, 0.4], mode='evenly', **opts)
         spectra_gallery_indiv(sim, EW_minmax=[3.0, 6.0], mode='random', **opts)
 
     if 0:
         # C IV
         sim = simParams(run='tng50-1', redshift=2.0)
-        inst = 'SDSS-BOSS' #'KECK-HIRES-B14'
-        opts = {'ion':'C IV', 'instrument':inst, 'num':10, 'SNR':50, 'dv':True, 'xlim':[-900,900]} # 'auto'
+        opts = {'ion':'C IV', 'num':10, 'SNR':50, 'dv':True, 'xlim':[-900,900]} # 'auto'
 
-        spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='evenly', **opts)
-        spectra_gallery_indiv(sim, EW_minmax=[0.01, 0.4], mode='evenly', **opts)
-        spectra_gallery_indiv(sim, EW_minmax=[3.0, 6.0], mode='random', **opts)
+        for inst in ['SDSS-BOSS','KECK-HIRES-B14']:
+            spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='evenly', instrument=inst, **opts)
+            spectra_gallery_indiv(sim, EW_minmax=[3.0, 6.0], mode='random', instrument=inst, **opts)
 
     if 0:
-        # Fe II
-        sim = simParams(run='tng50-1', redshift=2.0)
-        inst = '4MOST-HRS'
-        opts = {'ion':'Fe II', 'instrument':inst, 'num':10, 'SNR':None}
+        # Ne VIII
+        sim = simParams(run='tng50-1', redshift=0.7)
+        opts = {'ion':'Ne VIII', 'instrument':'COS-G130M', 'num':10, 'dv':True, 'xlim':[-900,900], 'SNR':15}
 
-        spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='evenly', **opts)
-        spectra_gallery_indiv(sim, EW_minmax=[0.01, 0.4], mode='evenly', **opts)
-        spectra_gallery_indiv(sim, EW_minmax=[3.0, 6.0], mode='random', **opts)
+        spectra_gallery_indiv(sim, EW_minmax=[0.1, 3.0], mode='evenly', **opts)
+        spectra_gallery_indiv(sim, EW_minmax=[2.0, 3.5], mode='random', **opts)
 
     # fig 5: 2d spectra visualization
     if 0:
@@ -608,23 +643,26 @@ def paperPlots():
 
         spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='all', style='2d', **opts)
 
-    # fig 6: EW vs coldens vs CoG
+    # fig 6: EW vs coldens vs CoG (CIV)
     if 0:
         sim = simParams('tng50-1', redshift=2.0)
+        EW_vs_coldens(sim, line='MgII 2796', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,1.0], xlim=[12.0,19.0])
+        EW_vs_coldens(sim, line='HI 1215', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,1.0], xlim=[12.0,19.0])
         EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS')
 
-    # fig ?: MgII EW distribution functions vs. data
+    # fig 7: MgII EW distribution functions (dN/DW) and absorber incidence vs redshift (dN/dz) vs. data
     if 0:
         sim = simParams(run='tng50-1')
         line = 'MgII 2796'
-        inst = '4MOST-HRS' # 'KECK-HIRES-B14'
-        redshifts = [0.5, 0.7, 1.0]
+        inst = 'KECK-HIRES-B14'
+        redshifts = [0.1, 0.3, 0.5, 1.0, 2.0]
         indivEWs = False
         opts = {'xlim':[0,8], 'solar':False, 'log':False}
 
         EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, indivEWs=False, **opts)
+        dNdz_evolution(sim, line=line, instrument=inst, redshifts=redshifts, solar=opts['solar'])
 
-    # fig ?: CIV EW distribution
+    # fig 7: CIV EW distributions (dN/DW) and absorber incidence vs redshift (dN/dz) vs. data
     if 0:
         sim = simParams(run='tng50-1')
         line = 'CIV 1548'
@@ -634,40 +672,23 @@ def paperPlots():
         opts = {'xlim':[0,3], 'solar':False, 'log':False}
 
         EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, indivEWs=indivEWs, **opts)
+        dNdz_evolution(sim, line=line, instrument=inst, redshifts=redshifts, solar=opts['solar'])
 
-    # fig ?: dN/dz (absorber incidence s a function of redshift) vs. data
-    if 0:
-        sim = simParams(run='tng50-1')
-        line = 'MgII 2796'
-        inst = 'SDSS-BOSS'
-        solar = False
-
-        dNdz_evolution(sim, redshifts=redshifts, line=line, instrument=inst, solar=solar)
-
-    # fig X: 2D optical depth map
+    # fig 8: 2D optical depth map
     if 0:
         pass # e.g. usual Steidel+/KBSS style (https://arxiv.org/abs/2503.20037)
 
-    # fig X: instrumental LSFs
-    if 0:
-        inst = 'COS-G130M' #'4MOST-HRS' #'SDSS-BOSS'
-        instrument_lsf(inst)
-
-    # fig X: example of a cosmological-distance (i.e. lightcone) spectrum
-    if 0:
+    # fig 9: example of a cosmological-distance (i.e. lightcone) spectrum
+    if 1:
         sim = simParams(run='tng50-1')
 
-        plotLightconeSpectrum(sim, instrument='SDSS-BOSS', ion='Fe II')
-        #plotLightconeSpectrum(sim, instrument='KECK-HIRES', ion='H I')
-        #plotLightconeSpectrum(sim, instrument='KECK-HIRES', ion='H I')
+        plotLightconeSpectrum(sim, instrument='KECK-HIRES-B14', ion='H I')
+        plotLightconeSpectrum(sim, instrument='KECK-HIRES-B14', ion='C IV', SNR=100)
 
-    # fig X: Lyman-alpha forest sightlines (testing)
+    # fig A: instrumental LSFs
     if 0:
-        sim = simParams(run='tng50-1', redshift=5.0)
-        inst = 'KECK-HIRES'
-        num = 10
-
-        spectra_gallery_indiv(sim, ion='H I', instrument=inst, EW_minmax=None, num=num, mode='random', xlim='full', SNR=None)
+        for inst in ['COS-G130M','4MOST-HRS','SDSS-BOSS']:
+            instrument_lsf(inst)
 
     # table: transitions
     if 0:
@@ -679,20 +700,6 @@ def paperPlots():
                 if info['ion'] == ion:
                     s += line.split(' ')[1] + ", "
             print(s[:-2] + r" \\")
-
-    if 0:
-        # O VI sample_localized test (sanch)
-        sim = simParams(run='tng50-1', redshift=0.1)
-        #sim = simParams(run='simba', redshift=0.138)
-        inst = 'COS-G130M' #'COS-G130M-noLSF'
-        nRaysPerDim = 300
-        raysType = 'sample_localized'
-        opts = {'ion':'O VI', 'instrument':inst, 'num':10, 'SNR':None, 'nRaysPerDim':nRaysPerDim, 'raysType':raysType}
-        opts['dv'] = True; opts['xlim'] = [-500,500]
-
-        spectra_gallery_indiv(sim, EW_minmax=[0.1, 1.5], mode='evenly', **opts)
-        spectra_gallery_indiv(sim, EW_minmax=[0.01, 0.4], mode='evenly', **opts)
-        spectra_gallery_indiv(sim, EW_minmax=[2.0, 6.0], mode='random', **opts)
 
 if __name__ == "__main__":
     paperPlots()
