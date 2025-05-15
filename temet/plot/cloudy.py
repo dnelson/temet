@@ -11,6 +11,7 @@ from datetime import datetime
 from ..util.helper import contourf, evenlySample, sampleColorTable, closest, logZeroNaN, loadColorTable, rootPath
 from ..cosmo.cloudyGrid import loadUVB
 from ..cosmo.cloudy import cloudyIon
+from ..cosmo.hydrogen import photoCrossSecGray, photoRate, uvbEnergyDensity
 from ..plot.config import *
 
 def plotUVB(uvb='FG11'):
@@ -554,8 +555,6 @@ def grackleTable():
 
     pdf.close()
 
-    import pdb; pdb.set_trace()
-
 def gracklePhotoCrossSec(uvb='FG11'):
     """ Plot the photo-ionization cross sections from Grackle. Compare to new derivation. """
     filepath = '/u/dnelson/sims.structures/grackle/grackle_data_files/input/'
@@ -573,9 +572,6 @@ def gracklePhotoCrossSec(uvb='FG11'):
             hi_avg_crs = np.log10(f['UVBRates/CrossSections/hi_avg_crs'][()])
 
     # compute new cross-sections
-    from ..cosmo.hydrogen import photoCrossSecGray
-    from ..cosmo.cloudyGrid import loadUVB
-
     uvbs = loadUVB(uvb)
 
     z_new = np.array([u['redshift'] for u in uvbs])
@@ -624,7 +620,7 @@ def grackleReactionRates():
     filepath = '/u/dnelson/sims.structures/grackle/grackle_data_files/input/'
     
     filenames = ['CloudyData_UVB=FG2011_shielded.h5', # FG11 orig
-                 'grid_cooling_UVB=FG11.hdf5', # FG2011 my new version
+                 'grid_cooling_UVB=FG11_withH2.hdf5', # FG2011 my new version
                  'CloudyData_UVB=HM2012_shielded.h5', # HM12 orig
                  'grid_cooling_UVB=FG20.hdf5'] # FG20 my new version
 
@@ -634,48 +630,139 @@ def grackleReactionRates():
     for filename in filenames:
         with h5py.File(filepath + filename,'r') as f:
             z = f['UVBRates']['z'][()]
-            k24 = np.log10(f['UVBRates/Chemistry/k24'][()])
-            k25 = np.log10(f['UVBRates/Chemistry/k25'][()])
-            k26 = np.log10(f['UVBRates/Chemistry/k26'][()])
+            k = {}
+            for knum in [24,25,26,27,28,29,30,31]:
+                key = f'UVBRates/Chemistry/k{knum}'
+                if key not in f:
+                    continue
+                k[knum] = np.log10(f[key][()])
 
         uvb = filename.split('UVB=')[1].split('_')[0].split('.')[0]
-        data[uvb] = z, k24, k25, k26
-        print(uvb)
 
-        if uvb == 'FG20': k25[k25 == -40.0] = -26.0 # just for plotting (enlarges y-range too much)
-        if uvb == 'FG11': k24 += 0.1 # just for plotting (exactly on top of FG2011)
-        if uvb == 'FG11': k26 += 0.1 # just for plotting (exactly on top of FG2011)
+        if uvb == 'FG20': k[25][k[25] == -40.0] = -26.0 # just for plotting (enlarges y-range too much)
+        if uvb == 'FG11': k[24] += 0.1 # just for plotting (exactly on top of FG2011)
+        if uvb == 'FG11': k[26] += 0.1 # just for plotting (exactly on top of FG2011)
 
-    # plot
+        # compute new photoreaction rates
+        uvbs = loadUVB(uvb.replace('2012','12').replace('2011','11'))
+
+        z_local = np.array([u['redshift'] for u in uvbs])
+        k24_local = np.zeros(z_local.size, dtype='float32')
+        k27_local = np.zeros(z_local.size, dtype='float32')
+        k28_local = np.zeros(z_local.size, dtype='float32')
+        k29_local = np.zeros(z_local.size, dtype='float32')
+        k30_local = np.zeros(z_local.size, dtype='float32')
+        k31_local = np.zeros(z_local.size, dtype='float32')
+
+        for i, u in enumerate(uvbs):
+            J_loc = 10.0**u['J_nu'].astype('float64') # linear
+            
+            k24_local[i] = photoRate(u['freqRyd'], J_loc, ion='H I') # [1/s]
+            k27_local[i] = photoRate(u['freqRyd'], J_loc, ion='k27')
+            k28_local[i] = photoRate(u['freqRyd'], J_loc, ion='k28b')
+            k29_local[i] = photoRate(u['freqRyd'], J_loc, ion='k29')
+            k30_local[i] = photoRate(u['freqRyd'], J_loc, ion='k30')
+            k31_local[i] = photoRate(u['freqRyd'], J_loc, ion='k31')
+        
+        k['k24_custom'] = k24_local
+        k['k27_custom'] = k27_local
+        k['k28_custom'] = k28_local
+        k['k29_custom'] = k29_local
+        k['k30_custom'] = k30_local
+        k['k31_custom'] = k31_local
+
+        # hack: fix that original grackle fg11 tables miss very last redshift bin
+        if uvb == 'FG2011':
+            for key in k:
+                if '_custom' in str(key):
+                    k[key] = k[key][:-1]
+
+        data[uvb] = z, k
+        print(uvb, k.keys())
+
+        # add directly to (production) grackle table
+        if 0 and uvb in ['FG11','FG20']:
+            print('Careful.', uvb)
+
+            with h5py.File(f'/vera/ptmp/gc/MCST/arepo5_setups/grid_cooling_UVB={uvb}.hdf5','r+') as f:
+                assert f['UVBRates/z'].size == z_local.size
+                assert np.array_equal(f['UVBRates/z'][()], z_local)
+                f['UVBRates/Chemistry/k27'] = k27_local
+                f['UVBRates/Chemistry/k28'] = k28_local
+                f['UVBRates/Chemistry/k29'] = k29_local
+                f['UVBRates/Chemistry/k30'] = k30_local
+                f['UVBRates/Chemistry/k31'] = k31_local
+
+    # plot k24-26 (primordial_chemistry <= 1)
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
     ax.set_xlabel('Redshift')
     ax.set_ylabel('Photoionization i.e. Reaction Rate [$s^{-1}$]')
     ax.set_xlim([-0.5,11.0])
-    #ax.set_ylim([-18.0,-17.1])
+    #ax.set_ylim([-15.0,-11.6])
 
-    # k24
     for i, uvb in enumerate(data.keys()):
-        z, k24, k25, k26 = data[uvb]
+        z, k = data[uvb]
+
+        if 'k24_custom' in k:
+            ax.plot(z, k['k24_custom'], ls=linestyles[i], lw=lw, color='black', label='k24_custom (%s)' % uvb)
+
         if i == 0:
-            l24, = ax.plot(z, k24, lw=lw, label='k24 (%s)' % uvb)
-            l25, = ax.plot(z, k25, lw=lw, label='k25 (%s)' % uvb)
-            l26, = ax.plot(z, k26, lw=lw, label='k26 (%s)' % uvb)
+            l24, = ax.plot(z, k[24], lw=lw, label='k24 (%s)' % uvb)
+            l25, = ax.plot(z, k[25], lw=lw, label='k25 (%s)' % uvb)
+            l26, = ax.plot(z, k[26], lw=lw, label='k26 (%s)' % uvb)
         else:
-            ax.plot(z, k24, ls=linestyles[i], lw=lw, color=l24.get_color(), label='k24 (%s)' % uvb)
-            ax.plot(z, k25, ls=linestyles[i], lw=lw, color=l25.get_color(), label='k25 (%s)' % uvb)
-            ax.plot(z, k26, ls=linestyles[i], lw=lw, color=l26.get_color(), label='k26 (%s)' % uvb)
+            ax.plot(z, k[24], ls=linestyles[i], lw=lw, color=l24.get_color(), label='k24 (%s)' % uvb)
+            ax.plot(z, k[25], ls=linestyles[i], lw=lw, color=l25.get_color(), label='k25 (%s)' % uvb)
+            ax.plot(z, k[26], ls=linestyles[i], lw=lw, color=l26.get_color(), label='k26 (%s)' % uvb)
 
     ax.legend(loc='lower left')
 
-    fig.savefig('grackle_chemistryk.pdf')
+    fig.savefig('grackle_chemistryk24-26.pdf')
+    plt.close(fig)
+
+    # plot k27-31 (primordial_chemistry > 1)
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel('Photoionization i.e. Reaction Rate [$s^{-1}$]')
+    ax.set_xlim([-0.5,11.0])
+
+    for i, uvb in enumerate(data.keys()):
+        z, k = data[uvb]
+
+        if 'k27_custom' in k:
+            #ax.plot(z, np.log10(k['k27_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k27_custom (%s)' % uvb)
+            #ax.plot(z, np.log10(k['k28_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k28_custom (%s)' % uvb)
+            #ax.plot(z, np.log10(k['k29_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k29_custom (%s)' % uvb)
+            #ax.plot(z, np.log10(k['k30_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k30_custom (%s)' % uvb)
+            ax.plot(z, np.log10(k['k31_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k31_custom (%s)' % uvb)
+
+        if 27 not in k:
+            continue
+
+        if i == 0:
+            l27, = ax.plot(z, k[27], lw=lw, label='k27 (%s)' % uvb)
+            l28, = ax.plot(z, k[28], lw=lw, label='k28 (%s)' % uvb)
+            l29, = ax.plot(z, k[29], lw=lw, label='k29 (%s)' % uvb)
+            l30, = ax.plot(z, k[30], lw=lw, label='k30 (%s)' % uvb)
+            l31, = ax.plot(z, k[31], lw=lw, label='k31 (%s)' % uvb)
+        else:
+            ax.plot(z, k[27], ls=linestyles[i], lw=lw, color=l27.get_color(), label='k27 (%s)' % uvb)
+            ax.plot(z, k[28], ls=linestyles[i], lw=lw, color=l28.get_color(), label='k28 (%s)' % uvb)
+            ax.plot(z, k[29], ls=linestyles[i], lw=lw, color=l29.get_color(), label='k29 (%s)' % uvb)
+            ax.plot(z, k[30], ls=linestyles[i], lw=lw, color=l30.get_color(), label='k30 (%s)' % uvb)
+            ax.plot(z, k[31], ls=linestyles[i], lw=lw, color=l31.get_color(), label='k31 (%s)' % uvb)
+
+    ax.legend(loc='lower left')
+
+    fig.savefig('grackle_chemistryk27-31.pdf')
     plt.close(fig)
 
 def uvbEnergyDens():
     """ Plot the UVB energy density as a function of redshift, integrating  """
-    from ..cosmo.hydrogen import uvbEnergyDensity
-    from ..cosmo.cloudyGrid import loadUVB
     from datetime import datetime
     from scipy.interpolate import interp1d
 

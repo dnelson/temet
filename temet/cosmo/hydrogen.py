@@ -3,6 +3,7 @@ Modeling of the UVB and hydrogen states following Rahmati. Credit to Simeon Bird
 Also full box or halo based analysis of hydrogen/metal content.
 """
 import numpy as np
+from ..util.helper import closest
 
 def photoCrossSec(freq, ion='H I'):
     """ Find photoionisation cross-section (for a given ion) in cm^2 as a function of frequency.
@@ -108,15 +109,23 @@ def photoCrossSecGray(freq, J_nu, ion):
     return sigma_gray
 
 def photoRate(freq, J_nu, ion):
-    """ Compute the photoionization rate of (H, HeI, HeII) given the UVB intensity.
+    """ Compute the photoionization rate of (H, HeI, HeII), or the photochemical rates of 
+     other relevant interactions, given the UVB intensity (spectrum).
+
     Args:
       freq (ndarray[float]): frequency i.e. energy [Rydberg].
-      J_nu (ndarray[float]): uvb intensity [linear erg/s/cm^2/Hz/sr].
+      J_nu (ndarray[float]): uvb intensity [linear 4*pi* erg/s/cm^2/Hz].
       ion (str): specify coefficients.
 
     Returns:
       float: rate [1/s].
     """
+    rydberg_in_hz = 3.28984e15
+    planck_erg_s = 6.626e-27
+    eV_in_erg    = 1.602e-12 # 1 eV in erg
+
+    freq_eV = freq * 13.6
+    freq_hz = freq / rydberg_in_hz
 
     # threshold and freq-dependent cross section
     if ion in ['H I', 'He I', 'He II']:
@@ -124,13 +133,49 @@ def photoRate(freq, J_nu, ion):
         if ion == 'He I': nu_thresh = 24.6
         if ion == 'He II': nu_thresh = 54.4
 
-        sigma = photoCrossSec(freq, ion=ion)
+        sigma = photoCrossSec(freq_eV, ion=ion)
 
-    if ion == 'k24':
-        # H_2 + gamma --> H_2^+ + e^- (see Abel+96 Table 4 Entry 24) [cm^2]
+    if ion in ['k24','k25','k26']:
+        # (see Abel+96 Table 4 Entry entries 24,25,26-4 = 20,21,22) [cm^2]
+        assert 0, 'Use HI, HeI, HeII above instead.'
+
+    if ion == 'k27':
+        # HM + p --> HI + e ("Photo-detachment of the H- ion")
+        # H^- + gamma -> H + e^- (see Abel+96 Table 4 entry 27-4=23) [cm^2]
+        # R51 (https://arxiv.org/pdf/0705.0182)
+        sigma = np.zeros(freq.size, dtype='float32')
+        nu_thresh = 0.755 # eV
+
+        ind1 = np.where(freq_eV >= nu_thresh)
+        sigma[ind1] = 2.11e-16 * (freq_eV[ind1] - nu_thresh)**(3/2) * freq_eV[ind1]**(-3)
+
+    if ion == 'k28':
+        # H2II + p --> HI + HII ("Photodissociation of H2+") (Abel+96 Table 4 Entry 25)
+        # H_2^+ + gamma -> H + H^+ (R52)
+        sigma = np.zeros(freq.size, dtype='float32')
+        nu_thresh = 0.0
+
+        lnnu = np.log(freq_hz) # not clear from Abel+96 
+        sigma[:] = -1.655e6 + 1.866e5 * lnnu - 7.899e3 * lnnu**2 + 148.74 * lnnu**3 - 1.051 * lnnu**4
+        sigma = 10.0**sigma # negatives -> inf
+        import pdb; pdb.set_trace()
+
+    if ion == 'k28b':
+        # as above, but Glover fits
+        sigma = np.zeros(freq.size, dtype='float32')
+        nu_thresh = 2.65
+        Eratio = freq_eV / nu_thresh
+
+        ind1 = np.where((freq_eV >= 2.65) & (freq_eV < 11.27))
+        ind2 = np.where((freq_eV >= 11.27) & (freq_eV < 21.0))
+        sigma[ind1] = 10.0**(-40.97 + 15.9795*Eratio[ind1] - 3.53934*Eratio[ind1]**2 + 0.25812*Eratio[ind1]**3)
+        sigma[ind2] = 10.0**(-30.26 + 7.3935*Eratio[ind2] - 1.29214*Eratio[ind2]**2 + 6.5785e-2 * Eratio[ind2]**3)
+
+    if ion == 'k29':
+        # H2II + p --> HI + HII (see Abel+96 Table 4 Entry 29-4=25) [cm^2]
+        # H_2 + gamma --> H_2^+ + e^- (R54 of Glover)
         sigma = np.zeros(freq.size, dtype='float32')
         nu_thresh = 15.42
-        freq_eV = freq * 13.6
 
         ind1 = np.where((freq_eV >= 15.42) & (freq_eV < 16.50))
         sigma[ind1] = 6.2e-18 * freq_eV[ind1] - 9.4e-17
@@ -139,18 +184,50 @@ def photoRate(freq, J_nu, ion):
         ind3 = np.where(freq_eV >= 17.7)
         sigma[ind3] = 2.5e-14 * freq_eV[ind3]**(-2.71)
 
-    # see Abel+96 Eqn. 7
-    # integral of (4*pi*sigma*J_nu / h / nu) dv from nu_thresh to +inf
-    freq_hz = freq * 3.28984e15
-    dfreq_hz = np.diff(freq_hz)
-    dfreq_hz = np.hstack((dfreq_hz,dfreq_hz[-1]))
+    if ion == 'k30':
+        # H2II + p --> 2HII + e ("Photodissociation of H2+") (Abel+96 Table 4 Entry 26)
+        # H_2^+ + gamma -> 2H^+ + e^- (not in Glover?)
+        sigma = np.zeros(freq.size, dtype='float32')
+        nu_thresh = 30.0
+        nu_max = 90.0
 
-    planck_erg_s = 6.626e-27
-    ind = np.where(freq >= nu_thresh)
+        ind1 = np.where((freq_eV >= nu_thresh) & (freq_eV < nu_max))
+        sigma[ind1] = -16.926 -4.528e-2 * freq_eV[ind1] + 2.238e-4 * freq_eV[ind1]**2 + 4.245e-7 * freq_eV[ind1]**3
+        sigma[ind1] = 10.0**sigma[ind1]
 
-    integrand = 4.0*np.pi*sigma[ind]*J_nu[ind] / (planck_erg_s*freq_hz[ind]) # [1/s^2]
+    if ion == 'k31':
+        # Molecular hydrogen constant photo-dissociation
+        # H2I + p --> 2HI ("Photodissociation of H2 by predissociation")
+        # R53 (see Eqn. 49 of Glover)
+        _, ind = closest(freq_eV, 12.87)
+        return 1.89e9 * J_nu[ind] / (4*np.pi)
 
-    rate = np.sum(integrand * dfreq_hz[ind]) # np.trapz(integrand, freq_hz[ind])
+    # integrate cross section across UVB spectrum
+    ind = np.where(freq_eV >= nu_thresh) # not needed, if sigma == 0 outside of relevant freq range(s)
+
+    if 1:
+        # see Abel+96 Eqn. 7
+        # integral of (4*pi*sigma*J_nu / h / nu) dv from nu_thresh to +inf
+        
+        dfreq_hz = np.diff(freq_hz)
+        dfreq_hz = np.hstack((dfreq_hz,0))
+
+        # [sr] * [cm^2] * [erg/s/cm^2/Hz] / [erg] --> integrand has [1/s/Hz]
+        integrand = sigma*J_nu / (planck_erg_s*freq_hz)
+
+        rate = np.sum(integrand[ind] * dfreq_hz[ind]) # np.trapz(integrand, freq_hz[ind]) # [1/s]
+
+    if 0:
+        # do integral in eV (see https://arxiv.org/pdf/0705.0182 Eqn. 42)
+        J_eV = J_nu / eV_in_erg # [erg/s/cm^2/Hz] -> [eV/s/cm^2/Hz]
+        J_eV *= dfreq_hz # [erg/s/cm^2]
+
+        dfreq_eV = np.diff(freq_eV)
+        dfreq_eV = np.hstack((dfreq_eV,0))
+        J_eV /= dfreq_eV # [erg/s/cm^2/eV]
+
+        integrand = sigma * J_eV / freq_eV # [1/s/eV]
+        rate2 = np.sum(integrand[ind] * freq_eV[ind]) # [1/s]
 
     return rate
 
@@ -192,12 +269,12 @@ def uvbPhotoionAtten(log_hDens, log_temp, redshift):
 
     At energies above 13.6eV the HI cross-section reduces like :math:`\\nu^{-3}`.
     Account for this by noting that self-shielding happens when tau=1, i.e 
-    :math:`\\tau = n*\sigma*L = 1`. Thus a lower cross-section requires higher densities.
+    :math:`\\tau = n*\\sigma*L = 1`. Thus a lower cross-section requires higher densities.
     Assume then that HI self-shielding is really a function of tau, and thus at a frequency :math:`\\nu`,
     the self-shielding factor can be computed by working out the optical depth for the
-    equivalent density at 13.6 eV. ie, for :math:`\Gamma(n, T)`, account for frequency dependence with:
+    equivalent density at 13.6 eV. ie, for :math:`\\Gamma(n, T)`, account for frequency dependence with:
 
-    :math:`\Gamma( n / (\sigma(13.6) / \sigma(\\nu) ), T)`.
+    :math:`\\Gamma( n / (\\sigma(13.6) / \\sigma(\\nu) ), T)`.
 
     So that a lower x-section leads to a lower effective density. Note Rydberg ~ 1/wavelength, 
     and 1 Rydberg is the energy of a photon at the Lyman limit, ie, with wavelength 911.8 Angstrom.

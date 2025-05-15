@@ -910,6 +910,7 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
     cs_HI = np.zeros(uvbs_z.size, dtype='float64')
     cs_HeI = np.zeros(uvbs_z.size, dtype='float64')
     cs_HeII = np.zeros(uvbs_z.size, dtype='float64')
+    k = {}
     
     for i, u in enumerate(uvbs):
         J_loc = 10.0**u['J_nu'].astype('float64') # linear
@@ -917,6 +918,9 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
         cs_HI[i] = hydrogen.photoCrossSecGray(u['freqRyd'], J_loc, ion='H I')
         cs_HeI[i] = hydrogen.photoCrossSecGray(u['freqRyd'], J_loc, ion='He I')
         cs_HeII[i] = hydrogen.photoCrossSecGray(u['freqRyd'], J_loc, ion='He II')
+
+        for knum in [27,28,29,30,31]:
+            k[knum] = hydrogen.photoRate(u['freqRyd'], J_loc, ion=f'k{knum}') # [1/s]
 
     # load UVB photoheating rates, interpolate to spectra redshifts
     uvb_rates = loadUVBRates(uvb=uvb.replace('_unshielded',''))
@@ -968,12 +972,22 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
         f['UVBRates/CrossSections/heii_avg_crs'] = cs_HeII
 
         # k24 (HI+p --> HII+e), k25 (HeIII+p --> HeII+e) (typo?), k26 (HeI+p --> HeII+e) rate coefficients [cgs?]
-        # note: k{N} are supposed to match to Abel+96, but they do not (offset by 3 - these are just Gamma_H,HeI,HeII)
+        # note: k{N} are supposed to match to Abel+96, but they do not (offset by 4 - these are just Gamma_H,HeI,HeII)
+        # see https://arxiv.org/pdf/astro-ph/9608040
+        #   @  k24 @     HI + p --> HII + e
+        #   @  k25 @     HeIII + p --> HeII + e
+        #   @  k26 @     HeI + p --> HeII + e
         f['UVBRates/Chemistry/k24'] = uvb_Gamma_HI
         f['UVBRates/Chemistry/k25'] = uvb_Gamma_HeII
         f['UVBRates/Chemistry/k26'] = uvb_Gamma_HeI
 
         # k27-31 values (needed only if primordial_chemistry > 1, i.e. if GRACKLE_D or GRACKLE_H2 defined)
-        # --- not needed for our purposes, but could be added if desired
-
+        #   @  k27 @     HM + p --> HI + e        ("Photo-detachment of the H- ion")
+        #   @  k28 @     H2II + p --> HI + HII    ("Photoionization of molecular hydrogen")
+        #   @  k29 @     H2I + p --> H2II + e     ("Photodissociation of H2+")
+        #   @  k30 @     H2II + p --> 2HII + e    ("Photodissociation of H2+")
+        #   @  k31 @     H2I + p --> 2HI          ("Photodissociation of H2 by predissociation")
+        for knum in k:
+            f['UVBRates/Chemistry/k{knum}'] = k[knum]
+            
     print('Done.')
