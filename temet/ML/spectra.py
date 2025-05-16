@@ -77,8 +77,8 @@ class MockSpectraDataset(Dataset):
                 wave, flux, EW, N, lineNames = load_absorber_spectra(self.sim, line, instrument, solar, EW_minmax, dv=dv_window)
             else:
                 # old: returns the single largest feature from each spectrum
-                wave, flux, EW, N, lineNames = load_spectra_subset(self.sim, ion, instrument, solar, mode, 
-                                                                   num, EW_minmax, dv=dv_window, coldens=True)
+                wave, flux, EW, N, lineNames = load_spectra_subset(self.sim, ion, instrument, mode, 
+                                                                   num=num, EW_minmax=EW_minmax, solar=solar, dv=dv_window, coldens=True)
 
             self.lineNames = ','.join([line.split('_')[1] for line in lineNames])
 

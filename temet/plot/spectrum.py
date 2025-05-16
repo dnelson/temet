@@ -678,8 +678,8 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', nRaysPerDim=
         print(f'Increaing {dv_window = } to {xlim[1]} km/s to cover requested xlim.')
         dv_window = xlim[1]
 
-    wave, flux, EW, _, lineNames = load_spectra_subset(sim, ion, instrument, solar, mode, 
-                                                       nRaysPerDim=nRaysPerDim, raysType=raysType,
+    wave, flux, EW, _, lineNames = load_spectra_subset(sim, ion, instrument, mode, 
+                                                       nRaysPerDim=nRaysPerDim, raysType=raysType, solar=solar, 
                                                        num=num, inds=inds, EW_minmax=EW_minmax, dv=dv_window if dv else 0.0)
 
     # how many lines do we have? what is their span in wavelength?

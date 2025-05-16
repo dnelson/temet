@@ -1711,6 +1711,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
         
         EWs[line] = EW_local
 
+        print(' saving...', flush=True)
         with h5py.File(saveFilename,'r+') as f:
             # save tau per line
             f.create_dataset('tau_%s' % line.replace(' ','_'), data=tau_local, compression='gzip')

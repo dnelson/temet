@@ -12,12 +12,17 @@ import glob
 from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import ScalarFormatter
 from matplotlib.patches import ConnectionPatch
+from matplotlib.colors import Normalize
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from os.path import isfile
+from scipy.ndimage import gaussian_filter
 
 from ..cosmo.spectrum import _spectra_filepath, lines, instruments
+from ..cosmo.spectrum_analysis import load_spectra_subset
 #from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
 from ..plot.spectrum import spectra_gallery_indiv, EW_distribution, dNdz_evolution, EW_vs_coldens, instrument_lsf
 from ..plot.config import *
+from ..util.helper import closest
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
 
@@ -372,6 +377,263 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None, SNR=None):
     fig.savefig('spectrum_lightcone_%s_%s_%s%s.pdf' % (sim.simName,ion.replace(' ',''),instrument,linesStr))
     plt.close(fig)
 
+def _optical_depth_map_2d_calc(sim, line, instrument):
+    """ Helper for below. """
+
+    def _sim_posvel_to_wave(sim, pos_los_code, vel_los_code, wave0):
+        """ Convert a line-of-sight position (i.e. z-coordinate) and line-of-sight peculiar velocity (i.e. v_z)
+        into an effective redshift and thus redshifted wavelength of a specific rest-frame wavelength. 
+
+        Args:
+          sim (:py:class:`~util.simParams`): simulation instance.
+          pos_los_code (:py:class:`~numpy.ndarray`[float]): code units positions, along los coordinate.
+          vel_los_code (:py:class:`~numpy.ndarray`[float]): code units velocities, in los direction.
+          wave0 (float): rest-frame wavelength.
+        """
+        # create lookup table for (dist_los -> redshift)
+        # note: sim.redshift occurs at the front intersection (beginning) of the box
+        z_vals = np.linspace(sim.redshift, sim.redshift+0.1, 200)
+
+        z_lengths = sim.units.redshiftToComovingDist(z_vals) - sim.units.redshiftToComovingDist(sim.redshift)
+        assert z_lengths.max() > sim.units.codeLengthToComovingMpc(sim.boxSize)
+
+        dist_los = sim.units.codeLengthToComovingMpc(pos_los_code) # [cMpc]
+        z_cosmo = np.interp(dist_los, z_lengths, z_vals)
+
+        # doppler shift
+        vel_los = sim.units.particleCodeVelocityToKms(vel_los_code)
+        z_doppler = vel_los / sim.units.c_km_s
+
+        # effective redshift
+        z_eff = (1+z_doppler)*(1+z_cosmo) - 1
+
+        # expected wavelength
+        gal_wave = wave0 * (1 + z_eff)
+    
+        return gal_wave
+    
+    # config
+    mstar_range = [9.9,10.0] #[9.5,10.0] #[9.9, 10.0]
+    D_max = 250.0 # 100 # pkpc
+    dv_range = 1200 # km/s
+
+    # check cache
+    cachefile = sim.cachePath + f'taumap_{sim.simName}_{sim.snap}_{line.replace(' ','-')}_{instrument}_{mstar_range[0]:.1f}_{mstar_range[1]:.1f}_{dv_range:.0f}_{D_max:.0f}.hdf5'
+
+    if isfile(cachefile):
+        # load
+        r = {}
+        with h5py.File(cachefile,'r') as f:
+            for key in f:
+                r[key] = f[key][()]
+        print(f'Loaded [{cachefile}].')
+        return r
+
+    # galaxy sample selection
+    mstar = sim.subhalos('mstar_30kpc_log')
+
+    subIDs = np.where((mstar > mstar_range[0]) & (mstar <= mstar_range[1]))[0]
+
+    pos = sim.subhalos('SubhaloPos')[subIDs,:]
+    vel = sim.subhalos('SubhaloVel')[subIDs,:]
+    cen_flag = sim.subhalos('cen_flag')[subIDs]
+
+    print(f'Selected [{len(subIDs)}] galaxies with M* in [{mstar_range[0]:.1f} - {mstar_range[1]:.1f}].')
+    print(f'Note: [{np.sum(cen_flag)}] of [{len(subIDs)}] are centrals.')
+
+    # load spectra metadata
+    ion = lines[line]['ion']
+    filepath = _spectra_filepath(sim, ion, instrument=instrument)
+
+    with h5py.File(filepath,'r') as f:
+        # load metadata
+        ray_dir = f['ray_dir'][()]
+        ray_pos = f['ray_pos'][()]
+        wave = f['wave'][()]
+        ray_total_dl = f['ray_total_dl'][()]
+
+    # find all spectra that pass within D_max of any galaxy in the sample
+    spec_mask = np.zeros(ray_pos.shape[0], dtype='int32')
+
+    dir_ind = np.where(ray_dir == 1)[0][0]
+    sky_inds = list(set([0,1,2]) - set([dir_ind])) # e.g. [0,1] for projAxis == 2
+
+    assert ray_pos[:,dir_ind].max() == 0 # otherwize generalize (dist cut in los direction)
+    assert ray_total_dl == sim.boxSize # otherwise generalize (dist cut in los direction)
+
+    ray_pos = ray_pos[:,sky_inds]
+
+    # allocate for intersections
+    n_alloc = int(len(subIDs) * np.sqrt(spec_mask.size)) # heuristic
+
+    rays_subID = np.zeros(n_alloc, dtype='int32')
+    rays_subInd = np.zeros(n_alloc, dtype='int32')
+    rays_dist = np.zeros(n_alloc, dtype='float32')
+    rays_ind = np.zeros(n_alloc, dtype='int32')
+    gals_nrays = np.zeros(len(subIDs), dtype='int32')
+    rays_count = 0
+
+    for i, (sub_id, sub_pos) in enumerate(zip(subIDs,pos)):
+        if i % 10 == 0: print(f'[{i:3d}] of [{len(subIDs)}], now {sub_id = }, {rays_count = }.')
+
+        # periodic, squared transverse (i.e. plane of the sky) distances
+        dists = sim.periodicDists(sub_pos[sky_inds], ray_pos)
+
+        ray_inds_loc = np.where(dists <= D_max)[0]
+        
+        # stamp
+        n_loc = len(ray_inds_loc)
+
+        spec_mask[ray_inds_loc] = 1 # could store count
+
+        rays_subID[rays_count:rays_count+n_loc] = sub_id
+        rays_subInd[rays_count:rays_count+n_loc] = i
+        rays_dist[rays_count:rays_count+n_loc] = dists[ray_inds_loc]
+        rays_ind[rays_count:rays_count+n_loc] = ray_inds_loc
+        gals_nrays[i] = n_loc
+        rays_count += n_loc
+
+    # reduce
+    rays_subID = rays_subID[0:rays_count]
+    rays_subInd = rays_subInd[0:rays_count]
+    rays_dist = rays_dist[0:rays_count]
+    rays_ind = rays_ind[0:rays_count]
+
+    # check coverage of galaxy sample
+    nrays_near = len(np.where(spec_mask > 0)[0])
+
+    print(f'Of [{spec_mask.size}] sightlines, found [{nrays_near}] within [{D_max = :.1f}] pkpc.')
+    print(f'In total, have [{rays_count}] galaxy-sightline pairs. Loading [{line}] [{instrument}] spectra...')
+
+    # calculate galaxy effective redshift, and corresponding wavelength for this transition
+    gal_wave = _sim_posvel_to_wave(sim, pos[:,dir_ind], vel[:,dir_ind], lines[line]['wave0'])
+
+    # determine common (wave -> dv) and size of dv_range in spectral bins
+    wave_z = lines[line]['wave0'] * (1 + sim.redshift)
+    dlambda = wave - wave_z
+    wave_dv = dlambda / wave_z * sim.units.c_km_s
+
+    w = np.where( (wave_dv > -dv_range) & (wave_dv <= dv_range) )[0]
+    n = int(np.ceil(len(w) / 2))
+
+    _, ind_cen = closest(wave, wave_z)
+    wave_dv = wave_dv[ind_cen-n+1:ind_cen+n+1] #wave_dv[w]
+
+    # allocate spec in terms of global wave, and narrower dv
+    flux = np.zeros((rays_count,wave.size), dtype='float32')
+    flux_dv = np.zeros((rays_count,wave_dv.size), dtype='float32')
+
+    # load spectra (note: rays_ind contains duplicates, and is not sorted)
+    dset = 'flux' #'tau_%s' % line.replace(' ','_')
+    
+    with h5py.File(filepath,'r') as f:
+        for i, ray_ind in enumerate(rays_ind):
+            if i % 100 == 0: print(i)
+            flux[i] = f[dset][ray_ind,:]
+
+    # stamp
+    for i in range(rays_count):
+        # select closest bin to center wavelength
+        # TODO: is this good enough, or do we need to interpolate? (depends on how big dv bins are?)
+        wave_cen, ind_cen = closest(wave, gal_wave[rays_subInd[i]])
+
+        wave_err = wave_cen - gal_wave[rays_subInd[i]]
+
+        #print(i, rays_subInd[i], gal_wave[rays_subInd[i]], ind_cen, wave_err)
+
+        # stamp
+        flux_dv[i,:] = flux[i,ind_cen-n+1:ind_cen+n+1]
+
+    # save cache file
+    r = {'rays_subID':rays_subID, 'rays_subInd':rays_subInd, 'rays_dist':rays_dist, 'rays_ind':rays_ind,
+         'rays_count':rays_count, 'wave':wave, 'flux':flux, 'wave_dv':wave_dv, 'flux_dv':flux_dv, 
+         'mstar_range':mstar_range, 'dv_range':dv_range, 'D_max':D_max, 'subIDs':subIDs}
+    
+    with h5py.File(cachefile,'w') as f:
+        for key in r:
+            f[key] = r[key]
+        print(f'Saved [{cachefile}].')
+
+    return r
+
+def optical_depth_map_2d(sim, line, instrument, SNR=10.0, tau_minmax=[0.0, 0.3]):
+    """ Create 2D map of galaxy-centric apparent optical depth, as a function of transverse and LoS distance.
+    Inspired by the usual Steidel+/KBSS style (e.g. https://arxiv.org/abs/2503.20037).
+
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      line (str): string specifying the line transition.
+      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      SNR (float): if not None, then add noise to achieve this signal to noise ratio.
+      tau_minmax (list[float]): 2-tuple of min-max colorbar values for optical depth.
+    """
+    # config
+    D_binsize = 10.0 # pkpc
+    aspect = 1.8
+    cmap = 'inferno_r'
+
+    # load/calculate
+    stack = _optical_depth_map_2d_calc(sim, line, instrument)
+
+    # add noise? ("signal" is 1.0)
+    if SNR is not None:
+        rng = np.random.default_rng(424242)
+        noise = rng.normal(loc=0.0, scale=1/SNR, size=stack['flux_dv'].shape)
+        stack['flux_dv'] += noise # # achieved SNR = 1/stddev(noise)
+        stack['flux_dv'] = np.clip(stack['flux_dv'], 0, np.inf) # clip negative values at zero
+
+    # bin and stack in terms of projected (transverse) distance
+    D_nbins = int(stack['D_max'] / D_binsize)
+    D_binedges = np.linspace(0.0, stack['D_max'], D_nbins+1)
+    D_bincen = (D_binedges[:-1] + D_binedges[1:]) / 2
+
+    flux_stack = np.zeros((stack['wave_dv'].size, D_nbins), dtype='float32')
+    bin_count = np.zeros(D_nbins, dtype='int32')
+
+    for i in range(stack['rays_count']):
+        bin_ind = int(np.floor(stack['rays_dist'][i] / D_binsize))
+        flux_stack[:,bin_ind] += stack['flux_dv'][i,:]
+        bin_count[bin_ind] += 1
+
+    flux_stack /= bin_count
+
+    # convert to apparent optical depth
+    tau_stack = -np.log(flux_stack)
+
+    # smooth?
+    #sigma_xy = [1.0, 0.0]
+    #tau_stack = gaussian_filter(tau_stack, sigma_xy, mode='reflect', truncate=5.0)
+
+    # plot
+    fig, ax = plt.subplots(figsize=[6.0, 6.0*aspect])
+
+    ax.set_xlabel(r'$D_{\rm transverse}$ [ kpc ]')
+    ax.set_ylabel(r'$v_{\rm LOS}$ [ km/s ]')
+    ax.set_title(line)
+
+    xlim = [0, stack['D_max']]
+    ylim = [-stack['dv_range'], +stack['dv_range']]
+
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+
+    norm = Normalize(vmin=tau_minmax[0], vmax=tau_minmax[1])
+    extent = [xlim[0], xlim[1], ylim[0], ylim[1]]
+
+    s = ax.imshow(tau_stack, extent=extent, norm=norm, origin='lower', aspect='auto', cmap=cmap)
+
+    xx, yy = np.meshgrid(D_bincen, stack['wave_dv'], indexing='xy')
+    ax.contour(xx, yy, tau_stack, np.linspace(tau_minmax[1]/10,tau_minmax[1],5), cmap=cmap.replace('_r',''))
+
+    # finish plot
+    cax = make_axes_locatable(ax).append_axes('right', size='10%', pad=0.1)
+    #cb = plt.colorbar(sm, cax=cax, ticks=N_vals)
+    cb = plt.colorbar(s, cax=cax)
+    cb.ax.set_ylabel(r'Apparent Optical Depth $\tau_{\rm app} = - \ln{(F)}$')
+
+    fig.savefig(f'tau2d_{sim}_{line}_{instrument}.pdf'.replace(' ','-'))
+    plt.close(fig)
+
 def vis_overview(sP, haloID=None):
     """ Visualize large-scale box, and halo-scale zoom, in an ion column density. """
     nPixels    = 2000
@@ -416,8 +678,12 @@ def vis_overview(sP, haloID=None):
 
 def ion_redshift_coverage(sim, all=True, lowz=False):
     """ Schematic plot showing ion/redshift/instrument/etc coverage of available mock spectra files. 
-    If 'all' is True, then show all possible. Otherwise, only show existing. 
-    If 'lowz' is True, then make a log-log plot that focuses on low redshift. """
+    
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      all (bool): show all possible, otherwise show only existing.
+      lowz (bool): make a log-log plot that focuses on low redshift.
+    """
     # config
     line_alpha = 0.3
 
@@ -676,10 +942,16 @@ def paperPlots():
 
     # fig 8: 2D optical depth map
     if 0:
-        pass # e.g. usual Steidel+/KBSS style (https://arxiv.org/abs/2503.20037)
+        sim = simParams('tng50-1', redshift=2.0)
+        #inst = 'SDSS-BOSS' # # 'KECK-LRIS-B-600' would better match KBSS
+        inst = 'KECK-HIRES-B14'
+
+        optical_depth_map_2d(sim, line='CIV 1548', instrument=inst)
+        optical_depth_map_2d(sim, line='HI 1215', instrument=inst, tau_minmax=[0.0, 1.5])
+        #optical_depth_map_2d(sim, line='SiIV 1392', instrument=inst, tau_minmax=[0.0, 1.5])
 
     # fig 9: example of a cosmological-distance (i.e. lightcone) spectrum
-    if 1:
+    if 0:
         sim = simParams(run='tng50-1')
 
         plotLightconeSpectrum(sim, instrument='KECK-HIRES-B14', ion='H I')

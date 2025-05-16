@@ -12,20 +12,20 @@ from ..cosmo.spectrum import generate_rays_voronoi_fullbox, integrate_along_save
     create_wavelength_grid, _spectra_filepath, lines, projAxis_def, nRaysPerDim_def, raysType_def
 from ..plot.config import *
 
-def load_spectra_subset(sim, ion, instrument, solar, mode, nRaysPerDim=nRaysPerDim_def, 
-                        raysType=raysType_def, num=None, inds=None, EW_minmax=None, dv=0.0, coldens=False):
+def load_spectra_subset(sim, ion, instrument, mode, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def, 
+                        solar=False, num=None, inds=None, EW_minmax=None, dv=0.0, coldens=False):
     """ Load a subset of spectra from a given simulation and ion.
 
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
       ion (str): space separated species name and ionic number e.g. 'Mg II'.
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
-      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
-        use the (constant) solar value.
       mode (str): either 'all', 'random', 'evenly', or 'inds'.
       nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
       raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or 
         'sample_localized' (distributed around a given set of subhalos).
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+        use the (constant) solar value.
       num (int): how many individual spectra to show.
       inds (list[int]): if mode is 'inds', then the list of specific spectra indices to plot. num is ignored.
       EW_minmax (list[float]): minimum and maximum EW to plot [Ang].
