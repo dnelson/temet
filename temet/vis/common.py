@@ -200,6 +200,18 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
                         posSearch = pos[indRangeLoc[0]:indRangeLoc[1]]
                         print(' posSearch range: ', indRangeLoc)
 
+                    # check for identical coordinates due to float32 snapshot (random sampling from first few particles)
+                    if sP.isZoom and pos.dtype == np.float32:
+                        flag = False
+                        for i in range(np.min([10,pos.shape[0]])):
+                            for j in range(i+1,np.min([i+10,pos.shape[0]])):
+                                flag |= np.array_equal(pos[i,:],pos[j,:])
+                        if flag:
+                            print('NOTE: Found duplicate Coordinates, perturbing randomly for calcHsml().')
+                            pos = pos.astype('float64')
+                            rng = np.random.default_rng(42424242)
+                            pos += rng.uniform(size = pos.shape) * (sP.gravSoft / 1e6)
+
                     hsml = calcHsml(pos, sP.boxSize, posSearch=posSearch, nNGB=nNGB, nNGBDev=1, treePrec='double')
 
         # bhs (unused)
@@ -484,8 +496,12 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
 
             percs = np.nanpercentile(band_vals, [20,99.5])
 
-            minValLog = percs[[0,0,0]]
-            maxValLog = np.array([percs[1],percs[1]+0.08,percs[1]-0.24])
+            if band_vals.size > 0:
+                minValLog = percs[[0,0,0]]
+                maxValLog = np.array([percs[1],percs[1]+0.08,percs[1]-0.24])
+            else:
+                minValLog = [0,0,0]
+                maxValLog = [1,1,1]
 
         for i in range(3):
             if i == 0: grid_loc = band0_grid

@@ -188,6 +188,7 @@ class simParams:
     
     # physical models: GFM and other indications of optional snapshot fields
     metals    = None  # list of string labels for runs saving abundances by species
+    star      = False # >0 for USE_SFR (1=Illustris/TNG type i.e. SSPs, 2=MCST normal, 3=MCST solo stars)
     BHs       = False # >0 for BLACK_HOLES (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=MCST model)
     winds     = False # >0 for GFM_WINDS or SN feedback (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=MCST model)
 
@@ -494,6 +495,7 @@ class simParams:
 
             # common: physics models
             self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
+            self.star   = 1
             self.winds  = 2
             self.BHs    = 2
             
@@ -503,6 +505,7 @@ class simParams:
                 self.trMCPerCell = 0 # no tracers
 
                 self.metals = None
+                self.star   = False
                 self.winds  = False
                 self.BHs    = False
 
@@ -661,6 +664,7 @@ class simParams:
                 # baryonic, TNG fiducial models
                 self.trMCFields  = [0,1,2,-1,-1,-1,-1,-1,-1,3,-1,-1,-1,4]
                 self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
+                self.star  = 1
                 self.winds = 2
                 self.BHs   = 2
 
@@ -727,6 +731,7 @@ class simParams:
             # physics
             self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
             self.metals = None
+            self.star  = 1
             self.winds = 2
             self.BHs   = 2
 
@@ -764,6 +769,7 @@ class simParams:
             if self.variant == 'TNG':
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
                 self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
+                self.star  = 1
                 self.winds = 2
                 self.BHs   = 2
             if 'ST' in self.variant: # todo: set to ST9+ only
@@ -778,6 +784,10 @@ class simParams:
                 # whereas for gas these values are in the separate Grackle fields. the above is for stars.
                 self.winds = 4 # MCST fiducial
                 self.BHs   = 4 # MCST fiducial
+
+                self.star = 2
+                if self.res >= 15:
+                    self.star = 3 # SOLO_STARS
 
             # paths
             dirStr = 'L%dn%dTNG_h%d_L%d_%s' % (int(self.boxSize/1000.0),parentRes,self.hInd,self.zoomLevel,self.variant)
@@ -811,6 +821,7 @@ class simParams:
             if self.variant == 'TNG':
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,0,-1,-1,-1,-1,-1] # LastStarTime only
                 self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
+                self.star  = 1
                 self.winds = 2
                 self.BHs   = 2
 
@@ -850,6 +861,7 @@ class simParams:
             else:
                 # baryonic, AURIGA fiducial model
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
+                self.star  = 1
                 self.winds = 3
                 self.BHs   = 3
 
@@ -884,6 +896,7 @@ class simParams:
                 self.trMCPerCell = 1
                 self.trMCFields  = [0,1,2,3,4,5,6,7,8,9,10,11,12,-1] # all but shockmaxmach (=4096, 13 of 13)
                 self.metals      = ['H','He','C','N','O','Ne','Mg','Si','Fe']
+                self.star        = 1
                 self.winds       = 1
                 self.BHs         = 1
 
@@ -906,6 +919,7 @@ class simParams:
                 if res == 1820: self.simName = 'Illustris-1'
 
             if run == 'illustris_nr': # non-radiative
+                self.star        = 0
                 self.winds       = 0
                 self.BHs         = 0
 
@@ -947,6 +961,7 @@ class simParams:
                 self.trMCPerCell = 0
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
                 self.metals      = ['H','He','C','N','O','Ne','Mg','Si','Fe']
+                self.star        = 1
                 self.winds       = 1
                 self.BHs         = 1
 
@@ -983,6 +998,7 @@ class simParams:
             self.trMCPerCell = 0
             self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
             self.metals      = ['H','He','C','N','O','Ne','Mg','Si','Fe']
+            self.star        = 1
             self.winds       = 1
             self.BHs         = 1
 
@@ -1018,6 +1034,7 @@ class simParams:
             self.trMCPerCell = 0
             self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
             self.metals      = None
+            self.star        = 1
             self.winds       = 2
             self.BHs         = 2
 
@@ -1097,6 +1114,7 @@ class simParams:
                 self.trMCFields = [0,1,2,3,4,5,6,7,-1,-1,-1,-1,-1,-1,8] # shock_maxmach added
                 
                 self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
+                self.star   = 1
                 self.winds  = 2
                 self.BHs    = 2
             if '_josh' in run:
@@ -1178,6 +1196,7 @@ class simParams:
             self.trMCPerCell  = 5
             self.trMCFields   = [0,1,2,3,4,5,6,7,8,9,-1,-1,-1,-1] # up to and including WIND_COUNTER (=512, 10/13)
             self.metals       = ['H','He','C','N','O','Ne','Mg','Si','Fe']
+            self.star         = 1
             self.winds        = 1
             self.BHs          = 1
 

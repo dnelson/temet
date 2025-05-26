@@ -45,7 +45,7 @@ def vis_single_galaxy(sP, haloID=0):
         panels.append( {'partType':'stars', 'partField':'stellarComp', 'rotation':'face-on'} )
 
         # add skinny edge-on panels below:
-        panels.append( {'partType':'gas', 'partField':gas_field, 'nPixels':[960,240], 'valMinMax':[20.5+zfac,23.0+zfac], 
+        panels.append( {'partType':'gas', 'partField':gas_field, 'nPixels':[960,240], 'valMinMax':gas_mm, 
                         'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
         panels.append( {'partType':'stars', 'partField':'stellarComp', 'nPixels':[960,240], 
                         'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
@@ -122,8 +122,21 @@ def vis_movie(sP, haloID=0, frame=None):
     # panels
     panels = []
 
-    panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5]} )
-    panels.append( {'partType':'stars', 'partField':'stellarComp'} )
+    gas_mm = [6.0, 8.0]
+    if sP.hInd >= 10000: gas_mm = [5.5, 7.5]
+    if sP.hInd >= 1e5: gas_mm = [5.0, 7.0]
+
+    if 'ST' in sP.variant:
+        gas_mm[0] += 1.0
+        gas_mm[1] += 1.5
+
+    panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gas_mm} )
+    #panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5]} )
+
+    if sP.star == 1: # normal SSPs
+        panels.append( {'partType':'stars', 'partField':'stellarComp'} )
+    if sP.star > 1: # single/solo stars
+        panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[gas_mm[0]-1,gas_mm[1]-1]} )
 
     class plotConfig:
         plotStyle    = 'edged_black'
@@ -170,11 +183,6 @@ def vis_movie(sP, haloID=0, frame=None):
 
         snaps = tree['SnapNum'][ind:ind_stop]
         subids = tree['SubfindID'][ind:ind_stop]
-
-        #print(f'{ind = }, {ind_stop = }')
-        #print(f'{snaps = }')
-        #print(f'{subids = }')
-        #import pdb; pdb.set_trace()
 
     if frame is not None:
         snapList = [frame]
