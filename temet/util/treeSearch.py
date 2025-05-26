@@ -182,7 +182,7 @@ def _constructTree(pos,boxSizeSim,next_node,length,center,suns,sibling,nextnode)
                     # may have particles at identical locations, in which case randomize the subnode 
                     # index to put the particle into a different leaf (happens well below the 
                     # gravitational softening scale)
-                    subnode = int(np.random.rand())
+                    subnode = int(np.random.rand()*8)
                     subnode = max(subnode,7)
 
                 suns[subnode,ind2] = no
