@@ -418,7 +418,9 @@ def _optical_depth_map_2d_calc(sim, line, instrument):
     dv_range = 1200 # km/s
 
     # check cache
-    cachefile = sim.cachePath + f'taumap_{sim.simName}_{sim.snap}_{line.replace(' ','-')}_{instrument}_{mstar_range[0]:.1f}_{mstar_range[1]:.1f}_{dv_range:.0f}_{D_max:.0f}.hdf5'
+    lineName = line.replace(' ','-')
+    specStr = f'{mstar_range[0]:.1f}_{mstar_range[1]:.1f}_{dv_range:.0f}_{D_max:.0f}'
+    cachefile = sim.cachePath + f'taumap_{sim.simName}_{sim.snap}_{lineName}_{instrument}_{specStr}.hdf5'
 
     if isfile(cachefile):
         # load
@@ -912,16 +914,16 @@ def paperPlots():
     # fig 6: EW vs coldens vs CoG (CIV)
     if 0:
         sim = simParams('tng50-1', redshift=2.0)
-        EW_vs_coldens(sim, line='MgII 2796', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,1.0], xlim=[12.0,19.0])
-        EW_vs_coldens(sim, line='HI 1215', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,1.0], xlim=[12.0,19.0])
+        #EW_vs_coldens(sim, line='MgII 2796', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,1.0], xlim=[12.0,19.0])
+        #EW_vs_coldens(sim, line='HI 1215', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,1.0], xlim=[12.0,19.0])
         EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS')
 
     # fig 7: MgII EW distribution functions (dN/DW) and absorber incidence vs redshift (dN/dz) vs. data
     if 0:
         sim = simParams(run='tng50-1')
         line = 'MgII 2796'
-        inst = 'KECK-HIRES-B14'
-        redshifts = [0.1, 0.3, 0.5, 1.0, 2.0]
+        inst = 'SDSS-BOSS' #'KECK-HIRES-B14'
+        redshifts = [0.3, 0.5, 1.0, 2.0] #[0.1, 0.3, 0.5, 1.0, 2.0]
         indivEWs = False
         opts = {'xlim':[0,8], 'solar':False, 'log':False}
 
@@ -935,7 +937,7 @@ def paperPlots():
         inst = 'SDSS-BOSS'
         redshifts = [1.5, 2.0, 3.0, 4.0, 5.0]
         indivEWs = False
-        opts = {'xlim':[0,3], 'solar':False, 'log':False}
+        opts = {'xlim':[0,2.5], 'solar':False, 'log':False}
 
         EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, indivEWs=indivEWs, **opts)
         dNdz_evolution(sim, line=line, instrument=inst, redshifts=redshifts, solar=opts['solar'])
