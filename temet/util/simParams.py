@@ -1664,7 +1664,7 @@ class simParams:
         """ Return a list of particle type names contained in this simulation, excluding tracers. """
         pt = ['gas','dm','stars','bh']
         if self.isZoom:
-            pt.append('dm_lowres')
+            pt.append('dmlowres')
         return pt
 
     @property

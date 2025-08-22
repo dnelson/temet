@@ -1215,6 +1215,23 @@ class units(object):
         if log:
             csnd = logZeroSafe(csnd)
         return csnd
+    
+    def soundSpeedFromTemp(self, temp, log=False):
+        """ Calculate sound speed given temperature [in Kelvin] in physical km/s. """
+
+        # calculate mean mass
+        hmassfrac = self.hydrogen_massfrac
+        xe = 1.1
+        m = 4.0/(1.0 + 3.0 * hmassfrac + 4.0* hmassfrac * xe)
+        m *= self.mass_proton
+
+        csnd = np.sqrt(self.gamma * self.boltzmann * temp / m) # cm/s
+        csnd /= 1e5 # cm/s -> km/s
+
+        if log:
+            csnd = logZeroSafe(csnd)
+        return csnd
+
 
     def calcSunyaevZeldovichYparam(self, mass, xe, temp):
         """ Calculate per-cell (thermal) SZ y-parameter (e.g. McCarthy+2014 Eqn 2, Roncarelli+2007 Eqn 5, Kay+2012 Eqn 12).

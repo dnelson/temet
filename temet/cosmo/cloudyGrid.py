@@ -346,7 +346,6 @@ def _loadExternalUVB(redshifts=None, hm12=False, puchwein19=False):
         loc = { 'freqRyd'  : sP.units.c_ang_per_sec / wavelength / sP.units.rydberg_freq,
                 'J_nu'     : logZeroNaN(4*np.pi*J_lambda[:,w]),
                 'redshift' : float(redshift) }
-
         r.append(loc)
 
     if len(r) == 1:
@@ -911,6 +910,7 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
     cs_HeI = np.zeros(uvbs_z.size, dtype='float64')
     cs_HeII = np.zeros(uvbs_z.size, dtype='float64')
     k = {}
+    udens = {}
     
     for i, u in enumerate(uvbs):
         J_loc = 10.0**u['J_nu'].astype('float64') # linear
@@ -921,6 +921,10 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
 
         for knum in [27,28,29,30,31]:
             k[knum] = hydrogen.photoRate(u['freqRyd'], J_loc, ion=f'k{knum}') # [1/s]
+
+        for ev_range in [[6.0,13.6],[11.2,13.6]]:
+            name = f'{ev_range[0]:.1f}-{ev_range[1]:.1f}eV'
+            udens[name] = np.log10(hydrogen.uvbEnergyDensity(u['freqRyd'], J_loc, eV_min=ev_range[0], eV_max=ev_range[1]))
 
     # load UVB photoheating rates, interpolate to spectra redshifts
     uvb_rates = loadUVBRates(uvb=uvb.replace('_unshielded',''))
@@ -965,6 +969,12 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
         f['UVBRates/Photoheating/piHI'] = uvb_Q_HI
         f['UVBRates/Photoheating/piHeI'] = uvb_Q_HeI
         f['UVBRates/Photoheating/piHeII'] = uvb_Q_HeII
+
+        # UVB energy densities [log erg/cm^3]
+        f['UVBEnergyDens/Redshift'] = uvbs_z
+        f['UVBEnergyDens'].attrs['NumberRedshiftBins'] = uvbs_z.size
+        for k in udens:
+            f['UVBEnergyDens/EnergyDensity_' + k] = udens[k]
 
         # Cross sections [cgs] (needed only if self_shielding_method > 0, i.e. if GrackleSelfShieldingMethod > 0)
         f['UVBRates/CrossSections/hi_avg_crs'] = cs_HI

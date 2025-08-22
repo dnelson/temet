@@ -236,6 +236,7 @@ def uvbEnergyDensity(freq, J_nu, eV_min=6.0, eV_max=13.6):
     Args:
       freq (ndarray[float]): frequency i.e. energy [Rydberg].
       J_nu (ndarray[float]): uvb intensity [linear erg/s/cm^2/Hz/sr].
+      J_nu (ndarray[float]): uvb intensity [linear 4*pi* erg/s/cm^2/Hz].
       eV_min (float): minimum energy [eV].
       eV_max (float): maximum energy [eV].
 
@@ -243,11 +244,13 @@ def uvbEnergyDensity(freq, J_nu, eV_min=6.0, eV_max=13.6):
       float: energy density U [erg/cm^3].
     """
     # integral of (J_nu / c) dnu from eV_min to eV_max
-    freq_hz = freq * 3.28984e15
-    dfreq_hz = np.diff(freq_hz)
-    dfreq_hz = np.hstack((dfreq_hz,dfreq_hz[-1]))
-
+    rydberg_in_hz = 3.28984e15
     c_cm_s = 2.9979e10
+
+    freq_hz = freq * rydberg_in_hz
+    dfreq_hz = np.diff(freq_hz)
+    dfreq_hz = np.hstack((dfreq_hz,0))
+
     freq_eV = 13.6 * freq
     ind = np.where((freq_eV > eV_min) & (freq_eV <= eV_max))
 

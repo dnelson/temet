@@ -624,6 +624,9 @@ def grackleReactionRates():
                  'CloudyData_UVB=HM2012_shielded.h5', # HM12 orig
                  'grid_cooling_UVB=FG20.hdf5'] # FG20 my new version
 
+    filenames = ['CloudyData_UVB=HM2012_shielded.h5', # HM12 orig
+                 'grid_cooling_UVB=FG20.hdf5'] # FG20 my new version
+
     # load
     data = {}
 
@@ -687,11 +690,11 @@ def grackleReactionRates():
             with h5py.File(f'/vera/ptmp/gc/MCST/arepo5_setups/grid_cooling_UVB={uvb}.hdf5','r+') as f:
                 assert f['UVBRates/z'].size == z_local.size
                 assert np.array_equal(f['UVBRates/z'][()], z_local)
-                f['UVBRates/Chemistry/k27'] = k27_local
-                f['UVBRates/Chemistry/k28'] = k28_local
-                f['UVBRates/Chemistry/k29'] = k29_local
-                f['UVBRates/Chemistry/k30'] = k30_local
-                f['UVBRates/Chemistry/k31'] = k31_local
+                f['UVBRates/Chemistry/k27'][:] = k27_local
+                f['UVBRates/Chemistry/k28'][:] = k28_local
+                f['UVBRates/Chemistry/k29'][:] = k29_local
+                f['UVBRates/Chemistry/k30'][:] = k30_local
+                f['UVBRates/Chemistry/k31'][:] = k31_local
 
     # plot k24-26 (primordial_chemistry <= 1)
     fig = plt.figure(figsize=figsize)
@@ -705,8 +708,8 @@ def grackleReactionRates():
     for i, uvb in enumerate(data.keys()):
         z, k = data[uvb]
 
-        if 'k24_custom' in k:
-            ax.plot(z, k['k24_custom'], ls=linestyles[i], lw=lw, color='black', label='k24_custom (%s)' % uvb)
+        #if 'k24_custom' in k:
+        #    ax.plot(z, k['k24_custom'], ls=linestyles[i], lw=lw, color='black', label='k24_custom (%s)' % uvb)
 
         if i == 0:
             l24, = ax.plot(z, k[24], lw=lw, label='k24 (%s)' % uvb)
@@ -733,12 +736,12 @@ def grackleReactionRates():
     for i, uvb in enumerate(data.keys()):
         z, k = data[uvb]
 
-        if 'k27_custom' in k:
-            #ax.plot(z, np.log10(k['k27_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k27_custom (%s)' % uvb)
-            #ax.plot(z, np.log10(k['k28_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k28_custom (%s)' % uvb)
-            #ax.plot(z, np.log10(k['k29_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k29_custom (%s)' % uvb)
-            #ax.plot(z, np.log10(k['k30_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k30_custom (%s)' % uvb)
-            ax.plot(z, np.log10(k['k31_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k31_custom (%s)' % uvb)
+        #if 'k27_custom' in k:
+        #    #ax.plot(z, np.log10(k['k27_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k27_custom (%s)' % uvb)
+        #    #ax.plot(z, np.log10(k['k28_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k28_custom (%s)' % uvb)
+        #    #ax.plot(z, np.log10(k['k29_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k29_custom (%s)' % uvb)
+        #    #ax.plot(z, np.log10(k['k30_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k30_custom (%s)' % uvb)
+        #    ax.plot(z, np.log10(k['k31_custom']+0.02), ls=linestyles[i], lw=lw, color='black', label='k31_custom (%s)' % uvb)
 
         if 27 not in k:
             continue
@@ -784,7 +787,11 @@ def uvbEnergyDens():
         for i, u in enumerate(uvbs):
             J_loc = 10.0**u['J_nu'].astype('float64') # linear
             
-            u_local[i] = np.log10(uvbEnergyDensity(u['freqRyd'], J_loc, eV_min=eV_min, eV_max=eV_max))
+            u_local[i] = uvbEnergyDensity(u['freqRyd'], J_loc, eV_min=eV_min, eV_max=eV_max)
+            #u_local[i] /= np.pi
+            u_local[i] = np.log10(u_local[i])
+
+        print(uvb, z_local[0], u_local[0])
 
         # fix 7<z<10 oscillations in FG11
         if uvb == 'FG11':
@@ -824,6 +831,7 @@ def uvbEnergyDens():
 
         with h5py.File('/virgotng/mpia/MCST/arepo1_setups/grid_cooling_UVB=FG20.hdf5','r+') as f:
             i = uvb_names.index('FG20')
+            f['UVBEnergyDens'].attrs['NumberRedshiftBins'] = uvbs_z[i].size
             if 'UVBEnergyDens/Redshift' not in f:
                 f['UVBEnergyDens/Redshift'] = uvbs_z[i].astype('float32')
             f['UVBEnergyDens/EnergyDensity_' + name] = uvbs_u[i]

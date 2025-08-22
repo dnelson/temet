@@ -2229,6 +2229,9 @@ def menc(sim, partType, field, args):
     offset = 0
     for pt in sim.partTypes:
         numPartType = lenType[sim.ptNum(pt)]
+        if numPartType == 0:
+            continue
+
         rad[offset : offset+numPartType] = sim.snapshotSubset(pt, 'rad', **args)
         mass[offset : offset+numPartType] = sim.snapshotSubset(pt, 'mass', **args)
 
@@ -2295,6 +2298,22 @@ tcool_tff.label = r'$\rm{t_{cool} / t_{ff}}$'
 tcool_tff.units = '' # dimensionless
 tcool_tff.limits_halo = [-1.0, 2.0]
 tcool_tff.log = True
+
+@snap_field
+def menc_vesc(sim, partType, field, args):
+    """ Gravitational escape velocity (based on enclosed mass). """
+    menc = sim.snapshotSubset(partType, 'menc', **args)
+    rad = sim.snapshotSubset(partType, 'rad', **args)
+
+    vesc = np.sqrt(2 * sim.units.G * menc / rad) # code units
+    vesc *= (1.0e5/sim.units.UnitVelocity_in_cm_per_s) # account for non-km/s code units
+
+    return vesc
+
+menc_vesc.label = 'Escape Velocity'
+menc_vesc.units = r'$\rm{km/s}$'
+menc_vesc.limits_halo = [1.0, 2.6]
+menc_vesc.log = True
 
 @snap_field
 def delta_rho(sim, partType, field, args):

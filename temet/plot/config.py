@@ -21,6 +21,10 @@ linestyles = ['-',':','--','-.',(0, (3, 5, 1, 5, 1, 5)),'--','-.',':','--'] # 9 
 colors     = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 markers    = ['o','s','D','p','H','*','v','8','^','P','X','>','<','d']  # marker symbols to alternate through
 
+linestyles += linestyles
+colors     += colors
+markers    += markers
+
 # the dust model used by default for all colors
 defSimColorModel = 'p07c_cf00dust_res_conv_ns1_rad30pkpc'
 

@@ -556,14 +556,7 @@ def generate_set():
         haloIDs = [88,129,151,147,153,160,167,172,189,164,177,184,192,191,199]
         sizeFac = 4.0
 
-    if 0:
-        # TNG50-1 z=6 bubble candidates (Joe)
-        sP = simParams(run='tng50-1', redshift=6.0)
-        zoomFac = 1
-        haloIDs = [21] #[11]
-        sizeFac = 256.0
-
-    if 0:
+    if 1:
         # TNG50 dwarf zooms (MCST)
         #sP = simParams(run='tng50-1', redshift=3.0)
         #haloIDs = [1242] # Milky Way progenitors at z=3
@@ -588,9 +581,15 @@ def generate_set():
         #haloIDs += [513 772 957 807 400] # mhalo = 10.5
         #haloIDs += [137 175 174 139 145] # mhalo = 11.0
 
-        haloIDs = [5072, 15581, 73172, 219612, 844537] # z5.5 set
+        haloIDs = [23908, 1958] #[5072, 15581, 73172, 219612, 311384, 844537] # z5.5 set
         #zoomFac = 32 # 1 (L11), 2 (L12), 4 (L13), 8 (L14), 16 (L15), 32 (L16)
         sizeFac = 4.0 # 4, 6, 8
+
+    if 0:
+        # testing MCST for z=0 Milky Way
+        sP = simParams(run='tng50-1', redshift=0.0)
+        haloIDs = [268] # randomly chosen from MW/M31 sample as looking like a big disk
+        sizeFac = 4.0
 
     if 0:
         # byrohl P-ResimICs test
@@ -602,5 +601,5 @@ def generate_set():
 
     # run
     for haloID in haloIDs:
-        for zoomFac in [4,8,16,32]:
+        for zoomFac in [4,8,16]:#[1,4,8,16,32]:
             generate(sP, fofID=haloID, ZoomFactor=zoomFac, EnlargeHighResFactor=sizeFac)

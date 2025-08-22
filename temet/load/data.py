@@ -128,8 +128,8 @@ def behrooziUM(sim):
          'redshift'  : z_closest,
          'haloMass'  : data[:,0], # log msun
          'smhmRatio' : data[:,1], # log ratio
-         'errorUp'   : data[:,2]*4, # dex? (not clear, based on B+19 Fig 9 scale up ~5x for ~1 sigma values)
-         'errorDown' : data[:,3]*4} # dex? (errors are not yet reliable!)
+         'errorUp'   : data[:,2], # dex (? not so clear)
+         'errorDown' : data[:,3]} # dex (? not so clear)
 
     r['smhmRatio'][r['smhmRatio'] == 0] = np.nan
 
