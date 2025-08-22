@@ -1195,6 +1195,104 @@ def crossmatchHalosByCommonIDs(ids1, lengths1, ids2, lengths2):
 
     return index2
 
+@jit(nopython=True, nogil=True)
+def faddeeva985(x, y):
+    """ Real arguments represent z = x + im*y and return only the real part. """
+    # constants
+    theta = 0.5641895835477563 # 1/np.sqrt(np.pi)
+    
+    a0 = 122.60793
+    a1 = 214.38239
+    a2 = 181.92853
+    a3 = 93.15558
+    a4 = 30.180142
+    a5 = 5.9126262
+    a6 = 0.5641895835477563 # 1/np.sqrt(np.pi)
+
+    b0 = 122.60793
+    b1 = 352.73063
+    b2 = 457.33448
+    b3 = 348.70392
+    b4 = 170.35400
+    b5 = 53.992907
+    b6 = 10.479857
+
+    g0 = 36183.31
+    g1 = 3321.99
+    g2 = 1540.787
+    g3 = 219.031
+    g4 = 35.7668
+    g5 = 1.320522
+    g6 = 1/np.sqrt(np.pi)
+
+    l0 = 32066.6
+    l1 = 24322.84
+    l2 = 9022.228
+    l3 = 2186.181
+    l4 = 364.2191
+    l5 = 61.57037
+    l6 = 1.841439
+
+    s0 = 38000.0
+    s1 = 256.0
+    s2 = 62.0
+    s3 = 30.0
+    t3 = 1.0e-13
+    s4 = 2.5
+    t4 = 5.0e-9
+    t5 = 0.072
+
+    x_sq = x*x
+    y_sq = y*y
+    s = x_sq + y_sq
+
+    #regions 1-3 are optimized/simplified for real-only return
+    #region 1: Laplace continued fractions, 1 convergent
+    if s >= s0:
+        #print('region 1')
+        return y*theta/s
+
+    #region 2: Laplace continued fractions, 2 convergents
+    if s >= s1:
+        #print('region 2')
+        return y*(0.5 + s)*(theta/((s**2 + (y_sq - x_sq)) + 0.25))
+
+    #region 3: Laplace continued fractions, 3 convergents
+    if s >= s2:
+        #print('region 3')
+        q = y_sq - x_sq + 1.5
+        r = 4.0*x_sq*y_sq
+        return theta*(y*((q - 0.5)*q + r + x_sq))/(s*(q*q + r))
+
+    #regions 4+ are not optimized for real-only return
+    if s >= s3 and y_sq >= t3:
+        z = complex(x,y)
+        z_sq = z**2
+        result = (theta*complex(-y,x))*(z_sq - 2.5)/(z_sq*(z_sq - 3.0) + 0.75)
+        return result.real
+
+    if s > s4 and y_sq < t4:
+        z = complex(x,y)
+        z_sq = z**2
+        r = g0 + z_sq*(g1 + z_sq*(g2 + z_sq*(g3 + z_sq*(g4 + z_sq*(g5 + z_sq*g6)))))
+        t = l0 + z_sq*(l1 + z_sq*(l2 + z_sq*(l3 + z_sq*(l4 + z_sq*(l5 + z_sq*(l6 + z_sq))))))
+        
+        result = np.exp(-x_sq) + z*r/t * (0 + 1j)
+        return result.real
+    elif s > s4 and y_sq < t5:
+        z = complex(x,y)
+        z_sq = z**2
+        r = g0 + z_sq*(g1 + z_sq*(g2 + z_sq*(g3 + z_sq*(g4 + z_sq*(g5 + z_sq*g6)))))
+        t = l0 + z_sq*(l1 + z_sq*(l2 + z_sq*(l3 + z_sq*(l4 + z_sq*(l5 + z_sq*(l6 + z_sq))))))
+        result = np.exp(-z_sq) + z*r/t * (0 + 1j)
+        return result.real
+
+    # region 6
+    q = complex(y,-x) #y - j*x
+    r = a0 + q*(a1 + q*(a2 + q*(a3 + q*(a4 + q*(a5 + q*a6)))))
+    t = b0 + q*(b1 + q*(b2 + q*(b3 + q*(b4 + q*(b5 + q*(b6 + q))))))
+    return (r/t).real
+
 # --- vis ---
 
 def getWhiteBlackColors(pStyle):

@@ -912,11 +912,23 @@ def paperPlots():
         spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='all', style='2d', **opts)
 
     # fig 6: EW vs coldens vs CoG (CIV)
-    if 0:
-        sim = simParams('tng50-1', redshift=2.0)
-        #EW_vs_coldens(sim, line='MgII 2796', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,1.0], xlim=[12.0,19.0])
-        #EW_vs_coldens(sim, line='HI 1215', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,1.0], xlim=[12.0,19.0])
-        EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS')
+    if 1:
+        #sim = simParams('tng50-1', redshift=2.0)
+        #EW_vs_coldens(sim, line='MgII 2796', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,1.3], xlim=[12.0,19.0])
+        #EW_vs_coldens(sim, line='MgII 2796', instrument='KECK-HIRES-B14', bvals=[5,10,25,50], ylim=[-1.3,1.3], xlim=[12.0,19.0])
+
+        #EW_vs_coldens(sim, line='MgII 2803', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,1.3], xlim=[12.0,19.0])
+        #EW_vs_coldens(sim, line='MgII 1239', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-2.3,0.3], xlim=[12.0,21.0])
+        #EW_vs_coldens(sim, line='MgII 1240', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-2.3,0.3], xlim=[12.0,21.0])
+        #EW_vs_coldens(sim, line='HI 1215', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,2.5], xlim=[14.0,21.0])
+        #EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS')
+
+        #sim = simParams('tng50-1', redshift=0.1)
+        #EW_vs_coldens(sim, line='MgII 2796', instrument='KECK-HIRES-B14', bvals=[5,10,25,50], ylim=[-1.3,1.3], xlim=[12.0,19.0])
+
+        sim = simParams('tng50-3', redshift=2.0)
+        EW_vs_coldens(sim, line='MgII 2796', instrument='SDSS-BOSS', bvals=[5,10,25,50], 
+                      ylim=[-1.3,1.3], xlim=[12.0,19.0], pSplit=[0,16])
 
     # fig 7: MgII EW distribution functions (dN/DW) and absorber incidence vs redshift (dN/dz) vs. data
     if 0:

@@ -15,6 +15,63 @@ from .util.helper import pSplitRange
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def plot_wofz():
+    """ Test wofz complex function. """
+    from .cosmo.spectrum import wofz_complex_fn_realpart
+    from .util.helper import faddeeva985
+
+    u = np.linspace(-15, 15, 200)
+
+    # plot
+    fig, ax = plt.subplots(figsize=figsize)
+
+    for alpha in [0.00001, 0.0001, 0.001, 0.01, 0.1, 0.5, 1.0]:
+        w = np.zeros(u.size, dtype='float32')
+        w2 = np.zeros(u.size, dtype='float32')
+        for i in range(u.size):
+            w[i] = wofz_complex_fn_realpart(u[i], alpha)
+            w2[i] = faddeeva985(u[i], alpha)
+            
+        l, = ax.plot(u, w, '--', lw=2, label='alpha = %.2f' % alpha)
+        ax.plot(u, w2, ':', lw=2, color=l.get_color(), label='alpha = %.2f (985)' % alpha)
+        err = np.max(np.abs(w-w2))
+        print(alpha, w[0], w2[0], err)
+
+    ax.set_xlabel('u')
+    ax.set_ylabel('wofz(u)')
+    ax.set_title('wofz Complex Function Real Part')
+    ax.legend(loc='upper right')
+
+    fig.savefig('wofz_test.pdf')
+    plt.close(fig)
+
+    # plot B
+    fig, ax = plt.subplots(figsize=figsize)
+
+    alpha = np.linspace(-4.0, 0.0, 200)
+    alpha = 10.0**alpha
+
+    for u in [-2.0,-1.5,-1.0,-0.5,-0.1,0.0,0.1,0.5,1.0,1.5,2.0]:
+        w = np.zeros(alpha.size, dtype='float32')
+        w2 = np.zeros(alpha.size, dtype='float32')
+        for i in range(alpha.size):
+            w[i] = wofz_complex_fn_realpart(u, alpha[i])
+            w2[i] = faddeeva985(u, alpha[i])
+
+        l, = ax.plot(np.log10(alpha), w, lw=2, label='u = %.2f' % u)
+        ax.plot(np.log10(alpha), w2, ':', lw=2, color=ax.lines[-1].get_color(), label='u = %.2f (985)' % u)
+
+        err = np.max(np.abs(w-w2))
+        print(u, w[0], w2[0], err)
+
+    #ax.set_xscale('log')
+    ax.set_xlabel('log alpha')
+    ax.set_ylabel('wofz(u)')
+    ax.set_title('wofz Complex Function Real Part')
+    ax.legend(loc='upper right')
+    fig.savefig('wofz_test2.pdf')
+    plt.close(fig)
+
 def concat_tracer_parent_cats():
     """ Combine individual tracer_parent_indextype catalogs into single file. """
     sim = simParams('tng50-1')
@@ -1174,7 +1231,7 @@ def francesca_voversigma():
     # plot
     fig = plt.figure(figsize=[12, 8])
     ax = fig.add_subplot(111)
-    ax.set_xlabel('H-alpha based V$_{\\rm rot}$ / $\sigma$')
+    ax.set_xlabel(r'H-alpha based V$_{\rm rot}$ / $\sigma$')
     ax.set_ylabel('Number of Galaxies')
 
     nBins = 13
@@ -1774,8 +1831,8 @@ def guinevere_mw_sample():
 
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(1,1,1)
-        ax.set_xlabel('log $M_{\\rm gas} / M_\star$ [ Illustris ]')
-        ax.set_ylabel('log $M_{\\rm gas} / M_\star$ [ TNG ]')
+        ax.set_xlabel(r'log $M_{\rm gas} / M_\star$ [ Illustris ]')
+        ax.set_ylabel(r'log $M_{\rm gas} / M_\star$ [ TNG ]')
 
         ax.set_xlim([-2.2, 0.3])
         ax.set_ylim([-2.2, 0.3])

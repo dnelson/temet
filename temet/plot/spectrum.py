@@ -18,7 +18,7 @@ from ..util.helper import sampleColorTable, logZeroNaN
 from ..util.units import units
 from ..plot.config import *
 
-def _cog(lines, N, b, nPts=401):
+def _cog(lines, N, b, nPts=1001):
     """ Compute a local absorption spectrum for one or more line(s) at a given column density and 
     Doppler parameter, returning (relative) flux array and derived equivalent width. 
     
@@ -31,7 +31,7 @@ def _cog(lines, N, b, nPts=401):
     """
     f, gamma, wave0_ang, _, _ = _line_params(lines[0])
 
-    wave_ang = np.linspace(wave0_ang-10, wave0_ang+10, nPts) # 0.05 Ang spacing
+    wave_ang = np.linspace(wave0_ang-20, wave0_ang+20, nPts) # 0.05 Ang spacing
     dvel = (wave_ang/wave0_ang - 1) * units.c_cgs / 1e5 # cm/s -> km/s
 
     #dwave_ang = wave_ang[1] - wave_ang[0]
@@ -42,6 +42,9 @@ def _cog(lines, N, b, nPts=401):
     for line in lines:
         f, gamma, wave0_ang, _, _ = _line_params(line)
         tau += _voigt_tau(wave_ang, 10.0**N, b, wave0_ang, f, gamma)
+
+    if tau[0] > 1e-4 or tau[-1] > 1e-4:
+        print('_cog(): Warning: optical depth at edges is large, consider increasing wave_ang range.')
 
     flux = np.exp(-1*tau)
     EW = _equiv_width(tau,wave_ang)
@@ -933,7 +936,7 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
         EWs[redshift] = data
 
     # start plot
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=[figsize[0]*0.85, figsize[1]*0.85])
     ax = fig.add_subplot(111)
 
     ax.set_xlim(xlim)
@@ -980,16 +983,26 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
         opts = {'color':'#333333', 'ecolor':'#333333', 'alpha':0.6, 'capsize':0.0, 'fmt':'s'}
         ax.errorbar(m13_x, m13_y, yerr=m13_yerr, xerr=xerr, label=m13_label, **opts)
 
-        # Chen+16 (updated/finished sample of Matejek+, identical EW bins)
+        # Chen+17 (updated/finished sample of Matejek+, identical EW bins)
         # https://ui.adsabs.harvard.edu/abs/2017ApJ...850..188C/abstract
         c16_y = [1.539, 0.591, 0.298, 0.185, 0.134, 0.026]
         c16_yerr = [0.215, 0.082, 0.055, 0.042, 0.035, 0.007]
-        c16_label = 'Chen+16 (1.9 < z < 6.3)'
+        c16_label = 'Chen+17 (1.9 < z < 6.3)'
 
         opts = {'color':'#333333', 'ecolor':'#333333', 'alpha':0.9, 'capsize':0.0, 'fmt':'D'}
         ax.errorbar(m13_x, c16_y, yerr=c16_yerr, xerr=xerr, label=c16_label, **opts)
 
         # check: https://iopscience.iop.org/article/10.3847/1538-4357/abbb34/pdf
+
+        # Sebastian+24 (E-XQR-30)
+        s24_x = [5.15e-2, 1.03e-1, 2.0e-1, 3.95e-1, 7.75e-1, 1.51e0, 2.94e0]
+        s24_y = [5.51e0, 4.12e0, 3.13e0, 1.55e0, 6.1e-1, 2.27e-1, 8.10e-2]
+        s24_y0 = [4.48e0, 3.37e0, 2.80e0, 1.38e0, 5.17e-1, 1.86e-1, 6.43e-2]
+        s24_yerr = np.array(s24_y) - np.array(s24_y0)
+        s24_label = 'Sebastian+24 (2 < z < 6)'
+
+        opts = {'color':'#000', 'ecolor':'#000', 'alpha':0.9, 'capsize':0.0, 'fmt':'o'}
+        ax.errorbar(s24_x, s24_y, yerr=s24_yerr, label=s24_label, **opts)
 
     if line == 'CIV 1548':
         # Finlator+
@@ -1002,7 +1015,7 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
     plt.close(fig)
 
 def EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS', bvals = [5, 10, 25, 50, 100, 150],
-                    xlim=[12.5,16.0], ylim=[-1.7,0.5], solar=False, log=False):
+                    xlim=[12.5,16.0], ylim=[-1.7,0.5], solar=False, log=False, pSplit=None):
     """ Plot the relationship between EW and column density, and compare to the CoG.
 
     Args:
@@ -1014,19 +1027,16 @@ def EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS', bvals = [5, 10, 
       ylim (list[float]): min and max equivalent width [log Ang].
       solar (bool): use the (constant) solar value instead of simulation-tracked metal abundances.
       log (bool): plot log(EW) instead of linear EWs.
+      pSplit (list[int]): if not None, then use this subset.
     """
-    # plot config
-    EW_min = 1e-2 # rest-frame ang
-    coldens_min = 10.0 # log 1/cm^2
-
     # load
     ion = lines[line]['ion']
-    filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
+    filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar, pSplit=pSplit)
 
     with h5py.File(filepath,'r') as f:
         EW = f['EW_%s' % line.replace(' ','_')][()]
 
-    coldens = integrate_along_saved_rays(sim, '%s numdens' % ion)
+    coldens = integrate_along_saved_rays(sim, '%s numdens' % ion, pSplit=pSplit)
 
     # convert to rest-frame
     EW /= (1+sim.redshift)
@@ -1036,7 +1046,7 @@ def EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS', bvals = [5, 10, 
         EW = np.log10(EW)
         coldens = np.log10(coldens)
 
-        w = np.where( (EW>ylim[0]) & (EW<=ylim[1]) & (coldens>xlim[0]) & (coldens<=xlim[1]))
+        w = np.where((EW>ylim[0]) & (EW<=ylim[1]) & (coldens>xlim[0]) & (coldens<=xlim[1]))
 
     print('[%s] %d/%d sightlines selected.' % (sim.simName,len(w[0]),len(EW)))
 
@@ -1068,7 +1078,6 @@ def EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS', bvals = [5, 10, 
     # overplot curve of growth
     Nvals = np.linspace(xlim[0], xlim[1], 100)
     
-
     for b in bvals:
         EWs = np.zeros(Nvals.size, dtype='float32')
         for i, N in enumerate(Nvals):
@@ -1100,11 +1109,16 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
     # config
     z13 = zhu13mgii()
     #EW_thresholds = [0.3,1.0,3.0] # thresholds for EW for vs. redshift plot
-    EW_thresholds = z13['EW0'] # match to obs data
+    if 'MgII' in line:
+        EW_thresholds = z13['EW0'] # match to obs data
+        xlim = [0.0, np.max(redshifts)+2.0]
+        ylim = [2e-4, 4.0]
 
-    xlim = [0.0, np.max(redshifts)+1]
-    ylim = [2e-4, 4.0]
-
+    if 'CIV' in line:
+        EW_thresholds = [0.005, 0.3, 0.6, 0.9]
+        xlim = [np.min(redshifts)-0.1, np.max(redshifts)+0.1]
+        ylim = [1e-3, 10.0]    
+    
     # load: loop over all available redshifts
     zz = []
     dNdz = {thresh:[] for thresh in EW_thresholds}
@@ -1142,7 +1156,7 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
         zz.append(redshift)
 
     # start plot
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=[figsize[0]*0.85, figsize[1]*0.85])
     ax = fig.add_subplot(111)
 
     ax.set_xlim(xlim)
@@ -1154,7 +1168,8 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
     # plot the simulation dN/dz for each EW threshold
     colors = []
     for EW_thresh in EW_thresholds:
-        l, = ax.plot(zz, dNdz[EW_thresh], '-', lw=lw, label=r'EW > %.1f$\,\rm{\AA}$' % EW_thresh)
+        label = r'%s (EW > %.1f$\,\rm{\AA}$)' % (sim.simName,EW_thresh)
+        l, = ax.plot(zz, dNdz[EW_thresh], '-', lw=lw, label=label)
         colors.append(l.get_color())
 
     # observational data
@@ -1178,7 +1193,7 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
     plt.close(fig)
 
     # start plot
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=[figsize[0]*0.85, figsize[1]*0.85])
     ax = fig.add_subplot(111)
 
     ax.set_xlim(xlim)
@@ -1188,7 +1203,7 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
     ax.set_yscale('log')
 
     for EW_thresh in EW_thresholds:
-        ax.plot(zz, dNdX[EW_thresh], '-', lw=lw, label=r'EW > %.1f$\,\rm{\AA}$' % EW_thresh)
+        ax.plot(zz, dNdX[EW_thresh], '-', lw=lw)
 
     # observational data
     if line == 'MgII 2796':
@@ -1196,12 +1211,57 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
         # Zou+21
         # https://ui.adsabs.harvard.edu/abs/2017MNRAS.472.1023C/abstract
 
-    if line == 'CIV': # also SiIV
-        pass # https://ui.adsabs.harvard.edu/abs/2022ApJ...924...12H/abstract
+    if line == 'CIV 1548':
+        # Hasan+2020 (Table 4, Figure 7)
+        h20_label = 'Hasan+ (2020)'
+        h20_z = [1.34, 1.74, 1.94, 2.13, 2.30, 2.46, 2.64, 2.83, 3.01, 4.0]
+        h20_dNdX_005A = [1.97, 2.17, 2.12, 2.11, 2.03, 2.02, 1.77, 2.13, 1.39, 1.23]
+        h20_dNdX_03A  = [0.80, 0.76, 0.75, 0.67, 0.61, 0.56, 0.59, 0.55, 0.40, 0.24]
+        h20_dNdX_06A  = [0.53, 0.39, 0.36, 0.34, 0.34, 0.19, 0.26, 0.20, 0.11, 0.06]
+        h20_dNdX_005A_err = [0.19, 0.21, 0.20, 0.19, 0.18, 0.18, 0.16, 0.19, 0.12, 0.11]
+        h20_dNdX_03A_err  = [0.10, 0.10, 0.10, 0.10, 0.09, 0.09, 0.09, 0.09, 0.06, 0.04]
+        h20_dNdX_06A_err  = [0.08, 0.07, 0.07, 0.07, 0.07, 0.05, 0.06, 0.06, 0.03, 0.02]
+
+        label = r'%s ($\rm{W_0 > 0.05 \AA}$)' % (h20_label)
+        ax.errorbar(h20_z, h20_dNdX_005A, yerr=h20_dNdX_005A_err, color=colors[0], marker='s', ls='none', label=label)
+        label = r'%s ($\rm{W_0 > 0.3 \AA}$)' % (h20_label)
+        ax.errorbar(h20_z, h20_dNdX_03A, yerr=h20_dNdX_03A_err, color=colors[1], marker='s', ls='none', label=label)
+        label = r'%s ($\rm{W_0 > 0.6 \AA}$)' % (h20_label)
+        ax.errorbar(h20_z, h20_dNdX_06A, yerr=h20_dNdX_06A_err, color=colors[2], marker='s', ls='none', label=label)
+
+        # Anand+2025 (Figure 7)
+        a25_label = 'Anand+ (2025)'
+        a25_z = [1.54, 1.77, 1.86, 1.93, 1.98, 2.03, 2.09, 2.14, 2.20, 2.26, 2.33, 2.41, 2.51, 2.66, 2.88, 3.85]
+        a25_dNdX_06A = [1.80e-1, 1.72e-1, 1.75e-1, 1.63e-1, 1.59e-1, 1.52e-1, 1.50e-1, 1.47e-1, 1.41e-1, 
+                        1.33e-1, 1.25e-1, 1.22e-1, 1.07e-1, 8.47e-2, 7.67e-2, 4.81e-2]
+        a25_dNdX_09A = [7.79e-2, 7.07e-2, 6.81e-2, 6.68e-2, 6.60e-2, 6.14e-2, 5.72e-2, 5.86e-2, 5.45e-2, 
+                        5.34e-2, 4.83e-2, 4.54e-2, 4.12e-2, 3.21e-2, 2.80e-2, 1.71e-2]
+
+        label = r'%s ($\rm{W_0 > 0.6 \AA}$)' % (a25_label)
+        ax.errorbar(a25_z, a25_dNdX_06A, color=colors[2], marker='o', ls='none', label=label)
+        label = r'%s ($\rm{W_0 > 0.9 \AA}$)' % (a25_label)
+        ax.errorbar(a25_z, a25_dNdX_09A, color=colors[3], marker='o', ls='none', label=label)
+
+        # https://ui.adsabs.harvard.edu/abs/2022ApJ...924...12H/abstract
         # https://ui.adsabs.harvard.edu/abs/2018MNRAS.481.4940C/abstract
 
+    # legends
+    handles = []
+    labels = []
+
+    for i, EW_thresh in enumerate(EW_thresholds):
+        label = r'%s (EW > %.1f$\,\rm{\AA}$)' % (sim.simName,EW_thresh)
+        if EW_thresh < 0.1:
+            label = r'%s (EW > %.3f$\,\rm{\AA}$)' % (sim.simName,EW_thresh)
+        handles.append(plt.Line2D((0,1), (0,0), color=colors[i], lw=lw, ls='-'))
+        labels.append(label)
+
+    legend2 = ax.legend(handles, labels, loc='upper right')
+    ax.add_artist(legend2)
+
+    ax.legend(loc='lower left')
+
     # finish plot
-    ax.legend(loc='best')
     fig.savefig('dNdX_evolution_%s_%s.pdf' % (sim.simName,line.replace(' ','-')))
     plt.close(fig)
 

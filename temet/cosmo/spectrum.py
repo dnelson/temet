@@ -13,7 +13,7 @@ from numba import jit
 from numba.extending import get_cython_function_address
 import ctypes
 
-from ..util.helper import closest, pSplitRange
+from ..util.helper import closest, pSplitRange, faddeeva985
 from ..util.voronoiRay import rayTrace
 
 # default configuration for ray generation
@@ -42,10 +42,10 @@ lines = {'HI 1215'    : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion'
          'HI 923'     : {'f':2.216e-3, 'gamma':5.79e6,  'wave0':923.1503,  'ion':'H I'},
          'HI 920'     : {'f':1.605e-3, 'gamma':4.19e6,  'wave0':920.9630,  'ion':'H I'},
          'HI 919'     : {'f':1.20e-3,  'gamma':7.83e4,  'wave0':919.3514,  'ion':'H I'},
-         'HI 918'     : {'f':9.21e-4,  'gamma':5.06e4,  'wave0':918.1293,  'ion':'H I'},
-         'HI 917'     : {'f':7.226e-4, 'gamma':3.39e4,  'wave0':917.1805,  'ion':'H I'},
-         'HI 916'     : {'f':5.77e-4,  'gamma':2.34e4,  'wave0':916.4291,  'ion':'H I'},
-         'HI 915'     : {'f':4.69e-4,  'gamma':1.66e4,  'wave0':915.8238,  'ion':'H I'},
+         #'HI 918'     : {'f':9.21e-4,  'gamma':5.06e4,  'wave0':918.1293,  'ion':'H I'},
+         #'HI 917'     : {'f':7.226e-4, 'gamma':3.39e4,  'wave0':917.1805,  'ion':'H I'},
+         #'HI 916'     : {'f':5.77e-4,  'gamma':2.34e4,  'wave0':916.4291,  'ion':'H I'},
+         #'HI 915'     : {'f':4.69e-4,  'gamma':1.66e4,  'wave0':915.8238,  'ion':'H I'},
          'CI 1561'    : {'f':7.14e-2,  'gamma':1.17e8,  'wave0':1561.054,  'ion':'C I'}, # 6 subcomponents combined
         #'CI 1560a'   : {'f':7.14e-2,  'gamma':6.52e7,  'wave0':1560.309,  'ion':'C I'}, # test: 'a' of above
         #'CI 1560b'   : {'f':5.36e-2,  'gamma':8.81e7,  'wave0':1560.682,  'ion':'C I'}, # test: 'b' of above
@@ -529,7 +529,7 @@ def create_wavelength_grid(line=None, instrument=None):
         num_edges = int(np.floor((wave_max - wave_min) / dwave)) + 1
         wave_edges = np.linspace(wave_min, wave_max, num_edges)
         wave_mid = (wave_edges[1:] + wave_edges[:-1]) / 2
-        print(f'Created [N = {wave_mid.size}] linear wavelength grid with {dwave = } for [{instrument}]')
+        print(f' Created [N = {wave_mid.size}] linear wavelength grid with {dwave = } [{wave_min =} {wave_max =}] for [{instrument}]')
 
     # if dlogwave is specified, use log10-linear wavelength spacing
     if dlogwave is not None:
@@ -539,7 +539,7 @@ def create_wavelength_grid(line=None, instrument=None):
         wave_mid = 10.0**log_wave_mid
         log_wave_edges = np.arange(log_wavemin-dlogwave/2,log_wavemax+dlogwave+dlogwave/2,dlogwave)
         wave_edges = 10.0**log_wave_edges
-        print(f'Created [N = {wave_mid.size}] loglinear wavelength grid with {dlogwave = } for [{instrument}]')
+        print(f' Created [N = {wave_mid.size}] loglinear wavelength grid with {dlogwave = } for [{instrument}]')
 
     # if dlnwave is specified, use log-linear wavelength spacing
     if dlnwave is not None:
@@ -549,7 +549,7 @@ def create_wavelength_grid(line=None, instrument=None):
         wave_mid = np.exp(log_wave_mid)
         log_wave_edges = np.arange(log_wavemin-dlnwave/2,log_wavemax+dlnwave+dlnwave/2,dlnwave)
         wave_edges = np.exp(log_wave_edges)
-        print(f'Created [N = {wave_mid.size}] lnlinear wavelength grid with {dlnwave = } for [{instrument}]')
+        print(f' Created [N = {wave_mid.size}] lnlinear wavelength grid with {dlnwave = } for [{instrument}]')
 
     if wave_mid is None:
         raise Exception(f'Missing wavelength grid specification for [{instrument}].')
@@ -564,7 +564,7 @@ def create_wavelength_grid(line=None, instrument=None):
         wave_mid = np.exp(log_wave_mid)
         log_wave_edges = np.arange(log_wavemin-d_loglam/2,log_wavemax+d_loglam+d_loglam/2,d_loglam)
         wave_edges = np.exp(log_wave_edges)
-        print(f'Created [N = {wave_mid.size}] loglinear wavelength grid with {R = } for [{instrument}]')
+        print(f' Created [N = {wave_mid.size}] loglinear wavelength grid with {R = } for [{instrument}]')
 
     tau_master = np.zeros(wave_mid.size, dtype='float32')
 
@@ -578,18 +578,78 @@ functype = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double, ctypes.c_double)
 # Note: rather dangerous as the real part isn't strictly guaranteed to be the first 8 bytes
 wofz_complex_fn_realpart = functype(addr)
 
-@jit(nopython=True, nogil=True, cache=False)
-def _voigt0(wave_cm, b, wave0_ang, gamma):
-    """ Dimensionless Voigt profile (shape).
+@jit(nopython=True, nogil=True)
+def _voigt_tau(wave, N, b, wave0, f, gamma, wave0_rest=None):
+    """ Compute optical depth tau as a function of wavelength for a Voigt absorption profile.
 
     Args:
-      wave_cm (array[float]): wavelength grid in [cm] where the profile is calculated.
-      b (float): doppler parameter in km/s.
-      wave0_ang (float): central wavelength of transition in angstroms.
-      gamma (float): sum of transition probabilities (Einstein A coefficients).
+      wave (array[float]): observed-frame wavelength grid in [linear ang]
+      N (float): column density of absorbing species in [cm^-2]
+      b (float): doppler parameter, equal to sqrt(2kT/m) where m is the particle mass.
+        b = sigma*sqrt(2) where sigma is the velocity dispersion.
+      wave0 (float): observed-frame central wavelength of the transition in [ang]
+      f (float): oscillator strength of the transition
+      gamma (float): sum of transition probabilities (Einstein A coefficients) [1/s]
+      wave0_rest (float): if not None, then rest-frame central wavelength, i.e. wave0 could be redshifted
     """
+    if wave0_rest is None:
+        wave0_rest = wave0
+
+    wave_cm = wave * 1e-8
+
+    # get dimensionless shape for voigt profile:
     nu = sP_units_c_cgs / wave_cm # wave = c/nu
-    wave_rest = wave0_ang * 1e-8 # angstrom -> cm
+    wave0_cm = wave0 * 1e-8 # angstrom -> cm
+    wave0_rest_cm = wave0_rest * 1e-8 # angstrom -> cm
+    nu0 = sP_units_c_cgs / wave0_cm # Hz
+    b_cgs = b * 1e5 # km/s -> cm/s
+    dnu = b_cgs / wave0_cm # Hz, "doppler width" = sigma/sqrt(2)
+
+    # use Faddeeva for integral
+    #alpha = gamma / (4*np.pi*dnu) # old, wrong for z>0
+    alpha = gamma / (4*np.pi*b_cgs/wave0_rest_cm) # should use here rest-frame wave0
+    voigt_u = (nu - nu0) / dnu # = (nu-nu0) * wave0_cm / b_cgs
+    # = (c/wave_cm - c/wave0_cm) * wave0_cm / b_cgs
+    # = c * (wave0_cm/wave_cm - 1) / b_cgs
+
+    # numba wofz issue: https://github.com/numba/numba/issues/3086
+    #voigt_wofz = wofz(voigt_u + 1j*alpha).real # H(alpha,z)
+    voigt_wofz = np.zeros(voigt_u.size, dtype=np.float64)
+    for i in range(voigt_u.size):
+        #voigt_wofz[i] = wofz_complex_fn_realpart(voigt_u[i], alpha)
+        voigt_wofz[i] = faddeeva985(voigt_u[i], alpha) # speed-up depends on region
+
+    phi_wave = voigt_wofz / b_cgs # s/cm
+
+    # normalize amplitude
+    consts = 0.014971475 # sqrt(pi)*e^2 / m_e / c = cm^2/s
+    wave0_rest_cm = wave0_rest * 1e-8
+
+    tau_wave = (consts * N * f * wave0_rest_cm) * phi_wave # dimensionless
+    return tau_wave
+
+#@jit(nopython=True, nogil=True, cache=False)
+def _voigt_tau_old(wave, N, b, wave0, f, gamma, wave0_rest=None):
+    """ Compute optical depth tau as a function of wavelength for a Voigt absorption profile.
+
+    Args:
+      wave (array[float]): wavelength grid in [linear ang]
+      N (float): column density of absorbing species in [cm^-2]
+      b (float): doppler parameter, equal to sqrt(2kT/m) where m is the particle mass.
+        b = sigma*sqrt(2) where sigma is the velocity dispersion.
+      wave0 (float): central wavelength of the transition in [ang]
+      f (float): oscillator strength of the transition
+      gamma (float): sum of transition probabilities (Einstein A coefficients) [1/s]
+      wave0_rest (float): if not None, then rest-frame central wavelength, i.e. wave0 could be redshifted
+    """
+    if wave0_rest is None:
+        wave0_rest = wave0
+
+    wave_cm = wave * 1e-8
+
+    # get dimensionless shape for voigt profile:
+    nu = sP_units_c_cgs / wave_cm # wave = c/nu
+    wave_rest = wave0 * 1e-8 # angstrom -> cm
     nu0 = sP_units_c_cgs / wave_rest # Hz
     b_cgs = b * 1e5 # km/s -> cm/s
     dnu = b_cgs / wave_rest # Hz, "doppler width" = sigma/sqrt(2)
@@ -607,30 +667,8 @@ def _voigt0(wave_cm, b, wave0_ang, gamma):
         voigt_wofz[i] = wofz_complex_fn_realpart(voigt_u[i], alpha)
 
     phi_wave = voigt_wofz / b_cgs # s/cm
-    return phi_wave
 
-@jit(nopython=True, nogil=True, cache=False)
-def _voigt_tau(wave, N, b, wave0, f, gamma, wave0_rest=None):
-    """ Compute optical depth tau as a function of wavelength for a Voigt absorption profile.
-
-    Args:
-      wave (array[float]): wavelength grid in [linear ang]
-      N (float): column density of absorbing species in [cm^-2]
-      b (float): doppler parameter, equal to sqrt(2kT/m) where m is the particle mass.
-        b = sigma*sqrt(2) where sigma is the velocity dispersion.
-      wave0 (float): central wavelength of the transition in [ang]
-      f (float): oscillator strength of the transition
-      gamma (float): sum of transition probabilities (Einstein A coefficients) [1/s]
-      wave0_rest (float): if not None, then rest-frame central wavelength, i.e. wave0 could be redshifted
-    """
-    if wave0_rest is None:
-        wave0_rest = wave0
-
-    # get dimensionless shape for voigt profile:
-    wave_cm = wave * 1e-8
-
-    phi_wave = _voigt0(wave_cm, b, wave0, gamma)
-
+    # normalize amplitude
     consts = 0.014971475 # sqrt(pi)*e^2 / m_e / c = cm^2/s
     wave0_rest_cm = wave0_rest * 1e-8
 
@@ -689,7 +727,7 @@ def varconvolve(arr, kernel):
 
     return arr_conv
 
-@jit(nopython=True, nogil=True, cache=False)
+@jit(nopython=True, nogil=True)
 def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_eff, debug=False):
     """ Add the absorption profile of a single transition, from a single cell, to a spectrum.
     Global method, where the original master grid is assumed to be very high resolution, such that 
@@ -794,7 +832,7 @@ def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_
 
     return
 
-@jit(nopython=True, nogil=True, cache=False)
+@jit(nopython=True, nogil=True)
 def _resample_spectrum(master_mid, tau_master, inst_waveedges):
     """ Resample a high-resolution spectrum defined on the master_mid wavelength (midpoints) grid, 
     with given optical depths at each wavelength point, onto a lower resolution inst_waveedges 
@@ -817,9 +855,6 @@ def _resample_spectrum(master_mid, tau_master, inst_waveedges):
 
     assert master_startind > 0, 'Should not occur.'
     assert master_finalind < master_mid.size-1, 'Should not occur.'
-
-    # convert optical depth to flux
-    flux_master = np.exp(-tau_master)
 
     dwave_master = master_mid[1] - master_mid[0] # constant
 
@@ -863,11 +898,11 @@ def _resample_spectrum(master_mid, tau_master, inst_waveedges):
             flux_bin = 0.0
 
         # accumulate (partial) sum of 1-flux
-        flux_bin += (1-flux_master[master_ind])
+        flux_bin += 1 - np.exp(-tau_master[master_ind])
 
     return inst_tau
 
-@jit(nopython=True, nogil=True, cache=False)
+@jit(nopython=True, nogil=True)
 def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, 
                                      rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
                                      cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
@@ -895,6 +930,13 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
         master_temp = cell_temp[master_inds]
         master_vellos = cell_vellos[master_inds]
 
+        # column density
+        N = master_dens * (master_dx * sP_units_Mpc_in_cm) # cm^-2
+
+        # skip rays with negligibly small total columns (in linear cm^-2)
+        if np.sum(N) < 1e8:
+            continue
+
         # reset tau_master for each ray
         tau_master *= 0.0
 
@@ -912,22 +954,24 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
         # effective redshift
         z_eff = (1+z_doppler)*(1+z_cosmo) - 1
 
-        # column density
-        N = master_dens * (master_dx * sP_units_Mpc_in_cm) # cm^-2
-
         # doppler parameter b = sqrt(2kT/m) where m is the particle mass
         b = np.sqrt(2 * sP_units_boltzmann * master_temp / ion_mass) # cm/s
         b /= 1e5 # km/s
 
         # deposit each intersected cell as an absorption profile onto spectrum
+        count = 0
         for j in range(length):
             # skip negligibly small columns (in linear cm^-2) for efficiency
-            if N[j] < 1e2:
+            if N[j] < 1e6:
                 continue
 
             deposit_single_line(master_edges, tau_master, f, gamma, wave0, N[j], b[j], z_eff[j])
+            count += 1
 
         # resample tau_master on to instrument wavelength grid
+        if count == 0:
+            continue # no absorption, skip this ray
+
         tau_inst = _resample_spectrum(master_mid, tau_master, inst_waveedges)
 
         # line spread function (LSF) in pixel space? convolve the instrumental (flux) spectrum now
@@ -936,19 +980,25 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
         if lsf_mode == 1:
             flux_inst = 1 - np.exp(-tau_inst)
             flux_conv = varconvolve(flux_inst, lsf_matrix)
-            #tau_inst = varconvolve(tau_inst, lsf_matrix) # old, remove
+
+            # note: flux_conv can be 1.0, leading to tau_inst = inf
+            # so set to 1-eps, such that tau is very large (~16 for this value of eps)
+            # note: taking 1 - 1e-10 as in _resample_spectrum() fails in where/assignment to flux_conv (dtype?)
+            flux_smallval = 1.0 - 1e-7
+            flux_conv[flux_conv >= 1.0] = flux_smallval
+
             tau_inst = -np.log(1-flux_conv)
 
-        # also compute and save a reference EW from master
+        # also compute and save a reference EW
         # note: is a global EW, i.e. not localized/restricted to a single absorber
-        EW_allrays[i] = _equiv_width(tau_master,master_mid)
+        EW_allrays[i] = _equiv_width(tau_inst,inst_wavemid)
 
         # stamp
         tau_allrays[i,:] = tau_inst
 
         # debug: (verify EW is same in master and instrumental grids)
-        if 1:
-            EW_check = _equiv_width(tau_inst,inst_wavemid)
+        if 0:
+            EW_check = _equiv_width(tau_master,master_mid)
             #assert np.abs(EW_check - EW_allrays[i]) < 0.01
             if np.abs(EW_check - EW_allrays[i]) > 0.01:
                 # where? ignore if it is in master grid outside of inst grid coverage
@@ -995,10 +1045,6 @@ def create_spectra_from_traced_rays(sP, line, instrument,
 
     z_lengths = sP.units.redshiftToComovingDist(z_vals) - sP.units.redshiftToComovingDist(sP.redshift)
 
-    # adapt master grid to span instrumental grid (optional, save some memory/efficiency)
-    instruments['master']['wave_min'] = instruments[instrument]['wave_min'] - 100
-    instruments['master']['wave_max'] = instruments[instrument]['wave_max'] + 100
-
     # sample master, and instrumental, grids
     master_mid, master_edges, _ = create_wavelength_grid(instrument='master')
 
@@ -1008,6 +1054,15 @@ def create_spectra_from_traced_rays(sP, line, instrument,
     assert inst_waveedges[-1] <= master_edges[-1], 'Instrumental wavelength grid max extends off master.'
 
     lsf_mode, lsf, _ = lsf_matrix(instrument)
+
+    if 0:
+        if sP.simName == 'TNG50-1': indiv_index = 9420
+        if sP.simName == 'TNG50-3': indiv_index = 58189
+
+        rays_len = rays_len[indiv_index:indiv_index+10]
+        rays_off = rays_off[indiv_index:indiv_index+10]
+        n_rays = rays_len.size
+        print('TODO REMOVE SINGLE RAY DEBUG!!!')
 
     # single-threaded
     if nThreads == 1 or n_rays < nThreads:
@@ -1455,6 +1510,8 @@ def _integrate_quantity_along_traced_rays(rays_off, rays_len, rays_cell_dl, rays
 
         r[i] = np.sum(master_dx * master_values)
 
+        #import pdb; pdb.set_trace()
+
     return r
 
 def integrate_along_saved_rays(sP, field, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def, subhaloIDs=None, pSplit=None):
@@ -1617,6 +1674,25 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
       solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
         use the (constant) solar value.
     """
+    # adapt idealized grid to span (redshifted) central wavelength (optional, save space)
+    if instrument == 'idealized':
+        wave_min_ion = np.inf
+        wave_max_ion = 0.0
+
+        for line_name, props in lines.items():
+            if props['ion'] == ion:
+                wave_min_ion = min(wave_min_ion, props['wave0'])
+                wave_max_ion = max(wave_max_ion, props['wave0'])
+
+        wave_min = np.floor((wave_min_ion * (1 + sP.redshift) - 100) / 500) * 500
+        wave_max = np.ceil((wave_max_ion * (1 + sP.redshift) + 100) / 500) * 500
+        instruments['idealized']['wave_min'] = wave_min
+        instruments['idealized']['wave_max'] = wave_max
+
+    # adapt master grid to span instrumental grid (optional, save some memory/efficiency)
+    instruments['master']['wave_min'] = instruments[instrument]['wave_min'] - 100
+    instruments['master']['wave_max'] = instruments[instrument]['wave_max'] + 100
+
     # sample master grid
     wave_mid, _, tau = create_wavelength_grid(instrument=instrument)
     
