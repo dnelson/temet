@@ -281,8 +281,8 @@ legend.handlelength  : 2.0     # the length of the legend lines in fraction of f
 #legend.borderaxespad : 0.5   # the border between the axes and legend edge in fraction of fontsize
 legend.columnspacing : 1.5    # the border between the axes and legend edge in fraction of fontsize
 #legend.shadow        : False
-legend.frameon       : False   # whether or not to draw a frame around legend
-#legend.framealpha    : None    # opacity of of legend frame
+legend.frameon       : True   # whether or not to draw a frame around legend
+legend.framealpha    : 0.6    # opacity of of legend frame
 legend.scatterpoints : 1 # number of scatter points
 
 ### FIGURE

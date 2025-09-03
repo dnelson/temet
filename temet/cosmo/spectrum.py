@@ -83,6 +83,11 @@ lines = {'HI 1215'    : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion'
          'MnII 1197'  : {'f':2.17e-1,  'gamma':7.84e8,  'wave0':1197.184,  'ion':'Mn II'},
          'NI 1199'    : {'f':3.25e-1,  'gamma':5.02e8,  'wave0':1199.9674, 'ion':'N I'}, # 3 subcomponents combined
          'NI 1134'    : {'f':2.31e-2,  'gamma':3.99e7,  'wave0':1134.6559, 'ion':'N I'}, # 3 subcomponents combined
+         'NII 1085'   : {'f':1.09e-1,  'gamma':3.70e8,  'wave0':1085.1277, 'ion':'N II'}, # 6 subcomponents combined
+         'NII 916'    : {'f':1.60e-1,  'gamma':1.27e9,  'wave0':916.3408,  'ion':'N II'}, # 6 subcomponents combined
+         'NIII 990'   : {'f':1.22e-1,  'gamma':4.97e8,  'wave0':990.9790,  'ion':'N III'}, # 3 subcomponents combined
+         'NIII 764'   : {'f':8.20e-2,  'gamma':2.81e9,  'wave0':764.0118,  'ion':'N III'}, # 2 subcomponents combined
+         'NIII 685'   : {'f':4.02e-1,  'gamma':5.70e9,  'wave0':685.7166,  'ion':'N III'}, # 4 subcomponents combined
          'NV 1238'    : {'f':1.56e-1,  'gamma':3.40e8,  'wave0':1238.821,  'ion':'N V'},
          'NV 1242'    : {'f':7.80e-2,  'gamma':3.37e8,  'wave0':1242.804,  'ion':'N V'},
          'NeVIII 780' : {'f':5.05e-2,  'gamma':5.53e8,  'wave0':780.3240,  'ion':'Ne VIII'},
@@ -102,6 +107,10 @@ lines = {'HI 1215'    : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion'
          'OI 1302'    : {'f':5.04e-2,  'gamma':3.30e8,  'wave0':1302.1715, 'ion':'O I'},
          'OI 1039'    : {'f':9.04e-3,  'gamma':9.31e7,  'wave0':1039.2304, 'ion':'O I'}, # 3 subcomponents combined
          'OI 1025'    : {'f':1.88e-2,  'gamma':7.14e7,  'wave0':1025.762,  'ion':'O I'}, # 6 subcomponents combined
+         'OIII 834'   : {'f':1.07e-1,  'gamma':6.15e8,  'wave0':834.4920,  'ion':'O III'}, # 6 subcomponents combined
+         'OIII 703'   : {'f':1.37e-1,  'gamma':1.85e9,  'wave0':703.3594,  'ion':'O III'}, # 6 subcomponents combined
+         'OIV 789'    : {'f':1.10e-1,  'gamma':7.07e8,  'wave0':789.3620,  'ion':'O IV'}, # 3 subcomponents combined
+         'OIV 609'    : {'f':6.69e-2,  'gamma':3.61e9,  'wave0':609.3506,  'ion':'O IV'}, # 2 subcomponents combined
          'OVI 1037'   : {'f':6.580e-2, 'gamma':4.076e8, 'wave0':1037.6167, 'ion':'O VI'},
          'OVI 1031'   : {'f':1.325e-1, 'gamma':4.149e8, 'wave0':1031.9261, 'ion':'O VI'},
          'OVII 21'    : {'f':6.96e-1,  'gamma':3.32e12, 'wave0':21.6019,   'ion':'O VII'}, # x-ray (r)
@@ -239,14 +248,14 @@ lines = {'HI 1215'    : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion'
          'ZnII 2062'  : {'f':2.46e-1,  'gamma':3.86e8,  'wave0':2062.0012, 'ion':'Zn II'},
          'ZnII 2025'  : {'f':5.01e-1,  'gamma':4.07e8,  'wave0':2025.4845, 'ion':'Zn II'}}
 
-# TODO: check linelist from Philipp Richter (sisyphos_igm_line_list.dat email)
-
 # instrument characteristics (all wavelengths in angstroms)
 # R = lambda/dlambda = c/dv
 # EW_restframe = W_obs / (1+z_abs)
 # todo: finish PFS and MIKE (confirm R, get wave grids)
 # todo: finish MOSFIRE (get wave grid from KOA)
 # todo: finish GNIRS (confirm R, get wave grids)
+# todo: VLT/UVES, ESPRESSO
+# todo: WEAVE
 instruments = {'idealized'       : {'wave_min':800,   'wave_max':30000, 'dwave':0.01,   'R':None},  # note: also used for EW map vis
                'master'          : {'wave_min':1,     'wave_max':25000, 'dwave':0.0001, 'R':None},  # used to create master spectra (2GB per, float64 uncompressed)
                'NIRSpec'         : {'wave_min':11179, 'wave_max':11221, 'dwave':0.002,  'R':2700 }, # testing (celine) only
@@ -273,6 +282,7 @@ instruments = {'idealized'       : {'wave_min':800,   'wave_max':30000, 'dwave':
                'MIKE-B'          : {'wave_min':3350,  'wave_max':5000,  'R':83000},       # blue arm (on Magellan 2/Clay) (0.35" slit)
                'MIKE-R'          : {'wave_min':4900,  'wave_max':9500,  'R':65000},       # red arm (used simultaneously) (0.35" slit)
                'MOSFIRE'         : {'wave_min':9800,  'wave_max':24200, 'R':3660},         # Y, J, H, and K bands together, R approximate (https://www2.keck.hawaii.edu/inst/mosfire/grating.html)
+               'ANDES'           : {'wave_min':4000,  'wave_max':18000, 'R':100000},      # ELT ANDES (goals for IGM science case)
                'XSHOOTER-UVB-05' : {'wave_min':2936,  'wave_max':5930,  'dwave':0.2, 'R':9700},  # VLT X-Shooter UVB arm (R depends on slit width = 0.5")
                'XSHOOTER-UVB-10' : {'wave_min':2936,  'wave_max':5930,  'dwave':0.2, 'R':6200},  
                'XSHOOTER-UVB-16' : {'wave_min':2936,  'wave_max':5930,  'dwave':0.2, 'R':3200},
@@ -618,53 +628,6 @@ def _voigt_tau(wave, N, b, wave0, f, gamma, wave0_rest=None):
     for i in range(voigt_u.size):
         #voigt_wofz[i] = wofz_complex_fn_realpart(voigt_u[i], alpha)
         voigt_wofz[i] = faddeeva985(voigt_u[i], alpha) # speed-up depends on region
-
-    phi_wave = voigt_wofz / b_cgs # s/cm
-
-    # normalize amplitude
-    consts = 0.014971475 # sqrt(pi)*e^2 / m_e / c = cm^2/s
-    wave0_rest_cm = wave0_rest * 1e-8
-
-    tau_wave = (consts * N * f * wave0_rest_cm) * phi_wave # dimensionless
-    return tau_wave
-
-#@jit(nopython=True, nogil=True, cache=False)
-def _voigt_tau_old(wave, N, b, wave0, f, gamma, wave0_rest=None):
-    """ Compute optical depth tau as a function of wavelength for a Voigt absorption profile.
-
-    Args:
-      wave (array[float]): wavelength grid in [linear ang]
-      N (float): column density of absorbing species in [cm^-2]
-      b (float): doppler parameter, equal to sqrt(2kT/m) where m is the particle mass.
-        b = sigma*sqrt(2) where sigma is the velocity dispersion.
-      wave0 (float): central wavelength of the transition in [ang]
-      f (float): oscillator strength of the transition
-      gamma (float): sum of transition probabilities (Einstein A coefficients) [1/s]
-      wave0_rest (float): if not None, then rest-frame central wavelength, i.e. wave0 could be redshifted
-    """
-    if wave0_rest is None:
-        wave0_rest = wave0
-
-    wave_cm = wave * 1e-8
-
-    # get dimensionless shape for voigt profile:
-    nu = sP_units_c_cgs / wave_cm # wave = c/nu
-    wave_rest = wave0 * 1e-8 # angstrom -> cm
-    nu0 = sP_units_c_cgs / wave_rest # Hz
-    b_cgs = b * 1e5 # km/s -> cm/s
-    dnu = b_cgs / wave_rest # Hz, "doppler width" = sigma/sqrt(2)
-
-    # use Faddeeva for integral
-    alpha = gamma / (4*np.pi*dnu)
-    voigt_u = (nu - nu0) / dnu # = (nu-nu0) * wave_rest / b_cgs
-    # = (c/wave_cm - c/wave_rest) * wave_rest / b_cgs
-    # = c * (wave_rest/wave_cm - 1) / b_cgs
-
-    # numba wofz issue: https://github.com/numba/numba/issues/3086
-    #voigt_wofz = wofz(voigt_u + 1j*alpha).real # H(alpha,z)
-    voigt_wofz = np.zeros(voigt_u.size, dtype=np.float64)
-    for i in range(voigt_u.size):
-        voigt_wofz[i] = wofz_complex_fn_realpart(voigt_u[i], alpha)
 
     phi_wave = voigt_wofz / b_cgs # s/cm
 
@@ -1140,13 +1103,18 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
         mkdir(sP.derivPath + 'rays')
 
     iqStr = '_%s' % integrateQuant if integrateQuant is not None else ''
-
-    path = sP.derivPath + 'rays/%s%s_n%dd%d_%03d.hdf5' % (raysType,iqStr,nRaysPerDim,projAxis,sP.snap)
+    filename = '%s%s_n%dd%d_%03d.hdf5' % (raysType,iqStr,nRaysPerDim,projAxis,sP.snap)
 
     if pSplit is not None:
-        path = sP.derivPath + 'rays/%s%s_n%dd%d_%03d-split-%d-%d.hdf5' % \
+        filename = '%s%s_n%dd%d_%03d-split-%d-%d.hdf5' % \
                (raysType,iqStr,nRaysPerDim,projAxis,sP.snap,pSplit[0],pSplit[1])
+        
+    path = sP.derivPath + "rays/" + filename
     
+    if not isfile(path) and isfile(sP.postPath + 'AbsorptionSightlines/' + filename):
+        # check also existing files in permanent, publicly released postprocessing/
+        path = sP.postPath + 'AbsorptionSightlines/' + filename
+
     if pSplit is None and not isfile(path):
         print(f'Did not find: [{path}], likely expecting it to already exist.')
         assert 0
@@ -1463,7 +1431,7 @@ def _spectra_filepath(sim, ion, projAxis=projAxis_def, nRaysPerDim=nRaysPerDim_d
         use the (constant) solar value.
     """
     ionStr = ion.replace(' ','')
-    path = sim.derivPath + "rays/"
+    path = sim.derivPath + "spectra/"
     confStr = 'n%dd%d-%s' % (nRaysPerDim,projAxis,raysType.replace('voronoi_','')) # e.g. 'n1000d2-fullbox'
 
     if instrument is not None:
@@ -1482,6 +1450,9 @@ def _spectra_filepath(sim, ion, projAxis=projAxis_def, nRaysPerDim=nRaysPerDim_d
     else:
         # concatenated set
         filename = filebase + '_combined.hdf5'
+
+        if not isfile(path + filename) and isfile(sim.postPath + 'AbsorptionSpectra/' + filename):
+            path = sim.postPath + 'AbsorptionSpectra/' # permanent path in /postprocessing/
 
     if solar:
         filename = filename.replace('.hdf5','_solar.hdf5')
@@ -1912,14 +1883,16 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPer
             print(f'Skipping [{dset}], already saved.')
             continue
 
-        # allocate
+        # allocate, and set reasonable chunk shape (otherwise, automatic) (mandatory with compression)
         print(f'Loading [{dset}] -- [', end='')
         offset = 0
 
         if 'EW_' in dset:
             data = np.zeros(count, dtype='float32')
+            chunks = (count)
         else:
             data = np.zeros((count,n_wave), dtype='float32')
+            chunks = (1000, n_wave) if n_wave < 10000 else (100, n_wave)
 
         # load
         for i in range(pSplitNum):
@@ -1933,7 +1906,7 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPer
         # write
         with h5py.File(saveFilename,'r+') as f:
             print('] writing...')
-            f.create_dataset(dset, data=data, compression='gzip')
+            f.create_dataset(dset, data=data, chunks=chunks, compression='gzip')
 
     print('Saved: [%s]' % saveFilename)
 

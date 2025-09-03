@@ -498,14 +498,16 @@ class cloudyIon():
             # note: GFM_Metals[X] is the mass ratio of each element to total gas mass (M_X/M_gas)
             # so we can use, as long as the requested element X is one of the 9 tracked GFM elements
             if sP.snapHasField('gas', 'GFM_Metals'):
-                assert self._elementNameToSymbol(element) in sP.metals
+                if self._elementNameToSymbol(element) in sP.metals:
+                    fieldName = "metals_" + self._elementNameToSymbol(element)
+                    metal_mass_fraction = sP.snapshotSubset('gas', fieldName, indRange=indRange)
 
-                fieldName = "metals_" + self._elementNameToSymbol(element)
-                metal_mass_fraction = sP.snapshotSubset('gas', fieldName, indRange=indRange)
-
-                metal_mass_fraction[metal_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
+                    metal_mass_fraction[metal_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
+                else:
+                    print('WARNING: GFM_Metals available but does not contain [%s]. Assuming solar abundances.' % element)
+                    metal_mass_fraction = (metal/self._solar_Z) * self._solarMetalAbundanceMassRatio(element)
             else:
-                print('WARNING: metal abunds but GFM_Metals not available (mini-snap). Assuming solar abundances.')
+                print('WARNING: Snap abundances requested but GFM_Metals not available (mini-snap). Assuming solar abundances.')
                 metal_mass_fraction = (metal/self._solar_Z) * self._solarMetalAbundanceMassRatio(element)
 
         metal_ion_mass_fraction = metal_mass_fraction * ion_fraction

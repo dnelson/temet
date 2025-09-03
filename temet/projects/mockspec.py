@@ -9,7 +9,6 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 import glob
-from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import ScalarFormatter
 from matplotlib.patches import ConnectionPatch
 from matplotlib.colors import Normalize
@@ -22,7 +21,7 @@ from ..cosmo.spectrum_analysis import load_spectra_subset
 #from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
 from ..plot.spectrum import spectra_gallery_indiv, EW_distribution, dNdz_evolution, EW_vs_coldens, instrument_lsf
 from ..plot.config import *
-from ..util.helper import closest
+from ..util.helper import closest, running_median
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
 
@@ -313,7 +312,7 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None, SNR=None):
     # plot
     fig = plt.figure(figsize=(figsize[0]*1.6,figsize[1]*1.2))
     #(ax_top, ax_top_zoom), (ax_bottom, ax_bottom_zoom) = fig.subplots(nrows=2, ncols=2)
-    gs = GridSpec(2, len(zooms))
+    gs = fig.add_gridspec(2, len(zooms))
     ax_top = fig.add_subplot(gs[0,:])
     ax_zooms = [fig.add_subplot(gs[1,i]) for i in range(len(zooms))]
 
@@ -377,8 +376,15 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None, SNR=None):
     fig.savefig('spectrum_lightcone_%s_%s_%s%s.pdf' % (sim.simName,ion.replace(' ',''),instrument,linesStr))
     plt.close(fig)
 
-def _optical_depth_map_2d_calc(sim, line, instrument):
-    """ Helper for below. """
+def _galaxy_sightline_sample(sim, line, instrument, mstar_range, D_max):
+    """ Helper for below. Identify all sightlines passing near a galaxy sample.
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      line (str): name of spectral line, e.g. 'Mg II'.
+      instrument (str): name of instrument, e.g. 'SDSS-BOSS'.
+      mstar_range (list[float]): 2-element list, min and max stellar mass [log Msun].
+      D_max (float): maximum impact parameter [pkpc].
+    """
 
     def _sim_posvel_to_wave(sim, pos_los_code, vel_los_code, wave0):
         """ Convert a line-of-sight position (i.e. z-coordinate) and line-of-sight peculiar velocity (i.e. v_z)
@@ -412,25 +418,6 @@ def _optical_depth_map_2d_calc(sim, line, instrument):
     
         return gal_wave
     
-    # config
-    mstar_range = [9.9,10.0] #[9.5,10.0] #[9.9, 10.0]
-    D_max = 250.0 # 100 # pkpc
-    dv_range = 1200 # km/s
-
-    # check cache
-    lineName = line.replace(' ','-')
-    specStr = f'{mstar_range[0]:.1f}_{mstar_range[1]:.1f}_{dv_range:.0f}_{D_max:.0f}'
-    cachefile = sim.cachePath + f'taumap_{sim.simName}_{sim.snap}_{lineName}_{instrument}_{specStr}.hdf5'
-
-    if isfile(cachefile):
-        # load
-        r = {}
-        with h5py.File(cachefile,'r') as f:
-            for key in f:
-                r[key] = f[key][()]
-        print(f'Loaded [{cachefile}].')
-        return r
-
     # galaxy sample selection
     mstar = sim.subhalos('mstar_30kpc_log')
 
@@ -451,7 +438,6 @@ def _optical_depth_map_2d_calc(sim, line, instrument):
         # load metadata
         ray_dir = f['ray_dir'][()]
         ray_pos = f['ray_pos'][()]
-        wave = f['wave'][()]
         ray_total_dl = f['ray_total_dl'][()]
 
     # find all spectra that pass within D_max of any galaxy in the sample
@@ -478,8 +464,9 @@ def _optical_depth_map_2d_calc(sim, line, instrument):
     for i, (sub_id, sub_pos) in enumerate(zip(subIDs,pos)):
         if i % 10 == 0: print(f'[{i:3d}] of [{len(subIDs)}], now {sub_id = }, {rays_count = }.')
 
-        # periodic, squared transverse (i.e. plane of the sky) distances
+        # periodic transverse (i.e. plane of the sky) distances
         dists = sim.periodicDists(sub_pos[sky_inds], ray_pos)
+        dists = sim.units.codeLengthToKpc(dists) # pkpc
 
         ray_inds_loc = np.where(dists <= D_max)[0]
         
@@ -509,6 +496,46 @@ def _optical_depth_map_2d_calc(sim, line, instrument):
 
     # calculate galaxy effective redshift, and corresponding wavelength for this transition
     gal_wave = _sim_posvel_to_wave(sim, pos[:,dir_ind], vel[:,dir_ind], lines[line]['wave0'])
+
+    return rays_count, rays_subID, rays_subInd, rays_dist, rays_ind, gal_wave, subIDs
+
+def _optical_depth_map_2d_calc(sim, line, instrument, mstar_range, D_max):
+    """ Helper for below. Calculate and cache a 2D stacked galaxy-centric optical depth map.
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      line (str): name of spectral line, e.g. 'Mg II'.
+      instrument (str): name of instrument, e.g. 'SDSS-BOSS'.
+      mstar_range (list[float]): 2-element list, min and max stellar mass [log Msun].
+      D_max (float): maximum impact parameter [pkpc].
+    """
+    # config
+    dv_range = 800 # km/s
+
+    # check cache
+    lineName = line.replace(' ','-')
+    specStr = f'{mstar_range[0]:.1f}_{mstar_range[1]:.1f}_{dv_range:.0f}_{D_max:.0f}'
+    cachefile = sim.cachePath + f'taumap_{sim.simName}_{sim.snap}_{lineName}_{instrument}_{specStr}.hdf5'
+
+    if isfile(cachefile):
+        # load
+        r = {}
+        with h5py.File(cachefile,'r') as f:
+            for key in f:
+                r[key] = f[key][()]
+        print(f'Loaded [{cachefile}].')
+        return r
+
+    # galaxy sample
+    rays_count, rays_subID, rays_subInd, rays_dist, rays_ind, gal_wave, subIDs = \
+        _galaxy_sightline_sample(sim, line, instrument, mstar_range, D_max)
+
+    # load spectra metadata
+    ion = lines[line]['ion']
+    filepath = _spectra_filepath(sim, ion, instrument=instrument)
+
+    with h5py.File(filepath,'r') as f:
+        # load metadata
+        wave = f['wave'][()]
 
     # determine common (wave -> dv) and size of dv_range in spectral bins
     wave_z = lines[line]['wave0'] * (1 + sim.redshift)
@@ -575,7 +602,10 @@ def optical_depth_map_2d(sim, line, instrument, SNR=10.0, tau_minmax=[0.0, 0.3])
     cmap = 'inferno_r'
 
     # load/calculate
-    stack = _optical_depth_map_2d_calc(sim, line, instrument)
+    mstar_range = [9.9,10.0] #[9.5,10.0] #[9.9, 10.0]
+    D_max = 200.0 # 100 # pkpc
+
+    stack = _optical_depth_map_2d_calc(sim, line, instrument, mstar_range, D_max)
 
     # add noise? ("signal" is 1.0)
     if SNR is not None:
@@ -634,6 +664,187 @@ def optical_depth_map_2d(sim, line, instrument, SNR=10.0, tau_minmax=[0.0, 0.3])
     cb.ax.set_ylabel(r'Apparent Optical Depth $\tau_{\rm app} = - \ln{(F)}$')
 
     fig.savefig(f'tau2d_{sim}_{line}_{instrument}.pdf'.replace(' ','-'))
+    plt.close(fig)
+
+def impact_parameter_profile(sim, line, instrument, spec=False, SNR=100):
+    """ Create a 1D profile of absorption EW vs impact parameter, for a given galaxy sample.
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      line (str): string specifying the line transition.
+      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      spec (list[str]): if True, then add panels showing actual spectra for one of the galaxies.
+      SNR (float): if not None, then add noise to achieve this signal to noise ratio.
+    """
+    mstar_range = [10.3,10.4] #[9.5,10.0] #[9.9, 10.0]
+    D_max = 300.0 # 100 # pkpc
+    spec_dwave = 10.0 if 'SDSS' in instrument else 2.0 # Ang
+
+    rays_count, rays_subID, rays_subInd, rays_dist, rays_ind, gal_wave, subIDs = \
+        _galaxy_sightline_sample(sim, line, instrument, mstar_range, D_max)
+    
+    # load EW
+    ion = lines[line]['ion']
+    filepath = _spectra_filepath(sim, ion, instrument=instrument)
+
+    with h5py.File(filepath,'r') as f:
+        # load metadata
+        EW = f['EW_' + line.replace(' ','_')][()]
+
+    EW = EW[rays_ind]
+
+    # plot
+    if spec:
+        fig = plt.figure(figsize=(figsize[0]*1.6,figsize[1]*0.8))
+        gs = fig.add_gridspec(2, 4)
+        ax = fig.add_subplot(gs[:,0:2])
+        #ax_spec = fig.add_subplot(gs[0,2]) # [0,2] [0,3] [1,2] [1,3]
+        ax_spec = [fig.add_subplot(gs[i%2,int(i/2)+2]) for i in range(len(spec))]
+    else:
+        fig, ax = plt.subplots(figsize=[figsize[0]*0.8, figsize[1]*0.8])
+
+    ax.set_xlabel(r'Impact Parameter [ kpc ]')
+    ax.set_ylabel(line + r' Equivalent Width [ $\AA$ ]')
+    ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
+
+    xlim = [5.0, D_max]
+    ylim = [1e-3, 2.0]
+
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+
+    ax.plot(rays_dist, EW, 'o', ms=3, alpha=0.5, color='black', zorder=0)
+
+    # 1-sigma band
+    xm, ym, _, pm = running_median(rays_dist, EW, nBins=30, percs=percs)
+    l, = ax.plot(xm, ym, '-', lw=lw, color='black', zorder=2)
+    ax.fill_between(xm, pm[0,:], pm[-1,:], color=l.get_color(), alpha=0.3, zorder=2)
+
+    # mark specific galaxy
+    num_gals = 2
+    spec_colors = []
+    spec_inds = []
+    spec_gal_wave = []
+
+    for i in range(num_gals):
+        if 'MgII' in line:
+            if i == 0:
+                ww = np.where( (rays_dist > 33) & (rays_dist < 35) & (EW > 1.0) & (EW < 1.1) )[0][0]
+            if i == 1:
+                ww = np.where( (rays_dist > 75) & (rays_dist < 80) & (EW > 1.2) & (EW < 3.0) )[0][0]
+        if 'SiIII' in line:
+            if i == 0:
+                ww = np.where( (rays_dist > 40) & (rays_dist < 45) & (EW > 0.7) & (EW < 1.0) )[0][0]
+            if i == 1:
+                ww = np.where( (rays_dist > 75) & (rays_dist < 80) & (EW > 0.6) & (EW < 1.0) )[0][0]
+
+        l, = ax.plot(rays_dist[ww], EW[ww], 'o', ms=8, mfc='none', mew=5, zorder=3)
+
+        spec_colors.append(l.get_color())
+        spec_inds.append(rays_ind[ww])
+        spec_gal_wave.append(gal_wave[rays_subInd[ww]])
+
+        print(f' Marker: {rays_ind[ww] = }, {rays_subID[ww]}, {rays_subInd[ww]}, {rays_dist[ww]}, {EW[ww]}')
+
+    # annotate details
+    label = '%s\n%.1f < log M$_\\star$/M$_\\odot$ < %.1f\n%d galaxy-sightline pairs' % \
+        (sim, mstar_range[0], mstar_range[1], rays_count)
+    ax.annotate(label, xy=(0.02, 0.03), xycoords='axes fraction', fontsize='large')
+
+    # add panels showing actual spectra?
+    if spec:
+        rng = np.random.default_rng(424242)
+
+        for line_plot, ax_spec in zip(spec, ax_spec):
+            # setup sub-panel
+            print(' Plotting spectrum for line: [%s]' % line_plot)
+            ax_spec.set_xlabel('Wavelength [ Ang ]', fontsize='x-large')
+            ax_spec.set_ylabel(f'{line_plot} Flux', fontsize='x-large')
+
+            ion = lines[line_plot]['ion']
+            filepath = _spectra_filepath(sim, ion, instrument=instrument)
+
+            # get redshifted wavelength of this line at the galaxy systemic
+            for i in range(num_gals):
+                z_eff = (spec_gal_wave[i] / lines[line]['wave0']) - 1
+                wave_systemic = lines[line_plot]['wave0'] * (1 + z_eff)
+
+                ax_spec.set_xlim([wave_systemic-spec_dwave, wave_systemic+spec_dwave])
+                ax_spec.set_ylim([0.0, 1.05])
+
+                ax_spec.plot([wave_systemic, wave_systemic], ax_spec.get_ylim(), '--', lw=lw, color=spec_colors[i], alpha=0.8)
+
+                # load spectrum                
+                with h5py.File(filepath,'r') as f:
+                    wave = f['wave'][()]
+                    flux = f['flux'][spec_inds[i],:]
+
+                if flux.min() > 0.9:
+                    ax_spec.set_ylim([0.9, 1.01])
+
+                # add noise? ("signal" is now 1.0)
+                if SNR is not None:
+                    noise = rng.normal(loc=0.0, scale=1/SNR, size=flux.shape)
+                    flux += noise
+                    flux = np.clip(flux, 0, np.inf)
+
+                ax_spec.step(wave, flux, '-', where='mid', lw=lw, c=spec_colors[i])
+
+    # finish plot
+    fig.savefig(f'profileEW_{sim}_{line}_{instrument}_mstar={mstar_range[0]:.1f}-{mstar_range[1]:.1f}.pdf'.replace(' ','-'))
+    plt.close(fig)
+
+def doublet_ratio(sim, line1, line2, instrument):
+    """ Create a 2D histogram of doublet ratio vs equivalent width.
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      line1 (str): first line transition.
+      line2 (str): second line transition.
+      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+    """
+    ion = lines[line1]['ion']
+    assert ion == lines[line2]['ion'], 'Must be same ion.'
+
+    filepath = _spectra_filepath(sim, ion, instrument=instrument)
+    with h5py.File(filepath,'r') as f:
+        # load metadata
+        EW1 = f['EW_' + line1.replace(' ','_')][()]
+        EW2 = f['EW_' + line2.replace(' ','_')][()]
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        ratio = EW1 / EW2
+
+    theoretical_ratio = lines[line1]['f'] / lines[line2]['f']
+
+    # plot 1d histogram
+    fig, ax = plt.subplots(figsize=[figsize[0]*0.8, figsize[1]*0.8])
+    ax.set_xlabel(f'[{line1}/{line2}] Doublet Ratio')
+    ax.set_ylabel('PDF')
+
+    h = ax.hist(ratio, bins=50, histtype='stepfilled',density=True)
+    ax.set_yscale('log')
+
+    ax.plot([theoretical_ratio,theoretical_ratio], ax.get_ylim(), '--', lw=lw, color='black', label='Theoretical')
+    ax.legend(loc='best')
+
+    fig.savefig(f'doublet_ratio_{sim}_{line1}_{line2}_{instrument}.pdf'.replace(' ','-'))
+    plt.close(fig)
+
+    # plot 2d contours vs EW
+    fig, ax = plt.subplots(figsize=[figsize[0]*0.8, figsize[1]*0.8])
+    ax.set_xlabel(f'[{line1}] Equivalent Width [ $\\AA$ ]')
+    ax.set_ylabel(f'[{line1}/{line2}] Doublet Ratio')
+
+    #ax.set_xscale('log')
+
+    ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
+    hb = ax.hexbin(EW1, ratio, gridsize=50, mincnt=1, xscale='log', cmap='inferno', bins='log', zorder=0)
+
+    ax.plot(ax.get_xlim(), [theoretical_ratio,theoretical_ratio], '--', lw=lw, color='black', label='Theoretical')
+    ax.legend(loc='upper right')
+
+    fig.savefig(f'doublet_ratio2d_{sim}_{line1}_{line2}_{instrument}.pdf'.replace(' ','-'))
     plt.close(fig)
 
 def vis_overview(sP, haloID=None):
@@ -829,24 +1040,6 @@ def ion_redshift_coverage(sim, all=True, lowz=False):
 def paperPlots():
     from ..util.simParams import simParams
 
-    # pre-computed sightlines and spectra:
-    # {1M-uni} 4MOST-HRS    SDSS-BOSS    KECK-HIRES     UVES      COS          DESI          XSHOOTER (something NIR/high-z)
-    #          ---------    ---------    ----------     ----      ---          ----          --------
-    # HI       [ ]          [X] 2-4      [X] 1.5-5      [ ]       [ ]          [ ]           [ ] 
-    # MgII     [ ]          [X] 0.3-2    [X] 0.1-2      [ ]       [ ]          [ ]           [ ] 
-    # FeII     [ ]          [ ] 0.4-5    [ ]            [ ]       [ ]          [ ]           [ ] 
-    # SiII     [ ]          [X] 1.5-5    [X] 1-5        [ ]       [ ]          [ ]           [ ] 
-    # SiIII    [ ]          [X] 2-5      [X] 1.5-5      [ ]       [ ]          [ ]           [ ]
-    # SiIV     [ ]          [X] 1.5-5    [X] 1.5-5      [ ]       [ ]          [ ]           [ ] 
-    # NV       [ ]          [X] 2-5      [X] 1.5-5      [ ]       [ ]          [ ]           [ ]
-    # NeVIII   [ ]          [ ]          [ ]            [ ]       [.]          [ ]           [ ] 
-    # CII      [ ]          [X] 1.5-5    [X] 1.5-5      [ ]       [ ]          [ ]           [ ]
-    # CIV      [ ]          [X] 1.5-5    [X] 1-5        [ ]       [ ]          [ ]           [ ] 
-    # OVI      [ ]          [X] 3-5      [X] 2-5        [ ]       [ ]          [ ]           [ ] 
-    # CaII     [ ]          [ ]          [ ]            [ ]       [ ]          [ ]           [ ] 
-    # ZnII     [ ]          [ ]          [ ]            [ ]       [ ]          [ ]           [ ] 
-    # future: {4M-rnd} ?
-
     # fig 1: visual overview: full box TNG50 of N_ion, halo zoom, draw sightline going through
     if 0:
         sim = simParams('tng50-1', redshift=0.7) # OVI at z=0.2 or NeVIII at z=0.7
@@ -854,10 +1047,11 @@ def paperPlots():
         vis_overview(sim, haloID=300) # randomly selected, nice outflow features
 
         # single spectrum vis
-        opts = {'num':None, 'mode':'inds', 'dv':True, 'xlim':[-900,900]}
+        opts = {'num':None, 'mode':'inds', 'dv':True, 'xlim':[-500,500]}
         sim.setRedshift(2.0)
         spectra_gallery_indiv(sim, inds=[739610], ion='C IV', SNR=20, instrument='KECK-HIRES-B14', **opts)
 
+        opts = {'num':None, 'mode':'inds', 'xlim':[1308,1334]} #[-2000,2000]}
         sim.setRedshift(0.7)
         spectra_gallery_indiv(sim, inds=[905323], ion='Ne VIII', SNR=20, instrument='COS-G130M', **opts)
 
@@ -878,7 +1072,7 @@ def paperPlots():
     # fig 4: individual spectra galleries
     if 0:
         # Mg II
-        sim = simParams(run='tng50-1', redshift=0.5)
+        sim = simParams(run='tng50-1', redshift=0.7)
         inst = 'SDSS-BOSS' #'4MOST-HRS'
         opts = {'ion':'Mg II', 'instrument':inst, 'num':10, 'solar':False, 'SNR':20}
 
@@ -886,13 +1080,13 @@ def paperPlots():
         spectra_gallery_indiv(sim, EW_minmax=[3.0, 6.0], mode='random', **opts)
 
     if 0:
-        # C IV
+        # C IV - fig 4
         sim = simParams(run='tng50-1', redshift=2.0)
         opts = {'ion':'C IV', 'num':10, 'SNR':50, 'dv':True, 'xlim':[-900,900]} # 'auto'
 
         for inst in ['SDSS-BOSS','KECK-HIRES-B14']:
             spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='evenly', instrument=inst, **opts)
-            spectra_gallery_indiv(sim, EW_minmax=[3.0, 6.0], mode='random', instrument=inst, **opts)
+            #spectra_gallery_indiv(sim, EW_minmax=[3.0, 6.0], mode='random', instrument=inst, **opts)
 
     if 0:
         # Ne VIII
@@ -912,35 +1106,25 @@ def paperPlots():
         spectra_gallery_indiv(sim, EW_minmax=[0.1, 5.0], mode='all', style='2d', **opts)
 
     # fig 6: EW vs coldens vs CoG (CIV)
-    if 1:
-        #sim = simParams('tng50-1', redshift=2.0)
-        #EW_vs_coldens(sim, line='MgII 2796', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,1.3], xlim=[12.0,19.0])
-        #EW_vs_coldens(sim, line='MgII 2796', instrument='KECK-HIRES-B14', bvals=[5,10,25,50], ylim=[-1.3,1.3], xlim=[12.0,19.0])
-
+    if 0:
+        sim = simParams('tng50-1', redshift=2.0)
+        EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS')
+        EW_vs_coldens(sim, line='MgII 2796', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,1.3], xlim=[12.0,19.0])
         #EW_vs_coldens(sim, line='MgII 2803', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,1.3], xlim=[12.0,19.0])
-        #EW_vs_coldens(sim, line='MgII 1239', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-2.3,0.3], xlim=[12.0,21.0])
-        #EW_vs_coldens(sim, line='MgII 1240', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-2.3,0.3], xlim=[12.0,21.0])
         #EW_vs_coldens(sim, line='HI 1215', instrument='SDSS-BOSS', bvals=[5,10,25,50], ylim=[-1.3,2.5], xlim=[14.0,21.0])
-        #EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS')
-
-        #sim = simParams('tng50-1', redshift=0.1)
-        #EW_vs_coldens(sim, line='MgII 2796', instrument='KECK-HIRES-B14', bvals=[5,10,25,50], ylim=[-1.3,1.3], xlim=[12.0,19.0])
-
-        sim = simParams('tng50-3', redshift=2.0)
-        EW_vs_coldens(sim, line='MgII 2796', instrument='SDSS-BOSS', bvals=[5,10,25,50], 
-                      ylim=[-1.3,1.3], xlim=[12.0,19.0], pSplit=[0,16])
-
+        
     # fig 7: MgII EW distribution functions (dN/DW) and absorber incidence vs redshift (dN/dz) vs. data
     if 0:
         sim = simParams(run='tng50-1')
         line = 'MgII 2796'
-        inst = 'SDSS-BOSS' #'KECK-HIRES-B14'
-        redshifts = [0.3, 0.5, 1.0, 2.0] #[0.1, 0.3, 0.5, 1.0, 2.0]
+        inst = ['SDSS-BOSS','XSHOOTER-NIR-04']
+        z1 = [0.3, 0.7, 1.0, 1.5, 2.0]
+        z2 = [0.3, 0.5, 0.7, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0]
         indivEWs = False
-        opts = {'xlim':[0,8], 'solar':False, 'log':False}
+        opts = {'xlim':[0,6], 'solar':False, 'log':False}
 
-        EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, indivEWs=False, **opts)
-        dNdz_evolution(sim, line=line, instrument=inst, redshifts=redshifts, solar=opts['solar'])
+        EW_distribution(sim, line=line, instrument=inst, redshifts=z1, indivEWs=False, **opts)
+        dNdz_evolution(sim, line=line, instrument=inst, redshifts=z2, solar=opts['solar'])
 
     # fig 7: CIV EW distributions (dN/DW) and absorber incidence vs redshift (dN/dz) vs. data
     if 0:
@@ -949,7 +1133,7 @@ def paperPlots():
         inst = 'SDSS-BOSS'
         redshifts = [1.5, 2.0, 3.0, 4.0, 5.0]
         indivEWs = False
-        opts = {'xlim':[0,2.5], 'solar':False, 'log':False}
+        opts = {'xlim':[0.1,2.5], 'solar':False, 'dX':True, 'log':False}
 
         EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, indivEWs=indivEWs, **opts)
         dNdz_evolution(sim, line=line, instrument=inst, redshifts=redshifts, solar=opts['solar'])
@@ -957,14 +1141,24 @@ def paperPlots():
     # fig 8: 2D optical depth map
     if 0:
         sim = simParams('tng50-1', redshift=2.0)
-        #inst = 'SDSS-BOSS' # # 'KECK-LRIS-B-600' would better match KBSS
-        inst = 'KECK-HIRES-B14'
+        inst = 'KECK-HIRES-B14' # 'KECK-LRIS-B-600' would better match KBSS
 
-        optical_depth_map_2d(sim, line='CIV 1548', instrument=inst)
+        optical_depth_map_2d(sim, line='CIV 1548', instrument=inst, tau_minmax=[0.0, 0.4])
         optical_depth_map_2d(sim, line='HI 1215', instrument=inst, tau_minmax=[0.0, 1.5])
-        #optical_depth_map_2d(sim, line='SiIV 1392', instrument=inst, tau_minmax=[0.0, 1.5])
+        optical_depth_map_2d(sim, line='OI 1304', instrument=inst, tau_minmax=[0.0, 0.1])
 
-    # fig 9: example of a cosmological-distance (i.e. lightcone) spectrum
+    # fig 9: EW vs impact parameter, with example COS spectra
+    if 0:
+        sim = simParams('tng50-1', redshift=0.3)
+        spec = ['MgII 2796','MgII 2803', 'FeI 3026', 'NaI 5897']
+        impact_parameter_profile(sim, line='MgII 2796', instrument='SDSS-BOSS', spec=spec)
+
+    if 0:
+        sim = simParams('tng50-1', redshift=0.1)
+        spec = ['NIII 990','SiIII 1206', 'NV 1238', 'OVI 1031'] # also have NII 1083, HI 1215
+        impact_parameter_profile(sim, line='SiIII 1206', instrument='COS-G130M', spec=spec)
+
+    # fig 10: example of a cosmological-distance (i.e. lightcone) spectrum
     if 0:
         sim = simParams(run='tng50-1')
 
@@ -973,12 +1167,18 @@ def paperPlots():
 
     # fig A: instrumental LSFs
     if 0:
-        for inst in ['COS-G130M','4MOST-HRS','SDSS-BOSS']:
+        for inst in ['COS-G130M','4MOST-HRS','SDSS-BOSS','DESI']:
             instrument_lsf(inst)
+
+    # fig X: doublet ratio
+    if 0:
+        sim = simParams(run='tng50-1', redshift=2.0)
+        
+        doublet_ratio(sim, line1='MgII 2796', line2='MgII 2803', instrument='SDSS-BOSS')
+        doublet_ratio(sim, line1='CIV 1548', line2='CIV 1550', instrument='SDSS-BOSS')
 
     # table: transitions
     if 0:
-        #ions = ['H I','Mg II','Fe II','Si II','Si III','Si IV','N V','C II','C IV','O VI','Ca II','Zn II']
         ions = list(dict.fromkeys([info['ion'] for line,info in lines.items()])) # unique
         for ion in ions:
             s = ion + " & "

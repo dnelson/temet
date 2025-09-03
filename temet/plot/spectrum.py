@@ -4,6 +4,7 @@ Diagnostic and production plots based on synthetic ray-traced absorption spectra
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+import glob
 from matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
@@ -13,12 +14,12 @@ from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_fi
                              lsf_matrix, varconvolve, _resample_spectrum, \
                              integrate_along_saved_rays, create_wavelength_grid, deposit_single_line, \
                              lines, instruments, projAxis_def, nRaysPerDim_def, raysType_def
-from ..cosmo.spectrum_analysis import absorber_catalog, load_spectra_subset
-from ..util.helper import sampleColorTable, logZeroNaN
+from ..cosmo.spectrum_analysis import absorber_catalog, load_spectra_subset, wave_to_dv
+from ..util.helper import loadColorTable, sampleColorTable, logZeroNaN, iterable, closest
 from ..util.units import units
 from ..plot.config import *
 
-def _cog(lines, N, b, nPts=1001):
+def _cog(lines, N, b, nPts=5001):
     """ Compute a local absorption spectrum for one or more line(s) at a given column density and 
     Doppler parameter, returning (relative) flux array and derived equivalent width. 
     
@@ -31,7 +32,7 @@ def _cog(lines, N, b, nPts=1001):
     """
     f, gamma, wave0_ang, _, _ = _line_params(lines[0])
 
-    wave_ang = np.linspace(wave0_ang-20, wave0_ang+20, nPts) # 0.05 Ang spacing
+    wave_ang = np.linspace(wave0_ang-40, wave0_ang+40, nPts) # 0.05 Ang spacing
     dvel = (wave_ang/wave0_ang - 1) * units.c_cgs / 1e5 # cm/s -> km/s
 
     #dwave_ang = wave_ang[1] - wave_ang[0]
@@ -43,7 +44,7 @@ def _cog(lines, N, b, nPts=1001):
         f, gamma, wave0_ang, _, _ = _line_params(line)
         tau += _voigt_tau(wave_ang, 10.0**N, b, wave0_ang, f, gamma)
 
-    if tau[0] > 1e-4 or tau[-1] > 1e-4:
+    if tau[0] > 1e-2 or tau[-1] > 1e-2:
         print('_cog(): Warning: optical depth at edges is large, consider increasing wave_ang range.')
 
     flux = np.exp(-1*tau)
@@ -441,7 +442,6 @@ def instrument_lsf(instrument):
 
 def cos_disptab():
     """ Handle DISPTAB files, wavelength grids, and LSF files for HST-COS (pre-processing step). """
-    import glob
     from astropy.io import fits
     from ..util.helper import rootPath
 
@@ -753,7 +753,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', nRaysPerDim=
             if np.max(EW_minmax) <= 0.4:
                 spacingFac = 0.5
             if np.max(EW_minmax) > 0.8:
-                spacingFac = 0.8 #1.2
+                spacingFac = 1.1 #0.8 #1.2
         ylim = [+spacingFac/2, num*spacingFac + spacingFac/5]
 
         ax.set_xlim(xlim)
@@ -878,20 +878,215 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', nRaysPerDim=
         (sim.simName,sim.snap,ion.replace(' ',''),instrument,ewStr,num,mode,snrStr,style))
     plt.close(fig)
 
+def _select_random_spectrum():
+    """ Select a random spectrum, from all those available.
+    Args:
+      EW_min (float): minimum EW to consider [Ang].
+      EW_max (float): maximum EW to consider [Ang].
+    """
+    basepath = '/virgotng/universe/IllustrisTNG/'
+    rng = np.random.default_rng() #424242
+    sims = ['TNG50-1']
+
+    files = []
+    for sim in sims:
+        #sim = simParams(sim)
+        #path = sim.postPath + 'AbsorptionSpectra/spectra*combined.hdf5'
+        path = basepath + '%s/postprocessing/AbsorptionSpectra/spectra*combined.hdf5' % sim
+
+        files += sorted(glob.glob(path))
+
+    # pick one at random
+    file = rng.choice(files)
+    #print(file)
+
+    # load all EWs of one transition (chosen at random)
+    with h5py.File(file,'r') as f:
+        #lines_all = [key.split('EW_')[1].replace('_',' ') for key in f.keys() if 'EW_' in key]
+        lines = f.attrs['lineNames']
+        redshift = f.attrs['redshift']
+
+        line = rng.choice(lines)
+
+        key = 'EW_%s' % line.replace(' ','_')
+        if key not in f or 'flux' not in f:
+            #print('No EWs for line [%s], or flux is missing, in [%s].' % (line, file))
+            return _select_random_spectrum()
+        
+        EWs = f[key][()]
+        EWs /= (1 + redshift) # rest-frame
+
+    if 0:
+        # pick randomly from EWs (biased towards low EWs)
+        inds = np.where(EWs >= EW_min)[0]
+        if len(inds) == 0:
+            #print('No EWs >= %.2f Ang in [%s].' % (EW_min, file))
+            return _select_random_spectrum()
+        
+        ind = rng.choice(inds)
+
+    if 1:
+        # pick a random EW, then find the closest match
+        EW_rnd = rng.uniform(low=0.0, high=np.min([5.0,EWs.max()]))
+        _, ind = closest(EWs, EW_rnd)
+
+    return file, ind
+
+def spectrum_plot_single(file=None, ind=None, full=True, saveFilename=None, output_fmt="png"):
+    """ Plot a randomly selected spectrum.
+    Args:
+      file (str): if not None, the specific file to load.
+      ind (int): if not None, the specific spectrum index to load.
+      full (bool): show the full wavelength range in addition to zooming in on the absorption feature.
+      saveFilename (str): if not None, the specific filename to save to (otherwise auto-generated).
+      output_fmt (str): either 'pdf', 'png', or 'jpg'.
+    """
+    SNR_bounds = [5, 200] # if not None, add noise with a random SNR in this range.
+    
+    rng = np.random.default_rng()
+
+    if file is None or ind is None:
+        file, ind = _select_random_spectrum()
+
+    params = file.split('/')[-1].split('_')[1:-1] # sim, redshift, config, inst, ion
+    ion = params[4]
+    config = params[2]
+
+    # load and plot spectrum
+    with h5py.File(file,'r') as f:
+        wave = f['wave'][()]
+        flux = f['flux'][ind]
+
+        lines = f.attrs['lineNames']
+        instrument = f.attrs['instrument']
+        redshift = f.attrs['redshift']
+        #count = int(np.sqrt(f.attrs['count']))
+        #ray_dir = np.where(f['ray_dir'][()] == 1)[0]
+        simName = f.attrs['simName']
+
+        EWs = [f['EW_%s' % line][ind] for line in lines]
+    
+    EWs = np.array(EWs) / (1 + redshift) # rest-frame
+
+    # determine automatic bounds
+    xlim = [np.inf, -np.inf]
+
+    w = np.where(flux[:] < 0.99)[0]
+    if len(w) == 0:
+        xlim = [wave.min(), wave.max()]
+    else:    
+        xlim = [wave[w].min(), wave[w].max()]
+
+    dx = (xlim[1] - xlim[0]) * 0.01
+    xlim[0] = np.floor((xlim[0]-dx)/5) * 5
+    xlim[1] = np.ceil((xlim[1]+dx)/5) * 5
+
+    # select dv window
+    dv_val = 1000
+    xlim = [-dv_val, dv_val]
+
+    wave_dv, flux_dv = wave_to_dv(wave, flux, dv=dv_val)
+
+    # adapt xlim automatically
+    n_edge = np.max([1,wave_dv.size // 20])
+    edge_flux_mean = np.max([np.mean(flux_dv[0:n_edge]), np.mean(flux_dv[-n_edge:])])
+
+    if wave_dv.size < 50 or edge_flux_mean < 0.9:
+        dv_val *= 2
+        xlim = [-dv_val, dv_val]
+
+        wave_dv, flux_dv = wave_to_dv(wave, flux, dv=dv_val)
+
+    elif wave_dv.size > 200 and edge_flux_mean > 0.99:
+        dv_val = 400
+        xlim = [-dv_val, dv_val]
+
+        wave_dv, flux_dv = wave_to_dv(wave, flux, dv=dv_val)
+
+    # add noise (not actually consistent between zoom and full!)
+    if SNR_bounds is not None:
+        SNR = rng.uniform(low=SNR_bounds[0], high=SNR_bounds[1])
+
+        noise = rng.normal(loc=0.0, scale=1/SNR, size=flux_dv.shape)
+        flux_dv += noise # achieved SNR = 1/stddev(noise)
+        flux_dv = np.clip(flux_dv, 0, np.inf) # clip negative values at zero
+
+        noise = rng.normal(loc=0.0, scale=1/SNR, size=flux.shape)
+        flux += noise # achieved SNR = 1/stddev(noise)
+        flux = np.clip(flux, 0, np.inf) # clip negative values at zero
+
+    # other common plot config
+    title = r'%s ($\rm{z = %.1f}$) %s (%s)' % (ion,redshift,instrument,simName)
+    ylabel = 'Relative Flux'
+
+    colors = loadColorTable('Set1').colors
+    color = rng.choice(colors[0:5] + colors[6:-1]) # avoid yellow and gray
+
+    for i in range(len(lines)):
+        if EWs[i] > 0.1:
+            break
+    label1 = r'%s EW$_0$ = %.2f$\AA$ (SNR = %d)' % (lines[i].replace("_"," "), EWs[i], SNR)
+    label2 = r'%s (#%d)' % (config, ind)
+
+    # plotting two panels (zoomed and full), or just one (zoomed)?
+    if full:
+        fig, (ax2,ax1) = plt.subplots(nrows=2, figsize=[figsize[0]*0.8, figsize[1]*1.0])
+    else:
+        fig, ax1 = plt.subplots(figsize=[figsize[0]*0.8, figsize[1]*0.6])
+
+    # zoom: axis ranges
+    ax1.set_xlim(xlim)
+    if flux_dv.min() < 0.5:
+        ylim = [-0.05, 1.01]
+    else:
+        ylim = [np.floor((flux_dv.min() - 0.05)*10)/10-0.01, 1.01]
+    if SNR_bounds is not None:
+        #ylim[1] += 1/SNR
+        ylim[1] = np.max([1.0, flux_dv.max() + 0.01])
+
+    ax1.set_ylim(ylim)
+    ax1.set_xlabel(r'$\Delta v$ [ km/s ]')
+    ax1.set_ylabel(ylabel)
+
+    # full: axis ranges
+    if full:
+        xlim = [wave.min(), wave.max()]
+        ax2.set_xlim(xlim)
+        ax2.set_ylabel(ylabel)
+        ax2.set_xlabel('Wavelength [ Ang ]')
+        ax2.plot(wave, flux, '-', color=color)
+
+    ax1.step(wave_dv, flux_dv, '-', color=color, where='mid', lw=lw)
+
+    ax = ax2 if full else ax1 # for annotations and title
+
+    ax.set_title(title)
+    ax.annotate(label1, xy=(0.02, 0.04), xycoords='axes fraction', fontsize=18, color='#555')
+    
+    ax.annotate(label2, xy=(0.98, 0.06), xycoords='axes fraction', ha='right', 
+                fontsize=14, color='#aaa', alpha=0.5, zorder=-10)
+
+    # finish plot
+    if saveFilename is None:
+        saveFilename = 'spectrum_%s_%d.%s' % ('_'.join(params), ind, output_fmt)
+    fig.savefig(saveFilename)
+    plt.close(fig)
+
 def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=[0.5,0.7,1.0], 
-                    xlim=None, solar=False, indivEWs=False, log=False):
+                    xlim=None, solar=False, indivEWs=False, log=False, dX=False):
     """ Plot the EW distribution (dN/dWdz) of a given absorption line.
 
     Args:
       sim_in (:py:class:`~util.simParams`): simulation instance.
       line (str): string specifying the line transition.
-      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      instrument (list[str]): specify wavelength range and resolution, must be known in `instruments` dict.
       redshifts (list[float]): list of redshifts to overplot.
       xlim (list[float]): min and max EW [Ang], or None for default.
       solar (bool): use the (constant) solar value instead of simulation-tracked metal abundances.
       indivEWs (bool): if True, then use/create absorber catalog, to handle multiple absorbers per sightline, 
         otherwise use the available 'global' EWs, one per sightline.
       log (bool): plot log(EW) instead of linear EWs.
+      dX (bool): if True, normalize by absorption distance dX instead of redshift path length dz.
     """
     sim = sim_in.copy()
 
@@ -900,7 +1095,7 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
 
     if xlim is None:
         xlim = [0, 8] # ang
-        if log: xlim = [-1.0, 1.4] # log[ang]
+        if log: xlim = [0.1,10] # log[ang]
         
     nBins = 40
 
@@ -909,10 +1104,19 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
 
     for redshift in redshifts:
         sim.setRedshift(redshift)
-        print('EW distribution: ', sim, line)
 
         ion = lines[line]['ion']
-        filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
+
+        for inst in iterable(instrument):
+            filepath = _spectra_filepath(sim, ion, instrument=inst, solar=solar)
+
+            if isfile(filepath):
+                break
+
+        if not isfile(filepath):
+            continue
+
+        print(filepath)
 
         # raw EWs (one per sightline), or re-processed EWs (one per individual absorber)?
         if indivEWs:
@@ -940,23 +1144,32 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
     ax = fig.add_subplot(111)
 
     ax.set_xlim(xlim)
-    ax.set_xlabel(r'Rest-frame Equivalent Width [ %s$\rm{\AA}$ ]' % ('Log ' if log else ''))
-    ax.set_ylabel('d$^2 N$/d$z$d$W$ (%s)' % line)
+    ax.set_xlabel(r'Rest-frame Equivalent Width [ $\rm{\AA}$ ]')
+    if dX:
+        ax.set_ylabel('d$^2 N$/d$X$d$W$ (%s)' % line)
+    else:
+        ax.set_ylabel('d$^2 N$/d$z$d$W$ (%s)' % line)
     ax.set_yscale('log')
+    if log: ax.set_xscale('log')
 
     # loop over requested redshifts
-    for redshift in redshifts:
+    colors = []
+    labels = []
+
+    for redshift in EWs.keys():
         # load
         sim.setRedshift(redshift)
         x = EWs[redshift]
 
-        if log: x = np.log10(x)
-
         # histogram
         hh, bin_edges = np.histogram(x, bins=nBins, range=xlim)
 
-        # normalize by dz = total redshift path length = N_sightlines * boxSizeInDeltaRedshift
-        hh = hh.astype('float32') / (count * sim.dz)
+        if dX:
+            # normalize by dX = absorption distance = N_sightlines * boxSizeInAbsorptionDistance
+            hh = hh.astype('float32') / (count * sim.dX)
+        else:
+            # normalize by dz = total redshift path length = N_sightlines * boxSizeInDeltaRedshift
+            hh = hh.astype('float32') / (count * sim.dz)
 
         # normalize by dW = equivalent width bin sizes [Ang]
         dW_norm = bin_edges[1:] - bin_edges[:-1] # constant (linear)
@@ -964,10 +1177,12 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
 
         hh /= dW_norm
 
-        ax.stairs(hh, edges=bin_edges, lw=lw, label='z = %.1f' % sim.redshift)
+        l = ax.stairs(hh, edges=bin_edges, lw=lw)
+        colors.append(l.get_edgecolor())
+        labels.append('z = %.1f' % sim.redshift)
 
     # plot obs data
-    if line == 'MgII 2796':
+    if line == 'MgII 2796' and not dX:
         # (Matejek+12 Table 3)
         # https://ui.adsabs.harvard.edu/abs/2012ApJ...761..112M/abstract
         # (!) see also https://ui.adsabs.harvard.edu/abs/2013ApJ...764....9M/abstract
@@ -1004,14 +1219,49 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
         opts = {'color':'#000', 'ecolor':'#000', 'alpha':0.9, 'capsize':0.0, 'fmt':'o'}
         ax.errorbar(s24_x, s24_y, yerr=s24_yerr, label=s24_label, **opts)
 
-    if line == 'CIV 1548':
+        # Zhu+13 (SDSS, fits via Table 1 and Eqn 3)
+        z13_z = [0.48, 0.63, 0.78, 0.93, 1.08, 1.23, 1.38, 1.53, 1.68, 1.83, 1.98, 2.13]
+        z13_N = [1.11, 1.06, 1.13, 1.25, 1.21, 1.22, 1.34, 1.33, 1.32, 1.65, 1.49, 1.55]
+        z13_W = [0.51, 0.59, 0.63, 0.63, 0.68, 0.73, 0.71, 0.76, 0.76, 0.70, 0.70, 0.66]
+
+        xx = np.linspace(0.6, 5.0, 100)
+
+        for j, z_ind in enumerate([0, 2, 4]):
+            yy = (z13_N[z_ind] / z13_W[z_ind]) * np.exp(-xx/z13_W[z_ind]) # Eqn 3
+            ls = linestyles[j]
+            ax.plot(xx, yy, ls=ls, color='#777', lw=lw, label='Zhu+13 (<z> = %.2f)' % z13_z[z_ind])
+
+    if line == 'CIV 1548' and dX:
         # Finlator+
         # Hasan, F.+ 2020
-        pass
+        h20_label = 'Hasan+20 (1 < z < 2.5)'
+        h20_W = [0.058, 0.078, 0.103, 0.131, 0.165, 0.207, 0.264, 0.330, 0.447, 0.680, 1.16, 2.12]
+        h20_Werr = np.array([0.01, 0.01, 0.01, 0.02, 0.02, 0.03, 0.03, 0.05, 0.08, 0.17, 0.57, 0.52])/1.5
+        h20_n = [14.0, 10.1, 7.9, 5.1, 4.7, 3.6, 2.8, 1.7, 1.0, 0.53, 0.24, 0.01]
+        h20_nerr = [2.1, 1.3, 0.86, 0.72, 0.48, 0.40, 0.36, 0.22, 0.14, 0.05, 0.025, 0.004]
+
+        opts = {'color':'#333333', 'ecolor':'#333333', 'alpha':0.9, 'capsize':0.0, 'fmt':'D'}
+        ax.errorbar(h20_W, h20_n, yerr=h20_nerr, xerr=h20_Werr, label=h20_label, **opts)
+
+        h20z_label = 'Hasan+20 (2.5 < z < 4.7)'
+        h20z_W = [0.058, 0.078, 0.103, 0.131, 0.165, 0.207, 0.264, 0.330, 0.45, 0.67, 1.05, 2.13]
+        h20z_W_err = np.vstack(([0.01, 0.01, 0.01, 0.02, 0.02, 0.03, 0.03, 0.05, 0.08, 0.17, 0.3, 0.2],
+                                [0.01, 0.01, 0.01, 0.02, 0.02, 0.03, 0.03, 0.05, 0.08, 0.17, 0.5, 0.2]))/1.5
+        h20z_n = [12.9, 8.5, 7.2, 4.9, 3.6, 2.1, 1.9, 1.63, 0.84, 0.35, 0.06, 0.002]
+        h20z_n_err = np.vstack(([2.1, 1.3, 0.86, 0.72, 0.48, 0.40, 0.36, 0.22, 0.14, 0.05, 0.03, 0.0015],
+                               [2.1, 1.3, 0.86, 0.72, 0.48, 0.40, 0.36, 0.22, 0.14, 0.05, 0.05, 0.002]))
+
+        opts = {'color':'#000000', 'ecolor':'#000000', 'alpha':0.9, 'capsize':0.0, 'fmt':'o'}
+        ax.errorbar(h20z_W, h20z_n, yerr=h20z_n_err, xerr=h20z_W_err, label=h20z_label, **opts)
+
+    # simulation legend
+    handles = [plt.Line2D((0,1), (0,0), color=color, lw=lw, ls='-') for color in colors]
+    legend2 = ax.legend(handles, labels, loc='lower left')
+    ax.add_artist(legend2)
 
     # finish plot
     ax.legend(loc='best')
-    fig.savefig('EW_histogram_%s_%s%s_%s.pdf' % (sim.simName,line.replace(' ','-'),'_log' if log else '',instrument))
+    fig.savefig('EW_histogram_%s_%s%s.pdf' % (sim.simName,line.replace(' ','-'),'_log' if log else ''))
     plt.close(fig)
 
 def EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS', bvals = [5, 10, 25, 50, 100, 150],
@@ -1097,7 +1347,7 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
     Args:
       sim_in (:py:class:`~util.simParams`): simulation instance.
       line (str): string specifying the line transition.
-      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      instrument (list[str]): specify wavelength range and resolution, must be known in `instruments` dict.
       redshifts (list[float]): list of redshifts to overplot.
       solar (bool): use the (constant) solar value instead of simulation-tracked metal abundances.
       log (bool): plot log(EW) instead of linear EWs.
@@ -1111,13 +1361,13 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
     #EW_thresholds = [0.3,1.0,3.0] # thresholds for EW for vs. redshift plot
     if 'MgII' in line:
         EW_thresholds = z13['EW0'] # match to obs data
-        xlim = [0.0, np.max(redshifts)+2.0]
-        ylim = [2e-4, 4.0]
+        xlim = [0.0, 6.0]
+        ylim = [5e-4, 2.0]
 
     if 'CIV' in line:
-        EW_thresholds = [0.005, 0.3, 0.6, 0.9]
+        EW_thresholds = [0.05, 0.3, 0.6, 0.9]
         xlim = [np.min(redshifts)-0.1, np.max(redshifts)+0.1]
-        ylim = [1e-3, 10.0]    
+        ylim = [1e-4, 10.0]    
     
     # load: loop over all available redshifts
     zz = []
@@ -1127,12 +1377,19 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
     for redshift in redshifts:
         sim.setRedshift(redshift)
         ion = lines[line]['ion']
-        filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
+
+        # check for existence across all specified instrument(s)
+        for inst in iterable(instrument):
+            filepath = _spectra_filepath(sim, ion, instrument=inst, solar=solar)
+
+            if isfile(filepath):
+                break
 
         if not isfile(filepath):
             continue
 
         with h5py.File(filepath,'r') as f:
+            print(filepath)
             count = f.attrs['count']
             EWs = f['EW_%s' % line.replace(' ','_')][()]
 
@@ -1168,27 +1425,78 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
     # plot the simulation dN/dz for each EW threshold
     colors = []
     for EW_thresh in EW_thresholds:
-        label = r'%s (EW > %.1f$\,\rm{\AA}$)' % (sim.simName,EW_thresh)
-        l, = ax.plot(zz, dNdz[EW_thresh], '-', lw=lw, label=label)
+        l, = ax.plot(zz, dNdz[EW_thresh], '-', lw=lw)
         colors.append(l.get_color())
 
     # observational data
     if line == 'MgII 2796':     
         for i, EW0 in enumerate(z13['EW0']):
             label = r'%s ($\rm{W_0 > %.1f \AA}$)' % (z13['label'],EW0)
+            label = ''#z13['label']+" (variable)" if i == 0 else ''
             typical_error = 1e-3
             ax.errorbar(z13['z'], z13['dNdz'][EW0], yerr=typical_error, 
               color=colors[i], alpha=0.8, marker='s', linestyle='none', label=label)
 
         # Zou+21 (z>2)
+        z21_label = r'Zou+21 ($\rm{W_0 > 1.0 \AA}$)'
+        z21_z = [2.6, 3.4, 4.6, 5.2, 6.1]
+        z21_z_err1 = [3.0, 3.8, 5.0, 5.4, 6.2]
+        z21_z_err2 = [2.2, 3.0, 4.2, 5.0, 6.0]
+        z21_dNdz = [0.39, 0.67, 0.62, 0.19, 0.12]
+        z21_dNdz_err1 = [0.54, 0.94, 0.89, 0.31, 0.22]
+        z21_dNdz_err2 = [0.23, 0.40, 0.33, 0.07, 0.02]
+        yerr1 = np.array(z21_dNdz_err1) - np.array(z21_dNdz)
+        yerr2 = np.array(z21_dNdz) - np.array(z21_dNdz_err2)
+        xerr1 = np.array(z21_z_err1) - np.array(z21_z)
+        xerr2 = np.array(z21_z) - np.array(z21_z_err2)
+
+        ax.errorbar(z21_z, z21_dNdz, yerr=np.vstack((yerr1,yerr2)), xerr=np.vstack((xerr1,xerr2)),
+              color='#333', alpha=0.8, marker='D', linestyle='none', label=z21_label)
+
+        # Chen+17 (z>2)
+        c17_label = r'Chen+17 ($\rm{W_0 > 1.0 \AA}$)'
+        c17_z = [2.2, 2.7, 3.5, 4.8, 6.3]
+        c17_z_err1 = [2.5, 3.0, 3.8, 5.3, 6.8]
+        c17_z_err2 = [2.0, 2.5, 3.1, 4.3, 5.7]
+        c17_dNdz = [0.73, 0.49, 0.46, 0.34, 0.19]
+        c17_dNdz_err1 = [0.92, 0.63, 0.57, 0.44, 0.39]
+        c17_dNdz_err2 = [0.57, 0.39, 0.37, 0.25, 0.02]
+
+        yerr1 = np.array(c17_dNdz_err1) - np.array(c17_dNdz)
+        yerr2 = np.array(c17_dNdz) - np.array(c17_dNdz_err2)
+        xerr1 = np.array(c17_z_err1) - np.array(c17_z)
+        xerr2 = np.array(c17_z) - np.array(c17_z_err2)
+
+        ax.errorbar(c17_z, c17_dNdz, yerr=np.vstack((yerr1,yerr2)), xerr=np.vstack((xerr1,xerr2)),
+              color='#333', alpha=0.8, marker='o', linestyle='none', label=c17_label)
+
         # https://ui.adsabs.harvard.edu/abs/2017MNRAS.472.1023C/abstract
+
+        # Prochter+05
+
 
     if line == 'CIV': # also SiIV
         pass # https://ui.adsabs.harvard.edu/abs/2022ApJ...924...12H/abstract
         # https://ui.adsabs.harvard.edu/abs/2018MNRAS.481.4940C/abstract
 
+    # second legend
+    handles = []
+    labels = []
+
+    for i, EW_thresh in enumerate(EW_thresholds):
+        label = r'EW > %.1f$\,\rm{\AA}$' % EW_thresh
+        handles.append(plt.Line2D((0,1), (0,0), color=colors[i], lw=lw, ls='-'))
+        labels.append(label)
+
+    legend2 = ax.legend(handles, labels, ncols=1, loc='lower right')
+    ax.add_artist(legend2)
+
     # finish plot
-    ax.legend(loc='best')
+    handles, labels = ax.get_legend_handles_labels()
+    lExtra = [z13['label']+" (variable)", sim.simName]
+    hExtra = [plt.Line2D((0,1), (0,0), color='#333', lw=0, marker='s', alpha=0.8),
+              plt.Line2D((0,1), (0,0), color='#333', lw=lw, alpha=1.0)]
+    ax.legend(handles+hExtra, labels+lExtra, ncols=1, loc=[0.41,0.02], handlelength=1.2)
     fig.savefig('dNdz_evolution_%s_%s.pdf' % (sim.simName,line.replace(' ','-')))
     plt.close(fig)
 
@@ -1207,13 +1515,26 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
 
     # observational data
     if line == 'MgII 2796':
-        pass
         # Zou+21
-        # https://ui.adsabs.harvard.edu/abs/2017MNRAS.472.1023C/abstract
+
+        # Codoreanu+17 (Table 2)
+        c17_label = r'Codoreanu+17 ($\rm{0.3 \AA < W_0 < 0.6 \AA}$)'
+        c17_z = [2.53, 3.41, 4.76]
+        c17_dNdX = [0.30, 0.09, 0.11]
+        c17_dNdX_err = [0.15, 0.08, 0.07]
+        ax.errorbar(c17_z, c17_dNdX, yerr=c17_dNdX_err, 
+              color='#333', alpha=0.8, marker='o', linestyle='none', label=c17_label)
+
+        c17_label = r'Codoreanu+17 ($\rm{1.0 \AA < W_0 < 4.0 \AA}$)'
+        c17_z = [2.49, 3.43, 4.75]
+        c17_dNdX = [0.09, 0.07, 0.08]
+        c17_dNdX_err = [0.05, 0.06, 0.06]
+        ax.errorbar(c17_z, c17_dNdX, yerr=c17_dNdX_err, 
+              color='#333', alpha=0.8, marker='s', linestyle='none', label=c17_label)
 
     if line == 'CIV 1548':
         # Hasan+2020 (Table 4, Figure 7)
-        h20_label = 'Hasan+ (2020)'
+        h20_label = 'Hasan+ (2020) - SDSS'
         h20_z = [1.34, 1.74, 1.94, 2.13, 2.30, 2.46, 2.64, 2.83, 3.01, 4.0]
         h20_dNdX_005A = [1.97, 2.17, 2.12, 2.11, 2.03, 2.02, 1.77, 2.13, 1.39, 1.23]
         h20_dNdX_03A  = [0.80, 0.76, 0.75, 0.67, 0.61, 0.56, 0.59, 0.55, 0.40, 0.24]
@@ -1230,7 +1551,7 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
         ax.errorbar(h20_z, h20_dNdX_06A, yerr=h20_dNdX_06A_err, color=colors[2], marker='s', ls='none', label=label)
 
         # Anand+2025 (Figure 7)
-        a25_label = 'Anand+ (2025)'
+        a25_label = 'Anand+ (2025) - DESI'
         a25_z = [1.54, 1.77, 1.86, 1.93, 1.98, 2.03, 2.09, 2.14, 2.20, 2.26, 2.33, 2.41, 2.51, 2.66, 2.88, 3.85]
         a25_dNdX_06A = [1.80e-1, 1.72e-1, 1.75e-1, 1.63e-1, 1.59e-1, 1.52e-1, 1.50e-1, 1.47e-1, 1.41e-1, 
                         1.33e-1, 1.25e-1, 1.22e-1, 1.07e-1, 8.47e-2, 7.67e-2, 4.81e-2]
@@ -1242,19 +1563,35 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
         label = r'%s ($\rm{W_0 > 0.9 \AA}$)' % (a25_label)
         ax.errorbar(a25_z, a25_dNdX_09A, color=colors[3], marker='o', ls='none', label=label)
 
-        # https://ui.adsabs.harvard.edu/abs/2022ApJ...924...12H/abstract
         # https://ui.adsabs.harvard.edu/abs/2018MNRAS.481.4940C/abstract
 
-    # legends
-    handles = []
-    labels = []
+        # D'odorico+22 (from +13,+10)
+        d13_label = r'D\'Odorico+13 ($\rm{log N \ge 13.0 cm$^{-2}}$)'
+        d13_z = [2.1, 2.66, 3.44, 4.78, 5.18, 5.89]
+        d13_z_err1 = [0.3, 0.285, 1.0, 0.16, 0.46, 0.33]
+        d13_z_err2 = [0.34, 0.25, 0.5, 0.26, 0.22, 0.18]
+        d13_dNdX = [3.92, 4.22, 4.26, 4.36, 1.73, 0.86]
+        d13_dNdX_err1 = [0.33, 0.43, 0.42, 0.55, 0.24, 0.21]
+        d13_dNdX_err2 = [0.33, 0.42, 0.40, 0.58, 0.26, 0.21]
 
-    for i, EW_thresh in enumerate(EW_thresholds):
-        label = r'%s (EW > %.1f$\,\rm{\AA}$)' % (sim.simName,EW_thresh)
-        if EW_thresh < 0.1:
-            label = r'%s (EW > %.3f$\,\rm{\AA}$)' % (sim.simName,EW_thresh)
-        handles.append(plt.Line2D((0,1), (0,0), color=colors[i], lw=lw, ls='-'))
-        labels.append(label)
+        #ax.errorbar(d13_z, d13_dNdX, yerr=np.vstack((d13_dNdX_err1,d13_dNdX_err2)), 
+        #            xerr=np.vstack((d13_z_err1,d13_z_err2)),
+        #            color='#333', alpha=0.8, marker='o', linestyle='none', label=d13_label)
+
+    # legends
+    if 0:
+        handles = []
+        labels = []
+
+        for i, EW_thresh in enumerate(EW_thresholds):
+            label = r'%s (EW > %.1f$\,\rm{\AA}$)' % (sim.simName,EW_thresh)
+            if EW_thresh < 0.1:
+                label = r'%s (EW > %.2f$\,\rm{\AA}$)' % (sim.simName,EW_thresh)
+            handles.append(plt.Line2D((0,1), (0,0), color=colors[i], lw=lw, ls='-'))
+            labels.append(label)
+    else:
+        handles = [plt.Line2D((0,1), (0,0), color='black', lw=lw, ls='-')]
+        labels = [sim.simName]
 
     legend2 = ax.legend(handles, labels, loc='upper right')
     ax.add_artist(legend2)

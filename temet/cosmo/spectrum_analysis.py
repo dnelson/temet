@@ -8,6 +8,7 @@ from os.path import isfile
 from numba import jit
 
 from ..util.helper import closest, contiguousIntSubsets, logZeroMin
+from ..util.units import units
 from ..cosmo.spectrum import generate_rays_voronoi_fullbox, integrate_along_saved_rays, \
     create_wavelength_grid, _spectra_filepath, lines, projAxis_def, nRaysPerDim_def, raysType_def
 from ..plot.config import *
@@ -48,9 +49,6 @@ def load_spectra_subset(sim, ion, instrument, mode, nRaysPerDim=nRaysPerDim_def,
 
         # total EW (summing all transitions)
         EW = np.sum(np.vstack([f[key][()] for key in f.keys() if 'EW_' in key]), axis=0)
-
-        # total EW (of a single transition)
-        #EW = f['EW_MgII_2796'][()]
 
     # select
     if EW_minmax is not None:
@@ -118,83 +116,112 @@ def load_spectra_subset(sim, ion, instrument, mode, nRaysPerDim=nRaysPerDim_def,
         if N is not None:
             N = N[sort_inds]
         
-    # x-axis in velocity space? keep global spectra, shift wave axis
-    if 0 and dv:
-        # center each absorption line at its tau-weighted mean wavelength, and convert to dv
-        wave_dv = np.zeros((num, wave.size), dtype='float32')
-
-        for i in range(num):
-            flux_loc = flux[i,:]
-            flux_loc[flux_loc < 1e-4] = 1e-4 # avoid log(0)
-            tau = -np.log(flux_loc)
-
-            wave_mean = np.average(wave, weights=tau)
-            dlambda = wave - wave_mean
-            wave_dv[i,:] = dlambda / wave_mean * sim.units.c_km_s
-
-            # re-compute in a fixed dv window to avoid other nearby absorption features
-            w = np.where( (wave_dv[i,:] > -dv) & (wave_dv[i,:] <= dv) )[0]
-            wave_mean = np.average(wave[w], weights=tau[w])
-            dlambda = wave - wave_mean
-            wave_dv[i,:] = dlambda / wave_mean * sim.units.c_km_s
-
-        wave = wave_dv
-
-    # x-axis in velocity space? take local subsets of spectra, adopt common dv axis
+    # x-axis in velocity space?
     if dv:
-        # how many wavelength bins in velocity window?
-        dlambda = wave - wave.mean()
-        wave_dv = dlambda / wave.mean() * sim.units.c_km_s
+        wave, flux = wave_to_dv(sim, wave, flux, dv)
 
-        w = np.where( (wave_dv > -dv) & (wave_dv <= dv) )[0]
-        n = int(np.ceil(len(w) / 2))
+    return wave, flux, EW, N, lineNames
 
-        _, ind_cen = closest(wave, wave.mean())
-        wave_dv = wave_dv[ind_cen-n+1:ind_cen+n+1] #wave_dv[w]
+def wave_to_dv(wave, flux, dv):
+    """ Convert a spectrum as a function of wavelength to velocity space, centering
+    at the tau-weighted mean wavelength.
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      wave (np.ndarray): wavelength array [Ang].
+      flux (np.ndarray): flux array, shape (n_spectra, n_wave).
+      dv (float): velocity window (+/-) [km/s].
+    """
+    if flux.ndim == 1:
+        flux = np.reshape(flux, (1,flux.size))
 
-        flux_dv = np.zeros((flux.shape[0],wave_dv.size), dtype=flux.dtype)
-        #dwave_cen = np.zeros(flux.shape[0], dtype=wave.dtype)
+    # keep global spectra, shift wave axis
+    if 0:
+        # center each absorption line at its tau-weighted mean wavelength, and convert to dv
+        wave_dv = np.zeros((flux.shape[0], wave.size), dtype='float32')
 
         for i in range(flux.shape[0]):
             flux_loc = flux[i,:]
             flux_loc[flux_loc < 1e-4] = 1e-4 # avoid log(0)
             tau = -np.log(flux_loc)
 
-            # pick the largest absorption feature, if more than one
-            w = np.where(tau > 0)[0]
-            ranges = contiguousIntSubsets(w)
-
-            if len(ranges) > 1:
-                tau_sums = [tau[w[r[0]:r[1]]].sum() for r in ranges]
-                tau_max_ind = np.argmax(tau_sums)
-
-                for j, r in enumerate(ranges):
-                    if j == tau_max_ind:
-                        continue
-                    tau[w[r[0]:r[1]]] = 0
-
-            # center at tau-weighted mean wavelength
             wave_mean = np.average(wave, weights=tau)
             dlambda = wave - wave_mean
-            wave_dv_loc = dlambda / wave_mean * sim.units.c_km_s
+            wave_dv[i,:] = dlambda / wave_mean * units.c_km_s
+
+            # re-compute in a fixed dv window to avoid other nearby absorption features
+            w = np.where( (wave_dv[i,:] > -dv) & (wave_dv[i,:] <= dv) )[0]
+            wave_mean = np.average(wave[w], weights=tau[w])
+            dlambda = wave - wave_mean
+            wave_dv[i,:] = dlambda / wave_mean * units.c_km_s
+
+        return wave_dv, flux.squeeze()
+    
+    # take local subsets of spectra, adopt common dv axis
+
+    # how many wavelength bins in velocity window?
+    dlambda = wave - wave.mean()
+    wave_dv = dlambda / wave.mean() * units.c_km_s
+
+    w = np.where( (wave_dv > -dv) & (wave_dv <= dv) )[0]
+    n = int(np.ceil(len(w) / 2))
+
+    _, ind_cen = closest(wave, wave.mean())
+    wave_dv = wave_dv[ind_cen-n+1:ind_cen+n+1] #wave_dv[w]
+
+    flux_dv = np.zeros((flux.shape[0],wave_dv.size), dtype=flux.dtype)
+    #dwave_cen = np.zeros(flux.shape[0], dtype=wave.dtype)
+
+    for i in range(flux.shape[0]):
+        flux_loc = flux[i,:]
+        flux_loc[flux_loc < 1e-4] = 1e-4 # avoid log(0)
+        tau = -np.log(flux_loc)
+
+        # pick the largest absorption feature, if more than one
+        w = np.where(tau > 0)[0]
+        ranges = contiguousIntSubsets(w)
+
+        if len(ranges) > 1:
+            tau_sums = [tau[w[r[0]:r[1]]].sum() for r in ranges]
+            tau_max_ind = np.argmax(tau_sums)
+
+            for j, r in enumerate(ranges):
+                if j == tau_max_ind:
+                    continue
+                tau[w[r[0]:r[1]]] = 0
+
+        # center at tau-weighted mean wavelength
+        if np.sum(tau) > 0:
+            wave_mean = np.average(wave, weights=tau)
+            dlambda = wave - wave_mean
+            wave_dv_loc = dlambda / wave_mean * units.c_km_s
 
             # re-compute in a fixed dv window to avoid other nearby absorption features
             w = np.where( (wave_dv_loc > -dv) & (wave_dv_loc <= dv) )[0]
 
             #assert tau[w].sum() > 0 # otherwise next line fails
             wave_mean = np.average(wave[w], weights=tau[w])
+        else:
+            wave_mean = np.average(wave)
 
-            # select closest bin to center wavelength
-            wave_cen, ind_cen = closest(wave, wave_mean)
+        # select closest bin to center wavelength
+        wave_cen, ind_cen = closest(wave, wave_mean)
 
-            # stamp
-            flux_dv[i,:] = flux[i,ind_cen-n+1:ind_cen+n+1]
-            #dwave_cen[i] = wave_cen - wave_mean
+        # stamp (careful if we are near boundaries)
+        off1 = 0
 
-        wave = wave_dv
-        flux = flux_dv
+        if ind_cen-n+1 < 0:
+            off1 = -(ind_cen-n+1)
 
-    return wave, flux, EW, N, lineNames
+        if ind_cen+n+1 >= wave.size:
+            off2 = wave.size - (ind_cen-n+1)
+
+            flux_dv[i,off1:off2] = flux[i,ind_cen-n+1+off1:ind_cen+n+1+off2]
+        else:
+            flux_dv[i,off1:] = flux[i,ind_cen-n+1+off1:ind_cen+n+1]
+
+        #dwave_cen[i] = wave_cen - wave_mean
+
+    return wave_dv, flux_dv.squeeze()
 
 def load_absorber_spectra(sim, line, instrument, solar, EW_minmax=None, dwave=0.0, dv=0.0):
     """ Load the (local) spectra for each absorber, from a given simulation and ion.
