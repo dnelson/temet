@@ -587,3 +587,146 @@ def blackhole_details_mergers(sim, overwrite=False):
     smbhs['mergers'] = {'times':merger_times, 'ids':merger_ids}
 
     return smbhs
+
+def sf_sn_details(sim, overwrite=False):
+    """ Convert the sf_details/, sf_details_ids/, and sn_details/ files into HDF5. """
+    cachefile = {'sf':sim.derivPath + 'sf_details.hdf5',
+                 'sn':sim.derivPath + 'sn_details.hdf5'}
+
+    stars = {}
+    supernovae = {}
+
+    # check for existence of cache
+    if isfile(cachefile['sf']) and isfile(cachefile['sn']) and not overwrite:
+        with h5py.File(cachefile['sf'],'r') as f:
+            for key in f:
+                stars[key] = f[key][()]
+        print(f'Loaded [{cachefile['sf']}].')
+        with h5py.File(cachefile['sn'],'r') as f:
+            for key in f:
+                supernovae[key] = f[key][()]
+        print(f'Loaded [{cachefile['sn']}].')
+        
+        return stars, supernovae
+
+    # concatenate txt files if needed
+    path = sim.simPath + 'txt-files/'
+
+    if not isdir(path):
+        # txt-files/ is not present yet, run is likely still in progress
+        path = sim.simPath
+
+    file_sf = path + 'sf_details/sf_details.txt'
+    file_sf_ids = path + 'sf_details_ids/sf_details_ids.txt'
+    file_sn = path + 'sn_details/sn_details.txt'
+    
+    decompressed = False
+
+    if not isfile(file_sf):
+        # .tar.gz files present and directories not? decompress
+        if isfile(path + 'sf_details.tar.gz') and not isdir(path + 'sf_details/'):
+            assert 'txt-files/' in path # should not occur otherwise
+
+            print('Decompressing sf_details.tar.gz...')
+            r = subprocess.run(['tar','-xzf','sf_details.tar.gz'], cwd=path)
+            print('Decompressing sf_details_ids.tar.gz...')
+            r = subprocess.run(['tar','-xzf','sf_details_ids.tar.gz'], cwd=path)
+            print('Decompressing sn_details.tar.gz...')
+            r = subprocess.run(['tar','-xzf','sn_details.tar.gz'], cwd=path)
+            decompressed = True
+
+        # concat file is missing, check for individual files
+        filename_indiv = file_sf.replace('.txt','_0.txt')
+        if isfile(filename_indiv):
+            # run concat
+            print('Concat sf_details*.txt...')
+            r = subprocess.run('cat sf_details_*.txt > sf_details.txt', cwd=path + 'sf_details/', shell=True)
+
+            print('Concat sf_details_ids*.txt...')
+            r = subprocess.run('cat sf_details_ids_*.txt > sf_details_ids.txt', cwd=path + 'sf_details_ids/', shell=True)
+
+            print('Concat sn_details*.txt...')
+            r = subprocess.run('cat sn_details_*.txt > sn_details.txt', cwd=path + 'sn_details/', shell=True)
+
+    # load sf_details, columns:
+    # thistask tistep num time pos0 pos1 pos2 vel0 vel1 vel2 dens temp metal mass initialsolomass 0 0
+    sf_columns = ['Time','pos0','pos1','pos2','vel0','vel1','vel2','Density','Temperature','Metallicity','InitialSoloMass']
+    
+    sf_data = np.loadtxt(file_sf, usecols=np.arange(3,len(sf_columns)+3), dtype='float32')
+    sf = {col: sf_data[:,i] for i, col in enumerate(sf_columns)}
+    for i, col in enumerate(['task','tistep','num']):
+        sf[col] = np.loadtxt(file_sf, usecols=[i], dtype='int32')
+
+    # load sf_details_ids, columns: task tistep index id
+    sf_ids_columns = ['task','tistep','index','id']
+    sf_ids_data = np.loadtxt(file_sf_ids, dtype='int64')
+    sf_ids = {col: sf_ids_data[:,i] for i, col in enumerate(sf_ids_columns)}
+
+    # combine sf_details and sf_details_ids
+    assert sf['task'].size == sf_ids['task'].size
+    for i in range(sf['task'].size):
+        assert sf['task'][i] == sf_ids['task'][i]
+        assert sf['tistep'][i] == sf_ids['tistep'][i]
+        assert sf['num'][i] <= sf_ids['index'][i]
+
+    sf['id'] = sf_ids['id']
+
+    # clean: only unique entries (this is star formation, so just one entry per star id)
+    def _clean_sort_and_save(dict_in, unique_keys, name):
+        """ Clean dictionary to only unique entries based on unique_keys, sort by time, and save. """
+        dict_out = {}
+        unique_ids, unique_inds = np.unique(unique_keys, return_index=True)
+
+        if unique_ids.size < len(unique_keys):
+            print(f' Found {len(unique_keys) - unique_ids.size} duplicate [{name}] entries! Keeping first occurrence only.')
+            for key in dict_in.keys():
+                dict_out[key] = dict_in[key][unique_inds]
+        else:
+            print(f' No duplicate [{name}] entries found.')
+            dict_out = dict_in
+
+        # sort by time
+        inds = np.argsort(dict_out['Time'])
+        for key in dict_out.keys():
+            dict_out[key] = dict_out[key][inds]
+        
+        dict_out['Coordinates'] = np.vstack((dict_out['pos0'], dict_out['pos1'], dict_out['pos2'])).T
+        dict_out['Velocities'] = np.vstack((dict_out['vel0'], dict_out['vel1'], dict_out['vel2'])).T
+        for key in ['pos0','pos1','pos2','vel0','vel1','vel2']:
+            del dict_out[key]
+
+        # save
+        with h5py.File(cachefile[name],'w') as f:
+            for key in dict_out:
+                f[key] = dict_out[key]
+
+        print(f'Saved [{cachefile[name]}].')
+
+        return dict_out
+
+    stars = _clean_sort_and_save(sf, sf['id'], 'sf')
+
+    # load sn_details, columns:
+    # id time pos0 pos1 pos2 vel0 vel1 vel2 dens temp metal mass_out energy_out age local_flag
+    sn_columns = ['Time','pos0','pos1','pos2','vel0','vel1','vel2','Density','Temperature',
+                  'Metallicity','Mass_SN','Energy_SN','Age'] #,'local_flag']
+
+    sn = np.loadtxt(file_sn, usecols=[0], dtype='int64')
+    sn = {col: sn for col in ['id']}
+    sn_data = np.loadtxt(file_sn, usecols=np.arange(1,len(sn_columns)+1), dtype='float32')
+    for i, col in enumerate(sn_columns):
+        sn[col] = sn_data[:,i]
+
+    keys = ['%s-%s' % (id,time) for id,time in zip(sn['id'], sn['Time'])]
+
+    supernoave = _clean_sort_and_save(sn, keys, 'sn')
+
+    # delete decompressed files
+    if decompressed:
+        assert 'txt-files/' in path
+        print('Deleting decompressed files...')
+        r = subprocess.run(['rm','-r','sf_details'], cwd=path)
+        r = subprocess.run(['rm','-r','sf_details_ids'], cwd=path)
+        r = subprocess.run(['rm','-r','sn_details'], cwd=path)
+
+    return stars, supernovae
