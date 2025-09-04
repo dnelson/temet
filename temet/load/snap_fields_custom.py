@@ -1422,7 +1422,7 @@ def _cloudy_load(sim, partType, field, args):
                 if prop in ['mass','frac','numdens']:
                     # either ionization fractions, or total mass in the ion
                     values = ion.calcGasMetalAbundances(sim, element, ionNum, indRange=indRangeLocal, 
-                                                        assumeSolarAbunds=assumeSolarAbunds)
+                                                        assumeSolarAbunds=assumeSolarAbunds, parallel=True)
 
                     if prop == 'mass':
                         values *= sim.snapshotSubset(partType, 'Masses', indRange=indRangeLocal)

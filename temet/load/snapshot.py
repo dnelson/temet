@@ -170,9 +170,10 @@ def snapHasField(sP, partType, field):
     if 'PartType' not in partType:
         gName = 'PartType' + str(sP.ptNum(partType))
 
-    # special cases (for efficiency)
-    if gName == 'PartType0' and field == 'Volume' and 'TNG' in sP.simName:
-        return False
+    # cache (for efficiency)
+    cacheKey = 'snapHasField_%s_%s' % (gName,field)
+    if cacheKey in sP.data:
+        return sP.data[cacheKey]
 
     # the first chunk could not have the field but it could exist in a later chunk (e.g. sparse file 
     # contents of subboxes). to definitely return False, we have to check them all, but we can return 
@@ -182,8 +183,10 @@ def snapHasField(sP, partType, field):
 
         with h5py.File(fileName,'r') as f:
             if '%s/%s' % (gName,field) in f:
+                sP.data[cacheKey] = True
                 return True
-
+            
+    sP.data[cacheKey] = False
     return False
 
 def snapFields(sP, partType):

@@ -1657,6 +1657,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
 
         wave_min = np.floor((wave_min_ion * (1 + sP.redshift) - 100) / 500) * 500
         wave_max = np.ceil((wave_max_ion * (1 + sP.redshift) + 100) / 500) * 500
+        if wave_min < 0: wave_min = 0.0
         instruments['idealized']['wave_min'] = wave_min
         instruments['idealized']['wave_max'] = wave_max
 

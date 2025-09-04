@@ -3,8 +3,11 @@ Use previously computed CLOUDY tables of photo-ionization models to derive ionic
 """
 import numpy as np
 import h5py
+import time
+import threading
+from scipy.ndimage import map_coordinates
 
-from ..util.helper import closest, iterable
+from ..util.helper import closest, iterable, pSplitRange
 from ..cosmo.cloudyGrid import basePath, getEmissionLines
 
 class cloudyIon():
@@ -353,7 +356,7 @@ class cloudyIon():
         if temp is None:
             return self.grid['temp'], locData[i0,i1,i2,:]
 
-    def frac(self, element, ionNum, dens, metal, temp, redshift=None):
+    def frac(self, element, ionNum, dens, metal, temp, redshift=None, nThreads=16):
         """ Interpolate the ion abundance table, return log(ionization fraction).
         Input gas properties can be scalar or np.array(), in which case they must have the same size.
         e.g. ``x = ion.frac('O','VI',-3.0,0.0,6.5)`` or 
@@ -367,13 +370,12 @@ class cloudyIon():
           dens (ndarray): hydrogen number density [log cm^-3]
           temp (ndarrray): temperature [log K]
           metal (ndarray): metallicity [log solar]
+          redshift (float or None): redshift, if we are interpolating in redshift space.
+          nThreads (int): number of threads to use for interpolation (1=serial).
 
         Return:
           ndarray: ionization fraction per cell [log].
         """
-        from scipy.ndimage import map_coordinates
-        import time
-
         element = self._resolveElementNames(element)
         ionNum  = self._resolveIonNumbers(ionNum)
 
@@ -388,35 +390,68 @@ class cloudyIon():
         if ionNum-1 >= self.data[element].shape[0]:
             raise Exception('Requested ion number of ' + element + ' [' + str(ionNum) + '] out of range.')
 
-        start_time = time.time()
-
-        # convert input interpolant point into fractional 3D/4D (+ionNum) array indices
-        # Note: we are clamping here at [0,size-1], which means that although we never 
-        # extrapolate below (nearest grid edge value is returned), there is no warning given
-        i1 = np.interp( dens,  self.grid['dens'],  np.arange(self.grid['dens'].size) )
-        i2 = np.interp( metal, self.grid['metal'], np.arange(self.grid['metal'].size) )
-        i3 = np.interp( temp,  self.grid['temp'],  np.arange(self.grid['temp'].size) )
-
-        if redshift is None:
-            iND = np.vstack( (i1,i2,i3) )
-            locData = self.data[element][ionNum-1,:,:,:]
-        else:
-            i0 = np.interp( redshift, self.grid['redshift'], np.arange(self.grid['redshift'].size) )
-            if isinstance(i0,float):
-                i0 = np.zeros( i1.shape, dtype='float32' ) + i0 # expand scalar into 1D array
-
-            iND = np.vstack( (i0,i1,i2,i3) )
-            locData = self.data[element][ionNum-1,:,:,:,:]
-
         # do 3D or 4D interpolation on this ion sub-table at the requested order
-        abunds = map_coordinates( locData, iND, order=self.order, mode='nearest')
+        class mapThread(threading.Thread):
+            """ Subclass Thread() to provide local storage which can be retrieved after 
+                this thread terminates and added to the global return. """
+            def __init__(self, threadNum, nThreads, ionInstance):
+                super(mapThread, self).__init__()
+
+                # views
+                self.dens  = dens
+                self.metal = metal
+                self.temp  = temp
+                self.data  = ionInstance.data
+
+                self.grid  = ionInstance.grid
+
+                # determine local slice
+                self.ind0, self.ind1 = pSplitRange([0, self.dens.size], nThreads, threadNum)
+
+            def run(self):
+                # convert input interpolant point into fractional 3D/4D (+ionNum) array indices
+                # Note: we are clamping here at [0,size-1], which means that although we never 
+                # extrapolate below (nearest grid edge value is returned), there is no warning given
+                i1 = np.interp(self.dens[self.ind0:self.ind1],  self.grid['dens'],  np.arange(self.grid['dens'].size))
+                i2 = np.interp(self.metal[self.ind0:self.ind1], self.grid['metal'], np.arange(self.grid['metal'].size))
+                i3 = np.interp(self.temp[self.ind0:self.ind1],  self.grid['temp'],  np.arange(self.grid['temp'].size))
+
+                if redshift is None:
+                    iND = np.vstack((i1,i2,i3))
+                    locData = self.data[element][ionNum-1,:,:,:]
+                else:
+                    i0 = np.interp(redshift, self.grid['redshift'], np.arange(self.grid['redshift'].size))
+                    if isinstance(i0,float):
+                        i0 = np.zeros(i1.shape, dtype='float32') + i0 # expand scalar into 1D array
+
+                    iND = np.vstack((i0,i1,i2,i3))
+                    locData = self.data[element][ionNum-1,:,:,:,:]
+
+                self.result = map_coordinates(locData, iND, order=3, mode='nearest')
+
+        # create threads
+        threads = [mapThread(threadNum, nThreads, self) for threadNum in np.arange(nThreads)]
+
+        # launch each thread, detach, and then wait for each to finish
+        for thread in threads:
+            thread.start()
+            
+        for thread in threads:
+            thread.join()
+
+        # allocate
+        abunds = np.zeros(dens.size, dtype=threads[0].result.dtype)
+
+        # add the result array from each thread to the global
+        for thread in threads:
+            abunds[thread.ind0 : thread.ind1] = thread.result
 
         #print('Abundance fraction interp took [%.2f] sec (%s points)' % ((time.time()-start_time),dens.size) )
 
         return abunds
 
     def calcGasMetalAbundances(self, sP, element, ionNum, indRange=None, 
-                               assumeSolarAbunds=False, assumeSolarMetallicity=False, sfGasTemp='cold'):
+                               assumeSolarAbunds=False, assumeSolarMetallicity=False, sfGasTemp='cold', parallel=False):
         """ Compute abundance mass fraction of the given metal ion for gas particles in the 
         whole snapshot, optionally restricted to an indRange. 
 
@@ -430,35 +465,37 @@ class cloudyIon():
           sfGasTemp (str): must be 'cold' (i.e. 1000 K), 'hot' (i.e. 5.73e7 K), 'effective' (snapshot value), 
             or 'both', in which case abundances from both cold and hot phases are combined, each given fractional 
             densities of the total gas density based on the two-phase model.
+          parallel (bool): if True, use parallel snapshot loads (i.e. not already inside a parallelized load).
 
         Return:
           ndarray: mass fraction of the requested ion, relative to the total cell gas mass [linear].
         """
+        snapSubset = sP.snapshotSubsetP if parallel else sP.snapshotSubset
 
         # load required gas properties
-        dens = sP.snapshotSubset('gas', 'hdens_log', indRange=indRange) # log [cm^-3]
+        dens = snapSubset('gas', 'hdens_log', indRange=indRange) # log [cm^-3]
 
         if assumeSolarMetallicity:
             metal = np.zeros( dens.size, dtype='float32' ) + self._solar_Z
         else:
             assert sP.snapHasField('gas', 'GFM_Metallicity')
-            metal = sP.snapshotSubset('gas', 'metal', indRange=indRange)
+            metal = snapSubset('gas', 'metal', indRange=indRange)
 
         metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
 
         if sfGasTemp == 'effective':
             # snapshot value
-            temp = sP.snapshotSubset('gas', 'temp_log', indRange=indRange)
+            temp = snapSubset('gas', 'temp_log', indRange=indRange)
         elif sfGasTemp == 'cold':
             # cold-phase value (i.e. 1000 K)
-            temp = sP.snapshotSubset('gas', 'temp_sfcold_log', indRange=indRange)
+            temp = snapSubset('gas', 'temp_sfcold_log', indRange=indRange)
         elif sfGasTemp == 'hot':
             # hot-phase value (i.e. 5.73e7 K)
-            temp = sP.snapshotSubset('gas', 'temp_sfhot_log', indRange=indRange)
+            temp = snapSubset('gas', 'temp_sfhot_log', indRange=indRange)
         elif sfGasTemp == 'both':
             # add contributions from both
-            temp = sP.snapshotSubset('gas', 'temp_sfcold_log', indRange=indRange)
-            temp_hot = sP.snapshotSubset('gas', 'temp_sfhot_log', indRange=indRange)
+            temp = snapSubset('gas', 'temp_sfcold_log', indRange=indRange)
+            temp_hot = snapSubset('gas', 'temp_sfhot_log', indRange=indRange)
         
         # interpolate for log(abundance) and convert to linear
         # note: doesn't matter if "ionziation fraction" is mass ratio, mass density ratio, or 
@@ -467,7 +504,7 @@ class cloudyIon():
         if sfGasTemp == 'both':
             # contributions from multiple (sub-grid) phases
             # note: temp and temp_hot are the same for non-starforming gas, where coldfrac == 0
-            coldfrac = sP.snapshotSubset('gas', 'twophase_coldfrac', indRange=indRange)
+            coldfrac = snapSubset('gas', 'twophase_coldfrac', indRange=indRange)
             ion_fraction = np.zeros(dens.size, dtype='float32')
 
             # compute multi-contributions for star-forming gas
@@ -500,7 +537,7 @@ class cloudyIon():
             if sP.snapHasField('gas', 'GFM_Metals'):
                 if self._elementNameToSymbol(element) in sP.metals:
                     fieldName = "metals_" + self._elementNameToSymbol(element)
-                    metal_mass_fraction = sP.snapshotSubset('gas', fieldName, indRange=indRange)
+                    metal_mass_fraction = snapSubset('gas', fieldName, indRange=indRange)
 
                     metal_mass_fraction[metal_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
                 else:
@@ -658,9 +695,6 @@ class cloudyEmission():
         Return:
           ndarray: 1d array of volume emissivity, per cell [log erg/cm^3/s].
         """
-        from scipy.ndimage import map_coordinates
-        import time
-
         line = self._resolveLineNames(line, single=True)
 
         if redshift is not None and self.redshiftInterp == False:

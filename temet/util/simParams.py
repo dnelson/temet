@@ -184,7 +184,7 @@ class simParams:
     # plotting/vis parameters
     colors = None # color sequence (one per res level)
     marker = None # matplotlib marker (for placing single points for zoom sims)
-    data   = None # per session memory-based cache
+    data   = None # per session memory-based cache (cleared if snap/redshift changes)
     
     # physical models: GFM and other indications of optional snapshot fields
     metals    = None  # list of string labels for runs saving abundances by species
