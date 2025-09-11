@@ -150,7 +150,7 @@ def reportMemory():
 def numPartToChunkLoadSize(numPart):
     """ For a given snapshot size, in terms of total particle count, decide on a good 
     chunk loading size for a reasonable compute/memory balance. """
-    nChunks = np.max( [4, int(numPart**(1.0/3.0) / 10.0)] )
+    nChunks = np.max( [4, int(numPart**(1.0/3.0) / 20.0)] )
     return nChunks
 
 def tail(fileName, nLines):

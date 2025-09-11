@@ -878,27 +878,27 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', nRaysPerDim=
         (sim.simName,sim.snap,ion.replace(' ',''),instrument,ewStr,num,mode,snrStr,style))
     plt.close(fig)
 
-def _select_random_spectrum():
+def _select_random_spectrum(file=None):
     """ Select a random spectrum, from all those available.
     Args:
-      EW_min (float): minimum EW to consider [Ang].
-      EW_max (float): maximum EW to consider [Ang].
+      file (str): if not None, the specific file to load. Otherwise, randomly select from those available.
     """
     basepath = '/virgotng/universe/IllustrisTNG/'
     rng = np.random.default_rng() #424242
     sims = ['TNG50-1']
 
-    files = []
-    for sim in sims:
-        #sim = simParams(sim)
-        #path = sim.postPath + 'AbsorptionSpectra/spectra*combined.hdf5'
-        path = basepath + '%s/postprocessing/AbsorptionSpectra/spectra*combined.hdf5' % sim
+    if file is None:
+        files = []
+        for sim in sims:
+            #sim = simParams(sim)
+            #path = sim.postPath + 'AbsorptionSpectra/spectra*combined.hdf5'
+            path = basepath + '%s/postprocessing/AbsorptionSpectra/spectra*combined.hdf5' % sim
 
-        files += sorted(glob.glob(path))
+            files += sorted(glob.glob(path))
 
-    # pick one at random
-    file = rng.choice(files)
-    #print(file)
+        # pick one at random
+        file = rng.choice(files)
+        #print(file)
 
     # load all EWs of one transition (chosen at random)
     with h5py.File(file,'r') as f:
@@ -946,7 +946,7 @@ def spectrum_plot_single(file=None, ind=None, full=True, saveFilename=None, outp
     rng = np.random.default_rng()
 
     if file is None or ind is None:
-        file, ind = _select_random_spectrum()
+        file, ind = _select_random_spectrum(file)
 
     params = file.split('/')[-1].split('_')[1:-1] # sim, redshift, config, inst, ion
     ion = params[4]

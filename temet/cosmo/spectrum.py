@@ -15,6 +15,7 @@ import ctypes
 
 from ..util.helper import closest, pSplitRange, faddeeva985
 from ..util.voronoiRay import rayTrace
+from ..cosmo.cloudy import cloudyIon
 
 # default configuration for ray generation
 #projAxis_def = 2
@@ -325,8 +326,6 @@ def _line_params(line):
     Return:
       5-tuple of (f,Gamma,wave0,ion_amu,ion_mass).
     """
-    from ..cosmo.cloudy import cloudyIon
-
     element = lines[line]['ion'].split(' ')[0]
     ion_amu = {el['symbol']:el['mass'] for el in cloudyIon._el}[element]
     ion_mass = ion_amu * sP_units_mass_proton # g
@@ -720,7 +719,7 @@ def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_
     dwave_master = wave_edges_master[1] - wave_edges_master[0]
     b_dwave = b / sP_units_c_km_s * wave0 # v/c = dwave/wave
 
-    if b_dwave < dwave_master * 10:
+    if b_dwave < dwave_master * 5:
         print('WARNING: b_dwave is too small for the dwave_master, ', b_dwave, dwave_master)
         #assert 0 # check
 
@@ -840,14 +839,9 @@ def _resample_spectrum(master_mid, tau_master, inst_waveedges):
 
             inst_height = local_EW / dwave_inst 
 
-            # sanity checks and handle rounding issues
-            if inst_height < 0 or inst_height > 1.005:
-                print('WARNING: strange inst_height is above unity: ', inst_height)
-                # assert 0 # impossible to have >1, in which case np.log(negative) is nan, which we fix below
-
+            # entire inst bin is saturated to zero flux, and/or rounding errors could place the height > 1.0
+            # set to 1-eps, such that tau is very large (~20 for this value of eps), and final flux ~ 1e-10
             if inst_height > flux_smallval:
-                # entire inst bin is saturated to zero flux, but rounding errors could place the height > 1.0
-                # set to 1-eps, such that tau is very large (~20 for this value of eps), and final flux ~ 1e-10
                 inst_height = flux_smallval
 
             localEW_to_tau = -np.log(1-inst_height)
@@ -977,7 +971,7 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
 
 def create_spectra_from_traced_rays(sP, line, instrument,
                                     rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
-                                    cell_dens, cell_temp, cell_vellos, nThreads=54):
+                                    cell_dens, cell_temp, cell_vellos, nThreads=60):
     """ Given many completed rays traced through a volume, in the form of a composite list of 
     intersected cell pathlengths and indices, extract the physical properties needed (dens, temp, vellos) 
     and create the final absorption spectrum, depositing a Voigt absorption profile for each cell.
@@ -1019,9 +1013,7 @@ def create_spectra_from_traced_rays(sP, line, instrument,
     lsf_mode, lsf, _ = lsf_matrix(instrument)
 
     if 0:
-        if sP.simName == 'TNG50-1': indiv_index = 9420
-        if sP.simName == 'TNG50-3': indiv_index = 58189
-
+        indiv_index = 20
         rays_len = rays_len[indiv_index:indiv_index+10]
         rays_off = rays_off[indiv_index:indiv_index+10]
         n_rays = rays_len.size
@@ -1655,8 +1647,8 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
                 wave_min_ion = min(wave_min_ion, props['wave0'])
                 wave_max_ion = max(wave_max_ion, props['wave0'])
 
-        wave_min = np.floor((wave_min_ion * (1 + sP.redshift) - 100) / 500) * 500
-        wave_max = np.ceil((wave_max_ion * (1 + sP.redshift) + 100) / 500) * 500
+        wave_min = np.floor((wave_min_ion * (1 + sP.redshift) - 50) / 100) * 100
+        wave_max = np.ceil((wave_max_ion * (1 + sP.redshift) + 50) / 100) * 100
         if wave_min < 0: wave_min = 0.0
         instruments['idealized']['wave_min'] = wave_min
         instruments['idealized']['wave_max'] = wave_max
@@ -1664,6 +1656,24 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
     # adapt master grid to span instrumental grid (optional, save some memory/efficiency)
     instruments['master']['wave_min'] = instruments[instrument]['wave_min'] - 100
     instruments['master']['wave_max'] = instruments[instrument]['wave_max'] + 100
+    if instruments['master']['wave_min'] < 0: instruments['master']['wave_min'] = -10.0
+
+    if 1:
+        # if 10^K gas for this ion produces unresolved absorption lines, make master grid higher resolution
+        temp = 1e4 # K
+        ion_amu = {el['symbol']:el['mass'] for el in cloudyIon._el}[ion.split(" ")[0]]
+        ion_mass = ion_amu * sP_units_mass_proton # g
+
+        b = np.sqrt(2 * sP_units_boltzmann * temp / ion_mass) / 1e5 # km/s
+
+        # check that master grid resolution is sufficient
+        lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
+        wave0 = lines[lineNames[0]]['wave0'] # Angstrom
+        b_dwave = b / sP_units_c_km_s * wave0 # v/c = dwave/wave
+
+        if b_dwave < instruments['master']['dwave'] * 10:
+            print('NOTE: b_dwave is too small for the dwave_master, setting dwave_master 10x higher!')
+            instruments['master']['dwave'] /= 10
 
     # sample master grid
     wave_mid, _, tau = create_wavelength_grid(instrument=instrument)

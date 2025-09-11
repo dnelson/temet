@@ -1,9 +1,6 @@
 """
-One Billion Synthetic Absorption Sightlines (OBAS) project
-The Billion Synthetic Absorption Spectra (BSAS) Project
-The Billion Absorption Sightlines Project (BASP)
-The Virtual Universe in Absorption (VUA): a billion synthetic absorption sightlines from cosmological hydrodynamical simulations
-(in prep)
+The Synthetic Absorption Line Spectral Almanac (SALSA)
+https://arxiv.org/abs/xxxx.xxxxx (in prep)
 """
 import numpy as np
 import h5py
@@ -17,9 +14,8 @@ from os.path import isfile
 from scipy.ndimage import gaussian_filter
 
 from ..cosmo.spectrum import _spectra_filepath, lines, instruments
-from ..cosmo.spectrum_analysis import load_spectra_subset
-#from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
-from ..plot.spectrum import spectra_gallery_indiv, EW_distribution, dNdz_evolution, EW_vs_coldens, instrument_lsf
+from ..plot.spectrum import spectra_gallery_indiv, EW_distribution, dNdz_evolution, EW_vs_coldens, \
+    instrument_lsf, spectrum_plot_single
 from ..plot.config import *
 from ..util.helper import closest, running_median
 from ..vis.halo import renderSingleHalo
@@ -1176,6 +1172,16 @@ def paperPlots():
         
         doublet_ratio(sim, line1='MgII 2796', line2='MgII 2803', instrument='SDSS-BOSS')
         doublet_ratio(sim, line1='CIV 1548', line2='CIV 1550', instrument='SDSS-BOSS')
+
+    # fig X: single spectrum plot (website/online API)
+    if 0:
+        sim = simParams(run='tng50-1')
+        #file = 'spectra_TNG50-1_z4.0_n1000d2-fullbox_KECK-HIRES-B14_SiII_combined.hdf5'
+        file = 'spectra_TNG50-1_z0.4_n1000d2-fullbox_idealized_SiIV_combined.hdf5'
+
+        for _ in range(10):
+            filepath = sim.postPath + 'AbsorptionSpectra/' + file
+            spectrum_plot_single(file=filepath, ind=None) # random index
 
     # table: transitions
     if 0:
