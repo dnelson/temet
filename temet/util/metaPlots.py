@@ -461,7 +461,7 @@ def periodic_slurm_status(machine='vera',nosave=False):
     #topo  = pyslurm.topology().get()
     stats = pyslurm.statistics().get()
     nodes = pyslurm.node().get()
-    parts = pyslurm.partition().get()
+    parts = None #pyslurm.partition().get() # throwing error
 
     curTime = datetime.fromtimestamp(stats['req_time'])
     print('Now [%s].' % curTime.strftime('%A (%d %b) %H:%M'))
@@ -497,8 +497,11 @@ def periodic_slurm_status(machine='vera',nosave=False):
 
     # restrict nodes to those in main partition (skip login nodes, etc)
     nodesInPart = []
-    for partName in partNames:
-        nodesInPart += _expandNodeList( parts[partName]['nodes'] )
+    if parts is not None:
+        for partName in partNames:
+            nodesInPart += _expandNodeList( parts[partName]['nodes'] )
+    else:
+        nodesInPart = nodes.keys()
 
     for _, node in nodes.items():
         if node['cpu_load'] == 4294967294: node['cpu_load'] = 0 # fix uint32 overflow
@@ -539,14 +542,19 @@ def periodic_slurm_status(machine='vera',nosave=False):
         (len(nodes_main), n_nodes_idle, n_nodes_alloc, n_nodes_down))
     print(' Misc nodes: [%d] total.' % len(nodes_misc))
 
-    if np.sum(parts[partName]['total_nodes'] for partName in partNames) != len(nodes_main):
+    if parts is not None and np.sum(parts[partName]['total_nodes'] for partName in partNames) != len(nodes_main):
         print(' WARNING: Node count mismatch.')
     if len(nodes_main) != n_nodes_idle + n_nodes_alloc + n_nodes_down:
         print(' WARNING: Nodes not all accounted for.')
 
     nCores = 0
-    for partName in partNames:
-        nCores += parts[partName]['total_nodes'] * coresPerNode
+    if parts is not None:
+        for partName in partNames:
+            nCores += parts[partName]['total_nodes'] * coresPerNode
+    else:
+        for node in nodes:
+            nCores += nodes[node]['cpus']
+
     nCores_alloc = np.sum([j['num_cpus'] for j in jobs_running]) / nHyper
     nCores_idle = nCores - nCores_alloc
 
