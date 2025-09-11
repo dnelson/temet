@@ -662,7 +662,7 @@ def grackleReactionRates():
             
             k24_local[i] = photoRate(u['freqRyd'], J_loc, ion='H I') # [1/s]
             k27_local[i] = photoRate(u['freqRyd'], J_loc, ion='k27')
-            k28_local[i] = photoRate(u['freqRyd'], J_loc, ion='k28b')
+            k28_local[i] = photoRate(u['freqRyd'], J_loc, ion='k28')
             k29_local[i] = photoRate(u['freqRyd'], J_loc, ion='k29')
             k30_local[i] = photoRate(u['freqRyd'], J_loc, ion='k30')
             k31_local[i] = photoRate(u['freqRyd'], J_loc, ion='k31')

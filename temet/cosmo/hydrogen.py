@@ -149,7 +149,7 @@ def photoRate(freq, J_nu, ion):
         ind1 = np.where(freq_eV >= nu_thresh)
         sigma[ind1] = 2.11e-16 * (freq_eV[ind1] - nu_thresh)**(3/2) * freq_eV[ind1]**(-3)
 
-    if ion == 'k28':
+    if ion == 'k28b':
         # H2II + p --> HI + HII ("Photodissociation of H2+") (Abel+96 Table 4 Entry 25)
         # H_2^+ + gamma -> H + H^+ (R52)
         sigma = np.zeros(freq.size, dtype='float32')
@@ -158,9 +158,9 @@ def photoRate(freq, J_nu, ion):
         lnnu = np.log(freq_hz) # not clear from Abel+96 
         sigma[:] = -1.655e6 + 1.866e5 * lnnu - 7.899e3 * lnnu**2 + 148.74 * lnnu**3 - 1.051 * lnnu**4
         sigma = 10.0**sigma # negatives -> inf
-        import pdb; pdb.set_trace()
+        assert 0 # todo: check
 
-    if ion == 'k28b':
+    if ion == 'k28':
         # as above, but Glover fits
         sigma = np.zeros(freq.size, dtype='float32')
         nu_thresh = 2.65

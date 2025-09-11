@@ -527,11 +527,15 @@ def runCloudySim(gv, temp):
     gv['outputFileNameEm'] = 'output_em_' + fileNameStr + '.txt'
 
     outputFilePath = gv['basePath'] + gv['outputFileName']
+    outputFilePathGrackle = gv['basePath'] + gv['inputFileName'] + ".out"
 
     # skip if this output has already been made
     if isfile(outputFilePath) and getsize(outputFilePath) > 0:
         return
     
+    if gv['res'] == 'grackle' and isfile(outputFilePathGrackle) and getsize(outputFilePathGrackle) > 0:
+        return
+        
     #if isfile(gv['inputFileNameAbs']+'.out') and getsize(gv['inputFileNameAbs']+'.out') > 1e5:
     #    return
 
@@ -591,8 +595,8 @@ def _getRhoTZzGrid(res, uvb):
 
     if res == 'grackle':
         # metals: primordial and solar runs (difference gives metal contribution only, scaled linearly in grackle)
-        densities = np.arange(-10.0, 4.0+eps, 0.5)
-        temps     = np.arange(1.0, 9.0+eps,0.05)
+        densities = np.arange(-10.0, 7.0+eps, 0.5)
+        temps     = np.arange(0.0, 9.0+eps,0.05)
         metals    = np.array([-8.0, 0.0]) 
         # note: 8.02 to bracket rapid changes from z=8 to z=8.02 (in FG20, z=8.02 not present in FG11)
         redshifts = np.array([0.0,0.1,0.2,0.3,0.4,0.6,0.8,1.0,1.2,1.4,1.6,1.8,2.0,2.2,
@@ -973,8 +977,8 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
         # UVB energy densities [log erg/cm^3]
         f['UVBEnergyDens/Redshift'] = uvbs_z
         f['UVBEnergyDens'].attrs['NumberRedshiftBins'] = uvbs_z.size
-        for k in udens:
-            f['UVBEnergyDens/EnergyDensity_' + k] = udens[k]
+        for key in udens:
+            f['UVBEnergyDens/EnergyDensity_' + key] = udens[key]
 
         # Cross sections [cgs] (needed only if self_shielding_method > 0, i.e. if GrackleSelfShieldingMethod > 0)
         f['UVBRates/CrossSections/hi_avg_crs'] = cs_HI
@@ -998,6 +1002,6 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
         #   @  k30 @     H2II + p --> 2HII + e    ("Photodissociation of H2+")
         #   @  k31 @     H2I + p --> 2HI          ("Photodissociation of H2 by predissociation")
         for knum in k:
-            f['UVBRates/Chemistry/k{knum}'] = k[knum]
+            f[f'UVBRates/Chemistry/k{knum}'] = k[knum]
             
     print('Done.')
