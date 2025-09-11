@@ -915,6 +915,12 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
     cs_HeII = np.zeros(uvbs_z.size, dtype='float64')
     k = {}
     udens = {}
+
+    for knum in [27,28,29,30,31]:
+        k[knum] = np.zeros(uvbs_z.size, dtype='float32')
+    for ev_range in [[6.0,13.6],[11.2,13.6]]:
+        name = f'{ev_range[0]:.1f}-{ev_range[1]:.1f}eV'
+        udens[name] = np.zeros(uvbs_z.size, dtype='float32')
     
     for i, u in enumerate(uvbs):
         J_loc = 10.0**u['J_nu'].astype('float64') # linear
@@ -924,11 +930,11 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
         cs_HeII[i] = hydrogen.photoCrossSecGray(u['freqRyd'], J_loc, ion='He II')
 
         for knum in [27,28,29,30,31]:
-            k[knum] = hydrogen.photoRate(u['freqRyd'], J_loc, ion=f'k{knum}') # [1/s]
+            k[knum][i] = hydrogen.photoRate(u['freqRyd'], J_loc, ion=f'k{knum}') # [1/s]
 
         for ev_range in [[6.0,13.6],[11.2,13.6]]:
             name = f'{ev_range[0]:.1f}-{ev_range[1]:.1f}eV'
-            udens[name] = np.log10(hydrogen.uvbEnergyDensity(u['freqRyd'], J_loc, eV_min=ev_range[0], eV_max=ev_range[1]))
+            udens[name][i] = np.log10(hydrogen.uvbEnergyDensity(u['freqRyd'], J_loc, eV_min=ev_range[0], eV_max=ev_range[1]))
 
     # load UVB photoheating rates, interpolate to spectra redshifts
     uvb_rates = loadUVBRates(uvb=uvb.replace('_unshielded',''))
