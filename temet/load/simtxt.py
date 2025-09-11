@@ -635,18 +635,18 @@ def sf_sn_details(sim, overwrite=False):
             r = subprocess.run(['tar','-xzf','sn_details.tar.gz'], cwd=path)
             decompressed = True
 
-        # concat file is missing, check for individual files
-        filename_indiv = file_sf.replace('.txt','_0.txt')
-        if isfile(filename_indiv):
-            # run concat
-            print('Concat sf_details*.txt...')
-            r = subprocess.run('cat sf_details_*.txt > sf_details.txt', cwd=path + 'sf_details/', shell=True)
+    # concat file is missing, check for individual files, run concat
+    if not isfile(file_sf):
+        print('Concat sf_details*.txt...')
+        r = subprocess.run('cat sf_details_*.txt > sf_details.txt', cwd=path + 'sf_details/', shell=True)
 
-            print('Concat sf_details_ids*.txt...')
-            r = subprocess.run('cat sf_details_ids_*.txt > sf_details_ids.txt', cwd=path + 'sf_details_ids/', shell=True)
+    if not isfile(file_sf_ids):
+        print('Concat sf_details_ids*.txt...')
+        r = subprocess.run('cat sf_details_ids_*.txt > sf_details_ids.txt', cwd=path + 'sf_details_ids/', shell=True)
 
-            print('Concat sn_details*.txt...')
-            r = subprocess.run('cat sn_details_*.txt > sn_details.txt', cwd=path + 'sn_details/', shell=True)
+    if not isfile(file_sn):
+        print('Concat sn_details*.txt...')
+        r = subprocess.run('cat sn_details_*.txt > sn_details.txt', cwd=path + 'sn_details/', shell=True)
 
     # load sf_details, columns:
     # thistask tistep num time pos0 pos1 pos2 vel0 vel1 vel2 dens temp metal mass initialsolomass 0 0

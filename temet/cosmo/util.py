@@ -110,9 +110,13 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False, lo
 
             zFound, w = closest(r['redshifts'], redshift)
             
-            if np.abs(zFound-redshift) > 0.1:
+            if np.abs(zFound-redshift) > 0.1 and zFound > redshift:
                 # try to recompute in case we have a partial save from a previously in progress run
-                if not recalculate:
+                # and more snapshots exist than previously existed
+                maxSnapPrev = np.where(np.isfinite(r['redshifts']))[0].max()
+                nextSnapExists = sP.snapPath(snapNum=maxSnapPrev+1, subbox=sP.subbox, checkExists=True)
+
+                if not recalculate and nextSnapExists is not None:
                     return redshiftToSnapNum(redshifts=redshifts, times=times, sP=sP, recalculate=True)
                 else:
                     print("Warning! [%s] Snapshot selected with redshift error = %g" % (sP.simName,np.abs(zFound-redshift)))

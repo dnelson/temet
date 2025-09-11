@@ -818,13 +818,15 @@ class units(object):
 
         return p_vel
 
-    def codeDensToPhys(self, dens, cgs=False, numDens=False, msunpc3=False, totKpc3=False):
+    def codeDensToPhys(self, dens, scalefac=None, cgs=False, numDens=False, msunpc3=False, totKpc3=False):
         """ Convert mass density comoving->physical and add little_h factors. 
         Unless overridden by a parameter option, the default return units are :math:`[10^{10} M_\\odot/\\rm{kpc}^3]`.
         
         Args:
           dens (array[float]): density in code units, should be 
             :math:`[10^{10} M_\\odot/h / (ckpc/h)^3]` = :math:`[10^{10} M_\\odot h^2 / ckpc^3]`. 
+          scalefac (array[float]): if provided, use this scale factor instead of the current snapshot value.
+            Can be a single value, or a different value per density.
           cgs (bool): if True, return units are [g/cm^3].
           numDens (bool): if True and cgs == True, return units are [1/cm^3].
           msunpc3 (bool): if True, return units are [Msun/pc^3].
@@ -842,7 +844,10 @@ class units(object):
             raise Exception('Invalid combination.')
 
         # remove cosmological factors -> [UnitDensity]
-        dens_phys = dens.astype('float32') * self._sP.HubbleParam**2 / self.scalefac**3
+        if scalefac is None:
+            scalefac = self.scalefac
+
+        dens_phys = dens.astype('float32') * self._sP.HubbleParam**2 / scalefac**3
 
         if cgs:
             dens_phys *= self.UnitDensity_in_cgs # e.g. [1e10 msun/kpc^3] -> [g/cm^3]

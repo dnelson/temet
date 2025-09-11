@@ -15,7 +15,7 @@ from ..util.helper import running_median, logZeroNaN, closest, cache
 from ..plot.general import plotPhaseSpace2D, plotSingleRadialProfile
 from ..plot.cosmoMisc import simHighZComparison
 from ..plot.cosmoGeneral import addUniverseAgeAxis
-from ..load.simtxt import sfrTxt, blackhole_details_mergers
+from ..load.simtxt import blackhole_details_mergers, sf_sn_details
 from ..projects.mcst_vis import *
 
 def _get_existing_sims(variants, res, hInds, redshift, all=False):
@@ -250,18 +250,24 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Fal
             if xval < xMinMax[0] or xval > xMinMax[1] or yval < yMinMax[0] or yval > yMinMax[1]:
                 print(f'Out of bounds in {sim.simName} {xQuant}={xval:.3f} {yQuant}={yval:.3f}')
 
+            marker_lim = None
             if np.isnan(yval) or yval < yMinMax[0]:
-                yval = yMinMax[0] + (yMinMax[1]-yMinMax[0])/100 * rng.uniform(0.5, 1.0)
+                yval = yMinMax[0] + (yMinMax[1]-yMinMax[0])/25 * rng.uniform(0.6, 1.0)
                 print(f' set [y] {yQuant}={yval:.3f} for visibility.')
+                marker_lim = 11 #CARETDOWNBASE #r'$\downarrow$'
             if np.isnan(xval) or xval < xMinMax[0]:
-                xval = xMinMax[0] + (xMinMax[1]-xMinMax[0])/100 * rng.uniform(0.5, 1.0)
+                xval = xMinMax[0] + (xMinMax[1]-xMinMax[0])/25 * rng.uniform(0.6, 1.0)
                 print(f' set [x] {xQuant}={xval:.3f} for visibility.')
+                marker_lim = 8 #CARETLEFTBASE #r'$\leftarrow$'
                                             
             # color set by hInd
             c = colors[hInds.index(sim.hInd)]
 
             # marker set by variant
             marker = markers[variants.index(sim.variant) % len(markers)]
+
+            if marker_lim is not None:
+                marker = marker_lim
 
             # marker size set by resolution
             ms_loc = (sim.res - 10) * 2.5 + 4
@@ -273,7 +279,7 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Fal
                 style['fillstyle'] = 'none'
                 style['markeredgewidth'] = 2
 
-            l, = ax.plot(xval, yval, marker, label='', **style)
+            l, = ax.plot(xval, yval, marker=marker, label='', **style)
 
             if tracks:
                 # load
@@ -491,6 +497,10 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
             # time track
             if quant in star_zform_quants:
                 # special case: stellar mass growth or SFH
+                if sim.subhalo(subhaloID)['SubhaloLenType'][sim.ptNum('stars')] == 0:
+                    print(f'[{sim}] no stars in {subhaloID = }, skipping [{quant}].')
+                    continue
+
                 star_zform, dt_Myr, star_mass = _load_sfh(sim, quant, subhaloID)
                 ax.set_ylabel(ylabel.replace('instant',r'\Delta t = %.1f Myr' % dt_Myr))
                 if sfh_lin:
@@ -529,6 +539,10 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
         # time track
         if quant in star_zform_quants:
             # special case: stellar mass growth or SFH
+            if sim_parent.subhalo(subhaloInd)['SubhaloLenType'][sim.ptNum('stars')] == 0:
+                print(f'[{sim}] no stars in {subhaloInd = }, skipping [{quant}].')
+                continue
+
             star_zform, _, star_mass = _load_sfh(sim_parent, quant, subhaloInd)
 
             w = np.where((star_zform >= 0.0) & (star_zform < xMinMax[0]))
@@ -981,32 +995,6 @@ def diagnostic_snapshot_spacing(sims):
     fig.savefig('snapshot_spacing_%s.pdf' % sims[0].simName)
     plt.close(fig)
 
-def diagnostic_box_sfrd(sims):
-    """ Comparison of global box SFRD between runs, to avoid halo selection issues. """
-    fig, ax = plt.subplots()
-    ax.set_ylim([1e-10, 1e-4])
-    ax.set_xlim([14, 9.0])
-    #ax.set_ylim([1e-9, 3e-2])
-    #ax.set_xlim([14, 3.0])
-    ax.set_xscale('log')
-    ax.set_yscale('log')
-    ax.xaxis.set_major_formatter(ScalarFormatter())
-    ax.xaxis.set_minor_formatter(ScalarFormatter())
-    ax.set_xlabel('Redshift')
-    ax.set_ylabel('SFRD [ M$_{\\rm sun}$  yr$^{-1}$  Mpc$^{-3}$]')
-
-    for sim in sims:
-        # load sfr.txt file
-        s = sfrTxt(sim)
-
-        ax.plot(s['redshift'], s['sfrd'], '-', lw=lw, label=sim.simName)
-
-    # second legend
-    ax.legend(loc='lower right')
-
-    fig.savefig('cosmic_sfrd_comp-%d.pdf' % len(sims))
-    plt.close(fig)
-
 def diagnostic_sfr_jeans_mass(sims, haloID=0):
     """ CHECK: load all gas properties, convert to proper, calculate the jeans mass and 
         cell diameter yourself, calculate SFR yourself, plot against what the code is reporting 
@@ -1404,6 +1392,46 @@ def blackhole_position_vs_time(sim):
         fig.savefig(f'smbh_pos_vs_time_{sim.simName}_{smbh_id}.pdf')
         plt.close(fig)
 
+def starformation_diagnostics(sims, xlim=None):
+    """ Plot PDFs of gas properties at the sites and moments of star formation, using the sf_details/ txt files. """
+    # config
+    z_bins = [[5.5, 8.0], [8.0, 10.0], [10.0, 15.0]]
+
+    # plot
+    fig, ax = plt.subplots()
+    ax.set_xlabel('Gas Density [ log cm$^{-3}$ ]')
+    ax.set_ylabel('Number of Stars Formed')
+    ax.set_yscale('log')
+    if xlim is not None: ax.set_xlim(xlim)
+
+    # loop over simulations
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+    for i, sim in enumerate(sims):
+        stars, supernovae = sf_sn_details(sim)
+
+        # unit conversions: physical [1/cm^3]
+        dens = np.log10(sim.units.codeDensToPhys(stars['Density'], scalefac=stars['Time'], cgs=True, numDens=True))
+        z = 1/stars['Time'] - 1
+
+        for j, z_bin in enumerate(z_bins):
+            w = np.where((z >= z_bin[0]) & (z < z_bin[1]))[0]
+
+            # plot hist
+            label = f'{sim.simName}' if j == 0 else ''
+            
+            l = ax.hist(dens[w], bins=40, histtype='step', lw=lw, linestyle=linestyles[j], color=colors[i], label=label)
+
+    # second legend
+    labels = [f'{z_bin[0]} < z < {z_bin[1]}' for z_bin in z_bins]
+    handles = [plt.Line2D( (0,0), (0,0), ls=linestyles[i], color='black', lw=lw, label=label) for i in range(len(z_bins))]
+    legend2 = ax.legend(handles, labels, loc='upper left')
+    ax.add_artist(legend2)
+
+    ax.legend(loc='upper right')
+    fig.savefig('sf_dens_pdf.pdf')
+    plt.close(fig)
+
 def select_ics():
     """ Helper to select halos from TNG50 for resimulation. """
     import illustris_python as il
@@ -1527,19 +1555,26 @@ def paperPlots():
     #redshift = 5.0
 
     # testing:
-    variants = ['ST9','ST10','ST10b','ST10c','ST10d','ST10e','ST10f','ST10g','ST10h','ST10i','ST10j','ST10u1','ST10u2','ST10w1','ST10w2','ST10w3']
-    variants = ['ST9','ST10','ST10j','ST10b2']
-    variants = ['ST10j']#,'TNG']
+    #variants = ['ST9','ST10','ST10b','ST10c','ST10d','ST10e','ST10f','ST10g','ST10h','ST10i','ST10j','ST10u1','ST10u2','ST10w1','ST10w2','ST10w3']
+    #variants = ['ST9','ST10','ST10j','ST10b2']
+    variants = ['ST11','ST11s']#'ST9','ST10j','ST11','ST11s']#,'TNG']
     res = [14,15] #[13,14,15,16] #[12,13,14,15]
-    #hInds = [73172,219612,311384]#,73172,219612]#,73172,219612] #[5072, 15581, 73172, 219612, 844537]
-    hInds = [5072,15581,73172,219612,311384] #[5072,15581,73172,219612,311384]
+    hInds = [73172, 219612, 311384, 844537] # [1958, 5072, 15581, 23908, 73172, 219612, 311384, 844537]
     redshift = 5.5
 
-    sims = _get_existing_sims(variants, res, hInds, redshift, all=False) # if False, only dz < 0.1 matches
+    sims = _get_existing_sims(variants, res, hInds, redshift, all=True) # if False, only dz < 0.1 matches
 
     # contamination diagnostic printout (info only)
     #for sim in sims:
     #    _ = _zoomSubhaloIDsToPlot(sim)
+
+    # examine last existing snapshot of each sim (info only)
+    #for sim in sims:
+    #    sim.setSnap(sim.validSnapList()[-1])
+
+    #    bhs = sim.bhs(['BH_Mass','Masses'])
+    #    for i in range(bhs['count']):
+    #        print(f'{str(sim):<24} BH {i}: BH_Mass = {sim.units.codeMassToLogMsun(bhs["BH_Mass"][i])[0]:.3f}, Mass = {sim.units.codeMassToLogMsun(bhs["Masses"][i])[0]:.3f}')
 
     # ------------
 
@@ -1564,21 +1599,24 @@ def paperPlots():
         smhm_relation(sims)
 
     # ------------
-    # figure - SFH (stellar mass vs redshift evo)
+    # figure - SFH (stellar mass vs redshift evo) (one plot per halo)
     if 0:
-        # ST9 hack (mini snaps missins InitialMass, and z=5.5 is a mini)
-        for sim in sims:
-            if 'ST9' in sim.variant:
-                if not sim.snapHasField('stars','InitialMass'):
-                    sim.setSnap(sim.validSnapList(onlyFull=True)[-1])
-
         quant = 'mstar2_log'
         #xlim = [13.1, 5.5]
         #ylim = [3.8, 8.5] #[3.8,7.0]
         xlim = [15.1, 5.5]
         ylim = [2.8, 7.5] #[3.8,7.0]
 
-        quantVsRedshift(sims, quant, xlim, ylim)
+        for hInd in hInds:
+            sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
+
+            # ST9 hack (mini snaps missins InitialMass, and z=5.5 is a mini)
+            for sim in sims_loc:
+                if 'ST9' in sim.variant:
+                    if not sim.snapHasField('stars','InitialMass'):
+                        sim.setSnap(sim.validSnapList(onlyFull=True)[-1])
+
+            quantVsRedshift(sims_loc, quant, xlim, ylim)
 
     # figure - sfr vs mstar relation
     if 0:
@@ -1590,14 +1628,14 @@ def paperPlots():
         mbh_vs_mhalo(sims)
 
     # figure - star formation history (one plot per halo)
-    if 0:
+    if 1:
         quant = 'sfr2'
         xlim = xlim = [15.1, 5.5] #[12.1, 2.95]
         ylim = [-6.5, 0.5]
 
         for hInd in hInds:
             sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
-            quantVsRedshift(sims_loc, quant, xlim, ylim, sfh_lin=False, sfh_treebased=True)
+            quantVsRedshift(sims_loc, quant, xlim, ylim, sfh_lin=False, sfh_treebased=False)
 
     # figure - stellar sizes
     if 0:
@@ -1646,8 +1684,12 @@ def paperPlots():
     # black hole time evolution
     if 0:
         for sim in sims:
-            blackhole_diagnostics_vs_time(sim)
-            #blackhole_position_vs_time(sim)
+            #blackhole_diagnostics_vs_time(sim)
+            blackhole_position_vs_time(sim)
+
+    # SF and feedback diagnostics:
+    if 0:
+        starformation_diagnostics(sims, xlim=[3,8])
 
     # ------------
 
@@ -1682,10 +1724,6 @@ def paperPlots():
     # diagnostic: number of non-contaminated halos vs redshift
     if 0:
         diagnostic_numhalos_uncontaminated(sims)
-
-    # diagnostic: global box sfrd
-    if 0:
-        diagnostic_box_sfrd(sims)
 
     # diagnostic: full high-res region vis
     if 0:
