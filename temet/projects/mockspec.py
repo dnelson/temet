@@ -1177,7 +1177,7 @@ def paperPlots():
     if 0:
         sim = simParams(run='tng50-1')
         #file = 'spectra_TNG50-1_z4.0_n1000d2-fullbox_KECK-HIRES-B14_SiII_combined.hdf5'
-        file = 'spectra_TNG50-1_z0.4_n1000d2-fullbox_idealized_SiIV_combined.hdf5'
+        file = 'spectra_TNG50-1_z0.0_n1000d2-fullbox_idealized_OVII_combined.hdf5'
 
         for _ in range(10):
             filepath = sim.postPath + 'AbsorptionSpectra/' + file

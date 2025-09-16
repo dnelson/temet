@@ -290,8 +290,9 @@ def grackleTable():
     ##filename2 = 'CloudyData_UVB=FG2011_shielded.h5' # orig
 
     filepath = rootPath + 'tables/cloudy/'
-    filename1 = 'grid_cooling_UVB=FG20_unshielded.hdf5'
-    filename2 = 'grid_cooling_UVB=FG20.hdf5'
+    #filename1 = 'grid_cooling_UVB=FG20_unshielded.hdf5'
+    filename1 = 'grid_cooling_UVB=FG20.hdf5'
+    filename2 = 'grid_cooling_UVB=FG20_ext.hdf5'
 
     # https://github.com/brittonsmith/cloudy_cooling_tools
     # https://github.com/aemerick/cloudy_tools/blob/master/FG_files/FG_shielded/grackle_cooling_curves.py
@@ -312,8 +313,8 @@ def grackleTable():
 
         return d, a
 
-    data1, attrs = _load_grackle_table(filepath + filename1) # unshielded
-    data2, attrs2 = _load_grackle_table(filepath + filename2) # shielded
+    data1, attrs1 = _load_grackle_table(filepath + filename1) # e.g. unshielded
+    data2, attrs2 = _load_grackle_table(filepath + filename2) # e.g. shielded
 
     # check all attrs/param grids are the same
     #for k in attrs:
@@ -322,25 +323,26 @@ def grackleTable():
     #        continue
     #    assert attrs[k] == attrs2[k]
 
-    # table dimensions [29, 23, 161] = [nH, z, T]
-    hdens = attrs['Parameter1'] # log cm^-3
-    redshift = attrs['Parameter2']
-    temp = np.log10(attrs['Temperature']) # log K
-
     # plot config
     lambdanet_range = [-32,-15]
-    temp_range = [1.0, 9.0]
+    temp_range = [0.0, 9.0]
     dens_range = [-10.0, 4.0]
 
     metallicity = 0.01 # multiplies metal cooling rates below...
 
     # unshielded and shielded separately
-    for filename, data in zip([filename1,filename2],[data1,data2]):
+    for filename, data, attrs in zip([filename1,filename2],[data1,data2],[attrs1,attrs2]):
+        # table dimensions [29, 23, 161] = [nH, z, T]
+        hdens = attrs['Parameter1'] # log cm^-3
+        redshift = attrs['Parameter2']
+        temp = np.log10(attrs['Temperature']) # log K
+
         # plot book
         pdf = PdfPages('grackle_%s.pdf' % filename)
         
         # (A) - plot vs. temperature, lines for different dens, pages for different redshifts
         gridSize = 6 # 5*6=30 to cover 29 different densities
+        gridSize = int(np.ceil(np.sqrt(hdens.size+2)))
 
         for redshift_ind, z in enumerate(redshift[0:1]): # redshift
             fig = plt.figure(figsize=(36,22))

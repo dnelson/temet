@@ -350,7 +350,7 @@ def quantMPB(sim, mpb, quant):
     prop = quant.lower().replace('_log','') # new
     log = True # default
 
-    if prop in ['mhalo_200']:
+    if prop in ['mhalo_200','mhalo']:
         vals = mpb['Group_M_Crit200']
         vals = sim.units.codeMassToMsun(vals)
 
@@ -362,8 +362,31 @@ def quantMPB(sim, mpb, quant):
         vals = mpb['SubhaloMassInRadType'][:,sim.ptNum('stars')]
         vals = sim.units.codeMassToMsun(vals)
 
+    if prop in ['mgas2']:
+        vals = mpb['SubhaloMassInRadType'][:,sim.ptNum('gas')]
+        vals = sim.units.codeMassToMsun(vals)
+
     if prop in ['sfr2']:
         vals = mpb['SubhaloSFRinRad']
+
+    if prop in ['size_stars']:
+        vals = mpb['SubhaloHalfmassRadType'][:,sim.ptNum('stars')]
+        vals = sim.units.codeLengthToComovingKpc(vals)
+        print(f'Note: [{sim}] quantMPB [{prop}] in comoving units.')
+
+    if prop in ['size_gas']:
+        vals = mpb['SubhaloHalfmassRadType'][:,sim.ptNum('gas')]
+        vals = sim.units.codeLengthToComovingKpc(vals)
+        print(f'Note: [{sim}] quantMPB [{prop}] in comoving units.')
+
+    if prop in ['Z_stars']:
+        vals = sim.units.metallicityInSolar(mpb['SubhaloStarMetallicity'])
+
+    if prop in ['Z_gas']:
+        vals = sim.units.metallicityInSolar(mpb['SubhaloGasMetallicity'])
+
+    if prop in ['Z_gas_sfr']:
+        vals = sim.units.metallicityInSolar(mpb['SubhaloGasMetallicitySfrWeighted'])
 
     # take log?
     if '_log' in quant and log:

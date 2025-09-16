@@ -11,7 +11,7 @@ from os.path import isfile
 
 from ..util.simParams import simParams
 from ..plot.config import *
-from ..util.helper import running_median, logZeroNaN, closest, cache
+from ..util.helper import running_median, logZeroNaN, closest, cache, colored_line
 from ..plot.general import plotPhaseSpace2D, plotSingleRadialProfile
 from ..plot.cosmoMisc import simHighZComparison
 from ..plot.cosmoGeneral import addUniverseAgeAxis
@@ -96,7 +96,7 @@ def _load_mpb_quants(sim, subhaloInd, quants, smooth=False):
     # use merger tree MPB
     r = {}
 
-    try:
+    if 1:#try:
         mpb = sim.loadMPB(subhaloInd)
         for quant in quants:
             r[quant] = sim.quantMPB(mpb, quant)
@@ -104,7 +104,7 @@ def _load_mpb_quants(sim, subhaloInd, quants, smooth=False):
                 r[quant] = savgol_filter(r[quant], sKn, sKo)
 
         r['z'] = sim.snapNumToRedshift(mpb['SnapNum'])
-    except:
+    else: #except:
         print('No merger tree and/or offsets for [%s], skipping.' % sim)
 
         for quant in quants:
@@ -817,7 +817,7 @@ def stellar_mzr(sims):
     """ Diagnostic plot of stellar mass-metallicity relation (MZR). """
     xQuant = 'mstar2_log'
     yQuant = 'Z_stars_masswt'
-    ylim = [-2.0, 0.6] # log pkpc
+    ylim = [-3.0, 0.0] # log pkpc
     xlim = [5.7, 10.2] # log mstar
 
     def _draw_data(ax, sims):
@@ -1208,7 +1208,7 @@ def blackhole_diagnostics_vs_time(sim):
     smbhs = blackhole_details_mergers(sim) #, overwrite=True)
 
     xlim = [12.1, 5.5]
-    ageVals = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    ageVals = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
     # handle mergers: if this ID ever appears in a merger pair, then 
     # decide which of the two IDs to keep i.e. attach the earlier data from
@@ -1240,12 +1240,13 @@ def blackhole_diagnostics_vs_time(sim):
 
         mdot_edd = np.log10(sim.units.codeBHMassToMdotEdd(mass_code[::step]))
         mdot_limit = np.log10(10.0**mdot_edd * sim.params['BlackHoleEddingtonFactor'])
+        ngbmaxdist = smbhs[smbh_id]['ngbmaxdist']
 
         # mass
-        fig, ax = plt.subplots(nrows=3, figsize=(12,12))#, sharex=True)
+        fig, ax = plt.subplots(nrows=4, figsize=(14,14))#, sharex=True)
         ax[0].set_xlabel('Redshift')
         ax[0].set_xlim(xlim)
-        ax[0].set_ylabel(r'SMBH Mass [ log M$_{\rm sun}$ ]')
+        ax[0].set_ylabel(r'SMBH Mass' + '\n' + r'[ log M$_{\rm sun}$ ]')
 
         ax[0].plot(redshift[::step], mass[::step], lw=lw, zorder=0)
         addUniverseAgeAxis(ax[0], sim, ageVals=ageVals)
@@ -1253,7 +1254,7 @@ def blackhole_diagnostics_vs_time(sim):
         # mdot: full range
         ax[1].set_xlabel('Redshift')
         ax[1].set_xlim(xlim)
-        ax[1].set_ylabel(r'$\dot{M}_{\rm SMBH}$ [ log M$_{\rm sun}$ yr$^{-1}$ ]')
+        ax[1].set_ylabel(r'$\dot{M}_{\rm SMBH}$' + '\n' + r'[ log M$_{\rm sun}$ yr$^{-1}$ ]')
 
         ax[1].plot(redshift[::step], mdot[::step], lw=lw, zorder=0)
 
@@ -1264,7 +1265,7 @@ def blackhole_diagnostics_vs_time(sim):
         # mdot: high values only
         ax[2].set_xlabel('Redshift')
         ax[2].set_xlim(xlim)
-        ax[2].set_ylabel(r'$\dot{M}_{\rm SMBH}$ [ log M$_{\rm sun}$ yr$^{-1}$ ]')
+        ax[2].set_ylabel(r'$\dot{M}_{\rm SMBH}$' + '\n' + r'[ log M$_{\rm sun}$ yr$^{-1}$ ]')
         ax[2].set_ylim([-5.2, 0.0])
 
         ax[2].plot(redshift[::step], mdot[::step], lw=lw, zorder=0)
@@ -1273,28 +1274,17 @@ def blackhole_diagnostics_vs_time(sim):
 
         ax[2].legend(loc='best')
 
+        # ngbmaxdist
+        ax[3].set_xlabel('Redshift')
+        ax[3].set_xlim(xlim)
+        ax[3].set_ylabel('NGB Max Dist\n[ ckpc/h ]')
+
+        ax[3].plot(redshift[::step], ngbmaxdist[::step], lw=lw, zorder=0)
+
         for a in ax: a.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
         fig.savefig(f'smbh_vs_time_{sim.simName}_{smbh_id}.pdf')
         plt.close(fig)
-
-        # plot additional fields if available
-        if 'ngbmaxdist' in smbhs[smbh_id]:
-            ngbmaxdist = smbhs[smbh_id]['ngbmaxdist']
-
-            # mass
-            fig, ax = plt.subplots()
-            ax.set_xlabel('Redshift')
-            ax.set_xlim(xlim)
-            ax.set_ylabel(r'NGB Max Dist [ ckpc/h ]')
-
-            ax.plot(redshift[::step], ngbmaxdist[::step], lw=lw, zorder=0)
-            addUniverseAgeAxis(ax, sim, ageVals=ageVals)
-
-            ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
-
-            fig.savefig(f'smbh_vs_time_ngbmaxdist_{sim.simName}_{smbh_id}.pdf')
-            plt.close(fig)
 
 @cache #(overwrite=True)
 def _blackhole_position_vs_time(sim):
@@ -1367,26 +1357,37 @@ def blackhole_position_vs_time(sim):
         pos_rel = data['pos_rel'][w]
         z = data['z'][w]
         dist_pc = data['dist_pc'][w]
+        sub_ids = data['sub_ids'][w]
 
-        # plot: distance from center vs. time
+        # plot (1): distance from center vs. time
         fig, (ax1,ax2) = plt.subplots(ncols=2, figsize=(14,7.5))
         ax1.set_xlabel('Redshift')
         ax1.set_ylabel('Distance from Subhalo Center [pc]')
         #ax1.set_ylim([-1, 10])
 
-        ax1.plot(z, dist_pc, lw=lw)
+        ax1.plot(z, dist_pc, lw=lw-1) # auto axes limits
+        colored_line(z, dist_pc, c=z, ax=ax1, lw=lw, cmap='plasma')
 
         ageVals = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
         addUniverseAgeAxis(ax1, sim, ageVals=ageVals)
 
-        # plot: projected position in xy plane
-        ax2.set_xlabel('x [cpc/h]')
-        ax2.set_ylabel('y [cpc/h]')
+        # plot (2): projected position in xy plane
+        ax2.set_xlabel('x [ckpc/h]')
+        ax2.set_ylabel('y [ckpc/h]')
         ax2.set_box_aspect(1.0)
-        ax2.set_xlim([-120,120])
-        ax2.set_ylim([-120,120])
+        ax2.set_xlim([-1.1,1.1])
+        ax2.set_ylim([-1.1,1.1])
 
-        ax2.plot(pos_rel[:,0] * 1000, pos_rel[:,1] * 1000, lw=lw)
+        # draw circle at subhalo size
+        sub_rhalf = sim.subhalos('SubhaloHalfmassRadType')[:,4]
+        sub_id = sub_ids[-1]
+        print(f' [{sim}] subhalo ID: {sub_id}, r_half: {sub_rhalf[sub_id]:.3f} ckpc/h')
+        c1 = plt.Circle((0,0), sub_rhalf[sub_id], color='black', alpha=0.3, zorder=-1)
+        c2 = plt.Circle((0,0), 2*sub_rhalf[sub_id], color='black', alpha=0.3, zorder=-1)
+        ax2.add_artist(c1)
+        ax2.add_artist(c2)
+
+        colored_line(pos_rel[:,0], pos_rel[:,1], c=z, ax=ax2, lw=lw, cmap='plasma')
 
         # save
         fig.savefig(f'smbh_pos_vs_time_{sim.simName}_{smbh_id}.pdf')
@@ -1540,8 +1541,8 @@ def select_ics():
 
 # -------------------------------------------------------------------------------------------------
 
-def paperPlots():
-    """ Plots for MCST intro paper. """
+def paperPlots(a = False):
+    """ Plots for MCST intro paper. (if a == True, make all figures)."""
     # list of sims to include
     #variants = ['TNG','ST8','ST8e'] # TNG, ST5*, ST6, ST6b
     #res = [11, 12, 13, 14, 15] # [11, 12, 13, 14]
@@ -1557,9 +1558,9 @@ def paperPlots():
     # testing:
     #variants = ['ST9','ST10','ST10b','ST10c','ST10d','ST10e','ST10f','ST10g','ST10h','ST10i','ST10j','ST10u1','ST10u2','ST10w1','ST10w2','ST10w3']
     #variants = ['ST9','ST10','ST10j','ST10b2']
-    variants = ['ST11','ST11s']#'ST9','ST10j','ST11','ST11s']#,'TNG']
-    res = [14,15] #[13,14,15,16] #[12,13,14,15]
-    hInds = [73172, 219612, 311384, 844537] # [1958, 5072, 15581, 23908, 73172, 219612, 311384, 844537]
+    variants = ['ST12'] #['ST11','ST11s','ST12']#'ST9','ST10j','ST11','ST11s']#,'TNG']
+    res = [14,15]#,15] #[13,14,15,16] #[12,13,14,15]
+    hInds = [219612,311384] #[73172, 219612, 311384, 844537] # [1958, 5072, 15581, 23908, 73172, 219612, 311384, 844537]
     redshift = 5.5
 
     sims = _get_existing_sims(variants, res, hInds, redshift, all=True) # if False, only dz < 0.1 matches
@@ -1569,12 +1570,12 @@ def paperPlots():
     #    _ = _zoomSubhaloIDsToPlot(sim)
 
     # examine last existing snapshot of each sim (info only)
-    #for sim in sims:
-    #    sim.setSnap(sim.validSnapList()[-1])
+    for sim in sims:
+        sim.setSnap(sim.validSnapList()[-1])
 
-    #    bhs = sim.bhs(['BH_Mass','Masses'])
-    #    for i in range(bhs['count']):
-    #        print(f'{str(sim):<24} BH {i}: BH_Mass = {sim.units.codeMassToLogMsun(bhs["BH_Mass"][i])[0]:.3f}, Mass = {sim.units.codeMassToLogMsun(bhs["Masses"][i])[0]:.3f}')
+        bhs = sim.bhs(['BH_Mass','Masses'])
+        for i in range(bhs['count']):
+            print(f'{str(sim):<24} BH {i}: BH_Mass = {sim.units.codeMassToLogMsun(bhs["BH_Mass"][i])[0]:.3f}, Mass = {sim.units.codeMassToLogMsun(bhs["Masses"][i])[0]:.3f}')
 
     # ------------
 
@@ -1594,13 +1595,14 @@ def paperPlots():
         vis_single_halo(sims[0], haloID=0)
         vis_single_galaxy(sims[0], haloID=0)
 
-    # fig 4: smhm relation
-    if 0:
+    # ------------
+
+    # figure - smhm relation
+    if 0 or a:
         smhm_relation(sims)
 
-    # ------------
-    # figure - SFH (stellar mass vs redshift evo) (one plot per halo)
-    if 0:
+    # figure - SFH (stellar mass vs redshift evo) (one plot per halo) (using stellar histo)
+    if 0 or a:
         quant = 'mstar2_log'
         #xlim = [13.1, 5.5]
         #ylim = [3.8, 8.5] #[3.8,7.0]
@@ -1616,46 +1618,58 @@ def paperPlots():
                     if not sim.snapHasField('stars','InitialMass'):
                         sim.setSnap(sim.validSnapList(onlyFull=True)[-1])
 
-            quantVsRedshift(sims_loc, quant, xlim, ylim)
+            quantVsRedshift(sims_loc, quant, xlim, ylim, sfh_treebased=False)
 
     # figure - sfr vs mstar relation
-    if 0:
+    if 0 or a:
         for yQuant in ['sfr2_log','sfr_30pkpc_100myr','sfr_30pkpc_instant']:
             sfr_vs_mstar(sims, yQuant=yQuant)
 
     # figure - smbh vs mhalo relation
-    if 0:
+    if 0 or a:
         mbh_vs_mhalo(sims)
 
-    # figure - star formation history (one plot per halo)
-    if 1:
+    # figure - star formation history (one plot per halo) (using stellar histo)
+    if 0 or a:
         quant = 'sfr2'
-        xlim = xlim = [15.1, 5.5] #[12.1, 2.95]
+        xlim = [15.1, 5.5] #[12.1, 2.95]
         ylim = [-6.5, 0.5]
 
         for hInd in hInds:
             sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
             quantVsRedshift(sims_loc, quant, xlim, ylim, sfh_lin=False, sfh_treebased=False)
 
+    # figure - size (or any quant) vs redshift (one plot per halo) (using tree MPB)
+    if 0 or a:
+        xlim = [12.1, 5.5]
+
+        for hInd in hInds:
+            sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
+            # todo: Z_stars, Z_gas, Z_gas_sfr
+            quantVsRedshift(sims_loc, quant='mhalo_log', xlim=xlim, ylim=[6.5,9.0])
+            quantVsRedshift(sims_loc, quant='mgas2_log', xlim=xlim, ylim=[4.0,8.0])
+            quantVsRedshift(sims_loc, quant='size_stars_log', xlim=xlim, ylim=[-1.1, 0.5])
+            quantVsRedshift(sims_loc, quant='size_gas_log', xlim=xlim, ylim=[-0.6, 1.5])
+
     # figure - stellar sizes
-    if 0:
+    if 0 or a:
         sizes_vs_mstar(sims)
 
     # figure - gas metallicity
-    if 0:
+    if 0 or a:
         gas_mzr(sims)
 
     # figure - stellar metallicity
-    if 0:
+    if 0 or a:
         stellar_mzr(sims)
 
     # figure - phase space diagrams (one per run)
-    if 0:
+    if 0 or a:
         for sim in sims:
             phase_diagram(sim)
 
     # vis: single image,z gas and stars
-    if 0:
+    if 0 or a:
         for sim in sims:
             # ST9 hack (mini snaps missins InitialMass, and z=5.5 is a mini)
             if 'ST9' in sim.variant:
@@ -1667,7 +1681,7 @@ def paperPlots():
             #vis_single_halo(sim, haloID=0, size=20.0)
 
     # radial profile
-    if 0:
+    if 0 or a:
         haloIDs = [0] * len(sims) # assume first
 
         ptType = 'gas'
@@ -1682,34 +1696,19 @@ def paperPlots():
             xlog=True, xlim=[-2.0, 1.5], ylim=ylim, scope='global') # 'global'
 
     # black hole time evolution
-    if 0:
+    if 0 or a:
         for sim in sims:
-            #blackhole_diagnostics_vs_time(sim)
+            blackhole_diagnostics_vs_time(sim)
             blackhole_position_vs_time(sim)
 
     # SF and feedback diagnostics:
-    if 0:
+    if 0 or a:
         starformation_diagnostics(sims, xlim=[3,8])
 
     # ------------
 
-    # phase space diagram movie (note: must change save name from .pdf to .png manually)
-    if 0:
-        for snap in range(86):
-            sim = simParams(run='structures', hInd=4182, res=14, variant='ST8', snap=snap)
-            phase_diagram(sim)
-
-    # movie
-    if 0:
-        vis_movie(sims[0], haloID=0)
-
-    # movies
-    if 0:
-        from ..vis.haloMovieDrivers import structuresEvo
-        structuresEvo(conf='one') # one, two, three, four
-
     # diagnostic: CPU times
-    if 0:
+    if 0 or a:
         from ..cosmo.perf import plotCpuTimes
         plotCpuTimes(sims, xlim=[0.0, 0.25])
 
@@ -1718,19 +1717,44 @@ def paperPlots():
         diagnostic_vis_timebins(sims[0])
 
     # diagnostic: snapshot spacing
-    if 0:
+    if 0 or a:
         diagnostic_snapshot_spacing(sims)
 
     # diagnostic: number of non-contaminated halos vs redshift
-    if 0:
+    if 0 or a:
         diagnostic_numhalos_uncontaminated(sims)
 
     # diagnostic: full high-res region vis
-    if 0:
-        vis_highres_region(sims[0], partType='gas')
+    if 0 or a:
+        for sim in sims:
+            vis_highres_region(sim, partType='gas')
+            vis_highres_region(sim, partType='dm')
     
     # diagnostic: SFR debug
-    if 0:
+    if 0 or a:
         diagnostic_sfr_jeans_mass(sims, haloID=0)
 
+    # ------------
 
+    # movie: phase space diagram (note: must change save name from .pdf to .png manually)
+    if 0:
+        for snap in range(86):
+            sim = simParams(run='structures', hInd=4182, res=14, variant='ST8', snap=snap)
+            phase_diagram(sim)
+
+    # movie: galaxy-scale gas + stars vis
+    if 0:
+        vis_movie(sims[0], haloID=0)
+
+    # movies
+    if 0:
+        from ..vis.haloMovieDrivers import structuresEvo
+        structuresEvo(conf='one') # one, two, three, four
+
+    # movie: high-res region
+    if 0 or a:
+        for sim in sims:
+            for snap in sim.validSnapList():
+                sim.setSnap(snap)
+                vis_highres_region(sim, partType='gas')
+                vis_highres_region(sim, partType='dm')   

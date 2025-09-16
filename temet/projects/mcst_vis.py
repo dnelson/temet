@@ -249,10 +249,7 @@ def vis_highres_region(sP, partType='dm'):
 
         boxsize = np.max([boxsize, min_v, max_v])
 
-    boxsize = np.ceil((boxsize * 2)/10) * 10
-
-    #boxsize /= 10 # zoom in more
-    #boxsize /= 4 # zoom in more
+    #boxsize = np.ceil(boxsize/10) * 10
 
     nPixels    = 1000
     axes       = [0,2] # x,y
@@ -280,9 +277,9 @@ def vis_highres_region(sP, partType='dm'):
         plotStyle  = 'edged_black'
         #colorbars  = False
         colorbarOverlay = True
-        saveFilename = './boxImage_%s_%s-%s.png' % (sP.simName,partType,panels[0]['partField'])
+        saveFilename = './boxImage_%s_%s-%s_%03d.png' % (sP.simName,partType,panels[0]['partField'],sP.snap)
 
-    renderBox(panels, plotConfig, locals(), skipExisting=False)
+    renderBox(panels, plotConfig, locals(), skipExisting=True)
 
 def vis_parent_box(sP, partType='dm'):
     """ Visualize large-scale region that bounds all high-res DM. """

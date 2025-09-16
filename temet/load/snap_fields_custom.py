@@ -1387,11 +1387,11 @@ def _cloudy_load(sim, partType, field, args):
             else:
                 with h5py.File(cacheFile,'r') as f:
                     nChunksDone = f.attrs['nChunksDone'] if 'nChunksDone' in f.attrs else nChunks # fallback
-                    nChunksTotal = f.attrs['nChunksTotal'] if 'nChunksTotal' in f.attrs else nChunks # fallback
+                    nChunks = f.attrs['nChunksTotal'] if 'nChunksTotal' in f.attrs else nChunks # fallback
 
-                if nChunksDone < nChunksTotal:
+                if nChunksDone < nChunks:
                     print('Warning: Found cache file [%s], but only has [%d] of [%d] chunks done, remaking.' % \
-                        (cacheFile.split(sim.cachePath)[1],nChunksDone,nChunksTotal))
+                        (cacheFile.split(sim.cachePath)[1],nChunksDone,nChunks))
                     remakeCacheFile = True
 
         if createCache and (not isfile(cacheFile) or remakeCacheFile):
@@ -1402,7 +1402,7 @@ def _cloudy_load(sim, partType, field, args):
             # create file and init ionization calculator
             with h5py.File(cacheFile, 'w') as f:
                 f.attrs['nChunksDone'] = 0
-                f.attrs['nChunksTotal'] = nChunksTotal
+                f.attrs['nChunksTotal'] = nChunks
                 dset = f.create_dataset('field', (indRangeAll[1],), dtype='float32')
 
             if prop in ['mass','frac','numdens']:
