@@ -843,6 +843,63 @@ def doublet_ratio(sim, line1, line2, instrument):
     fig.savefig(f'doublet_ratio2d_{sim}_{line1}_{line2}_{instrument}.pdf'.replace(' ','-'))
     plt.close(fig)
 
+def mean_transmitted_flux(sim, line, instrument, redshifts):
+    """ Calculate and plot the mean transmitted flux as a function of redshift.
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      line (str): string specifying the line transition.
+      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
+      redshifts (list[float]): 1D array of redshift bin edges.
+    """
+    ion = lines[line]['ion']
+    
+    # allocate
+    mean_flux = np.zeros(len(redshifts), dtype='float32')
+    percs_flux = np.zeros((len(redshifts),len(percs)), dtype='float32')
+
+    for i in range(len(redshifts)):
+        print(f' At redshift [{redshifts[i]:.2f}]...')
+        # load
+        sim.setRedshift(redshifts[i])
+        filepath = _spectra_filepath(sim, ion, instrument=instrument)
+
+        with h5py.File(filepath,'r') as f:
+            # load metadata
+            wave = f['wave'][()]
+            flux = f['flux'][()] #[0:100000,:] # subsample for speed
+
+        # what wavelength range is covered by this simulation box at this redshift?
+        wave_min = lines[line]['wave0'] * (1 + sim.redshift)
+        wave_max = lines[line]['wave0'] * (1 + sim.redshift + sim.dz)
+
+        print(f'  Wavelength range: [{wave_min:.1f} - {wave_max:.1f}] Ang.')
+
+        w = np.where((wave > wave_min) & (wave < wave_max))[0]
+
+        mean_flux[i] = np.mean(flux[:,w])
+        mean_tau = -np.log(mean_flux[i])
+        percs_flux[i,:] = np.mean(np.percentile(flux[:,w], percs, axis=0), axis=1)
+
+        print(mean_flux, mean_tau)
+
+    # plot
+    fig, ax = plt.subplots(figsize=[figsize[0]*0.8, figsize[1]*0.8])
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel(f'Mean Transmitted Flux [{line}]')
+
+    ax.set_xlim([1.4, 4.1])
+    ax.set_ylim([0.0, 1.05])
+
+    ax.plot(redshifts, mean_flux, '-', lw=lw, color='black')
+    #ax.fill_between(redshifts, mean_flux - std_flux, mean_flux + std_flux, color='black', alpha=0.3)
+
+    # see observational data e.g.
+    # https://arxiv.org/abs/astro-ph/9911196
+    # https://arxiv.org/abs/2310.00524
+
+    fig.savefig(f'mean_transmitted_flux_{sim}_{line}_{instrument}.pdf'.replace(' ','-'))
+    plt.close(fig)
+
 def vis_overview(sP, haloID=None):
     """ Visualize large-scale box, and halo-scale zoom, in an ion column density. """
     nPixels    = 2000
@@ -885,11 +942,12 @@ def vis_overview(sP, haloID=None):
 
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def ion_redshift_coverage(sim, all=True, lowz=False):
+def ion_redshift_coverage(sim, single=False, all=True, lowz=False):
     """ Schematic plot showing ion/redshift/instrument/etc coverage of available mock spectra files. 
     
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
+      single (bool): show only 1 marker per ion/full snap, instead of per instrument/config.
       all (bool): show all possible, otherwise show only existing.
       lowz (bool): make a log-log plot that focuses on low redshift.
     """
@@ -900,7 +958,7 @@ def ion_redshift_coverage(sim, all=True, lowz=False):
     datasets = []
 
     # (A) actually done
-    path = sim.derivPath + 'rays/spectra_*fullbox*combined.hdf5'
+    path = sim.postPath + 'AbsorptionSpectra/spectra_*fullbox*combined.hdf5'
     files = sorted(glob.glob(path))
 
     for file in files:
@@ -918,11 +976,12 @@ def ion_redshift_coverage(sim, all=True, lowz=False):
     insts += ['COS-G230L']
 
     # (B) all possible
+    redshifts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0]
+
     if all:
         #ions = ['H I','Mg II','Fe II','Si II','Si III','Si IV','N V','C II','C IV','O VI','Ca II','Zn II']
         insts_to_fill = insts #['COS-G130M']#, 'SDSS-BOSS', '4MOST-HRS'] # insts
         config = 'dummy'
-        redshifts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0]
 
         for line, props in lines.items():
             ion = props['ion'].replace(' ','')
@@ -936,19 +995,35 @@ def ion_redshift_coverage(sim, all=True, lowz=False):
         #ions = list(dict.fromkeys([info['ion'] for line,info in lines.items()])) # unique
         ions = list(set([ds[0] for ds in datasets]))
 
+    # (c) only one marker per ion/full snap
+    if single:
+        datasets = []
+        for line, props in lines.items():
+            ion = props['ion'].replace(' ','')
+            inst = insts[0]
+            config = 'dummy'
+
+            for z in redshifts:
+                wave_z = props['wave0'] * (1 + z)
+
+                #if wave_z > 0.0 and wave_z < instruments[inst]['wave_max']:
+                datasets.append([ion,inst,z,config,[line],True])
+
+        ions = list(set([ds[0] for ds in datasets]))
+
     # start plot
     fig = plt.figure(figsize=[figsize[0]*1.2, figsize[1]*0.9])
     ax = fig.add_subplot(111)
-    #ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
+    ax.set_rasterization_zorder(2) # elements below z=1 are rasterized
 
     ax.set_xlabel('Observed Wavelength [ Ang ]')
     ax.set_ylabel('Redshift')
 
     if lowz: # low-z focused (log-log)
-        xlim = [950, 10000]
-        xticks = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000]
-        ylim = [0.08, 6] # z=0.1 minimum currently used
-        yticks = [0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 2.0, 3.0, 4.0, 5.0]
+        xlim = [700, 11500] #[950, 10000]
+        xticks = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 10000]
+        ylim = [0.07, 7] #[0.08, 6] # z=0.1 minimum currently used
+        yticks = [0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
         ax.set_yscale('log')
         ax.set_xscale('log')
     else: # high-z focused (linear)
@@ -1016,10 +1091,16 @@ def ion_redshift_coverage(sim, all=True, lowz=False):
                 z_display += 7.0 * (insts.index(inst) - len(insts)/2)
                 _, z_plot = ax.transData.inverted().transform((wave_z,z_display))
 
-            ax.plot(wave_z, z_plot, marker, c=colors[ion], label=label, **style)
+            if single:
+                _, z_display = ax.transData.transform((wave_z,z))
+                z_display += 0.5 * (ions.index(ion) - len(ions)/2)
+                _, z_plot = ax.transData.inverted().transform((wave_z,z_display))
+
+            ax.plot(wave_z, z_plot, marker, c=colors[ion], label=label, zorder=1, **style)
 
     # second legend (instrument markers)
-    handles = [plt.Line2D((0,0), (0,0), color='black', lw=0, marker=markers[j]) for j in range(len(insts))]
+    j_off = 1 if single else 0
+    handles = [plt.Line2D((0,0), (0,0), color='black', lw=0, marker=markers[j+j_off]) for j in range(len(insts))]
     labels = insts
 
     legend2 = ax.legend(handles, labels, loc='lower right')
@@ -1030,7 +1111,8 @@ def ion_redshift_coverage(sim, all=True, lowz=False):
     labels = ions
     legend = ax.legend(handles, labels, ncols=4 if lowz else 2, handlelength=1.3, columnspacing=0.8, loc='upper left')
 
-    fig.savefig('ion_redshift_inst_coverage_%s%s%s.pdf' % (sim.simName, '_all' if all else '','_lowz' if lowz else ''))
+    fig.savefig('ion_redshift_inst_coverage_%s%s%s%s.pdf' % \
+        (sim.simName, '_single' if single else '','_all' if all else '','_lowz' if lowz else ''))
     plt.close(fig)
 
 def paperPlots():
@@ -1054,7 +1136,8 @@ def paperPlots():
     # fig 2: redshift coverage for transitions/instruments/configurations (given a sim)
     if 0:
         sim = simParams(run='tng50-1')
-        ion_redshift_coverage(sim, all=True, lowz=True)
+        #ion_redshift_coverage(sim, all=True, lowz=True)
+        ion_redshift_coverage(sim, single=True, lowz=True)
 
     # fig 3: (dense) spectra galleries
     if 0:
@@ -1172,6 +1255,12 @@ def paperPlots():
         
         doublet_ratio(sim, line1='MgII 2796', line2='MgII 2803', instrument='SDSS-BOSS')
         doublet_ratio(sim, line1='CIV 1548', line2='CIV 1550', instrument='SDSS-BOSS')
+
+    # fig X: mean transmitted LyA forest flux
+    if 0:
+        sim = simParams(run='tng50-1', redshift=2.0)
+        mean_transmitted_flux(sim, line='HI 1215', instrument='SDSS-BOSS', redshifts=[2.0, 3.0, 4.0])
+        mean_transmitted_flux(sim, line='HI 1215', instrument='KECK-HIRES-B14', redshifts=[2.0, 3.0, 4.0])
 
     # fig X: single spectrum plot (website/online API)
     if 0:
