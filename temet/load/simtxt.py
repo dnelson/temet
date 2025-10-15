@@ -4,7 +4,7 @@ Load AREPO .txt diagnostic and output files (by converting and cachine to HDF5).
 import numpy as np
 import h5py
 import glob
-from os import remove
+import os
 from os.path import isfile, isdir, expanduser
 import subprocess
 
@@ -142,7 +142,7 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0, skipWrite=False):
                 # recalc for new data
                 print('recalc [%f to %f] [%d to %d] %s' % \
                        (maxTimeSaved,maxTimeAvail,maxStepSaved,maxStepAvail,basePath))
-                remove(saveFilename)
+                os.remove(saveFilename)
                 return loadCpuTxt(basePath, keys, hatbMin)
 
             for key in read_keys:
@@ -308,7 +308,7 @@ def loadTimebinsTxt(basePath):
                 # recalc for new data
                 print('recalc [%f to %f] [%d to %d] %s' % \
                        (maxTimeSaved,maxTimeAvail,maxStepSaved,maxStepAvail,basePath))
-                remove(saveFilename)
+                os.remove(saveFilename)
                 return loadTimebinsTxt(basePath)
 
             for key in f:
@@ -495,6 +495,8 @@ def blackhole_details_mergers(sim, overwrite=False):
         if isfile(path + 'blackhole_details.tar.gz') and not isdir(path1):
             assert 'txt-files/' in path # should not occur otherwise
 
+            # have write permission?
+            #if not os.access(path, os.W_OK | os.X_OK):
             print('Decompressing blackhole_details.tar.gz...')
             r = subprocess.run(['tar','-xzf','blackhole_details.tar.gz'], cwd=path)
             print('Decompressing blackhole_mergers.tar.gz...')
@@ -648,31 +650,8 @@ def sf_sn_details(sim, overwrite=False):
         print('Concat sn_details*.txt...')
         r = subprocess.run('cat sn_details_*.txt > sn_details.txt', cwd=path + 'sn_details/', shell=True)
 
-    # load sf_details, columns:
-    # thistask tistep num time pos0 pos1 pos2 vel0 vel1 vel2 dens temp metal mass initialsolomass 0 0
-    sf_columns = ['Time','pos0','pos1','pos2','vel0','vel1','vel2','Density','Temperature','Metallicity','InitialSoloMass']
-    
-    sf_data = np.loadtxt(file_sf, usecols=np.arange(3,len(sf_columns)+3), dtype='float32')
-    sf = {col: sf_data[:,i] for i, col in enumerate(sf_columns)}
-    for i, col in enumerate(['task','tistep','num']):
-        sf[col] = np.loadtxt(file_sf, usecols=[i], dtype='int32')
-
-    # load sf_details_ids, columns: task tistep index id
-    sf_ids_columns = ['task','tistep','index','id']
-    sf_ids_data = np.loadtxt(file_sf_ids, dtype='int64')
-    sf_ids = {col: sf_ids_data[:,i] for i, col in enumerate(sf_ids_columns)}
-
-    # combine sf_details and sf_details_ids
-    assert sf['task'].size == sf_ids['task'].size
-    for i in range(sf['task'].size):
-        assert sf['task'][i] == sf_ids['task'][i]
-        assert sf['tistep'][i] == sf_ids['tistep'][i]
-        assert sf['num'][i] <= sf_ids['index'][i]
-
-    sf['id'] = sf_ids['id']
-
     # clean: only unique entries (this is star formation, so just one entry per star id)
-    def _clean_sort_and_save(dict_in, unique_keys, name):
+    def _clean_sort_and_save(dict_in, unique_keys, name=None, sort_inds=None):
         """ Clean dictionary to only unique entries based on unique_keys, sort by time, and save. """
         dict_out = {}
         unique_ids, unique_inds = np.unique(unique_keys, return_index=True)
@@ -685,26 +664,61 @@ def sf_sn_details(sim, overwrite=False):
             print(f' No duplicate [{name}] entries found.')
             dict_out = dict_in
 
-        # sort by time
-        inds = np.argsort(dict_out['Time'])
+        # sort by time (unless sort input explicitly)
+        if sort_inds is None:
+            sort_inds = np.argsort(dict_out['Time'])
         for key in dict_out.keys():
-            dict_out[key] = dict_out[key][inds]
+            dict_out[key] = dict_out[key][sort_inds]
         
-        dict_out['Coordinates'] = np.vstack((dict_out['pos0'], dict_out['pos1'], dict_out['pos2'])).T
-        dict_out['Velocities'] = np.vstack((dict_out['vel0'], dict_out['vel1'], dict_out['vel2'])).T
+        if 'pos0' in dict_out:
+            dict_out['Coordinates'] = np.vstack((dict_out['pos0'], dict_out['pos1'], dict_out['pos2'])).T
+        if 'vel0' in dict_out:
+            dict_out['Velocities'] = np.vstack((dict_out['vel0'], dict_out['vel1'], dict_out['vel2'])).T
         for key in ['pos0','pos1','pos2','vel0','vel1','vel2']:
-            del dict_out[key]
+            if key in dict_out:
+                del dict_out[key]
 
         # save
-        with h5py.File(cachefile[name],'w') as f:
-            for key in dict_out:
-                f[key] = dict_out[key]
+        if name is not None:
+            with h5py.File(cachefile[name],'w') as f:
+                for key in dict_out:
+                    f[key] = dict_out[key]
 
-        print(f'Saved [{cachefile[name]}].')
+            print(f'Saved [{cachefile[name]}].')
 
-        return dict_out
+        return dict_out, sort_inds
 
-    stars = _clean_sort_and_save(sf, sf['id'], 'sf')
+    # load sf_details, columns:
+    # thistask tistep num time pos0 pos1 pos2 vel0 vel1 vel2 dens temp metal mass initialsolomass 0 0
+    sf_columns = ['Time','pos0','pos1','pos2','vel0','vel1','vel2','Density','Temperature','Metallicity','InitialSoloMass']
+    
+    sf_data = np.loadtxt(file_sf, usecols=np.arange(3,len(sf_columns)+3), dtype='float32')
+    sf = {col: sf_data[:,i] for i, col in enumerate(sf_columns)}
+    for i, col in enumerate(['task','tistep','num']):
+        sf[col] = np.loadtxt(file_sf, usecols=[i], dtype='int32')
+
+    # restrict to unique entries (must do this independently for sf_details and sf_details_ids since duplicates can differ)
+    sf_keys = ['%d-%d-%d' % (sf['task'][i],sf['tistep'][i],sf['num'][i]) for i in range(sf['task'].size)]
+    sf, sort_inds = _clean_sort_and_save(sf, sf_keys)
+
+    # load sf_details_ids, columns: task tistep index id
+    sf_ids_columns = ['task','tistep','index','id']
+    sf_ids_data = np.loadtxt(file_sf_ids, dtype='int64')
+    sf_ids = {col: sf_ids_data[:,i] for i, col in enumerate(sf_ids_columns)}
+
+    sf_ids_keys = ['%d-%d-%d' % (sf_ids['task'][i],sf_ids['tistep'][i],sf_ids['index'][i]) for i in range(sf_ids['task'].size)]
+    sf_ids, _ = _clean_sort_and_save(sf_ids, sf_ids_keys, sort_inds=sort_inds)
+
+    # combine sf_details and sf_details_ids
+    assert sf['task'].size == sf_ids['task'].size
+    for i in range(sf['task'].size):
+        assert sf['task'][i] == sf_ids['task'][i]
+        assert sf['tistep'][i] == sf_ids['tistep'][i]
+        assert sf['num'][i] <= sf_ids['index'][i]
+
+    sf['id'] = sf_ids['id']
+
+    stars, _ = _clean_sort_and_save(sf, sf['id'], 'sf')
 
     # load sn_details, columns:
     # id time pos0 pos1 pos2 vel0 vel1 vel2 dens temp metal mass_out energy_out age local_flag
@@ -719,7 +733,7 @@ def sf_sn_details(sim, overwrite=False):
 
     keys = ['%s-%s' % (id,time) for id,time in zip(sn['id'], sn['Time'])]
 
-    supernoave = _clean_sort_and_save(sn, keys, 'sn')
+    supernoave, _ = _clean_sort_and_save(sn, keys, 'sn')
 
     # delete decompressed files
     if decompressed:

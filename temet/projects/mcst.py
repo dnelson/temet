@@ -977,8 +977,8 @@ def diagnostic_snapshot_spacing(sims):
         ax.plot(redshifts[1:], dt, 'o-', ms=6.0, label=f'{sim} saved')
 
     # load request
-    fname1 = '/u/dnelson/sims.structures/arepo6/outputlist_10Myr_z10-3.txt'
-    fname2 = '/u/dnelson/sims.structures/arepo6/outputlist_1Myr_z20-5.5.txt'
+    fname1 = '/u/dnelson/sims.structures/arepo7/outputlist_10Myr_z10-3.txt'
+    fname2 = '/u/dnelson/sims.structures/arepo7/outputlist_1Myr_z20-5.5.txt'
 
     for i, fname in enumerate([fname2]): #[fname1,fname2]):
         with open(fname,'r') as f:
@@ -1558,12 +1558,12 @@ def paperPlots(a = False):
     # testing:
     #variants = ['ST9','ST10','ST10b','ST10c','ST10d','ST10e','ST10f','ST10g','ST10h','ST10i','ST10j','ST10u1','ST10u2','ST10w1','ST10w2','ST10w3']
     #variants = ['ST9','ST10','ST10j','ST10b2']
-    variants = ['ST12'] #['ST11','ST11s','ST12']#'ST9','ST10j','ST11','ST11s']#,'TNG']
-    res = [14,15]#,15] #[13,14,15,16] #[12,13,14,15]
-    hInds = [219612,311384] #[73172, 219612, 311384, 844537] # [1958, 5072, 15581, 23908, 73172, 219612, 311384, 844537]
+    variants = ['ST12','ST13','ST14','ST14e'] #['ST11','ST11s','ST12']#'ST9','ST10j','ST11','ST11s']#,'TNG']
+    res = [14] #[14,15]#,15] #[13,14,15,16] #[12,13,14,15]
+    hInds = [219612,311384] #[23908,31619,73172,219612,311384,844537] # [1958,5072,15581,23908,31619,73172,219612,311384,844537]
     redshift = 5.5
 
-    sims = _get_existing_sims(variants, res, hInds, redshift, all=True) # if False, only dz < 0.1 matches
+    sims = _get_existing_sims(variants, res, hInds, redshift, all=False) # if False, only dz < 0.1 matches
 
     # contamination diagnostic printout (info only)
     #for sim in sims:
@@ -1571,11 +1571,16 @@ def paperPlots(a = False):
 
     # examine last existing snapshot of each sim (info only)
     for sim in sims:
-        sim.setSnap(sim.validSnapList()[-1])
-
-        bhs = sim.bhs(['BH_Mass','Masses'])
+        ##sim.setSnap(sim.validSnapList()[-1]) # careful
+        bhs = sim.bhs(['BH_Mass','Masses','BH_CumEgyInjection_QM','BH_CumMassGrowth_QM','BH_MPB_CumEgyHigh'])
         for i in range(bhs['count']):
-            print(f'{str(sim):<24} BH {i}: BH_Mass = {sim.units.codeMassToLogMsun(bhs["BH_Mass"][i])[0]:.3f}, Mass = {sim.units.codeMassToLogMsun(bhs["Masses"][i])[0]:.3f}')
+            s = f'{str(sim):<24} BH {i}:'
+            s += f'BH_Mass = {sim.units.codeMassToLogMsun(bhs["BH_Mass"][i])[0]:.3f}, '
+            s += f'Mass = {sim.units.codeMassToLogMsun(bhs["Masses"][i])[0]:.3f}, '
+            s += f'CumEgy = {sim.units.codeEnergyToErg(bhs["BH_CumEgyInjection_QM"][i]):.3e}, '
+            s += f'CumMass = {sim.units.codeMassToLogMsun(bhs["BH_CumMassGrowth_QM"][i])[0]:.3f}, '
+            s += f'CumEgy_MPB = {sim.units.codeEnergyToErg(bhs["BH_MPB_CumEgyHigh"][i]):.3e}'
+            print(s)
 
     # ------------
 

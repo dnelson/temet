@@ -1408,10 +1408,10 @@ class units(object):
 
     def codeEnergyToErg(self, energy, log=False):
         """ Convert energy from code units (unitMass*unitLength^2/unitTime^2) to [erg]. (for BH_CumEgy* ). """
-        energy_cgs = energy.astype('float32') * self.UnitEnergy_in_cgs / self._sP.HubbleParam
+        energy_cgs = energy.astype('float64') * self.UnitEnergy_in_cgs / self._sP.HubbleParam
         
         if log:
-            return logZeroNaN(energy_cgs)
+            return logZeroNaN(energy_cgs).astype('float32')
         return energy_cgs
 
     def codeEnergyRateToErgPerSec(self, energy_rate, log=False):
