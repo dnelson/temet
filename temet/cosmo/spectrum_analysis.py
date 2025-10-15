@@ -44,7 +44,7 @@ def load_spectra_subset(sim, ion, instrument, mode, nRaysPerDim=nRaysPerDim_def,
 
     with h5py.File(filepath,'r') as f:
         # load metadata
-        lineNames = f.attrs['lineNames']
+        lineNames = list(f.attrs['lineNames'])
         wave = f['wave'][()]
 
         # total EW (summing all transitions)

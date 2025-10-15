@@ -1272,6 +1272,15 @@ def paperPlots():
             filepath = sim.postPath + 'AbsorptionSpectra/' + file
             spectrum_plot_single(file=filepath, ind=None) # random index
 
+    # fig X: 2d stacked COS spectra visualization
+    if 0:
+        sim = simParams(run='tng50-1', redshift=0.1)
+        ions = ['O VI', 'N V', 'N II', 'N III', 'Si III', 'H I']
+        opts = {'ion':ions, 'instrument':'COS-G130M', 'EW_minmax':None, 'num':None, 'SNR':10}
+
+        #spectra_gallery_indiv(sim, mode='inds', inds=np.arange(15000), style='2d', **opts)
+        spectra_gallery_indiv(sim, mode='all', style='2d', **opts)
+
     # table: transitions
     if 0:
         ions = list(dict.fromkeys([info['ion'] for line,info in lines.items()])) # unique

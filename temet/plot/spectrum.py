@@ -15,7 +15,7 @@ from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_fi
                              integrate_along_saved_rays, create_wavelength_grid, deposit_single_line, \
                              lines, instruments, projAxis_def, nRaysPerDim_def, raysType_def
 from ..cosmo.spectrum_analysis import absorber_catalog, load_spectra_subset, wave_to_dv
-from ..util.helper import loadColorTable, sampleColorTable, logZeroNaN, iterable, closest
+from ..util.helper import loadColorTable, sampleColorTable, logZeroNaN, iterable, closest, rebin
 from ..util.units import units
 from ..plot.config import *
 
@@ -651,7 +651,7 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', nRaysPerDim=
 
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
-      ion (str): space separated species name and ionic number e.g. 'Mg II'.
+      ion (str, list[str]): space separated species name and ionic number e.g. 'Mg II', or list of such.
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
       nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
       raysType (str): either 'voronoi_fullbox' (equally spaced) or 'voronoi_rndfullbox' (random).
@@ -681,9 +681,33 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', nRaysPerDim=
         print(f'Increaing {dv_window = } to {xlim[1]} km/s to cover requested xlim.')
         dv_window = xlim[1]
 
-    wave, flux, EW, _, lineNames = load_spectra_subset(sim, ion, instrument, mode, 
-                                                       nRaysPerDim=nRaysPerDim, raysType=raysType, solar=solar, 
-                                                       num=num, inds=inds, EW_minmax=EW_minmax, dv=dv_window if dv else 0.0)
+    if isinstance(ion, list):
+        # multiple ions, stack
+        print(f'Loading multiple ions: {ion} ...')
+        wave, flux, EW, _, lineNames = load_spectra_subset(sim, ion[0], instrument, mode, 
+                                                           nRaysPerDim=nRaysPerDim, raysType=raysType, solar=solar, 
+                                                           inds=inds)
+        
+        tau = -np.log(flux)
+        
+        for ion in ion[1:]:
+            wave_loc, flux_loc, _, _, lineNames_loc = load_spectra_subset(sim, ion, instrument, mode, 
+                                                             nRaysPerDim=nRaysPerDim, raysType=raysType, solar=solar, 
+                                                             inds=inds)
+            assert np.array_equal(wave, wave_loc)
+            tau_loc = -np.log(flux_loc)
+            tau += tau_loc
+
+            if ion == 'H I': lineNames_loc = lineNames_loc[0:6]
+            lineNames += lineNames_loc
+
+        flux = np.exp(-1*tau)
+
+    else:
+        # single ion load
+        wave, flux, EW, _, lineNames = load_spectra_subset(sim, ion, instrument, mode, 
+                                                        nRaysPerDim=nRaysPerDim, raysType=raysType, solar=solar, 
+                                                        num=num, inds=inds, EW_minmax=EW_minmax, dv=dv_window if dv else 0.0)
 
     # how many lines do we have? what is their span in wavelength?
     lines_wavemin = 0
@@ -837,40 +861,63 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', nRaysPerDim=
         ax.set_ylabel(r'Equivalent Width [ $\rm{\AA}$ ]')
         cbar_label = 'Relative Flux'
 
+        if EW_minmax is None: # for display only
+            EW_minmax = [0.01, EW.max()]
+
         ylim = [np.log10(EW_minmax[0]), np.log10(EW_minmax[1])]
         extent = [xlim[0], xlim[1], ylim[0], ylim[1]]
-        norm = Normalize(vmin=0.9, vmax=1.0)
+        norm = Normalize(vmin=0.99, vmax=1.0)
 
         nbins = 1000
         bins = np.linspace(ylim[0], ylim[1], nbins)
         EW = np.log10(EW)
 
-        h2d = np.zeros((nbins,wave.size), dtype='float32')
+        # if wave.size > hueristic, downsample (in horizontal direction)
+        n_x = wave.size
+        while n_x > 2000:
+            n_x = int(n_x/2)
+
+        h2d = np.zeros((nbins,n_x), dtype='float32')
 
         for i in range(nbins-1):
             w = np.where((EW >= bins[i]) & (EW < bins[i+1]))[0]
-            h2d[i,:] = np.mean(flux[w,:], axis=0)
+
+            flux_mean = np.mean(flux[w,:], axis=0)
+
+            h2d[i,:] = flux_mean.reshape((n_x,flux_mean.size//n_x)).mean(-1)
 
         # show in log?
         if 0:
             h2d = logZeroNaN(h2d)
-            norm = Normalize(vmin=-0.05, vmax=0.0)
+            norm = Normalize(vmin=-0.01, vmax=0.0)
             cbar_label += ' [ log ]'
 
         s = ax.imshow(h2d, extent=extent, norm=norm, origin='lower', aspect='auto', cmap='plasma')
 
-        yticks_all = [0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0]
+        yticks_all = [0.01, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0]
         yticks = []
+        yticklabels = []
         for ytick in yticks_all:
             if ytick >= EW_minmax[0] and ytick <= EW_minmax[1]:
                 yticks.append(ytick)
+                yticklabels.append('%.1f' % ytick if ytick >= 0.1 else '%.2f' % ytick)
         ax.set_yticks(np.log10(yticks))
-        ax.set_yticklabels(['%.1f' % y for y in yticks])
+        ax.set_yticklabels(yticklabels)
 
         # colorbar
         cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.1)
         cb = fig.colorbar(s, cax=cax)
         cb.ax.set_ylabel(cbar_label)
+
+        # mark transitions
+        if 1:
+            opts = {'color':'#000', 'alpha':0.8, 'ha':'center', 'va':'bottom'}
+            ypos = np.linspace(ylim[0]+0.1, ylim[0]+0.1*len(lineNames), len(lineNames))
+
+            for line, yy in zip(lineNames,ypos):
+                line = line.replace('_',' ')
+                wave_z = lines[line]['wave0'] * (1 + sim.redshift)
+                ax.text(wave_z, yy, line, **opts)
 
     snrStr = '_snr%d' % SNR if SNR is not None else ''
     ewStr = '_%.1f-%.1f' % (EW_minmax[0],EW_minmax[1]) if EW_minmax is not None else ''

@@ -1707,7 +1707,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
             # which lines are already done?
-            existing_lines = [k.replace('tau_','').replace('_',' ') for k in f.keys() if 'tau_' in k]
+            existing_lines = [k.replace('EW_','').replace('_',' ') for k in f.keys() if 'EW_' in k]
 
         all_done = all([line in existing_lines for line in lineNames])
         if all_done:
@@ -1823,6 +1823,8 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPer
 
         with h5py.File(filename,'r') as f:
             # first file: load number of spectra per chunk file, master wavelength grid, and other metadata
+            assert 'flux' in f, 'Error: No flux array found in [%s], likely OOM and did not finish.' % filename
+
             if i == 0:
                 n_wave = f['flux'].shape[1]
                 n_spec = f['flux'].shape[0]
