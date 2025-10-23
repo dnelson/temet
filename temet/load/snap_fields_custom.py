@@ -44,6 +44,21 @@ mass.limits = [-3.0, 0.0]
 mass.limits_halo = [-6.0, -2.0]
 mass.log = True
 
+@snap_field
+def highres_massfrac(sim, partType, field, args):
+    """ High-resolution mass normalized by total mass (applicable only to zooms). """
+    assert sim.isPartType(partType, 'gas')
+    mass = sim.snapshotSubset(partType, 'mass', **args)
+    mass_highres = sim.snapshotSubset(partType, 'HighResGasMass', **args)
+
+    return mass_highres / mass
+
+mass.label = 'High-Res Mass Fraction'
+mass.units = '' # dimensionless
+mass.limits = [-3.0, 0.0]
+mass.limits_halo = [-6.0, -2.0]
+mass.log = True
+
 @snap_field(alias='vmag')
 def velmag(sim, partType, field, args):
     """ Magnitude of the gas velocity 3-vector. """

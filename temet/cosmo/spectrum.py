@@ -1708,8 +1708,9 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
         with h5py.File(saveFilename,'r') as f:
             # which lines are already done?
             existing_lines = [k.replace('EW_','').replace('_',' ') for k in f.keys() if 'EW_' in k]
+            flux_done = 'flux' in f
 
-        all_done = all([line in existing_lines for line in lineNames])
+        all_done = all([line in existing_lines for line in lineNames]) & flux_done
         if all_done:
             print(f'Save [{saveFilename.split("/")[-1]}] already exists and is done, exiting.')
             return

@@ -8,7 +8,7 @@ from scipy.signal import savgol_filter
 from scipy import interpolate
 
 import illustris_python as il
-from ..util.helper import logZeroNaN, running_sigmawindow, iterable
+from ..util.helper import logZeroNaN, running_sigmawindow, iterable, closest, cache
 
 treeName_default = "SubLink"
 
@@ -155,13 +155,11 @@ def loadTreeFieldnames(sP, treeName=treeName_default):
 
     raise Exception('Unrecognized treeName.')
 
-def insertMPBGhost(mpb, snapToInsert=None):
+def insertMPBGhost(mpb, snap):
     """ Insert a ghost entry into a MPB dict by interpolating over neighboring snapshot information.
     Appropriate if e.g. a group catalog if corrupt but snapshot files are ok. Could also be used to 
     selectively wipe out outlier points in the MPB. """
-    assert snapToInsert is not None
-
-    indAfter = np.where(mpb['SnapNum'] == snapToInsert - 1)[0]
+    indAfter = np.where(mpb['SnapNum'] == snap - 1)[0]
     assert len(indAfter) > 0
 
     mpb['SubfindID'] = np.insert( mpb['SubfindID'], indAfter, -1 ) # ghost
@@ -215,7 +213,7 @@ def mpbPositionComplete(sP, id, extraFields=None):
     for snap in np.arange( mpb['SnapNum'].min(), mpb['SnapNum'].max() ):
         if snap in mpb['SnapNum']:
             continue
-        mpb = insertMPBGhost(mpb, snapToInsert=snap)
+        mpb = insertMPBGhost(mpb, snap)
         #print(' mpb inserted [%d] ghost' % snap)
 
     # rearrange into ascending snapshot order, and are we already done?
@@ -242,272 +240,159 @@ def mpbPositionComplete(sP, id, extraFields=None):
 
     return snaps, times, posComplete
 
-def mpbSmoothedProperties(sP, id, fillSkippedEntries=True, extraFields=None):
-    """ Load a particular subset of MPB properties of subhalo id, and smooth them in time. These are 
-    currently: position, mass (m200_crit), virial radius (r200_crit), virial temperature (derived), 
-    velocity (subhalo), and are inside ['sm'] for smoothed versions. Also attach time with snap/redshift.
-    Note: With the Sublink* trees, the group properties are always present for all subhalos and are 
-    identical for all subhalos in the same group. """
-    if extraFields is None: extraFields = []
+@cache
+def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=False):
+    """ Return particular quantit(ies) from a MPB. 
+    A simplified version of e.g. simSubhaloQuantity(). Can be generalized in the future. 
+    Returned units should be consistent with simSubhaloQuantity() of the same quantity name.
     
-    fields = ['SubfindID','SnapNum','SubhaloPos','SubhaloVel','Group_R_Crit200','Group_M_Crit200',
-              'SubhaloHalfmassRad','SubhaloHalfmassRadType']
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      subhaloInd (int): subhalo index.
+      quants (list[str]): quantities to return.
+      add_ghosts (bool): fill any missing snapshots with ghost entries?
+      z_vals (list[float]): if not None, restrict to these redshift values only.
+      smooth (bool): smooth the returned quantities in time.
+    """
+    quants = iterable(quants)
 
-    # any extra fields to be loaded?
-    treeFileFields = loadTreeFieldnames(sP)
+    # load main progenitor branch
+    mpb = sim.loadMPB(subhaloInd)
 
-    for field in iterable(extraFields):
-        if field not in fields and field in treeFileFields:
-            fields.append(field)
-
-    # load
-    mpb = loadMPB(sP, id, fields=fields)
+    r = {}
 
     # fill any missing snapshots with ghost entries? (e.g. actual trees can skip a snapshot when 
     # locating a descendant but we may need a continuous position for all snapshots)
-    if fillSkippedEntries:
-        for snap in np.arange( mpb['SnapNum'].min(), mpb['SnapNum'].max() ):
+    if add_ghosts:
+        for snap in np.arange(mpb['SnapNum'].min(), mpb['SnapNum'].max()):
             if snap in mpb['SnapNum']:
                 continue
-            mpb = insertMPBGhost(mpb, snapToInsert=snap)
+            mpb = insertMPBGhost(mpb, snap=snap)
             print(' mpb inserted [%d] ghost' % snap)
 
-    # sims.zooms2/h2_L9: corrupt groups_104 override (insert interpolated snap 104 values for MPB)
-    if sP.run == 'zooms2' and sP.res == 9 and sP.hInd == 2:
-        print('WARNING: sims.zooms2/h2_L9: mpb corrupt 104 ghost inserted')
-        mpb = insertMPBGhost(mpb, snapToInsert=104)
+    # add redshift
+    r['z'] = sim.snapNumToRedshift(mpb['SnapNum'])
 
-    # determine sK parameters
-    sKn = int(len(mpb['SnapNum'])/10) # savgol smoothing kernel length (1=disabled)
-    if sKn % 2 == 0:
-        sKn = sKn + 1 # make odd
-    sKo = 3 # savgol smoothing kernel poly order
+    # restrict to a set of discrete redshifts?
+    inds = np.where(r['z'])[0]
+    if z_vals is not None:
+        inds = np.array([closest(r['z'], z_val)[1] for z_val in z_vals])
+        r['z'] = r['z'][inds]
 
-    # attach redshift, virial temp, savgol parameters
-    mpb['Redshift']    = sP.snapNumToRedshift(mpb['SnapNum'])
-    mpb['Group_T_vir'] = sP.units.codeMassToVirTemp(mpb['Group_M_Crit200'], log=True)
-    mpb['Group_S_vir'] = sP.units.codeMassToVirEnt(mpb['Group_M_Crit200'], log=True)
-    mpb['Group_V_vir'] = sP.units.codeMassToVirVel(mpb['Group_M_Crit200'])
+    # loop over requested quantities
+    for quant in quants:
+        prop = quant.lower().replace('_log','') # new
+        log = True # default
+        vals = None
 
-    mpb['sm'] = {}
-    mpb['sm']['sKn'] = sKn
-    mpb['sm']['sKo'] = sKo
+        if prop in ['mhalo_200','mhalo']:
+            vals = mpb['Group_M_Crit200']
+            vals = sim.units.codeMassToMsun(vals)
 
-    # smoothing: velocity
-    mpb['sm']['vel'] = mpb['SubhaloVel'].astype('float32')
-    #mpb['sm']['vel_moved'] = mpb['SubhaloVel'].astype('float32')
-    #mpb['sm']['v_sm'] = mpb['SubhaloVel'].astype('float32')
-    #mpb['sm']['v_sigma'] = mpb['SubhaloVel'].astype('float32')
+        if prop in ['rhalo_200','rhalo','r200','r200c','rvir','r_vir','rvirial']:
+            vals = mpb['Group_R_Crit200']
+            print(f'Note: [{sim}] quantMPB [{prop}] in code units.')
 
-    for i in range(3):
-        # outlier rejection: running median estimator
-        medWindowSize = int( len(mpb['SnapNum'])/sKn*2 )
-        sigmaThresh = 2.0
-        iterations = 0 # disabled
-
-        for j in range(iterations):
-            mpb['sm']['v_sigma'][:,i] = running_sigmawindow( mpb['Redshift'], mpb['sm']['vel'][:,i], medWindowSize)
-            mpb['sm']['v_sm'][:,i] = savgol_filter( mpb['sm']['vel'][:,i], sKn*5, sKo )
-
-            w = np.where( np.abs(mpb['sm']['vel'][:,i]-mpb['sm']['v_sm'][:,i])/mpb['sm']['v_sigma'][:,i] > sigmaThresh )
-
-            print(i,mpb['sm']['vel'][w,i],mpb['sm']['v_sm'][w,i])
-            mpb['sm']['vel'][w,i] = mpb['sm']['v_sm'][w,i]
-            mpb['sm']['vel_moved'][w,i] = mpb['sm']['v_sm'][w,i]
-
-        # smooth
-        mpb['sm']['vel'][:,i] = savgol_filter( mpb['sm']['vel'][:,i], sKn, sKo )
-
-    # smoothing: positions with box-edge shifting
-    posShiftInds = sP.correctPeriodicPosBoxWrap(mpb['SubhaloPos'])
-    mpb['sm']['pos'] = mpb['SubhaloPos'].astype('float32')
-
-    for i in range(3):
-        mpb['sm']['pos'][:,i] = savgol_filter( mpb['sm']['pos'][:,i], sKn, sKo )
+        if prop in ['t_vir']:
+            vals = sim.units.codeMassToVirTemp(mpb['Group_M_Crit200'])
         
-        # shifted? then unshift now
-        if i in posShiftInds:
-            unShift = np.zeros( len(mpb['Redshift']), dtype='float32' )
-            unShift[posShiftInds[i]] = sP.boxSize
+        if prop in ['s_vir']:
+            vals = sim.units.codeMassToVirEnt(mpb['Group_M_Crit200'])
 
-            mpb['SubhaloPos'][:,i] = mpb['SubhaloPos'][:,i] + unShift
-            mpb['sm']['pos'][:,i] = mpb['sm']['pos'][:,i] + unShift
+        if prop in ['v_vir']:
+            vals = sim.units.codeMassToVirVel(mpb['Group_M_Crit200'])
 
-    # smoothing: all others
-    mpb['sm']['mass'] = savgol_filter( sP.units.codeMassToLogMsun( mpb['Group_M_Crit200'] ), sKn, sKo )
-    mpb['sm']['rvir'] = savgol_filter( mpb['Group_R_Crit200'], sKn, sKo )
-    mpb['sm']['tvir'] = savgol_filter( mpb['Group_T_vir'], sKn, sKo )
-    mpb['sm']['svir'] = savgol_filter( mpb['Group_S_vir'], sKn, sKo )
-    mpb['sm']['vvir'] = savgol_filter( mpb['Group_V_vir'], sKn, sKo )
+        if prop in ['mstar']:
+            vals = mpb['SubhaloMassType'][:,sim.ptNum('stars')]
+            vals = sim.units.codeMassToMsun(vals)
 
-    return mpb    
+        if prop in ['mstar2']:
+            vals = mpb['SubhaloMassInRadType'][:,sim.ptNum('stars')]
+            vals = sim.units.codeMassToMsun(vals)
 
-def quantMPB(sim, mpb, quant):
-    """ Return a particular quantity from the MPB, where quant is a string. 
-    A simplified version of e.g. simSubhaloQuantity(). Can be generalized in the future. 
-    Returned units should be consistent with simSubhaloQuantity() of the same quantity name. """
+        if prop in ['mgas2']:
+            vals = mpb['SubhaloMassInRadType'][:,sim.ptNum('gas')]
+            vals = sim.units.codeMassToMsun(vals)
 
-    prop = quant.lower().replace('_log','') # new
-    log = True # default
+        if prop in ['mass_smbh']:
+            vals = mpb['SubhaloBHMass']
+            vals = sim.units.codeMassToMsun(vals)
 
-    if prop in ['mhalo_200','mhalo']:
-        vals = mpb['Group_M_Crit200']
-        vals = sim.units.codeMassToMsun(vals)
+        if prop in ['sfr2']:
+            vals = mpb['SubhaloSFRinRad']
 
-    if prop in ['mstar']:
-        vals = mpb['SubhaloMassType'][:,sim.ptNum('stars')]
-        vals = sim.units.codeMassToMsun(vals)
+        if prop in ['size_stars','rhalf_stars']:
+            vals = mpb['SubhaloHalfmassRadType'][:,sim.ptNum('stars')]
+            vals = sim.units.codeLengthToComovingKpc(vals)
+            print(f'Note: [{sim}] quantMPB [{prop}] in comoving units.')
 
-    if prop in ['mstar2']:
-        vals = mpb['SubhaloMassInRadType'][:,sim.ptNum('stars')]
-        vals = sim.units.codeMassToMsun(vals)
+        if prop in ['size_gas']:
+            vals = mpb['SubhaloHalfmassRadType'][:,sim.ptNum('gas')]
+            vals = sim.units.codeLengthToComovingKpc(vals)
+            print(f'Note: [{sim}] quantMPB [{prop}] in comoving units.')
 
-    if prop in ['mgas2']:
-        vals = mpb['SubhaloMassInRadType'][:,sim.ptNum('gas')]
-        vals = sim.units.codeMassToMsun(vals)
+        if prop in ['z_stars']:
+            vals = sim.units.metallicityInSolar(mpb['SubhaloStarMetallicity'])
 
-    if prop in ['sfr2']:
-        vals = mpb['SubhaloSFRinRad']
+        if prop in ['z_gas']:
+            vals = sim.units.metallicityInSolar(mpb['SubhaloGasMetallicity'])
 
-    if prop in ['size_stars']:
-        vals = mpb['SubhaloHalfmassRadType'][:,sim.ptNum('stars')]
-        vals = sim.units.codeLengthToComovingKpc(vals)
-        print(f'Note: [{sim}] quantMPB [{prop}] in comoving units.')
+        if prop in ['z_gas_sfr','z_gas_sfrwt']:
+            vals = sim.units.metallicityInSolar(mpb['SubhaloGasMetallicitySfrWeighted'])
 
-    if prop in ['size_gas']:
-        vals = mpb['SubhaloHalfmassRadType'][:,sim.ptNum('gas')]
-        vals = sim.units.codeLengthToComovingKpc(vals)
-        print(f'Note: [{sim}] quantMPB [{prop}] in comoving units.')
+        # unchanged fields from the tree
+        if prop in mpb.keys():
+            vals = mpb[prop]
 
-    if prop in ['Z_stars']:
-        vals = sim.units.metallicityInSolar(mpb['SubhaloStarMetallicity'])
+        if vals is None:
+            # unrecognized quant name, likely custom/auxcat-type, need to compute separately for each snap
+            print(f'Computing custom MPB quant [{quant}] for [{sim}].')
+            sim_loc = sim.copy()
 
-    if prop in ['Z_gas']:
-        vals = sim.units.metallicityInSolar(mpb['SubhaloGasMetallicity'])
+            for i, tree_ind in enumerate(inds):
+                sim_loc.setSnap(mpb['SnapNum'][tree_ind])
 
-    if prop in ['Z_gas_sfr']:
-        vals = sim.units.metallicityInSolar(mpb['SubhaloGasMetallicitySfrWeighted'])
+                vals_loc = sim_loc.subhalos(quant)
+                val_loc = vals_loc[mpb['SubfindID'][tree_ind]]
 
-    # take log?
-    if '_log' in quant and log:
-        log = False
-        vals = logZeroNaN(vals)
+                if i == 0:
+                    vals = np.zeros(mpb['SnapNum'].size, dtype=vals_loc.dtype)
+                vals[tree_ind] = val_loc
+
+        # smooth?
+        if smooth:
+            from ..plot.config import sKn, sKo
+
+            # 3-vectors
+            if vals.ndim > 1:
+                if prop in ['pos','subhalopos']:
+                    # positions with box-edge shifting
+                    posShiftInds = sim.correctPeriodicPosBoxWrap(mpb['SubhaloPos'])
+
+                for i in range(vals.shape[1]):
+                    vals[:,i] = savgol_filter(vals[:,i], sKn, sKo)
+
+                    if prop in ['pos','subhalopos'] and i in posShiftInds:
+                        assert 0 # old code, should be checked
+                        unShift = np.zeros( len(mpb['Redshift']), dtype='float32' )
+                        unShift[posShiftInds[i]] = sim.boxSize
+                        vals[:,i] = vals[:,i] + unShift
+            else:
+                vals = savgol_filter(vals, sKn, sKo)
+
+        # take redshift subset
+        vals = vals[inds]
+
+        # take log?
+        if '_log' in quant and log:
+            log = False
+            vals = logZeroNaN(vals)
+
+        # attach
+        r[quant] = vals
 
     # return
-    return vals #, label, minMax, log
-
-def debugPlot():
-    """ Testing MPB loading and smoothing. """
-    from ..util import simParams
-    import matplotlib.pyplot as plt
-    from ..plot.cosmoGeneral import addRedshiftAgeAxes
-
-    # config
-    #sP = simParams(res=455, run='tng', redshift=0.0) 
-    sP = simParams(res=11, run='zooms', redshift=2.0, hInd=0)
-
-    # load
-    mpb = mpbSmoothedProperties(sP, sP.zoomSubhaloID)
-
-    label = 'savgol n='+str(mpb['sm']['sKn']) + ' o=' + str(mpb['sm']['sKo'])
-
-    if 1:
-        # PLOT 1: position
-        fig, axs = plt.subplots(1, 3, figsize=(20,10))
-
-        for i in range(3):
-            addRedshiftAgeAxes(axs[i], sP, xlog=True)
-            axs[i].set_xlim([1.9,9.0])
-            axs[i].set_ylabel(['x','y','z'][i] + ' [ckpc/h]')
-
-            # plot original and smoothed x,y,z
-            axs[i].plot( mpb['Redshift'], mpb['SubhaloPos'][:,i], 'o', label='raw' )      
-            axs[i].plot( mpb['Redshift'], mpb['sm']['pos'][:,i], linestyle='-', label=label )
-
-            # fitting
-            #for deg in [3,7]:
-            #    pcoeffs = np.polyfit( mpb['Redshift'], mpb['SubhaloPos'][:,i], deg)
-            #    poly = np.poly1d(pcoeffs)
-            #    xx = np.linspace(2.0, 10.0, 400)
-            #    yy = poly(xx)
-            #    axs[i].plot( xx, yy, linestyle='-', label='poly '+str(deg))
-
-        axs[0].legend(loc='upper right')
-        fig.savefig('tree_debug_pos_'+str(sP.res)+'.pdf')
-        plt.close(fig)
-
-    if 1:
-        # PLOT 2: vel
-        fig, axs = plt.subplots(1, 3, figsize=(20,10))
-
-        for i in range(3):
-            addRedshiftAgeAxes(axs[i], sP, xlog=True)
-            axs[i].set_xlim([1.9,9.0])
-            axs[i].set_ylabel(['vel_x','vel_y','vel_z'][i] + ' [km/s]')
-
-            # plot original and smoothed v_x,v_y,v_z
-            axs[i].plot( mpb['Redshift'], mpb['SubhaloVel'][:,i], 'o', label='raw orig' ) 
-            #axs[i].plot( mpb['Redshift'], mpb['sm']['vel_moved'][:,i], 'o', color='red', label='raw moved' )      
-            axs[i].plot( mpb['Redshift'], mpb['sm']['vel'][:,i], linestyle='-', label=label )
-
-            # sigma bounds
-            #axs[i].plot( mpb['Redshift'], mpb['SubhaloVel'][:,i]+2*mpb['sm']['v_sigma'][:,i], 
-            #    linestyle=':', label='p2 sigma' )
-            #axs[i].plot( mpb['Redshift'], mpb['SubhaloVel'][:,i]-2*mpb['sm']['v_sigma'][:,i], 
-            #    linestyle=':', label='n2 sigma' )
-
-        axs[0].legend(loc='upper right')
-        fig.savefig('tree_debug_vel_'+str(sP.res)+'.pdf')
-        plt.close(fig)
-
-    if 1:
-        # PLOT 3: other properties
-        fig, axs = plt.subplots(2, 2, figsize=(20,10))
-
-        # vir rad
-        addRedshiftAgeAxes(axs[0,0], sP, xlog=True)
-        axs[0,0].set_xlim([1.9,9.0])
-        axs[0,0].set_ylabel('Group_R_Crit200 [ckpc/h]')
-
-        axs[0,0].plot( mpb['Redshift'], mpb['Group_R_Crit200'], 'o', label='raw' )
-
-        yy2 = savgol_filter(mpb['Group_R_Crit200'],mpb['sm']['sKn'],mpb['sm']['sKo'])
-        axs[0,0].plot( mpb['Redshift'], yy2, linestyle='-', label=label )
-        axs[0,0].legend(loc='upper right')
-
-        # vir temp
-        addRedshiftAgeAxes(axs[1,0], sP, xlog=True)
-        axs[1,0].set_xlim([1.9,9.0])
-        axs[1,0].set_ylabel('Vir Temp [ log K ]')
-
-        axs[1,0].plot( mpb['Redshift'], mpb['Group_T_vir'], 'o', label='raw' )
-
-        yy2 = savgol_filter(mpb['Group_T_vir'],mpb['sm']['sKn'],mpb['sm']['sKo'])
-        axs[1,0].plot( mpb['Redshift'], yy2, linestyle='-', label=label )
-
-        # mass
-        addRedshiftAgeAxes(axs[0,1], sP, xlog=True)
-        axs[0,1].set_xlim([1.9,9.0])
-        axs[0,1].set_ylabel('Mass [ 10$^{10}$ Msun/h ]')
-
-        axs[0,1].plot( mpb['Redshift'], mpb['Group_M_Crit200'], 'o', label='raw' )
-
-        yy2 = savgol_filter(mpb['Group_M_Crit200'],mpb['sm']['sKn'],mpb['sm']['sKo'])
-        axs[0,1].plot( mpb['Redshift'], yy2, linestyle='-', label=label )
-
-        # vir entropy
-        addRedshiftAgeAxes(axs[1,1], sP, xlog=True)
-        axs[1,1].set_xlim([1.9,9.0])
-        axs[1,1].set_ylabel('Vir Entropy [ log cgs ]')
-
-        axs[1,1].plot( mpb['Redshift'], mpb['Group_S_vir'], 'o', label='raw' )
-
-        yy2 = savgol_filter(mpb['Group_S_vir'],mpb['sm']['sKn'],mpb['sm']['sKo'])
-        axs[1,1].plot( mpb['Redshift'], yy2, linestyle='-', label=label )
-
-        # finish
-        fig.savefig('tree_debug_props_'+str(sP.res)+'.pdf')
-        plt.close(fig)    
+    return r
 
 @jit(nopython=True, nogil=True, cache=True)
 def _helper_plot_tree(SnapNum,SubhaloID,DescendantID,FirstProgenitorID):
@@ -573,7 +458,7 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
     from ..plot.config import figsize
     from ..util.helper import loadColorTable, logZeroNaN
     import matplotlib.pyplot as plt
-    from matplotlib.colors import Normalize, LogNorm
+    from matplotlib.colors import Normalize
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
     from matplotlib.colorbar import ColorbarBase
     from matplotlib.collections import LineCollection

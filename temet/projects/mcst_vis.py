@@ -206,33 +206,6 @@ def vis_movie(sP, haloID=0, frame=None):
 
 # -------------------------------------------------------------------------------------------------
 
-def diagnostic_vis_timebins(sP):
-    """ Visualize spatial distribution of gas timebins across the box. """
-    nPixels    = 500
-    axes       = [0,1] # x,y
-    labelZ     = True
-    labelScale = True
-    labelSim   = True
-    plotHalos  = 100
-    method     = 'histo_minIP' # sphMap, sphMap_minIP, sphMap_maxIP
-    zoomFac    = 0.01 #0.15 # fraction of box-size
-    sliceFac   = zoomFac # same projection depth as zoom
-    minmax     = [40, 47]
-    #ctName     = 'plasma_r'
-
-    absCenPos  = sP.subhalo(sP.zoomSubhaloID)['SubhaloPos']
-    relCenPos  = None
-
-    numColors = minmax[1] - minmax[0] # discrete colorbar
-    panels = [{'partType':'gas', 'partField':'TimebinHydro', 'valMinMax':minmax}]
-
-    class plotConfig:
-        plotStyle  = 'open'
-        #rasterPx   = 1000
-        saveFilename = './boxImage_%s_%s.png' % (sP.simName,panels[0]['partField'])
-
-    renderBox(panels, plotConfig, locals())
-
 def vis_highres_region(sP, partType='dm'):
     """ Visualize large-scale region that bounds all high-res DM. """
     # determine bounding box (always use high-res DM particles)

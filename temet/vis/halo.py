@@ -8,7 +8,6 @@ from copy import deepcopy
 from getpass import getuser
 
 from ..vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac, gridBox
-from ..cosmo.mergertree import mpbSmoothedProperties
 from ..util.rotation import meanAngMomVector, rotationMatrixFromVec, momentOfInertiaTensor, \
   rotationMatricesFromInertiaTensor, rotationMatrixFromAngleDirection
 from ..util.simParams import simParams
@@ -432,7 +431,7 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
             p['sP'].subhaloInd = p['subhaloInd']
 
         # load MPB once per panel
-        p['mpb'] = mpbSmoothedProperties(p['sP'], p['sP'].subhaloInd)
+        p['mpb'] = p['sP'].loadMPB(p['sP'].subhaloInd)
 
         if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]
 

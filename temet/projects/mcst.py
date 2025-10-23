@@ -6,6 +6,8 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
+from matplotlib.collections import LineCollection
+from matplotlib.colors import to_rgb
 from scipy.signal import savgol_filter
 from os.path import isfile
 
@@ -91,29 +93,6 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
     legend2 = ax.legend(handles, labels, loc=locs[1], ncols=np.min([4,len(variants)]))
     ax.add_artist(legend2)
 
-def _load_mpb_quants(sim, subhaloInd, quants, smooth=False):
-    """ Helper to load quantities from a tree MPB, for a single subhalo. """
-    # use merger tree MPB
-    r = {}
-
-    if 1:#try:
-        mpb = sim.loadMPB(subhaloInd)
-        for quant in quants:
-            r[quant] = sim.quantMPB(mpb, quant)
-            if smooth:
-                r[quant] = savgol_filter(r[quant], sKn, sKo)
-
-        r['z'] = sim.snapNumToRedshift(mpb['SnapNum'])
-    else: #except:
-        print('No merger tree and/or offsets for [%s], skipping.' % sim)
-
-        for quant in quants:
-            r[quant] = np.nan
-
-        r['z'] = np.nan
-
-    return r
-
 def _zoomSubhaloIDsToPlot(sim, verbose=False):
     """ Define a common rule for which subhalo(s) to plot for a given zoom run. """
     subhaloIDs = [sim.zoomSubhaloID]
@@ -149,7 +128,7 @@ def _zoomSubhaloIDsToPlot(sim, verbose=False):
     return subhaloIDs
 
 def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=False, vstng50=True, 
-                        tracks=False, f_pre=None, f_post=None):
+                        tracks=True, f_pre=None, f_post=None):
     """ Scatterplot between two quantities, optionally including time evolution tracks through this plane.
     Designed for comparison between many zoom runs, including the target subhalo(s) from each.
 
@@ -250,24 +229,21 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Fal
             if xval < xMinMax[0] or xval > xMinMax[1] or yval < yMinMax[0] or yval > yMinMax[1]:
                 print(f'Out of bounds in {sim.simName} {xQuant}={xval:.3f} {yQuant}={yval:.3f}')
 
-            marker_lim = None
+            marker_lim = False # None
             if np.isnan(yval) or yval < yMinMax[0]:
-                yval = yMinMax[0] + (yMinMax[1]-yMinMax[0])/25 * rng.uniform(0.6, 1.0)
+                yval = yMinMax[0] #+ (yMinMax[1]-yMinMax[0])/25 * rng.uniform(0.6, 1.0)
                 print(f' set [y] {yQuant}={yval:.3f} for visibility.')
-                marker_lim = 11 #CARETDOWNBASE #r'$\downarrow$'
+                marker_lim = True # 11 #CARETDOWNBASE #r'$\downarrow$'
             if np.isnan(xval) or xval < xMinMax[0]:
-                xval = xMinMax[0] + (xMinMax[1]-xMinMax[0])/25 * rng.uniform(0.6, 1.0)
+                xval = xMinMax[0] #+ (xMinMax[1]-xMinMax[0])/25 * rng.uniform(0.6, 1.0)
                 print(f' set [x] {xQuant}={xval:.3f} for visibility.')
-                marker_lim = 8 #CARETLEFTBASE #r'$\leftarrow$'
+                marker_lim = True # 8 #CARETLEFTBASE #r'$\leftarrow$'
                                             
             # color set by hInd
             c = colors[hInds.index(sim.hInd)]
 
             # marker set by variant
             marker = markers[variants.index(sim.variant) % len(markers)]
-
-            if marker_lim is not None:
-                marker = marker_lim
 
             # marker size set by resolution
             ms_loc = (sim.res - 10) * 2.5 + 4
@@ -279,14 +255,49 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Fal
                 style['fillstyle'] = 'none'
                 style['markeredgewidth'] = 2
 
-            l, = ax.plot(xval, yval, marker=marker, label='', **style)
+            clip = False if marker_lim else True
+
+            l, = ax.plot(xval, yval, marker=marker, clip_on=clip, label='', **style)
 
             if tracks:
-                # load
-                mpb = _load_mpb_quants(sim, sim.zoomSubhaloID, quants=[xQuant,yQuant], smooth=True)
+                # various criterion for how far back to go
+                max_z = 10.0
+                dz = 0.2
+                min_mstar = 4.5
 
-                # plot
-                ax.plot(mpb[xQuant], mpb[yQuant], '-', lw=lw_loc, color=l.get_color(), alpha=0.5)
+                # sample at a number of discrete redshifts
+                z_vals = np.arange(sim.redshift+dz, max_z, dz)
+
+                mpb = sim.quantMPB(sim.zoomSubhaloID, quants=[xQuant,yQuant], z_vals=z_vals)
+
+                x_track = mpb[xQuant]
+                y_track = mpb[yQuant]
+
+                if xLog: x_track = logZeroNaN(x_track)
+                if yLog: y_track = logZeroNaN(y_track)
+
+                if 'mstar' in yQuant:
+                    # for high-res runs, show only points above 100 star particles
+                    w = np.where(y_track >= min_mstar)[0]
+                    x_track = x_track[w]
+                    y_track = y_track[w]
+
+                if x_track.size == 0:
+                    continue
+
+                # variable alpha, decaying towards high redshift
+                alpha = np.linspace(0.6, 0.2, x_track.size)
+
+                # plot as series of markers
+                r, g, b = to_rgb(l.get_color())
+                xy_c = [[r,g,b,a] for a in alpha]
+                ax.scatter(x_track, y_track, marker=marker, color=xy_c, alpha=alpha, zorder=10)
+
+                # plot as line
+                #points = np.vstack((x_track, y_track)).T.reshape(-1, 1, 2)
+                #segments = np.hstack((points[:-1], points[1:]))
+                #lc = LineCollection(segments, array=alpha, color=l.get_color(), lw=lw_loc)
+                #line = ax.add_collection(lc)
 
     # halos from parent box: at the same redshift as the zooms?
     sim_parent = sims[0].sP_parent.copy()
@@ -319,16 +330,16 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Fal
         print(f'parent {sim_parent_load.simName} h{hInd} {subhaloInd = } {xQuant}={xval:.3f} {yQuant}={yval:.3f}')
 
         # time evolution tracks
-        if tracks:
-            mpb = _load_mpb_quants(sim_parent_load, subhaloInd, quants=[xQuant,yQuant], smooth=True)
-            ax.plot(mpb[xQuant], mpb[yQuant], '-', lw=1.5, color=l.get_color(), alpha=0.2)
+        if tracks and 0:
+            mpb = sim_parent_load.quantMPB(subhaloInd, quants=[xQuant,yQuant])
+            ax.plot(mpb[xQuant], mpb[yQuant], '-', lw=2, color=l.get_color(), alpha=0.3)
 
     # finish and save plot
     if f_post is not None:
         f_post(ax, sims)
 
     _add_legends(ax, hInds, res, variants, colors)
-    fig.savefig(f'mcst_{xQuant}-vs-{yQuant}_comp-{len(sims)}.pdf')
+    fig.savefig(f'mcst_{xQuant}-vs-{yQuant}_comp-{len(sims)}%s.pdf' % ('_notracks' if not tracks else ''))
     plt.close(fig)
 
 def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treebased=False):
@@ -516,9 +527,11 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
                     ax.plot([x,sim.redshift], [y,y], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=0.2)
             else:
                 # general case
-                mpb = _load_mpb_quants(sim, subhaloID, quants=[quant])
+                mpb = sim.quantMPB(subhaloID, quants=[quant])
+                vals = mpb[quant]
+                if valLog and not sfh_lin: vals = logZeroNaN(vals)
 
-                ax.plot(mpb['z'], mpb[quant], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha_loc)
+                ax.plot(mpb['z'], vals, ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha_loc)
 
     # galaxies from parent box
     vals, _, _, _ = sim_parent.simSubhaloQuantity(quant, clean, tight=True)
@@ -549,9 +562,9 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
             ax.plot(star_zform[w], star_mass[w], '-', lw=lw, color='#555', alpha=1.0, label=label)
         else:
             # general case
-            mpb = _load_mpb_quants(sim_parent, subhaloInd, quants=[quant])
-
-            ax.plot(mpb['z'], mpb[quant], ls=linestyle, lw=lw, color='#555', alpha=1.0, label=label)
+            pass
+            #mpb = sim_parent.quantMPB(subhaloInd, quants=[quant])
+            #ax.plot(mpb['z'], mpb[quant], ls=linestyle, lw=lw, color='#555', alpha=1.0, label=label)
 
     # finish and save plot
     _add_legends(ax, hInds, res, variants, colors, lineplot=True)
@@ -566,8 +579,8 @@ def smhm_relation(sims):
 
     xQuant = 'mhalo_200_log'
     yQuant = 'mstar2_log'
-    xlim = [6.3, 10.3]
-    ylim = [3.1, 8.0]
+    xlim = [7.3, 10.3]
+    ylim = [4.0, 8.0]
     
     # focus on low-mass end:
     #xlim = [5.5, 9.3]
@@ -585,7 +598,7 @@ def smhm_relation(sims):
         ax.plot(b19_um['haloMass'], b19_um['mstar_high'], ':', color='#bbb', lw=lw, alpha=0.8)
         #ax.fill_between(b19_um['haloMass'], b19_um['mstar_low'], b19_um['mstar_high'], color='#bbb', hatch='X', alpha=0.4)
 
-    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False, f_pre=_draw_data)
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
     
 def sfr_vs_mstar(sims, yQuant):
     """ Diagnostic plot of SFR vs Mstar including observational data. """
@@ -655,7 +668,7 @@ def sfr_vs_mstar(sims, yQuant):
             label = 'Popesso+23 z=%d' % redshift if i == 0 else ''
             ax.plot(xlim, np.log10(sfr), '--', color='#555', lw=lw, alpha=0.7, label=label)
 
-    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False, f_pre=_draw_data)
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
     
 def mbh_vs_mhalo(sims):
     """ Diagnostic plot of SMBH mass versus halo mass. """
@@ -692,7 +705,7 @@ def mbh_vs_mhalo(sims):
         mhalo_seed_tng = sim_parent.units.codeMassToLogMsun(MinFoFMassForNewSeed_TNG)
         ax.plot([mhalo_seed_tng,mhalo_seed_tng], [ylim[1],ylim[1]-0.1], '-', lw=lw, color='#444', alpha=0.4)
 
-    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False, f_pre=_draw_data)
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
 
 def sizes_vs_mstar(sims):
     """ Diagnostic plot of galaxy stellar size (half mass radius for now) versus stellar mass. """
@@ -757,7 +770,7 @@ def sizes_vs_mstar(sims):
 
         ax.errorbar(m24_mstar, m24_reff, yerr=m24_reff_err, fmt='D--', color='#555', alpha=0.5, label='Matharu+24 FRESCO (z=5)')
 
-    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False, f_pre=_draw_data)
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
 
 def gas_mzr(sims):
     """ Diagnostic plot of gas-phase mass-metallicity relation (MZR). """
@@ -811,7 +824,7 @@ def gas_mzr(sims):
 
         ax.plot(li22_mstar, li22_z, '-.', lw=lw, color='#999', alpha=1.0, label='Li+22 z=3.0 (B18)')
 
-    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False, f_pre=_draw_data)
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
 
 def stellar_mzr(sims):
     """ Diagnostic plot of stellar mass-metallicity relation (MZR). """
@@ -862,7 +875,7 @@ def stellar_mzr(sims):
 
         ax.plot(c21_mstar, c21_z, '-.', lw=lw, color='#999', alpha=1.0, label='Calabro+21 z=2.5')
 
-    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, tracks=False, f_pre=_draw_data)
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
 
 def phase_diagram(sim):
     """ Driver. """
@@ -874,8 +887,10 @@ def phase_diagram(sim):
     ylim = [1.0, 7.0]
     haloIDs = None #[0]
     qRestrictions = [['rad_rvir',0.0,5.0]] # within 5rvir only
-    qRestrictions.append(['mass',0.0,sim.targetGasMass*4]) # high-res only                     
+    qRestrictions.append(['highres_massfrac',0.5,1.0]) # high-res only
     clim = [-4.0, -0.2]
+
+    saveFilename = 'phase_%s_%s_%s_%03d.png' % (sim.simName, xQuant, yQuant, sim.snap)
     
     # MCS model: star formation threshold
     def _f_post(ax):
@@ -897,7 +912,7 @@ def phase_diagram(sim):
             ax.plot(xx, np.log10(temp), ls=[':','--'][i], color='black', lw=lw, alpha=0.7)
 
     plotPhaseSpace2D(sim, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs, qRestrictions=qRestrictions,
-        xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, f_post=_f_post)
+        xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, f_post=_f_post, saveFilename=saveFilename)
 
 def diagnostic_numhalos_uncontaminated(sims):
     """ Visualize number of non-contaminated halos vs redshift, and their contamination fractions. """
@@ -1218,7 +1233,8 @@ def blackhole_diagnostics_vs_time(sim):
         
         w = np.where(smbhs['mergers']['ids'] == smbh_id)[0]
         if len(w) > 0:
-            import pdb; pdb.set_trace() # todo
+            print(' NOTE: SMBH ID [{smbh_id}] involved in mergers, TODO.')
+            #import pdb; pdb.set_trace() # todo
 
     # make a multi-panel time series plot for each SMBH
     for smbh_id in smbhs.keys():
@@ -1546,7 +1562,7 @@ def paperPlots(a = False):
     # list of sims to include
     #variants = ['TNG','ST8','ST8e'] # TNG, ST5*, ST6, ST6b
     #res = [11, 12, 13, 14, 15] # [11, 12, 13, 14]
-    #hInds = [1242, 4182, 10677, 12688, 31619] # [1242, 4182, 10677, 12688, 31619]
+    #hInds = [1242, 4182, 10677, 12688, 31619]
     #redshift = 3.0
 
     # single run resolution series
@@ -1556,31 +1572,35 @@ def paperPlots(a = False):
     #redshift = 5.0
 
     # testing:
-    #variants = ['ST9','ST10','ST10b','ST10c','ST10d','ST10e','ST10f','ST10g','ST10h','ST10i','ST10j','ST10u1','ST10u2','ST10w1','ST10w2','ST10w3']
-    #variants = ['ST9','ST10','ST10j','ST10b2']
-    variants = ['ST12','ST13','ST14','ST14e'] #['ST11','ST11s','ST12']#'ST9','ST10j','ST11','ST11s']#,'TNG']
-    res = [14] #[14,15]#,15] #[13,14,15,16] #[12,13,14,15]
-    hInds = [219612,311384] #[23908,31619,73172,219612,311384,844537] # [1958,5072,15581,23908,31619,73172,219612,311384,844537]
+    variants = ['ST14'] # ST14m, ST14e
+    res = [15] # [14,15,16]
+    hInds = [219612,311384] #[5072,15581,23908,31619,73172,219612,311384,844537] # [1958,5072,15581,23908,31619,73172,219612,311384,844537]
     redshift = 5.5
 
     sims = _get_existing_sims(variants, res, hInds, redshift, all=False) # if False, only dz < 0.1 matches
 
     # contamination diagnostic printout (info only)
     #for sim in sims:
-    #    _ = _zoomSubhaloIDsToPlot(sim)
+    #    subIDs = _zoomSubhaloIDsToPlot(sim)
+    #    #for subID in subIDs:
+    #    #    subhalo = sim.subhalo(subID)
+    #    #    s = f' h[{subhalo["SubhaloGrNr"]}] sub[{subID:4d}] '
+    #    #    s += f'Re = {sim.units.codeLengthToPc(subhalo["SubhaloHalfmassRadType"][4]):.2f} pc, '
+    #    #    s += f'M_BH = {sim.units.codeMassToLogMsun(subhalo["SubhaloBHMass"])[0]:.2f}'
+    #    #    print(s)
 
     # examine last existing snapshot of each sim (info only)
-    for sim in sims:
-        ##sim.setSnap(sim.validSnapList()[-1]) # careful
-        bhs = sim.bhs(['BH_Mass','Masses','BH_CumEgyInjection_QM','BH_CumMassGrowth_QM','BH_MPB_CumEgyHigh'])
-        for i in range(bhs['count']):
-            s = f'{str(sim):<24} BH {i}:'
-            s += f'BH_Mass = {sim.units.codeMassToLogMsun(bhs["BH_Mass"][i])[0]:.3f}, '
-            s += f'Mass = {sim.units.codeMassToLogMsun(bhs["Masses"][i])[0]:.3f}, '
-            s += f'CumEgy = {sim.units.codeEnergyToErg(bhs["BH_CumEgyInjection_QM"][i]):.3e}, '
-            s += f'CumMass = {sim.units.codeMassToLogMsun(bhs["BH_CumMassGrowth_QM"][i])[0]:.3f}, '
-            s += f'CumEgy_MPB = {sim.units.codeEnergyToErg(bhs["BH_MPB_CumEgyHigh"][i]):.3e}'
-            print(s)
+    #for sim in sims:
+    #    ##sim.setSnap(sim.validSnapList()[-1]) # careful
+    #    bhs = sim.bhs(['BH_Mass','Masses','BH_CumEgyInjection_QM','BH_CumMassGrowth_QM','BH_MPB_CumEgyHigh'])
+    #    for i in range(bhs['count']):
+    #        s = f'{str(sim):<24} BH {i}:'
+    #        s += f'BH_Mass = {sim.units.codeMassToLogMsun(bhs["BH_Mass"][i])[0]:.3f}, '
+    #        s += f'Mass = {sim.units.codeMassToLogMsun(bhs["Masses"][i])[0]:.3f}, '
+    #        s += f'CumEgy = {sim.units.codeEnergyToErg(bhs["BH_CumEgyInjection_QM"][i]):.3e}, '
+    #        s += f'CumMass = {sim.units.codeMassToLogMsun(bhs["BH_CumMassGrowth_QM"][i])[0]:.3f}, '
+    #        s += f'CumEgy_MPB = {sim.units.codeEnergyToErg(bhs["BH_MPB_CumEgyHigh"][i]):.3e}'
+    #        print(s)
 
     # ------------
 
@@ -1627,8 +1647,12 @@ def paperPlots(a = False):
 
     # figure - sfr vs mstar relation
     if 0 or a:
-        for yQuant in ['sfr2_log','sfr_30pkpc_100myr','sfr_30pkpc_instant']:
+        for yQuant in ['sfr_100myr','sfr_10myr']:
             sfr_vs_mstar(sims, yQuant=yQuant)
+
+    # figure - sfr burstyness (10/100 myr ratios) vs redshift
+    if 0 or a:
+        twoQuantScatterplot(sims, xQuant='mstar2_log', yQuant='sfr_10_100_ratio', xlim=[4.7, 9.2], ylim=[-1.0, 2.0])
 
     # figure - smbh vs mhalo relation
     if 0 or a:
@@ -1650,11 +1674,12 @@ def paperPlots(a = False):
 
         for hInd in hInds:
             sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
-            # todo: Z_stars, Z_gas, Z_gas_sfr
-            quantVsRedshift(sims_loc, quant='mhalo_log', xlim=xlim, ylim=[6.5,9.0])
-            quantVsRedshift(sims_loc, quant='mgas2_log', xlim=xlim, ylim=[4.0,8.0])
-            quantVsRedshift(sims_loc, quant='size_stars_log', xlim=xlim, ylim=[-1.1, 0.5])
-            quantVsRedshift(sims_loc, quant='size_gas_log', xlim=xlim, ylim=[-0.6, 1.5])
+            # todo: Z_gas, Z_gas_sfr
+            #quantVsRedshift(sims_loc, quant='mhalo_log', xlim=xlim, ylim=[6.5,9.0])
+            #quantVsRedshift(sims_loc, quant='mgas2_log', xlim=xlim, ylim=[4.0,8.0])
+            #quantVsRedshift(sims_loc, quant='size_stars_log', xlim=xlim, ylim=[-1.1, 0.5])
+            #quantVsRedshift(sims_loc, quant='size_gas_log', xlim=xlim, ylim=[-0.6, 1.5])
+            quantVsRedshift(sims_loc, quant='Z_stars', xlim=xlim, ylim=[-2.1, 0.0])
 
     # figure - stellar sizes
     if 0 or a:
@@ -1690,15 +1715,21 @@ def paperPlots(a = False):
         haloIDs = [0] * len(sims) # assume first
 
         ptType = 'gas'
-        ptProp = 'numdens'
-        ylim = [-4.5, 4.0]
-        ylog = True
-        #ptProp = 'menc_vesc'
-        #ylim = [0.0, 1.8]
-        #ylog = False
+
+        #ptProp = 'numdens'
+        #ylim = [-4.5, 4.0]
+        #ylog = True
+
+        #ptProp = 'temp'
+        #ylim = [0.0, 6.0]
+        #ylog = True
+
+        ptProp = 'menc_vesc'
+        ylim = [0.0, 1.8]
+        ylog = False
 
         plotSingleRadialProfile(sims, ptType=ptType, ptProperty=ptProp, haloIDs=haloIDs, 
-            xlog=True, xlim=[-2.0, 1.5], ylim=ylim, scope='global') # 'global'
+            xlog=True, xlim=[-2.0, 1.5], ylim=ylim, scope='fof' if ptProp == 'menc_vesc' else 'global')
 
     # black hole time evolution
     if 0 or a:
@@ -1716,10 +1747,6 @@ def paperPlots(a = False):
     if 0 or a:
         from ..cosmo.perf import plotCpuTimes
         plotCpuTimes(sims, xlim=[0.0, 0.25])
-
-    # diagnostic: timebin spatial distribution
-    if 0:
-        diagnostic_vis_timebins(sims[0])
 
     # diagnostic: snapshot spacing
     if 0 or a:
@@ -1741,10 +1768,11 @@ def paperPlots(a = False):
 
     # ------------
 
-    # movie: phase space diagram (note: must change save name from .pdf to .png manually)
+    # movie: phase space diagram
     if 0:
-        for snap in range(86):
-            sim = simParams(run='structures', hInd=4182, res=14, variant='ST8', snap=snap)
+        sim = sims[0].copy()
+        for snap in sim.validSnapList():
+            sim.setSnap(snap)
             phase_diagram(sim)
 
     # movie: galaxy-scale gas + stars vis
@@ -1758,8 +1786,8 @@ def paperPlots(a = False):
 
     # movie: high-res region
     if 0 or a:
-        for sim in sims:
-            for snap in sim.validSnapList():
-                sim.setSnap(snap)
-                vis_highres_region(sim, partType='gas')
-                vis_highres_region(sim, partType='dm')   
+        sim = sims[0].copy()
+        for snap in sim.validSnapList():
+            sim.setSnap(snap)
+            vis_highres_region(sim, partType='gas')
+            vis_highres_region(sim, partType='dm')   

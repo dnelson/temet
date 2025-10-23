@@ -14,7 +14,7 @@ except:
     from numpy import argsort as p_argsort # fallback
 
 from ..util.helper import iterable, nUnique, bincount, reportMemory
-from ..cosmo.mergertree import mpbSmoothedProperties, loadTreeFieldnames
+from ..cosmo.mergertree import loadTreeFieldnames
 from ..cosmo.util import inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
 
 debug = False # enable expensive debug consistency checks and verbose output
@@ -928,10 +928,10 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     if len(mpbInd) == 0:
                         raise Exception('Error, snap ['+str(snap)+'] not found in mpb.')
 
-                    haloCenter = mpb['sm']['pos'][mpbInd[0],:]
-                    haloVel    = mpb['sm']['vel'][mpbInd[0],:]
-                    haloVirRad = mpb['sm']['rvir'][mpbInd[0]]
-                    haloVirVel = mpb['sm']['vvir'][mpbInd[0]]
+                    haloCenter = mpb['SubhaloPos'][mpbInd[0],:]
+                    haloVel    = mpb['SubhaloVel'][mpbInd[0],:]
+                    haloVirRad = mpb['r_vir'][mpbInd[0]]
+                    haloVirVel = mpb['v_vir'][mpbInd[0]]
                 else:
                     # for global catalogs (tracers spanning many/all halos) map groupcat values at 
                     # this snapshot into one [halo pos,vel,virrad,virvel] per tracer
@@ -1150,7 +1150,7 @@ def subhaloTracersTimeEvo(sP, subhaloID, fields, snapStep=1, toRedshift=10.0, fu
         trIDs = subhaloTracerChildren(sP, subhaloID=subhaloID)
 
     # get smoothed MPB tracks since some properties are relative to the parent halo MPB values
-    mpb = mpbSmoothedProperties(sP, subhaloID)
+    mpb = sP.quantMPB(subhaloID, quants=['SubhaloPos','SubhaloVel','r_vir','v_vir'], smooth=True)
 
     # follow tracer and tracer parent properties (one at a time and save) from sP.snap back to snap=0
     # note, could simply eliminate this whole loop and hand all of trFields+parFields to tracersTimeEvo()

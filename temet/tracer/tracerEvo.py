@@ -9,8 +9,6 @@ from collections import OrderedDict
 
 from ..tracer.tracerMC import subhaloTracersTimeEvo, subhalosTracersTimeEvo, \
   globalAllTracersTimeEvo, globalTracerMPBMap, defParPartTypes
-from ..cosmo.mergertree import mpbSmoothedProperties
-from ..cosmo.util import redshiftToSnapNum
 from ..util.helper import pSplitRange
 
 # integer flags for accretion modes
@@ -213,11 +211,11 @@ def accTime(sP, snapStep=1, rVirFac=1.0, pSplit=None, indRangeLoad=None):
     # check for existence
     if sP.isZoom:
         saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_acc_time_%d.hdf5' % \
-          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep,rVirFac*100)
+          (sP.zoomSubhaloID,True,sP.snap,sP.redshiftToSnapNum(maxRedshift),snapStep,rVirFac*100)
     else:
         splitStr = '' if pSplit is None else '_split-%d-%d'
         saveFilenameBase = sP.derivPath + '/trTimeEvo/acc_time_snap_%d-%d-%d_r%d%s.hdf5' % \
-          (sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep,rVirFac*100,splitStr)
+          (sP.snap,sP.redshiftToSnapNum(maxRedshift),snapStep,rVirFac*100,splitStr)
         saveFilename = saveFilenameBase
         if pSplit is not None: saveFilename = saveFilename % (pSplit[0],pSplit[1])
 
@@ -377,11 +375,11 @@ def accMode(sP, snapStep=1, pSplit=None, indRangeLoad=None):
     # check for existence
     if sP.isZoom:
         saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_acc_mode.hdf5' % \
-          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep)
+          (sP.zoomSubhaloID,True,sP.snap,sP.redshiftToSnapNum(maxRedshift),snapStep)
     else:
         splitStr = '' if pSplit is None else '_split-%d-%d'
         saveFilenameBase = sP.derivPath + '/trTimeEvo/acc_mode_s%d-%d-%d%s.hdf5' % \
-          (sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep,splitStr)
+          (sP.snap,sP.redshiftToSnapNum(maxRedshift),snapStep,splitStr)
         saveFilename = saveFilenameBase
         if pSplit is not None: saveFilename = saveFilename % (pSplit[0],pSplit[1])
 
@@ -437,7 +435,7 @@ def accMode(sP, snapStep=1, pSplit=None, indRangeLoad=None):
     data_snaps_min = data['snaps'].min()
 
     if sP.isZoom:
-        mpb = mpbSmoothedProperties(sP, sP.zoomSubhaloID)
+        mpb = sP.loadMPB(sP.zoomSubhaloID)
     else:
         if pSplit is not None:
             # load the subset of the tracer IDs we are working with and obtain only their MPBs
@@ -598,10 +596,10 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
     # check for existence
     if sP.isZoom:
         saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_%s_%s.hdf5' % \
-          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep,fieldName,extType)
+          (sP.zoomSubhaloID,True,sP.snap,sP.redshiftToSnapNum(maxRedshift),snapStep,fieldName,extType)
     else:
         saveFilename = sP.derivPath + '/trTimeEvo/%s_%s_snap_%d-%s-%d.hdf5' % \
-          (fieldName,extType,sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep)
+          (fieldName,extType,sP.snap,sP.redshiftToSnapNum(maxRedshift),snapStep)
 
     # load pre-existing
     if isfile(saveFilename):
@@ -732,7 +730,7 @@ def mpbValsAtRedshifts(sP, valName, redshifts, snapStep=1):
 
     # TODO: maybe whole function is divergent for sP.isZoom or not, split
     if sP.isZoom:
-        mpb = mpbSmoothedProperties(sP, sP.zoomSubhaloID, extraFields=valName)
+        mpb = sP.quantMPB(sP.zoomSubhaloID, valName, smooth=True)
     else:
         mpbGlobal = globalTracerMPBMap(sP, halos=True, retMPBs=True, extraFields=valName)
 
@@ -757,13 +755,9 @@ def mpbValsAtRedshifts(sP, valName, redshifts, snapStep=1):
         mpbIndexMap.fill(-1)
         mpbIndexMap[ mpb['SnapNum'] ] = np.arange(mpb['SnapNum'].max())
 
-    # pull out either smoothed value or raw field straight from trees
-    if valName in mpb['sm'].keys():
-        data['val'] = mpb['sm'][valName]
-    if valName in mpb.keys():
-        data['val'] = mpb[valName]
+    # pull out field straight from trees
+    data['val'] = mpb[valName]
 
-    assert 'val' in data
     assert data['val'].shape[0] == mpb['Redshift'].shape[0]
     assert data['val'].shape[0] == mpb['SnapNum'].shape[0]
 

@@ -651,7 +651,7 @@ def sf_sn_details(sim, overwrite=False):
         r = subprocess.run('cat sn_details_*.txt > sn_details.txt', cwd=path + 'sn_details/', shell=True)
 
     # clean: only unique entries (this is star formation, so just one entry per star id)
-    def _clean_sort_and_save(dict_in, unique_keys, name=None, sort_inds=None):
+    def _clean_sort_and_save(dict_in, unique_keys, name):
         """ Clean dictionary to only unique entries based on unique_keys, sort by time, and save. """
         dict_out = {}
         unique_ids, unique_inds = np.unique(unique_keys, return_index=True)
@@ -665,28 +665,23 @@ def sf_sn_details(sim, overwrite=False):
             dict_out = dict_in
 
         # sort by time (unless sort input explicitly)
-        if sort_inds is None:
-            sort_inds = np.argsort(dict_out['Time'])
+        sort_inds = np.argsort(dict_out['Time'])
         for key in dict_out.keys():
             dict_out[key] = dict_out[key][sort_inds]
         
-        if 'pos0' in dict_out:
-            dict_out['Coordinates'] = np.vstack((dict_out['pos0'], dict_out['pos1'], dict_out['pos2'])).T
-        if 'vel0' in dict_out:
-            dict_out['Velocities'] = np.vstack((dict_out['vel0'], dict_out['vel1'], dict_out['vel2'])).T
+        dict_out['Coordinates'] = np.vstack((dict_out['pos0'], dict_out['pos1'], dict_out['pos2'])).T
+        dict_out['Velocities'] = np.vstack((dict_out['vel0'], dict_out['vel1'], dict_out['vel2'])).T
         for key in ['pos0','pos1','pos2','vel0','vel1','vel2']:
-            if key in dict_out:
-                del dict_out[key]
+            del dict_out[key]
 
         # save
-        if name is not None:
-            with h5py.File(cachefile[name],'w') as f:
-                for key in dict_out:
-                    f[key] = dict_out[key]
+        with h5py.File(cachefile[name],'w') as f:
+            for key in dict_out:
+                f[key] = dict_out[key]
 
-            print(f'Saved [{cachefile[name]}].')
+        print(f'Saved [{cachefile[name]}].')
 
-        return dict_out, sort_inds
+        return dict_out
 
     # load sf_details, columns:
     # thistask tistep num time pos0 pos1 pos2 vel0 vel1 vel2 dens temp metal mass initialsolomass 0 0
@@ -699,7 +694,10 @@ def sf_sn_details(sim, overwrite=False):
 
     # restrict to unique entries (must do this independently for sf_details and sf_details_ids since duplicates can differ)
     sf_keys = ['%d-%d-%d' % (sf['task'][i],sf['tistep'][i],sf['num'][i]) for i in range(sf['task'].size)]
-    sf, sort_inds = _clean_sort_and_save(sf, sf_keys)
+
+    _, unique_inds = np.unique(sf_keys, return_index=True)
+    for key in list(sf.keys()):
+        sf[key] = sf[key][unique_inds]
 
     # load sf_details_ids, columns: task tistep index id
     sf_ids_columns = ['task','tistep','index','id']
@@ -707,18 +705,26 @@ def sf_sn_details(sim, overwrite=False):
     sf_ids = {col: sf_ids_data[:,i] for i, col in enumerate(sf_ids_columns)}
 
     sf_ids_keys = ['%d-%d-%d' % (sf_ids['task'][i],sf_ids['tistep'][i],sf_ids['index'][i]) for i in range(sf_ids['task'].size)]
-    sf_ids, _ = _clean_sort_and_save(sf_ids, sf_ids_keys, sort_inds=sort_inds)
+
+    _, unique_inds = np.unique(sf_ids_keys, return_index=True)
+    for key in list(sf_ids.keys()):
+        sf_ids[key] = sf_ids[key][unique_inds]
 
     # combine sf_details and sf_details_ids
-    assert sf['task'].size == sf_ids['task'].size
-    for i in range(sf['task'].size):
-        assert sf['task'][i] == sf_ids['task'][i]
-        assert sf['tistep'][i] == sf_ids['tistep'][i]
-        assert sf['num'][i] <= sf_ids['index'][i]
+    if sf['task'].size == sf_ids['task'].size:
+        for i in range(sf['task'].size):
+            assert sf['task'][i] == sf_ids['task'][i]
+            assert sf['tistep'][i] == sf_ids['tistep'][i]
+            assert sf['num'][i] <= sf_ids['index'][i]
 
-    sf['id'] = sf_ids['id']
+        sf['id'] = sf_ids['id']
 
-    stars, _ = _clean_sort_and_save(sf, sf['id'], 'sf')
+        stars = _clean_sort_and_save(sf, sf['id'], 'sf')
+    else:
+        print('WARNING: sf_details and sf_details_ids have different lengths! Cannot combine. Skipping IDs.')
+        sf['id'] = np.zeros(sf['task'].size, dtype='int32') - 1
+        sf_keys = np.arange(sf['task'].size)
+        stars = _clean_sort_and_save(sf, sf_keys, 'sf')
 
     # load sn_details, columns:
     # id time pos0 pos1 pos2 vel0 vel1 vel2 dens temp metal mass_out energy_out age local_flag
@@ -733,7 +739,7 @@ def sf_sn_details(sim, overwrite=False):
 
     keys = ['%s-%s' % (id,time) for id,time in zip(sn['id'], sn['Time'])]
 
-    supernoave, _ = _clean_sort_and_save(sn, keys, 'sn')
+    supernoave = _clean_sort_and_save(sn, keys, 'sn')
 
     # delete decompressed files
     if decompressed:

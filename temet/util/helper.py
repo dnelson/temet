@@ -12,6 +12,8 @@ from scipy.optimize import leastsq, least_squares
 from scipy.ndimage.filters import gaussian_filter
 from scipy.stats import binned_statistic
 from numba import jit
+from inspect import getsource
+from hashlib import sha256
 
 # --- root path (e.g. '/home/username/temet/temet/') ----
 from os.path import dirname, abspath
@@ -179,14 +181,28 @@ def cache(_func=None, *, overwrite=False):
                     sim = arg
             assert sim is not None # should be one, our path is sP-dependent
 
-            if len(args) > 1 or len(kwargs) > 0:
-                # args and kwargs are not empty, so we can't cache
-                print(f'Function [{func.__name__}] has additional arguments, not caching.')
-                return func(*args, **kwargs)
-
             cachefile = sim.cachePath + f'f_{func.__name__}.hdf5'
-            # todo: cachefile name can include hash that depends on args and source code of func
-            # or this hash can be within the file, and used to invalidate the cache and overwrite
+
+            # cachefile name includes hash that depends on args and source code of func
+            # (or this hash can be within the file, and used to invalidate the cache and overwrite)
+            # unless the function has only a single argument that is a simParams object
+            if len(args) > 0 or len(kwargs) > 0 and not (len(args) == 1 and isinstance(args[0], simParams)):
+                # old: args and kwargs are not empty, so we can't cache
+                #print(f'Function [{func.__name__}] has additional arguments, not caching.')
+                #return func(*args, **kwargs)
+
+                # get function source (note: includes decorator line(s), comments, and so on)
+                hashstr = getsource(func)
+
+                # append args and kwargs as string pairs
+                for arg in args:
+                    hashstr += str(arg) + ';'
+                for key in sorted(kwargs.keys()):
+                    hashstr += key + '=' + str(kwargs[key]) + ';'
+
+                hashval = sha256(hashstr.encode('utf-8')).hexdigest()[::4]
+
+                cachefile = cachefile.replace(".hdf5", f'_{hashval}.hdf5')
 
             if isfile(cachefile) and not overwrite:
                 # load cached

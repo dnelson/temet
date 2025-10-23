@@ -613,6 +613,8 @@ fieldComputeFunctionMapping = \
    # star formation rates
    'Subhalo_StellarMassFormed_10myr': \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='initialmass',op='sum',rad=None,ptRestrictions={'stellar_age':['lt',0.01]}),
+   'Subhalo_StellarMassFormed_100myr': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='initialmass',op='sum',rad=None,ptRestrictions={'stellar_age':['lt',0.1]}),
    'Subhalo_StellarMassFormed_10myr_30pkpc': \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='initialmass',op='sum',rad=30.0,ptRestrictions={'stellar_age':['lt',0.01]}),
    'Subhalo_StellarMassFormed_50myr_30pkpc': \

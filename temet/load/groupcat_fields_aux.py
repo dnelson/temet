@@ -296,10 +296,43 @@ def sfr_10myr(sim, partType, field, args):
     
     return vals
 
-sfr_10myr.label = r'$\rm{SFR_{sub,10Myr}}$'
+sfr_10myr.label = r'$\rm{SFR_{10Myr}}$'
 sfr_10myr.units = r'$\rm{M_{sun}\, yr^{-1}}$'
 sfr_10myr.limits = [-2.5, 1.0]
 sfr_10myr.log = True
+
+@catalog_field
+def sfr_100myr(sim, partType, field, args):
+    """ Star formation rate (full subhalo) averaged over the past 100 Myr. """
+    acField = 'Subhalo_StellarMassFormed_100myr'
+
+    dt_yr = 1e6 * 100 # 10 Myr
+
+    ac = sim.auxCat(fields=[acField])
+    vals = sim.units.codeMassToMsun(ac[acField]) / dt_yr # msun/yr
+    
+    return vals
+
+sfr_100myr.label = r'$\rm{SFR_{100Myr}}$'
+sfr_100myr.units = r'$\rm{M_{sun}\, yr^{-1}}$'
+sfr_100myr.limits = [-2.5, 1.0]
+sfr_100myr.log = True
+
+@catalog_field(alias='sfr_10_100')
+def sfr_10_100_ratio(sim, partType, field, args):
+    """ Ratio of SFR_10Myr / SFR_100Myr (full subhalo) as a burstyness indicator. """
+    sfr_10 = sim.subhalos('sfr_10myr')
+    sfr_100 = sim.subhalos('sfr_100myr')
+
+    with np.errstate(invalid='ignore'):
+        ratio = sfr_10 / sfr_100
+        
+    return ratio
+
+sfr_10_100_ratio.label = r'$\rm{SFR_{10Myr}}$ / $\rm{SFR_{100Myr}}$'
+sfr_10_100_ratio.units = r'' # dimensionless
+sfr_10_100_ratio.limits = [-1.0, 4.0]
+sfr_10_100_ratio.log = True
 
 # ---------------------------- auxcat: gas observables --------------------------------------------
 

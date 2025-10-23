@@ -239,7 +239,8 @@ def _load_all_halos(sP, partType, partField, haloIDs, GroupLenType=None):
 def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloIDs=None, 
                      xlim=None, ylim=None, clim=None, contours=None, contourQuant=None, normColMax=False, hideBelow=False, 
                      ctName='viridis', colorEmpty=False, smoothSigma=0.0, nBins=None, qRestrictions=None, median=False, 
-                     normContourQuantColMax=False, addHistX=False, addHistY=False, colorbar=True, f_pre=None, f_post=None, pdf=None):
+                     normContourQuantColMax=False, addHistX=False, addHistY=False, colorbar=True, f_pre=None, f_post=None, 
+                     saveFilename=None, pdf=None):
     """ Plot a 2D phase space plot (arbitrary values on x/y axes), for a list of halos, or for an entire box 
     (if haloIDs is None). weights is a list of the gas properties to weight the 2D histogram by, 
     if more than one, a horizontal multi-panel plot will be made with a single colorbar. Or, if meancolors is 
@@ -592,10 +593,13 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     if pdf is not None:
         pdf.savefig(facecolor=fig.get_facecolor())
     else:
-        fig.savefig('phase2d_%s_%d_%s_x-%s_y-%s_wt-%s_%s.pdf' % \
+        # note: saveFilename could be an in-memory buffer
+        if saveFilename is None:
+            saveFilename = 'phase2d_%s_%d_%s_x-%s_y-%s_wt-%s_%s.pdf' % \
             (sP.simName,sP.snap,partType,xQuant,yQuant,
             "-".join([w.replace(" ","") for w in weights]),
-            "nh%d" % len(haloIDs) if haloIDs is not None else 'fullbox') )
+            "nh%d" % len(haloIDs) if haloIDs is not None else 'fullbox')
+        fig.savefig(saveFilename)
     plt.close(fig)
 
 def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant='temp', 
