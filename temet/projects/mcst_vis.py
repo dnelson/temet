@@ -58,6 +58,51 @@ def vis_single_galaxy(sP, haloID=0):
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
+def vis_gallery_galaxy(sims, conf=0, haloID=0):
+    """ Visualization: gallery of images of galaxies (one per run). """
+    rVirFracs  = [1.0]
+    fracsType  = 'rHalfMassStars'
+    nPixels    = [960,960]
+    sizeType   = 'kpc'
+    labelSim   = True
+    labelHalo  = 'mhalo,mstar'
+    labelZ     = True
+    labelScale = 'physical'
+    relCoords  = True
+    axes = [0,1]   
+
+    # panels (can vary hInd, variant, res)
+    if conf == 0:
+        partType = 'gas'
+        partField = 'coldens_msunkpc2' # 'HI'
+        valMinMax = [6.0,8.5]
+
+    if conf == 1:
+        partType = 'stars'
+        partField = 'stellarComp'
+        valMinMax = None
+
+    panels = []
+
+    for sim in sims:
+        # face-on + edge-on pairs
+        sub_ind = sim.halo(haloID)['GroupFirstSub']
+        size_loc = 1.0 if sim.hInd > 20000 else 5.0
+
+        panels.append({'sP':sim, 'subhaloInd':sub_ind, 'rotation':'face-on', 'size':size_loc})
+
+        #panels.append({'sP':sim, 'subhaloInd':sub_ind, 'rotation':'edge-on', 'size':size_loc, 'nPixels':[960,240], 
+        #                'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False})
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = 1000
+        colorbars    = True
+        fontsize     = 32
+        saveFilename = 'gallery_galaxy_conf%d_%d.pdf' % (conf,len(sims))
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
 def vis_single_halo(sP, haloID=0, size=3.5):
     """ Visualization: single image of a halo.  """
     rVirFracs  = [1.0]

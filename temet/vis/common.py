@@ -3281,7 +3281,7 @@ def renderMultiPanel(panels, conf):
             heightFac /= (conf.rasterPx[0]/850) # todo: does this make sense for vector output?
 
             # disable for subbox_movie_tng300fof0_4x2():
-            #heightFac += 0.002*(conf.fontsize-min_fontsize) # larger for larger fonts, and vice versa (needs tuning)
+            heightFac += 0.02*(conf.fontsize-40) # larger for larger fonts, and vice versa (needs tuning)
 
             if nRows == 1:
                 heightFac /= aspect # increase
@@ -3328,7 +3328,7 @@ def renderMultiPanel(panels, conf):
                 field_counts[key] += (panel['valMinMax'] is None) # auto
             
             for k,v in field_counts.items():
-                if v > 1:
+                if v > 1 and 'stellarComp' not in k:
                     print(f'WARNING: [{k}] has multiple panels with auto colorbar minmax. Disabling single global colorbar.')
                     oneGlobalColorbar = False
 

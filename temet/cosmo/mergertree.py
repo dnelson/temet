@@ -332,13 +332,16 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
             print(f'Note: [{sim}] quantMPB [{prop}] in comoving units.')
 
         if prop in ['z_stars']:
-            vals = sim.units.metallicityInSolar(mpb['SubhaloStarMetallicity'])
+            if 'SubhaloStarMetallicity' in mpb: # not in MCST
+                vals = sim.units.metallicityInSolar(mpb['SubhaloStarMetallicity'])
 
         if prop in ['z_gas']:
-            vals = sim.units.metallicityInSolar(mpb['SubhaloGasMetallicity'])
+            if 'SubhaloGasMetallicity' in mpb: # not in MCST
+                vals = sim.units.metallicityInSolar(mpb['SubhaloGasMetallicity'])
 
         if prop in ['z_gas_sfr','z_gas_sfrwt']:
-            vals = sim.units.metallicityInSolar(mpb['SubhaloGasMetallicitySfrWeighted'])
+            if 'SubhaloGasMetallicitySfrWeighted' in mpb: # not in MCST
+                vals = sim.units.metallicityInSolar(mpb['SubhaloGasMetallicitySfrWeighted'])
 
         # unchanged fields from the tree
         if prop in mpb.keys():
