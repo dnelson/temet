@@ -5,6 +5,7 @@ import numpy as np
 import h5py
 import glob
 import threading
+import gc
 from os.path import isfile, isdir
 from os import mkdir, unlink
 #from scipy.special import wofz
@@ -1005,6 +1006,8 @@ def create_spectra_from_traced_rays(sP, line, instrument,
     # sample master, and instrumental, grids
     master_mid, master_edges, _ = create_wavelength_grid(instrument='master')
 
+    assert master_mid[1] > master_mid[0], 'Error: dwave_master will be zero!'
+
     inst_wavemid, inst_waveedges, _ = create_wavelength_grid(instrument=instrument)
 
     assert inst_waveedges[0] >= master_edges[0], 'Instrumental wavelength grid min extends off master.'
@@ -1013,7 +1016,7 @@ def create_spectra_from_traced_rays(sP, line, instrument,
     lsf_mode, lsf, _ = lsf_matrix(instrument)
 
     if 0:
-        indiv_index = 20
+        indiv_index = 0
         rays_len = rays_len[indiv_index:indiv_index+10]
         rays_off = rays_off[indiv_index:indiv_index+10]
         n_rays = rays_len.size
@@ -1647,9 +1650,11 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
                 wave_min_ion = min(wave_min_ion, props['wave0'])
                 wave_max_ion = max(wave_max_ion, props['wave0'])
 
-        wave_min = np.floor((wave_min_ion * (1 + sP.redshift) - 50) / 100) * 100
-        wave_max = np.ceil((wave_max_ion * (1 + sP.redshift) + 50) / 100) * 100
-        if wave_min < 0: wave_min = 0.0
+        # note: must be int or float64, dangerous to be float32, can lead to
+        # bizarre rounding issues in np.linspace during creation of master grid
+        wave_min = int(np.floor((wave_min_ion * (1 + sP.redshift) - 50) / 100) * 100)
+        wave_max = int(np.ceil((wave_max_ion * (1 + sP.redshift) + 50) / 100) * 100)
+        if wave_min < 0: wave_min = 0
         instruments['idealized']['wave_min'] = wave_min
         instruments['idealized']['wave_max'] = wave_max
 
@@ -1719,7 +1724,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
       generate_rays_voronoi_fullbox(sP, nRaysPerDim=nRaysPerDim, raysType=raysType, 
                                     subhaloIDs=subhaloIDs, pSplit=pSplit)
-
+    
     # load required gas cell properties
     projAxis = list(ray_dir).index(1)
     velLosField = 'vel_'+['x','y','z'][projAxis]
@@ -1770,10 +1775,12 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
         
         EWs[line] = EW_local
 
+        chunks = (1000, tau_local.shape[1]) if tau_local.shape[1] < 10000 else (100, tau_local.shape[1])
+
         print(' saving...', flush=True)
         with h5py.File(saveFilename,'r+') as f:
             # save tau per line
-            f.create_dataset('tau_%s' % line.replace(' ','_'), data=tau_local, compression='gzip')
+            f.create_dataset('tau_%s' % line.replace(' ','_'), data=tau_local, chunks=chunks, compression='gzip')
             # save EWs per line
             f.create_dataset('EW_%s' % line.replace(' ','_'), data=EW_local, compression='gzip')
 
@@ -1788,7 +1795,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
     flux = np.exp(-1*tau)
 
     with h5py.File(saveFilename,'r+') as f:
-        f.create_dataset('flux', data=flux, compression='gzip')
+        f.create_dataset('flux', data=flux, chunks=chunks, compression='gzip')
 
     print(f'Saved: [{saveFilename}]')
 
@@ -1913,9 +1920,13 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPer
             filename = _spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=[i,pSplitNum], solar=solar)
             print(i, end=' ', flush=True)
 
-            with h5py.File(filename,'r') as f_read:
+            with h5py.File(filename,'r',rdcc_nbytes=0) as f_read:
                 data[offset:offset+n_spec] = f_read[dset][()]
             offset += n_spec
+
+            from ..util.helper import reportMemory
+            reportMemory()
+            gc.collect()
 
         # write
         with h5py.File(saveFilename,'r+') as f:
