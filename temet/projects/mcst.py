@@ -367,7 +367,7 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Fal
     fig.savefig(f'mcst_{xQuant}-vs-{yQuant}_comp-{len(sims)}%s.pdf' % ('_notracks' if not tracks else ''))
     plt.close(fig)
 
-def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treebased=False, sizefac=1.0):
+def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treebased=False, plot_parent=True, sizefac=1.0):
     """ Evolution of a quantity versus redshift.
     Designed for comparison between many zoom runs, including the target subhalo (only) from each.
 
@@ -378,6 +378,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
       ylim (list[float][2]): if not None, override default y-axis limits.
       sfh_lin (bool): show SFH with linear y-axis.
       sfh_treebased (bool): if True, use merger tree-based tracks even for SFH-related quantities.
+      plot_parent (bool): if True, plot halos from the parent box for comparison.
       sizefac (float): multiplier on figure size.
     """
     # quantities based on stellar formation times of stars in the final snapshot, as opposed to tree MPBs
@@ -427,6 +428,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
             star_tform = sim.units.redshiftToAgeFlat(star_zform)
 
             # bin and convert to rate
+            #nbins_sfh = int(np.round(sim.units.redshiftToAgeFlat(sim.redshift) * 1e3 / 10))
             tbins = np.linspace(0.0, sim.units.redshiftToAgeFlat(sim.redshift), nbins_sfh)
             dt_Myr = (tbins[1] - tbins[0]) * 1e3 # Myr
             tbins_cen = 0.5 * (tbins[1:] + tbins[:-1])
@@ -511,7 +513,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
             # marker size set by resolution
             ms_loc = (sim.res - 10) * 2.5 + 3
             lw_loc = lw #(sim.res - 10) if len(res) > 1 else lw
-            alpha_loc = 1.0 #0.6 if len(res) > 1 else 1.0
+            alpha_loc = 1.0
 
             # if only one hInd, then use color for either variant or res
             if len(hInds) == 1:
@@ -528,9 +530,15 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
 
                 if len(subhaloIDs) > 1 and len(variants) <= 2:
                     linestyle = linestyles[np.min([j,1])]
+            else:
+                # more than one hInd, additional subhalos are faint
+                if j > 0:
+                    alpha_loc = 0.4
+                    lw_loc = lw - 1
 
             # final redshift marker
-            l, = ax.plot(sim.redshift, val, marker, color=c, markersize=ms_loc, label='')
+            if len(hInds) == 1 or j == 0:
+                l, = ax.plot(sim.redshift, val, marker, color=c, markersize=ms_loc, alpha=alpha_loc, label='')
 
             # time track
             if quant in star_zform_quants:
@@ -555,10 +563,10 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
             else:
                 # general case
                 mpb = sim.quantMPB(subhaloID, quants=[quant])
-                vals = mpb[quant]
-                if valLog and not sfh_lin: vals = logZeroNaN(vals)
+                vals_track = mpb[quant]
+                if valLog and not sfh_lin: vals_track = logZeroNaN(vals_track)
 
-                ax.plot(mpb['z'], vals, ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha_loc)
+                ax.plot(mpb['z'], vals_track, ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha_loc)
 
     # galaxies from parent box
     vals, _, _, _ = sim_parent.simSubhaloQuantity(quant, clean, tight=True)
@@ -566,6 +574,9 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
 
     for i, hInd in enumerate(hInds):
         # load
+        if not plot_parent:
+            continue
+
         subhaloInd = parent_GroupFirstSub[hInd]
         val = vals[subhaloInd]
 
@@ -625,7 +636,7 @@ def smhm_relation(sims):
         ax.plot(b19_um['haloMass'], b19_um['mstar_high'], ':', color='#bbb', lw=lw, alpha=0.8)
         #ax.fill_between(b19_um['haloMass'], b19_um['mstar_low'], b19_um['mstar_high'], color='#bbb', hatch='X', alpha=0.4)
 
-    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data, sizefac=0.8)
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
     
 def sfr_vs_mstar(sims, yQuant):
     """ Diagnostic plot of SFR vs Mstar including observational data. """
@@ -851,7 +862,10 @@ def gas_mzr(sims):
 
         ax.plot(li22_mstar, li22_z, '-.', lw=lw, color='#999', alpha=1.0, label='Li+22 z=3.0 (B18)')
 
-    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
+        # TODO: z=5-6
+        # https://arxiv.org/abs/2510.19959
+
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data, sizefac=0.8)
 
 def stellar_mzr(sims):
     """ Diagnostic plot of stellar mass-metallicity relation (MZR). """
@@ -1436,13 +1450,13 @@ def blackhole_position_vs_time(sim):
         fig.savefig(f'smbh_pos_vs_time_{sim.simName}_{smbh_id}.pdf')
         plt.close(fig)
 
-def starformation_diagnostics(sims, xlim=None):
+def starformation_diagnostics(sims, xlim=None, sizefac=1.0):
     """ Plot PDFs of gas properties at the sites and moments of star formation, using the sf_details/ txt files. """
     # config
     z_bins = [[5.5, 8.0], [8.0, 10.0], [10.0, 15.0]]
 
     # plot
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
     ax.set_xlabel('Gas Density [ log cm$^{-3}$ ]')
     ax.set_ylabel('Number of Stars Formed')
     ax.set_yscale('log')
@@ -1455,7 +1469,9 @@ def starformation_diagnostics(sims, xlim=None):
         stars, supernovae = sf_sn_details(sim)
 
         # unit conversions: physical [1/cm^3]
-        dens = np.log10(sim.units.codeDensToPhys(stars['Density'], scalefac=stars['Time'], cgs=True, numDens=True))
+        dens = sim.units.codeDensToPhys(stars['Density'], scalefac=stars['Time'], cgs=True, numDens=True)
+        dens[dens == 0] = dens[dens > 0].min() # zeros rarely occur
+        dens = np.log10(dens)
         z = 1/stars['Time'] - 1
 
         for j, z_bin in enumerate(z_bins):
@@ -1606,7 +1622,7 @@ def paperPlots(a = False):
 
     # if (all == False), only dz < 0.1 matches
     # if (single == True), only the highest available res of each halo
-    sims = _get_existing_sims(variants, res, hInds, redshift, all=False, single=False)
+    sims = _get_existing_sims(variants, res, hInds, redshift, all=False, single=True)
 
     # contamination diagnostic printout (info only)
     #for sim in sims:
@@ -1666,39 +1682,75 @@ def paperPlots(a = False):
         yQuant = 'sfr_10_100_ratio'
         twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=[4.7, 9.2], ylim=[-1.0, 2.0], sizefac=0.8)
 
-    # fig 6c: ?
-    if 0 or a:
-        pass
-
-    # fig 7a: star formation history (one plot per halo) (using stellar histo)
+    # fig 6c: star formation history (using stellar histo)
     if 0 or a:
         quant = 'sfr2'
         xlim = [12.1, 5.5] #[12.1, 2.95]
         ylim = [-5.5, 0.5]
 
-        quantVsRedshift(sims, quant, xlim, ylim, sfh_lin=False, sfh_treebased=False)
+        quantVsRedshift(sims, quant, xlim, ylim, sfh_lin=False, sfh_treebased=False, sizefac=0.8)
 
-        for hInd in hInds:
-            sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
-            # todo: gallery of lots of small panels?
-            quantVsRedshift(sims_loc, quant, xlim, ylim, sfh_lin=False, sfh_treebased=False, sizefac=0.7)
+        # (one plot per halo) todo: gallery of lots of small panels?
+        #for hInd in hInds:
+        #    sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
+        #    quantVsRedshift(sims_loc, quant, xlim, ylim, sfh_lin=False, sfh_treebased=False, sizefac=0.7)
 
-    # fig 7b: smhm relation
+    # fig 7a: smhm relation
     if 0 or a:
         smhm_relation(sims)
 
-    # fig 7c: stellar mass vs redshift evo (one plot per halo) (using stellar histo)
+    # fig 7b: stellar mass vs redshift evo (one plot per halo) (using stellar histo)
     if 0 or a:
         quant = 'mstar2_log'
         xlim = [12.1, 5.5]
         ylim = [2.8, 7.5] #[3.8,7.0]
 
-        quantVsRedshift(sims, quant, xlim, ylim, sfh_treebased=False, sizefac=0.8)
+        quantVsRedshift(sims, quant, xlim, ylim, sfh_treebased=False, plot_parent=False, sizefac=0.8)
+        #quantVsRedshift(sims, quant='mgas2_log', xlim=xlim, ylim=[4.0,8.0])
 
-        for hInd in hInds:
-            sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
+        #for hInd in hInds:
+        #    sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
+        #    quantVsRedshift(sims_loc, quant, xlim, ylim, sfh_treebased=False)
 
-            quantVsRedshift(sims_loc, quant, xlim, ylim, sfh_treebased=False, sizefac=0.8)
+    # fig 7c: SF and stellar feedback
+    if 0 or a:
+        starformation_diagnostics(sims, xlim=[3,8], sizefac=0.8)
+
+    # fig 8: phase space diagrams (one per run)
+    if 0 or a:
+        for sim in sims:
+            phase_diagram(sim)
+
+    # fig 9a - stellar metallicity
+    if 0 or a:
+        stellar_mzr(sims)
+
+    # fig 9b - metallicity vs time evolution
+    if 0 or a:
+        xlim = [14.1, 5.4]
+        ylim = [-4.1, 0.0]
+
+        quantVsRedshift(sims, quant='Z_gas_sfrwt', xlim=xlim, ylim=ylim, sizefac=0.8)
+        quantVsRedshift(sims, quant='Z_stars_masswt', xlim=xlim, ylim=ylim, sizefac=0.8)
+
+    # fig 9c - gas metallicity
+    if 0 or a:
+        gas_mzr(sims)
+
+    # fig 10a - stellar sizes
+    if 0 or a:
+        sizes_vs_mstar(sims)
+
+    # fig 10b - stellar size evo
+    if 0 or a:
+        xlim = [14.1, 5.5]
+
+        quantVsRedshift(sims, quant='size_stars_log', xlim=xlim, ylim=[-3.5, 0.0])
+
+    # fig 10c - gas sizes
+    if 0 or a:
+        pass # todo: h-alpha?
+        #quantVsRedshift(sims, quant='size_gas_log', xlim=xlim, ylim=[-0.6, 1.5])
 
     # ------------
 
@@ -1711,36 +1763,6 @@ def paperPlots(a = False):
         for sim in sims:
             blackhole_diagnostics_vs_time(sim)
             blackhole_position_vs_time(sim)
-
-    # figure - various quants vs redshift (one plot per halo) (using tree MPB)
-    if 1 or a:
-        xlim = [12.1, 5.5]
-
-        for hInd in hInds:
-            sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
-            #quantVsRedshift(sims_loc, quant='mhalo_log', xlim=xlim, ylim=[6.5,9.0])
-            #quantVsRedshift(sims_loc, quant='mgas2_log', xlim=xlim, ylim=[4.0,8.0])
-            #quantVsRedshift(sims_loc, quant='size_stars_log', xlim=xlim, ylim=[-1.1, 0.5])
-            #quantVsRedshift(sims_loc, quant='size_gas_log', xlim=xlim, ylim=[-0.6, 1.5])
-            #quantVsRedshift(sims_loc, quant='Z_stars_masswt', xlim=xlim, ylim=[-4.1, -1.0])
-            quantVsRedshift(sims_loc, quant='Z_gas_sfrwt', xlim=xlim, ylim=[-4.1, -1.0])
-
-    # figure - stellar sizes
-    if 0 or a:
-        sizes_vs_mstar(sims)
-
-    # figure - gas metallicity
-    if 0 or a:
-        gas_mzr(sims)
-
-    # figure - stellar metallicity
-    if 0 or a:
-        stellar_mzr(sims)
-
-    # figure - phase space diagrams (one per run)
-    if 0 or a:
-        for sim in sims:
-            phase_diagram(sim)
 
     # ------------
 
@@ -1772,9 +1794,9 @@ def paperPlots(a = False):
         plotSingleRadialProfile(sims, ptType=ptType, ptProperty=ptProp, haloIDs=haloIDs, 
             xlog=True, xlim=[-2.0, 1.5], ylim=ylim, scope='fof' if ptProp == 'menc_vesc' else 'global')
 
-    # diagnostics: SF and stellar feedback
+    # diagnostics: stellar feedback (sn_details*)
     if 0 or a:
-        starformation_diagnostics(sims, xlim=[3,8])
+        pass
 
     # diagnostic: CPU times
     if 0 or a:

@@ -271,7 +271,9 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
             print(' mpb inserted [%d] ghost' % snap)
 
     # add redshift
-    r['z'] = sim.snapNumToRedshift(mpb['SnapNum'])
+    mpb_z = sim.snapNumToRedshift(mpb['SnapNum'])
+    mpb_a = 1 / (1 + mpb_z)
+    r['z'] = mpb_z
 
     # restrict to a set of discrete redshifts?
     inds = np.where(r['z'])[0]
@@ -291,7 +293,9 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
 
         if prop in ['rhalo_200','rhalo','r200','r200c','rvir','r_vir','rvirial']:
             vals = mpb['Group_R_Crit200']
-            print(f'Note: [{sim}] quantMPB [{prop}] in code units.')
+            #vals *= mpb_a # comoving -> physical
+            # todo: the following inconsistency wrt the units of simSubhaloQuantity() is for its historical use in tracer_Mc
+            print(f'NOTE: [{sim}] quantMPB [{prop}] in code (comoving) units!')
 
         if prop in ['t_vir']:
             vals = sim.units.codeMassToVirTemp(mpb['Group_M_Crit200'])
@@ -324,12 +328,12 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
         if prop in ['size_stars','rhalf_stars']:
             vals = mpb['SubhaloHalfmassRadType'][:,sim.ptNum('stars')]
             vals = sim.units.codeLengthToComovingKpc(vals)
-            print(f'Note: [{sim}] quantMPB [{prop}] in comoving units.')
+            vals *= mpb_a # comoving -> physical
 
         if prop in ['size_gas']:
             vals = mpb['SubhaloHalfmassRadType'][:,sim.ptNum('gas')]
             vals = sim.units.codeLengthToComovingKpc(vals)
-            print(f'Note: [{sim}] quantMPB [{prop}] in comoving units.')
+            vals *= mpb_a # comoving -> physical
 
         if prop in ['z_stars']:
             if 'SubhaloStarMetallicity' in mpb: # not in MCST
