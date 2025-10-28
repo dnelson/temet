@@ -493,12 +493,25 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if tight: minMax = [0.2, 1.8]
 
     if quantname in ['size_halpha']:
-        fieldName = 'Subhalo_Gas_Halpha_HalfRad'
+        fieldName = 'Subhalo_Gas_Halpha_HalfRad' # empirical relation from sfr
         ac = sP.auxCat(fieldName)
 
         vals = sP.units.codeLengthToKpc(ac[fieldName])
 
         label = 'r$_{\\rm 1/2,H\\alpha}$ [ log kpc ]'
+        minMax = [0.5, 2.0]
+        if tight: minMax = [1.0, 2.2]
+
+        minMax[0] -= sP.redshift/4
+        minMax[1] -= sP.redshift/4
+
+    if quantname in ['size_h-alpha']:
+        fieldName = 'Subhalo_Gas_H-alpha_HalfRad' # cloudy-based
+        ac = sP.auxCat(fieldName)
+
+        vals = sP.units.codeLengthToKpc(ac[fieldName])
+
+        label = 'r$_{\\rm 1/2,H-\\alpha}$ [ log kpc ]'
         minMax = [0.5, 2.0]
         if tight: minMax = [1.0, 2.2]
 

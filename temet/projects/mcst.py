@@ -810,6 +810,19 @@ def sizes_vs_mstar(sims):
 
     twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
 
+def size_halpha_vs_mstar(sims):
+    """ Diagnostic plot of galaxy h-alpha (gas) size (half-light radius) versus stellar mass. """
+
+    xQuant = 'mstar2_log'
+    yQuant = 'size_h-alpha' # cloudy-based
+    ylim = [-2.5, 1.5] # log pkpc
+    xlim = [4.8, 10.2] # log mstar
+
+    def _draw_data(ax, sims):
+        pass
+
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
+
 def gas_mzr(sims):
     """ Diagnostic plot of gas-phase mass-metallicity relation (MZR). """
     xQuant = 'mstar2_log'
@@ -1737,6 +1750,15 @@ def paperPlots(a = False):
     if 0 or a:
         gas_mzr(sims)
 
+    # fig 9d - N/O
+    if 0 or a:
+        # https://arxiv.org/abs/2510.21960
+        pass # TODO
+
+    # fig 9e - BPT diagram?
+    if 0 or a:
+        pass # TODO
+
     # fig 10a - stellar sizes
     if 0 or a:
         sizes_vs_mstar(sims)
@@ -1749,7 +1771,7 @@ def paperPlots(a = False):
 
     # fig 10c - gas sizes
     if 0 or a:
-        pass # todo: h-alpha?
+        size_halpha_vs_mstar(sims)
         #quantVsRedshift(sims, quant='size_gas_log', xlim=xlim, ylim=[-0.6, 1.5])
 
     # ------------
@@ -1763,15 +1785,6 @@ def paperPlots(a = False):
         for sim in sims:
             blackhole_diagnostics_vs_time(sim)
             blackhole_position_vs_time(sim)
-
-    # ------------
-
-    # vis: single image,z gas and stars
-    if 0 or a:
-        for sim in sims:
-            vis_single_galaxy(sim, haloID=0)
-            vis_single_halo(sim, haloID=0)
-            #vis_single_halo(sim, haloID=0, size=20.0)
 
     # radial profiles
     if 0 or a:
@@ -1793,6 +1806,19 @@ def paperPlots(a = False):
 
         plotSingleRadialProfile(sims, ptType=ptType, ptProperty=ptProp, haloIDs=haloIDs, 
             xlog=True, xlim=[-2.0, 1.5], ylim=ylim, scope='fof' if ptProp == 'menc_vesc' else 'global')
+        
+    # radial profiles: 2d vs time
+    if 0 or a:
+        pass # TODO
+
+    # ------------
+
+    # vis: single image,z gas and stars
+    if 0 or a:
+        for sim in sims:
+            vis_single_galaxy(sim, haloID=0)
+            vis_single_halo(sim, haloID=0)
+            #vis_single_halo(sim, haloID=0, size=20.0)
 
     # diagnostics: stellar feedback (sn_details*)
     if 0 or a:

@@ -586,16 +586,16 @@ def snapshotSubset(sP, partType, fields,
       { 'names':['phot_r','r'],                         'field':'GFM_StellarPhotometrics', 'fN':5 },
       { 'names':['phot_i','i'],                         'field':'GFM_StellarPhotometrics', 'fN':6 },
       { 'names':['phot_z','z'],                         'field':'GFM_StellarPhotometrics', 'fN':7 },
-      { 'names':['metals_H', 'hydrogen'],               'field':'GFM_Metals', 'fN':0 },
-      { 'names':['metals_He','helium'],                 'field':'GFM_Metals', 'fN':1 },
-      { 'names':['metals_C', 'carbon'],                 'field':'GFM_Metals', 'fN':2 },
-      { 'names':['metals_N', 'nitrogen'],               'field':'GFM_Metals', 'fN':3 },
-      { 'names':['metals_O', 'oxygen'],                 'field':'GFM_Metals', 'fN':4 },
-      { 'names':['metals_Ne','neon'],                   'field':'GFM_Metals', 'fN':5 },
-      { 'names':['metals_Mg','magnesium'],              'field':'GFM_Metals', 'fN':6 },
-      { 'names':['metals_Si','silicon'],                'field':'GFM_Metals', 'fN':7 },
-      { 'names':['metals_Fe','iron'],                   'field':'GFM_Metals', 'fN':8 },
-      { 'names':['metals_tot','metals_total'],          'field':'GFM_Metals', 'fN':9 },
+      #{ 'names':['metals_H', 'hydrogen'],               'field':'GFM_Metals', 'fN':0 },
+      #{ 'names':['metals_He','helium'],                 'field':'GFM_Metals', 'fN':1 },
+      #{ 'names':['metals_C', 'carbon'],                 'field':'GFM_Metals', 'fN':2 },
+      #{ 'names':['metals_N', 'nitrogen'],               'field':'GFM_Metals', 'fN':3 },
+      #{ 'names':['metals_O', 'oxygen'],                 'field':'GFM_Metals', 'fN':4 },
+      #{ 'names':['metals_Ne','neon'],                   'field':'GFM_Metals', 'fN':5 },
+      #{ 'names':['metals_Mg','magnesium'],              'field':'GFM_Metals', 'fN':6 },
+      #{ 'names':['metals_Si','silicon'],                'field':'GFM_Metals', 'fN':7 },
+      #{ 'names':['metals_Fe','iron'],                   'field':'GFM_Metals', 'fN':8 },
+      #{ 'names':['metals_tot','metals_total'],          'field':'GFM_Metals', 'fN':9 },
       { 'names':['metaltag_SNIa',  'metals_SNIa'],      'field':'GFM_MetalsTagged', 'fN':0 },
       { 'names':['metaltag_SNII',  'metals_SNII'],      'field':'GFM_MetalsTagged', 'fN':1 },
       { 'names':['metaltag_AGB',   'metals_AGB'],       'field':'GFM_MetalsTagged', 'fN':2 },
@@ -603,6 +603,20 @@ def snapshotSubset(sP, partType, fields,
       { 'names':['metaltag_FeSNIa','metals_FeSNIa'],    'field':'GFM_MetalsTagged', 'fN':4 },
       { 'names':['metaltag_FeSNII','metals_FeSNII'],    'field':'GFM_MetalsTagged', 'fN':5 } \
     ]
+
+    # map species abundance names into dataset indices (varies by simulation)
+    if sP.metals is not None:
+        metal_list = sP.metals
+
+        if sP.star == 1: #sP.snapHasField(partType, 'GFM_Metals'): # slow
+            z_field = 'GFM_Metals'
+        elif sP.star in [2,3]: #sP.snapHasField(partType, 'ElementFraction'):
+            z_field = 'ElementFraction'
+            if sP.isPartType(partType, 'gas'):
+                metal_list = sP.metals[2:] # omit first 2 since ElementFraction does not have H,He for gas
+
+        for i, metal in enumerate(metal_list):
+            multiDimSliceMaps.append( { 'names':['metals_'+metal], 'field':z_field, 'fN':i } )
 
     for i,field in enumerate(fields):
         for multiDimMap in multiDimSliceMaps:

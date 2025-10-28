@@ -165,6 +165,8 @@ temp_old.log = True
 def temp_sfcold(sim, partType, field, args):
     """ Gas temperature, where star-forming gas is set to the sub-grid (constant)
     cold-phase temperature, instead of eEOS 'effective' temperature. """
+    assert sim.eEOS == 1
+
     temp = sim.snapshotSubset(partType, 'temp', **args)
     sfr = sim.snapshotSubset(partType, 'sfr', **args)
 
@@ -183,6 +185,7 @@ temp_sfcold.log = True
 def temp_sfhot(sim, partType, field, args):
     """ Gas temperature, where star-forming gas is set to the sub-grid (constant)
     hot-phase temperature, instead of the eEOS 'effective' temperature. Use with caution. """
+    assert sim.eEOS == 1
     temp = sim.snapshotSubset(partType, 'temp', **args)
     nh = sim.snapshotSubset(partType, 'nh', **args)
     sfr = sim.snapshotSubset(partType, 'sfr', **args)
@@ -204,6 +207,8 @@ temp_sfhot.log = True
 def twophase_coldfrac(sim, partType, field, args):
     """ Cold-phase mass (or density) fraction, for the SH03 two-phase ISM model.
     Note: is exactly 0.0 for non-starforming (SFR==0) gas cells, and typically of order ~0.9 for SFR>0 cells. """
+    assert sim.eEOS == 1
+
     nh = sim.snapshotSubset(partType, 'nh', **args)
     sfr = sim.snapshotSubset(partType, 'sfr', **args)
 
@@ -244,6 +249,8 @@ ne.log = True
 def ne_twophase(sim, partType, field, args):
     """ Electron number density, where for star-forming gas cells we override the naive snapshot value, 
     which is unphysically high, with a value based on the SH03 hot-phase mass only. """
+    assert sim.eEOS == 1
+
     ne = sim.snapshotSubset(partType, 'ne', **args)
 
     # compute hot-phase fraction (is 1.0 for SFR==0 cells, and of order ~0.1 for SFR>0 cells)
@@ -888,6 +895,46 @@ metaldens_.units = r'$\rm{g\ cm^{-3}}$'
 metaldens_.limits = [-40.0, -26.0]
 metaldens_.limits_halo = [-36.0, -26.0]
 metaldens_.log = True
+
+@snap_field
+def h_massfrac(sim, partType, field, args):
+    """ Total hydrogen (H) mass fraction. This is a custom helper for MCST runs where this value 
+    is not directly stored for gas, but is split based on sub-species and ionization state. """
+    assert sim.isPartType(partType,'gas')
+    assert sim.snapHasField(partType,'ElementFraction')
+
+    frac = sim.snapshotSubset(partType, 'HMMassFraction', **args) # hydrogen anion (w/ extra electron)
+    frac += sim.snapshotSubset(partType, 'HIMassFraction', **args) # neutral hydrogen
+    frac += sim.snapshotSubset(partType, 'HIIMassFraction', **args) # single ionized hydrogen
+    #frac += sim.snapshotSubset(partType, 'H2IMassFraction', **args) # neutral molecular hydrogen
+    #frac += sim.snapshotSubset(partType, 'H2IIMassFraction', **args) # singly ionized molecular hydrogen
+
+    return frac
+
+h_massfrac.label = 'H Mass Fraction'
+h_massfrac.units = r'' # dimensionless
+h_massfrac.limits = [0.0, 1.0]
+h_massfrac.limits_halo = [0.0, 1.0]
+h_massfrac.log = False
+
+@snap_field
+def he_massfrac(sim, partType, field, args):
+    """ Total helium (He) mass fraction. This is a custom helper for MCST runs where this value 
+    is not directly stored for gas, but is split based on sub-species and ionization state. """
+    assert sim.isPartType(partType,'gas')
+    assert sim.snapHasField(partType,'ElementFraction')
+
+    frac = sim.snapshotSubset(partType, 'HeIMassFraction', **args) # neutral helium
+    frac += sim.snapshotSubset(partType, 'HeIIMassFraction', **args) # once ionized helium
+    frac += sim.snapshotSubset(partType, 'HeIIIMassFraction', **args) # twice ionized helium
+
+    return frac
+
+he_massfrac.label = 'He Mass Fraction'
+he_massfrac.units = r'' # dimensionless
+he_massfrac.limits = [0.0, 1.0]
+he_massfrac.limits_halo = [0.0, 1.0]
+he_massfrac.log = False
 
 # -------------------- gas observables ------------------------------------------------------------
 

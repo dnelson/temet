@@ -758,12 +758,11 @@ class cloudyEmission():
         if assumeSolarMetallicity:
             metal = np.zeros( dens.size, dtype='float32' ) + ion._solar_Z
         else:
-            assert sP.snapHasField('gas', 'GFM_Metallicity')
             metal = sP.snapshotSubset('gas', 'metal', indRange=indRange)
 
         metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
 
-        if sfGasTemp == 'effective':
+        if sfGasTemp == 'effective' or (not sP.eEOS):
             # snapshot value
             temp = sP.snapshotSubset('gas', 'temp_log', indRange=indRange)
         elif sfGasTemp == 'cold':
@@ -815,6 +814,7 @@ class cloudyEmission():
             # so we can use, as long as the requested element X is one of the 9 tracked GFM elements
             sym = ion._elementNameToSymbol(element)
             if sP.snapHasField('gas', 'GFM_Metals'):
+                # GFM-based models
                 if sym not in sP.metals:
                     print('WARNING: [%s] not in sP.metals (expected for sulphur), taking solar abunds.' % sym)
                     el_mass_fraction = ion._solarMetalAbundanceMassRatio(element)
@@ -822,11 +822,24 @@ class cloudyEmission():
                     fieldName = "metals_" + sym
                     el_mass_fraction = sP.snapshotSubset('gas', fieldName, indRange=indRange)
                     el_mass_fraction[el_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
+                    
+            elif sP.snapHasField('gas', 'ElementFraction'):
+                # MCST-related models
+                # # note: sP.metals[0] == 'H' and sP.metals[1] == 'He', although these are stored separately for gas
+                if sym == 'H':
+                    el_mass_fraction = sP.snapshotSubset('gas', 'h_massfrac', indRange=indRange)
+                elif sym == 'He':
+                    el_mass_fraction = sP.snapshotSubset('gas', 'he_massfrac', indRange=indRange)
+                else:
+                    fieldName = "metals_" + sym
+                    el_mass_fraction = sP.snapshotSubset('gas', fieldName, indRange=indRange)
+                el_mass_fraction[el_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
+
             else:
                 print('WARNING: line emission but GFM_Metals not available (mini-snap). Assuming solar abundances.')
                 el_mass_fraction = ion._solarMetalAbundanceMassRatio(element)
-
-        # take into account dust-depletion of this species (i.e. taking it out of the gas phase)
+                
+        # take into account dust-depletion of this species (i.e. remove some from the gas phase)
         if dustDepletion:
             from ..load.data import decia2018
             assert element == 'Mg' # can generalize in the future
