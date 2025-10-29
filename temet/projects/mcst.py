@@ -14,7 +14,7 @@ from os.path import isfile
 from ..util.simParams import simParams
 from ..plot.config import *
 from ..util.helper import running_median, logZeroNaN, closest, cache, colored_line
-from ..plot.general import plotPhaseSpace2D, plotSingleRadialProfile
+from ..plot.general import plotPhaseSpace2D, plotSingleRadialProfile, plot2DStackedRadialProfileEvo
 from ..plot.cosmoMisc import simHighZComparison
 from ..plot.cosmoGeneral import addUniverseAgeAxis
 from ..load.simtxt import blackhole_details_mergers, sf_sn_details
@@ -618,7 +618,7 @@ def smhm_relation(sims):
     xQuant = 'mhalo_200_log'
     yQuant = 'mstar2_log'
     xlim = [7.3, 10.3]
-    ylim = [4.0, 8.0]
+    ylim = [4.0, 8.0] # log mstar
     
     # focus on low-mass end:
     #xlim = [5.5, 9.3]
@@ -813,15 +813,18 @@ def sizes_vs_mstar(sims):
 def size_halpha_vs_mstar(sims):
     """ Diagnostic plot of galaxy h-alpha (gas) size (half-light radius) versus stellar mass. """
 
+    for sim in sims:
+        sim.createCloudyCache = False
+
     xQuant = 'mstar2_log'
-    yQuant = 'size_h-alpha' # cloudy-based
-    ylim = [-2.5, 1.5] # log pkpc
-    xlim = [4.8, 10.2] # log mstar
+    yQuant = 'size_halpha_em' # cloudy-based
+    ylim = [-0.5, 1.5] # log pkpc
+    xlim = [4.8, 9.0] # log mstar
 
     def _draw_data(ax, sims):
         pass
 
-    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data, sizefac=0.8)
 
 def gas_mzr(sims):
     """ Diagnostic plot of gas-phase mass-metallicity relation (MZR). """
@@ -1767,7 +1770,7 @@ def paperPlots(a = False):
     if 0 or a:
         xlim = [14.1, 5.5]
 
-        quantVsRedshift(sims, quant='size_stars_log', xlim=xlim, ylim=[-3.5, 0.0])
+        quantVsRedshift(sims, quant='size_stars_log', xlim=xlim, ylim=[-3.5, 0.0], sizefac=0.8)
 
     # fig 10c - gas sizes
     if 0 or a:
@@ -1790,23 +1793,33 @@ def paperPlots(a = False):
     if 0 or a:
         haloIDs = [0] * len(sims) # assume first
 
-        ptType = 'gas'
-
-        #ptProp = 'numdens'
-        #ylim = [-4.5, 4.0]
-        #ylog = True
-
-        #ptProp = 'temp'
-        #ylim = [0.0, 6.0]
-        #ylog = True
-
-        ptProp = 'menc_vesc'
-        ylim = [0.0, 1.8]
-        ylog = False
-
-        plotSingleRadialProfile(sims, ptType=ptType, ptProperty=ptProp, haloIDs=haloIDs, 
-            xlog=True, xlim=[-2.0, 1.5], ylim=ylim, scope='fof' if ptProp == 'menc_vesc' else 'global')
+        plotSingleRadialProfile(sims, ptType='gas', ptProperty='numdens', haloIDs=haloIDs, 
+            xlog=True, xlim=[-2.0, 1.5], ylim=[-4.5, 4.0], ylog=True, scope='global')
         
+        plotSingleRadialProfile(sims, ptType='gas', ptProperty='temp', haloIDs=haloIDs, 
+            xlog=True, xlim=[-2.0, 1.5], ylim=[3.0, 6.0], ylog=True, scope='global')
+
+        plotSingleRadialProfile(sims, ptType='gas', ptProperty='menc_vesc', haloIDs=haloIDs, 
+            xlog=True, xlim=[-2.0, 1.5], ylim=[0.0, 1.7], ylog=True, scope='fof')
+
+    if 0 or a:
+        # evo
+        max_z = 10.0
+        haloID = 0
+
+        for sim in sims:
+            plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='numdens', haloID=haloID, 
+                rlog=True, rlim=[-2.0, 1.5], clim=[-2.0, 3.0], clog=True, max_z=max_z, scope='global', ctName='magma')
+
+            plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='temp', haloID=haloID, 
+                rlog=True, rlim=[-2.0, 1.5], clim=[3.0, 6.0], clog=True, max_z=max_z, scope='global', ctName='thermal')
+            
+            plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='vrad', haloID=haloID, 
+                rlog=True, rlim=[-2.0, 1.5], clim=[-50,50], clog=False, max_z=max_z, scope='global', ctName='curl')
+
+            plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='menc_vesc', haloID=haloID, 
+                rlog=True, rlim=[-2.0, 1.5], clim=[0.0, 1.7], clog=True, max_z=max_z, scope='fof', ctName='afmhot')
+
     # radial profiles: 2d vs time
     if 0 or a:
         pass # TODO

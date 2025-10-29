@@ -836,7 +836,7 @@ class cloudyEmission():
                 el_mass_fraction[el_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
 
             else:
-                print('WARNING: line emission but GFM_Metals not available (mini-snap). Assuming solar abundances.')
+                print('WARNING: (em) individual abundances not available (mini-snap). Assuming solar abundances.')
                 el_mass_fraction = ion._solarMetalAbundanceMassRatio(element)
                 
         # take into account dust-depletion of this species (i.e. remove some from the gas phase)

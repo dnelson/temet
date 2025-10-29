@@ -11,7 +11,6 @@ from collections import OrderedDict
 
 from ..util.helper import running_median, logZeroNaN, sampleColorTable
 from ..cosmo.clustering import twoPointAutoCorrelationPeriodicCube, conformityRedFrac
-from ..plot.general import getWhiteBlackColors
 from ..vis.common import setAxisColors
 from ..tracer.tracerMC import match3
 from ..plot.config import *
@@ -26,7 +25,7 @@ def galaxyTwoPoint(sPs, saveBase='', cenSatSelects=['all','cen','sat'],
     lw = 2.5
 
     rLabel = 'r [ Mpc ]'
-    yLabel = '$\\xi(r \pm \Delta r)$  [ real space two-point autocorr ]'
+    yLabel = r'$\xi(r \pm \Delta r)$  [ real space two-point autocorr ]'
 
     # load/calculate
     cfs = []
@@ -38,11 +37,9 @@ def galaxyTwoPoint(sPs, saveBase='', cenSatSelects=['all','cen','sat'],
             cfs.append({'rad':rad, 'xi':xi, 'xi_err':xi_err, 'css':cenSatSelect, 'sP':sP})
 
     # start plot
-    color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
-
-    fig = plt.figure(figsize=figsize, facecolor=color1)
-    ax = fig.add_subplot(111, facecolor=color1)
-    setAxisColors(ax, color2)
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+    setAxisColors(ax)
 
     ax.set_xlim(rMinMax)
     ax.set_ylim(yMinMax)
@@ -69,8 +66,7 @@ def galaxyTwoPoint(sPs, saveBase='', cenSatSelects=['all','cen','sat'],
 
     # finish plot
     ax.legend()
-    fig.savefig('%stpcf_%s.pdf' % (saveBase,'_'.join([sP.simName for sP in sPs])), 
-        facecolor=fig.get_facecolor())
+    fig.savefig('%stpcf_%s.pdf' % (saveBase,'_'.join([sP.simName for sP in sPs])))
     plt.close(fig)
 
 def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot=False, 
@@ -136,7 +132,7 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
                 label = mstarBin
                 mstarBin = mstarBins[mstarBin]
             else:
-                label = '%4.1f < log($M_\star$/M$_{\\rm sun}$) < %4.1f' % (mstarBin[0], mstarBin[1])
+                label = r'%4.1f < log($M_\star$/M$_{\rm sun}$) < %4.1f' % (mstarBin[0], mstarBin[1])
 
             cfs[label] = []
 
@@ -175,12 +171,10 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
     # iterate over y-axes: xi(r), r*xi(r), r^2*xi(r)
     for iterNum in [0,1,2]:
         # start plot
-        color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
-
-        fig = plt.figure(figsize=(figsize[0],figsize[1]*1.2**ratioSubPlot),facecolor=color1)
+        fig = plt.figure(figsize=(figsize[0],figsize[1]*1.2**ratioSubPlot))
         gs = gridspec.GridSpec(1+ratioSubPlot, 1, height_ratios=[3.5,1])
-        ax = fig.add_subplot(gs[0], facecolor=color1)
-        setAxisColors(ax, color2)
+        ax = fig.add_subplot(gs[0])
+        setAxisColors(ax)
 
         if not ratioSubPlot:
             ax.set_xlim(rMinMax)
@@ -193,17 +187,17 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
 
         # ratio sub-plot on the bottom?
         if ratioSubPlot:
-            ax_sub = fig.add_subplot(gs[1], facecolor=color1, sharex=ax)
+            ax_sub = fig.add_subplot(gs[1], sharex=ax)
             ax_sub.set_xlim(rMinMax)
             ax_sub.set_xlabel(rLabel)
             ax_sub.set_ylim(yMinMaxSub)
             ax_sub.set_yscale('log')
 
             if len(cfs) != 2:
-                ax_sub.set_ylabel('$\\xi(r)_{M_i}$ / $\\xi(r)_{M_0}$')
+                ax_sub.set_ylabel(r'$\xi(r)_{M_i}$ / $\xi(r)_{M_0}$')
             else:
-                if loadByColor: ax_sub.set_ylabel('$\\xi(r)_{\\rm red}$ / $\\xi(r)_{\\rm blue}$')
-                if loadByMass: ax_sub.set_ylabel('$\\xi(r)_{\\rm high}$ / $\\xi(r)_{\\rm low}$')
+                if loadByColor: ax_sub.set_ylabel(r'$\xi(r)_{\\rm red}$ / $\xi(r)_{\rm blue}$')
+                if loadByMass: ax_sub.set_ylabel(r'$\xi(r)_{\\rm high}$ / $\xi(r)_{\rm low}$')
                 if len(sPs) > 1:
                     # multi-redshift
                     ax_sub.set_ylabel('$\\xi(r)_{z_i}$ / $\\xi(r)_{z=0}$')
@@ -327,7 +321,7 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
             #ax_sub.legend()
 
         fig.savefig('%stpcf_%s_%s.pdf' % (saveBase,['xi','rxi','r2xi'][iterNum],
-            '_'.join([sP.simName for sP in sPs])), facecolor=fig.get_facecolor())
+            '_'.join([sP.simName for sP in sPs])))
         plt.close(fig)
 
 def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
@@ -359,7 +353,7 @@ def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
     confs = OrderedDict()
 
     for massBinPri in massBinsPri:
-        label = '%4.1f < log($M_\star$/M$_{\\rm sun}$) < %4.1f' % (massBinPri[0], massBinPri[1])
+        label = r'%4.1f < log($M_\star$/M$_{\rm sun}$) < %4.1f' % (massBinPri[0], massBinPri[1])
         confs[label] = OrderedDict()
 
         for colorBinPri in colorBinsPri:
@@ -370,12 +364,10 @@ def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
             confs[label][colorLabel] = conf
 
     # start plot
-    color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
-
-    fig = plt.figure(figsize=figsize, facecolor=color1)
+    fig = plt.figure(figsize=figsize)
     gs = gridspec.GridSpec(1, 1)
-    ax = fig.add_subplot(gs[0], facecolor=color1)
-    setAxisColors(ax, color2)
+    ax = fig.add_subplot(gs[0])
+    setAxisColors(ax)
 
     ax.set_xlim(rMinMax)
     ax.set_xlabel(rLabel)
@@ -419,7 +411,7 @@ def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
     legend2 = ax.legend(handles, labels, loc='upper right')
     ax.add_artist(legend2)
 
-    fig.savefig('%sconformity_redfrac_%s.pdf' % (saveBase,sP.simName), facecolor=fig.get_facecolor())
+    fig.savefig('%sconformity_redfrac_%s.pdf' % (saveBase,sP.simName))
     plt.close(fig)
 
 def paperPlots():
@@ -454,8 +446,8 @@ def paperPlots():
 
         mstarBins = [mstarBinDef]
         colorBins = OrderedDict()
-        colorBins['blue (M$_\star$ > 10$^9$ M$_{\\rm sun})$'] = [0.0, 0.6]
-        colorBins['red (M$_\star$ > 10$^9$ M$_{\\rm sun})$'] = [0.6, 1.0]
+        colorBins[r'blue (M$_\star$ > 10$^9$ M$_{\rm sun})$'] = [0.0, 0.6]
+        colorBins[r'red (M$_\star$ > 10$^9$ M$_{\rm sun})$'] = [0.6, 1.0]
 
         galaxyTwoPointQuantBounds(sPs, saveBase=saveBase, cenSatSelect='all', ratioSubPlot=True,
           colorBins=colorBins, cType=cTypeDef, mstarBins=mstarBins, mType=mTypeDef)
@@ -466,8 +458,8 @@ def paperPlots():
         saveBase = 'figure1b_highmass_vs_lowmass_'
 
         mstarBins = OrderedDict()
-        mstarBins['low-mass (M$_\star$ < 10$^{11}$ M$_{\\rm sun})$'] = [9.0, 11.0]
-        mstarBins['high-mass (M$_\star$ > 10$^{11}$ M$_{\\rm sun})$'] = [11.0, 13.0]
+        mstarBins[r'low-mass (M$_\star$ < 10$^{11}$ M$_{\rm sun})$'] = [9.0, 11.0]
+        mstarBins[r'high-mass (M$_\star$ > 10$^{11}$ M$_{\rm sun})$'] = [11.0, 13.0]
         cType = None
         colorBins = None
 
@@ -535,8 +527,8 @@ def paperPlots():
 
         mstarBins = [mstarBinDef]
         colorBins = OrderedDict()
-        colorBins['blue (M$_\star$ > 10$^9$ M$_{\\rm sun})$'] = [0.0, 0.6]
-        colorBins['red (M$_\star$ > 10$^9$ M$_{\\rm sun})$'] = [0.6, 1.0]
+        colorBins[r'blue (M$_\star$ > 10$^9$ M$_{\rm sun})$'] = [0.0, 0.6]
+        colorBins[r'red (M$_\star$ > 10$^9$ M$_{\rm sun})$'] = [0.6, 1.0]
 
         galaxyTwoPointQuantBounds(sPs, saveBase=saveBase, cenSatSelect='all', ratioSubPlot=True,
           colorBins=colorBins, cType=cTypeDef, mstarBins=mstarBins, mType=mTypeDef)

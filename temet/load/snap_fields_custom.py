@@ -2041,7 +2041,7 @@ def vel_rel(sim, partType, field, args):
     if isinstance(vel, dict) and vel['count'] == 0: return vel # no particles of type, empty return
 
     # get reference velocity
-    if sim.isZoom and args['subhaloID'] is None:
+    if sim.isZoom and args['subhaloID'] is None and args['haloID'] is None:
         args['subhaloID'] = sim.zoomSubhaloID
         print(f'WARNING: Using {sim.zoomSubhaloID =} for zoom run to compute [{field}]!')
 
@@ -2086,13 +2086,13 @@ def rad(sim, partType, field, args):
     if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
     
     # get (host) halo center position
-    if sim.isZoom and args['subhaloID'] is None:
+    if sim.isZoom and args['subhaloID'] is None and args['haloID'] is None and sim.refPos is None:
         args['subhaloID'] = sim.zoomSubhaloID
         print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
 
     if args['haloID'] is None and args['subhaloID'] is None:
         assert sim.refPos is not None
-        print(f'WARNING: Using refPos in non-zoom run to compute [{field}]!')
+        print(f'Note: Using refPos to compute [{field}]!')
         haloPos = sim.refPos
         halo = sim.halo(sim.refSubhalo['SubhaloGrNr'])
     else:
@@ -2105,7 +2105,7 @@ def rad(sim, partType, field, args):
 
     # compute
     rr = sim.periodicDists(haloPos, pos)
-    
+
     # what kind of distance?
     if '_rvir' in field: rr /= halo['Group_R_Crit200']
     if '_r500' in field: rr /= halo['Group_R_Crit500']
@@ -2149,7 +2149,7 @@ def dist_2dz(sim, partType, field, args):
     if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
     
     # get (host) halo center position, or position of reference
-    if sim.isZoom and args['subhaloID'] is None:
+    if sim.isZoom and args['subhaloID'] is None and args['haloID'] is None and sim.refPos is None:
         args['subhaloID'] = sim.zoomSubhaloID
         print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
 
@@ -2186,13 +2186,13 @@ def vrad(sim, partType, field, args):
     if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
 
     # get position and velocity of reference
-    if sim.isZoom and args['subhaloID'] is None:
+    if sim.isZoom and args['subhaloID'] is None and args['haloID'] is None and sim.refPos is None:
         args['subhaloID'] = sim.zoomSubhaloID
         print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
 
     if args['haloID'] is None and args['subhaloID'] is None:
         if sim.refPos is not None and sim.refVel is not None:
-            print(f'WARNING: Using refPos and refVel in non-zoom run to compute [{field}]!')
+            print(f'Note: Using refPos and refVel to compute [{field}]!')
             refPos = sim.refPos
             refVel = sim.refVel
         else:
@@ -2250,7 +2250,7 @@ def angmom(sim, partType, field, args):
     if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
 
     # reference position and velocity
-    if sim.isZoom and args['subhaloID'] is None:
+    if sim.isZoom and args['subhaloID'] is None and args['haloID'] is None:
         args['subhaloID'] = sim.zoomSubhaloID
         print(f'WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!')
 

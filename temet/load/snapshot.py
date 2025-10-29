@@ -284,6 +284,7 @@ def haloOrSubhaloSubset(sP, haloID=None, subhaloID=None):
             subset['lenType'][sP.ptNum('dm')] = f[gcName][gcName+'Len'][groupOffset]
 
         subset['offsetType'] = groupCatOffsetListIntoSnap(sP)['snapOffsets'+gcName][gcID,:]
+        assert subset['offsetType'].ndim == 1, 'Error: Make sure input haloID or subhaloID is a single number, not list.'
 
     return subset
 

@@ -643,6 +643,36 @@ rshock_.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_kpc' in f else '' # linear d
 rshock_.limits = lambda sim,pt,f: [1.6, 3.2] if '_kpc' in f else [0.0, 4.0]
 rshock_.log = lambda sim,pt,f: True if '_kpc' in f else False
 
+# ---------------------------- auxcat: sizes ------------------------------------------------------
+
+@catalog_field
+def size_halpha(sim, partType, field, args):
+    """ Half-light radius of H-alpha emission, based on SFR empirical relation. """
+    acField = 'Subhalo_Gas_Halpha_HalfRad'
+    ac = sim.auxCat(acField)
+    vals = sim.units.codeLengthToKpc(ac[acField])
+
+    return vals
+
+size_halpha.label = r'r$_{\rm 1/2,H\alpha}$ [ log kpc ]'
+size_halpha.units = r'$\rm{kpc}$'
+size_halpha.limits = [0.0, 1.5]
+size_halpha.log = True
+
+@catalog_field
+def size_halpha_em(sim, partType, field, args):
+    """ Half-light radius of H-alpha emission, based on cloudy. """
+    acField = 'Subhalo_Gas_H-alpha_HalfRad'
+    ac = sim.auxCat(acField)
+    vals = sim.units.codeLengthToKpc(ac[acField])
+
+    return vals
+
+size_halpha_em.label = r'r$_{\rm 1/2,H\alpha}$ [ log kpc ]'
+size_halpha_em.units = r'$\rm{kpc}$'
+size_halpha_em.limits = [0.0, 1.5]
+size_halpha_em.log = True
+
 # ---------------------------- auxcat: other ------------------------------------------------------
 
 @catalog_field

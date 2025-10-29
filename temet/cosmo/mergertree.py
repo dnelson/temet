@@ -348,8 +348,8 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
                 vals = sim.units.metallicityInSolar(mpb['SubhaloGasMetallicitySfrWeighted'])
 
         # unchanged fields from the tree
-        if prop in mpb.keys():
-            vals = mpb[prop]
+        if quant.replace('_log','') in mpb.keys():
+            vals = mpb[quant.replace('_log','')]
 
         if vals is None:
             # unrecognized quant name, likely custom/auxcat-type, need to compute separately for each snap

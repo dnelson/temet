@@ -193,12 +193,16 @@ def cache(_func=None, *, overwrite=False):
 
                 # get function source (note: includes decorator line(s), comments, and so on)
                 hashstr = getsource(func)
+                hashstr = hashstr[hashstr.find('def '):] # strip leading decorator line(s)
 
                 # append args and kwargs as string pairs
                 for arg in args:
                     hashstr += str(arg) + ';'
                 for key in sorted(kwargs.keys()):
                     hashstr += key + '=' + str(kwargs[key]) + ';'
+
+                # append simParams details (otherwise is not unique in e.g. snap)
+                hashstr += str(sim.snap)
 
                 hashval = sha256(hashstr.encode('utf-8')).hexdigest()[::4]
 
