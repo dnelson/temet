@@ -5,7 +5,6 @@ import numpy as np
 import h5py
 import glob
 import threading
-import gc
 from os.path import isfile, isdir
 from os import mkdir, unlink
 #from scipy.special import wofz
@@ -1795,6 +1794,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
     flux = np.exp(-1*tau)
 
     with h5py.File(saveFilename,'r+') as f:
+        chunks = (1000, tau.shape[1]) if tau.shape[1] < 10000 else (100, tau.shape[1])
         f.create_dataset('flux', data=flux, chunks=chunks, compression='gzip')
 
     print(f'Saved: [{saveFilename}]')
@@ -1904,34 +1904,31 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPer
             print(f'Skipping [{dset}], already saved.')
             continue
 
-        # allocate, and set reasonable chunk shape (otherwise, automatic) (mandatory with compression)
-        print(f'Loading [{dset}] -- [', end='')
+        # set reasonable chunk shape (otherwise, automatic) (mandatory with compression)
+        print(f'Re-writing [{dset}] -- [', end='')
         offset = 0
 
         if 'EW_' in dset:
-            data = np.zeros(count, dtype='float32')
+            shape = count
             chunks = (count)
         else:
-            data = np.zeros((count,n_wave), dtype='float32')
+            shape = (count,n_wave)
             chunks = (1000, n_wave) if n_wave < 10000 else (100, n_wave)
 
-        # load
-        for i in range(pSplitNum):
-            filename = _spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=[i,pSplitNum], solar=solar)
-            print(i, end=' ', flush=True)
+        with h5py.File(saveFilename,'r+') as fOut:
+            # initialize empty dataset
+            data = fOut.create_dataset(dset, shape=shape, chunks=chunks, compression='gzip')
 
-            with h5py.File(filename,'r',rdcc_nbytes=0) as f_read:
-                data[offset:offset+n_spec] = f_read[dset][()]
-            offset += n_spec
+            # load and write by split chunk
+            for i in range(pSplitNum):
+                filename = _spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=[i,pSplitNum], solar=solar)
+                print(i, end=' ', flush=True)
 
-            from ..util.helper import reportMemory
-            reportMemory()
-            gc.collect()
+                with h5py.File(filename,'r',rdcc_nbytes=0) as f_read:
+                    data[offset:offset+n_spec] = f_read[dset][()]
+                offset += n_spec
 
-        # write
-        with h5py.File(saveFilename,'r+') as f:
-            print('] writing...')
-            f.create_dataset(dset, data=data, chunks=chunks, compression='gzip')
+        print('] done.')
 
     print('Saved: [%s]' % saveFilename)
 
