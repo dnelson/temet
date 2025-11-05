@@ -13,7 +13,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from os.path import isfile
 from scipy.ndimage import gaussian_filter
 
-from ..cosmo.spectrum import _spectra_filepath, lines, instruments
+from ..cosmo.spectrum import spectra_filepath
+from ..cosmo.spectrum_util import lines, instruments
 from ..plot.spectrum import spectra_gallery_indiv, EW_distribution, dNdz_evolution, EW_vs_coldens, \
     instrument_lsf, spectrum_plot_single
 from ..plot.config import *
@@ -193,7 +194,7 @@ def lightconeSpectra(sim, instrument, ion, solar=False, add_lines=None):
     # load metadata from first (available) snapshot
     for snap in snaps:
         sim.setSnap(snap)
-        fname = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
+        fname = spectra_filepath(sim, ion, instrument=instrument, solar=solar)
 
         if isfile(fname):
             break
@@ -214,7 +215,7 @@ def lightconeSpectra(sim, instrument, ion, solar=False, add_lines=None):
         print(f'[{snap = :3d}] at z = {sim.redshift:.2f}, num spec = {num_box}')
 
         # check existence
-        fname = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
+        fname = spectra_filepath(sim, ion, instrument=instrument, solar=solar)
 
         if not isfile(fname):
             # (hopefully, no lines at the relevant wavelength range at this redshift)
@@ -225,7 +226,7 @@ def lightconeSpectra(sim, instrument, ion, solar=False, add_lines=None):
         spec_inds = rng.integers(low=0, high=num_spec, size=int(num_box))
 
         # open file
-        fname = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
+        fname = spectra_filepath(sim, ion, instrument=instrument, solar=solar)
 
         with h5py.File(fname,'r') as f:
             # load each spectrum individually, shift, and accumulate
@@ -428,7 +429,7 @@ def _galaxy_sightline_sample(sim, line, instrument, mstar_range, D_max):
 
     # load spectra metadata
     ion = lines[line]['ion']
-    filepath = _spectra_filepath(sim, ion, instrument=instrument)
+    filepath = spectra_filepath(sim, ion, instrument=instrument)
 
     with h5py.File(filepath,'r') as f:
         # load metadata
@@ -527,7 +528,7 @@ def _optical_depth_map_2d_calc(sim, line, instrument, mstar_range, D_max):
 
     # load spectra metadata
     ion = lines[line]['ion']
-    filepath = _spectra_filepath(sim, ion, instrument=instrument)
+    filepath = spectra_filepath(sim, ion, instrument=instrument)
 
     with h5py.File(filepath,'r') as f:
         # load metadata
@@ -680,7 +681,7 @@ def impact_parameter_profile(sim, line, instrument, spec=False, SNR=100):
     
     # load EW
     ion = lines[line]['ion']
-    filepath = _spectra_filepath(sim, ion, instrument=instrument)
+    filepath = spectra_filepath(sim, ion, instrument=instrument)
 
     with h5py.File(filepath,'r') as f:
         # load metadata
@@ -759,7 +760,7 @@ def impact_parameter_profile(sim, line, instrument, spec=False, SNR=100):
             ax_spec.set_ylabel(f'{line_plot} Flux', fontsize='x-large')
 
             ion = lines[line_plot]['ion']
-            filepath = _spectra_filepath(sim, ion, instrument=instrument)
+            filepath = spectra_filepath(sim, ion, instrument=instrument)
 
             # get redshifted wavelength of this line at the galaxy systemic
             for i in range(num_gals):
@@ -802,7 +803,7 @@ def doublet_ratio(sim, line1, line2, instrument):
     ion = lines[line1]['ion']
     assert ion == lines[line2]['ion'], 'Must be same ion.'
 
-    filepath = _spectra_filepath(sim, ion, instrument=instrument)
+    filepath = spectra_filepath(sim, ion, instrument=instrument)
     with h5py.File(filepath,'r') as f:
         # load metadata
         EW1 = f['EW_' + line1.replace(' ','_')][()]
@@ -861,7 +862,7 @@ def mean_transmitted_flux(sim, line, instrument, redshifts):
         print(f' At redshift [{redshifts[i]:.2f}]...')
         # load
         sim.setRedshift(redshifts[i])
-        filepath = _spectra_filepath(sim, ion, instrument=instrument)
+        filepath = spectra_filepath(sim, ion, instrument=instrument)
 
         with h5py.File(filepath,'r') as f:
             # load metadata

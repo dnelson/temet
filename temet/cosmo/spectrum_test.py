@@ -5,7 +5,8 @@ import numpy as np
 import h5py
 from os.path import isfile
 
-from ..cosmo.spectrum import create_spectra_from_traced_rays, create_wavelength_grid, _line_params
+from ..cosmo.spectrum import create_spectra_from_traced_rays
+from ..cosmo.spectrum_util import create_wavelength_grid, line_params
 from ..util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
                               trace_ray_through_voronoi_mesh_with_connectivity, rayTrace
 from ..util.sphMap import sphGridWholeBox, sphMap
@@ -19,8 +20,8 @@ def create_spectrum_from_traced_ray(sP, line, instrument, cell_dens, cell_dx, ce
 
     # prepare pass through
     rays_off = np.array([0], dtype='int32')
-    rays_len = np.array([master_dens.size], dtype='int32')
-    rays_cell_inds = np.arange(master_dens.size)
+    rays_len = np.array([cell_dens.size], dtype='int32')
+    rays_cell_inds = np.arange(cell_dens.size)
 
     return create_spectra_from_traced_rays(sP, line, instrument,
                                            rays_off, rays_len, cell_dx, rays_cell_inds, 

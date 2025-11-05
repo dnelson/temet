@@ -17,7 +17,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 def check_spec():
     """ Check OVI COS vs idealized spectra. """
-    from temet.cosmo.spectrum import _equiv_width
+    from temet.cosmo.spectrum_util import _equiv_width
     path = '/u/dnelson/sims.TNG/TNG50-1/postprocessing/AbsorptionSpectra/'
     file1 = 'spectra_TNG50-1_z0.1_n1000d2-fullbox_COS-G130M_OVI_combined.hdf5'
     file2 = 'spectra_TNG50-1_z0.1_n1000d2-fullbox_idealized_OVI_combined.hdf5'
@@ -130,7 +130,7 @@ def check_spec():
 
 def check_spec_v90():
     """ Check OVI COS vs idealized spectra. """
-    from temet.cosmo.spectrum import _equiv_width, _v90
+    from temet.cosmo.spectrum_util import _equiv_width, _v90
     path = '/u/dnelson/sims.TNG/TNG50-1/postprocessing/AbsorptionSpectra/'
     file1 = 'spectra_TNG50-1_z0.1_n1000d2-fullbox_COS-G130M_OVI_combined.hdf5'
 
@@ -177,7 +177,7 @@ def check_spec_v90():
 
 def plot_wofz():
     """ Test wofz complex function. """
-    from .cosmo.spectrum import wofz_complex_fn_realpart
+    from .cosmo.spectrum_util import wofz_complex_fn_realpart
     from .util.helper import faddeeva985
 
     u = np.linspace(-15, 15, 200)

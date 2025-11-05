@@ -10,12 +10,13 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from os.path import isfile
 
-from ..cosmo.spectrum import _line_params, _voigt_tau, _equiv_width, _spectra_filepath, \
-                             lsf_matrix, varconvolve, _resample_spectrum, \
-                             integrate_along_saved_rays, create_wavelength_grid, deposit_single_line, \
-                             lines, instruments, projAxis_def, nRaysPerDim_def, raysType_def
+from ..cosmo.spectrum import integrate_along_saved_rays, deposit_single_line, \
+                             projAxis_def, nRaysPerDim_def, raysType_def, spectra_filepath
+from ..cosmo.spectrum_util import line_params, _voigt_tau, _equiv_width, \
+                                  lsf_matrix, varconvolve, resample_spectrum, \
+                                  create_wavelength_grid, lines, instruments
 from ..cosmo.spectrum_analysis import absorber_catalog, load_spectra_subset, wave_to_dv
-from ..util.helper import loadColorTable, sampleColorTable, logZeroNaN, iterable, closest, rebin
+from ..util.helper import loadColorTable, sampleColorTable, logZeroNaN, iterable, closest
 from ..util.units import units
 from ..plot.config import *
 
@@ -30,7 +31,7 @@ def _cog(lines, N, b, nPts=5001):
       b (float): Doppler parameter [km/s].
       nPts (int): number of points to sample the spectrum.
     """
-    f, gamma, wave0_ang, _, _ = _line_params(lines[0])
+    f, gamma, wave0_ang, _, _ = line_params(lines[0])
 
     wave_ang = np.linspace(wave0_ang-40, wave0_ang+40, nPts) # 0.05 Ang spacing
     dvel = (wave_ang/wave0_ang - 1) * units.c_cgs / 1e5 # cm/s -> km/s
@@ -41,7 +42,7 @@ def _cog(lines, N, b, nPts=5001):
     tau = np.zeros(wave_ang.shape, dtype='float64')
 
     for line in lines:
-        f, gamma, wave0_ang, _, _ = _line_params(line)
+        f, gamma, wave0_ang, _, _ = line_params(line)
         tau += _voigt_tau(wave_ang, 10.0**N, b, wave0_ang, f, gamma)
 
     if tau[0] > 1e-2 or tau[-1] > 1e-2:
@@ -146,7 +147,7 @@ def profile_single_line():
     master_mid, master_edges, tau_master = create_wavelength_grid(line=line, instrument=None)
 
     # deposit
-    f, gamma, wave0, _, _ = _line_params(line)
+    f, gamma, wave0, _, _ = line_params(line)
 
     z_doppler = vel_los / units.c_km_s
     z_eff = (1+z_doppler)*(1+z_cosmo) - 1 # effective redshift
@@ -209,7 +210,7 @@ def profiles_multiple_lines(plotTau=True):
     z_eff = (1+z_doppler)*(1+z_cosmo) - 1 # effective redshift
 
     for line in lineNames:
-        f, gamma, wave0, _, _ = _line_params(line)
+        f, gamma, wave0, _, _ = line_params(line)
 
         deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff)
 
@@ -284,7 +285,7 @@ def profiles_multiple_lines_coldens():
         z_eff = (1+z_doppler)*(1+z_cosmo) - 1 # effective redshift
 
         for line in lineNames:
-            f, gamma, wave0, _, _ = _line_params(line)
+            f, gamma, wave0, _, _ = line_params(line)
 
             deposit_single_line(master_edges, tau_master, f, gamma, wave0, 10.0**N, b, z_eff)
 
@@ -294,7 +295,7 @@ def profiles_multiple_lines_coldens():
 
         # down-sample to instrumental wavelength grid
         inst_mid, inst_waveedges, _ = create_wavelength_grid(instrument=instrument+'_inst')
-        tau_inst = _resample_spectrum(master_mid, tau_master, inst_waveedges)
+        tau_inst = resample_spectrum(master_mid, tau_master, inst_waveedges)
 
         flux_inst = np.exp(-1*tau_inst)
 
@@ -342,7 +343,7 @@ def LyA_profiles_vs_coldens():
     z_doppler = vel_los / units.c_km_s
     z_eff = (1+z_doppler)*(1+z_cosmo) - 1 # effective redshift
 
-    f, gamma, wave0, _, _ = _line_params(line)
+    f, gamma, wave0, _, _ = line_params(line)
 
     # start plot
     fig = plt.figure(figsize=(13,6))
@@ -1155,7 +1156,7 @@ def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=
         ion = lines[line]['ion']
 
         for inst in iterable(instrument):
-            filepath = _spectra_filepath(sim, ion, instrument=inst, solar=solar)
+            filepath = spectra_filepath(sim, ion, instrument=inst, solar=solar)
 
             if isfile(filepath):
                 break
@@ -1328,7 +1329,7 @@ def EW_vs_coldens(sim, line='CIV 1548', instrument='SDSS-BOSS', bvals = [5, 10, 
     """
     # load
     ion = lines[line]['ion']
-    filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar, pSplit=pSplit)
+    filepath = spectra_filepath(sim, ion, instrument=instrument, solar=solar, pSplit=pSplit)
 
     with h5py.File(filepath,'r') as f:
         EW = f['EW_%s' % line.replace(' ','_')][()]
@@ -1427,7 +1428,7 @@ def dNdz_evolution(sim_in, redshifts, line='MgII 2796', instrument='SDSS-BOSS', 
 
         # check for existence across all specified instrument(s)
         for inst in iterable(instrument):
-            filepath = _spectra_filepath(sim, ion, instrument=inst, solar=solar)
+            filepath = spectra_filepath(sim, ion, instrument=inst, solar=solar)
 
             if isfile(filepath):
                 break
@@ -1672,7 +1673,7 @@ def n_cloud_distribution(sim, ion='Mg II', redshifts=[0.5,0.7]):
     # loop over requested redshifts
     for redshift in redshifts:
         # load
-        saveFilename = _spectra_filepath(sim, ion).replace('integral_','stats_').replace('_combined','')
+        saveFilename = spectra_filepath(sim, ion).replace('integral_','stats_').replace('_combined','')
 
         with h5py.File(saveFilename,'r') as f:
             n_clouds = f['n_clouds'][()]
@@ -1702,13 +1703,13 @@ def n_clouds_vs_EW(sim):
     xlog = False
 
     # load n_clouds
-    saveFilename = _spectra_filepath(sim, ion).replace('integral_','stats_').replace('_combined','')
+    saveFilename = spectra_filepath(sim, ion).replace('integral_','stats_').replace('_combined','')
 
     with h5py.File(saveFilename,'r') as f:
         n_clouds = f['n_clouds'][()]
 
     # load EWs
-    filepath = _spectra_filepath(sim, ion, instrument=instrument)
+    filepath = spectra_filepath(sim, ion, instrument=instrument)
 
     EWs = {}
     inds = {}

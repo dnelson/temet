@@ -10,7 +10,8 @@ from numba import jit
 from ..util.helper import closest, contiguousIntSubsets, logZeroMin
 from ..util.units import units
 from ..cosmo.spectrum import generate_rays_voronoi_fullbox, integrate_along_saved_rays, \
-    create_wavelength_grid, _spectra_filepath, lines, projAxis_def, nRaysPerDim_def, raysType_def
+                             projAxis_def, nRaysPerDim_def, raysType_def, spectra_filepath
+from ..cosmo.spectrum_util import create_wavelength_grid, lines
 from ..plot.config import *
 
 def load_spectra_subset(sim, ion, instrument, mode, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def, 
@@ -40,7 +41,7 @@ def load_spectra_subset(sim, ion, instrument, mode, nRaysPerDim=nRaysPerDim_def,
     else:
         assert num is None, 'Do not specify num if mode is not random or evenly.'
 
-    filepath = _spectra_filepath(sim, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, solar=solar)
+    filepath = spectra_filepath(sim, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, solar=solar)
 
     with h5py.File(filepath,'r') as f:
         # load metadata
@@ -246,7 +247,7 @@ def load_absorber_spectra(sim, line, instrument, solar, EW_minmax=None, dwave=0.
 
     ion = lines[line]['ion']
 
-    filepath = _spectra_filepath(sim, ion, instrument=instrument, solar=solar)
+    filepath = spectra_filepath(sim, ion, instrument=instrument, solar=solar)
 
     with h5py.File(filepath,'r') as f:
         # load metadata
@@ -340,7 +341,7 @@ def absorber_catalog(sP, ion, instrument, solar=False):
     # lines of this ion
     lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
 
-    loadFilename = _spectra_filepath(sP, ion, instrument=instrument, solar=solar)
+    loadFilename = spectra_filepath(sP, ion, instrument=instrument, solar=solar)
     saveFilename = loadFilename.replace('_combined','_abscat')
 
     # dicts (to load, one entry per line)
@@ -617,7 +618,7 @@ def cell_to_absorber_map(sP, ion, instrument, solar=False):
     # lines of this ion
     lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
     
-    loadFilename = _spectra_filepath(sP, ion, instrument=instrument, solar=solar)
+    loadFilename = spectra_filepath(sP, ion, instrument=instrument, solar=solar)
     saveFilename = loadFilename.replace('_combined','_abscellmap')
 
     pSplitNum = 16 # hack, no easy way to get this from the combined spectra file
@@ -754,7 +755,7 @@ def calc_statistics_from_saved_rays(sP, ion):
     pSplitNum = 16
 
     # save file
-    saveFilename = _spectra_filepath(sP, ion).replace('integral_','stats_').replace('_combined','')
+    saveFilename = spectra_filepath(sP, ion).replace('integral_','stats_').replace('_combined','')
 
     # (global) load required gas cell properties
     densField = '%s numdens' % ion
