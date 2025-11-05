@@ -359,7 +359,7 @@ def _generate_lsf_matrix(wave_mid, lsf_dlambda, dwave):
     kernel_halfsize = int(kernel_size/2)
 
     # allocate
-    lsf_matrix = np.zeros((wave_mid.size,kernel_size), dtype='float32')
+    lsf_matrix = np.zeros((wave_mid.size,kernel_size), dtype='float64')
 
     # create a different discrete kernel for each wavelength bin
     for i in range(wave_mid.size):
@@ -655,6 +655,70 @@ def _equiv_width(tau,wave_mid_ang):
 
     return res
 
+@jit(nopython=True, nogil=True, cache=True)
+def _v90(tau,wave_mid_ang):
+    """ Compute v90 the velocity range containing 90% of the flux. """
+    assert wave_mid_ang.size == tau.size
+
+    # convert to flux = 1-exp(-tau)
+    tau = tau.astype(np.float64)
+    flux = 1 - np.exp(-tau)
+
+    # normalize
+    flux_sum = np.sum(flux)
+    if flux_sum == 0:
+        return 0.0
+    
+    inv_flux_total = 1.0 / flux_sum
+    flux *= inv_flux_total
+
+    # fallbacks (e.g. v90 == 0 if no absorption))
+    wave_v05 = wave_mid_ang[0]
+    wave_v95 = wave_mid_ang[0]
+
+    # cumulative sum walk
+    s = 0.0
+
+    for i in range(flux.size):
+        s += flux[i]
+        if s > 0.05:
+            # linear interpolation to find s == 0.05
+            if i == 0:
+                wave_v05 = wave_mid_ang[0]
+            else:
+                x = 0.05
+                x1 = s
+                x0 = s - flux[i]
+                y1 = wave_mid_ang[i]
+                y0 = wave_mid_ang[i-1]
+                wave_v05 = y0 + (x - x0) / (x1 - x0) * (y1 - y0)
+            break
+
+    for j in range(i, flux.size):
+        s += flux[j]
+        if s > 0.95:
+            # linear interpolation to find s == 0.95
+            x = 0.95
+            x1 = s
+            x0 = s - flux[j]
+            y1 = wave_mid_ang[j]
+            y0 = wave_mid_ang[j-1]
+            wave_v95 = y0 + (x - x0) / (x1 - x0) * (y1 - y0)
+            break
+
+    if s < 0.95:
+        wave_v95 = wave_mid_ang[-1]
+
+    # calculate velocity interval
+    dwave = wave_v95 - wave_v05
+
+    if dwave == 0:
+        dwave = (wave_mid_ang[j] - wave_mid_ang[j-1]) * 0.1 # i.e. unresolved and small
+
+    v90 = sP_units_c_km_s * dwave / ((wave_v95 + wave_v05)/2)
+
+    return v90
+
 @jit(nopython=True, nogil=True)
 def varconvolve(arr, kernel):
     """ Convolution (non-fft) with variable kernel. """
@@ -810,7 +874,7 @@ def _resample_spectrum(master_mid, tau_master, inst_waveedges):
       inst_tau (array[float]): optical depth array at the lower resolution, with total size 
         equal to (inst_waveedges.size - 1).
     """
-    flux_smallval = 1.0 - 1e-10
+    flux_smallval = 1.0 - 1e-16
 
     # where does instrumental grid start within master?
     master_startind, master_finalind = np.searchsorted(master_mid, [inst_waveedges[0], inst_waveedges[-1]])
@@ -837,14 +901,15 @@ def _resample_spectrum(master_mid, tau_master, inst_waveedges):
             # h = area / width gives the 'height' of (1-flux) in the instrumental grid
             dwave_inst = inst_waveedges[inst_ind+1] - inst_waveedges[inst_ind]
 
-            inst_height = local_EW / dwave_inst 
+            inst_height = local_EW / dwave_inst
 
             # entire inst bin is saturated to zero flux, and/or rounding errors could place the height > 1.0
-            # set to 1-eps, such that tau is very large (~20 for this value of eps), and final flux ~ 1e-10
+            # set to 1-eps, such that tau is very large (~30 for this value of eps), and final flux ~ 1e-16
             if inst_height > flux_smallval:
                 inst_height = flux_smallval
 
             localEW_to_tau = -np.log(1-inst_height)
+            assert np.isfinite(localEW_to_tau), 'Should be finite.'
 
             # save into instrumental optical depth array
             assert inst_tau[inst_ind] == 0, 'Should be empty.'
@@ -859,7 +924,7 @@ def _resample_spectrum(master_mid, tau_master, inst_waveedges):
 
     return inst_tau
 
-@jit(nopython=True, nogil=True)
+#@jit(nopython=True, nogil=True)
 def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, 
                                      rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
                                      cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
@@ -869,10 +934,12 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
     n_rays = ind1 - ind0 + 1
     scalefac = 1/(1+z_vals[0])
 
-    # allocate: full spectra return as well as derived EWs
-    tau_master = np.zeros(master_mid.size, dtype=np.float64)
+    # allocate: full spectra return as well as derived summary statistics
+    tau_master  = np.zeros(master_mid.size, dtype=np.float64)
     tau_allrays = np.zeros((n_rays,inst_wavemid.size), dtype=np.float32)
-    EW_allrays = np.zeros(n_rays, dtype=np.float32)
+    EW_allrays  = np.zeros(n_rays, dtype=np.float32)
+    N_allrays   = np.zeros(n_rays, dtype=np.float32)
+    v90_allrays = np.zeros(n_rays, dtype=np.float32)
 
     # loop over rays
     for i in range(n_rays):
@@ -889,9 +956,10 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
 
         # column density
         N = master_dens * (master_dx * sP_units_Mpc_in_cm) # cm^-2
+        N_allrays[i] = np.sum(N)
 
         # skip rays with negligibly small total columns (in linear cm^-2)
-        if np.sum(N) < 1e8:
+        if N_allrays[i] < 1e8:
             continue
 
         # reset tau_master for each ray
@@ -935,20 +1003,22 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
         # note: in theory we would prefer to convolve the master spectrum prior to resampling, but 
         # given the ~1e8 resolution of the master spectrum, the cost is prohibitive
         if lsf_mode == 1:
+            tau_inst = tau_inst.astype(np.float64)
             flux_inst = 1 - np.exp(-tau_inst)
             flux_conv = varconvolve(flux_inst, lsf_matrix)
 
             # note: flux_conv can be 1.0, leading to tau_inst = inf
-            # so set to 1-eps, such that tau is very large (~16 for this value of eps)
-            # note: taking 1 - 1e-10 as in _resample_spectrum() fails in where/assignment to flux_conv (dtype?)
-            flux_smallval = 1.0 - 1e-7
+            # so set to 1-eps, such that tau is very large (~30 for this value of eps)
+            flux_smallval = 1.0 - 1e-16
             flux_conv[flux_conv >= 1.0] = flux_smallval
 
-            tau_inst = -np.log(1-flux_conv)
+            tau_inst = -np.log(1-flux_conv).astype(np.float32)
 
-        # also compute and save a reference EW
-        # note: is a global EW, i.e. not localized/restricted to a single absorber
+        # also compute and save a reference EW and v90
+        # note: are global values, i.e. not localized/restricted to a single absorber
         EW_allrays[i] = _equiv_width(tau_inst,inst_wavemid)
+
+        v90_allrays[i] = _v90(tau_inst,inst_wavemid)
 
         # stamp
         tau_allrays[i,:] = tau_inst
@@ -967,7 +1037,7 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
                           ' from wavemin = ',wavemin,' to wavemax = ',wavemax, 
                           ' EW_inst = ', EW_check, ' EW_master = ', EW_allrays[i])
 
-    return tau_allrays, EW_allrays
+    return tau_allrays, EW_allrays, N_allrays, v90_allrays
 
 def create_spectra_from_traced_rays(sP, line, instrument,
                                     rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
@@ -1015,7 +1085,7 @@ def create_spectra_from_traced_rays(sP, line, instrument,
     lsf_mode, lsf, _ = lsf_matrix(instrument)
 
     if 0:
-        indiv_index = 0
+        indiv_index = 10910
         rays_len = rays_len[indiv_index:indiv_index+10]
         rays_off = rays_off[indiv_index:indiv_index+10]
         n_rays = rays_len.size
@@ -1026,13 +1096,13 @@ def create_spectra_from_traced_rays(sP, line, instrument,
         ind0 = 0
         ind1 = n_rays - 1
 
-        tau, EW = _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, 
+        tau, EW, N, v90 = _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, 
                                                    rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
                                                    cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
                                                    master_mid, master_edges, inst_wavemid, inst_waveedges, 
                                                    lsf_mode, lsf, ind0, ind1)
 
-        return inst_wavemid, tau, EW
+        return inst_wavemid, tau, EW, N, v90
 
     # multi-threaded
     class specThread(threading.Thread):
@@ -1064,16 +1134,20 @@ def create_spectra_from_traced_rays(sP, line, instrument,
 
     # all threads are done, determine return size and allocate
     tau_allrays = np.zeros((n_rays,inst_wavemid.size), dtype='float32')
-    EW_allrays = np.zeros(n_rays, dtype='float32')
+    EW_allrays  = np.zeros(n_rays, dtype='float32')
+    N_allrays   = np.zeros(n_rays, dtype='float32')
+    v90_allrays = np.zeros(n_rays, dtype='float32')
 
     # add the result array from each thread to the global
     for thread in threads:
-        tau_loc, EW_loc = thread.result
+        tau_loc, EW_loc, N_loc, v90_loc = thread.result
 
         tau_allrays[thread.ind0 : thread.ind1 + 1,:] = tau_loc
         EW_allrays[thread.ind0 : thread.ind1 + 1] = EW_loc
+        N_allrays[thread.ind0 : thread.ind1 + 1] = N_loc
+        v90_allrays[thread.ind0 : thread.ind1 + 1] = v90_loc
 
-    return inst_wavemid, tau_allrays, EW_allrays
+    return inst_wavemid, tau_allrays, EW_allrays, N_allrays, v90_allrays
 
 def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def, 
                                   subhaloIDs=None, pSplit=None, integrateQuant=None, search=False):
@@ -1108,10 +1182,6 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
     if not isfile(path) and isfile(sP.postPath + 'AbsorptionSightlines/' + filename):
         # check also existing files in permanent, publicly released postprocessing/
         path = sP.postPath + 'AbsorptionSightlines/' + filename
-
-    if pSplit is None and not isfile(path):
-        print(f'Did not find: [{path}], likely expecting it to already exist.')
-        assert 0
 
     # total requested pathlength (equal to box length)
     total_dl = sP.boxSize
@@ -1475,8 +1545,6 @@ def _integrate_quantity_along_traced_rays(rays_off, rays_len, rays_cell_dl, rays
 
         r[i] = np.sum(master_dx * master_values)
 
-        #import pdb; pdb.set_trace()
-
     return r
 
 def integrate_along_saved_rays(sP, field, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def, subhaloIDs=None, pSplit=None):
@@ -1653,6 +1721,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
         # bizarre rounding issues in np.linspace during creation of master grid
         wave_min = int(np.floor((wave_min_ion * (1 + sP.redshift) - 50) / 100) * 100)
         wave_max = int(np.ceil((wave_max_ion * (1 + sP.redshift) + 50) / 100) * 100)
+
         if wave_min < 0: wave_min = 0
         instruments['idealized']['wave_min'] = wave_min
         instruments['idealized']['wave_max'] = wave_max
@@ -1681,7 +1750,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
 
     # sample master grid
     wave_mid, _, tau = create_wavelength_grid(instrument=instrument)
-    
+
     # list of lines to process for this ion
     lineCandidates = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
 
@@ -1700,6 +1769,9 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
     # save file
     saveFilename = _spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=pSplit, solar=solar)
     saveFilenameConcat = _spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=None, solar=solar)
+
+    if not isdir(sP.derivPath + "spectra/"):
+        mkdir(sP.derivPath + "spectra/")
 
     # does save already exist, with all lines done?
     existing_lines = []
@@ -1738,6 +1810,8 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
 
     # (re)start output
     EWs = {}
+    N = {}
+    v90 = {}
     densField = None
 
     with h5py.File(saveFilename,'a') as f:
@@ -1747,6 +1821,13 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
             f['ray_pos'] = ray_pos
             f['ray_dir'] = ray_dir
             f['ray_total_dl'] = total_dl
+
+            f.attrs['simName'] = sP.simName
+            f.attrs['redshift'] = sP.redshift
+            f.attrs['snapshot'] = sP.snap
+            f.attrs['instrument'] = instrument
+            f.attrs['lineNames'] = lineNames
+            f.attrs['count'] = ray_pos.shape[0]
 
     # loop over requested line(s)
     for i, line in enumerate(lineNames):
@@ -1765,7 +1846,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
             cell_dens = sP.snapshotSubsetP('gas', densField, inds=cell_inds) # ions/cm^3
 
         # create spectra
-        inst_wave, tau_local, EW_local = \
+        inst_wave, tau_local, EW_local, N_local, v90_local = \
           create_spectra_from_traced_rays(sP, line, instrument, 
                                           rays_off, rays_len, rays_dl, rays_inds,
                                           cell_dens, cell_temp, cell_vellos)
@@ -1773,6 +1854,8 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
         assert np.array_equal(inst_wave,wave_mid)
         
         EWs[line] = EW_local
+        N[line] = N_local
+        v90[line] = v90_local
 
         chunks = (1000, tau_local.shape[1]) if tau_local.shape[1] < 10000 else (100, tau_local.shape[1])
 
@@ -1780,8 +1863,10 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
         with h5py.File(saveFilename,'r+') as f:
             # save tau per line
             f.create_dataset('tau_%s' % line.replace(' ','_'), data=tau_local, chunks=chunks, compression='gzip')
-            # save EWs per line
+            # save EWs and coldens per line
             f.create_dataset('EW_%s' % line.replace(' ','_'), data=EW_local, compression='gzip')
+            f.create_dataset('N_%s' % line.replace(' ','_'), data=N_local, compression='gzip')
+            f.create_dataset('v90_%s' % line.replace(' ','_'), data=v90_local, compression='gzip')
 
     # sum optical depths across all lines, use to calculate flux array (i.e. the spectrum), and total EW
     tau = np.zeros((rays_len.size,tau.size), dtype=tau.dtype)
@@ -1896,6 +1981,8 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPer
     # load large datasets, one at a time, and save
     dsets = ['flux']
     dsets += ['EW_%s' % line for line in lines_present]
+    dsets += ['N_%s' % line for line in lines_present]
+    dsets += ['v90_%s' % line for line in lines_present]
     dsets += ['tau_%s' % line for line in lines_present]
 
     for dset in dsets:
@@ -1908,7 +1995,7 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPer
         print(f'Re-writing [{dset}] -- [', end='')
         offset = 0
 
-        if 'EW_' in dset:
+        if 'EW_' in dset or 'N_' in dset:
             shape = count
             chunks = (count)
         else:

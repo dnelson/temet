@@ -368,6 +368,9 @@ class simParams:
             header = dict(hf["Header"].attrs)
             params = dict(hf["Parameters"].attrs) if "Parameters" in hf else None
 
+            gas_fields = list(hf['PartType0'].keys()) if 'PartType0' in hf else []
+            star_fields = list(hf['PartType4'].keys()) if 'PartType4' in hf else []
+
         self.boxSize     = header["BoxSize"]
         self.omega_m     = header["Omega0"]
         self.omega_L     = header["OmegaLambda"]
@@ -376,11 +379,25 @@ class simParams:
 
         # cosmological/comoving simulation, or idealized simulation?
         if params is not None and params['ComovingIntegrationOn'] == 0:
-            print('a')
             self.comoving = False
         elif header['Omega0'] == 0 and header['OmegaLambda'] == 0:
-            print('b')
             self.comoving = False
+
+        # model parameters
+        if 'GFM_Metals' in gas_fields:
+            # assume tng model
+            self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
+            self.eEOS   = 1
+            self.star   = 1
+            self.winds  = 2
+            self.BHs    = 2
+        if 'ElementFraction' in gas_fields:
+            # assume mcst model
+            self.metals = ['H','He','C','N','O','F','Ne','Na','Mg','Al','Si','P','S','Cl',
+                           'Ar','K','Ca','Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn','other']
+            self.winds = 4
+            self.BHs   = 4
+            self.star  = 2 if 'StellarArray' in star_fields else 3 # solo stars for L15+
 
     def lookup_simulation(self, res=None, run=None, variant=None, redshift=None, time=None, snap=None, hInd=None,
                           haloInd=None, subhaloInd=None):

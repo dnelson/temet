@@ -54,6 +54,7 @@ def load_spectra_subset(sim, ion, instrument, mode, nRaysPerDim=nRaysPerDim_def,
     if EW_minmax is not None:
         inds_all = np.where( (EW>EW_minmax[0]) & (EW<=EW_minmax[1]) )[0]
         print(f'[{ion}] [{instrument}] Found [{len(inds_all)}] of [{EW.size}] spectra in EW range [{EW_minmax[0]}-{EW_minmax[1]}] Ang.')
+        assert len(inds_all) > 0, 'No spectra found in this EW range.'
     else:
         inds_all = np.arange(EW.size)
         print(f'[{ion}] [{instrument}] Loaded [{len(inds_all)}] spectra, no EW range window.')

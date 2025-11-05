@@ -15,6 +15,166 @@ from .util.helper import pSplitRange
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def check_spec():
+    """ Check OVI COS vs idealized spectra. """
+    from temet.cosmo.spectrum import _equiv_width
+    path = '/u/dnelson/sims.TNG/TNG50-1/postprocessing/AbsorptionSpectra/'
+    file1 = 'spectra_TNG50-1_z0.1_n1000d2-fullbox_COS-G130M_OVI_combined.hdf5'
+    file2 = 'spectra_TNG50-1_z0.1_n1000d2-fullbox_idealized_OVI_combined.hdf5'
+
+    path3 = '/u/dnelson/sims.TNG/TNG50-1/data.files/spectra/'
+    file3 = 'spectra_TNG50-1_z0.1_n1000d2-fullbox_idealized_OVI_0-of-16.hdf5_bak' # new, pSplit=[0,16]
+    file4 = 'spectra_TNG50-1_z0.1_n1000d2-fullbox_idealized_OVI_0-of-16.hdf5' # newest, pSplit=[0,16]
+    file5 = 'spectra_TNG50-1_z0.1_n1000d2-fullbox_COS-G130M_OVI_0-of-16.hdf5' # newest, pSplit=[0,16]
+
+    index = 10910
+
+    # load
+    with h5py.File(path+file1,'r') as f:
+        wave_cos = f['wave'][()]
+        tau_1031_cos = f['tau_OVI_1031'][index,:]
+        tau_1037_cos = f['tau_OVI_1037'][index,:]
+        print('ray_pos = ', f['ray_pos'][index])
+    with h5py.File(path+file2,'r') as f:
+        wave_ideal = f['wave'][()]
+        tau_1031_ideal = f['tau_OVI_1031'][index,:]
+        tau_1037_ideal = f['tau_OVI_1037'][index,:]
+    with h5py.File(path3+file3,'r') as f:
+        wave_ideal_new = f['wave'][()]
+        tau_1031_ideal_new = f['tau_OVI_1031'][index,:]
+        tau_1037_ideal_new = f['tau_OVI_1037'][index,:]
+    with h5py.File(path3+file4,'r') as f:
+        wave_ideal_new2 = f['wave'][()]
+        tau_1031_ideal_new2 = f['tau_OVI_1031'][index,:]
+        tau_1037_ideal_new2 = f['tau_OVI_1037'][index,:]
+    with h5py.File(path3+file5,'r') as f:
+        wave_cos_new = f['wave'][()]
+        tau_1031_cos_new = f['tau_OVI_1031'][index,:]
+        tau_1037_cos_new = f['tau_OVI_1037'][index,:]
+
+    # 1031
+    wave_min = 1141
+    wave_max = 1147
+
+    w_cos = np.where( (wave_cos >= wave_min) & (wave_cos <= wave_max) )[0]
+    w_ideal = np.where( (wave_ideal >= wave_min) & (wave_ideal <= wave_max) )[0]
+    w_ideal_new = np.where( (wave_ideal_new >= wave_min) & (wave_ideal_new <= wave_max) )[0]
+    w_ideal_new2 = np.where( (wave_ideal_new2 >= wave_min) & (wave_ideal_new2 <= wave_max) )[0]
+    w_cos_new = np.where( (wave_cos_new >= wave_min) & (wave_cos_new <= wave_max) )[0]
+
+    ew_cos_1031 = _equiv_width(tau_1031_cos[w_cos], wave_cos[w_cos])
+    ew_ideal_1031 = _equiv_width(tau_1031_ideal[w_ideal], wave_ideal[w_ideal])
+    ew_ideal_new_1031 = _equiv_width(tau_1031_ideal_new[w_ideal_new], wave_ideal_new[w_ideal_new])
+    ew_ideal_new2_1031 = _equiv_width(tau_1031_ideal_new2[w_ideal_new2], wave_ideal_new2[w_ideal_new2])
+    ew_cos_new_1031 = _equiv_width(tau_1031_cos_new[w_cos_new], wave_cos_new[w_cos_new])
+
+    print(f'EW COS 1031: {ew_cos_1031:.3f} A')
+    print(f'EW Ideal 1031: {ew_ideal_1031:.3f} A')
+    print(f'EW IdealNew 1031: {ew_ideal_new_1031:.3f} A')
+    print(f'EW IdealNew2 1031: {ew_ideal_new2_1031:.3f} A')
+    print(f'EW COS New 1031: {ew_cos_new_1031:.3f} A')
+
+    # plot
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_title('TNG50-1 z=0.1 OVI Absorption Spectra: COS vs Idealized')
+    ax.set_xlabel('Wavelength [Angstrom]')
+    ax.set_ylabel('Optical Depth tau')
+
+    ax.plot(wave_cos[w_cos], tau_1031_cos[w_cos], '-', lw=2, label='COS 1031')
+    ax.plot(wave_ideal[w_ideal], tau_1031_ideal[w_ideal], '-', lw=2, label='Ideal 1031')
+    ax.plot(wave_ideal_new[w_ideal_new], tau_1031_ideal_new[w_ideal_new], '-', lw=2, label='IdealNew 1031')
+    ax.plot(wave_ideal_new2[w_ideal_new], tau_1031_ideal_new2[w_ideal_new], ':', lw=2, label='IdealNew2 1031')
+    ax.plot(wave_cos_new[w_cos_new], tau_1031_cos_new[w_cos_new], ':', lw=2, label='COSNew 1031')
+
+    ax.legend(loc='upper right')
+    fig.savefig('tng50_ovi_cos_vs_idealized_1031.pdf')
+
+    # 1037
+    wave_min = 1141+6
+    wave_max = 1147+6
+
+    w_cos = np.where( (wave_cos >= wave_min) & (wave_cos <= wave_max) )[0]
+    w_ideal = np.where( (wave_ideal >= wave_min) & (wave_ideal <= wave_max) )[0]
+    w_ideal_new = np.where( (wave_ideal_new >= wave_min) & (wave_ideal_new <= wave_max) )[0]
+    w_ideal_new2 = np.where( (wave_ideal_new2 >= wave_min) & (wave_ideal_new2 <= wave_max) )[0]
+    w_cos_new = np.where( (wave_cos_new >= wave_min) & (wave_cos_new <= wave_max) )[0]
+
+    ew_cos_1037 = _equiv_width(tau_1037_cos[w_cos], wave_cos[w_cos])
+    ew_ideal_1037 = _equiv_width(tau_1037_ideal[w_ideal], wave_ideal[w_ideal])
+    ew_ideal_new_1037 = _equiv_width(tau_1037_ideal_new[w_ideal_new], wave_ideal_new[w_ideal_new])
+    ew_ideal_new2_1037 = _equiv_width(tau_1037_ideal_new2[w_ideal_new2], wave_ideal_new2[w_ideal_new2])
+    ew_cos_new_1037 = _equiv_width(tau_1037_cos_new[w_cos_new], wave_cos_new[w_cos_new])
+
+    print(f'EW COS 1037: {ew_cos_1037:.3f} A')
+    print(f'EW Ideal 1037: {ew_ideal_1037:.3f} A')
+    print(f'EW IdealNew 1037: {ew_ideal_new_1037:.3f} A')
+    print(f'EW IdealNew2 1031: {ew_ideal_new2_1037:.3f} A')
+    print(f'EW COS New 1031: {ew_cos_new_1037:.3f} A')
+
+    # plot
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_title('TNG50-1 z=0.1 OVI Absorption Spectra: COS vs Idealized')
+    ax.set_xlabel('Wavelength [Angstrom]')
+    ax.set_ylabel('Optical Depth tau')
+
+    ax.plot(wave_cos[w_cos], tau_1037_cos[w_cos], '-', lw=2, label='COS 1037')
+    ax.plot(wave_ideal[w_ideal], tau_1037_ideal[w_ideal], '-', lw=2, label='Ideal 1037')
+    ax.plot(wave_ideal_new[w_ideal_new], tau_1037_ideal_new[w_ideal_new], '-', lw=2, label='IdealNew 1037')
+    ax.plot(wave_ideal_new2[w_ideal_new], tau_1037_ideal_new2[w_ideal_new], ':', lw=2, label='IdealNew2 1031')
+    ax.plot(wave_cos_new[w_cos_new], tau_1037_cos_new[w_cos_new], ':', lw=2, label='COSNew 1031')
+
+    ax.legend(loc='upper right')
+    fig.savefig('tng50_ovi_cos_vs_idealized_1037.pdf')
+
+    import pdb; pdb.set_trace()
+
+def check_spec_v90():
+    """ Check OVI COS vs idealized spectra. """
+    from temet.cosmo.spectrum import _equiv_width, _v90
+    path = '/u/dnelson/sims.TNG/TNG50-1/postprocessing/AbsorptionSpectra/'
+    file1 = 'spectra_TNG50-1_z0.1_n1000d2-fullbox_COS-G130M_OVI_combined.hdf5'
+
+    index = 1001 #10910
+
+    # load
+    with h5py.File(path+file1,'r') as f:
+        wave_cos = f['wave'][()]
+        tau_1031_cos = f['tau_OVI_1031'][index,:]
+        tau_1037_cos = f['tau_OVI_1037'][index,:]
+
+    # 1031
+    wave_min = 1141
+    wave_max = 1147
+
+    w_cos = np.where( (wave_cos >= wave_min) & (wave_cos <= wave_max) )[0]
+    ew_cos_1031 = _equiv_width(tau_1031_cos[w_cos], wave_cos[w_cos])
+    v90_cos_1031 = _v90(tau_1031_cos[w_cos], wave_cos[w_cos])
+
+    print(f'EW COS 1031: {ew_cos_1031:.3f} A')
+    print(f'v90 COS 1031: {v90_cos_1031:.3f} km/s')
+
+    v90_cos_1031b = _v90(tau_1031_cos, wave_cos)
+    print(f'v90 COS 1031 (full): {v90_cos_1031b:.3f} km/s')
+
+    # plot
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_title('TNG50-1 z=0.1 OVI Absorption Spectra: COS vs Idealized')
+    ax.set_xlabel('Wavelength [Angstrom]')
+    ax.set_ylabel('Optical Depth tau')
+
+    ax.plot(wave_cos[w_cos], tau_1031_cos[w_cos], '-', lw=2, label='COS 1031')
+
+    #ax.plot([1143.018,1143.018],[0,3], '--', color='black')
+    #ax.plot([1145.909,1145.909],[0,3], '--', color='black')
+
+    #ax.plot([1142.980,1142.980],[0,3], '--', color='green')
+    #ax.plot([1145.911,1145.911],[0,3], '--', color='green')
+
+    ax.legend(loc='upper right')
+    fig.savefig('tng50_ovi_cos_1031.pdf')
+
+    import pdb; pdb.set_trace()
+
 def plot_wofz():
     """ Test wofz complex function. """
     from .cosmo.spectrum import wofz_complex_fn_realpart
