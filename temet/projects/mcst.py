@@ -1712,7 +1712,7 @@ def paperPlots(a = False):
         #    quantVsRedshift(sims_loc, quant, xlim, ylim, sfh_lin=False, sfh_treebased=False, sizefac=0.7)
 
     # fig 7a: smhm relation
-    if 1 or a:
+    if 0 or a:
         smhm_relation(sims)
 
     # fig 7b: stellar mass vs redshift evo (using stellar histo)
@@ -1884,7 +1884,7 @@ def paperPlots(a = False):
 
     # movie: various configurations (final tree mpb smoothed)
     if 0:
-        vis_movie_mpbsm(sims, conf='one') # one, two, three, four
+        vis_movie_mpbsm(sims, conf=1)
 
     # movie: high-res region
     if 0 or a:

@@ -294,7 +294,8 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
         if prop in ['rhalo_200','rhalo','r200','r200c','rvir','r_vir','rvirial']:
             vals = mpb['Group_R_Crit200']
             #vals *= mpb_a # comoving -> physical
-            # todo: the following inconsistency wrt the units of simSubhaloQuantity() is for its historical use in tracer_Mc
+            # todo: the following inconsistency wrt the units of simSubhaloQuantity() 
+            # is for its historical use in tracer_Mc and renderSingleHaloFrames()
             print(f'NOTE: [{sim}] quantMPB [{prop}] in code (comoving) units!')
 
         if prop in ['t_vir']:
@@ -367,7 +368,7 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
                 vals[tree_ind] = val_loc
 
         # smooth?
-        if smooth:
+        if smooth and quant not in ['SubfindID','SnapNum']:
             from ..plot.config import sKn, sKo
 
             # 3-vectors

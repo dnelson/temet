@@ -221,7 +221,7 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=
         for range_start, range_stop in ranges_global:
             redshifts[range_start:range_stop:2] = -1.0
 
-    w = np.where((redshifts >= minRedshift) & (redshifts < maxRedshift))[0]
+    w = np.where((redshifts >= minRedshift) & (redshifts <= maxRedshift))[0]
 
     if len(w) == 0:
         return None

@@ -58,14 +58,13 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclina
                 boxCenter[i] = np.poly1d( np.polyfit( fitX, mpb['sm']['pos'][-fitSize:,i], fitN ) )(sP.snap)
         else:
             # for times within actual MPB, use smoothed properties directly
-            ind = np.where( mpb['SnapNum'] == sP.snap )[0]
+            ind = np.where(mpb['SnapNum'] == sP.snap)[0]
             assert len(ind)
 
-            assert sP.subhaloInd is None # about to override, check if compatible with new subhaloInd behavior
             sP.subhaloInd = mpb['SubfindID'][ind[0]]
-            haloVirRad = mpb['sm']['rvir'][ind[0]]
-            boxCenter = mpb['sm']['pos'][ind[0],:]
-            boxCenter = boxCenter[ axes + [3-axes[0]-axes[1]] ] # permute into axes ordering
+            haloVirRad = mpb['Group_R_Crit200'][ind[0]]
+            boxCenter = mpb['SubhaloPos'][ind[0],:]
+            boxCenter = boxCenter[axes + [3-axes[0]-axes[1]]] # permute into axes ordering
             galHalfMassRad = mpb['SubhaloHalfmassRad'][ind[0]]
             galHalfMassRadStars = mpb['SubhaloHalfmassRadType'][ind[0],sP.ptNum('stars')]
 
@@ -329,11 +328,11 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
     panels = deepcopy(panels_in)
 
     # defaults (all panel fields that can be specified)
-    subhaloInd  = 0               # subhalo (subfind) index to visualize
+    #subhaloInd = 0               # subhalo (subfind) index to visualize
     hInd        = None            # halo index for zoom run
-    run         = 'tng'           # run name
-    res         = 1820            # run resolution
-    redshift    = 2.0             # run redshift
+    #run        = 'tng'           # run name
+    #res        = 1820            # run resolution
+    #redshift   = 2.0             # run redshift
     partType    = 'gas'           # which particle type to project
     partField   = 'temp'          # which quantity/field to project for that particle type
     valMinMax   = None            # if not None (auto), then stretch colortable between 2-tuple [min,max] field values
@@ -344,8 +343,9 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
     cenShift    = [0,0,0]         # [x,y,z] coordinates to shift default box center location by
     size        = 3.0             # side-length specification of imaging box around halo/galaxy center
     depthFac    = 1.0             # projection depth, relative to size (1.0=same depth as width and height)
-    sizeType    = 'rVirial'       # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,kpc]
-    #hsmlFac     = 2.5            # multiplier on smoothing lengths for sphMap
+    sizeType    = 'rVirial'     # size multiplies [rVirial,r500,rHalfMass,rHalfMassStars] or in [codeUnits,kpc,arcsec,arcmin,deg]
+    depth       = None          # if None, depth is taken as size*depthFac, otherwise depth is provided here
+    depthType   = 'rVirial'     # as sizeType except for depth, if depth is not None    #hsmlFac     = 2.5            # multiplier on smoothing lengths for sphMap
     axes        = [1,0]           # e.g. [0,1] is x,y
     axesUnits   = 'code'          # code [ckpc/h], mpc, deg, arcmin, arcsec
     vecOverlay  = False           # add vector field quiver/streamlines on top? then name of field [bfield,vel]
@@ -385,8 +385,8 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
 
         # movie config
         treeRedshift = 2.0       # at what redshift does the tree/MPB start (for periodic box, snap of hInd)
-        minRedshift  = 2.0       # ending redshift of frame sequence (we go forward in time)
-        maxRedshift  = 10.0      # starting redshift of frame sequence (we go forward in time)
+        minRedshift  = 0.0       # ending redshift of frame sequence (we go forward in time)
+        maxRedshift  = 100.0     # starting redshift of frame sequence (we go forward in time)
         maxNumSnaps  = None      # make at most this many evenly spaced frames, or None for all
 
     # add plotConfig defaults
@@ -431,7 +431,8 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
             p['sP'].subhaloInd = p['subhaloInd']
 
         # load MPB once per panel
-        p['mpb'] = p['sP'].loadMPB(p['sP'].subhaloInd)
+        quants = ['SubfindID','SnapNum','Group_R_Crit200','SubhaloPos','SubhaloHalfmassRad','SubhaloHalfmassRadType']
+        p['mpb'] = p['sP'].quantMPB(p['sP'].subhaloInd, quants=quants, smooth=True)
 
         if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]
 
@@ -446,7 +447,8 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
         # finalize panels list (all properties not set here are invariant in time)
         for p in panels:
             # override simParams info at this snapshot
-            p['sP'] = simParams(res=p['res'], run=p['run'], snap=snapNum, hInd=p['hInd'], variant=p['variant'])
+            p['sP'] = p['sP'].copy()
+            p['sP'].setSnap(snapNum)
 
             # add imaging config for single halo view using MPB
             p['boxSizeImg'], p['boxCenter'], p['extent'], \

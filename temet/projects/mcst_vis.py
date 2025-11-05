@@ -6,7 +6,7 @@ import numpy as np
 import h5py
 from os.path import isfile
 
-from ..vis.halo import renderSingleHalo
+from ..vis.halo import renderSingleHalo, renderSingleHaloFrames
 from ..vis.box import renderBox
 
 def vis_single_galaxy(sP, haloID=0):
@@ -147,6 +147,8 @@ def vis_single_halo(sP, haloID=0, size=3.5):
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
+# -------------------------------------------------------------------------------------------------
+
 def vis_movie(sP, haloID=0, frame=None):
     """ Visualization: movie of a single halo. Use minimal SubLink MPB tracking.
     Cannot use rotation for face-on/edge-on since it has random orientations each frame. """
@@ -159,6 +161,7 @@ def vis_movie(sP, haloID=0, frame=None):
     labelHalo  = 'mhalo,mstar'
     labelZ     = True
     labelScale = 'physical'
+    method     = 'sphMap_global'
     relCoords  = True
     #axes = [0,1]
 
@@ -248,6 +251,64 @@ def vis_movie(sP, haloID=0, frame=None):
 
         plotConfig.saveFilename = '%s_%03d.png' % (sP.simName,sP.snap)
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
+
+def vis_movie_mpbsm(sims, haloID=0, conf=1):
+    """ Render movie of a sims.structures/ run (~400 total snapshots). 
+    Use the final merger tree and MPB-smoothed halo tracking. """
+    panels = []
+
+    # panel selection
+    rVirFracs  = [1.0]
+    fracsType  = 'rHalfMassStars'
+    method     = 'sphMap_global'
+    nPixels    = [960,960]
+    size       = 2.0 if np.max([s.hInd for s in sims]) > 20000 else 5.0
+    sizeType   = 'kpc'
+    axes       = [0,1]
+    labelSim   = False
+    relCoords  = True
+    rotation   = None
+
+    dmMM = [6.0,8.5]
+    gasMM = [5.0,7.5]
+
+    if conf == 1:
+        pt1 = 'gas'
+        pf1 = 'coldens_msunkpc2'
+        vmm1 = gasMM
+
+        pt2 = 'stars'
+        pf2 = 'stellarComp'
+        vmm2 = None
+
+    if len(sims) == 1:
+        # one run: gas and stars side-by-side
+        sub_ind = sims[0].halo(haloID)['GroupFirstSub']
+
+        panels.append( {'sP':sims[0], 'subhaloInd':sub_ind,
+                        'partType':pt1, 'partField':pf1, 'valMinMax':vmm1, 
+                        'labelScale':'physical', 'labelSim':True} )
+        panels.append( {'sP':sims[0], 'subhaloInd':sub_ind,
+                        'partType':pt2, 'partField':pf2, 'valMinMax':vmm2, 
+                        'labelScale':'physical', 'labelHalo':True, 'labelZ':True} )
+    else:
+        # multiple runs: one panel each
+        for sim in sims:
+            sub_ind = sim.halo(haloID)['GroupFirstSub']
+
+            panels.append( {'sP':sim, 'subhaloInd':sub_ind, 
+                            'partType':pt1, 'partField':pf2, 'valMinMax':vmm1, 
+                            'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = nPixels[0]
+        colorbars    = True
+        fontsize     = 26
+        savePath     = ''
+        saveFileBase = '%s_evo_%s' % ('-'.join([s.simName for s in sims]),conf)
+
+    renderSingleHaloFrames(panels, plotConfig, locals())
 
 # -------------------------------------------------------------------------------------------------
 
