@@ -707,7 +707,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         assert 'voronoi_proj' in method
 
         # load number density of relevant species as 'mass'
-        from ..cosmo.spectrum import lines
+        from ..cosmo.spectrum_util import lines
         line = partField.replace('EW_','')
         element, ionNum = lines[line]['ion'].split(' ')
         field = 'mass'
@@ -1996,10 +1996,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     grid_q = np.zeros(nPixels, dtype='float32') # dummy
                     
                 elif 'EW_' in partField:
-                    # equivalent width map via synthetic spectra
-                    from ..cosmo.spectrum import _line_params
-
-                    # obtain full rays
+                    # equivalent width map via synthetic spectra: obtain full rays
                     rays_off, rays_len, rays_dl, rays_inds = rayTrace(sP, ray_pos, ray_dir, total_dl, pos, mode='full')
 
                     # load additional required properties

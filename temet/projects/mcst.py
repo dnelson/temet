@@ -1631,7 +1631,7 @@ def paperPlots(a = False):
     #redshift = 5.0
 
     # testing:
-    variants = ['ST14'] # ST14m, ST14e
+    variants = ['ST14']
     res = [14,15] # [14,15,16]
     hInds = [15581,73172,219612,311384,844537] # [1958,5072,15581,23908,31619,73172,219612,311384,844537]
     redshift = 5.5
@@ -1712,10 +1712,10 @@ def paperPlots(a = False):
         #    quantVsRedshift(sims_loc, quant, xlim, ylim, sfh_lin=False, sfh_treebased=False, sizefac=0.7)
 
     # fig 7a: smhm relation
-    if 0 or a:
+    if 1 or a:
         smhm_relation(sims)
 
-    # fig 7b: stellar mass vs redshift evo (one plot per halo) (using stellar histo)
+    # fig 7b: stellar mass vs redshift evo (using stellar histo)
     if 0 or a:
         quant = 'mstar2_log'
         xlim = [12.1, 5.5]
@@ -1748,6 +1748,11 @@ def paperPlots(a = False):
 
         quantVsRedshift(sims, quant='Z_gas_sfrwt', xlim=xlim, ylim=ylim, sizefac=0.8)
         quantVsRedshift(sims, quant='Z_stars_masswt', xlim=xlim, ylim=ylim, sizefac=0.8)
+
+        #for hInd in hInds:
+        #    sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
+        #    quantVsRedshift(sims_loc, 'Z_gas_sfrwt', xlim, ylim)
+        #    quantVsRedshift(sims_loc, 'Z_stars_masswt', xlim, ylim)
 
     # fig 9c - gas metallicity
     if 0 or a:
@@ -1789,19 +1794,23 @@ def paperPlots(a = False):
             blackhole_diagnostics_vs_time(sim)
             blackhole_position_vs_time(sim)
 
-    # radial profiles
+    # radial profiles - halo comparisons
     if 0 or a:
         haloIDs = [0] * len(sims) # assume first
 
         plotSingleRadialProfile(sims, ptType='gas', ptProperty='numdens', haloIDs=haloIDs, 
             xlog=True, xlim=[-2.0, 1.5], ylim=[-4.5, 4.0], ylog=True, scope='global')
         
+        plotSingleRadialProfile(sims, ptType='stars', ptProperty='dens', haloIDs=haloIDs, 
+            xlog=True, xlim=[-2.0, 1.5], ylim=[2.5, 11.0], ylog=True, scope='global')
+
         plotSingleRadialProfile(sims, ptType='gas', ptProperty='temp', haloIDs=haloIDs, 
             xlog=True, xlim=[-2.0, 1.5], ylim=[3.0, 6.0], ylog=True, scope='global')
 
         plotSingleRadialProfile(sims, ptType='gas', ptProperty='menc_vesc', haloIDs=haloIDs, 
             xlog=True, xlim=[-2.0, 1.5], ylim=[0.0, 1.7], ylog=True, scope='fof')
 
+    # radial profiles: 2d vs time
     if 0 or a:
         # evo
         max_z = 10.0
@@ -1811,6 +1820,9 @@ def paperPlots(a = False):
             plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='numdens', haloID=haloID, 
                 rlog=True, rlim=[-2.0, 1.5], clim=[-2.0, 3.0], clog=True, max_z=max_z, scope='global', ctName='magma')
 
+            plot2DStackedRadialProfileEvo(sim, ptType='stars', ptProperty='dens', haloID=haloID, 
+                rlog=True, rlim=[-2.0, 1.5], clim=[3.0, 10.0], clog=True, max_z=max_z, scope='global', ctName='magma')
+
             plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='temp', haloID=haloID, 
                 rlog=True, rlim=[-2.0, 1.5], clim=[3.0, 6.0], clog=True, max_z=max_z, scope='global', ctName='thermal')
             
@@ -1819,10 +1831,6 @@ def paperPlots(a = False):
 
             plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='menc_vesc', haloID=haloID, 
                 rlog=True, rlim=[-2.0, 1.5], clim=[0.0, 1.7], clog=True, max_z=max_z, scope='fof', ctName='afmhot')
-
-    # radial profiles: 2d vs time
-    if 0 or a:
-        pass # TODO
 
     # ------------
 
@@ -1869,14 +1877,14 @@ def paperPlots(a = False):
             sim.setSnap(snap)
             phase_diagram(sim)
 
-    # movie: galaxy-scale gas + stars vis
+    # movie: galaxy-scale gas + stars vis (tree mpb manual search)
     if 0:
-        vis_movie(sims[0], haloID=0)
+        for sim in sims:
+            vis_movie(sim, haloID=0)
 
-    # movies
+    # movie: various configurations (final tree mpb smoothed)
     if 0:
-        from ..vis.haloMovieDrivers import structuresEvo
-        structuresEvo(conf='one') # one, two, three, four
+        vis_movie_mpbsm(sims, conf='one') # one, two, three, four
 
     # movie: high-res region
     if 0 or a:

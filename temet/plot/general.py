@@ -1069,6 +1069,28 @@ def _radial_profile(sim, ptType, ptProperty, xlim, nRadBins, xlog=False, haloID=
 
     return yy
 
+@cache
+def _radial_profile_dens(sim, ptType, xlim, nRadBins, xlog=False, haloID=None, subhaloID=None):
+    """ Load particles/cells and compute radial mass density profiles for a single (sub)halo, caching. """
+    rad  = sim.snapshotSubset(ptType, 'rad_kpc', haloID=haloID, subhaloID=subhaloID)
+    mass = sim.snapshotSubset(ptType, 'mass_msun', haloID=haloID, subhaloID=subhaloID)
+
+    # radial bins
+    rad_bins = np.linspace(xlim[0], xlim[1], nRadBins+1)
+    rad_bins_lin = 10.0**rad_bins if xlog else rad_bins
+    bin_vols = (4.0/3.0)*np.pi * (rad_bins_lin[1:]**3 - rad_bins_lin[:-1]**3) # pkpc^3
+    if xlog: rad = np.log10(rad)
+
+    yy = {}
+    yy['rad'] = rad_bins[:-1] + (rad_bins[1]-rad_bins[0])/2 # bin centers
+
+    yy['mean'] = np.histogram(rad, bins=rad_bins, weights=mass)[0] / bin_vols
+
+    yy['median'] = yy['mean'].copy() # dummy
+    yy['perc'] = np.zeros((4,yy['mean'].size), dtype='float32') # dummy
+
+    return yy
+
 def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp', subhaloIDs=None, haloIDs=None, 
     xlog=True, xlim=None, ylog=None, ylim=None, sfreq0=False, scope='fof'):
     """ Radial profile of some quantity ptProperty of ptType vs. radius from halo center,
@@ -1079,9 +1101,11 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp', subhaloIDs=Non
     # config
     if xlog:
         if xlim is None: xlim = [-0.5,3.0]
+        assert np.max(xlim) < 5.0, 'Warning: xlog is True, so xlim should be in log pkpc units, check.'
         xlabel = 'Galactocentric Radius [ log pkpc ]'
     else:
         if xlim is None: xlim = [0.0,500.0]
+        assert np.max(xlim) > 5.0, 'Warning: xlog is False, so xlim should be in linear pkpc units, check.'
         xlabel = 'Galactocentric Radius [ pkpc ]'
 
     nRadBins = 40
@@ -1091,9 +1115,13 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp', subhaloIDs=Non
     if subhaloIDs is not None: assert (len(subhaloIDs) == len(sPs)) # one subhalo ID per sP
     if haloIDs is not None: assert (len(haloIDs) == len(sPs)) # one subhalo ID per sP
 
-    ylabel, ylim_q, ylog_q = sPs[0].simParticleQuantity(ptType, ptProperty, haloLims=True)
-    if ylim is None: ylim = ylim_q
-    if ylog is None: ylog = ylog_q
+    if ptType in ['stars','dm'] and ptProperty == 'dens':
+        ptLabel = 'Stellar' if ptType == 'stars' else 'DM'
+        ylabel = r'%s Mass Density [ log M$_{\rm sun}$ pkpc$^{-3}$ ]' % ptLabel
+    else:
+        ylabel, ylim_q, ylog_q = sPs[0].simParticleQuantity(ptType, ptProperty, haloLims=True)
+        if ylim is None: ylim = ylim_q
+        if ylog is None: ylog = ylog_q
 
     # start plot
     fig = plt.figure(figsize=figsize)
@@ -1119,7 +1147,10 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp', subhaloIDs=Non
         load_subID = subhaloID if scope == 'subfind' else None
         if load_haloID is None and load_subID is None: assert scope == 'global'
 
-        yy = _radial_profile(sP, ptType, ptProperty, xlim, nRadBins, xlog, load_haloID, load_subID, sfreq0)
+        if ptType in ['stars','dm'] and ptProperty == 'dens':
+            yy = _radial_profile_dens(sP, ptType, xlim, nRadBins, xlog, load_haloID, load_subID)
+        else:
+            yy = _radial_profile(sP, ptType, ptProperty, xlim, nRadBins, xlog, load_haloID, load_subID, sfreq0)
 
         if ylog:
             yy['mean'] = logZeroNaN(yy['mean'])
@@ -1133,9 +1164,9 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp', subhaloIDs=Non
 
         # plot lines
         label = '%s haloID=%d [%s]' % (sP.simName,haloID,scope) if not clean else sP.simName
-        l, = ax.plot(yy['rad'], yy['median'], '-', lw=lw, label=label)
-        ax.plot(yy['rad'], yy['mean'], '--', lw=lw, color=l.get_color())
-
+        l, = ax.plot(yy['rad'], yy['mean'], '--', lw=lw)
+        ax.plot(yy['rad'], yy['median'], '-', lw=lw, color=l.get_color(), label=label)
+        
         if len(sPs) <= 2:
             for j in range(int(yy['perc'].shape[0]/2)):
                 ax.fill_between(yy['rad'], yy['perc'][0+j,:], yy['perc'][-(j+1),:], 
@@ -1204,8 +1235,16 @@ def plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='temp', subhaloI
     # load MPB and allocate
     mpb = sim.loadMPB(subhaloID)
 
-    w = np.where(mpb['Redshift'] < max_z)
+    w = np.where(mpb['Redshift'] < max_z)[0]
     snaps = mpb['SnapNum'][w] #sim.validSnapList()[::10]
+
+    # metadata
+    mpb_a = 1 / (1 + mpb['Redshift'][w])
+    r200c = sim.units.codeLengthToComovingKpc(mpb['Group_R_Crit200'][w]) * mpb_a # pkpc
+    rhalf = sim.units.codeLengthToComovingKpc(mpb['SubhaloHalfmassRadType'][w,4]) * mpb_a # pkpc
+    if rlog:
+        r200c = np.log10(r200c)
+        rhalf = np.log10(rhalf)
 
     zvals = sim.snapNumToRedshift(snaps)
 
@@ -1215,6 +1254,9 @@ def plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='temp', subhaloI
     mean = np.zeros((snaps.size,nRadBins), dtype='float32')
     median = np.zeros((snaps.size,nRadBins), dtype='float32')
     perc = np.zeros((snaps.size,4,nRadBins), dtype='float32')
+
+    if clog:
+        mean.fill(np.nan)
 
     # loop over snapshots
     sim_loc = sim.copy()
@@ -1237,7 +1279,12 @@ def plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='temp', subhaloI
             sim_loc.refVel = mpb['SubhaloVel'][mpb_index]
             sim_loc.refSubhalo = sim_loc.subhalo(subhaloID_loc)
 
-        yy = _radial_profile(sim_loc, ptType, ptProperty, rlim, nRadBins, rlog, load_haloID, load_subID, sfreq0)
+        if ptType in ['stars','dm'] and ptProperty == 'dens':
+            if sim_loc.numPart[sim.ptNum(ptType)] == 0:
+                continue
+            yy = _radial_profile_dens(sim_loc, ptType, rlim, nRadBins, rlog, load_haloID, load_subID)
+        else:
+            yy = _radial_profile(sim_loc, ptType, ptProperty, rlim, nRadBins, rlog, load_haloID, load_subID, sfreq0)
 
         if clog:
             yy['mean'] = logZeroNaN(yy['mean'])
@@ -1247,16 +1294,20 @@ def plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='temp', subhaloI
         if yy['rad'].size > sKn:
             yy['mean'] = savgol_filter(yy['mean'],sKn,sKo)
             yy['median'] = savgol_filter(yy['median'],sKn,sKo)
-            yy['perc ']= savgol_filter(yy['perc'],sKn,sKo,axis=1) # P[10,90]
+            yy['perc'] = savgol_filter(yy['perc'],sKn,sKo,axis=1) # P[10,90]
 
         mean[i,:] = yy['mean']
         median[i,:] = yy['median']
         perc[i,:,:] = yy['perc']
 
     # load metadata
-    clabel, clim_q, clog_q = sim.simParticleQuantity(ptType, ptProperty, haloLims=True)
-    if clim is None: clim = clim_q
-    if clog is None: clog = clog_q
+    if ptType in ['stars','dm'] and ptProperty == 'dens':
+        ptLabel = 'Stellar' if ptType == 'stars' else 'DM'
+        clabel = r'%s Mass Density [ log M$_{\rm sun}$ pkpc$^{-3}$ ]' % ptLabel
+    else:
+        clabel, clim_q, clog_q = sim.simParticleQuantity(ptType, ptProperty, haloLims=True)
+        if clim is None: clim = clim_q
+        if clog is None: clog = clog_q
 
     if rlog:
         if rlim is None: rlim = [-0.5,3.0]
@@ -1271,6 +1322,7 @@ def plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='temp', subhaloI
     ax.set_xlabel('Redshift')
     ax.set_ylabel(rlabel)
     #ax.set_xlim([sim.redshift,max_z])
+    ax.set_xlim([0,snaps.size])
     if rlim is not None: ax.set_ylim(rlim)
 
     _draw_special_lines(sim, ax, ptProperty)
@@ -1290,6 +1342,12 @@ def plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='temp', subhaloI
     ax.set_xticks(xtickvals)
     ax.set_xticklabels([f'{z:.1f}' for z in zvals])
 
+    # mark size evolution
+    l, = ax.plot(r200c, '--', color='white')
+    ax.text(10, r200c[10]*1.05, r'r$_{200c}$', color=l.get_color(), fontsize=20, va='bottom', ha='left')
+    l, = ax.plot(rhalf, '--', color='black')
+    ax.text(5, rhalf[5]+0.1, r'r$_{\rm 1/2\star}$', color=l.get_color(), fontsize=20, va='bottom', ha='left')
+    
     # contour lines in the color quantity
     #for cval in [-1.0, 0.0, 1.0]:
     #    XX, YY = np.meshgrid(zvals, yy['rad'], indexing='ij')
@@ -1300,7 +1358,22 @@ def plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='temp', subhaloI
 
     #    c = plt.contour(XX, YY, binned_quant, [cval], colors='white', linestyles='solid', alpha=0.6)
 
+    # add universe age on top
+    ax2 = ax.twiny()
+    ax2.set_xlim([0,snaps.size])
+    ages = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]) # Gyr
+    ages_z = sim.units.ageFlatToRedshift(ages)
+
+    w = np.where((ages_z >= sim.redshift) & (ages_z <= max_z))[0]
+    ages_snap = [closest(snaps,s)[1] for s in sim.redshiftToSnapNum(ages_z[w])]
+    ax2.set_xticks(ages_snap)
+    ax2.set_xticklabels([f'{a:.1f}' for a in ages[w]])
+    ax2.set_xlabel('Age of the Universe [ Gyr ]', labelpad=12)
+
     # add colorbar and finish plot
+    dax = make_axes_locatable(ax2).append_axes('right', size='3%', pad=0.2)
+    dax.get_yaxis().set_ticks([]) # dummy such that ax2 is aligned with ax
+    dax.get_xaxis().set_ticks([])
     cax = make_axes_locatable(ax).append_axes('right', size='3%', pad=0.2)
     cb = fig.colorbar(im, cax=cax, label=clabel)
 
