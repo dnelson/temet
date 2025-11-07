@@ -504,6 +504,14 @@ def makeCloudyConfigFile(gridVals):
         # save request: mean ionization of all elements
         confLines.append( "save last ionization means \"" + gridVals['outputFileName'] + "\"" )
 
+        # test: save line populations
+        #confLines.append( "save line populations \"" + gridVals['outputFileName'] + "_linepops.txt\" \"lines.txt\"" )
+        # lines.txt needs to be generated to cover all our transitions, with format e.g.:
+        # Si 2 1526.71A
+        # Si 2 1260.42A
+        # the output file contains "nl" density of the lower level of the transition
+        # (includes the input density, species metal fraction, and ion ionization fraction) (need to be factored out)
+
         # save request: line emissivities
         confLines.append( "save last lines, emissivity, \"" + gridVals['outputFileNameEm'] + "\"")
         emLines, _ = getEmissionLines()
@@ -593,6 +601,12 @@ def _getRhoTZzGrid(res, uvb):
         metals    = np.arange(-3.0,1.0+eps,0.4)
         redshifts = np.arange(0.0,8.0+eps,0.5)
 
+    if res == 'ext':
+        densities = np.arange(-7.0, 6.0+eps, 0.1)
+        temps     = np.arange(1.0, 9.0+eps, 0.05)
+        metals    = np.arange(-3.0,1.0+eps,0.4)
+        redshifts = np.arange(0.0,8.0+eps,0.5)
+
     if res == 'grackle':
         # metals: primordial and solar runs (difference gives metal contribution only, scaled linearly in grackle)
         densities = np.arange(-10.0, 7.0+eps, 0.5)
@@ -627,7 +641,8 @@ def runGrid(redshiftInd, nThreads=71, res='lg', uvb='FG11'):
     gv['res'] = res
     gv['uvb'] = uvb
     gv['redshift'] = redshifts[redshiftInd]
-    gv['basePath']  = basePathTemp + 'redshift_%04.2f_%s/' % (gv['redshift'],gv['uvb'])
+    #gv['basePath']  = basePathTemp + 'redshift_%04.2f_%s/' % (gv['redshift'],gv['uvb'])
+    gv['basePath'] = 'test/'
 
     if not isdir(gv['basePath']):
         mkdir(gv['basePath'])

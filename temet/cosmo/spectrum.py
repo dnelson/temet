@@ -529,6 +529,8 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
             f.create_dataset('N_%s' % line.replace(' ','_'), data=N_local, compression='gzip')
             f.create_dataset('v90_%s' % line.replace(' ','_'), data=v90_local, compression='gzip')
 
+        tau_local = None
+
     # sum optical depths across all lines, use to calculate flux array (i.e. the spectrum), and total EW
     tau = np.zeros((rays_len.size,tau.size), dtype=tau.dtype)
 
@@ -1155,7 +1157,7 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPer
         print(f'Re-writing [{dset}] -- [', end='')
         offset = 0
 
-        if 'EW_' in dset or 'N_' in dset:
+        if 'EW_' in dset or 'N_' in dset or 'v90_' in dset:
             shape = count
             chunks = (count)
         else:
