@@ -9,7 +9,7 @@ from os.path import isfile, isdir
 from os import mkdir, unlink
 from numba import jit
 
-from ..util.helper import pSplitRange
+from ..util.helper import pSplitRange, reportMemory
 from ..util.voronoiRay import rayTrace
 from ..cosmo.cloudy import cloudyIon
 from ..cosmo.spectrum_util import *
@@ -441,12 +441,14 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
         print(f'Final save [{saveFilenameConcat.split("/")[-1]}] already exists! Exiting.')
         return
 
+    all_lines_done = False
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
             # which lines are already done?
             existing_lines = [k.replace('EW_','').replace('_',' ') for k in f.keys() if 'EW_' in k]
-            flux_done = 'flux' in f
+            flux_done = 'flux' in f and f.attrs.get('flux_done',False)
 
+        all_lines_done = all([line in existing_lines for line in lineNames])
         all_done = all([line in existing_lines for line in lineNames]) & flux_done
         if all_done:
             print(f'Save [{saveFilename.split("/")[-1]}] already exists and is done, exiting.')
@@ -454,20 +456,21 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
 
     # load rays
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
-      generate_rays_voronoi_fullbox(sP, nRaysPerDim=nRaysPerDim, raysType=raysType, 
-                                    subhaloIDs=subhaloIDs, pSplit=pSplit)
-    
-    # load required gas cell properties
-    projAxis = list(ray_dir).index(1)
-    velLosField = 'vel_'+['x','y','z'][projAxis]
+        generate_rays_voronoi_fullbox(sP, nRaysPerDim=nRaysPerDim, raysType=raysType, 
+                                      subhaloIDs=subhaloIDs, pSplit=pSplit)
 
-    cell_vellos = sP.snapshotSubsetP('gas', velLosField, inds=cell_inds) # code
-    cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold', inds=cell_inds) # K
-    
-    cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
+    if not all_lines_done:
+        # load required gas cell properties
+        projAxis = list(ray_dir).index(1)
+        velLosField = 'vel_'+['x','y','z'][projAxis]
 
-    # convert length units, all other units already appropriate
-    rays_dl = sP.units.codeLengthToMpc(rays_dl)
+        cell_vellos = sP.snapshotSubsetP('gas', velLosField, inds=cell_inds) # code
+        cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold', inds=cell_inds) # K
+        
+        cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
+
+        # convert length units, all other units already appropriate
+        rays_dl = sP.units.codeLengthToMpc(rays_dl)
 
     # (re)start output
     EWs = {}
@@ -525,25 +528,52 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
             # save tau per line
             f.create_dataset('tau_%s' % line.replace(' ','_'), data=tau_local, chunks=chunks, compression='gzip')
             # save EWs and coldens per line
-            f.create_dataset('EW_%s' % line.replace(' ','_'), data=EW_local, compression='gzip')
-            f.create_dataset('N_%s' % line.replace(' ','_'), data=N_local, compression='gzip')
-            f.create_dataset('v90_%s' % line.replace(' ','_'), data=v90_local, compression='gzip')
+            f.create_dataset('EW_%s' % line.replace(' ','_'), data=EW_local)
+            f.create_dataset('N_%s' % line.replace(' ','_'), data=N_local)
+            f.create_dataset('v90_%s' % line.replace(' ','_'), data=v90_local)
 
         tau_local = None
 
-    # sum optical depths across all lines, use to calculate flux array (i.e. the spectrum), and total EW
-    tau = np.zeros((rays_len.size,tau.size), dtype=tau.dtype)
-
-    with h5py.File(saveFilename,'r') as f:
-        for line in lineNames:
-            tau_local = f['tau_%s' % line.replace(' ','_')][()]
-            tau += tau_local
-
-    flux = np.exp(-1*tau)
+    # sum optical depths across all lines, use to calculate flux array (i.e. the spectrum)
+    print('Loading tau by line and saving total flux...', flush=True)
 
     with h5py.File(saveFilename,'r+') as f:
-        chunks = (1000, tau.shape[1]) if tau.shape[1] < 10000 else (100, tau.shape[1])
-        f.create_dataset('flux', data=flux, chunks=chunks, compression='gzip')
+        # create flux dataset
+        shape = f['tau_%s' % lineNames[0].replace(' ','_')].shape
+        chunks = (1000, shape[1]) if shape[1] < 10000 else (100, shape[1])
+        
+        if 'flux' not in f:
+            # create if not already present (may have been started but not finished)
+            dset = f.create_dataset('flux', shape=shape, chunks=chunks, compression='gzip')
+        else:
+            dset = f['flux']
+
+        # process in 10 chunks
+        n_chunks = 10
+
+        offset = 0
+        n_per_chunk = int(shape[0] / n_chunks)
+        assert n_per_chunk == shape[0] / n_chunks
+
+        tau = np.zeros((n_per_chunk,shape[1]), dtype='float32')
+
+        for i in range(n_chunks):
+            print(f' chunk [{i} of {n_chunks}]', flush=True)
+            tau *= 0
+
+            # loop over all lines, accumulate optical depth arrays
+            for line in lineNames:
+                #print(f' {reportMemory() = :.1f} GB now adding tau [{line}].', flush=True)
+                tau_local = f['tau_%s' % line.replace(' ','_')][offset:offset+n_per_chunk]
+                tau += tau_local
+
+            # compute and write flux
+            flux = np.exp(-1*tau)
+
+            dset[offset:offset+n_per_chunk] = flux
+            offset += n_per_chunk
+
+        f.attrs['flux_done'] = True
 
     print(f'Saved: [{saveFilename}]')
 
