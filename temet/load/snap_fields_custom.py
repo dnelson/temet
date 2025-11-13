@@ -165,13 +165,16 @@ temp_old.log = True
 def temp_sfcold(sim, partType, field, args):
     """ Gas temperature, where star-forming gas is set to the sub-grid (constant)
     cold-phase temperature, instead of eEOS 'effective' temperature. """
-    assert sim.eEOS == 1
+    assert sim.eEOS in [1,2]
 
     temp = sim.snapshotSubset(partType, 'temp', **args)
     sfr = sim.snapshotSubset(partType, 'sfr', **args)
 
     w = np.where(sfr > 0.0)
-    temp[w] = sim.units.sh03_T_c
+    if sim.eEOS == 1:
+        temp[w] = sim.units.sh03_T_c
+    elif sim.eEOS == 2:
+        temp[w] = 1e4 # K (see Rahmati+16, Wijers+19, i.e. accepted EAGLE eEOS convention)
 
     return temp
 
