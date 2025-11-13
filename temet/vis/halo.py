@@ -432,7 +432,7 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
 
         # load MPB once per panel
         quants = ['SubfindID','SnapNum','Group_R_Crit200','SubhaloPos','SubhaloHalfmassRad','SubhaloHalfmassRadType']
-        p['mpb'] = p['sP'].quantMPB(p['sP'].subhaloInd, quants=quants, smooth=True)
+        p['mpb'] = p['sP'].quantMPB(p['sP'].subhaloInd, quants=quants, add_ghosts=True, smooth=True)
 
         if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]
 

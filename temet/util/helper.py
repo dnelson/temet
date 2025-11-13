@@ -184,13 +184,9 @@ def cache(_func=None, *, overwrite=False):
             cachefile = sim.cachePath + f'f_{func.__name__}.hdf5'
 
             # cachefile name includes hash that depends on args and source code of func
-            # (or this hash can be within the file, and used to invalidate the cache and overwrite)
+            # (this hash could be within the file, and used to invalidate the cache and overwrite)
             # unless the function has only a single argument that is a simParams object
             if len(args) > 0 or len(kwargs) > 0 and not (len(args) == 1 and isinstance(args[0], simParams)):
-                # old: args and kwargs are not empty, so we can't cache
-                #print(f'Function [{func.__name__}] has additional arguments, not caching.')
-                #return func(*args, **kwargs)
-
                 # get function source (note: includes decorator line(s), comments, and so on)
                 hashstr = getsource(func)
                 hashstr = hashstr[hashstr.find('def '):] # strip leading decorator line(s)
@@ -212,6 +208,9 @@ def cache(_func=None, *, overwrite=False):
                 # load cached
                 with h5py.File(cachefile,'r') as f:
                     data = {key: f[key][()] for key in f.keys()}
+                if '_return' in data and len(data) == 1:
+                    # single ndarray
+                    data = data['_return']
                 print(f'Loaded [{cachefile}].')
             else:
                 # call i.e. compute
@@ -223,8 +222,13 @@ def cache(_func=None, *, overwrite=False):
                         for key in data:
                             f[key] = data[key]
                     print(f'Saved [{cachefile}].')
+                elif isinstance(data,np.ndarray):
+                    # save cache
+                    with h5py.File(cachefile,'w') as f:
+                        f['_return'] = data
+                    print(f'Saved [{cachefile}].')
                 else:
-                    print(f'Function [{f.__name__}] did not return a dict, not saving cache.')
+                    print(f'Function [{func.__name__}] did not return a ndarray or dict, not saving cache.')
 
             return data
         return wrapper

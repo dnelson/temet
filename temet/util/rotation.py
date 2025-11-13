@@ -3,6 +3,7 @@ Find rotation matrices (moment of inertia tensors) to place galaxies edge-on/fac
 """
 import numpy as np
 from numba import jit, prange
+from ..util.helper import cache
 
 def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
     """ Calculate the 3-vector (x,y,z) of the mean angular momentum of either the star-forming gas 
@@ -55,6 +56,7 @@ def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
 
     return ang_mom_mean
 
+@cache
 def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subhaloID=None, 
                           useStars=True, onlyStars=False):
     """ Calculate the moment of inertia tensor (3x3 matrix) for a subhalo or halo, given a load 
@@ -69,7 +71,13 @@ def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subh
         shPos = subhalo['SubhaloPos']
 
         gas = sP.snapshotSubset('gas', fields=['mass','pos','sfr'], subhaloID=subhaloID)
-        stars = sP.snapshotSubset('stars', fields=['mass','pos','sftime'], subhaloID=subhaloID)
+
+        stars = {'count':0}
+        if subhalo['SubhaloLenType'][sP.ptNum('stars')] == 0:
+            useStars = False
+
+        if useStars:
+            stars = sP.snapshotSubset('stars', fields=['mass','pos','sftime'], subhaloID=subhaloID)
     else:
         assert all(v is not None for v in [gas,stars,rHalf,shPos])
 

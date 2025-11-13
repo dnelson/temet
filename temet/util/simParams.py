@@ -188,7 +188,7 @@ class simParams:
     
     # physical models: GFM and other indications of optional snapshot fields
     metals    = None  # list of string labels for runs saving abundances by species
-    eEOS      = False # >0 if star-forming gas on effective equation of state (1=Illustris/TNG, 2=EAGLE)
+    eEOS      = False # >0 if star-forming gas on effective equation of state (1=Illustris/TNG, 2=EAGLE, 3=SIMBA)
     star      = False # >0 for USE_SFR (1=Illustris/TNG type i.e. SSPs, 2=MCST normal, 3=MCST solo stars)
     BHs       = False # >0 for BLACK_HOLES (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=MCST model)
     winds     = False # >0 for GFM_WINDS or SN feedback (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=MCST model)
@@ -997,7 +997,7 @@ class simParams:
                 self.arepoPath  = self.basePath + 'sims.other/Eagle-L'+bs+'n'+str(res)+'FP/'
                 self.simNameAlt = 'Eagle-L'+bs+'n'+str(res)+'FP'
 
-                if res == 1504: self.simName = 'Eagle100' #'Eagle-L68n1504FP'
+                if res == 1504: self.simName = 'Eagle100-1' #'Eagle-L68n1504FP'
 
             if run == 'eagle_dm': # DM-only
                 self.arepoPath  = self.basePath + 'sims.other/Eagle-L'+bs+'n'+str(res)+'DM/'

@@ -364,7 +364,7 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Fal
         f_post(ax, sims)
 
     _add_legends(ax, hInds, res, variants, colors)
-    fig.savefig(f'mcst_{xQuant}-vs-{yQuant}_comp-{len(sims)}%s.pdf' % ('_notracks' if not tracks else ''))
+    fig.savefig(f'mcst_{xQuant}-vs-{yQuant}.pdf')
     plt.close(fig)
 
 def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treebased=False, plot_parent=True, sizefac=1.0):
@@ -608,7 +608,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
     _add_legends(ax, hInds, res, variants, colors, lineplot=True)
     hStr = '' if len(set(hInds)) > 1 else '_h%d' % hInds[0]
     tStr = '_tree' if sfh_treebased else ''
-    fig.savefig(f'mcst_{quant}-vs-redshift_comp-{len(sims)}{hStr}{tStr}.pdf')
+    fig.savefig(f'mcst_{quant}-vs-redshift_{hStr}{tStr}.pdf')
     plt.close(fig)
 
 def smhm_relation(sims):
@@ -830,15 +830,8 @@ def gas_mzr(sims):
     """ Diagnostic plot of gas-phase mass-metallicity relation (MZR). """
     xQuant = 'mstar2_log'
     yQuant = 'Z_gas_sfrwt'
-    ylim = [-2.0, 0.5] # log pkpc
-    xlim = [5.7, 10.2] # log mstar
-
-    if sims[0].redshift >= 4.5:
-        xlim = [4.4, 9.0]
-        ylim = [-2.5, 0.0]
-    if sims[0].redshift >= 7.5:
-        xlim = [3.9, 8.0]
-        ylim = [-3.0, -0.5]
+    ylim = [-2.5, 0.0] # log pkpc
+    xlim = [4.4, 9.0] # log mstar
 
     def _draw_data(ax, sims):
         # adjust from A09 (all curves from Stanton+24) to our Zsun
@@ -887,8 +880,8 @@ def stellar_mzr(sims):
     """ Diagnostic plot of stellar mass-metallicity relation (MZR). """
     xQuant = 'mstar2_log'
     yQuant = 'Z_stars_masswt'
-    ylim = [-3.0, 0.0] # log pkpc
-    xlim = [5.7, 10.2] # log mstar
+    ylim = [-2.5, 0.0] # log pkpc
+    xlim = [4.4, 9.0] # log mstar
 
     def _draw_data(ax, sims):
         # adjust from A09 (all curves from Stanton+24) to our Zsun
@@ -988,14 +981,16 @@ def diagnostic_numhalos_uncontaminated(sims):
     max_num = 0
 
     for sim in sims:
-        # loop over snapshots
-        for snap in sim.validSnapList():
-            # load
-            sim.setSnap(snap)
+        sim_loc = sim.copy()
 
-            contam_frac = sim.subhalos('contam_frac')
-            cen_flag = sim.subhalos('cen_flag')
-            mstar = sim.subhalos('mstar2_log')
+        # loop over snapshots
+        for snap in sim_loc.validSnapList():
+            # load
+            sim_loc.setSnap(snap)
+
+            contam_frac = sim_loc.subhalos('contam_frac')
+            cen_flag = sim_loc.subhalos('cen_flag')
+            mstar = sim_loc.subhalos('mstar2_log')
 
             # select subhalos of interest
             subhaloIDs = np.where((cen_flag == 1) & (mstar > 0) & np.isfinite(mstar))[0]
@@ -1010,7 +1005,7 @@ def diagnostic_numhalos_uncontaminated(sims):
             for j, subhaloID in enumerate(subhaloIDs):
                 yy = contam_frac[j] if contam_frac[j] > ymin else ymin*1.5
                 ms = mstar[j] * 1.5
-                ax.plot(sim.redshift, yy, marker=markers[0], ms=ms, color=colors[j])
+                ax.plot(sim_loc.redshift, yy, marker=markers[0], ms=ms, color=colors[j])
 
     # legend
     handles = [plt.Line2D( (0,0), (0,0), ls='-', color='black', lw=0)]
@@ -1277,7 +1272,7 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
 def blackhole_diagnostics_vs_time(sim):
     """ Plot SMBH mass growth and accretion rates vs time, from the txt files. """
     # load
-    smbhs = blackhole_details_mergers(sim) #, overwrite=True)
+    smbhs = blackhole_details_mergers(sim)
 
     xlim = [12.1, 5.5]
     ageVals = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
@@ -1359,11 +1354,13 @@ def blackhole_diagnostics_vs_time(sim):
         fig.savefig(f'smbh_vs_time_{sim.simName}_{smbh_id}.pdf')
         plt.close(fig)
 
-@cache #(overwrite=True)
-def _blackhole_position_vs_time(sim):
-    """ Plot (relative) position of SMBHs vs time. """
+@cache
+def _blackhole_position_vs_time_snap(sim):
+    """ Plot (relative) position of SMBHs vs time, using snapshot information. """
     # load
     r = {}
+
+    sim = sim.copy()
 
     for snap in sim.validSnapList()[::-1]:
         sim.setSnap(snap)
@@ -1413,9 +1410,91 @@ def _blackhole_position_vs_time(sim):
     # convert to numpy arrays
     return r
 
-def blackhole_position_vs_time(sim):
+#@cache
+def _blackhole_position_vs_time(sim, n_pts=400):
+    """ Plot (relative) position of SMBHs vs time, using txt-files information. """
+    # load
+    r = {}
+
+    sim = sim.copy()
+
+    smbhs = blackhole_details_mergers(sim) #, overwrite=True)
+
+    # loop over each black hole
+    for smbh_id in smbhs.keys():
+        if smbh_id == 'mergers':
+            continue
+
+        # identify parent subhalo at final snapshot
+        bh_ids = sim.bhs('id')
+        w = np.where(bh_ids == int(smbh_id))[0]
+        assert len(w) == 1, 'Error: could not find SMBH ID [%s] in final snapshot!' % smbh_id
+
+        # identify central subhalo of fof of this parent, i.e. in case the SMBH is in a satellite
+        sub_id = sim.bhs('subhalo_id')[w[0]]
+        sub_id = sim.halo(sim.subhalo(sub_id)['SubhaloGrNr'])['GroupFirstSub']
+
+        # load subhalo mpb position (smoothed?)
+        mpb = sim.quantMPB(sub_id, quants=['SubhaloPos'], add_ghosts=True, smooth=True)
+        parent_time = 1/(1+mpb['z'])
+
+        # interpolate subhalo positions to blackhole times
+        bh_time = smbhs[smbh_id]['time']
+        
+        sub_pos = np.zeros( (bh_time.size, 3), dtype='float32' )
+        for i in range(3):
+            sub_pos[:,i] = np.interp(bh_time, parent_time[::-1], mpb['SubhaloPos'][:,i][::-1])
+
+        # calculate relative positions and distances
+        pos_smbh = np.vstack((smbhs[smbh_id]['x'],smbhs[smbh_id]['y'],smbhs[smbh_id]['z'])).T
+        pos_rel = pos_smbh - sub_pos
+        sim.correctPeriodicDistVecs(pos_rel)
+
+        # reduce relative positions via running mean
+        bin_size = int(np.floor(bh_time.size / n_pts))
+        offset = 0
+
+        bh_time_bin = np.zeros(n_pts, dtype='float32')
+        pos_rel_bin = np.zeros((n_pts,3), dtype='float32')
+
+        for i in range(n_pts):
+            bh_time_bin[i] = np.mean(bh_time[offset:offset+bin_size])
+            pos_rel_bin[i,:] = np.mean(pos_rel[offset:offset+bin_size,:], axis=0)
+            offset += bin_size
+
+        bh_z = 1/bh_time_bin - 1
+
+        dist = np.linalg.norm(pos_rel_bin, axis=1)
+        dist_pc = sim.units.codeLengthToPc(dist)
+
+        # bh ids (constant), and parent sub ids (just constant for now)
+        ids = np.zeros(dist.size, dtype='int64') + int(smbh_id)
+        sub_ids = np.zeros(dist.size, dtype='int64') + sub_id
+
+        # append
+        if len(r) == 0:
+            r['ids'] = ids
+            r['sub_ids'] = sub_ids
+            r['pos_rel'] = pos_rel_bin
+            r['dist_pc'] = dist_pc
+            r['time'] = bh_time_bin
+            r['z'] = bh_z
+        else:
+            r['ids'] = np.hstack((r['ids'], ids))
+            r['sub_ids'] = np.hstack((r['sub_ids'], sub_ids))
+            r['pos_rel'] = np.vstack((r['pos_rel'], pos_rel))
+            r['dist_pc'] = np.hstack((r['dist_pc'], dist_pc))
+            r['time'] = np.hstack((r['time'], bh_time))
+            r['z'] = np.hstack((r['z'], bh_z))
+
+    return r
+
+def blackhole_position_vs_time(sim, snap_based=True):
     """ Plot (relative) position of SMBHs vs time. """
-    data = _blackhole_position_vs_time(sim)
+    if snap_based:
+        data = _blackhole_position_vs_time_snap(sim)
+    else:
+        data = _blackhole_position_vs_time(sim)
 
     # loop over unique IDs
     smbh_ids = np.unique(data['ids'])
@@ -1451,7 +1530,7 @@ def blackhole_position_vs_time(sim):
         ax2.set_xlim([-1.1,1.1])
         ax2.set_ylim([-1.1,1.1])
 
-        # draw circle at subhalo size
+        # draw circle at (final) subhalo size
         sub_rhalf = sim.subhalos('SubhaloHalfmassRadType')[:,4]
         sub_id = sub_ids[-1]
         print(f' [{sim}] subhalo ID: {sub_id}, r_half: {sub_rhalf[sub_id]:.3f} ckpc/h')
@@ -1463,7 +1542,7 @@ def blackhole_position_vs_time(sim):
         colored_line(pos_rel[:,0], pos_rel[:,1], c=z, ax=ax2, lw=lw, cmap='plasma')
 
         # save
-        fig.savefig(f'smbh_pos_vs_time_{sim.simName}_{smbh_id}.pdf')
+        fig.savefig(f'smbh_pos_vs_time_{sim.simName}_{smbh_id}{"_snap" if snap_based else ""}.pdf')
         plt.close(fig)
 
 def starformation_diagnostics(sims, xlim=None, sizefac=1.0):
@@ -1619,21 +1698,9 @@ def select_ics():
 def paperPlots(a = False):
     """ Plots for MCST intro paper. (if a == True, make all figures)."""
     # list of sims to include
-    #variants = ['TNG','ST8','ST8e'] # TNG, ST5*, ST6, ST6b
-    #res = [11, 12, 13, 14, 15] # [11, 12, 13, 14]
-    #hInds = [1242, 4182, 10677, 12688, 31619]
-    #redshift = 3.0
-
-    # single run resolution series
-    #variants = ['ST8']
-    #res = [11, 12, 13, 14, 15]
-    #hInds = [4182, 31619]
-    #redshift = 5.0
-
-    # testing:
     variants = ['ST14']
     res = [14,15] # [14,15,16]
-    hInds = [15581,73172,219612,311384,844537] # [1958,5072,15581,23908,31619,73172,219612,311384,844537]
+    hInds = [219612] #[15581,23908,31619,73172,219612,311384,844537] # [1958,5072,15581,23908,31619,73172,219612,311384,844537]
     redshift = 5.5
 
     # if (all == False), only dz < 0.1 matches
@@ -1683,9 +1750,21 @@ def paperPlots(a = False):
 
     # figs 4,5: multi-sim galleries
     if 0 or a:
-        sims_loc = sims[0:9] # limit to first N sims for layout
-        vis_gallery_galaxy(sims_loc, conf=0, haloID=0)
-        vis_gallery_galaxy(sims_loc, conf=1, haloID=0)
+        #sims_loc = sims[0:9] # limit to first N sims for layout
+        sims_loc = []
+        v = 'ST14'
+        sims_loc.append(simParams('structures', hInd=5072, res=14, variant=v, snap=346, haloInd=0))
+        sims_loc.append(simParams('structures', hInd=15581, res=14, variant=v, redshift=5.8, haloInd=0))
+        sims_loc.append(simParams('structures', hInd=23908, res=14, variant=v, redshift=5.5, haloInd=0))
+        sims_loc.append(simParams('structures', hInd=31619, res=14, variant=v, redshift=5.5, haloInd=0))
+        sims_loc.append(simParams('structures', hInd=31619, res=14, variant=v, redshift=5.5, haloInd=1))
+        sims_loc.append(simParams('structures', hInd=73172, res=14, variant=v, redshift=5.5, haloInd=0))
+        sims_loc.append(simParams('structures', hInd=219612, res=15, variant=v, redshift=5.5, haloInd=0))
+        sims_loc.append(simParams('structures', hInd=311384, res=15, variant=v, redshift=6.0, haloInd=0))
+        sims_loc.append(simParams('structures', hInd=844537, res=15, variant=v, redshift=5.5, haloInd=0))
+
+        vis_gallery_galaxy(sims_loc, conf=0)
+        vis_gallery_galaxy(sims_loc, conf=1)
 
     # fig 6a: sfr vs mstar relation
     if 0 or a:
@@ -1719,7 +1798,7 @@ def paperPlots(a = False):
     if 0 or a:
         quant = 'mstar2_log'
         xlim = [12.1, 5.5]
-        ylim = [2.8, 7.5] #[3.8,7.0]
+        ylim = [3.8, 8.0]
 
         quantVsRedshift(sims, quant, xlim, ylim, sfh_treebased=False, plot_parent=False, sizefac=0.8)
         #quantVsRedshift(sims, quant='mgas2_log', xlim=xlim, ylim=[4.0,8.0])
@@ -1792,7 +1871,8 @@ def paperPlots(a = False):
     if 0 or a:
         for sim in sims:
             blackhole_diagnostics_vs_time(sim)
-            blackhole_position_vs_time(sim)
+            #blackhole_position_vs_time(sim, snap_based=True)
+            blackhole_position_vs_time(sim, snap_based=False)
 
     # radial profiles - halo comparisons
     if 0 or a:

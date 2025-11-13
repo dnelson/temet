@@ -21,7 +21,8 @@ def loadMPB(sP, id, fields=None, treeName=treeName_default, fieldNamesOnly=False
     if treeName in ['LHaloTree']:
         tree = il.lhalotree.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMPB=True)
 
-    tree['Redshift'] = sP.snapNumToRedshift(tree['SnapNum'])
+    if tree is not None:
+        tree['Redshift'] = sP.snapNumToRedshift(tree['SnapNum'])
 
     return tree
 
@@ -34,7 +35,8 @@ def loadMDB(sP, id, fields=None, treeName=treeName_default, fieldNamesOnly=False
     if treeName in ['LHaloTree']:
         tree = il.lhalotree.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMDB=True)
     
-    tree['Redshift'] = sP.snapNumToRedshift(tree['SnapNum'])
+    if tree is not None:
+        tree['Redshift'] = sP.snapNumToRedshift(tree['SnapNum'])
 
     return tree
 
@@ -268,7 +270,7 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
             if snap in mpb['SnapNum']:
                 continue
             mpb = insertMPBGhost(mpb, snap=snap)
-            print(' mpb inserted [%d] ghost' % snap)
+            #print(' mpb inserted [%d] ghost' % snap)
 
     # add redshift
     mpb_z = sim.snapNumToRedshift(mpb['SnapNum'])

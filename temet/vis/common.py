@@ -1687,7 +1687,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 s_long = np.arctan2(pos[:,1], pos[:,0]) # longitude (lambda) in [-pi,pi]
 
                 # restrict to sphere, instead of cube, to avoid differential ray lengths
-                w = np.where(s_rad > sP.boxSize/2)
+                w = np.where(s_sP.boxSize/2)
                 mass[w] = 0.0
 
                 # hsml: convert from kpc to deg (compute angular diameter)
@@ -1825,7 +1825,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                                          nPixels=nPixels, hsml_1=hsml_1, colDens=normCol, multi=True, 
                                          maxIntProj=maxIntProj, minIntProj=minIntProj, refGrid=refGrid )
 
-            elif method in ['histo','histo_maxIP','histo_minIP']:
+            elif method in ['histo','histo_global','histo_maxIP','histo_minIP']:
                 # simple 2D histogram, particles assigned to the bin which contains them
                 from scipy.stats import binned_statistic_2d
                 assert hsml_1 is None # not supported
@@ -2544,9 +2544,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
                 rad *= p['galHalfMass']
             if p['fracsType'] == 'rHalfMassStars':
                 rad *= p['galHalfMassStars']
-                if rad == 0.0:
-                    print('Warning: Drawing frac [%.1f %s] is zero, use halfmass.' % (rVirFrac,p['fracsType']))
-                    rad = rVirFrac * p['galHalfMass']
+                #if rad == 0.0:
+                #    #print('Warning: Drawing frac [%.1f %s] is zero, use halfmass.' % (rVirFrac,p['fracsType']))
+                #    #rad = rVirFrac * p['galHalfMass']
             if p['fracsType'] == 'codeUnits':
                 rad *= 1.0
             if p['fracsType'] == 'kpc':
@@ -2566,9 +2566,15 @@ def addBoxMarkers(p, conf, ax, pExtent):
             else:
                 raise Exception('Handle.')
 
+            # show if circle is larger than 2 pixels
+            pxScale = p['boxSizeImg'][p['axes'][0]] / p['nPixels'][0]
+
             color = '#ffffff'
-            c = plt.Circle( (xyPos[0],xyPos[1]), rad, color=color, linewidth=1.5, fill=False, alpha=0.6)
-            ax.add_artist(c)
+            if rad > 5*pxScale:
+                c = plt.Circle( (xyPos[0],xyPos[1]), rad, color=color, linewidth=1.5, fill=False, alpha=0.6)
+                ax.add_artist(c)
+            else:
+                print('Warning [%s]: Drawing radius at [%.1f %s] is zero or small, skip.' % (p['sP'].simName,rVirFrac,p['fracsType']))
 
     if 'labelZ' in p and p['labelZ']:
         if p['sP'].redshift >= 0.99 or np.abs(np.round(10*p['sP'].redshift)/10 - p['sP'].redshift) < 1e-2:
@@ -2706,21 +2712,13 @@ def addBoxMarkers(p, conf, ax, pExtent):
         haloMass = p['sP'].units.codeMassToLogMsun(halo['Group_M_Crit200'])
         stellarMass = p['sP'].units.codeMassToLogMsun(subhalo['SubhaloMassInRadType'][p['sP'].ptNum('stars')])
 
-        str1 = "log M$_{\\rm halo}$ = %.1f" % haloMass
-        str2 = "log M$_{\\rm star}$ = %.1f" % stellarMass
-
-        if 'mstar' in str(p['labelHalo']):
-            # just Mstar
-            str2 = r"log M$_{\star}$ = %.1f" % stellarMass
-            legend_labels.append( str2 )
         if 'mhalo' in str(p['labelHalo']):
-            # just Mhalo
-            legend_labels.append( str1 )
-        #if str1 not in legend_labels and str2 not in legend_labels:
-        #    # both Mhalo and Mstar
-        #    legend_labels.append( str1 )
-        #    if np.isfinite(stellarMass): legend_labels.append( str2 )
-
+            str1 = r"log M$_{\rm halo}$ = %.1f" % haloMass
+            legend_labels.append(str1)
+        if 'mstar' in str(p['labelHalo']):
+            str2 = r"log M$_{\star}$ = %.1f" % stellarMass
+            if np.isnan(stellarMass): str2 = r"log M$_{\star}$ = 0"
+            legend_labels.append(str2)
         if 'haloidorig' in str(p['labelHalo']):
             assert p['sP'].simName == 'TNG-Cluster' # Halo ID from parent DMO box
             legend_labels.append('HaloID %d (#%d)' % (subhalo['SubhaloGrNr'],halo['GroupOrigHaloID']))

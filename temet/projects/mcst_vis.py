@@ -58,16 +58,17 @@ def vis_single_galaxy(sP, haloID=0):
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def vis_gallery_galaxy(sims, conf=0, haloID=0):
+def vis_gallery_galaxy(sims, conf=0):
     """ Visualization: gallery of images of galaxies (one per run). """
     rVirFracs  = [1.0]
     fracsType  = 'rHalfMassStars'
     nPixels    = [960,960]
     sizeType   = 'kpc'
-    labelSim   = True
+    #labelSim   = True
     labelHalo  = 'mhalo,mstar'
     labelZ     = True
     labelScale = 'physical'
+    method     = 'sphMap'
     relCoords  = True
     axes = [0,1]   
 
@@ -80,19 +81,21 @@ def vis_gallery_galaxy(sims, conf=0, haloID=0):
     if conf == 1:
         partType = 'stars'
         partField = 'stellarComp'
+        method    = 'histo'
+        nPixels   = [480,480]
         valMinMax = None
 
     panels = []
 
     for sim in sims:
         # face-on + edge-on pairs
-        sub_ind = sim.halo(haloID)['GroupFirstSub']
-        size_loc = 1.0 if sim.hInd > 20000 else 5.0
+        sub_ind = sim.halo(sim.haloInd)['GroupFirstSub']
+        size_loc = 1.0 if sim.hInd < 300000 else 0.5
+        label_sim = sim.simName
+        if sim.haloInd > 0: label_sim += 'b'
 
-        panels.append({'sP':sim, 'subhaloInd':sub_ind, 'rotation':'face-on', 'size':size_loc})
-
-        #panels.append({'sP':sim, 'subhaloInd':sub_ind, 'rotation':'edge-on', 'size':size_loc, 'nPixels':[960,240], 
-        #                'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False})
+        panels.append({'sP':sim, 'subhaloInd':sub_ind, 'labelSim':label_sim,
+                       'rotation':'face-on', 'size':size_loc})
 
     class plotConfig:
         plotStyle    = 'edged'
