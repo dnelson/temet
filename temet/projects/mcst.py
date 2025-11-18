@@ -1918,6 +1918,7 @@ def paperPlots(a = False):
     if 0 or a:
         for sim in sims:
             vis_single_galaxy(sim, haloID=0)
+            vis_single_galaxy(sim, haloID=0, noSats=True)
             vis_single_halo(sim, haloID=0)
             #vis_single_halo(sim, haloID=0, size=20.0)
 

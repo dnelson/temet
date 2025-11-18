@@ -9,7 +9,7 @@ from os.path import isfile
 from ..vis.halo import renderSingleHalo, renderSingleHaloFrames
 from ..vis.box import renderBox
 
-def vis_single_galaxy(sP, haloID=0):
+def vis_single_galaxy(sP, haloID=0, noSats=False):
     """ Visualization: single image of a galaxy. 
     Cannot use for a movie since the face-on/edge-on rotations have random orientations each frame. """
     rVirFracs  = [1.0]
@@ -21,13 +21,20 @@ def vis_single_galaxy(sP, haloID=0):
     labelHalo  = 'mhalo,mstar,haloid'
     labelZ     = True
     labelScale = 'physical'
-    #plotBHs    = 10 # to finish
+    plotBHs    = 'all'
+    plotSubhalos = False #'all'
     relCoords  = True
     if 1:
         axes = [0,1]
         #rotation   = 'edge-on' #'face-on'
 
     subhaloInd = sP.halo(haloID)['GroupFirstSub']
+
+    # remove all particle/cells in satellite subhalos
+    if noSats:
+        #ptRestrictions = {'subhalo_id':['eq',subhaloInd]}
+        ptRestrictions = {'sat_member':['eq',0]}
+        plotSubhalos = False
 
     # redshift-dependent vis (h31619 L16 tests)
     zfac = 0.0
@@ -40,21 +47,27 @@ def vis_single_galaxy(sP, haloID=0):
 
     if 1:
         gas_field = 'coldens_msunkpc2' # 'HI'
-        gas_mm = [6.0+zfac,8.5+zfac] #[20.0+zfac,22.5+zfac]
+        stars_field = 'stellarComp' #stellarCompObsFrame'
+
+        gas_mm = [4.0+zfac,8.5+zfac] #[20.0+zfac,22.5+zfac]
+        dm_mm = [7.0+zfac,11.0+zfac]
         panels.append( {'partType':'gas', 'partField':gas_field, 'valMinMax':gas_mm, 'rotation':'face-on'} )
-        panels.append( {'partType':'stars', 'partField':'stellarComp', 'rotation':'face-on'} )
+        #panels.append( {'partType':'dm', 'partField':gas_field, 'valMinMax':dm_mm, 'rotation':'face-on'} )
+        panels.append( {'partType':'stars', 'nPixels':[480,480], 'method':'histo', 'partField':stars_field, 'rotation':'face-on'} )
 
         # add skinny edge-on panels below:
-        panels.append( {'partType':'gas', 'partField':gas_field, 'nPixels':[960,240], 'valMinMax':gas_mm, 
+        panels.append( {'partType':'gas', 'partField':gas_field, 'nPixels':[960,240], 'valMinMax':gas_mm,
                         'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
-        panels.append( {'partType':'stars', 'partField':'stellarComp', 'nPixels':[960,240], 
+        #panels.append( {'partType':'dm', 'partField':gas_field, 'nPixels':[960,240], 'valMinMax':dm_mm, 
+        #                'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
+        panels.append( {'partType':'stars', 'method':'histo', 'partField':stars_field, 'nPixels':[480,120], 
                         'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
 
     class plotConfig:
         plotStyle    = 'edged'
         colorbars    = True
         fontsize     = 28 # 24
-        saveFilename = 'galaxy_%s_%d_h%d.pdf' % (sP.simName,sP.snap,haloID)
+        saveFilename = 'galaxy_%s_%d_h%d%s.pdf' % (sP.simName,sP.snap,haloID,'_nosats' if noSats else '')
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 

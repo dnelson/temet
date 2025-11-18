@@ -79,6 +79,7 @@ def renderBox(panels_in, plotConfig, localVars, skipExisting=True, retInfo=False
     nPixels     = 1400        # number of pixels per dimension of images when projecting (960 1400)
     zoomFac     = 1.0         # [0,1], only in axes, not along projection direction
     #hsmlFac     = 1.0        # multiplier on smoothing lengths for sphMap (dm 0.2) (gas 2.5)
+    ptRestrictions = None     # dictionary of particle-level restrictions to apply
     relCenPos   = [0.5,0.5]   # [0-1,0-1] relative coordinates of where to center image, only in axes
     absCenPos   = None        # [x,y,z] in simulation coordinates to place at center of image
     sliceFac    = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
@@ -196,6 +197,7 @@ def renderBoxFrames(panels_in, plotConfig, localVars, curTask=0, numTasks=1, ski
     nPixels     = 960         # number of pixels per dimension of images when projecting
     zoomFac     = 1.0         # [0,1], only in axes, not along projection direction
     #hsmlFac     = 2.5        # multiplier on smoothing lengths for sphMap
+    ptRestrictions = None     # dictionary of particle-level restrictions to apply
     relCenPos   = [0.5,0.5]   # [0-1,0-1] relative coordinates of where to center image, only in axes
     absCenPos   = None        # [x,y,z] in simulation coordinates to place at center of image
     sliceFac    = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize

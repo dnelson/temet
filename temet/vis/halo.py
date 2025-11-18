@@ -206,6 +206,7 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
     depth       = None          # if None, depth is taken as size*depthFac, otherwise depth is provided here
     depthType   = 'rVirial'     # as sizeType except for depth, if depth is not None
     #hsmlFac     = 2.5          # multiplier on smoothing lengths for sphMap
+    ptRestrictions = None       # dictionary of particle-level restrictions to apply
     axes        = [1,0]         # e.g. [0,1] is x,y
     axesUnits   = 'code'        # code [ckpc/h], kpc, mpc, deg, arcmin, arcsec
     vecOverlay  = False         # add vector field quiver/streamlines on top? then name of field [bfield,vel]
@@ -343,9 +344,11 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
     cenShift    = [0,0,0]         # [x,y,z] coordinates to shift default box center location by
     size        = 3.0             # side-length specification of imaging box around halo/galaxy center
     depthFac    = 1.0             # projection depth, relative to size (1.0=same depth as width and height)
-    sizeType    = 'rVirial'     # size multiplies [rVirial,r500,rHalfMass,rHalfMassStars] or in [codeUnits,kpc,arcsec,arcmin,deg]
-    depth       = None          # if None, depth is taken as size*depthFac, otherwise depth is provided here
-    depthType   = 'rVirial'     # as sizeType except for depth, if depth is not None    #hsmlFac     = 2.5            # multiplier on smoothing lengths for sphMap
+    sizeType    = 'rVirial'       # size multiplies [rVirial,r500,rHalfMass,rHalfMassStars] or in [codeUnits,kpc,arcsec,arcmin,deg]
+    depth       = None            # if None, depth is taken as size*depthFac, otherwise depth is provided here
+    depthType   = 'rVirial'       # as sizeType except for depth, if depth is not None
+    #hsmlFac     = 2.5            # multiplier on smoothing lengths for sphMap
+    ptRestrictions = None         # dictionary of particle-level restrictions to apply
     axes        = [1,0]           # e.g. [0,1] is x,y
     axesUnits   = 'code'          # code [ckpc/h], mpc, deg, arcmin, arcsec
     vecOverlay  = False           # add vector field quiver/streamlines on top? then name of field [bfield,vel]

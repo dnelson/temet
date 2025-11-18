@@ -2474,7 +2474,7 @@ def subhalo_id(sim, partType, field, args):
 
     # make explicit list of indices
     if indRange is not None:
-        inds = np.arange(indRange[0], indRange[1])
+        inds = np.arange(indRange[0], indRange[1]+1)
     else:
         inds = np.arange(0, sim.numPart[sim.ptNum(partType)])
 
@@ -2507,6 +2507,24 @@ halo_id.label = 'Halo ID'
 halo_id.units = '' # dimensionless
 halo_id.limits = [0, 1e7]
 halo_id.log = True
+
+@snap_field
+def sat_member(sim, partType, field, args):
+    """ True (1) if particle/cell belongs to a satellite subhalo, False (0) otherwise (central/inner fuzz/outer fuzz). """
+    subhaloIDs = sim.snapshotSubset(partType, 'subhalo_id', **args)
+    haloIDs = sim.snapshotSubset(partType, 'halo_id', **args)
+    GroupFirstSub = sim.halos('GroupFirstSub')[haloIDs]
+
+    data = np.zeros(GroupFirstSub.size, dtype='int8')
+    w = np.where((subhaloIDs != GroupFirstSub) & (subhaloIDs != -1))
+    data[w] = 1
+
+    return data
+
+sat_member.label = 'Satellite Member'
+sat_member.units = '' # dimensionless
+sat_member.limits = [0, 1]
+sat_member.log = False
 
 @snap_field(multi=True)
 def parent_subhalo_(sim, partType, field, args):

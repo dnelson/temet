@@ -18,6 +18,7 @@ from ..util.treeSearch import calcHsml
 from ..util.voronoiRay import rayTrace
 from ..util.helper import loadColorTable, logZeroMin, logZeroNaN, pSplitRange
 from ..util.boxRemap import remapPositions
+from ..util.rotation import rotateCoordinateArray, perspectiveProjection
 from ..cosmo.cloudy import cloudyIon, cloudyEmission
 from ..cosmo.cloudyGrid import getEmissionLines
 from ..cosmo.stellarPop import sps
@@ -330,7 +331,9 @@ def _get_dist_theta_grid(size, nPixels):
     return dist, theta
 
 def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, projParams, boxCenter, boxSizeImg, 
-                               hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM):
+                               hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM,
+                               snapHsmlForStars, alsoSFRgasForStars, excludeSubhaloFlag, skipCellIndices, 
+                               ptRestrictions, weightField, randomNoise):
     """ Generate 3-band RGB composite using starlight in three different passbands. Work in progress. """
     bands = partField.split("-")[1:]
 
@@ -345,11 +348,17 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
     #print('Generating stellar composite with %s [%s %s %s]' % (fieldPrefix,bands[0],bands[1],bands[2]))
 
     band0_grid_mag, _, _ = gridBox(sP, method, 'stars', fieldPrefix+bands[0], nPixels, axes, projType, projParams, boxCenter, 
-                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
+                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM,
+                                snapHsmlForStars, alsoSFRgasForStars, excludeSubhaloFlag, skipCellIndices, 
+                                ptRestrictions, weightField, randomNoise)
     band1_grid_mag, _, _ = gridBox(sP, method, 'stars', fieldPrefix+bands[1], nPixels, axes, projType, projParams, boxCenter, 
-                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
+                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM,
+                                snapHsmlForStars, alsoSFRgasForStars, excludeSubhaloFlag, skipCellIndices, 
+                                ptRestrictions, weightField, randomNoise)
     band2_grid_mag, _, _ = gridBox(sP, method, 'stars', fieldPrefix+bands[2], nPixels, axes, projType, projParams, boxCenter, 
-                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
+                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM,
+                                snapHsmlForStars, alsoSFRgasForStars, excludeSubhaloFlag, skipCellIndices, 
+                                ptRestrictions, weightField, randomNoise)
 
     # convert magnitudes to linear luminosities
     ww = np.where(band0_grid_mag < 99) # these left at zero
@@ -750,6 +759,8 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         if partFieldLoad in volDensityFields+colDensityFields or \
         (' ' in partFieldLoad and 'mass' not in partFieldLoad and 'frac' not in partFieldLoad):
             normCol = True
+        #if 'stellarBand-' in partFieldLoad or 'stellarBandObsFrame-' in partFieldLoad and method == 'histo':
+        #    normCol = True
     else:
         # distribute a mass-weighted quantity and calculate mean value grid
         if partFieldLoad in haloCentricFields or partFieldLoad.startswith('delta_'):
@@ -1363,8 +1374,6 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             alsoSFRgasForStars=False, excludeSubhaloFlag=False, skipCellIndices=None, 
             ptRestrictions=None, weightField='mass', randomNoise=None, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
-    from ..util.rotation import rotateCoordinateArray, perspectiveProjection
-
     optionalStr = ''
     if projType != 'ortho':
         optionalStr += '_%s-%s' % (projType, '_'.join( [str(k)+'='+str(v) for k,v in projParams.items()] ))
@@ -1423,8 +1432,10 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     # generate a 3-band composite stellar image from 3 bands
     if 'stellarComp' in partField or 'stellarCompObsFrame' in partField:
         return stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, projParams, boxCenter, boxSizeImg, 
-                                          hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
-
+                                          hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM,
+                                snapHsmlForStars, alsoSFRgasForStars, excludeSubhaloFlag, skipCellIndices, 
+                                ptRestrictions, weightField, randomNoise)
+    
     # map
     if not forceRecalculate and isfile(saveFilename):
         # load if already made
@@ -1490,7 +1501,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             projParamsLoc = dict(projParams)
             projParamsLoc['noclip'] = True
             refGrid, _, _ = gridBox(sP, method, partType, partFieldRef, nPixels, axes, projType, projParamsLoc, 
-                                    boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, smoothFWHM=smoothFWHM)
+                                    boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
+                                    smoothFWHM=smoothFWHM, ptRestrictions=ptRestrictions)
 
         # allocate
         grid_dens  = np.zeros( nPixels[::-1], dtype='float32' )
@@ -1504,6 +1516,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         disableChunkLoad = (sP.isPartType(partType,'dm') and not sP.snapHasField(partType, 'SubfindHsml') and method != 'histo')
         disableChunkLoad |= sP.isPartType(partType,'stars') # use custom CalcHsml always for stars now
         disableChunkLoad |= ('voronoi_' in method) # need complete mesh at once
+        disableChunkLoad |= (indRange is None and h['NumPart'][sP.ptNum(partType)] < 1e8)
 
         if len(sP.data) and np.count_nonzero( [key for key in sP.data.keys() if 'snap%d'%sP.snap in key] ):
             print(' gridBox(): have fields in sP.data, disabling chunking (possible spatial subset already applied)')
@@ -1513,9 +1526,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         # if indRange is still None (full snapshot load), we will proceed chunked, unless we need
         # a full tree construction to calculate hsml values
         if indRange is None and sP.subbox is None and not disableChunkLoad:
-            nChunks = np.max( [1, int(h['NumPart'][sP.ptNum(partType)]**(1.0/3.0) / 10.0)] )
+            nChunks = np.max( [1, int(h['NumPart'][sP.ptNum(partType)]**(1.0/3.0) / 20.0)] )
             chunkSize = int(h['NumPart'][sP.ptNum(partType)] / nChunks)
-            if nChunks > 50:
+            if nChunks > 10:
                 print(' gridBox(): proceeding for (%s %s) with [%d] chunks...' % (partType,partField,nChunks))
 
         for chunkNum in np.arange(nChunks):
@@ -1524,7 +1537,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 # calculate load indices (snapshotSubset is inclusive on last index) (make sure we get to the end)
                 indRange = [chunkNum*chunkSize, (chunkNum+1)*chunkSize-1]
                 if chunkNum == nChunks-1: indRange[1] = h['NumPart'][sP.ptNum(partType)]-1
-                if nChunks > 50:
+                if nChunks > 10:
                     print('  [%2d] %11d - %d' % (chunkNum,indRange[0],indRange[1]))
 
             if indRange2 is not None and chunkNum == 1:
@@ -1799,6 +1812,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
             if partType == 'stars' and sP.winds:
                 sftime = sP.snapshotSubsetP(partType, 'sftime', indRange=indRange)
+                assert sftime.size == mass.size
                 wMask = np.where(sftime > 0.0)[0]
                 if len(wMask) <= 2 and nChunks == 1:
                     return emptyReturn()
@@ -1978,14 +1992,14 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     # mass has units of [code mass / code volume], so grid_q has [code mass / code area]
                     result = rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=mass, mode=mode)
                     grid_d = result.reshape(nPixels).T
-                    grid_q = np.zeros(nPixels, dtype='float32') # dummy
+                    grid_q = np.zeros(nPixels, dtype='float32').T # dummy
 
                 elif partField in volDensityFields:
                     assert not normCol # check what it would mean
                     mode = 'quant_mean' # unweighted
                     result = rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=mass, mode=mode)
                     grid_d = result.reshape(nPixels).T
-                    grid_q = np.zeros(nPixels, dtype='float32') # dummy
+                    grid_q = np.zeros(nPixels, dtype='float32').T # dummy
 
                 elif partField in totSumFields:
                     assert 0 # needs to be checked, implement tau0 and yparam direct integrations to verify
@@ -1993,7 +2007,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     mode = 'quant_sum'
                     result = rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=mass, mode=mode)
                     grid_d = result.reshape(nPixels).T
-                    grid_q = np.zeros(nPixels, dtype='float32') # dummy
+                    grid_q = np.zeros(nPixels, dtype='float32').T # dummy
                     
                 elif 'EW_' in partField:
                     # equivalent width map via synthetic spectra: obtain full rays
@@ -2019,7 +2033,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                                                                    mass, cell_temp, cell_vellos)
 
                     grid_d = result.reshape(nPixels).T
-                    grid_q = np.zeros(nPixels, dtype='float32') # dummy
+                    grid_q = np.zeros(nPixels, dtype='float32').T # dummy
 
                 else:
                     # weighted average of quant_i using dens_i*dl (column density) as the weight
@@ -2027,7 +2041,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     mode = 'quant_weighted_dx_mean'
                     result = rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=quant, quant2=mass, mode=mode)
                     grid_q = result.reshape(nPixels).T
-                    grid_d = np.ones( nPixels, dtype='float32' ) # dummy normalization
+                    grid_d = np.ones( nPixels, dtype='float32' ).T # dummy normalization
 
             else:
                 raise Exception('Method not implemented.')
@@ -2148,7 +2162,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     if 0 and partField in velLOSFieldNames:
         print('Clipping LOS velocity, visible at log(n_HI) > 19.0 only.')
         grid_nHI, _, _ = gridBox(sP, method, 'gas', 'HI_segmented', nPixels, axes, projType, projParams, 
-                              boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, smoothFWHM=smoothFWHM)
+                              boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
+                              smoothFWHM=smoothFWHM, ptRestrictions=ptRestrictions)
 
         grid_master[grid_nHI < 19.0] = np.nan
 
@@ -2156,7 +2171,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         if 'noclip' not in projParams:
             print('Clipping LOS velocity, visible at SFR surface density > 0.01 msun/yr/kpc^2 only.')
             grid_sfrsd, _, _ = gridBox(sP, method, 'gas', 'sfr_msunyrkpc2', nPixels, axes, projType, projParams, 
-                                  boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, smoothFWHM=smoothFWHM)
+                                  boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
+                                  smoothFWHM=smoothFWHM, ptRestrictions=ptRestrictions)
 
             grid_master[grid_sfrsd < -3.0] = np.nan
 
@@ -2164,7 +2180,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     # ~log(3.2) [msun/kpc^2] equal to the bottom of the color scale for the illustris/tng sb0 box renders
     if partField == 'stellar_age':
         grid_stellarColDens, _, _ = gridBox(sP, method, 'stars', 'coldens_msunkpc2', nPixels, axes, projType, projParams, 
-                                         boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio)
+                                         boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio,
+                                         smoothFWHM=smoothFWHM, ptRestrictions=ptRestrictions)
 
         w = np.where(grid_stellarColDens < 3.0)
         grid_master[w] = 0.0 # black
@@ -2174,7 +2191,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     if ' fracmass' in partField:
         grid_totmass, _, data_grid_totmass = gridBox(sP, method, partType, 'mass', nPixels, axes, projType, projParams, 
                                                      boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
-                                                     smoothFWHM=smoothFWHM)
+                                                     smoothFWHM=smoothFWHM, ptRestrictions=ptRestrictions)
 
         grid_master = logZeroMin( 10.0**grid_master / 10.0**grid_totmass )
         data_grid = logZeroMin( 10.0**data_grid / 10.0**data_grid_totmass )
@@ -2187,9 +2204,11 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         print('NOTE: Converting gas coldens map to baryon fraction map!')
 
         grid_stars, _, data_grid_stars = gridBox(sP, method, 'stars', 'coldens', nPixels, axes, projType, projParams, 
-                                                 boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio)
+                                                 boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio,
+                                                 smoothFWHM=smoothFWHM, ptRestrictions=ptRestrictions)
         grid_dm, _, data_grid_dm = gridBox(sP, method, 'dm', 'coldens', nPixels, axes, projType, projParams, 
-                                           boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio)
+                                           boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio,
+                                           smoothFWHM=smoothFWHM, ptRestrictions=ptRestrictions)
 
         grid_gas = 10.0**grid_master
         grid_stars = 10.0**grid_stars
@@ -2260,18 +2279,36 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 def addBoxMarkers(p, conf, ax, pExtent):
     """ Factor out common annotation/markers to overlay. """
 
-    color = '#ffffff'
-
-    def _addCirclesHelper(p, ax, pos, radii, numToAdd, labelVals=None, lw=1.5, alpha=0.3, marker='o'):
+    def _addCirclesHelper(p, ax, pos, radii, numToAdd, labelVals=None, lw=1.5, alpha=0.3, marker='o', color='#ffffff', facecolor=None):
         """ Helper function to add a number of circle markers for halos/subhalos/SMBHs, within the panel. """
         fontsize = 16 # for text only
 
-        circOpts = {'color':color, 'alpha':alpha, 'linewidth':lw, 'fill':False}
+        circOpts = {'alpha':alpha, 'linewidth':lw}
         textOpts = {'color':color, 'alpha':alpha, 'fontsize':fontsize, 
                     'horizontalalignment':'left', 'verticalalignment':'center'}
+        
+        if facecolor is None:
+            circOpts['fill'] = False
+            circOpts['color'] = color
+        else:
+            circOpts['fill'] = True
+            circOpts['edgecolor'] = color
+            circOpts['facecolor'] = facecolor
 
         countAdded = 0
         gcInd = 0
+
+        if p['rotMatrix'] is not None:
+            rotCenter = p['rotCenter']
+            if rotCenter is None:
+                # use subhalo center at this snapshot
+                sh = p['sP'].groupCatSingle(subhaloID=p['sP'].subhaloInd)
+                rotCenter = sh['SubhaloPos']
+
+                if not p['sP'].isZoom and p['sP'].subhaloInd is None:
+                    raise Exception('Rotation in periodic box must be about a halo center.')
+
+            pos, _ = rotateCoordinateArray(p['sP'], pos, p['rotMatrix'], rotCenter)
 
         if pos.ndim == 1 and pos.size == 3:
             assert radii.size == 1
@@ -2281,6 +2318,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
         # remap? transform coordinates
         if 'remapRatio' in p and p['remapRatio'] is not None:
             pos, _ = remapPositions(p['sP'], pos, p['remapRatio'], p['nPixels'])
+
+        if str(numToAdd) == 'all':
+            numToAdd = pos.shape[0]
 
         while countAdded < numToAdd:
             xyzPos = pos[gcInd,:][ [p['axes'][0], p['axes'][1], 3-p['axes'][0]-p['axes'][1]] ]
@@ -2344,7 +2384,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
             gcInd += 1
             if gcInd >= pos.shape[0] and countAdded < numToAdd:
-                print('Warning: Ran out of halos to add, only [%d of %d]' % (countAdded,numToAdd))
+                if numToAdd != pos.shape[0]:
+                    # only exactly equal if numToAdd was 'all'
+                    print('Warning: Ran out of halos/objects to add, only [%d of %d]' % (countAdded,numToAdd))
                 break
 
         # special behavior: highlight the progenitor of a specific object
@@ -2410,7 +2452,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
             _addCirclesHelper(p, ax, gc['GroupPos'], gc['Group_R_Crit200'], p['plotHalos'], labelVals, alpha=0.5)
 
-    if 'plotSubhalos' in p and p['plotSubhalos'] > 0:
+    if 'plotSubhalos' in p and (str(p['plotSubhalos']) == 'all' or p['plotSubhalos'] > 0):
         # plotting N most massive child subhalos in visible area
         h = p['sP'].groupCatHeader()
 
@@ -2429,15 +2471,18 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
             _addCirclesHelper(p, ax, gc['SubhaloPos'], gc['SubhaloHalfmassRad'], p['plotSubhalos'])
 
-    if 'plotBHs' in p and p['plotBHs'] > 0:
+    if 'plotBHs' in p and (str(p['plotBHs']) == 'all' or p['plotBHs'] > 0):
         # plotting N most massive PartType5 in visible area
         if p['sP'].numPart[p['sP'].ptNum('bhs')] > 0:
             # global load entire snapshot
             smbh_pos = p['sP'].snapshotSubset('bhs', 'pos')
             smbh_mass = p['sP'].snapshotSubset('bhs', 'BH_Mass')
-            smbh_rad = p['sP'].units.codeMassToLogMsun(smbh_mass) + 10.0
 
-            _addCirclesHelper(p, ax, smbh_pos, smbh_rad, p['plotBHs'])
+            # simple size scaling for visibility: 2px + 1px per dex of log(m_smbh)
+            pxScale = p['boxSizeImg'][p['axes'][0]] / 1000
+            smbh_rad = (3+p['sP'].units.codeMassToLogMsun(smbh_mass)) * pxScale
+            
+            _addCirclesHelper(p, ax, smbh_pos, smbh_rad, p['plotBHs'], alpha=0.7, lw=3, color='#fff', facecolor='#000')
 
     if 'plotHaloIDs' in p:
         # plotting halos/groups specified by ID, in visible area
@@ -2500,6 +2545,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
         ymax = cen[1] + size/2
 
         # draw with label
+        color = '#ffffff'
         ax.plot([xmin,xmax,xmax,xmin,xmin],[ymin,ymin,ymax,ymax,ymin],'-',color=color)
 
         textOpts = {'color':color, 'alpha':1.0, 'fontsize':16, 
@@ -3273,7 +3319,7 @@ def renderMultiPanel(panels, conf):
         def _heightfac():
             """ Helper. Used later to define height of colorbar. """
             heightFac = np.clip(1.0*(nCols/nRows)**0.3, 0.35, 2.5)
-            heightFac /= (conf.rasterPx[0]/850) # todo: does this make sense for vector output?
+            #heightFac /= (conf.rasterPx[0]/850) # todo: does this make sense for vector output?
 
             # disable for subbox_movie_tng300fof0_4x2():
             heightFac += 0.02*(conf.fontsize-40) # larger for larger fonts, and vice versa (needs tuning)
