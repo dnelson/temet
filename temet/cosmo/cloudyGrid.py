@@ -17,17 +17,7 @@ basePath = rootPath + "tables/cloudy/"
 basePathTemp = expanduser("~") + "/data/cloudy_tables/"
 
 # emission lines recorded (must redo Cloudy grid to add lines)
-# to add in the future:
-#Fe 2 in the UV
-#O 1 in the UV (e.g. 1302)
-#O 5 doublet (~1218A)
-#C 2 in the UV (e.g. 1334)
-#Si 2                1304.37A
-#Si 2                1260.42A
-#Si 2                1231.66A
-#Si 2                1230.75A
-#Si 2                1193.29A
-#Si 2                1190.42A
+# note: all with "type t" are new, not yet in table file
 
 lineList = """
 #1259    H  1 911.753A      radiative recombination continuum, i.e. (inf -> n=1) "Lyman limit"
@@ -109,8 +99,82 @@ lineList = """
 #85297   C  3 2296.87A      Stout, 5 9
 #105092  N  5 1238.82A      Stout, 1 3, doublet in Bertone+ (2010b)
 #105097  N  5 1242.80A      Stout, 1 2, doublet in Bertone+ (2010b)
-#123142  C  4 1550.78A      Chianti, 1 2, doublet in Bertone+ (2010b)
+#109626  C  2 1334.53A      # type: t, index=1, 7 Elow=0
+#109761  C  2 157.636m      # type: t, index=1, 2 Elow=0   Stout, 2s2.2p 2P*1/2 -- 2s2.2p 2P*3/2
+#109671  C  2 2323.50A      # type: t, index=1, 4 Elow=0   Stout, 2s2.2p 2P*1/2 -- 2s.2p2 4P3/2
+#109676  C  2 2324.69A      # type: t, index=1, 3 Elow=0   Stout, 2s2.2p 2P*1/2 -- 2s.2p2 4P1/2
+#109766  C  3 1908.73A      # type: t, index=1, 3 Elow=0   Stout, 1s2.2s2 1S0 -- 1s2.2s.2p 3P1
+#109771  C  3 1906.68A      # type: t, index=1, 4 Elow=0   Stout, 1s2.2s2 1S0 -- 1s2.2s.2p 3P2
+#109776  C  3 977.020A      # type: t, index=1, 5 Elow=0   Stout, 1s2.2s2 1S0 -- 1s2.2s.2p 1P1
+#118751  Fe 2 7419.41A      # type: t, index=1, 14 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d7(4P) 4P2.5
+#118756  Fe 2 6309.53A      # type: t, index=1, 17 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d7(2G) 2G4.5
+#118761  Fe 2 6107.27A      # type: t, index=1, 18 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d7(2G) 2G3.5
+#118766  Fe 2 4914.99A      # type: t, index=1, 21 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d7(2H) 2H5.5
+#118771  Fe 2 4872.66A      # type: t, index=1, 22 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d7(2D) 2D2.5
+#118776  Fe 2 4805.02A      # type: t, index=1, 23 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d7(2H) 2H4.5
+#118781  Fe 2 4799.30A      # type: t, index=1, 24 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(4P) 4P2.5
+#118786  Fe 2 4704.22A      # type: t, index=1, 25 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(4H) 4H6.5
+#118791  Fe 2 4664.97A      # type: t, index=1, 27 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(2H) 2H5.5
+#118796  Fe 2 4632.28A      # type: t, index=1, 28 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(2H) 2H4.5
+#118801  Fe 2 4604.48A      # type: t, index=1, 29 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(4H) 4H3.5
+#118806  Fe 2 4416.27A      # type: t, index=1, 32 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(4F) 4F4.5
+#118811  Fe 2 4382.74A      # type: t, index=1, 33 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(4F) 4F3.5
+#118816  Fe 2 4358.10A      # type: t, index=1, 34 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(4F) 4F2.5
+#118821  Fe 2 4287.39A      # type: t, index=1, 36 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d54s2(6S) 6S2.5
+#118826  Fe 2 3931.44A      # type: t, index=1, 37 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(4G) 4G5.5
+#118831  Fe 2 3874.07A      # type: t, index=1, 39 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(4G) 4G4.5
+#118836  Fe 2 3847.78A      # type: t, index=1, 40 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(4G) 4G3.5
+#118841  Fe 2 3836.89A      # type: t, index=1, 41 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(4G) 4G2.5
+#118846  Fe 2 3820.06A      # type: t, index=1, 42 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(4H) 4H5.5
+#118851  Fe 2 3793.59A      # type: t, index=1, 43 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(4H) 4H4.5
+#118856  Fe 2 3659.96A      # type: t, index=1, 45 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(2F) 2F3.5
+#118861  Fe 2 3619.48A      # type: t, index=1, 46 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(2F) 2F2.5
+#118866  Fe 2 3289.77A      # type: t, index=1, 47 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(2G) 2G4.5
+#118871  Fe 2 3249.57A      # type: t, index=1, 48 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(2G) 2G3.5
+#118876  Fe 2 3185.01A      # type: t, index=1, 51 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(4D) 4D2.5
+#118881  Fe 2 3175.38A      # type: t, index=1, 52 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(4D) 4D3.5
+#118886  Fe 2 3142.58A      # type: t, index=1, 53 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d7(2F) 2F2.5
+#118891  Fe 2 3124.19A      # type: t, index=1, 54 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d7(2F) 2F3.5
+#118896  Fe 2 3040.88A      # type: t, index=1, 55 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(2I) 2I6.5
+#118901  Fe 2 3037.72A      # type: t, index=1, 56 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(2I) 2I5.5
+#118906  Fe 2 2987.19A      # type: t, index=1, 57 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(2G) 2G4.5
+#118911  Fe 2 2984.09A      # type: t, index=1, 58 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(2G) 2G3.5
+#118916  Fe 2 2757.58A      # type: t, index=1, 60 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(2D) 2D2.5
+#118921  Fe 2 2619.47A      # type: t, index=1, 62 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64s1(2D) 2D2.5
+#118926  Fe 2 2599.40A      # type: t, index=1, 64 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64p1(6D) 6D4.5
+#118931  Fe 2 2585.88A      # type: t, index=1, 65 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64p1(6D) 6D3.5
+#118936  Fe 2 2572.64A      # type: t, index=1, 66 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64p1(6D) 6D2.5
+#118941  Fe 2 2382.04A      # type: t, index=1, 69 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64p1(6F) 6F5.5
+#118946  Fe 2 2373.74A      # type: t, index=1, 70 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64p1(6F) 6F4.5
+#118951  Fe 2 2366.87A      # type: t, index=1, 71 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64p1(6F) 6F3.5
+#118956  Fe 2 2361.40A      # type: t, index=1, 72 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64p1(6F) 6F2.5
+#118961  Fe 2 2343.50A      # type: t, index=1, 75 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64p1(6P) 6P3.5
+#118966  Fe 2 2312.04A      # type: t, index=1, 76 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64p1(6P) 6P2.5
+#118971  Fe 2 2260.08A      # type: t, index=1, 78 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64p1(4F) 4F4.5
+#118976  Fe 2 2249.18A      # type: t, index=1, 79 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64p1(4D) 4D3.5
+#118981  Fe 2 2233.75A      # type: t, index=1, 80 Elow=0   Stout, 3p63d64s1(6D) 6D4.5 -- 3p63d64p1(4F) 4F3.5
+#123142  C  4 1550.78A      Chianti, 1 2   Stout, 2s2.2p 2P*1/2 -- 2s.2p2 2D3/2, doublet in Bertone+ (2010b)
 #123147  C  4 1548.19A      Chianti, 1 3, doublet in Bertone+ (2010b), in vdV+ 2013
+#153506  Ne 3 3868.76A      # type: t, index=1, 4 Elow=0   Stout, 2s22p4(3P) (3)1( 2.0) -- 2s22p4(1D) (1)2( 2.0)
+#156931  O  1 1025.76A      # type: t, index=1, 23 Elow=0   Stout, 2s2.2p4 3P2 -- 2s2.2p3.(4S*).3d 3D*3 (note: 3 lines)
+#156961  O  1 1039.23A      # type: t, index=1, 15 Elow=0   Stout, 2s2.2p4 3P2 -- 2s2.2p3.(4S*).4s 3S*1
+#156976  O  1 1302.17A      # type: t, index=1, 7 Elow=0   Stout, 2s2.2p4 3P2 -- 2s2.2p3.(4S*).3s 3S*1
+#156991  O  1 1355.60A      # type: t, index=1, 6 Elow=0   Stout, 2s2.2p4 3P2 -- 2s2.2p3.(4S*).3s 5S*2
+#157016  O  1 2958.36A      # type: t, index=1, 5 Elow=0   Stout, 2s2.2p4 3P2 -- 2s2.2p4 1S0
+#157061  O  1 6300.30A      # type: t, index=1, 4 Elow=0   Stout, 2s2.2p4 3P2 -- 2s2.2p4 1D2
+#157481  O  2 2470.22A      # type: t, index=1, 5 Elow=0   Stout, 2s2.2p3 4S*3/2 -- 2s2.2p3 2P*1/2
+#157486  O  2 2470.34A      # type: t, index=1, 4 Elow=0   Stout, 2s2.2p3 4S*3/2 -- 2s2.2p3 2P*3/2
+#157521  O  2 3728.81A      # type: t, index=1, 2 Elow=0   Stout, 2s2.2p3 4S*3/2 -- 2s2.2p3 2D*5/2
+#157526  O  2 3726.03A      # type: t, index=1, 3 Elow=0   Stout, 2s2.2p3 4S*3/2 -- 2s2.2p3 2D*3/2
+#157541  O  3 4931.23A      # type: t, index=1, 4 Elow=0   Stout, 2s2.2p2 3P0 -- 2s2.2p2 1D2
+#157546  O  3 1657.69A      # type: t, index=1, 6 Elow=0   Stout, 2s2.2p2 3P0 -- 2s.2p3 5S*2
+#157596  O  3 4958.91A      # type: t, index=2, 4 Elow=113.178   Stout, 2s2.2p2 3P1 -- 2s2.2p2 1D2
+#157606  O  3 1660.81A      # type: t, index=2, 6 Elow=113.178   Stout, 2s2.2p2 3P1 -- 2s.2p3 5S*2
+#157656  O  3 5006.84A      # type: t, index=3, 4 Elow=306.174   Stout, 2s2.2p2 3P2 -- 2s2.2p2 1D2
+#157666  O  3 1666.15A      # type: t, index=3, 6 Elow=306.174   Stout, 2s2.2p2 3P2 -- 2s.2p3 5S*2
+#157716  O  3 4363.21A      # type: t, index=4, 5 Elow=20273.27   Stout, 2s2.2p2 1D2 -- 2s2.2p2 1S0
+#158041  O  5 1218.34A      # type: t, index=1, 3 Elow=0   Stout, 1s2.2s2 1S0 -- 1s2.2s.2p 3P*1
+#158046  O  5 1213.81A      # type: t, index=1, 4 Elow=0   Stout, 1s2.2s2 1S0 -- 1s2.2s.2p 3P*2
 #158187  O  6 1037.62A      Chianti, 1 2, "resonance line" (Draine pg.88), doublet in Bertone+ (2010b)
 #158192  O  6 1031.91A      Chianti, 1 3, "resonance line" (Draine pg.88), doublet in Bertone+ (2010b)
 #158197  O  6 183.937A      Chianti, 2 4
@@ -139,6 +203,12 @@ lineList = """
 #113377  Si 2 2328.52A      Stout, 1 4
 #113382  Si 2 1808.01A      Stout, 1 6
 #113387  Si 2 1526.71A      Stout, 1 8
+#164321  Si 2 1304.37A      # type: t, index=1, 9 Elow=0   Stout, 3s2.3p 2P*1/2 -- 3s.3p2 2S1/2
+#164326  Si 2 1260.42A      # type: t, index=1, 10 Elow=0   Stout, 3s2.3p 2P*1/2 -- 3s2.3d 2D3/2
+#164331  Si 2 1231.66A      # type: t, index=1, 12 Elow=0   Stout, 3s2.3p 2P*1/2 -- 3s2.4p 2P*1/2
+#164336  Si 2 1230.75A      # type: t, index=1, 13 Elow=0   Stout, 3s2.3p 2P*1/2 -- 3s2.4p 2P*3/2
+#164341  Si 2 1193.29A      # type: t, index=1, 14 Elow=0   Stout, 3s2.3p 2P*1/2 -- 3s.3p2 2P1/2
+#164346  Si 2 1190.42A      # type: t, index=1, 15 Elow=0   Stout, 3s2.3p 2P*1/2 -- 3s.3p2 2P3/2
 #113862  Si 3 1892.03A      Stout, 1 3
 #113867  Si 3 1882.71A      Stout, 1 4
 #113872  Si 3 1206.50A      Stout, 1 5
