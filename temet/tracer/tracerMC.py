@@ -13,7 +13,7 @@ try:
 except:
     from numpy import argsort as p_argsort # fallback
 
-from ..util.helper import iterable, nUnique, bincount, reportMemory
+from ..util.helper import iterable, nUnique, bincount, reportMemory, pSplitRange
 from ..cosmo.mergertree import loadTreeFieldnames
 from ..cosmo.util import inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
 
@@ -1018,22 +1018,22 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 print('  Saving now...', flush=True)
                 with h5py.File(saveFilename,'r+') as f:
                     # hack (below): disable the next four lines
-                    if r[field].ndim == 2:
-                        f[field][:,saveSnapInd] = r[field][:,m]
-                    else:
-                        f[field][:,:,saveSnapInd] = r[field][:,:,m]
+                    #if r[field].ndim == 2:
+                    #    f[field][:,saveSnapInd] = r[field][:,m]
+                    #else:
+                    #    f[field][:,:,saveSnapInd] = r[field][:,:,m]
 
                     f['done'][saveSnapInd] = 1
                     done[saveSnapInd] = 1
 
                 # hack: write temporary file with just this snapshot (combine later), since writing
                 # into the slice of the existing dataset can be extremely slow
-                #saveFilenameIndiv = saveFilename.replace('.hdf5','_indiv-%d.hdf5' % saveSnapInd)
-                #with h5py.File(saveFilenameIndiv,'w') as f:
-                #    if r[field].ndim == 2:
-                #        f[field] = r[field][:,m]
-                #    else:
-                #        f[field] = r[field][:,:,m]
+                saveFilenameIndiv = saveFilename.replace('.hdf5','_indiv-%d.hdf5' % saveSnapInd)
+                with h5py.File(saveFilenameIndiv,'w') as f:
+                    if r[field].ndim == 2:
+                        f[field] = r[field][:,m]
+                    else:
+                        f[field] = r[field][:,:,m]
 
                 print('  Saved snapshot index [%d] to [%s].' % (saveSnapInd,saveFilename.split("/")[-1]), flush=True)
 
@@ -1582,6 +1582,8 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
     else:
         # saved inside tracersTimeEvo() one snapshot at a time, can be restarted
         oneSnap = (sP.res == 2160 and not sP.isSubbox)
+        #oneSnap = False
+        #print('TODO REMOVE')
 
         if 'tracer_' in field: # trField
             trVals = tracersTimeEvo(sP, trIDs, [field], [], toRedshift=toRedshift, mpb=mpb, saveFilename=saveFilename, exitAfterOneSnap=oneSnap)
@@ -1662,3 +1664,44 @@ def checkTracerMeta(sP):
                 assert np.array_equal(children_ids, trIDs_subhalo_pt[0:children_ids.size])
 
     print('Pass.')
+
+def concat_tracer_parent_cats():
+    """ Combine individual tracer_parent_indextype, tracer_subhalo_id, etc catalogs into single file. """
+    #sim = simParams('tng50-1')
+    basePath = '/u/dnelson/sims.TNG/TNG50-1/postprocessing/tracer_tracks/'
+    nSplits = 50
+    nSnaps = 100
+    field = 'subhalo_id' # parent_indextype'
+
+    # load first (or second) file to get shape
+    with h5py.File(basePath + 'tr_all_groups_99_%s_indiv-1.hdf5' % field,'r') as f:
+        nTr = f[field].size
+        dtype = f[field].dtype
+
+    shape = [nTr,nSnaps]
+    print(f'{shape = }')
+
+    # create output file
+    #assert not isfile(basePath + 'tr_all_groups_99_%s.hdf5' % field)
+    #with h5py.File(basePath + 'tr_all_groups_99_%s.hdf5' % field,'w') as f:
+    #    f.create_dataset(field, shape, dtype=dtype)
+    #    f['snaps'] = np.arange(nSnaps, dtype='dtype)[::-1]
+    #    f['redshifts'] = sim.snapNumToRedshift(f['snaps'][()])
+
+    # loop over splits
+    for i in range(nSplits):
+        # allocate, load across all cats
+        indRange = pSplitRange([0, shape[0]], nSplits, i)
+        print(i, indRange, flush=True)
+        data = np.zeros((indRange[1]-indRange[0],nSnaps), dtype=dtype)
+
+        for j in range(1,nSnaps)[::-1]: # NOTE! REMOVE 1 if starting from chunk ZERO !!!!!!!!!!!!!
+            # load
+            with h5py.File(basePath + 'tr_all_groups_99_%s_indiv-%d.hdf5' % (field,j),'r') as f:
+                data[:,j] = f[field][indRange[0]:indRange[1]]
+
+        # save
+        with h5py.File(basePath + 'tr_all_groups_99_%s.hdf5' % field,'a') as f:
+            f[field][indRange[0]:indRange[1]] = data
+
+    print('Done.')
