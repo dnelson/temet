@@ -749,7 +749,7 @@ def sizes_vs_mstar(sims):
     """ Diagnostic plot of galaxy stellar size (half mass radius for now) versus stellar mass. """
 
     xQuant = 'mstar2_log'
-    yQuant = 'rhalf_stars'
+    yQuant = 'rhalf_stars_fof'
     ylim = [-2.5, 1.5] # log pkpc
     xlim = [4.8, 10.2] # log mstar
 
@@ -1699,7 +1699,7 @@ def paperPlots(a = False):
     """ Plots for MCST intro paper. (if a == True, make all figures)."""
     # list of sims to include
     variants = ['ST14']
-    res = [14,15] # [14,15,16]
+    res = [14] #[14,15] # [14,15,16]
     hInds = [219612] #[15581,23908,31619,73172,219612,311384,844537] # [1958,5072,15581,23908,31619,73172,219612,311384,844537]
     redshift = 5.5
 
@@ -1707,28 +1707,27 @@ def paperPlots(a = False):
     # if (single == True), only the highest available res of each halo
     sims = _get_existing_sims(variants, res, hInds, redshift, all=False, single=True)
 
-    # contamination diagnostic printout (info only)
-    #for sim in sims:
-    #    subIDs = _zoomSubhaloIDsToPlot(sim)
-    #    #for subID in subIDs:
-    #    #    subhalo = sim.subhalo(subID)
-    #    #    s = f' h[{subhalo["SubhaloGrNr"]}] sub[{subID:4d}] '
-    #    #    s += f'Re = {sim.units.codeLengthToPc(subhalo["SubhaloHalfmassRadType"][4]):.2f} pc, '
-    #    #    s += f'M_BH = {sim.units.codeMassToLogMsun(subhalo["SubhaloBHMass"])[0]:.2f}'
-    #    #    print(s)
+    # contamination diagnostic printout and SMBH printout (info only)
+    if 0:
+        for sim in sims:
+            subIDs = _zoomSubhaloIDsToPlot(sim)
+            for subID in subIDs:
+                subhalo = sim.subhalo(subID)
+                s = f' h[{subhalo["SubhaloGrNr"]}] sub[{subID:4d}] '
+                s += f'Re = {sim.units.codeLengthToPc(subhalo["SubhaloHalfmassRadType"][4]):.2f} pc, '
+                s += f'M_BH = {sim.units.codeMassToLogMsun(subhalo["SubhaloBHMass"])[0]:.2f}'
+                print(s)
 
-    # examine last existing snapshot of each sim (info only)
-    #for sim in sims:
-    #    ##sim.setSnap(sim.validSnapList()[-1]) # careful
-    #    bhs = sim.bhs(['BH_Mass','Masses','BH_CumEgyInjection_QM','BH_CumMassGrowth_QM','BH_MPB_CumEgyHigh'])
-    #    for i in range(bhs['count']):
-    #        s = f'{str(sim):<24} BH {i}:'
-    #        s += f'BH_Mass = {sim.units.codeMassToLogMsun(bhs["BH_Mass"][i])[0]:.3f}, '
-    #        s += f'Mass = {sim.units.codeMassToLogMsun(bhs["Masses"][i])[0]:.3f}, '
-    #        s += f'CumEgy = {sim.units.codeEnergyToErg(bhs["BH_CumEgyInjection_QM"][i]):.3e}, '
-    #        s += f'CumMass = {sim.units.codeMassToLogMsun(bhs["BH_CumMassGrowth_QM"][i])[0]:.3f}, '
-    #        s += f'CumEgy_MPB = {sim.units.codeEnergyToErg(bhs["BH_MPB_CumEgyHigh"][i]):.3e}'
-    #        print(s)
+            ##sim.setSnap(sim.validSnapList()[-1]) # careful
+            bhs = sim.bhs(['BH_Mass','Masses','BH_CumEgyInjection_QM','BH_CumMassGrowth_QM','BH_MPB_CumEgyHigh'])
+            for i in range(bhs['count']):
+                s = f'{str(sim):<24} BH {i}:'
+                s += f'BH_Mass = {sim.units.codeMassToLogMsun(bhs["BH_Mass"][i])[0]:.3f}, '
+                s += f'Mass = {sim.units.codeMassToLogMsun(bhs["Masses"][i])[0]:.3f}, '
+                s += f'CumEgy = {sim.units.codeEnergyToErg(bhs["BH_CumEgyInjection_QM"][i]):.3e}, '
+                s += f'CumMass = {sim.units.codeMassToLogMsun(bhs["BH_CumMassGrowth_QM"][i])[0]:.3f}, '
+                s += f'CumEgy_MPB = {sim.units.codeEnergyToErg(bhs["BH_MPB_CumEgyHigh"][i]):.3e}'
+                print(s)
 
     # ------------
 
@@ -1822,11 +1821,14 @@ def paperPlots(a = False):
 
     # fig 9b - metallicity vs time evolution
     if 0 or a:
-        xlim = [14.1, 5.4]
-        ylim = [-4.1, 0.0]
+        xlim = [11.0,9.0] #[14.1, 5.4]
+        ylim = [-4.1, -1.0] #[-4.1, 0.0]
 
         quantVsRedshift(sims, quant='Z_gas_sfrwt', xlim=xlim, ylim=ylim, sizefac=0.8)
         quantVsRedshift(sims, quant='Z_stars_masswt', xlim=xlim, ylim=ylim, sizefac=0.8)
+        quantVsRedshift(sims, quant='Z_stars_2rhalfstarsfof_masswt', xlim=xlim, ylim=ylim, sizefac=0.8)
+        quantVsRedshift(sims, quant='Z_stars_1kpc_masswt', xlim=xlim, ylim=ylim, sizefac=0.8)
+        quantVsRedshift(sims, quant='Z_stars_fof_masswt', xlim=xlim, ylim=ylim, sizefac=0.8)
 
         #for hInd in hInds:
         #    sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
@@ -1854,7 +1856,8 @@ def paperPlots(a = False):
     if 0 or a:
         xlim = [14.1, 5.5]
 
-        quantVsRedshift(sims, quant='size_stars_log', xlim=xlim, ylim=[-3.5, 0.0], sizefac=0.8)
+        #quantVsRedshift(sims, quant='size_stars_log', xlim=xlim, ylim=[-3.5, 0.0], sizefac=0.8)
+        quantVsRedshift(sims, quant='rhalf_stars_fof', xlim=xlim, ylim=[-3.5, 0.0], sizefac=0.8)
 
     # fig 10c - gas sizes
     if 0 or a:
@@ -1922,6 +1925,35 @@ def paperPlots(a = False):
             vis_single_halo(sim, haloID=0)
             #vis_single_halo(sim, haloID=0, size=20.0)
 
+    # star cluster histogram test
+    if 0:
+        sim = sims[0]
+        haloID = 0
+
+        sub_haloIDs = sim.subhalos('SubhaloGrNr')
+        sub_ids = np.where(sub_haloIDs == haloID)[0][1:]
+
+        mstar = sim.subhalos('mstar_tot')[sub_ids]
+        mgas = sim.subhalos('mgas_tot')[sub_ids]
+        mdm = sim.subhalos('mdm_tot')[sub_ids]
+
+        w = np.where((mstar > 0) & (mdm == 0))[0]
+
+        # start plot
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.set_xlabel(r'Stellar Mass [ log M$_{\odot}$ ]')
+        ax.set_ylabel('Number of Star Clusters')
+        ax.set_yscale('log')
+        ax.hist(np.log10(mstar[w]), bins=30, histtype='step', lw=lw)
+
+        min_mass = np.log10(20 * sim.units.codeMassToMsun(sim.targetGasMass))
+        ax.plot([min_mass,min_mass], ax.get_ylim(), lw=lw, color='black', linestyle='--', label='20x targetGasMass')
+        ax.set_title(f'# Clusters: {len(w)} of {mstar.size} subhalos.')
+        ax.legend(loc='best')
+
+        fig.savefig(f'star_cluster_histo_{sim.simName}_halo{haloID}.pdf')
+        plt.close(fig)
+
     # diagnostics: stellar feedback (sn_details*)
     if 0 or a:
         pass
@@ -1948,6 +1980,16 @@ def paperPlots(a = False):
     # diagnostic: SFR debug
     if 0 or a:
         diagnostic_sfr_jeans_mass(sims, haloID=0)
+
+    # diagnostic: halo mass, virial radii, mpb-based mstar, rhalf/rvir ratio, all vs redshift
+    if 0 or a:
+        xlim = [12.1, 5.5]
+
+        quantVsRedshift(sims, 'mstar2', xlim=xlim, ylim=[3.5,6.5], sfh_treebased=True, plot_parent=False, sizefac=0.8)
+        quantVsRedshift(sims, 'mstar_fof', xlim=xlim, ylim=[3.5,6.5], sfh_treebased=True, plot_parent=False, sizefac=0.8)
+        #quantVsRedshift(sims, 'mhalo', xlim=xlim, ylim=[6.0,11.0], plot_parent=False, sizefac=0.8)
+        #quantVsRedshift(sims, 'rvir', xlim=xlim, ylim=[0.5,2.0], plot_parent=False, sizefac=0.8)
+        #quantVsRedshift(sims, 're_rvir_ratio', xlim=xlim, ylim=[-3.5,-0.5], plot_parent=False, sizefac=0.8)       
 
     # ------------
 

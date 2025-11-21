@@ -493,6 +493,45 @@ z_stars_masswt.limits = [-3.0, 0.5]
 z_stars_masswt.log = True
 
 @catalog_field
+def z_stars_1kpc_masswt(sim, partType, field, args):
+    """ Stellar metallicity (within 1 kpc, fof-scope), mass weighted. """
+    acField = 'Subhalo_StellarZ_1kpc_FoF_MassWt'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+
+    return sim.units.metallicityInSolar(ac[acField])
+
+z_stars_1kpc_masswt.label = r'$\rm{Z_{\star,masswt}}$'
+z_stars_1kpc_masswt.units = r'$\rm{Z_{\odot}}$'
+z_stars_1kpc_masswt.limits = [-3.0, 0.5]
+z_stars_1kpc_masswt.log = True
+
+@catalog_field
+def z_stars_2rhalfstarsfof_masswt(sim, partType, field, args):
+    """ Stellar metallicity (within 2rhalfstars of fof, and fof-scope), mass weighted. """
+    acField = 'Subhalo_StellarZ_2rhalfstars-FoF_MassWt'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+
+    return sim.units.metallicityInSolar(ac[acField])
+
+z_stars_2rhalfstarsfof_masswt.label = r'$\rm{Z_{\star,masswt}}$'
+z_stars_2rhalfstarsfof_masswt.units = r'$\rm{Z_{\odot}}$'
+z_stars_2rhalfstarsfof_masswt.limits = [-3.0, 0.5]
+z_stars_2rhalfstarsfof_masswt.log = True
+
+@catalog_field
+def z_stars_fof_masswt(sim, partType, field, args):
+    """ Stellar metallicity (full fof-scope), mass weighted. All satellites have same value as their central."""
+    acField = 'Subhalo_StellarZ_FoF_MassWt'
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+
+    return sim.units.metallicityInSolar(ac[acField])
+
+z_stars_fof_masswt.label = r'$\rm{Z_{\star,masswt}}$'
+z_stars_fof_masswt.units = r'$\rm{Z_{\odot}}$'
+z_stars_fof_masswt.limits = [-3.0, 0.5]
+z_stars_fof_masswt.log = True
+
+@catalog_field
 def z_gas_sfrwt(sim, partType, field, args):
     """ Gas-phase metallicity (no radial restriction), mass weighted. """
     acField = 'Subhalo_GasZ_NoRadCut_SfrWt'
@@ -654,7 +693,7 @@ def size_halpha(sim, partType, field, args):
 
     return vals
 
-size_halpha.label = r'r$_{\rm 1/2,H\alpha}$ [ log kpc ]'
+size_halpha.label = r'r$_{\rm 1/2,H\alpha}$'
 size_halpha.units = r'$\rm{kpc}$'
 size_halpha.limits = [0.0, 1.5]
 size_halpha.log = True
@@ -668,10 +707,31 @@ def size_halpha_em(sim, partType, field, args):
 
     return vals
 
-size_halpha_em.label = r'r$_{\rm 1/2,H\alpha}$ [ log kpc ]'
+size_halpha_em.label = r'r$_{\rm 1/2,H\alpha}$'
 size_halpha_em.units = r'$\rm{kpc}$'
 size_halpha_em.limits = [0.0, 1.5]
 size_halpha_em.log = True
+
+@catalog_field(alias='rhalf_stars_fof_code')
+def rhalf_stars_fof(sim, partType, field, args):
+    """ Stellar half-mass radius, computed from all FoF-scope stars. """
+    acField = 'Subhalo_Stars_R50_FoF'
+    ac = sim.auxCat(acField, expandPartial=True) # saved only for centrals
+
+    # assign same value to all subhalos of each halo
+    grnr = sim.subhalos('SubhaloGrNr')
+    firstsub = sim.halos('GroupFirstSub')[grnr]
+    vals = ac[acField][firstsub]
+
+    if '_code' not in field:
+        vals = sim.units.codeLengthToKpc(vals)
+
+    return vals
+
+rhalf_stars_fof.label = r'r$_{\rm 1/2,\star}$'
+rhalf_stars_fof.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
+rhalf_stars_fof.limits = [0.0, 1.5]
+rhalf_stars_fof.log = True
 
 # ---------------------------- auxcat: other ------------------------------------------------------
 

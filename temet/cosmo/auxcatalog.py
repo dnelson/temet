@@ -385,6 +385,13 @@ def _radialRestriction(sP, nSubsTot, rad):
         stellarRHalf = 1.0 * subHalfmassRadType[:,sP.ptNum('stars')]
 
         radSqMax = (stellarRHalf/2)**2
+    elif rad == '2rhalfstars_fof':
+        # classic galaxy definition, r < 2*r_{1/2,mass,stars}, except based on re-computed 
+        # stellar half mass radii that consider all FoF stars, not just those assigned to the subhalo
+        subHalfmassRadType = sP.subhalos('rhalf_stars_fof')
+        twiceStellarRHalf = 2.0 * subHalfmassRadType
+
+        radSqMax = twiceStellarRHalf**2
     elif rad == '1pkpc_2d':
         # 1 pkpc in 2D projection (e.g. for Sigma_1)
         rad_code = sP.units.physicalKpcToCodeLength(1.0)
@@ -1037,8 +1044,11 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         minHaloMass=minHaloMass, cenSatSelect=cenSatSelect)
     nSubsDo = len(subhaloIDsTodo)
 
-    assert np.count_nonzero(np.isnan(radSqMin[subhaloIDsTodo])) == 0, 'Radial selection requires centrals only?'
-    assert np.count_nonzero(np.isnan(radSqMax[subhaloIDsTodo])) == 0, 'Radial selection requires centrals only?'
+    if rad not in ['2rhalfstars_fof']:
+        # skip check if e.g. some (sub)halos have no stars, and so no stellar half mass radii, in which case
+        # our return here should likely also be nan
+        assert np.count_nonzero(np.isnan(radSqMin[subhaloIDsTodo])) == 0, 'Radial selection requires centrals only?'
+        assert np.count_nonzero(np.isnan(radSqMax[subhaloIDsTodo])) == 0, 'Radial selection requires centrals only?'
 
     if ptType not in indRange:
         # e.g. snapshots so early there are no stars, or no SMBHs

@@ -1568,16 +1568,23 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             # load: sizes (hsml) and manipulate as needed
             hsml = None
             if (method != 'histo') and ('voronoi' not in method):
-                if 'stellarBand-' in partField or (partType == 'stars' and 'coldens' in partField):
-                    hsml = getHsmlForPartType(sP, partType, indRange=indRange, nNGB=32, 
-                                              useSnapHsml=snapHsmlForStars, alsoSFRgasForStars=alsoSFRgasForStars)
+                pxScale = np.max(np.array(boxSizeImg)[axes] / nPixels)
+
+                if 'stellarBand' in partField or (partType == 'stars' and 'coldens' in partField):
+                    if sP.star in [2,3]:
+                        # high-res i.e. single-star type models, render as point-like
+                        hsml = np.zeros(pos.shape[0], dtype='float32')
+                        hsml += pxScale * 1.0
+                    else:
+                        # TNG-type SSP models, render with neighbor-based size smoothing
+                        hsml = getHsmlForPartType(sP, partType, indRange=indRange, nNGB=32, 
+                                                useSnapHsml=snapHsmlForStars, alsoSFRgasForStars=alsoSFRgasForStars)
                 else:
                     hsml = getHsmlForPartType(sP, partType, indRange=indRange)
 
                 hsml *= hsmlFac # modulate hsml values by hsmlFac
 
-                if sP.isPartType(partType, 'stars'):
-                    pxScale = np.max(np.array(boxSizeImg)[axes] / nPixels)
+                if sP.isPartType(partType, 'stars') and sP.star == 1:
                     hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels, indRange, method=3) # custom age-based clipping
 
             # load: mass/weights, quantity, and render specifications required
@@ -2593,6 +2600,10 @@ def addBoxMarkers(p, conf, ax, pExtent):
                 #if rad == 0.0:
                 #    #print('Warning: Drawing frac [%.1f %s] is zero, use halfmass.' % (rVirFrac,p['fracsType']))
                 #    #rad = rVirFrac * p['galHalfMass']
+            if p['fracsType'] == 'rhalf_stars_fof':
+                # load custom stellar half mass radius (based on fof-scope), code length units
+                rhalf_stars_fof = p['sP'].subhalos('rhalf_stars_fof_code')
+                rad *= rhalf_stars_fof[p['sP'].subhaloInd]
             if p['fracsType'] == 'codeUnits':
                 rad *= 1.0
             if p['fracsType'] == 'kpc':
@@ -3338,6 +3349,9 @@ def renderMultiPanel(panels, conf):
                 heightFac = 0.7
                 widthFrac = 0.9
                 hOffset = -0.5
+
+            if nRows == 3:
+                heightFac *= 0.85
             if nRows >= 4:
                 heightFac *= 0.65
                 

@@ -333,6 +333,11 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
             vals = sim.units.codeLengthToComovingKpc(vals)
             vals *= mpb_a # comoving -> physical
 
+        if prop in ['re_rvir_ratio']:
+            vals1 = mpb['SubhaloHalfmassRadType'][:,sim.ptNum('stars')]
+            vals2 = mpb['Group_R_Crit200']
+            vals = vals1 / vals2
+
         if prop in ['size_gas']:
             vals = mpb['SubhaloHalfmassRadType'][:,sim.ptNum('gas')]
             vals = sim.units.codeLengthToComovingKpc(vals)

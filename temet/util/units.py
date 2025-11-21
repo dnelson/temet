@@ -1730,7 +1730,12 @@ class units(object):
         dA = self.redshiftToAngDiamDist(z)
         size_mpc = dA * ang_diam * self.arcsec_in_rad
         return size_mpc * 1000.0
-
+    
+    def arcsecToCodeLength(self, x_arcsec, z=None):
+        """ Convert an angle in arcseconds to an angular/tranverse size (in code length units). """
+        x_kpc = self.arcsecToAngSizeKpcAtRedshift(x_arcsec, z)
+        return self.physicalKpcToCodeLength(x_kpc)
+    
     def degToAngSizeKpcAtRedshift(self, ang_diam_deg, z):
         """ Convert an angle in degrees to a physical size [kpc] at redshift z. """
         arcsec_per_deg = 60 * 60

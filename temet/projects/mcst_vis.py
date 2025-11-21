@@ -13,8 +13,9 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
     """ Visualization: single image of a galaxy. 
     Cannot use for a movie since the face-on/edge-on rotations have random orientations each frame. """
     rVirFracs  = [1.0]
-    fracsType  = 'rHalfMassStars'
-    nPixels    = [960,960]
+    fracsType  = 'rhalf_stars_fof' #'rHalfMassStars'
+    nPixels    = [960,960] # face-on panels
+    nPixels_e  = [960,240] # edge-on panels
     size       = 1.0 if sP.hInd > 20000 else 5.0
     sizeType   = 'kpc'
     labelSim   = False # True
@@ -27,6 +28,12 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
     if 1:
         axes = [0,1]
         #rotation   = 'edge-on' #'face-on'
+
+    # observational resolution?
+    if 0:
+        # note: 1.0 should be 2.0, since FWHM is 2x pixel scale
+        nircam_fwhm = 1.0 * 0.031 # arcsec at 0.6-2.3 um (is 2x worse at 2.4-5 um)
+        smoothFWHM = sP.units.arcsecToCodeLength(nircam_fwhm)
 
     subhaloInd = sP.halo(haloID)['GroupFirstSub']
 
@@ -47,20 +54,23 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
 
     if 1:
         gas_field = 'coldens_msunkpc2' # 'HI'
-        stars_field = 'stellarComp' #stellarCompObsFrame'
+        stars_field = 'stellarCompObsFrame' #stellarCompObsFrame'
 
         gas_mm = [4.0+zfac,8.5+zfac] #[20.0+zfac,22.5+zfac]
         dm_mm = [7.0+zfac,11.0+zfac]
         panels.append( {'partType':'gas', 'partField':gas_field, 'valMinMax':gas_mm, 'rotation':'face-on'} )
         #panels.append( {'partType':'dm', 'partField':gas_field, 'valMinMax':dm_mm, 'rotation':'face-on'} )
-        panels.append( {'partType':'stars', 'nPixels':[480,480], 'method':'histo', 'partField':stars_field, 'rotation':'face-on'} )
+        #panels.append( {'partType':'stars', 'nPixels':[480,480], 'method':'histo', 'partField':stars_field, 'rotation':'face-on'} )
+        panels.append( {'partType':'stars', 'partField':stars_field, 'rotation':'face-on'} )
 
         # add skinny edge-on panels below:
-        panels.append( {'partType':'gas', 'partField':gas_field, 'nPixels':[960,240], 'valMinMax':gas_mm,
+        panels.append( {'partType':'gas', 'partField':gas_field, 'nPixels':nPixels_e, 'valMinMax':gas_mm,
                         'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
-        #panels.append( {'partType':'dm', 'partField':gas_field, 'nPixels':[960,240], 'valMinMax':dm_mm, 
+        #panels.append( {'partType':'dm', 'partField':gas_field, 'nPixels':nPixels_e, 'valMinMax':dm_mm, 
         #                'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
-        panels.append( {'partType':'stars', 'method':'histo', 'partField':stars_field, 'nPixels':[480,120], 
+        #panels.append( {'partType':'stars', 'method':'histo', 'partField':stars_field, 'nPixels':[480,120], 
+        #                'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
+        panels.append( {'partType':'stars', 'partField':stars_field, 'nPixels':nPixels_e,
                         'labelScale':False, 'labelSim':True, 'labelHalo':False, 'labelZ':False, 'rotation':'edge-on'} )
 
     class plotConfig:
@@ -74,13 +84,14 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
 def vis_gallery_galaxy(sims, conf=0):
     """ Visualization: gallery of images of galaxies (one per run). """
     rVirFracs  = [1.0]
-    fracsType  = 'rHalfMassStars'
+    fracsType  = 'rhalf_stars_fof' #'rHalfMassStars'
     nPixels    = [960,960]
     sizeType   = 'kpc'
     #labelSim   = True
     labelHalo  = 'mhalo,mstar'
     labelZ     = True
     labelScale = 'physical'
+    plotBHs    = 'all'
     method     = 'sphMap'
     relCoords  = True
     axes = [0,1]   
@@ -93,9 +104,7 @@ def vis_gallery_galaxy(sims, conf=0):
 
     if conf == 1:
         partType = 'stars'
-        partField = 'stellarComp'
-        method    = 'histo'
-        nPixels   = [480,480]
+        partField = 'stellarCompObsFrame'
         valMinMax = None
 
     panels = []

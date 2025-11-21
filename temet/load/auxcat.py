@@ -279,8 +279,8 @@ def _expand_partial(sP, r, field):
             new_data.fill(-1)
 
         new_data[r['subhaloIDs'],...] = r[field]
-        print(' Auxcat Expanding [%d] to [%d] elements for [%s].' % (r[field].shape[0],new_data.shape[0],field))
-        print(' Auxcat WARNING: "subhaloIDs" in return is unchanged (sparse).')
+        #print(' Auxcat Expanding [%d] to [%d] elements for [%s].' % (r[field].shape[0],new_data.shape[0],field))
+        #print(' Auxcat WARNING: "subhaloIDs" in return is unchanged (sparse).')
 
         return new_data
 
@@ -639,6 +639,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='mass',op='halfrad',rad=None),
    'Subhalo_Stars_R80': \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='mass',op='rad80',rad=None),
+   'Subhalo_Stars_R50_FoF': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='mass',op='halfrad',rad=None,cenSatSelect='cen',scope='fof'),
 
    # emission: x-rays
    'Subhalo_XrayBolLum' : \
@@ -801,6 +803,12 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_StellarZ_NoRadCut_MassWt': \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad=None,weighting='mass'),
+   'Subhalo_StellarZ_2rhalfstars-FoF_MassWt': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='2rhalfstars_fof',scope='fof',weighting='mass'),
+   'Subhalo_StellarZ_FoF_MassWt': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad=None,scope='fof',weighting='mass'),
+   'Subhalo_StellarZ_1kpc_FoF_MassWt': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad=1.0,scope='fof',weighting='mass'),
    'Subhalo_StellarZ_4pkpc_rBandLumWt'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad=4.0,weighting='bandLum-sdss_r'),
    'Subhalo_StellarZ_SDSSFiber_rBandLumWt'    : \
