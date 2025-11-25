@@ -609,6 +609,13 @@ def sf_sn_details(sim, overwrite=False):
                 supernovae[key] = f[key][()]
         print(f'Loaded [{cachefile['sn']}].')
         
+        w = np.where((stars['Density'] <= 0) | (stars['Time'] <= 0) | (stars['Temperature'] <= 0))[0]
+        if len(w):
+            print(f' WARNING: found [{len(w)}] stars with non-positive density, temp, or time, removing.')
+            w = np.where((stars['Density'] > 0) & (stars['Time'] > 0) & (stars['Temperature'] > 0))[0]
+            for key in stars:
+                stars[key] = stars[key][w]
+
         return stars, supernovae
 
     # concatenate txt files if needed

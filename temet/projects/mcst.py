@@ -608,7 +608,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
     _add_legends(ax, hInds, res, variants, colors, lineplot=True)
     hStr = '' if len(set(hInds)) > 1 else '_h%d' % hInds[0]
     tStr = '_tree' if sfh_treebased else ''
-    fig.savefig(f'mcst_{quant}-vs-redshift_{hStr}{tStr}.pdf')
+    fig.savefig(f'mcst_{quant}-vs-redshift{hStr}{tStr}.pdf')
     plt.close(fig)
 
 def smhm_relation(sims):
@@ -749,7 +749,7 @@ def sizes_vs_mstar(sims):
     """ Diagnostic plot of galaxy stellar size (half mass radius for now) versus stellar mass. """
 
     xQuant = 'mstar2_log'
-    yQuant = 'rhalf_stars_fof'
+    yQuant = 'rhalf_stars'
     ylim = [-2.5, 1.5] # log pkpc
     xlim = [4.8, 10.2] # log mstar
 
@@ -879,7 +879,7 @@ def gas_mzr(sims):
 def stellar_mzr(sims):
     """ Diagnostic plot of stellar mass-metallicity relation (MZR). """
     xQuant = 'mstar2_log'
-    yQuant = 'Z_stars_masswt'
+    yQuant = 'Z_stars' # Z_stars is cat/tree (<2rhalf), while Z_stars_masswt is aux (subhalo)
     ylim = [-2.5, 0.0] # log pkpc
     xlim = [4.4, 9.0] # log mstar
 
@@ -930,11 +930,11 @@ def stellar_mzr(sims):
 def phase_diagram(sim):
     """ Driver. """
     # config
-    yQuant = 'temp'
+    yQuant = 'temp' #'csnd'
     xQuant = 'nh'
 
     xlim = [-6.5, 7.0]
-    ylim = [1.0, 7.0]
+    ylim = [1.0, 7.0] if yQuant == 'temp' else [-0.5, 2.5]
     haloIDs = None #[0]
     qRestrictions = [['rad_rvir',0.0,5.0]] # within 5rvir only
     qRestrictions.append(['highres_massfrac',0.5,1.0]) # high-res only
@@ -1545,47 +1545,78 @@ def blackhole_position_vs_time(sim, snap_based=True):
         fig.savefig(f'smbh_pos_vs_time_{sim.simName}_{smbh_id}{"_snap" if snap_based else ""}.pdf')
         plt.close(fig)
 
-def starformation_diagnostics(sims, xlim=None, sizefac=1.0):
-    """ Plot PDFs of gas properties at the sites and moments of star formation, using the sf_details/ txt files. """
+def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0):
+    """ Plot PDFs of gas properties at the sites and moments of star formation (or supernovae), 
+    using the sf_details/ and sn_details/ txt files. """
     # config
     z_bins = [[5.5, 8.0], [8.0, 10.0], [10.0, 15.0]]
+    if not split_z: z_bins = [[5.5, 15.0]]
 
-    # plot
-    fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
-    ax.set_xlabel('Gas Density [ log cm$^{-3}$ ]')
-    ax.set_ylabel('Number of Stars Formed')
-    ax.set_yscale('log')
-    if xlim is not None: ax.set_xlim(xlim)
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']    
 
-    # loop over simulations
-    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    for field in ['Density','Temperature','Metallicity']:
+        # plot
+        fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
 
-    for i, sim in enumerate(sims):
-        stars, supernovae = sf_sn_details(sim)
+        if field == 'Density':
+            xlabel = 'Ambient Gas Density [ log cm$^{-3}$ ]'
+            xlim = [1,7] if not supernovae else [-6,5]
+        if field == 'Temperature':
+            xlabel = 'Ambient Gas Temperature [ log K ]'
+            xlim = [1,4.5] if not supernovae else [1,9]
+        if field == 'Metallicity':
+            xlabel = 'Ambient Gas Metallicity [ log Z/Z$_{\\odot}$ ]'
+            xlim = [-4.1,0.5] if not supernovae else [-4.1,2]
 
-        # unit conversions: physical [1/cm^3]
-        dens = sim.units.codeDensToPhys(stars['Density'], scalefac=stars['Time'], cgs=True, numDens=True)
-        dens[dens == 0] = dens[dens > 0].min() # zeros rarely occur
-        dens = np.log10(dens)
-        z = 1/stars['Time'] - 1
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel('Number of Stars Formed')
+        ax.set_yscale('log')
+        ax.set_xlim(xlim)
 
-        for j, z_bin in enumerate(z_bins):
-            w = np.where((z >= z_bin[0]) & (z < z_bin[1]))[0]
+        # loop over simulations
+        for i, sim in enumerate(sims):
+            data, data_sn = sf_sn_details(sim)
 
-            # plot hist
-            label = f'{sim.simName}' if j == 0 else ''
-            
-            l = ax.hist(dens[w], bins=40, histtype='step', lw=lw, linestyle=linestyles[j], color=colors[i], label=label)
+            if supernovae:
+                data = data_sn
 
-    # second legend
-    labels = [f'{z_bin[0]} < z < {z_bin[1]}' for z_bin in z_bins]
-    handles = [plt.Line2D( (0,0), (0,0), ls=linestyles[i], color='black', lw=lw, label=label) for i in range(len(z_bins))]
-    legend2 = ax.legend(handles, labels, loc='upper left')
-    ax.add_artist(legend2)
+            if field == 'Density':
+                # unit conversions: physical [1/cm^3]
+                dens = sim.units.codeDensToPhys(data['Density'], scalefac=data['Time'], cgs=True, numDens=True)
+                dens[dens == 0] = dens[dens > 0].min() # zeros rarely occur
+                vals = np.log10(dens)
 
-    ax.legend(loc='upper right')
-    fig.savefig('sf_dens_pdf.pdf')
-    plt.close(fig)
+            if field == 'Temperature':
+                vals = np.log10(data['Temperature'])
+
+            if field == 'Metallicity':
+                # unit conversions: solar
+                metallicity = sim.units.metallicityInSolar(data['Metallicity'])
+                #metallicity[metallicity == 0] = metallicity[metallicity > 0].min() # zeros rarely occur
+                vals = np.log10(metallicity)
+
+            z = 1/data['Time'] - 1
+
+            for j, z_bin in enumerate(z_bins):
+                w = np.where((z >= z_bin[0]) & (z < z_bin[1]))[0]
+
+                # plot hist
+                label = f'{sim.simName}' if j == 0 else ''
+                
+                l = ax.hist(vals[w], bins=40, histtype='step', lw=lw, linestyle=linestyles[j], color=colors[i], label=label)
+
+        # second legend
+        if split_z:
+            labels = [f'{z_bin[0]} < z < {z_bin[1]}' for z_bin in z_bins]
+            handles = [plt.Line2D( (0,0), (0,0), ls=linestyles[i], color='black', lw=lw, label=label) for i in range(len(z_bins))]
+            legend2 = ax.legend(handles, labels, loc='upper left')
+            ax.add_artist(legend2)
+
+        # finish plot
+        hInds = sorted(list(set([sim.hInd for sim in sims])))
+        ax.legend(loc='upper right')
+        fig.savefig(f'{'sn' if supernovae else 'sf'}_{field}{'_h'+str(hInds[0]) if len(hInds) == 1 else ''}.pdf')
+        plt.close(fig)
 
 def select_ics():
     """ Helper to select halos from TNG50 for resimulation. """
@@ -1698,9 +1729,10 @@ def select_ics():
 def paperPlots(a = False):
     """ Plots for MCST intro paper. (if a == True, make all figures)."""
     # list of sims to include
-    variants = ['ST14']
+    variants = ['ST14','ST14f1','ST14f2','ST14f3','ST14f4']
+    variants = ['ST14','ST14h','ST15']#['ST15','ST15c','ST15m','ST15s']
     res = [14] #[14,15] # [14,15,16]
-    hInds = [219612] #[15581,23908,31619,73172,219612,311384,844537] # [1958,5072,15581,23908,31619,73172,219612,311384,844537]
+    hInds = [219612,311384] #[15581,23908,31619,73172,219612,311384,844537] # [1958,5072]
     redshift = 5.5
 
     # if (all == False), only dz < 0.1 matches
@@ -1748,7 +1780,7 @@ def paperPlots(a = False):
         vis_single_galaxy(sims[0], haloID=0)
 
     # figs 4,5: multi-sim galleries
-    if 0 or a:
+    if 0:
         #sims_loc = sims[0:9] # limit to first N sims for layout
         sims_loc = []
         v = 'ST14'
@@ -1808,7 +1840,9 @@ def paperPlots(a = False):
 
     # fig 7c: SF and stellar feedback
     if 0 or a:
-        starformation_diagnostics(sims, xlim=[3,8], sizefac=0.8)
+        split_z = True
+        starformation_diagnostics(sims, split_z=split_z, sizefac=0.8)
+        starformation_diagnostics(sims, supernovae=True, split_z=split_z, sizefac=0.8)
 
     # fig 8: phase space diagrams (one per run)
     if 0 or a:
@@ -1821,14 +1855,16 @@ def paperPlots(a = False):
 
     # fig 9b - metallicity vs time evolution
     if 0 or a:
-        xlim = [11.0,9.0] #[14.1, 5.4]
-        ylim = [-4.1, -1.0] #[-4.1, 0.0]
+        xlim = [14.1, 5.4]
+        ylim = [-4.1, 0.0]
 
-        quantVsRedshift(sims, quant='Z_gas_sfrwt', xlim=xlim, ylim=ylim, sizefac=0.8)
-        quantVsRedshift(sims, quant='Z_stars_masswt', xlim=xlim, ylim=ylim, sizefac=0.8)
-        quantVsRedshift(sims, quant='Z_stars_2rhalfstarsfof_masswt', xlim=xlim, ylim=ylim, sizefac=0.8)
-        quantVsRedshift(sims, quant='Z_stars_1kpc_masswt', xlim=xlim, ylim=ylim, sizefac=0.8)
-        quantVsRedshift(sims, quant='Z_stars_fof_masswt', xlim=xlim, ylim=ylim, sizefac=0.8)
+        quantVsRedshift(sims, quant='Z_gas', xlim=xlim, ylim=ylim, sizefac=0.8) # cat/tree
+        quantVsRedshift(sims, quant='Z_gas_sfrwt', xlim=xlim, ylim=ylim, sizefac=0.8) # cat/tree
+        quantVsRedshift(sims, quant='Z_stars', xlim=xlim, ylim=ylim, sizefac=0.8) # cat/tree (<2rhalf)
+        quantVsRedshift(sims, quant='Z_stars_masswt', xlim=xlim, ylim=ylim, sizefac=0.8) # aux (subhalo)
+        #quantVsRedshift(sims, quant='Z_stars_2rhalfstarsfof_masswt', xlim=xlim, ylim=ylim, sizefac=0.8) # aux
+        #quantVsRedshift(sims, quant='Z_stars_1kpc_masswt', xlim=xlim, ylim=ylim, sizefac=0.8) # aux
+        #quantVsRedshift(sims, quant='Z_stars_fof_masswt', xlim=xlim, ylim=ylim, sizefac=0.8) # aux
 
         #for hInd in hInds:
         #    sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
@@ -1844,10 +1880,6 @@ def paperPlots(a = False):
         # https://arxiv.org/abs/2510.21960
         pass # TODO
 
-    # fig 9e - BPT diagram?
-    if 0 or a:
-        pass # TODO
-
     # fig 10a - stellar sizes
     if 0 or a:
         sizes_vs_mstar(sims)
@@ -1856,8 +1888,8 @@ def paperPlots(a = False):
     if 0 or a:
         xlim = [14.1, 5.5]
 
-        #quantVsRedshift(sims, quant='size_stars_log', xlim=xlim, ylim=[-3.5, 0.0], sizefac=0.8)
-        quantVsRedshift(sims, quant='rhalf_stars_fof', xlim=xlim, ylim=[-3.5, 0.0], sizefac=0.8)
+        quantVsRedshift(sims, quant='size_stars_log', xlim=xlim, ylim=[-3.5, 0.0], sizefac=0.8)
+        #quantVsRedshift(sims, quant='rhalf_stars_fof', xlim=xlim, ylim=[-3.5, 0.0], sizefac=0.8)
 
     # fig 10c - gas sizes
     if 0 or a:
@@ -1953,10 +1985,6 @@ def paperPlots(a = False):
 
         fig.savefig(f'star_cluster_histo_{sim.simName}_halo{haloID}.pdf')
         plt.close(fig)
-
-    # diagnostics: stellar feedback (sn_details*)
-    if 0 or a:
-        pass
 
     # diagnostic: CPU times
     if 0 or a:

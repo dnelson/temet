@@ -46,7 +46,7 @@ class units(object):
     mu                = 0.6             # for ionized primordial (e.g. hot halo gas)
     Gravity           = 6.6738e-8       # G in cgs, cm**3/g/s**2 (== GRAVITY)
     H0_h1_s           = 3.24078e-18     # H0 (with h=1) in [1/s] (=H0_kmsMpc/HubbleParam/kpc_in_km) (=HUBBLE in Arepo)
-    Z_solar           = 0.0127          # solar metallicity = (massZ/massTot) in the sun
+    Z_solar           = 0.0127          # solar metallicity = (massZ/massTot) in the sun (TNG/MCST)
     L_sun             = 3.839e33        # solar luminosity [erg/s]
     Msun_in_g         = 1.98892e33      # solar mass [g]
     c_cgs             = 2.9979e10       # speed of light in [cm/s]
@@ -1218,7 +1218,7 @@ class units(object):
         csnd *= (1.0e5/self.UnitVelocity_in_cm_per_s) # account for non-km/s code units
 
         if log:
-            csnd = logZeroSafe(csnd)
+            csnd = logZeroNaN(csnd)
         return csnd
     
     def soundSpeedFromTemp(self, temp, log=False):
@@ -1234,9 +1234,8 @@ class units(object):
         csnd /= 1e5 # cm/s -> km/s
 
         if log:
-            csnd = logZeroSafe(csnd)
+            csnd = logZeroNaN(csnd)
         return csnd
-
 
     def calcSunyaevZeldovichYparam(self, mass, xe, temp):
         """ Calculate per-cell (thermal) SZ y-parameter (e.g. McCarthy+2014 Eqn 2, Roncarelli+2007 Eqn 5, Kay+2012 Eqn 12).

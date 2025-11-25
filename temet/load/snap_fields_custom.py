@@ -412,7 +412,7 @@ va.limits = [-9.0, 3.0]
 va.limits_halo = [-3.0, 2.0]
 va.log = True
 
-@snap_field(aliases=['vel_sound','csound'])
+@snap_field(aliases=['vel_sound','csound','csnd'])
 def cs(sim, partType, field, args):
     """ Gas sound speed (hydro only version). """
     u    = sim.snapshotSubset(partType, 'u', **args)
@@ -422,9 +422,9 @@ def cs(sim, partType, field, args):
 
 cs.label = 'Sound Speed'
 cs.units = r'$\rm{km/s}$'
-cs.limits = [-9.0, 3.0]
-cs.limits_halo = [-3.0, 2.0]
-cs.log = False
+cs.limits = [-6.0, 3.0]
+cs.limits_halo = [-1.0, 2.0]
+cs.log = True
 
 @snap_field(aliases=['jeans_mass'])
 def mjeans(sim, partType, field, args):
