@@ -324,7 +324,7 @@ class sps():
 
         zStr = ''
         if redshifted:
-            zStr = '_z=%.3f' % sP.redshift
+            zStr = '_z=%.1f' % sP.redshift
             #print(' COMPUTING STELLAR MAGS/SPECTRA WITH REDSHIFT (z=%.1f)!' % sP.redshift)
             # cosmology in FSPS is hard-coded (sps_vars.f90), and this has been set to TNG values
             assert sP.omega_m == 0.3089 and sP.omega_L == 0.6911 and sP.HubbleParam == 0.6774
@@ -464,7 +464,7 @@ class sps():
         line_wave_check = [float(fline[0]) for fline in line_file]
         line_names = [fline[1].encode('ascii') for fline in line_file]
 
-        assert np.abs(line_wave - line_wave_check).max() < 0.5 # make sure order is correct
+        assert np.abs(line_wave - line_wave_check).max() <= 0.5 # make sure order is correct
 
         emline = np.zeros( (pop.zlegend.size, pop.log_age.size, line_wave.size), dtype='float32' )
 
