@@ -1682,11 +1682,11 @@ def concat_tracer_parent_cats():
     print(f'{shape = }')
 
     # create output file
-    #assert not isfile(basePath + 'tr_all_groups_99_%s.hdf5' % field)
-    #with h5py.File(basePath + 'tr_all_groups_99_%s.hdf5' % field,'w') as f:
-    #    f.create_dataset(field, shape, dtype=dtype)
-    #    f['snaps'] = np.arange(nSnaps, dtype='dtype)[::-1]
-    #    f['redshifts'] = sim.snapNumToRedshift(f['snaps'][()])
+    assert not isfile(basePath + 'tr_all_groups_99_%s.hdf5' % field)
+    with h5py.File(basePath + 'tr_all_groups_99_%s.hdf5' % field,'w') as f:
+        f.create_dataset(field, shape, dtype=dtype)
+        f['snaps'] = np.arange(nSnaps, dtype='int32')[::-1]
+        f['redshifts'] = sim.snapNumToRedshift(f['snaps'][()])
 
     # loop over splits
     for i in range(nSplits):
@@ -1695,7 +1695,7 @@ def concat_tracer_parent_cats():
         print(i, indRange, flush=True)
         data = np.zeros((indRange[1]-indRange[0],nSnaps), dtype=dtype)
 
-        for j in range(1,nSnaps)[::-1]: # NOTE! REMOVE 1 if starting from chunk ZERO !!!!!!!!!!!!!
+        for j in range(nSnaps)[::-1]:
             # load
             with h5py.File(basePath + 'tr_all_groups_99_%s_indiv-%d.hdf5' % (field,j),'r') as f:
                 data[:,j] = f[field][indRange[0]:indRange[1]]
@@ -1703,5 +1703,13 @@ def concat_tracer_parent_cats():
         # save
         with h5py.File(basePath + 'tr_all_groups_99_%s.hdf5' % field,'a') as f:
             f[field][indRange[0]:indRange[1]] = data
+
+        if 0:
+            # single-index add
+            single_index = 0
+            with h5py.File(basePath + 'tr_all_groups_99_%s_indiv-%d.hdf5' % (field,single_index),'r') as f:
+                data = f[field][indRange[0]:indRange[1]]
+            with h5py.File(basePath + 'tr_all_groups_99_%s.hdf5' % field,'a') as f:
+                f[field][indRange[0]:indRange[1],single_index] = data
 
     print('Done.')
