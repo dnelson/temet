@@ -709,7 +709,7 @@ def sfr_vs_mstar(sims, yQuant):
     twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
     
 def mbh_vs_mhalo(sims):
-    """ Diagnostic plot of SMBH mass versus halo mass. """
+    """ SMBH mass versus halo mass. """
     from ..load.data import zhang21
 
     xQuant = 'mhalo_200_log'
@@ -743,7 +743,68 @@ def mbh_vs_mhalo(sims):
         mhalo_seed_tng = sim_parent.units.codeMassToLogMsun(MinFoFMassForNewSeed_TNG)
         ax.plot([mhalo_seed_tng,mhalo_seed_tng], [ylim[1],ylim[1]-0.1], '-', lw=lw, color='#444', alpha=0.4)
 
-    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data, sizefac=0.8)
+
+def mbh_vs_mstar(sims):
+    """ SMBH mass versus stellar mass. """
+    xQuant = 'mstar2_log'
+    yQuant = 'mass_smbh' # largest BH_Mass in each subhalo
+    xlim = [4.8, 10.2] # mstar
+    ylim = [2.8, 7.0] # msmbh
+
+    def _draw_data(ax, sims):
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        sim_parent = sims[0].sP_parent
+
+        # MCST seed mass from parameter file
+        SeedBlackHoleMass = 6.774e-08 # 1000 Msun
+        MinFoFMassForNewSeed_MCST =  6.774e-3 # 1e8 Msun
+        mbh_seed = sim_parent.units.codeMassToLogMsun(SeedBlackHoleMass)
+        mhalo_seed = sim_parent.units.codeMassToLogMsun(MinFoFMassForNewSeed_MCST)
+
+        ax.plot([xlim[0],(xlim[1]+xlim[0])/2], [mbh_seed, mbh_seed], ':', lw=lw, color='#444', alpha=0.8)
+        label = r'MCST $M_{\rm BH,seed}$ (@ M$_{\rm FoF} = 10^{%.1f}$ M$_{\rm sun}$)' % mhalo_seed
+        ax.text(xlim[0]+0.8, mbh_seed+0.1, label, fontsize=13, color='#444', alpha=0.5, ha='left', va='bottom')
+
+        # constant mbh/mstar ratios
+        for i, ratio in enumerate([1.0, 0.1, 0.01]):
+            x = np.arange(xlim[0], xlim[1], 0.1)
+            y = np.log10(10.0**x * ratio)
+            label = r'$M_{\rm BH} = M_{\star}$ / %d' % (1/ratio)
+            if ratio == 1: label = r'$M_{\rm BH} = \,M_{\star}$'
+            ax.plot(x, y, linestyles[i+1], lw=lw, color='#444', alpha=0.3)
+            ax.text(xlim[0]+0.1, y[0]+0.2, label, 
+                    fontsize=13, color='#444', alpha=0.3, ha='left', va='bottom', rotation=45.0)
+
+        # Brooks+25 (z=5.6 and z=5.8 stack points) (Table 1 / Fig 6)
+        b25_label = 'Brooks+25' # JWST (z = 5.5-6)'
+        b25_mstar = [7.88, 8.56] # log msun
+        b25_mstar_err = [0.18, 0.13] # dex (note: 0.03 changed to 0.13)
+        b25_mbh = [6.13, 5.21]
+        b25_mbh_err = [0.53, 0.43]
+
+        ax.errorbar(b25_mstar, b25_mbh, xerr=b25_mstar_err, yerr=b25_mbh_err, 
+                    fmt='o', color='#555', lw=lw, alpha=0.8, label=b25_label)
+        
+        # Brooks+25 upper limit at z=5.3
+        ax.errorbar([7.26], [4.99], xerr=[0.26], fmt='o', color='#555', lw=lw, alpha=0.8)
+        ax.annotate('', xy=(7.26, 4.99 - 0.4), xytext=(7.26, 4.99),
+                    arrowprops=dict(facecolor='#555', edgecolor='#555', arrowstyle='simple', alpha=0.8))
+
+        # Geris+25 (5<z<7) points (Table 4)
+        g25_label = 'Geris+25'
+        g25_mbh = [6.35, 6.30]
+        g25_mbh_err = [0.37, 0.37]
+        g25_mstar = [8.9, 8.01]
+        g25_mstar_err = [0.83, 0.71]
+
+        ax.errorbar(g25_mstar, g25_mbh, xerr=g25_mstar_err, yerr=g25_mbh_err, 
+                    fmt='s', color='#555', lw=lw, alpha=0.8, label=g25_label)
+
+        # todo: Larson+23, Ubler+23, Maiolino+23, Harikane+23, etc (see Brooks+25 Fig 6)
+
+    twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data, sizefac=0.8)
 
 def sizes_vs_mstar(sims):
     """ Diagnostic plot of galaxy stellar size (half mass radius for now) versus stellar mass. """
@@ -1731,8 +1792,9 @@ def paperPlots(a = False):
     # list of sims to include
     variants = ['ST14','ST14f1','ST14f2','ST14f3','ST14f4']
     variants = ['ST14','ST14h','ST15']#['ST15','ST15c','ST15m','ST15s']
-    res = [14] #[14,15] # [14,15,16]
-    hInds = [219612,311384] #[15581,23908,31619,73172,219612,311384,844537] # [1958,5072]
+    variants = ['ST14']
+    res = [14,15] #[14,15] # [14,15,16]
+    hInds = [15581,23908,31619,73172,219612,311384,844537] # [1958,5072]
     redshift = 5.5
 
     # if (all == False), only dz < 0.1 matches
@@ -1901,6 +1963,7 @@ def paperPlots(a = False):
     # figure - smbh vs mhalo relation
     if 0 or a:
         mbh_vs_mhalo(sims)
+        mbh_vs_mstar(sims)
 
     # black hole time evolution
     if 0 or a:
