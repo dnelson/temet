@@ -116,7 +116,6 @@ def zoomEvoMovies(conf):
         saveFileBase = '%s_evo_h%d_%s' % (run,hInd,conf)
 
         # movie config
-        treeRedshift = 2.0
         minRedshift  = 2.0
         maxRedshift  = 100.0
 

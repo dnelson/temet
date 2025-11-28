@@ -9,7 +9,7 @@ from os.path import isfile, isdir, getsize
 from os import mkdir
 
 from .snapshot import snap_field, _haloOrSubhaloIndRange
-from ..util.helper import numPartToChunkLoadSize, pSplitRange
+from ..util.helper import numPartToChunkLoadSize, pSplitRange, closest
 
 # -------------------- general/all particle types -------------------------------------------------
 
@@ -1702,6 +1702,78 @@ wind_eta.units = '' # dimensionless
 wind_eta.limits = [-2.0, 2.0]
 wind_eta.limits_halo = [-1.0, 1.5]
 wind_eta.log = True
+
+# -------------------- gas (mcst model) -----------------------------------------------------------
+
+@snap_field(aliases=['raddens_fuv','rad_fuv_habing','raddens_fuv_habing'])
+def rad_fuv(sim, partType, field, args):
+    """ Radiation energy density in FUV band (6 - 13.6 eV). """
+    edens_bands = sim.snapshotSubset(partType, 'RadiationEnergyDensity', **args)
+    edens = edens_bands[:,0] # FUV band is first index (generalize)
+
+    return sim.units.codeEnergyDensToErgPerCm3(edens)
+
+rad_fuv.label = r'FUV Radiation Energy Density'
+rad_fuv.units = lambda sim,pt,f: r'erg cm$^{-3}$' if '_habing' not in f else r'$\rm{Habing}$'
+rad_fuv.limits = lambda sim,pt,f: [-20, -10] if '_habing' not in f else [-6, 2]
+rad_fuv.limits_halo = lambda sim,pt,f: [-14, -8] if '_habing' not in f else [-4, 4]
+rad_fuv.log = True
+
+@snap_field(aliases=['raddens_lw','rad_lw_habing','raddens_lw_habing'])
+def rad_lw(sim, partType, field, args):
+    """ Radiation energy density in Lyman-Werner band (11.2 - 12.3 eV). """
+    edens_bands = sim.snapshotSubset(partType, 'RadiationEnergyDensity', **args)
+    edens = edens_bands[:,1] # LW is second index (generalize)
+
+    if '_habing' in field:
+        return sim.units.codeEnergyDensToHabing(edens)
+    return sim.units.codeEnergyDensToErgPerCm3(edens)
+
+rad_lw.label = r'LW Radiation Energy Density'
+rad_lw.units = lambda sim,pt,f: r'erg cm$^{-3}$' if '_habing' not in f else r'$\rm{Habing}$'
+rad_lw.units = lambda sim,pt,f: r'erg cm$^{-3}$' if '_habing' not in f else r'$\rm{Habing}$'
+rad_lw.limits = lambda sim,pt,f: [-20, -10] if '_habing' not in f else [-6, 2]
+rad_lw.limits_halo = lambda sim,pt,f: [-14, -8] if '_habing' not in f else [-4, 4]
+rad_lw.log = True
+
+@snap_field
+def rad_fuv_lw_ratio(sim, partType, field, args):
+    """ Ratio of radiation energy density in FUV to Lyman-Werner band. """
+    edens_bands = sim.snapshotSubset(partType, 'RadiationEnergyDensity', **args)
+    edens_fuv = edens_bands[:,0] # FUV band is first index (generalize)
+    edens_lw = edens_bands[:,1]  # LW is second index
+
+    return edens_fuv / edens_lw
+
+rad_fuv_lw_ratio.label = r'(FUV / LW) Radiation Ratio'
+rad_fuv_lw_ratio.units = '' # dimensionless
+rad_fuv_lw_ratio.limits = [-1.0, 1.0]
+rad_fuv_lw_ratio.limits_halo = [-1.0, 1.0]
+rad_fuv_lw_ratio.log = True
+
+@snap_field
+def rad_fuv_uvb_ratio(sim, partType, field, args):
+    """ Ratio of local to UVB radiation energy density in FUV band. """
+    edens_fuv = sim.snapshotSubset(partType, 'rad_fuv', **args)
+
+    # could make this sim independent in the future
+    path = sim.arepoPath + sim.params['GrackleDataFile'].decode()
+
+    with h5py.File(path,'r') as f:
+        uvb_z = f['UVBEnergyDens/Redshift'][()]
+        uvb_edens_z = f['UVBEnergyDens/EnergyDensity_6.0-13.6eV'][()] # [log erg/cm^3]
+
+    # find closest redshift, get (single constant) UVB energy density
+    z_found, z_ind = closest(uvb_z, sim.redshift)
+    edens_uvb = 10.0**uvb_edens_z[z_ind]
+
+    return edens_fuv / edens_uvb
+
+rad_fuv_uvb_ratio.label = r'(Local / UVB) FUV Radiation Ratio'
+rad_fuv_uvb_ratio.units = '' # dimensionless
+rad_fuv_uvb_ratio.limits = [-1.0, 1.0]
+rad_fuv_uvb_ratio.limits_halo = [-1.0, 1.0]
+rad_fuv_uvb_ratio.log = True
 
 # -------------------- gas/stars ------------------------------------------------------------------
 

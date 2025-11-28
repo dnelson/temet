@@ -54,7 +54,7 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
 
     if 1:
         gas_field = 'coldens_msunkpc2' # 'HI'
-        stars_field = 'stellarCompObsFrame' #stellarCompObsFrame'
+        stars_field = 'stellarCompObsFrame' #stellarComp'
 
         gas_mm = [4.0+zfac,8.5+zfac] #[20.0+zfac,22.5+zfac]
         dm_mm = [7.0+zfac,11.0+zfac]
@@ -128,40 +128,47 @@ def vis_gallery_galaxy(sims, conf=0):
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def vis_single_halo(sP, haloID=0, size=3.5):
-    """ Visualization: single image of a halo.  """
+def vis_single_halo(sP, haloID=0, movie=False):
+    """ Visualization: single halo, multiple fields. """
     rVirFracs  = [1.0]
     fracsType  = 'rVirial'
     nPixels    = [960,960]
-    #size       = 3.5 #2.5
+    size       = 3.5 #2.5
     sizeType   = 'rVirial'
     labelSim   = False # True
     labelHalo  = False # 'mhalo'
-    labelZ     = True
-    labelScale = 'physical'
-    #plotBHs    = 10 # to finish
+    labelZ     = False
+    labelScale = False
+    plotBHs    = 'all'
     relCoords  = True
-    if 1:
-        axes = [0,1]
-        #rotation   = 'edge-on' #'face-on'
+    axes = [0,1]
+    #rotation   = 'edge-on' #'face-on'
+
+    method = 'voronoi_slice' # 'sphMap'
 
     subhaloInd = sP.halo(haloID)['GroupFirstSub']
 
-    # redshift-dependent vis (h31619 L16 tests)
-    zfac = 0.0
-    if sP.redshift >= 9.9:
-        zfac = 1.5
-        #size = 0.05 # z=10, 11, 12 tests of L16
-
-    # panels (can vary hInd, variant, res)
+    # panels: top row
     panels = []
 
-    if 1:
-        panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5+zfac,7.0+zfac]} )
-    if 0:
-        panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[3.0,4.5]} )
-    if 0:
-        panels.append( {'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.0]} )
+    if method == 'voronoi_slice':
+        panels.append( {'partType':'gas', 'partField':'dens', 'valMinMax':[-4.0, -1.0]} )
+        #panels.append( {'partType':'dm', 'partField':'dmdens', 'valMinMax':[-3.0, 0.0]} ) # not available in mini-snap
+        panels.append( {'partType':'dm', 'method':'sphMap', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.5]} )
+    else:
+        panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5,7.0]} )
+        panels.append( {'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.5]} )
+
+    panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[3.5,5.0]} )
+    panels.append( {'partType':'gas', 'partField':'machnum', 'valMinMax':[0,3]} )
+
+    # bottom row
+    panels.append( {'partType':'gas', 'partField':'rad_FUV', 'valMinMax':[-15.0, -13.0], 'labelScale':'physical'} )
+    panels.append( {'partType':'gas', 'partField':'rad_FUV_UVB_ratio', 'valMinMax':[-0.5,0.5]} )
+    #panels.append( {'partType':'gas', 'partField':'rad_LW'} )
+    #panels.append( {'partType':'gas', 'partField':'rad_FUV_LW_ratio', 'valMinMax':[0.0,0.5]} )
+    panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.5,0.0]} )
+    panels.append( {'partType':'gas', 'partField':'vrad', 'valMinMax':[-60,60], 'labelZ':True} )
 
     class plotConfig:
         plotStyle    = 'edged_black'
@@ -170,7 +177,12 @@ def vis_single_halo(sP, haloID=0, size=3.5):
         fontsize     = 28 # 24
         saveFilename = 'halo_%s_%d_h%d.pdf' % (sP.simName,sP.snap,haloID)
 
-    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+    if movie:
+        plotConfig.savePath = ''
+        plotConfig.saveFileBase = '%s_evo' % sP.simName
+        renderSingleHaloFrames(panels, plotConfig, locals())
+    else:
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 # -------------------------------------------------------------------------------------------------
 
@@ -186,6 +198,7 @@ def vis_movie(sP, haloID=0, frame=None):
     labelHalo  = 'mhalo,mstar'
     labelZ     = True
     labelScale = 'physical'
+    plotBHs    = 'all'
     method     = 'sphMap_global'
     relCoords  = True
     #axes = [0,1]
@@ -206,10 +219,12 @@ def vis_movie(sP, haloID=0, frame=None):
     panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gas_mm} )
     #panels.append( {'partType':'gas', 'partField':'HI', 'valMinMax':[20.0,22.5]} )
 
-    if sP.star == 1: # normal SSPs
-        panels.append( {'partType':'stars', 'partField':'stellarComp'} )
-    if sP.star > 1: # single/solo stars
-        panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[gas_mm[0]-1,gas_mm[1]-1]} )
+    #if sP.star == 1: # normal SSPs
+    #    panels.append( {'partType':'stars', 'partField':'stellarComp'} )
+    #if sP.star > 1: # single/solo stars
+    #    panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[gas_mm[0]-1,gas_mm[1]-1]} )
+
+    panels.append( {'partType':'stars', 'partField':'stellarComp', 'autoLimits':False} )
 
     class plotConfig:
         plotStyle    = 'edged_black'
@@ -290,9 +305,11 @@ def vis_movie_mpbsm(sims, haloID=0, conf=1):
     size       = 2.0 if np.max([s.hInd for s in sims]) > 20000 else 5.0
     sizeType   = 'kpc'
     axes       = [0,1]
+    plotBHs    = 'all'
     labelSim   = False
     relCoords  = True
     rotation   = None
+    autoLimits = False # disable auto-scaling of stellar band images across frames
 
     dmMM = [6.0,8.5]
     gasMM = [5.0,7.5]
@@ -303,7 +320,7 @@ def vis_movie_mpbsm(sims, haloID=0, conf=1):
         vmm1 = gasMM
 
         pt2 = 'stars'
-        pf2 = 'stellarComp'
+        pf2 = 'stellarComp' # ObsFrame
         vmm2 = None
 
     if len(sims) == 1:
@@ -339,7 +356,18 @@ def vis_movie_mpbsm(sims, haloID=0, conf=1):
 
 def vis_highres_region(sP, partType='dm'):
     """ Visualize large-scale region that bounds all high-res DM. """
-    # determine bounding box (always use high-res DM particles)
+    nPixels    = 1000
+    axes       = [0,2] # x,z
+    labelZ     = True
+    labelScale = True
+    labelSim   = True
+    plotHalos  = 100
+    labelHalos = 'mhalo'
+    relCenPos  = None # specified in absCenPos
+    method     = 'sphMap'
+    plotBHs    = 'all'
+
+    # determine center and bounding box (always use high-res DM particles)
     pos = sP.dm('pos')
 
     boxsize = 0.0
@@ -348,23 +376,13 @@ def vis_highres_region(sP, partType='dm'):
     for i in range(3):
         absCenPos[i] = np.mean(pos[:,i])
 
-        min_v = absCenPos[i] - pos[:,i].min()
-        max_v = pos[:,i].max() - absCenPos[i]
+    for i in range(2):
+        min_v = absCenPos[axes[i]] - pos[:,axes[i]].min()
+        max_v = pos[:,axes[i]].max() - absCenPos[axes[i]]
 
         boxsize = np.max([boxsize, min_v, max_v])
 
-    #boxsize = np.ceil(boxsize/10) * 10
-
-    nPixels    = 1000
-    axes       = [0,2] # x,y
-    labelZ     = True
-    labelScale = True
-    labelSim   = True
-    plotHalos  = 100
-    labelHalos = 'mhalo'
-    relCenPos  = None # specified in absCenPos
-    method     = 'sphMap'
-    zoomFac    = boxsize / sP.boxSize # fraction of box-size
+    zoomFac    = 1.8 * boxsize / sP.boxSize # fraction of box-size
     sliceFac   = zoomFac # same projection depth as zoom
 
     absCenPos = [absCenPos[axes[0]],absCenPos[axes[1]],absCenPos[3-axes[0]-axes[1]]]
@@ -375,6 +393,7 @@ def vis_highres_region(sP, partType='dm'):
     if partType == 'gas':
         # only high-res, no buffer
         ptRestrictions = {'Masses':['lt',sP.targetGasMass * 3]}
+        #ptRestrictions = {'highres_massfrac':['gt',0.5]} # need ST15+ for mini snaps
         panels = [{'partField':'coldens_msunkpc2', 'valMinMax':[4.8,7.5]}]
 
     class plotConfig:
@@ -395,6 +414,7 @@ def vis_parent_box(sP, partType='dm'):
     plotHalos  = 100 # TODO: label the specific zoom targets (only) (at z=6)
     labelHalos = 'mhalo'
     method     = 'sphMap'
+    plotBHs    = 'all'
 
     sP.setRedshift(6.0) # z=5.5 is not a full snap, do not have SubfindHsml for DM, headache
 

@@ -43,7 +43,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
     """ Helper, return a list of all field names we can handle. """
     
     # base fields
-    fields = ['dens','density','mass',
+    fields = ['dens','density','dmdens','mass',
               'masspart','particle_mass','sfr','sfr_msunyrkpc2',
               'coldens','coldens_msunkpc2','coldens_msunckpc2','coldens_msun_ster',
               'ionmassratio_OVI_OVII',# (generalize),
@@ -54,6 +54,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
               'bmag','bmag_uG','bfield_x','bfield_y','bfield_z',
               'dedt','energydiss','shocks_dedt','shocks_energydiss',
               'machnum','shocks_machnum',
+              'rad_FUV','rad_LW',
               'P_gas','P_B','pressure_ratio',
               'metal','Z','metal_solar','Z_solar',
               'SN_IaII_ratio_Fe','SNIaII_ratio_metals','SN_Ia_AGB_ratio_metals',
@@ -330,17 +331,29 @@ def _get_dist_theta_grid(size, nPixels):
 
     return dist, theta
 
-def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, projParams, boxCenter, boxSizeImg, 
-                               hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM,
-                               snapHsmlForStars, alsoSFRgasForStars, excludeSubhaloFlag, skipCellIndices, 
-                               ptRestrictions, weightField, randomNoise):
-    """ Generate 3-band RGB composite using starlight in three different passbands. Work in progress. """
+def _stellar_3bands(partField):
+    """ Helper, parse 3-band stellar composite field name. """
     bands = partField.split("-")[1:]
 
     if len(bands) == 0:
         bands = ['jwst_f200w', 'jwst_f115w', 'jwst_f070w'] # default
 
     assert len(bands) == 3
+
+    bandsStr = ', '.join(bands)
+    if all([band.startswith('jwst_') for band in bands]):
+        bandsStr = 'JWST %s' % ', '.join([band.replace('jwst_','') for band in bands])
+    label = 'Stellar Composite [%s]' % bandsStr
+
+    return bands, label
+
+def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, projParams, boxCenter, boxSizeImg, 
+                               hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM,
+                               snapHsmlForStars, alsoSFRgasForStars, excludeSubhaloFlag, skipCellIndices, 
+                               ptRestrictions, weightField, randomNoise, autoLimits):
+    """ Generate 3-band RGB composite using starlight in three different passbands. Work in progress. """
+    bands, label = _stellar_3bands(partField)
+
     assert projType == 'ortho'
 
     fieldPrefix = 'stellarBandObsFrame-' if 'ObsFrame' in partField else 'stellarBand-'
@@ -499,7 +512,7 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
             maxValLog = np.log10( (10.0**maxValLog) * (pxArea/pxArea0*resFac) )
             #print('pxArea*res mod: ',(pxArea/pxArea0*resFac))
 
-        if 1:
+        if autoLimits:
             # new auto bounds
             band_vals = np.log10(band0_grid[band0_grid>0])
 
@@ -511,6 +524,13 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
             else:
                 minValLog = [0,0,0]
                 maxValLog = [1,1,1]
+        else:
+            minValLog = np.array([-1.7, -1.7, -1.7])
+            maxValLog = np.array([1.2, 1.3, 1.0])
+
+            pxAreaFac = np.sqrt((960 / nPixels[0]) * (960 / nPixels[1]))
+            minValLog = np.log10(10.0**minValLog * pxAreaFac)
+            maxValLog = np.log10(10.0**maxValLog * pxAreaFac)
 
         for i in range(3):
             if i == 0: grid_loc = band0_grid
@@ -583,12 +603,7 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
         import skimage.io
         skimage.io.imsave('out_%s.tif' % '-'.join(bands), im, plugin='tifffile')
 
-
-    bandsStr = ', '.join(bands)
-    if all([band.startswith('jwst_') for band in bands]):
-        bandsStr = 'JWST %s' % ', '.join([band.replace('jwst_','') for band in bands])
-
-    config = {'ctName':'gray', 'label':'Stellar Composite [%s]' % bandsStr, 'vMM_guess':None}
+    config = {'ctName':'gray', 'label':label, 'vMM_guess':None}
     return grid_master_u, config, grid_master
 
 def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, weightField, indRange=None):
@@ -764,7 +779,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
     else:
         # distribute a mass-weighted quantity and calculate mean value grid
         if partFieldLoad in haloCentricFields or partFieldLoad.startswith('delta_'):
-            if method in ['sphMap_global','sphMap_globalZoom','sphMap_globalZoomOrig']:
+            if method in ['sphMap_global','sphMap_globalZoom','sphMap_globalZoomOrig','voronoi_slice']:
                 # likely in chunked load, will use refPos and refVel as set in haloImgSpecs
                 quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)
             else:
@@ -829,10 +844,11 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     if partField in volDensityFields and 'voronoi' not in method:
         grid /= boxSizeImg[2] # mass/area -> mass/volume (normalizing by projection ray length)
 
-    if partField in ['dens','density']:
+    if partField in ['dens','density','dmdens']:
         grid  = sP.units.codeDensToPhys( grid, cgs=True, numDens=True )
         config['label']  = 'Mean %s Volume Density [log cm$^{-3}$]' % ptStr
         config['ctName'] = 'jet'
+        if sP.isPartType(partType,'dm'): config['ctName'] = 'dmdens_tng'
 
     if partField in ['f_b','baryon_frac']:
         grid = grid
@@ -1173,6 +1189,25 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['plawScale'] = 1.0 #0.7
         logMin = False
 
+    # mcst
+    if partField in ['rad_FUV','rad_LW']:
+        grid = grid # units already in erg/cm^3
+        bandStr = 'FUV' if partField == 'rad_FUV' else 'LW'
+        config['label']  = '%s Radiation Energy Density [log erg cm$^{-3}$]' % bandStr
+        config['ctName'] = 'plasma'
+
+    if partField in ['rad_FUV_LW_ratio']:
+        grid = grid
+        config['label']  = '(FUV / LW) Radiation Ratio [log]'
+        config['ctName'] = 'haline' #'diff0_r'
+        #config['cmapCenVal'] = 0.0
+
+    if partField in ['rad_FUV_UVB_ratio']:
+        grid = grid
+        config['label']  = '(Local / UVB) FUV Radiation Ratio [log]'
+        config['ctName'] = 'curl0'
+        config['cmapCenVal'] = 0.0
+
     # gas: pressures
     if partField in ['P_gas']:
         grid = grid
@@ -1299,8 +1334,9 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         logMin = False
 
     if 'stellarComp' in partField:
-        print('Warning! gridOutputProcess() on stellarComp*, should only occur for empty frames.')
-        config['label'] = 'Stellar Composite' #'dummy'
+        #print('Warning! gridOutputProcess() on stellarComp*, should only occur for empty frames.')
+        _, label = _stellar_3bands(partField)
+        config['label'] = label
         config['ctName'] = 'gray'
         logMin = False
 
@@ -1342,7 +1378,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     if np.min(grid) == 0 and np.max(grid) == 0:
         # this is also a catastropic failure (i.e. mis-centering, but return blank image)
-        print('WARNING: Final grid is uniformly zero.')
+        #print('Warning: Final grid is uniformly zero.')
         data_grid = grid.copy()
         config['vMM_guess'] = [0.0, 1.0]
     else:
@@ -1421,7 +1457,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     h = sP.snapshotHeader()
 
     def emptyReturn():
-        print('Warning: No particles, returning empty for [%s]!' % saveFilename.split(sP.derivPath)[1])
+        print('Skip empty: [%s]!' % saveFilename.split(sP.derivPath)[1])
         grid = np.zeros( nPixels, dtype='float32' )
         grid, config, data_grid = gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projType, method)
         return grid, config, data_grid
@@ -1431,10 +1467,11 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
     # generate a 3-band composite stellar image from 3 bands
     if 'stellarComp' in partField or 'stellarCompObsFrame' in partField:
+        autoLimits = True if 'autoLimits' not in kwargs else kwargs['autoLimits']
         return stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, projParams, boxCenter, boxSizeImg, 
                                           hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM,
-                                snapHsmlForStars, alsoSFRgasForStars, excludeSubhaloFlag, skipCellIndices, 
-                                ptRestrictions, weightField, randomNoise)
+                                          snapHsmlForStars, alsoSFRgasForStars, excludeSubhaloFlag, skipCellIndices, 
+                                          ptRestrictions, weightField, randomNoise, autoLimits)
     
     # map
     if not forceRecalculate and isfile(saveFilename):
@@ -1916,7 +1953,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 # note: only for a specified non-mass quantity, in which case the map gives the direct value of the 
                 # nearest gas cell (no weighting relevant)
                 assert axes == [0,1] # otherwise check everything
-                assert quant is not None # otherwise we would be imaging mass
+                assert quant is not None # otherwise we would be imaging mass (change coldens to dens)
                 assert not normCol # meaningless
                 assert hsml_1 is None # meaningless
                 assert ('_minIP' not in method) and ('_maxIP' not in method) # meaningless
@@ -2630,8 +2667,8 @@ def addBoxMarkers(p, conf, ax, pExtent):
             if rad > 5*pxScale:
                 c = plt.Circle( (xyPos[0],xyPos[1]), rad, color=color, linewidth=1.5, fill=False, alpha=0.6)
                 ax.add_artist(c)
-            else:
-                print('Warning [%s]: Drawing radius at [%.1f %s] is zero or small, skip.' % (p['sP'].simName,rVirFrac,p['fracsType']))
+            #else:
+            #    print('Warning [%s]: Drawing radius at [%.1f %s] is zero or small, skip.' % (p['sP'].simName,rVirFrac,p['fracsType']))
 
     if 'labelZ' in p and p['labelZ']:
         if p['sP'].redshift >= 0.99 or np.abs(np.round(10*p['sP'].redshift)/10 - p['sP'].redshift) < 1e-2:
@@ -3568,13 +3605,16 @@ def renderMultiPanel(panels, conf):
 
             if nRows == 2:
                 # both above and below, one per column
-                if curRow == 0 and barAreaTop > 0:
-                    addCustomColorbars(fig, ax, conf, config, heightFac*1.0, 0.0, barTop, color2, 
-                                       rowHeight, colWidth, bottomNorm, leftNorm, hOffset=0.4)
+                if conf.colorbarOverlay:
+                    heightFac *= 0.5
 
-                if curRow == nRows-1 and barAreaBottom > 0:
+                if curRow == 0 and (barAreaTop > 0 or conf.colorbarOverlay):
+                    addCustomColorbars(fig, ax, conf, config, heightFac*1.0, 0.0, barTop, color2, 
+                                       rowHeight, colWidth, bottomNorm, leftNorm, hOffset=-0.4)
+
+                if curRow == nRows-1 and (barAreaBottom > 0 or conf.colorbarOverlay):
                     addCustomColorbars(fig, ax, conf, config, heightFac*1.0, barBottom, 0.0, color2, 
-                                       rowHeight, colWidth, bottomNorm, leftNorm, hOffset=-1.0)
+                                       rowHeight, colWidth, bottomNorm, leftNorm, hOffset=-0.6)
             
             if nRows == 1 or (nRows > 2 and curRow == nRows-1):
                 # only below, one per column

@@ -763,6 +763,9 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
         nNGBDev = nNGB - pos.shape[0] + 1
         if verbose: print('WARNING: Less particles than requested neighbors. Increasing nNGBDev to [%d]!' % nNGBDev)
 
+    if treePrec == 'single' and pos.dtype == np.float64:
+        treePrec = 'float64'
+
     # build tree
     if tree is None:
         NextNode, length, center, sibling, nextnode = buildFullTree(pos,boxSizeSim,treePrec,verbose=verbose)

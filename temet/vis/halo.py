@@ -387,7 +387,6 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
         saveFileBase = 'renderHaloFrame' # filename base upon which frame numbers are appended
 
         # movie config
-        treeRedshift = 2.0       # at what redshift does the tree/MPB start (for periodic box, snap of hInd)
         minRedshift  = 0.0       # ending redshift of frame sequence (we go forward in time)
         maxRedshift  = 100.0     # starting redshift of frame sequence (we go forward in time)
         maxNumSnaps  = None      # make at most this many evenly spaced frames, or None for all

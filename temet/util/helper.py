@@ -1345,7 +1345,7 @@ def validColorTableNames():
     names1 = [n.replace('cmo.','') for n in names1] # cmocean
     names2 = ['dmdens','dmdens_tng','HI_segmented','H2_segmented','perula','magma_gray',
               'magma_gray_r','bluered_black0','blgrrd_black0','BdRd_r_black',
-              'tarn0','diff0','curl0','delta0','topo0','balance0'] # custom
+              'tarn0','diff0','diff0_r','curl0','delta0','topo0','balance0'] # custom
 
     return names1 + names2
 
@@ -1496,7 +1496,7 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
 
         cmap = LinearSegmentedColormap(ctName, cdict, N=512)
 
-    if ctName in ['tarn0','diff0','curl0','delta0','topo0','balance0']:
+    if ctName in ['tarn0','diff0','diff0_r','curl0','delta0','topo0','balance0']:
         # reshape a diverging colormap, which is otherwise centered at its midpoint, such that the center occurs at value zero
         valCut = 0.0 # e.g. log10(1) for tcool/tff, delta_rho
 
@@ -1507,12 +1507,15 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
         x1 = np.linspace(0.0, 0.5, int(1024*fCut))
         x2 = np.linspace(0.5, 1.0, int(1024*(1-fCut)))
 
-        cmap = getattr(cmocean.cm, ctName[:-1]) # acquire object member via string
+        cmap = getattr(cmocean.cm, ctName.replace('0','').replace('_r','')) # acquire object member via string
         colors1 = cmap(x1)
         colors2 = cmap(x2)
 
         # combine them and construct a new colormap
         colors = np.vstack((colors1, colors2))
+        if '_r' in ctName:
+            colors = colors[::-1]
+
         cmap = LinearSegmentedColormap.from_list('magma_gray', colors)
 
         return cmap

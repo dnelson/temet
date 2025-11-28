@@ -56,6 +56,7 @@ class units(object):
     electron_charge   = 4.8032e-10      # esu [=cm*sqrt(dyne) = g^(1/2)cm^(3/2)s^(-1)]
     rydberg_ang       = 0.00109737      # rydberg constant in 1/angstrom
     rydberg_freq      = 3.28984e15      # Hz, i.e. rydberg constant * c
+    Habing            = 5.29e-14        # erg cm^-3
 
     # derived constants
     mag2cgs       = None    # Lsun/Hz to cgs [erg/s/cm^2] at d=10pc
@@ -1406,7 +1407,7 @@ class units(object):
         return age
 
     def codeEnergyToErg(self, energy, log=False):
-        """ Convert energy from code units (unitMass*unitLength^2/unitTime^2) to [erg]. (for BH_CumEgy* ). """
+        """ Convert energy from code units (unitMass*unitLength^2/unitTime^2) to [erg]. (for BH_CumEgy*). """
         energy_cgs = energy.astype('float64') * self.UnitEnergy_in_cgs / self._sP.HubbleParam
         
         if log:
@@ -1421,6 +1422,23 @@ class units(object):
         if log:
             return logZeroNaN(energy_rate_cgs)
         return energy_rate_cgs
+    
+    def codeEnergyDensToErgPerCm3(self, energy_dens, log=False):
+        """ Convert energy/volume from -proper- code units (unitEnergy/unitDensity) to [erg/cm^3] (for RadiationEnergyDensity)."""
+        edens_cgs = energy_dens.astype('float64') * self.UnitEnergy_in_cgs / self.UnitLength_in_cm**3 / self._sP.HubbleParam**2
+
+        if log:
+            return logZeroNaN(edens_cgs).astype('float32')
+        return edens_cgs.astype('float32')
+
+    def codeEnergyDensToHabing(self, energy_dens, log=False):
+        """ Convert energy/volume from -proper- code units (unitEnergy/unitDensity) to Habing units (for RadiationEnergyDensity)."""
+        edens = self.codeEnergyDensToErgPerCm3(energy_dens, log=False)
+        edens /= self.Habing
+
+        if log:
+            return logZeroNaN(edens).astype('float32')
+        return edens.astype('float32')
 
     def lumToAbsMag(self, lum):
         """ Convert from an input luminosity in units of [Lsun/Hz] to an AB absolute magnitude. """

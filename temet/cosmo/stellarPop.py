@@ -308,8 +308,8 @@ class sps():
         assert imf in self.imfTypes
         assert dustModel in self.dustModels
 
-        if not redshifted and sP.redshift is not None and sP.redshift > 0.0 and getuser() != 'wwwrun':
-            print(' WARNING: sP redshift = %.2f, but not redshifting SPS calculations!' % sP.redshift)
+        #if not redshifted and sP.redshift is not None and sP.redshift > 0.0 and getuser() != 'wwwrun':
+        #    print(' WARNING: sP redshift = %.2f, but not redshifting SPS calculations!' % sP.redshift)
 
         self.sP    = sP
         self.data  = {} # band magnitudes

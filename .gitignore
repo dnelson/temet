@@ -23,3 +23,4 @@ temet/util/*.so
 ._.DS_Store
 .vscode
 wandb/
+cache/

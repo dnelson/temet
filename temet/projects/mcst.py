@@ -1330,7 +1330,7 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
     fig.savefig('mjeans_cumsum_n%d_z%d.pdf' % (len(sims),sims[0].redshift))
     plt.close(fig)
 
-def blackhole_diagnostics_vs_time(sim):
+def blackhole_diagnostics_vs_time(sim, clean=False):
     """ Plot SMBH mass growth and accretion rates vs time, from the txt files. """
     # load
     smbhs = blackhole_details_mergers(sim)
@@ -1364,6 +1364,8 @@ def blackhole_diagnostics_vs_time(sim):
 
         redshift = 1.0 / time - 1
 
+        if clean: xlim[0] = np.max(redshift) + 0.2
+
         # plot
         step = 1
 
@@ -1372,7 +1374,11 @@ def blackhole_diagnostics_vs_time(sim):
         ngbmaxdist = smbhs[smbh_id]['ngbmaxdist']
 
         # mass
-        fig, ax = plt.subplots(nrows=4, figsize=(14,14))#, sharex=True)
+        if clean:
+            fig, ax = plt.subplots(nrows=2, figsize=(figsize[0]*1.2,figsize[1]*0.8))#, sharex=True)
+        else:
+            fig, ax = plt.subplots(nrows=4, figsize=(14,14))#, sharex=True)
+
         ax[0].set_xlabel('Redshift')
         ax[0].set_xlim(xlim)
         ax[0].set_ylabel(r'SMBH Mass' + '\n' + r'[ log M$_{\rm sun}$ ]')
@@ -1391,24 +1397,25 @@ def blackhole_diagnostics_vs_time(sim):
         ax[1].plot(redshift[::step], mdot_edd, lw=lw, color='black', label='Eddington')
         ax[1].plot(redshift[::step], mdot_limit, lw=lw, color='black', alpha=0.4, label='Limit')
 
-        # mdot: high values only
-        ax[2].set_xlabel('Redshift')
-        ax[2].set_xlim(xlim)
-        ax[2].set_ylabel(r'$\dot{M}_{\rm SMBH}$' + '\n' + r'[ log M$_{\rm sun}$ yr$^{-1}$ ]')
-        ax[2].set_ylim([-5.2, 0.0])
+        if not clean:
+            # mdot: high values only
+            ax[2].set_xlabel('Redshift')
+            ax[2].set_xlim(xlim)
+            ax[2].set_ylabel(r'$\dot{M}_{\rm SMBH}$' + '\n' + r'[ log M$_{\rm sun}$ yr$^{-1}$ ]')
+            ax[2].set_ylim([-5.2, 0.0])
 
-        ax[2].plot(redshift[::step], mdot[::step], lw=lw, zorder=0)
-        ax[2].plot(redshift[::step], mdot_edd, lw=lw, color='black', label='Eddington')
-        ax[2].plot(redshift[::step], mdot_limit, lw=lw, color='black', alpha=0.4, label='Limit')
+            ax[2].plot(redshift[::step], mdot[::step], lw=lw, zorder=0)
+            ax[2].plot(redshift[::step], mdot_edd, lw=lw, color='black', label='Eddington')
+            ax[2].plot(redshift[::step], mdot_limit, lw=lw, color='black', alpha=0.4, label='Limit')
 
-        ax[2].legend(loc='best')
+            ax[2].legend(loc='best')
 
-        # ngbmaxdist
-        ax[3].set_xlabel('Redshift')
-        ax[3].set_xlim(xlim)
-        ax[3].set_ylabel('NGB Max Dist\n[ ckpc/h ]')
+            # ngbmaxdist
+            ax[3].set_xlabel('Redshift')
+            ax[3].set_xlim(xlim)
+            ax[3].set_ylabel('NGB Max Dist\n[ ckpc/h ]')
 
-        ax[3].plot(redshift[::step], ngbmaxdist[::step], lw=lw, zorder=0)
+            ax[3].plot(redshift[::step], ngbmaxdist[::step], lw=lw, zorder=0)
 
         for a in ax: a.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
@@ -1793,8 +1800,8 @@ def paperPlots(a = False):
     variants = ['ST14','ST14f1','ST14f2','ST14f3','ST14f4']
     variants = ['ST14','ST14h','ST15']#['ST15','ST15c','ST15m','ST15s']
     variants = ['ST14']
-    res = [14,15] #[14,15] # [14,15,16]
-    hInds = [15581,23908,31619,73172,219612,311384,844537] # [1958,5072]
+    res = [14] #[14,15] # [14,15,16]
+    hInds = [15581] #[15581,23908,31619,73172,219612,311384,844537] # [1958,5072]
     redshift = 5.5
 
     # if (all == False), only dz < 0.1 matches
@@ -1937,11 +1944,6 @@ def paperPlots(a = False):
     if 0 or a:
         gas_mzr(sims)
 
-    # fig 9d - N/O
-    if 0 or a:
-        # https://arxiv.org/abs/2510.21960
-        pass # TODO
-
     # fig 10a - stellar sizes
     if 0 or a:
         sizes_vs_mstar(sims)
@@ -1958,19 +1960,19 @@ def paperPlots(a = False):
         size_halpha_vs_mstar(sims)
         #quantVsRedshift(sims, quant='size_gas_log', xlim=xlim, ylim=[-0.6, 1.5])
 
-    # ------------
-
-    # figure - smbh vs mhalo relation
+    # fig 11b - smbh vs mhalo and mstar relations
     if 0 or a:
         mbh_vs_mhalo(sims)
         mbh_vs_mstar(sims)
 
-    # black hole time evolution
+    # fig 11c - black hole time evolution
     if 0 or a:
         for sim in sims:
-            blackhole_diagnostics_vs_time(sim)
+            blackhole_diagnostics_vs_time(sim, clean=False) # clean=True
             #blackhole_position_vs_time(sim, snap_based=True)
             blackhole_position_vs_time(sim, snap_based=False)
+
+    # ------------
 
     # radial profiles - halo comparisons
     if 0 or a:
@@ -2015,38 +2017,47 @@ def paperPlots(a = False):
     # vis: single image,z gas and stars
     if 0 or a:
         for sim in sims:
-            vis_single_galaxy(sim, haloID=0)
-            vis_single_galaxy(sim, haloID=0, noSats=True)
+            #vis_single_galaxy(sim, haloID=0)
+            #vis_single_galaxy(sim, haloID=0, noSats=True)
             vis_single_halo(sim, haloID=0)
-            #vis_single_halo(sim, haloID=0, size=20.0)
+            #vis_gallery_manyfields(sim, haloID=0)
+
+    # vis: full high-res region
+    if 0 or a:
+        for sim in sims:
+            vis_highres_region(sim, partType='gas')
+            vis_highres_region(sim, partType='dm')
+
+    # ------------
 
     # star cluster histogram test
     if 0:
-        sim = sims[0]
-        haloID = 0
-
-        sub_haloIDs = sim.subhalos('SubhaloGrNr')
-        sub_ids = np.where(sub_haloIDs == haloID)[0][1:]
-
-        mstar = sim.subhalos('mstar_tot')[sub_ids]
-        mgas = sim.subhalos('mgas_tot')[sub_ids]
-        mdm = sim.subhalos('mdm_tot')[sub_ids]
-
-        w = np.where((mstar > 0) & (mdm == 0))[0]
-
         # start plot
         fig, ax = plt.subplots(figsize=figsize)
         ax.set_xlabel(r'Stellar Mass [ log M$_{\odot}$ ]')
         ax.set_ylabel('Number of Star Clusters')
         ax.set_yscale('log')
-        ax.hist(np.log10(mstar[w]), bins=30, histtype='step', lw=lw)
+
+        for sim in sims:
+            haloID = 0
+
+            sub_haloIDs = sim.subhalos('SubhaloGrNr')
+            sub_ids = np.where(sub_haloIDs == haloID)[0][1:]
+
+            mstar = sim.subhalos('mstar_tot')[sub_ids]
+            mgas = sim.subhalos('mgas_tot')[sub_ids]
+            mdm = sim.subhalos('mdm_tot')[sub_ids]
+
+            w = np.where((mstar > 0) & (mdm == 0))[0]
+            
+            label = f'{sim.simName} (N={len(w)} of {mstar.size} subhalos)'
+            ax.hist(np.log10(mstar[w]), bins=30, histtype='step', lw=lw, label=label)
 
         min_mass = np.log10(20 * sim.units.codeMassToMsun(sim.targetGasMass))
         ax.plot([min_mass,min_mass], ax.get_ylim(), lw=lw, color='black', linestyle='--', label='20x targetGasMass')
-        ax.set_title(f'# Clusters: {len(w)} of {mstar.size} subhalos.')
         ax.legend(loc='best')
 
-        fig.savefig(f'star_cluster_histo_{sim.simName}_halo{haloID}.pdf')
+        fig.savefig(f'star_cluster_histo.pdf')
         plt.close(fig)
 
     # diagnostic: CPU times
@@ -2062,13 +2073,7 @@ def paperPlots(a = False):
     if 0 or a:
         diagnostic_numhalos_uncontaminated(sims)
 
-    # diagnostic: full high-res region vis
-    if 0 or a:
-        for sim in sims:
-            vis_highres_region(sim, partType='gas')
-            vis_highres_region(sim, partType='dm')
-    
-    # diagnostic: SFR debug
+        # diagnostic: SFR debug
     if 0 or a:
         diagnostic_sfr_jeans_mass(sims, haloID=0)
 
@@ -2076,10 +2081,10 @@ def paperPlots(a = False):
     if 0 or a:
         xlim = [12.1, 5.5]
 
-        quantVsRedshift(sims, 'mstar2', xlim=xlim, ylim=[3.5,6.5], sfh_treebased=True, plot_parent=False, sizefac=0.8)
-        quantVsRedshift(sims, 'mstar_fof', xlim=xlim, ylim=[3.5,6.5], sfh_treebased=True, plot_parent=False, sizefac=0.8)
-        #quantVsRedshift(sims, 'mhalo', xlim=xlim, ylim=[6.0,11.0], plot_parent=False, sizefac=0.8)
-        #quantVsRedshift(sims, 'rvir', xlim=xlim, ylim=[0.5,2.0], plot_parent=False, sizefac=0.8)
+        quantVsRedshift(sims, 'mstar2', xlim=xlim, ylim=[3.5,7.5], sfh_treebased=True, plot_parent=False, sizefac=0.8)
+        quantVsRedshift(sims, 'mstar_fof', xlim=xlim, ylim=[3.5,7.5], sfh_treebased=True, plot_parent=False, sizefac=0.8)
+        quantVsRedshift(sims, 'mhalo', xlim=xlim, ylim=[6.0,11.0], plot_parent=False, sizefac=0.8)
+        quantVsRedshift(sims, 'rvir', xlim=xlim, ylim=[0.5,2.0], plot_parent=False, sizefac=0.8)
         #quantVsRedshift(sims, 're_rvir_ratio', xlim=xlim, ylim=[-3.5,-0.5], plot_parent=False, sizefac=0.8)       
 
     # ------------
@@ -2100,10 +2105,17 @@ def paperPlots(a = False):
     if 0:
         vis_movie_mpbsm(sims, conf=1)
 
+    # movie: halo-scale many fields
+    if 1:
+        sim = sims[0].copy()
+        for snap in sim.validSnapList():
+            sim.setSnap(snap)
+            vis_single_halo(sim, haloID=0)
+
     # movie: high-res region
     if 0 or a:
         sim = sims[0].copy()
         for snap in sim.validSnapList():
             sim.setSnap(snap)
             vis_highres_region(sim, partType='gas')
-            vis_highres_region(sim, partType='dm')   
+            #vis_highres_region(sim, partType='dm')   

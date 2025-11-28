@@ -422,7 +422,7 @@ def _add_pres_curves(ax):
 
 def _load_equil_curves(metallicity, redshift, ssm):
     """ Helper. Load and/or compute equilibrium temperature and pressure vs. density curves. """
-    savefile = f'equil_vs_dens_Z{np.log10(metallicity):.0f}_z{redshift:.0f}_ssm{ssm}.hdf5'
+    savefile = f'cache/equil_vs_dens_Z{np.log10(metallicity):.0f}_z{redshift:.0f}_ssm{ssm}.hdf5'
 
     densities = np.linspace(-3.0, 3.0, 40) # log(1/cm^3)
 
