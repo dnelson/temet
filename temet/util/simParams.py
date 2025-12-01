@@ -1631,6 +1631,12 @@ class simParams:
 
         self.units = units(sP=self)
 
+        # clear subhalo/halo targets
+        self.haloInd    = None
+        self.subhaloInd = None
+        self.refPos     = None
+        self.refVel     = None
+        
         # clear cache
         old_data = {}
         for key in self.data:

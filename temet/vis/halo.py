@@ -40,6 +40,7 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclina
     else:
         # use the smoothed MPB properties to get halo properties at this snapshot
         assert sizeType not in ['rHalfMass','r500','rHalfMassStars'] # not implemented
+        assert (sP.refPos is None) and (sP.refPos is None) # will overwrite
 
         if sP.snap < mpb['SnapNum'].min():
             # for very early times, linearly interpolate properties at start of tree back to t=0
@@ -53,9 +54,13 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclina
 
             haloVirRad = np.poly1d( np.polyfit( fitX, mpb['sm']['rvir'][-fitSize:], fitN ) )(sP.snap)
 
-            boxCenter = np.zeros( 3, dtype='float32' )
+            boxCenter = np.zeros(3, dtype='float32')
+            galVel = np.zeros(3, dtype='float32')
+
             for i in range(3):
-                boxCenter[i] = np.poly1d( np.polyfit( fitX, mpb['sm']['pos'][-fitSize:,i], fitN ) )(sP.snap)
+                boxCenter[i] = np.poly1d(np.polyfit(fitX, mpb['sm']['pos'][-fitSize:,i], fitN))(sP.snap)
+                galVel[i] = np.poly1d(np.polyfit(fitX, mpb['sm']['vel'][-fitSize:,i], fitN))(sP.snap)
+
         else:
             # for times within actual MPB, use smoothed properties directly
             ind = np.where(mpb['SnapNum'] == sP.snap)[0]
@@ -67,6 +72,11 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclina
             boxCenter = boxCenter[axes + [3-axes[0]-axes[1]]] # permute into axes ordering
             galHalfMassRad = mpb['SubhaloHalfmassRad'][ind[0]]
             galHalfMassRadStars = mpb['SubhaloHalfmassRadType'][ind[0],sP.ptNum('stars')]
+            galVel = mpb['SubhaloVel'][ind[0],:]
+
+        # set refPos and refVel, used e.g. for halo-centric quantities
+        sP.refPos = boxCenter.copy()
+        sP.refVel = galVel
 
     boxCenter += np.array(cenShift)
 
@@ -402,7 +412,7 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
     for p in panels:
         # add all local variables to each (assumed to be common for all panels)
         for cName,cVal in localVars.items():
-            if cName in ['panels','plotConfig','plotConfigDefaults','simParams','sP','p']:
+            if cName in ['panels','plotConfig','plotConfigDefaults','simParams','p']:
                 continue
             if cName in p:
                 print('Warning: Letting panel specification ['+cName+'] override common value.')
@@ -433,7 +443,8 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
             p['sP'].subhaloInd = p['subhaloInd']
 
         # load MPB once per panel
-        quants = ['SubfindID','SnapNum','Group_R_Crit200','SubhaloPos','SubhaloHalfmassRad','SubhaloHalfmassRadType']
+        quants = ['SubfindID','SnapNum','Group_R_Crit200','SubhaloPos','SubhaloVel',
+                  'SubhaloHalfmassRad','SubhaloHalfmassRadType']
         p['mpb'] = p['sP'].quantMPB(p['sP'].subhaloInd, quants=quants, add_ghosts=True, smooth=True)
 
         if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]
