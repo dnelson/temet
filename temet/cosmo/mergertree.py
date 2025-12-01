@@ -164,10 +164,13 @@ def insertMPBGhost(mpb, snap):
     indAfter = np.where(mpb['SnapNum'] == snap - 1)[0]
     assert len(indAfter) > 0
 
-    mpb['SubfindID'] = np.insert( mpb['SubfindID'], indAfter, -1 ) # ghost
+    mpb['SubfindID'] = np.insert(mpb['SubfindID'], indAfter, -1) # ghost
+    mpb['SnapNum']  = np.insert(mpb['SnapNum'], indAfter, snap)
+
+    #print(' mpb insert [%d] ghost, index [%d]' % (snap,indAfter))
 
     for key in mpb:
-        if key in ['count','SubfindID']:
+        if key in ['count','SubfindID','SnapNum']:
             continue
 
         if mpb[key].ndim == 1: # [N]
@@ -270,7 +273,6 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
             if snap in mpb['SnapNum']:
                 continue
             mpb = insertMPBGhost(mpb, snap=snap)
-            #print(' mpb inserted [%d] ghost' % snap)
 
     # add redshift
     mpb_z = sim.snapNumToRedshift(mpb['SnapNum'])
