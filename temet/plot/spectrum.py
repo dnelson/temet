@@ -16,7 +16,9 @@ from ..cosmo.spectrum_util import line_params, _voigt_tau, _equiv_width, \
                                   lsf_matrix, varconvolve, resample_spectrum, \
                                   create_wavelength_grid, lines, instruments
 from ..cosmo.spectrum_analysis import absorber_catalog, load_spectra_subset, wave_to_dv
-from ..util.helper import loadColorTable, sampleColorTable, logZeroNaN, iterable, closest
+from ..util.helper import loadColorTable, sampleColorTable, logZeroNaN, iterable, closest, \
+                          getWhiteBlackColors
+from ..vis.common import setAxisColors
 from ..util.units import units
 from ..plot.config import *
 
@@ -980,13 +982,14 @@ def _select_random_spectrum(file=None):
 
     return file, ind
 
-def spectrum_plot_single(file=None, ind=None, full=True, saveFilename=None, output_fmt="png"):
+def spectrum_plot_single(file=None, ind=None, full=True, saveFilename=None, pStyle='white', output_fmt="png"):
     """ Plot a randomly selected spectrum.
     Args:
       file (str): if not None, the specific file to load.
       ind (int): if not None, the specific spectrum index to load.
       full (bool): show the full wavelength range in addition to zooming in on the absorption feature.
       saveFilename (str): if not None, the specific filename to save to (otherwise auto-generated).
+      pStyle (str): either 'white' or 'black' for plot style.
       output_fmt (str): either 'pdf', 'png', or 'jpg'.
     """
     SNR_bounds = [5, 200] # if not None, add noise with a random SNR in this range.
@@ -1077,10 +1080,14 @@ def spectrum_plot_single(file=None, ind=None, full=True, saveFilename=None, outp
     label2 = r'%s (#%d)' % (config, ind)
 
     # plotting two panels (zoomed and full), or just one (zoomed)?
+    color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
+
     if full:
-        fig, (ax2,ax1) = plt.subplots(nrows=2, figsize=[figsize[0]*0.8, figsize[1]*1.0])
+        fig, (ax2,ax1) = plt.subplots(nrows=2, figsize=[figsize[0]*0.8, figsize[1]*1.0], facecolor=color1)
+        for ax in (ax1,ax2): setAxisColors(ax, color2, color1)
     else:
-        fig, ax1 = plt.subplots(figsize=[figsize[0]*0.8, figsize[1]*0.6])
+        fig, ax1 = plt.subplots(figsize=[figsize[0]*0.8, figsize[1]*0.6], facecolor=color1)
+        setAxisColors(ax1, color2, color1)
 
     # zoom: axis ranges
     ax1.set_xlim(xlim)
@@ -1117,7 +1124,7 @@ def spectrum_plot_single(file=None, ind=None, full=True, saveFilename=None, outp
     # finish plot
     if saveFilename is None:
         saveFilename = 'spectrum_%s_%d.%s' % ('_'.join(params), ind, output_fmt)
-    fig.savefig(saveFilename)
+    fig.savefig(saveFilename, facecolor=fig.get_facecolor())
     plt.close(fig)
 
 def EW_distribution(sim_in, line='MgII 2796', instrument='SDSS-BOSS', redshifts=[0.5,0.7,1.0], 

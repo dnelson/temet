@@ -3021,8 +3021,10 @@ def addContourOverlay(p, conf, ax):
         # automatic contour levels
         ax.contour(grid_x, grid_y, grid_c, **contourOpts)
 
-def setAxisColors(ax, color2):
+def setAxisColors(ax, color2, color1=None):
     """ Factor out common axis color commands. """
+    if color1 is None: color1 = color2 # legacy
+    ax.set_facecolor(color1)
     ax.title.set_color(color2)
     ax.yaxis.label.set_color(color2)
     ax.xaxis.label.set_color(color2)

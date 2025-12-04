@@ -20,6 +20,7 @@ from ..cosmo.cloudy import cloudyIon
 # gamma - damping constant [1/s], where tau=1/gamma is the ~lifetime (is the sum of A)
 # wave0 - transition wavelength vacuum [ang]
 # Elow - lower level of the transition (if not zero, absorption is not from the ground state, careful)
+# todo: see https://arxiv.org/abs/2512.02992
 lines = {'HI 1215'    : {'f':0.4164,   'gamma':6.26e8,  'wave0':1215.670,  'ion':'H I', 'Elow':0}, # Lyman-alpha
          'HI 1025'    : {'f':0.0791,   'gamma':1.67e8,  'wave0':1025.7223, 'ion':'H I', 'Elow':0}, # Lyman-beta
          'HI 972'     : {'f':0.0290,   'gamma':6.82e7,  'wave0':972.5367,  'ion':'H I', 'Elow':0},
