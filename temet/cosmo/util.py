@@ -903,7 +903,14 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubha
             r[ptName] = offsets_pt[ [first_sub_groupID,last_sub_groupID], sP.ptNum(ptName) ]
             r[ptName][1] += last_sub_length[ sP.ptNum(ptName) ] - 1
 
-        assert r[ptName][1] >= 0 or snapHeader['NumPart'][sP.ptNum(ptName)] == 1 # otherwise we read the last/unused element of offsets_pt
+        if r[ptName][1] == -1:
+            # can occur if all subhalos have no particles of this type (but snap does)
+            subLenType = sP.subhalos('SubhaloLenType')
+            subLenType = subLenType[:,sP.ptNum(ptName)]
+            assert subLenType.sum() == 0 and r[ptName][0] == 0
+            r[ptName][1] = 0
+        else:
+            assert r[ptName][1] >= 0 or snapHeader['NumPart'][sP.ptNum(ptName)] == 1 # otherwise we read the last/unused element of offsets_pt
 
     if 'stars' in r:
         r['wind'] = r['stars']
