@@ -114,7 +114,7 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
             handles.append(plt.Line2D((0,1), (0,0), color='black', lw=0, marker=marker, ms=ms))
             labels.append('L%d_%s' % (r,variant))
 
-    legend2 = ax.legend(handles, labels, loc=locs[1], ncols=np.min([4,len(variants)]))
+    legend2 = ax.legend(handles, labels, loc=locs[1], ncols=np.min([2,len(variants)]))
     ax.add_artist(legend2)
 
 def _zoomSubhaloIDsToPlot(sim, verbose=False):
@@ -618,7 +618,7 @@ def smhm_relation(sims):
     xQuant = 'mhalo_200_log'
     yQuant = 'mstar2_log'
     xlim = [7.3, 10.3]
-    ylim = [4.0, 8.0] # log mstar
+    ylim = [4.0, 8.5] # log mstar
     
     # focus on low-mass end:
     #xlim = [5.5, 9.3]
@@ -934,6 +934,7 @@ def gas_mzr(sims):
 
         # TODO: z=5-6
         # https://arxiv.org/abs/2510.19959
+        # https://arxiv.org/abs/2512.03134
 
     twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data, sizefac=0.8)
 
@@ -1330,7 +1331,7 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
     fig.savefig('mjeans_cumsum_n%d_z%d.pdf' % (len(sims),sims[0].redshift))
     plt.close(fig)
 
-def blackhole_diagnostics_vs_time(sim, clean=False):
+def blackhole_properties_vs_time(sim, clean=False):
     """ Plot SMBH mass growth and accretion rates vs time, from the txt files. """
     # load
     smbhs = blackhole_details_mergers(sim)
@@ -1372,12 +1373,13 @@ def blackhole_diagnostics_vs_time(sim, clean=False):
         mdot_edd = np.log10(sim.units.codeBHMassToMdotEdd(mass_code[::step]))
         mdot_limit = np.log10(10.0**mdot_edd * sim.params['BlackHoleEddingtonFactor'])
         ngbmaxdist = smbhs[smbh_id]['ngbmaxdist']
+        hsml = smbhs[smbh_id]['hsml']
 
         # mass
         if clean:
             fig, ax = plt.subplots(nrows=2, figsize=(figsize[0]*1.2,figsize[1]*0.8))#, sharex=True)
         else:
-            fig, ax = plt.subplots(nrows=4, figsize=(14,14))#, sharex=True)
+            fig, ax = plt.subplots(nrows=4, figsize=(14,18))#, sharex=True)
 
         ax[0].set_xlabel('Redshift')
         ax[0].set_xlim(xlim)
@@ -1439,6 +1441,7 @@ def _blackhole_position_vs_time_snap(sim):
         # load all black holes IDs and positions, parent subhalos, relative positions
         ids_loc = sim.bhs('ids')
         pos_loc = sim.bhs('pos')
+        hsml_loc = sim.bhs('BH_Hsml')
         sub_ids_loc = sim.bhs('subhalo_id')
         sub_pos_loc = sim.subhalos('SubhaloPos')
 
@@ -1461,6 +1464,7 @@ def _blackhole_position_vs_time_snap(sim):
         if len(r) == 0:
             r['ids'] = ids_loc
             r['pos'] = pos_loc
+            r['hsml'] = hsml_loc
             r['sub_ids'] = sub_ids_loc
             r['pos_rel'] = pos_rel_loc
             r['dist_pc'] = dist_loc_pc
@@ -1469,6 +1473,7 @@ def _blackhole_position_vs_time_snap(sim):
         else:
             r['ids'] = np.hstack((r['ids'], ids_loc))
             r['pos'] = np.vstack((r['pos'], pos_loc))
+            r['hsml'] = np.hstack((r['hsml'], hsml_loc))
             r['sub_ids'] = np.hstack((r['sub_ids'], sub_ids_loc))
             r['pos_rel'] = np.vstack((r['pos_rel'], pos_rel_loc))
             r['dist_pc'] = np.hstack((r['dist_pc'], dist_loc_pc))
@@ -1496,7 +1501,10 @@ def _blackhole_position_vs_time(sim, n_pts=400):
         # identify parent subhalo at final snapshot
         bh_ids = sim.bhs('id')
         w = np.where(bh_ids == int(smbh_id))[0]
-        assert len(w) == 1, 'Error: could not find SMBH ID [%s] in final snapshot!' % smbh_id
+
+        if len(w) == 0:
+            print('Warning: SMBH ID [%s] not found in final snapshot, skipping!' % smbh_id)
+            continue
 
         # identify central subhalo of fof of this parent, i.e. in case the SMBH is in a satellite
         sub_id = sim.bhs('subhalo_id')[w[0]]
@@ -1519,16 +1527,20 @@ def _blackhole_position_vs_time(sim, n_pts=400):
         sim.correctPeriodicDistVecs(pos_rel)
 
         # reduce relative positions via running mean
-        bin_size = int(np.floor(bh_time.size / n_pts))
-        offset = 0
+        if n_pts is not None:
+            bin_size = int(np.floor(bh_time.size / n_pts))
+            offset = 0
 
-        bh_time_bin = np.zeros(n_pts, dtype='float32')
-        pos_rel_bin = np.zeros((n_pts,3), dtype='float32')
+            bh_time_bin = np.zeros(n_pts, dtype='float32')
+            pos_rel_bin = np.zeros((n_pts,3), dtype='float32')
 
-        for i in range(n_pts):
-            bh_time_bin[i] = np.mean(bh_time[offset:offset+bin_size])
-            pos_rel_bin[i,:] = np.mean(pos_rel[offset:offset+bin_size,:], axis=0)
-            offset += bin_size
+            for i in range(n_pts):
+                bh_time_bin[i] = np.mean(bh_time[offset:offset+bin_size])
+                pos_rel_bin[i,:] = np.mean(pos_rel[offset:offset+bin_size,:], axis=0)
+                offset += bin_size
+        else:
+            bh_time_bin = bh_time
+            pos_rel_bin = pos_rel
 
         bh_z = 1/bh_time_bin - 1
 
@@ -1543,6 +1555,7 @@ def _blackhole_position_vs_time(sim, n_pts=400):
         if len(r) == 0:
             r['ids'] = ids
             r['sub_ids'] = sub_ids
+            r['pos'] = pos_smbh
             r['pos_rel'] = pos_rel_bin
             r['dist_pc'] = dist_pc
             r['time'] = bh_time_bin
@@ -1550,6 +1563,7 @@ def _blackhole_position_vs_time(sim, n_pts=400):
         else:
             r['ids'] = np.hstack((r['ids'], ids))
             r['sub_ids'] = np.hstack((r['sub_ids'], sub_ids))
+            r['pos'] = np.vstack((r['pos'], pos_smbh))
             r['pos_rel'] = np.vstack((r['pos_rel'], pos_rel))
             r['dist_pc'] = np.hstack((r['dist_pc'], dist_pc))
             r['time'] = np.hstack((r['time'], bh_time))
@@ -1561,8 +1575,10 @@ def blackhole_position_vs_time(sim, snap_based=True):
     """ Plot (relative) position of SMBHs vs time. """
     if snap_based:
         data = _blackhole_position_vs_time_snap(sim)
+        data_snap = data
     else:
-        data = _blackhole_position_vs_time(sim)
+        data = _blackhole_position_vs_time(sim, n_pts=None) # 
+        data_snap = _blackhole_position_vs_time_snap(sim) # for BH_Hsml
 
     # loop over unique IDs
     smbh_ids = np.unique(data['ids'])
@@ -1574,18 +1590,24 @@ def blackhole_position_vs_time(sim, snap_based=True):
         sort_inds = np.argsort(data['time'][w])
         w = w[sort_inds]
 
+        pos = data['pos'][w]
         pos_rel = data['pos_rel'][w]
         z = data['z'][w]
         dist_pc = data['dist_pc'][w]
         sub_ids = data['sub_ids'][w]
 
+        # plot
+        if len(smbh_ids) > 1:
+            fig, (ax1,ax2,ax3) = plt.subplots(ncols=3, figsize=(20,7.5))
+        else:
+            fig, (ax1,ax2) = plt.subplots(ncols=2, figsize=(14,7.5))
+
         # plot (1): distance from center vs. time
-        fig, (ax1,ax2) = plt.subplots(ncols=2, figsize=(14,7.5))
         ax1.set_xlabel('Redshift')
         ax1.set_ylabel('Distance from Subhalo Center [pc]')
         #ax1.set_ylim([-1, 10])
 
-        ax1.plot(z, dist_pc, lw=lw-1) # auto axes limits
+        ax1.plot(z, dist_pc, lw=lw-1, color='black') # auto axes limits
         colored_line(z, dist_pc, c=z, ax=ax1, lw=lw, cmap='plasma')
 
         ageVals = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
@@ -1608,6 +1630,52 @@ def blackhole_position_vs_time(sim, snap_based=True):
         ax2.add_artist(c2)
 
         colored_line(pos_rel[:,0], pos_rel[:,1], c=z, ax=ax2, lw=lw, cmap='plasma')
+
+        # plot (3) pairwise distances to all other black holes
+        if len(smbh_ids) > 1:
+            ax3.set_xlabel('Redshift')
+            ax3.set_ylabel('Distance to other BHs [ckpc/h]')
+
+            for other_smbh_id in smbh_ids:
+                if other_smbh_id == smbh_id:
+                    continue
+
+                # get data subset
+                w2 = np.where(data['ids'] == other_smbh_id)[0]
+                sort_inds2 = np.argsort(data['time'][w2])
+                w2 = w2[sort_inds2]
+
+                pos2 = data['pos'][w2]
+                z2 = data['z'][w2]
+
+                # interpolate positions to common times
+                pos2_interp = np.zeros( (pos.shape[0], 3), dtype='float32' )
+                for i in range(3):
+                    pos2_interp[:,i] = np.interp(z[::-1], z2[::-1], pos2[:,i][::-1])[::-1]
+
+                pos_rel = pos - pos2_interp
+                sim.correctPeriodicDistVecs(pos_rel)
+
+                dist_rel_code = np.linalg.norm(pos_rel, axis=1)
+
+                ax3.plot(z, dist_rel_code, lw=lw-1, label=other_smbh_id) # auto axes limits
+
+            # get BH_Hsml from snapshot-based data
+            w_snap = np.where(data_snap['ids'] == smbh_id)[0]
+            sort_inds_snap = np.argsort(data_snap['time'][w_snap])
+            w_snap = w_snap[sort_inds_snap]
+            z_snap = data_snap['z'][w_snap]
+
+            # interpolate hsml to common times
+            hsml2 = data_snap['hsml'][w_snap]
+            hsml2_interp = np.interp(z[::-1], z_snap[::-1], hsml2[::-1])[::-1]
+
+            ax3.plot(z, hsml2_interp, lw=lw, color='black', linestyle='-', label='BH Hsml')
+
+            ax3.set_yscale('log')
+
+            addUniverseAgeAxis(ax3, sim, ageVals=ageVals)
+            ax3.legend(loc='best')
 
         # save
         fig.savefig(f'smbh_pos_vs_time_{sim.simName}_{smbh_id}{"_snap" if snap_based else ""}.pdf')
@@ -1637,7 +1705,10 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
             xlim = [-4.1,0.5] if not supernovae else [-4.1,2]
 
         ax.set_xlabel(xlabel)
-        ax.set_ylabel('Number of Stars Formed')
+        if supernovae:
+            ax.set_ylabel('Number of Supernovae')
+        else:
+            ax.set_ylabel('Number of Stars Formed')
         ax.set_yscale('log')
         ax.set_xlim(xlim)
 
@@ -1651,7 +1722,8 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
             if field == 'Density':
                 # unit conversions: physical [1/cm^3]
                 dens = sim.units.codeDensToPhys(data['Density'], scalefac=data['Time'], cgs=True, numDens=True)
-                dens[dens == 0] = dens[dens > 0].min() # zeros rarely occur
+                dens[dens <= 0] = dens[dens > 0].min() # zeros/negatives rarely occur (including corrupted txt lines)
+                dens[~np.isfinite(dens)] = dens[np.isfinite(dens)].max() # rarely inf
                 vals = np.log10(dens)
 
             if field == 'Temperature':
@@ -1660,7 +1732,7 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
             if field == 'Metallicity':
                 # unit conversions: solar
                 metallicity = sim.units.metallicityInSolar(data['Metallicity'])
-                #metallicity[metallicity == 0] = metallicity[metallicity > 0].min() # zeros rarely occur
+                metallicity[metallicity == 0] = metallicity[metallicity > 0].min() # zeros rarely occur
                 vals = np.log10(metallicity)
 
             z = 1/data['Time'] - 1
@@ -1670,8 +1742,9 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
 
                 # plot hist
                 label = f'{sim.simName}' if j == 0 else ''
-                
-                l = ax.hist(vals[w], bins=40, histtype='step', lw=lw, linestyle=linestyles[j], color=colors[i], label=label)
+               
+                c = colors[i % len(colors)]
+                l = ax.hist(vals[w], bins=40, histtype='step', lw=lw, linestyle=linestyles[j], color=c, label=label)
 
         # second legend
         if split_z:
@@ -1797,37 +1870,39 @@ def select_ics():
 def paperPlots(a = False):
     """ Plots for MCST intro paper. (if a == True, make all figures)."""
     # list of sims to include
-    variants = ['ST14','ST14f1','ST14f2','ST14f3','ST14f4']
-    variants = ['ST14','ST14h','ST15']#['ST15','ST15c','ST15m','ST15s']
-    variants = ['ST14']
-    res = [14] #[14,15] # [14,15,16]
-    hInds = [15581] #[15581,23908,31619,73172,219612,311384,844537] # [1958,5072]
+    variants = ['ST15'] #['ST14','ST15'] #,'ST15c','ST15m','ST15s']
+    res = [15] # [14,15,16]
+    hInds = [219612,311384] #[31619,73172,219612,311384,844537] #[5072,15581,23908,31619,73172,219612,311384,844537] # [1958,5072]
     redshift = 5.5
 
     # if (all == False), only dz < 0.1 matches
     # if (single == True), only the highest available res of each halo
-    sims = _get_existing_sims(variants, res, hInds, redshift, all=False, single=True)
+    sims = _get_existing_sims(variants, res, hInds, redshift, all=True, single=False)
 
     # contamination diagnostic printout and SMBH printout (info only)
     if 0:
         for sim in sims:
-            subIDs = _zoomSubhaloIDsToPlot(sim)
-            for subID in subIDs:
-                subhalo = sim.subhalo(subID)
-                s = f' h[{subhalo["SubhaloGrNr"]}] sub[{subID:4d}] '
-                s += f'Re = {sim.units.codeLengthToPc(subhalo["SubhaloHalfmassRadType"][4]):.2f} pc, '
-                s += f'M_BH = {sim.units.codeMassToLogMsun(subhalo["SubhaloBHMass"])[0]:.2f}'
-                print(s)
+            #subIDs = _zoomSubhaloIDsToPlot(sim)
+            #for subID in subIDs:
+            #    subhalo = sim.subhalo(subID)
+            #    s = f' h[{subhalo["SubhaloGrNr"]}] sub[{subID:4d}] '
+            #    s += f'Re = {sim.units.codeLengthToPc(subhalo["SubhaloHalfmassRadType"][4]):.2f} pc, '
+            #    s += f'M_BH = {sim.units.codeMassToLogMsun(subhalo["SubhaloBHMass"])[0]:.2f}'
+            #    print(s)
 
             ##sim.setSnap(sim.validSnapList()[-1]) # careful
-            bhs = sim.bhs(['BH_Mass','Masses','BH_CumEgyInjection_QM','BH_CumMassGrowth_QM','BH_MPB_CumEgyHigh'])
+            bhs = sim.bhs(['BH_Mass','BH_Hsml','BH_Ngb','Masses',
+                           'BH_CumEgyInjection_QM','BH_CumMassGrowth_QM','BH_MPB_CumEgyHigh','BH_Progs'])
             for i in range(bhs['count']):
                 s = f'{str(sim):<24} BH {i}:'
                 s += f'BH_Mass = {sim.units.codeMassToLogMsun(bhs["BH_Mass"][i])[0]:.3f}, '
                 s += f'Mass = {sim.units.codeMassToLogMsun(bhs["Masses"][i])[0]:.3f}, '
-                s += f'CumEgy = {sim.units.codeEnergyToErg(bhs["BH_CumEgyInjection_QM"][i]):.3e}, '
-                s += f'CumMass = {sim.units.codeMassToLogMsun(bhs["BH_CumMassGrowth_QM"][i])[0]:.3f}, '
-                s += f'CumEgy_MPB = {sim.units.codeEnergyToErg(bhs["BH_MPB_CumEgyHigh"][i]):.3e}'
+                s += f'CumEgy = {sim.units.codeEnergyToErg(bhs["BH_CumEgyInjection_QM"][i]):.2e}, '
+                s += f'CumMass = {sim.units.codeMassToLogMsun(bhs["BH_CumMassGrowth_QM"][i])[0]:.2f}, '
+                s += f'CumEgy_MPB = {sim.units.codeEnergyToErg(bhs["BH_MPB_CumEgyHigh"][i]):.2e}, '
+                s += f'BH_Hsml = {sim.units.codeLengthToPc(bhs["BH_Hsml"][i]):.3f} pc, '
+                s += f'BH_Ngb = {bhs["BH_Ngb"][i]}, '
+                s += f'NumProgs = {bhs["BH_Progs"][i]}'
                 print(s)
 
     # ------------
@@ -1927,6 +2002,8 @@ def paperPlots(a = False):
         xlim = [14.1, 5.4]
         ylim = [-4.1, 0.0]
 
+        # todo: https://arxiv.org/abs/2512.12983 
+
         quantVsRedshift(sims, quant='Z_gas', xlim=xlim, ylim=ylim, sizefac=0.8) # cat/tree
         quantVsRedshift(sims, quant='Z_gas_sfrwt', xlim=xlim, ylim=ylim, sizefac=0.8) # cat/tree
         quantVsRedshift(sims, quant='Z_stars', xlim=xlim, ylim=ylim, sizefac=0.8) # cat/tree (<2rhalf)
@@ -1968,7 +2045,7 @@ def paperPlots(a = False):
     # fig 11c - black hole time evolution
     if 0 or a:
         for sim in sims:
-            blackhole_diagnostics_vs_time(sim, clean=False) # clean=True
+            blackhole_properties_vs_time(sim, clean=False) # clean=True
             #blackhole_position_vs_time(sim, snap_based=True)
             blackhole_position_vs_time(sim, snap_based=False)
 
@@ -1989,6 +2066,9 @@ def paperPlots(a = False):
 
         plotSingleRadialProfile(sims, ptType='gas', ptProperty='menc_vesc', haloIDs=haloIDs, 
             xlog=True, xlim=[-2.0, 1.5], ylim=[0.0, 1.7], ylog=True, scope='fof')
+
+        plotSingleRadialProfile(sims, ptType='gas', ptProperty='cellsize_kpc', haloIDs=haloIDs, 
+            xlog=True, xlim=[-2.0, 1.5], ylim=[-3.5, -0.5], ylog=True, scope='global')
 
     # radial profiles: 2d vs time
     if 0 or a:
@@ -2019,6 +2099,7 @@ def paperPlots(a = False):
         for sim in sims:
             #vis_single_galaxy(sim, haloID=0)
             #vis_single_galaxy(sim, haloID=0, noSats=True)
+            sim.setSnap(0)
             vis_single_halo(sim, haloID=0)
             #vis_gallery_manyfields(sim, haloID=0)
 
@@ -2060,23 +2141,6 @@ def paperPlots(a = False):
         fig.savefig(f'star_cluster_histo.pdf')
         plt.close(fig)
 
-    # diagnostic: CPU times
-    if 0 or a:
-        from ..cosmo.perf import plotCpuTimes
-        plotCpuTimes(sims, xlim=[0.0, 0.25])
-
-    # diagnostic: snapshot spacing
-    if 0 or a:
-        diagnostic_snapshot_spacing(sims)
-
-    # diagnostic: number of non-contaminated halos vs redshift
-    if 0 or a:
-        diagnostic_numhalos_uncontaminated(sims)
-
-        # diagnostic: SFR debug
-    if 0 or a:
-        diagnostic_sfr_jeans_mass(sims, haloID=0)
-
     # diagnostic: halo mass, virial radii, mpb-based mstar, rhalf/rvir ratio, all vs redshift
     if 0 or a:
         xlim = [12.1, 5.5]
@@ -2085,7 +2149,24 @@ def paperPlots(a = False):
         quantVsRedshift(sims, 'mstar_fof', xlim=xlim, ylim=[3.5,7.5], sfh_treebased=True, plot_parent=False, sizefac=0.8)
         quantVsRedshift(sims, 'mhalo', xlim=xlim, ylim=[6.0,11.0], plot_parent=False, sizefac=0.8)
         quantVsRedshift(sims, 'rvir', xlim=xlim, ylim=[0.5,2.0], plot_parent=False, sizefac=0.8)
-        #quantVsRedshift(sims, 're_rvir_ratio', xlim=xlim, ylim=[-3.5,-0.5], plot_parent=False, sizefac=0.8)       
+        #quantVsRedshift(sims, 're_rvir_ratio', xlim=xlim, ylim=[-3.5,-0.5], plot_parent=False, sizefac=0.8)  
+
+    # diagnostic: CPU times
+    if 0 or a:
+        from ..cosmo.perf import plotCpuTimes
+        plotCpuTimes(sims, xlim=[0.0, 0.25])
+
+    # diagnostic: number of non-contaminated halos vs redshift
+    if 0 or a:
+        diagnostic_numhalos_uncontaminated(sims)
+
+    # diagnostic: snapshot spacing
+    if 0:
+        diagnostic_snapshot_spacing(sims)
+
+    # diagnostic: SFR debug
+    if 0:
+        diagnostic_sfr_jeans_mass(sims, haloID=0)
 
     # ------------
 
@@ -2097,20 +2178,21 @@ def paperPlots(a = False):
             phase_diagram(sim)
 
     # movie: galaxy-scale gas + stars vis (tree mpb manual search)
-    if 0:
-        for sim in sims:
-            vis_movie(sim, haloID=0)
+    #if 0:
+    #    for sim in sims:
+    #        vis_movie(sim, haloID=0)
 
-    # movie: various configurations (final tree mpb smoothed)
+    # movie: galaxy-scale gas + stars vis (final tree mpb smoothed)
     if 0:
         vis_movie_mpbsm(sims, conf=1)
 
-    # movie: halo-scale many fields
-    if 1:
-        sim = sims[0].copy()
-        for snap in sim.validSnapList():
-            sim.setSnap(snap)
-            vis_single_halo(sim, haloID=0)
+    # movie: halo-scale many fields (final tree mpb smoothed)
+    if 0:
+        vis_single_halo(sims[0], movie=True) 
+
+    # movie: galaxy-scale many fields (final tree mpb smoothed)
+    if 0:
+        vis_single_halo(sims[0], movie=True, galscale=True)
 
     # movie: high-res region
     if 0 or a:

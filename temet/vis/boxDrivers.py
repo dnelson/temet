@@ -8,7 +8,7 @@ from ..vis.common import savePathDefault
 from ..vis.box import renderBox, renderBoxFrames
 from ..vis.halo import renderSingleHalo
 from ..util.helper import pSplit
-from ..util import simParams
+from ..util.simParams import simParams
 
 def realizations(conf=1):
     """ Render a whole box image at one redshift, of one field, comparing multiple runs. """
@@ -159,9 +159,10 @@ def _TNGboxFieldConfig(res, conf, thinSlice, remap=False):
     if conf == 32: panels.append( {'partType':'gas', 'partField':'sb_O--6-1031.91A_ster', 'valMinMax':[-4.0, 2.0]} )
     if conf == 33: panels.append( {'partType':'gas', 'partField':'ionmassratio_O6_O8', 'valMinMax':[-2.0, 3.0]} )
     if conf == 34: panels.append( {'partType':'gas', 'partField':'cellsize_kpc', 'valMinMax':[-0.5, 1.5], 'ctName':'magma'} )
+    if conf == 35: panels.append( {'partType':'gas', 'partField':'sz_yparam', 'valMinMax':[-11.3, -6.5]} )
 
     # testing equirectangular projections:
-    if conf == 35:  panels.append( {'partType':'gas', 'partField':'coldens_msun_ster', 'valMinMax':gasFullMM} )
+    if conf == 36:  panels.append( {'partType':'gas', 'partField':'coldens_msun_ster', 'valMinMax':gasFullMM} )
 
     # thin slices may need different optimal bounds:
     if thinSlice:
@@ -194,10 +195,10 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     redshift   = 0.0
     nPixels    = 2000 # 800, 2000, 8000
     axes       = [0,1] # x,y
-    labelZ     = True
-    labelScale = True
-    labelSim   = True
-    plotHalos  = 100
+    labelZ     = False #True
+    labelScale = False #True
+    labelSim   = False #True
+    plotHalos  = False #100
     method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
 
@@ -227,8 +228,8 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
     class plotConfig:
         plotStyle  = 'edged' # open, edged
-        rasterPx   = 1000 #nPixels if isinstance(nPixels,list) else [nPixels,nPixels]
-        colorbars  = True # False
+        rasterPx   = nPixels if isinstance(nPixels,list) else [nPixels,nPixels]
+        colorbars  = False
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s%s.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr,mStr)

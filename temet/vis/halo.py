@@ -52,14 +52,17 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclina
 
             fitX = mpb['SnapNum'][-fitSize:]
 
-            haloVirRad = np.poly1d( np.polyfit( fitX, mpb['sm']['rvir'][-fitSize:], fitN ) )(sP.snap)
+            sP.subhaloInd = 0
+            haloVirRad = np.poly1d( np.polyfit( fitX, mpb['Group_R_Crit200'][-fitSize:], fitN ) )(sP.snap)
+            galHalfMassRad = np.poly1d( np.polyfit( fitX, mpb['SubhaloHalfmassRad'][-fitSize:], fitN ) )(sP.snap)
+            galHalfMassRadStars = np.poly1d( np.polyfit( fitX, mpb['SubhaloHalfmassRadType'][-fitSize:,sP.ptNum('stars')], fitN ) )(sP.snap)
 
             boxCenter = np.zeros(3, dtype='float32')
             galVel = np.zeros(3, dtype='float32')
 
             for i in range(3):
-                boxCenter[i] = np.poly1d(np.polyfit(fitX, mpb['sm']['pos'][-fitSize:,i], fitN))(sP.snap)
-                galVel[i] = np.poly1d(np.polyfit(fitX, mpb['sm']['vel'][-fitSize:,i], fitN))(sP.snap)
+                boxCenter[i] = np.poly1d(np.polyfit(fitX, mpb['SubhaloPos'][-fitSize:,i], fitN))(sP.snap)
+                galVel[i] = np.poly1d(np.polyfit(fitX, mpb['SubhaloVel'][-fitSize:,i], fitN))(sP.snap)
 
         else:
             # for times within actual MPB, use smoothed properties directly

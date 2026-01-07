@@ -12,7 +12,7 @@ from ..cosmo.util import multiRunMatchedSnapList
 from ..util.helper import iterable, pSplit
 from ..util.boxRemap import findCuboidRemapInds
 from ..util.rotation import rotationMatrixFromAngleDirection
-from ..util import simParams
+from ..util.simParams import simParams
 
 def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, nPixels, boxOffset, remapRatio, **kwargs):
     """ Factor out some box/image related calculations common to all whole box plots. 

@@ -1185,10 +1185,12 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp', subhaloIDs=Non
 
     if ptProperty == 'cellsize_kpc':
         xlim_p = [xlim[0] + (xlim[1]-xlim[0])/40, xlim[1] - (xlim[1]-xlim[0])/40]
-        notable_sizes = {'100pc':-1.0, '1kpc':0.0}
+        notable_sizes = {'10pc':-2.0, '100pc':-1.0, '1kpc':0.0}
         for label,val in notable_sizes.items():
-            ax.plot( xlim_p, [val,val], ':', lw=lw, color='black', alpha=0.05 )
-            ax.text( xlim_p[0]+0.1, val+0.03, label, color='black', fontsize=20, alpha=0.1, verticalalignment='bottom', horizontalalignment='center' )
+            if val < ylim[0] or val > ylim[1]:
+                continue
+            ax.plot( xlim_p, [val,val], ':', lw=lw, color='black', alpha=0.1 )
+            ax.text( xlim_p[0]+0.1, val+0.03, label, color='black', fontsize=20, alpha=0.2, verticalalignment='bottom', horizontalalignment='center' )
 
     # finish plot
     ax.legend(loc='best')

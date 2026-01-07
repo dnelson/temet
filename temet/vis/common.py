@@ -1032,7 +1032,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         grid /= pxAreaKpc2
         
         config['label'] = 'Thermal Sunyaev-Zeldovich y-param [log]'
-        config['ctName'] = 'turbo'
+        config['ctName'] = 'turbo' # ice
 
     if partField in ['ksz_yparam']:
         # 'per-cell kinetic yparam' has [kpc^2] units, normalize by pixel area -> dimensionless

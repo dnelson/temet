@@ -128,13 +128,9 @@ def vis_gallery_galaxy(sims, conf=0):
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def vis_single_halo(sP, haloID=0, movie=False):
+def vis_single_halo(sP, haloID=0, movie=False, galscale=False):
     """ Visualization: single halo, multiple fields. """
-    rVirFracs  = [1.0]
-    fracsType  = 'rVirial'
     nPixels    = [960,960]
-    size       = 3.5 #2.5
-    sizeType   = 'rVirial'
     labelSim   = False # True
     labelHalo  = False # 'mhalo'
     labelZ     = False
@@ -143,6 +139,17 @@ def vis_single_halo(sP, haloID=0, movie=False):
     relCoords  = True
     axes = [0,1]
     #rotation   = 'edge-on' #'face-on'
+
+    if galscale:
+        rVirFracs  = [1.0]
+        fracsType  = 'rhalf_stars_fof' #'rHalfMassStars'
+        size       = 1.0 if sP.hInd > 20000 else 5.0
+        sizeType   = 'kpc'
+    else:
+        rVirFracs  = [1.0]
+        fracsType  = 'rVirial'
+        size       = 3.5 #2.5
+        sizeType   = 'rVirial'
 
     method = 'voronoi_slice' # 'sphMap'
 
@@ -164,9 +171,10 @@ def vis_single_halo(sP, haloID=0, movie=False):
 
     # bottom row
     panels.append( {'partType':'gas', 'partField':'rad_FUV', 'valMinMax':[-15.0, -13.0], 'labelScale':'physical'} )
-    panels.append( {'partType':'gas', 'partField':'rad_FUV_UVB_ratio', 'valMinMax':[-0.5,0.5]} )
+    #panels.append( {'partType':'gas', 'partField':'rad_FUV_UVB_ratio', 'valMinMax':[-0.5,0.5]} )
     #panels.append( {'partType':'gas', 'partField':'rad_LW'} )
     #panels.append( {'partType':'gas', 'partField':'rad_FUV_LW_ratio', 'valMinMax':[0.0,0.5]} )
+    panels.append( {'partType':'stars', 'method':'sphMap', 'partField':'stellarCompObsFrame', 'autoLimits':False} )
     panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.5,0.0]} )
     panels.append( {'partType':'gas', 'partField':'vrad', 'valMinMax':[-60,60], 'labelZ':True} )
 
@@ -175,11 +183,11 @@ def vis_single_halo(sP, haloID=0, movie=False):
         colorbars    = True
         colorbarOverlay = True
         fontsize     = 28 # 24
-        saveFilename = 'halo_%s_%d_h%d.pdf' % (sP.simName,sP.snap,haloID)
+        saveFilename = '%s_%s_%d_h%d.pdf' % ('galaxy' if galscale else 'halo',sP.simName,sP.snap,haloID)
 
     if movie:
         plotConfig.savePath = ''
-        plotConfig.saveFileBase = '%s_evo' % sP.simName
+        plotConfig.saveFileBase = '%s_%sevo' % (sP.simName,'galaxy' if galscale else 'halo')
         renderSingleHaloFrames(panels, plotConfig, locals())
     else:
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
@@ -339,7 +347,7 @@ def vis_movie_mpbsm(sims, haloID=0, conf=1):
             sub_ind = sim.halo(haloID)['GroupFirstSub']
 
             panels.append( {'sP':sim, 'subhaloInd':sub_ind, 
-                            'partType':pt1, 'partField':pf2, 'valMinMax':vmm1, 
+                            'partType':pt1, 'partField':pf1, 'valMinMax':vmm1, 
                             'labelScale':'physical', 'labelSim':True, 'labelHalo':True} )
 
     class plotConfig:
@@ -367,8 +375,15 @@ def vis_highres_region(sP, partType='dm'):
     method     = 'sphMap'
     plotBHs    = 'all'
 
-    # determine center and bounding box (always use high-res DM particles)
-    pos = sP.dm('pos')
+    # determine center and bounding box (always use high-res DM or high-res gas)
+    if partType == 'dm':
+        pos = sP.dm('pos')
+    else:
+        pos = sP.gas('pos')
+        highresfrac = sP.gas('highres_massfrac')
+
+        w = np.where(highresfrac >= 0.5)[0]
+        pos = pos[w,:]
 
     boxsize = 0.0
     absCenPos = [0,0,0]
@@ -392,8 +407,8 @@ def vis_highres_region(sP, partType='dm'):
 
     if partType == 'gas':
         # only high-res, no buffer
-        ptRestrictions = {'Masses':['lt',sP.targetGasMass * 3]}
-        #ptRestrictions = {'highres_massfrac':['gt',0.5]} # need ST15+ for mini snaps
+        #ptRestrictions = {'Masses':['lt',sP.targetGasMass * 3]} # approximate
+        ptRestrictions = {'highres_massfrac':['gt',0.5]} # need ST15+ for mini snaps
         panels = [{'partField':'coldens_msunkpc2', 'valMinMax':[4.8,7.5]}]
 
     class plotConfig:

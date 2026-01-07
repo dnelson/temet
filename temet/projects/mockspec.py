@@ -1281,7 +1281,11 @@ def paperPlots():
         rng = np.random.default_rng(424242)
         for i in range(1000):
             filepath = rng.choice(files)
-            spectrum_plot_single(file=filepath, ind=None, saveFilename='frame_%03d.png' % i, pStyle='black') # random index
+            savefile = 'frame_%03d.png' % i
+            if isfile(savefile):
+                print(f' Frame {i:03d}: already exists, skipping.')
+                continue
+            spectrum_plot_single(file=filepath, ind=None, saveFilename=savefile, pStyle='black') # random index
 
     # fig X: 2d stacked COS spectra visualization
     if 0:

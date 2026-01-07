@@ -557,6 +557,9 @@ def blackhole_details_mergers(sim, overwrite=False):
         # additional columns
         if ncols > 6:
             w = w[inds] # sorted, de-duplicated subset
+            smbhs[int(smbh_id)]['rho'] = data[w,3]
+            smbhs[int(smbh_id)]['cs'] = data[w,4]
+            smbhs[int(smbh_id)]['hsml'] = data[w,5]
             smbhs[int(smbh_id)]['ngbmaxdist'] = data[w,6]
             smbhs[int(smbh_id)]['spin'] = data[w,7]
             smbhs[int(smbh_id)]['x'] = data[w,8]

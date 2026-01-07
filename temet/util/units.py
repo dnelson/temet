@@ -1257,13 +1257,13 @@ class units(object):
         consts = self.boltzmann * self.sigma_thomson / (self.mass_electron * self.c_cgs**2)
 
         # mass * ne/rho [dimensionless]
-        massfac = self.hydrogen_massfrac * xe * mass * (self.UnitMass_in_g / self._sP.HubbleParam / self.mass_proton)
+        massfac = self.hydrogen_massfrac * xe * mass.astype('float64') * (self.UnitMass_in_g / self._sP.HubbleParam / self.mass_proton)
         #massfac = mass * (self.UnitMass_in_g / self.mass_proton) / 1.14 # essentially identical
 
         Y = consts * temp * massfac # cm^2
         Y /= (self.kpc_in_km * self.km_in_cm)**2 # kpc^2
 
-        return Y
+        return Y.astype('float32')
 
     def calcKineticSZYParam(self, mass, xe, vel_los):
         """ Calculate per-cell kinetic SZ y-parameter (e.g. Dolag+16 Eqn. 4, Altamura+23 Eqn. 2).

@@ -581,7 +581,7 @@ def generate_set():
         #haloIDs += [513 772 957 807 400] # mhalo = 10.5
         #haloIDs += [137 175 174 139 145] # mhalo = 11.0
 
-        haloIDs = [23908, 1958] #[5072, 15581, 73172, 219612, 311384, 844537] # z5.5 set
+        haloIDs = [15581] #[23908, 1958] #[5072, 15581, 73172, 219612, 311384, 844537] # z5.5 set
         #zoomFac = 32 # 1 (L11), 2 (L12), 4 (L13), 8 (L14), 16 (L15), 32 (L16)
         sizeFac = 4.0 # 4, 6, 8
 
@@ -601,5 +601,5 @@ def generate_set():
 
     # run
     for haloID in haloIDs:
-        for zoomFac in [4,8,16]:#[1,4,8,16,32]:
+        for zoomFac in [32]:#[4,8,16]:#[1,4,8,16,32]:
             generate(sP, fofID=haloID, ZoomFactor=zoomFac, EnlargeHighResFactor=sizeFac)

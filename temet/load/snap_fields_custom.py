@@ -1758,6 +1758,7 @@ def rad_fuv_uvb_ratio(sim, partType, field, args):
 
     # could make this sim independent in the future
     path = sim.arepoPath + sim.params['GrackleDataFile'].decode()
+    path = path.replace('arepo7','arepo8') # hack for now
 
     with h5py.File(path,'r') as f:
         uvb_z = f['UVBEnergyDens/Redshift'][()]

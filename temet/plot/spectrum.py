@@ -1098,6 +1098,10 @@ def spectrum_plot_single(file=None, ind=None, full=True, saveFilename=None, pSty
     if SNR_bounds is not None:
         #ylim[1] += 1/SNR
         ylim[1] = np.max([1.0, flux_dv.max() + 0.01])
+    if pStyle == 'black':
+        # movie
+        ylim = [-0.05, 1.01]
+        ax2.set_ylim(ylim)
 
     ax1.set_ylim(ylim)
     ax1.set_xlabel(r'$\Delta v$ [ km/s ]')

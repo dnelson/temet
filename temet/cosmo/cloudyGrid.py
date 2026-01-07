@@ -166,6 +166,7 @@ lineList = """
 #157486  O  2 2470.34A      # type: t, index=1, 4 Elow=0   Stout, 2s2.2p3 4S*3/2 -- 2s2.2p3 2P*3/2
 #157521  O  2 3728.81A      # type: t, index=1, 2 Elow=0   Stout, 2s2.2p3 4S*3/2 -- 2s2.2p3 2D*5/2
 #157526  O  2 3726.03A      # type: t, index=1, 3 Elow=0   Stout, 2s2.2p3 4S*3/2 -- 2s2.2p3 2D*3/2
+#157531  O  3 88.3323m      # type: t, index=1, 2 Elow=0   Stout, 2s2.2p2 3P0 -- 2s2.2p2 3P1
 #157541  O  3 4931.23A      # type: t, index=1, 4 Elow=0   Stout, 2s2.2p2 3P0 -- 2s2.2p2 1D2
 #157546  O  3 1657.69A      # type: t, index=1, 6 Elow=0   Stout, 2s2.2p2 3P0 -- 2s.2p3 5S*2
 #157596  O  3 4958.91A      # type: t, index=2, 4 Elow=113.178   Stout, 2s2.2p2 3P1 -- 2s2.2p2 1D2
