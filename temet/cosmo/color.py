@@ -5,10 +5,10 @@ import numpy as np
 import h5py
 from os.path import isfile, isdir, expanduser
 from os import mkdir
-from scipy.stats import gaussian_kde
 import matplotlib.pyplot as plt
 
 from ..cosmo.kCorr import kCorrections, coeff
+from ..util.helper import kde_2d
 
 # dictionary of band name -> SubhaloStellarPhotometrics[:,i] index i (currently same for all sims, otherwise move into sP)
 from ..util import simParams
@@ -230,12 +230,7 @@ def calcMstarColor2dKDE(bands, gal_Mstar, gal_color, Mstar_range, mag_range,
     # calculate
     print('Calculating new: [%s]...' % saveFilename)
 
-    vv = np.vstack( [gal_Mstar, gal_color] )
-    kde = gaussian_kde(vv)
-
-    xx, yy = np.mgrid[Mstar_range[0]:Mstar_range[1]:200j, mag_range[0]:mag_range[1]:400j]
-    xy = np.vstack( [xx.ravel(), yy.ravel()] )
-    kde2d = np.reshape( np.transpose(kde(xy)), xx.shape)
+    xx, yy, kde2d = kde_2d(gal_Mstar, gal_color, Mstar_range, mag_range)
 
     # save
     with h5py.File(saveFilename,'w') as f:

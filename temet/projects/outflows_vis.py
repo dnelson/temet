@@ -14,12 +14,12 @@ import multiprocessing as mp
 from functools import partial
 
 from ..util import simParams
-from ..util.helper import loadColorTable, logZeroNaN, closest, getWhiteBlackColors
+from ..util.helper import loadColorTable, logZeroNaN, closest, getWhiteBlackColors, setAxisColors, setColorbarColors
 from ..util.rotation import rotationMatrixFromAngleDirection, momentOfInertiaTensor, \
   rotationMatricesFromInertiaTensor
 from ..plot.config import *
 from ..cosmo.mergertree import mpbPositionComplete
-from ..vis.common import gridBox, setAxisColors, setColorbarColors
+from ..vis.common import gridBox
 from ..vis.halo import renderSingleHalo, selectHalosFromMassBin
 from ..vis.box import renderBox
 from ..projects.outflows_analysis import halo_selection, selection_subbox_overlap, haloTimeEvoDataSubbox, haloTimeEvoDataFullbox

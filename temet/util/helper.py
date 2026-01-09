@@ -10,7 +10,7 @@ from functools import wraps
 from os.path import isfile
 from scipy.optimize import leastsq, least_squares
 from scipy.ndimage.filters import gaussian_filter
-from scipy.stats import binned_statistic
+from scipy.stats import binned_statistic, gaussian_kde
 from numba import jit
 from inspect import getsource
 from hashlib import sha256
@@ -760,6 +760,17 @@ def sgolay2d(z, window_size, order, derivative=None):
         r = np.linalg.pinv(A)[2].reshape((window_size, -1))
         return fftconvolve(Z, -r, mode='valid'), fftconvolve(Z, -c, mode='valid')
 
+def kde_2d(x, y, xrange, yrange):
+    """ Simple 2D KDE calculation using scipy gaussian_kde. """
+    vv = np.vstack([x, y])
+    kde = gaussian_kde(vv)
+
+    xx, yy = np.mgrid[xrange[0]:xrange[1]:200j, yrange[0]:yrange[1]:400j]
+    xy = np.vstack([xx.ravel(), yy.ravel()])
+    kde2d = np.reshape(np.transpose(kde(xy)), xx.shape)
+
+    return xx, yy, kde2d
+
 def gaussian_filter_nan(zz, sigma):
     """ Filter 2D array zz by a Gaussian with input sigma, ignoring any NaN entries. """
     if sigma == 0:
@@ -1336,6 +1347,26 @@ def getWhiteBlackColors(pStyle):
         color4 = '#222222'
 
     return color1, color2, color3, color4
+
+def setAxisColors(ax, color2, color1=None):
+    """ Factor out common axis color commands. """
+    if color1 is None: color1 = color2 # legacy
+    ax.set_facecolor(color1)
+    ax.title.set_color(color2)
+    ax.yaxis.label.set_color(color2)
+    ax.xaxis.label.set_color(color2)
+
+    for s in ['bottom','left','top','right']:
+        ax.spines[s].set_color(color2)
+    for a in ['x','y']:
+        ax.tick_params(axis=a, which='both', colors=color2)
+
+def setColorbarColors(cb, color2):
+    """ Factor out common colorbar color commands. """
+    cb.ax.yaxis.label.set_color(color2)
+    cb.outline.set_edgecolor(color2)
+    cb.ax.yaxis.set_tick_params(color=color2)
+    plt.setp(plt.getp(cb.ax.axes, 'yticklabels'), color=color2)
 
 def validColorTableNames():
     """ Return a list of whitelisted colormap names. """

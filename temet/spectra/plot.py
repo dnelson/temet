@@ -17,8 +17,7 @@ from ..spectra.util import line_params, _voigt_tau, _equiv_width, \
                                   create_wavelength_grid, lines, instruments
 from ..spectra.analysis import absorber_catalog, load_spectra_subset, wave_to_dv
 from ..util.helper import loadColorTable, sampleColorTable, logZeroNaN, iterable, closest, \
-                          getWhiteBlackColors
-from ..vis.common import setAxisColors
+                          getWhiteBlackColors, setAxisColors
 from ..util.units import units
 from ..plot.config import *
 
@@ -991,7 +990,7 @@ def spectrum_plot_single(file=None, ind=None, full=True, saveFilename=None, pSty
       saveFilename (str): if not None, the specific filename to save to (otherwise auto-generated).
       pStyle (str): either 'white' or 'black' for plot style.
       output_fmt (str): either 'pdf', 'png', or 'jpg'.
-    """
+    """    
     SNR_bounds = [5, 200] # if not None, add noise with a random SNR in this range.
     
     rng = np.random.default_rng()

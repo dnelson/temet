@@ -11,7 +11,7 @@ from ..vis.box import renderBox, renderBoxFrames
 from ..util import simParams
 from ..cosmo.util import subboxSubhaloCat
 from ..util.rotation import rotationMatrixFromAngleDirection
-from ..util.helper import logZeroNaN
+from ..util.helper import logZeroNaN, setAxisColors
 
 def subbox_4x2_movie(curTask=0, numTasks=1):
     """ Render a movie comparing several quantities of a single subbox (4x2 panels, 4K). """
@@ -296,7 +296,6 @@ def subbox_movie_tng300fof0_tracking(conf=0, clean=False):
         def func_post(parent_ax):
             """ Custom post-render hook to draw (i) virial radii circles, and (ii) BH Mdot vs time plot. """ 
             import matplotlib.pyplot as plt
-            from .common import setAxisColors
             from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
             # draw BH Mdot vs time plot
@@ -754,7 +753,6 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
 
             def func_post(parent_ax):
                 """ Custom post-render hook to draw plot on top. """ 
-                from .common import setAxisColors
                 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
                 ax = inset_axes(parent_ax, width="20%", height="20%", loc=4, borderpad=2.5) # lower right corner
 

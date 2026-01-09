@@ -15,13 +15,12 @@ from scipy.signal import savgol_filter
 from scipy.stats import gaussian_kde
 
 from ..util import simParams
-from ..util.helper import running_median, contourf, logZeroNaN, closest, loadColorTable, getWhiteBlackColors, leastsq_fit
+from ..util.helper import running_median, setAxisColors, logZeroNaN, closest, loadColorTable, getWhiteBlackColors, leastsq_fit
 from ..tracer.tracerMC import match3
 from ..cosmo.color import loadSimGalColors, stellarPhotToSDSSColor, calcSDSSColors, calcMstarColor2dKDE
 from ..projects.color_analysis import calcColorEvoTracks, characterizeColorMassPlane, colorTransitionTimes
 from ..plot.quantities import simSubhaloQuantity, bandMagRange
 from ..plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
-from ..vis.common import setAxisColors
 from ..plot.config import *
 
 def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel], 

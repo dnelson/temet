@@ -5,5 +5,4 @@ from . import general
 from . import globalComp
 from . import quantities
 from . import sizes
-from . import spectrum
 from .config import *

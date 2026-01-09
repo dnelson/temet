@@ -10,19 +10,17 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import Normalize
 from scipy.signal import savgol_filter
-from scipy.stats import binned_statistic, binned_statistic_2d
 from os.path import isfile, isdir
 from os import mkdir
+from functools import partial
 import healpy
 
 from ..util import simParams
 from ..util.helper import running_median, logZeroNaN, logZeroSafe, loadColorTable, last_nonzero
 from ..util.treeSearch import calcParticleIndices, buildFullTree, calcHsml, calcQuantReduction
 from ..plot.config import *
-from ..plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
 from ..plot.cosmoGeneral import quantHisto2D
 from ..vis.halo import renderSingleHalo
-from ..vis.box import renderBox
 
 def plotHealpixShells(rad, data, label, rads=None, clim=None, ctName='viridis', saveFilename='plot.pdf'):
     """ Plot a series of healpix shell samplings. """
@@ -463,28 +461,28 @@ def virialShockRadiusSingle(sP, haloID, useExistingAuxCat=True):
 
         if field == 'ShocksEnergyDiss':
             label = 'Shock Energy Dissipation [ log $10^{30}$ erg/s ]'
-            label2 = 'log( $\dot{E}_{\\rm shock}$ / <$\dot{E}_{\\rm shock}$> )'
-            label3 = '$\partial$$\dot{E}_{\\rm shock}$/$\partial$r [ log $10^{30}$ erg/s kpc$^{-1}$ ]'
+            label2 = r'log( $\dot{E}_{\rm shock}$ / <$\dot{E}_{\rm shock}$> )'
+            label3 = r'$\partial$$\dot{E}_{\rm shock}$/$\partial$r [ log $10^{30}$ erg/s kpc$^{-1}$ ]'
 
         if field == 'ShocksMachNum':
             label = 'Shock Mach Number [ linear ]'
-            label2 = 'log( $\mathcal{M}_{\\rm shock}$ / <$\mathcal{M}_{\\rm shock}$> )'
-            label3 = '$\partial$$\mathcal{M}_{\\rm shock}$/$\partial$r [ linear kpc$^{-1}$ ]'
+            label2 = r'log( $\mathcal{M}_{\rm shock}$ / <$\mathcal{M}_{\rm shock}$> )'
+            label3 = r'$\partial$$\mathcal{M}_{\rm shock}$/$\partial$r [ linear kpc$^{-1}$ ]'
 
         if field == 'Temp':
             label = 'Temperature [ log K ]'
-            label2 = 'log( $\delta$T / <T> )'
-            label3 = '$\partial$T/$\partial$r [ log K kpc$^{-1}$ ]'
+            label2 = r'log( $\delta$T / <T> )'
+            label3 = r'$\partial$T/$\partial$r [ log K kpc$^{-1}$ ]'
 
         if field == 'Entropy':
             label = 'Entropy [ log K cm$^2$ ]'
-            label2 = 'log( $\delta$S / <S> )'
-            label3 = '$\partial$S/$\partial$r [ log K cm$^2$ kpc$^{-1}$ ]'
+            label2 = r'log( $\delta$S / <S> )'
+            label3 = r'$\partial$S/$\partial$r [ log K cm$^2$ kpc$^{-1}$ ]'
 
         if field == 'RadVel':
             label = 'Radial Velocity [ km/s ]'
-            label2 = 'log( v$_{\\rm rad}$ / <v$_{\\rm rad}$> )'
-            label3 = '$\partial$v$_{\\rm rad}$/$\partial$r [ km/s kpc$^{-1}$ ]'
+            label2 = r'log( v$_{\rm rad}$ / <v$_{\rm rad}$> )'
+            label3 = r'$\partial$v$_{\rm rad}$/$\partial$r [ km/s kpc$^{-1}$ ]'
 
         # load existing or calculate now?
         if useExistingAuxCat:
@@ -992,3 +990,15 @@ def paperPlots():
     # TODO: make time evolution plot with time along x-axis, distance along y-axis, color=quant
     #  -- see if our method may need to be explicitly time aware
     
+# add auxcats
+from ..load.auxcat import fieldComputeFunctionMapping as ac
+
+ac['Subhalo_VirShockRad_Temp_400rad_16ns'] = partial(healpixThresholdedRadius,ptType='Gas',quant='Temp',radNumBins=400, Nside=16)
+ac['Subhalo_VirShockRad_Temp_400rad_8ns']  = partial(healpixThresholdedRadius,ptType='Gas',quant='Temp',radNumBins=400, Nside=8)
+ac['Subhalo_VirShockRad_Entropy_400rad_16ns']  = partial(healpixThresholdedRadius,ptType='Gas',quant='Entropy',radNumBins=400, Nside=16)
+ac['Subhalo_VirShockRad_ShocksMachNum_400rad_16ns']  = partial(healpixThresholdedRadius,ptType='Gas',quant='ShocksMachNum',radNumBins=400, Nside=16)
+ac['Subhalo_VirShockRad_ShocksMachNum_10rvir_800rad_16ns'] = partial(healpixThresholdedRadius,ptType='Gas',quant='ShocksMachNum',radNumBins=800, radMax=10, Nside=16)
+ac['Subhalo_VirShockRad_ShocksEnergyDiss_400rad_16ns']  = partial(healpixThresholdedRadius,ptType='Gas',quant='ShocksEnergyDiss',radNumBins=400, Nside=16)
+ac['Subhalo_VirShockRad_RadVel_400rad_16ns']  = partial(healpixThresholdedRadius,ptType='Gas',quant='RadVel',radNumBins=400, Nside=16)
+ac['Subhalo_SplashbackRad_DM_400rad_16ns']  = partial(healpixThresholdedRadius,ptType='DM',quant='RadVel',radNumBins=400, Nside=16)
+ac['Subhalo_SplashbackRad_Stars_400rad_16ns']  = partial(healpixThresholdedRadius,ptType='Stars',quant='RadVel',radNumBins=400, Nside=16)

@@ -11,8 +11,7 @@ from os.path import expanduser
 from glob import glob
 from scipy.interpolate import interp1d
 
-from ..util.helper import closest, getWhiteBlackColors
-from ..vis.common import setAxisColors
+from ..util.helper import closest, getWhiteBlackColors, setAxisColors
 from ..load.simtxt import *
 from ..plot.config import *
 

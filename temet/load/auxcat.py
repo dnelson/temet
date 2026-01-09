@@ -17,10 +17,6 @@ from ..cosmo.auxcatalog import fofRadialSumType, subhaloRadialReduction, subhalo
   wholeBoxColDensGrid, wholeBoxCDDF, mergerTreeQuant, tracerTracksQuant, subhaloCatNeighborQuant, \
   subhaloRadialProfile
 
-from ..projects.outflows_analysis import instantaneousMassFluxes, massLoadingsSN, outflowVelocities
-from ..projects.rshock import healpixThresholdedRadius
-from ..projects.tngcluster import summarize_projection_2d
-
 # save these as separate datasets, if present
 largeAttrNames = ['subhaloIDs','partInds','wavelength']
 
@@ -659,13 +655,6 @@ fieldComputeFunctionMapping = \
    'Subhalo_LX_05-2keV_R500c_3D' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum_0.5-2.0kev',op='sum',rad='r500crit',scope='fof',cenSatSelect='cen',minHaloMass=12.0),
 
-   'Subhalo_XrayLum_0.5-2.0kev_R500c_2D_d=r200' : \
-     partial(summarize_projection_2d,quantity='xray_lum_0.5-2.0kev',projConf='2r200_d=r200', aperture='r500'),
-   'Subhalo_XrayOffset_2D' : \
-     partial(summarize_projection_2d,quantity='xray_lum_0.5-2.0kev',projConf='0.5r500_d=3r200', op='peak_offset'),
-   'Subhalo_SZOffset_2D' : \
-     partial(summarize_projection_2d,quantity='sz_yparam',projConf='0.5r500_d=3r200', op='peak_offset'),
-
    # emission (cloudy-based)
    'Subhalo_OVIIr_GalaxyLum_1rstars' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O  7 21.6020A lum2phase',op='sum',rad='1rhalfstars',ptRestrictions=sfrgt0),
@@ -905,14 +894,6 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_SZY_R500c_3D' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='sz_yparam',op='sum',rad='r500crit',scope='fof',cenSatSelect='cen',minHaloMass=12.0),
-   'Subhalo_SZY_R500c_2D_d=r200' : \
-     partial(summarize_projection_2d,quantity='sz_yparam',projConf='2r200_d=r200', aperture='r500'),
-   'Subhalo_SZY_R500c_2D_d=3r200' : \
-     partial(summarize_projection_2d,quantity='sz_yparam',projConf='2r200_d=3r200', aperture='r500'),
-   'Subhalo_SZY_R500c_2D' : \
-     partial(summarize_projection_2d,quantity='sz_yparam',projConf='r500_d=r500', aperture='r500'),
-   'Subhalo_SZY_R200c_2D' : \
-     partial(summarize_projection_2d,quantity='sz_yparam',projConf='2r200_d=r200', aperture='r200'),
 
    # light: rest-frame/absolute
    'Subhalo_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
@@ -1433,63 +1414,6 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='temp',minHaloMass='10000dm',**{**sphericalSamplesOpts,'Nside':8}),
    'Subhalo_SphericalSamples_Global_Gas_ShocksMachNum_10rvir_800rad_16ns' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='shocks_machnum',minHaloMass='10000dm',**{**sphericalSamplesOpts,'radMax':10.0,'radNumBins':800}),
-
-   # shock/splashback radii
-   'Subhalo_VirShockRad_Temp_400rad_16ns' : partial(healpixThresholdedRadius,ptType='Gas',quant='Temp',radNumBins=400, Nside=16),
-   'Subhalo_VirShockRad_Temp_400rad_8ns'  : partial(healpixThresholdedRadius,ptType='Gas',quant='Temp',radNumBins=400, Nside=8),
-   'Subhalo_VirShockRad_Entropy_400rad_16ns'  : partial(healpixThresholdedRadius,ptType='Gas',quant='Entropy',radNumBins=400, Nside=16),
-   'Subhalo_VirShockRad_ShocksMachNum_400rad_16ns'  : partial(healpixThresholdedRadius,ptType='Gas',quant='ShocksMachNum',radNumBins=400, Nside=16),
-   'Subhalo_VirShockRad_ShocksMachNum_10rvir_800rad_16ns' : partial(healpixThresholdedRadius,ptType='Gas',quant='ShocksMachNum',radNumBins=800, radMax=10, Nside=16),
-   'Subhalo_VirShockRad_ShocksEnergyDiss_400rad_16ns'  : partial(healpixThresholdedRadius,ptType='Gas',quant='ShocksEnergyDiss',radNumBins=400, Nside=16),
-   'Subhalo_VirShockRad_RadVel_400rad_16ns'  : partial(healpixThresholdedRadius,ptType='Gas',quant='RadVel',radNumBins=400, Nside=16),
-   'Subhalo_SplashbackRad_DM_400rad_16ns'  : partial(healpixThresholdedRadius,ptType='DM',quant='RadVel',radNumBins=400, Nside=16),
-   'Subhalo_SplashbackRad_Stars_400rad_16ns'  : partial(healpixThresholdedRadius,ptType='Stars',quant='RadVel',radNumBins=400, Nside=16),
-
-   # outflows/inflows
-   'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz'),
-   'Subhalo_RadialMassFlux_SubfindWithFuzz_Wind' : partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz'),
-   'Subhalo_RadialMassFlux_Global_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='global'),
-   'Subhalo_RadialMassFlux_Global_Wind' : partial(instantaneousMassFluxes,ptType='wind',scope='global'),
-
-   'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_MgII' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',massField='Mg II mass'),
-   'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_SiII' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',massField='Si II mass'),
-   'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_NaI' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',massField='Na I mass'),
-
-   'Subhalo_RadialMass2DProj_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',
-                                                            rawMass=True,fluxMass=False,proj2D=True),
-   'Subhalo_RadialMass2DProj_SubfindWithFuzz_Wind' : partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',
-                                                             rawMass=True,fluxMass=False,proj2D=True),
-   'Subhalo_RadialMass2DProj_SubfindWithFuzz_Gas_SiII' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',
-                                                             rawMass=True,fluxMass=False,proj2D=True,massField='Si II mass'),
-   'Subhalo_RadialMass_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',rawMass=True,fluxMass=False),
-
-   'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr' : partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous'),
-   'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-50myr' : partial(massLoadingsSN,sfr_timescale=50,outflowMethod='instantaneous'),
-   'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-10myr' : partial(massLoadingsSN,sfr_timescale=10,outflowMethod='instantaneous'),
-
-   'Subhalo_MassLoadingSN_MgII_SubfindWithFuzz_SFR-100myr' : partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous',massField='MgII'),
-   'Subhalo_MassLoadingSN_MgII_SubfindWithFuzz_SFR-50myr' : partial(massLoadingsSN,sfr_timescale=50,outflowMethod='instantaneous',massField='MgII'),
-   'Subhalo_MassLoadingSN_MgII_SubfindWithFuzz_SFR-10myr' : partial(massLoadingsSN,sfr_timescale=10,outflowMethod='instantaneous',massField='MgII'),
-
-   'Subhalo_RadialEnergyFlux_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',fluxKE=True,fluxMass=False),
-   'Subhalo_RadialEnergyFlux_SubfindWithFuzz_Wind' : partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',fluxKE=True,fluxMass=False),
-   'Subhalo_RadialMomentumFlux_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',fluxP=True,fluxMass=False),
-   'Subhalo_RadialMomentumFlux_SubfindWithFuzz_Wind' : partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',fluxP=True,fluxMass=False),
-   'Subhalo_EnergyLoadingSN_SubfindWithFuzz' : partial(massLoadingsSN,outflowMethod='instantaneous',fluxKE=True),
-   'Subhalo_MomentumLoadingSN_SubfindWithFuzz' : partial(massLoadingsSN,outflowMethod='instantaneous',fluxP=True),
-
-   'Subhalo_OutflowVelocity_SubfindWithFuzz' : partial(outflowVelocities),
-   'Subhalo_OutflowVelocity_MgII_SubfindWithFuzz' : partial(outflowVelocities,massField='MgII'),
-   'Subhalo_OutflowVelocity_SiII_SubfindWithFuzz' : partial(outflowVelocities,massField='SiII'),
-   'Subhalo_OutflowVelocity_NaI_SubfindWithFuzz' : partial(outflowVelocities,massField='NaI'),
-
-   'Subhalo_OutflowVelocity2DProj_SubfindWithFuzz' : partial(outflowVelocities,proj2D=True),
-   'Subhalo_OutflowVelocity2DProj_SiII_SubfindWithFuzz' : partial(outflowVelocities,proj2D=True,massField='SiII'),
-
-   'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_v200norm' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',v200norm=True),
-   'Subhalo_RadialMassFlux_SubfindWithFuzz_Wind_v200norm' : partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',v200norm=True),
-   'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr_v200norm' : partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous',v200norm=True),
-   'Subhalo_OutflowVelocity_SubfindWithFuzz_v200norm' : partial(outflowVelocities,v200norm=True),
 
    'Subhalo_MgII_Emission_Grid2D_Shape' : partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='grid2d_isophot_shape',rad=None,scope='fof',cenSatSelect='cen',minStellarMass=7.0),
    'Subhalo_MgII_Emission_Grid2D_Area' : partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='grid2d_isophot_area',rad=None,scope='fof',cenSatSelect='cen',minStellarMass=7.0),

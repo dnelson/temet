@@ -11,10 +11,11 @@ from scipy.signal import savgol_filter
 from scipy.ndimage import gaussian_filter
 from scipy.stats import binned_statistic
 
-from ..vis.halo import renderSingleHalo, subsampleRandomSubhalos
+from ..vis.halo import renderSingleHalo
 from ..util.helper import running_median, sampleColorTable, loadColorTable, logZeroNaN, mvbe
 from ..plot.cosmoGeneral import quantMedianVsSecondQuant
 from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
+from ..cosmo.util import subsampleRandomSubhalos
 from ..plot.config import *
 from ..vis.common import _get_dist_theta_grid
 

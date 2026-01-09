@@ -10,6 +10,7 @@ from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 from os.path import isfile
 from matplotlib.colors import Normalize
+from functools import partial
 
 from ..cosmo.zooms import contamination_mindist
 from ..plot.cosmoGeneral import quantMedianVsSecondQuant
@@ -2362,3 +2363,22 @@ def paperPlots():
     # and https://arxiv.org/abs/2311.04867
     # in general: redshift evolution/buildup of some of the properties?
     # satellite property profiles (radial color trends?)
+
+# add auxcats
+from ..load.auxcat import fieldComputeFunctionMapping as ac
+
+ac['Subhalo_XrayLum_0.5-2.0kev_R500c_2D_d=r200'] = \
+  partial(summarize_projection_2d,quantity='xray_lum_0.5-2.0kev',projConf='2r200_d=r200', aperture='r500')
+ac['Subhalo_XrayOffset_2D'] = \
+  partial(summarize_projection_2d,quantity='xray_lum_0.5-2.0kev',projConf='0.5r500_d=3r200', op='peak_offset')
+ac['Subhalo_SZOffset_2D'] = \
+  partial(summarize_projection_2d,quantity='sz_yparam',projConf='0.5r500_d=3r200', op='peak_offset')
+
+ac['Subhalo_SZY_R500c_2D_d=r200'] = \
+     partial(summarize_projection_2d,quantity='sz_yparam',projConf='2r200_d=r200', aperture='r500')
+ac['Subhalo_SZY_R500c_2D_d=3r200'] = \
+     partial(summarize_projection_2d,quantity='sz_yparam',projConf='2r200_d=3r200', aperture='r500')
+ac['Subhalo_SZY_R500c_2D'] = \
+     partial(summarize_projection_2d,quantity='sz_yparam',projConf='r500_d=r500', aperture='r500')
+ac['Subhalo_SZY_R200c_2D'] = \
+     partial(summarize_projection_2d,quantity='sz_yparam',projConf='2r200_d=r200', aperture='r200')

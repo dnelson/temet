@@ -930,8 +930,8 @@ def bFieldStrengthComparison():
     hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
     ax.set_title('z=%.1f %s' % (redshift,hStr))
     ax.set_xlim(valMinMax)
-    ax.set_xlabel('Magnetic Field Magnitude [ log $\mu$G ]')
-    ax.set_ylabel('N$_{\\rm cells}$ PDF $\int=1$')
+    ax.set_xlabel(r'Magnetic Field Magnitude [ log $\mu$G ]')
+    ax.set_ylabel(r'N$_{\rm cells}$ PDF $\int=1$')
     ax.set_yscale('log')
 
     for sP in sPs:
@@ -1045,8 +1045,8 @@ def depletionVsDynamicalTimescale():
         ax.set_title(title)
         ax.set_xlim(mStarMinMax)
         ax.set_ylim(ratioMinMax)
-        ax.set_xlabel('M$_{\\rm star}$ [ log M$_\odot$ ]')
-        ax.set_ylabel('t$_{\\rm dyn}$ / t$_{\\rm dep}$')
+        ax.set_xlabel(r'M$_{\rm star}$ [ log M$_\odot$ ]')
+        ax.set_ylabel(r't$_{\rm dyn}$ / t$_{\rm dep}$')
 
         # 2d histo
         zz, xc, yc = np.histogram2d(m_star, t_dyn/t_dep, bins=[nBinsX, nBinsY], 
@@ -1082,8 +1082,8 @@ def depletionVsDynamicalTimescale():
         ax.set_title(title)
         ax.set_xlim(mStarMinMax)
         ax.set_ylim(tDepMinMax)
-        ax.set_xlabel('M$_{\\rm star}$ [ log M$_\odot$ ]')
-        ax.set_ylabel('t$_{\\rm dep}$ [ Gyr ]')
+        ax.set_xlabel(r'M$_{\rm star}$ [ log M$_\odot$ ]')
+        ax.set_ylabel(r't$_{\rm dep}$ [ Gyr ]')
 
         # 2d histo
         zz, xc, yc = np.histogram2d(m_star, t_dep, bins=[nBinsX, nBinsY], 

@@ -848,7 +848,7 @@ def galaxyLum(sim, haloID, b, aperture_kpc=10.0):
 
 def _get_subhalo_sample(sim, mstar_min=10.0, mstar_max=11.0, verbose=False):
     """ Define the main sample for ILTIS processing. """ 
-    from ..vis.halo import subsampleRandomSubhalos
+    from ..cosmo.util import subsampleRandomSubhalos
 
     # load
     mstar = sim.subhalos('mstar_30pkpc_log')

@@ -9,9 +9,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import gridspec
 from collections import OrderedDict
 
-from ..util.helper import running_median, logZeroNaN, sampleColorTable
+from ..util.helper import logZeroNaN, sampleColorTable, setAxisColors
 from ..cosmo.clustering import twoPointAutoCorrelationPeriodicCube, conformityRedFrac
-from ..vis.common import setAxisColors
 from ..tracer.tracerMC import match3
 from ..plot.config import *
 

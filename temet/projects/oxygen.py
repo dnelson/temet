@@ -17,13 +17,13 @@ from functools import partial
 from ..util import simParams
 from ..load.data import werk2013, johnson2015, berg2019, chen2018zahedy2019
 from ..plot.config import *
-from ..util.helper import running_median, logZeroNaN, iterable, contourf, loadColorTable, getWhiteBlackColors, closest, reducedChiSq
+from ..util.helper import running_median, logZeroNaN, iterable, contourf, loadColorTable, \
+    getWhiteBlackColors, setAxisColors, closest, reducedChiSq
 from ..cosmo.cloudy import cloudyIon
 from ..plot.general import plotPhaseSpace2D
 from ..plot.quantities import simSubhaloQuantity, bandMagRange, quantList
 from ..plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from ..plot.cloudy import ionAbundFracs2DHistos
-from ..vis.common import setAxisColors
 from ..cosmo.util import cenSatSubhaloIndices, redshiftToSnapNum, periodicDists
 from ..obs.galaxySample import obsMatchedSample, addIonColumnPerSystem, ionCoveringFractions
 

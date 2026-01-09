@@ -12,8 +12,7 @@ from ..plot.config import linestyles, figsize, lw
 
 def plotUsersData():
     """ Parse and plot a user data dump from the Illustris[TNG] public data release website. """
-    from ..vis.common import setAxisColors
-    from ..util.helper import getWhiteBlackColors
+    from ..util.helper import getWhiteBlackColors, setAxisColors
 
     # config
     col_headers = ["Date","NumUsers","Num30","NumLab","CountLogin","CountApi",
@@ -150,8 +149,7 @@ def plotNumPublicationsVsTime():
     from re import findall
     from time import mktime
     from datetime import datetime
-    from ..vis.common import setAxisColors
-    from ..util.helper import getWhiteBlackColors
+    from ..util.helper import getWhiteBlackColors, setAxisColors
 
     num_start = 10 # align 'time=0' after this number of publications have appeared
     xlim = [-0.6, 8.0] # years, [-3.2, 7.0] for num_start=100

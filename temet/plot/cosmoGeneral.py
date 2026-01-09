@@ -13,10 +13,9 @@ from scipy.stats import binned_statistic_2d
 
 from ..util import simParams
 from ..util.helper import running_median, running_median_sub, logZeroNaN, loadColorTable, \
-       getWhiteBlackColors, sampleColorTable, binned_stat_2d, lowess, iterable
-from ..cosmo.color import calcMstarColor2dKDE
-from ..vis.common import setAxisColors, setColorbarColors
-from ..vis.halo import subsampleRandomSubhalos
+       getWhiteBlackColors, sampleColorTable, binned_stat_2d, lowess, iterable, kde_2d, \
+       setAxisColors, setColorbarColors
+from ..cosmo.util import subsampleRandomSubhalos
 from ..plot.quantities import quantList
 from ..plot.config import *
 
@@ -417,8 +416,7 @@ def quantHisto2D(sP, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=Non
         simColorsModel = colorModelNames[model]
         bands = [bands[0],bands[1]]
 
-        xx, yy, kde_sim = calcMstarColor2dKDE(bands, sim_xvals, sim_yvals, xMinMax, yMinMax, 
-                                              sP=sP, simColorsModel=simColorsModel)
+        xx, yy, kde_sim = kde_2d(sim_xvals, sim_yvals, xMinMax, yMinMax)
 
         for k in range(kde_sim.shape[0]):
             kde_sim[k,:] /= kde_sim[k,:].max() # by column normalization
@@ -462,7 +460,7 @@ def quantHisto2D(sP, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=Non
 
         color = sampleColorTable('tableau10','purple')
         ax.plot(xMinMax, [f_b,f_b], '--', color=color, lw=lwMed)
-        ax.text(np.mean(ax.get_xlim()), f_b+0.05, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', color=color, size=17)
+        ax.text(np.mean(ax.get_xlim()), f_b+0.05, r'$\Omega_{\\rm b} / \Omega_{\\rm m}$', color=color, size=17)
 
     if yQuant in ['BH_CumEgy_low','BH_CumEgy_high']:
         # add approximate halo binding energy line = (3/5)*GM^2/R
@@ -603,7 +601,7 @@ def quantSlice1D(sPs, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', yRel=
                 assert yLog is False # otherwise handle in a general way (and maybe undo?)
                 if len(yRel) == 3:
                     yMinMax[0], yMinMax[1], yLog = yRel
-                    ylabel = '$\Delta$ ' + ylabel.split('[')[0] + ('[ log ]' if yLog else '')
+                    ylabel = r'$\Delta$ ' + ylabel.split('[')[0] + ('[ log ]' if yLog else '')
                 if len(yRel) == 4:
                     yMinMax[0], yMinMax[1], yLog, ylabel = yRel
                 
@@ -1086,7 +1084,7 @@ def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=No
                             cc = logZeroNaN(cc)
 
                         ct = 'curl' # diverging
-                        clabel = '$\Delta$ ' + clabel.split('[')[0] + ('[ log ]' if cLog else '')
+                        clabel = r'$\Delta$ ' + clabel.split('[')[0] + ('[ log ]' if cLog else '')
 
                     if maxPointsPerDex is not None:
                         inds, _ = subsampleRandomSubhalos(sP, maxPointsPerDex, xMinMax, mstar=xx)

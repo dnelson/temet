@@ -16,7 +16,7 @@ from scipy.ndimage import gaussian_filter
 from ..util.sphMap import sphMap
 from ..util.treeSearch import calcHsml
 from ..util.voronoiRay import rayTrace
-from ..util.helper import loadColorTable, logZeroMin, logZeroNaN, pSplitRange
+from ..util.helper import loadColorTable, logZeroMin, logZeroNaN, pSplitRange, setAxisColors, setColorbarColors
 from ..util.boxRemap import remapPositions
 from ..util.rotation import rotateCoordinateArray, perspectiveProjection
 from ..cosmo.cloudy import cloudyIon, cloudyEmission
@@ -3020,26 +3020,6 @@ def addContourOverlay(p, conf, ax):
     else:
         # automatic contour levels
         ax.contour(grid_x, grid_y, grid_c, **contourOpts)
-
-def setAxisColors(ax, color2, color1=None):
-    """ Factor out common axis color commands. """
-    if color1 is None: color1 = color2 # legacy
-    ax.set_facecolor(color1)
-    ax.title.set_color(color2)
-    ax.yaxis.label.set_color(color2)
-    ax.xaxis.label.set_color(color2)
-
-    for s in ['bottom','left','top','right']:
-        ax.spines[s].set_color(color2)
-    for a in ['x','y']:
-        ax.tick_params(axis=a, which='both', colors=color2)
-
-def setColorbarColors(cb, color2):
-    """ Factor out common colorbar color commands. """
-    cb.ax.yaxis.label.set_color(color2)
-    cb.outline.set_edgecolor(color2)
-    cb.ax.yaxis.set_tick_params(color=color2)
-    plt.setp(plt.getp(cb.ax.axes, 'yticklabels'), color=color2)
 
 def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
                        rowHeight, colWidth, bottomNorm, leftNorm, hOffset=None, cmap=None):

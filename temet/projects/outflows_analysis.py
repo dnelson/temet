@@ -100,7 +100,7 @@ def fit_vout():
 
             # plot
             x_mstar = data_z[0]['xm'][mass_ind] # log msun
-            label = 'M$_\star$ = %.2f' % x_mstar
+            label = r'M$_\star$ = %.2f' % x_mstar
             l, = ax.plot(xx, yy, '-', lw=lw, label=label) # np.log10(yy)
 
             # plot fit
@@ -1569,15 +1569,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
 
     return flux, mstar, ac['subhaloIDs'], binConfig, numBins, vcut_vals
 
-def tracerOutflowRates(sP):
-    """ For every subhalo, use the existing tracer_tracks catalogs to follow the evolution of all 
-    member tracers across adjacent snapshots to derive the mass fluxes. Then, bin as with the 
-    instantaneous method using the parent properties, either at sP.snap or interpolated to the 
-    times of interface crossing. """
-    import pdb; pdb.set_trace() # todo
-
-
-def massLoadingsSN(sP, pSplit, sfr_timescale=100, outflowMethod='instantaneous', scope='SubfindWithFuzz', thirdQuant=None, 
+def massLoadingsSN(sP, pSplit, sfr_timescale=100, scope='SubfindWithFuzz', thirdQuant=None, 
                    massField='Masses', fluxKE=False, fluxP=False, v200norm=False):
     """ For every subhalo, compute one of:
     * mass loading factor ``eta_M^SN = eta_M = Mdot_out / SFR``. 
@@ -1590,7 +1582,6 @@ def massLoadingsSN(sP, pSplit, sfr_timescale=100, outflowMethod='instantaneous',
       sP (:py:class:`~util.simParams`): simulation instance.
       pSplit (list[int][2]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total].
       sfr_timescale (float): the star formation rates can be instantaneous or smoothed over some appropriate timescale. 
-      outflowMethod (str): instantaneous Eulerian or tracer-based Lagrangian analysis technique.
       scope (str): analysis scope, can be one of 'subhalo', 'subhalo_wfuzz', or 'global' (slow).
       thirdQuant (str): if not None, then can be one of (temp,z_solar,numdens,theta), in which the 
         dependence on this parameter is given instead of integrated over, and the return has one more dimension. 
@@ -1614,31 +1605,26 @@ def massLoadingsSN(sP, pSplit, sfr_timescale=100, outflowMethod='instantaneous',
 
     params = {'thirdQuant':thirdQuant, 'massField':massField, 'fluxKE':fluxKE, 'fluxP':fluxP, 'v200norm':v200norm}
 
-    if outflowMethod == 'instantaneous':
-        # load fluxes of gas cells as well as wind-phase gas particles
-        gas_mdot, _, ac_subhaloIDs, gas_binconf, gas_nbins, gas_vcutvals = loadRadialMassFluxes(sP, scope, 'Gas', **params)
+    # load fluxes of gas cells as well as wind-phase gas particles
+    gas_mdot, _, ac_subhaloIDs, gas_binconf, gas_nbins, gas_vcutvals = loadRadialMassFluxes(sP, scope, 'Gas', **params)
 
-        if massField == 'Masses':
-            wind_mdot, _, wind_subids, wind_binconf, wind_nbins, wind_vcutvals = loadRadialMassFluxes(sP, scope, 'Wind', **params)
+    if massField == 'Masses':
+        wind_mdot, _, wind_subids, _, _, _ = loadRadialMassFluxes(sP, scope, 'Wind', **params)
 
-            assert np.array_equal(ac_subhaloIDs, wind_subids)
-            assert gas_mdot.shape == wind_mdot.shape
+        assert np.array_equal(ac_subhaloIDs, wind_subids)
+        assert gas_mdot.shape == wind_mdot.shape
 
-            # sum the two
-            outflow_rates = gas_mdot + wind_mdot
-        else:
-            # gas mass sub-component (phase), so no analogy in wind (i.e. current model assumption: wind particles have no ionic mass)
-            outflow_rates = gas_mdot
+        # sum the two
+        outflow_rates = gas_mdot + wind_mdot
+    else:
+        # gas mass sub-component (phase), so no analogy in wind (i.e. current model assumption: wind particles have no ionic mass)
+        outflow_rates = gas_mdot
 
-        # prepare metadata
-        binConfig = 'none' if thirdQuant is None else gas_binconf[thirdQuant]
-        numBins   = 'none' if thirdQuant is None else gas_nbins[thirdQuant]
+    # prepare metadata
+    binConfig = 'none' if thirdQuant is None else gas_binconf[thirdQuant]
+    numBins   = 'none' if thirdQuant is None else gas_nbins[thirdQuant]
 
-        attrs = {'binConfig':binConfig, 'numBins':numBins, 'rad':gas_binconf['rad'], 'vcut_vals':gas_vcutvals}
-
-    elif outFlowMethod == 'tracer_shell_crossing':
-        outflow_rates = tracerOutflowRates(sP)
-        ac_subhaloIDs = None
+    attrs = {'binConfig':binConfig, 'numBins':numBins, 'rad':gas_binconf['rad'], 'vcut_vals':gas_vcutvals}
 
     # cross-match with group catalog
     gcIDs = np.arange(0, sP.numSubhalos)
@@ -1815,3 +1801,48 @@ def run():
         # TNG50_3 test
         sel = halo_selection(TNG50_3, minM200=12.0)
         haloTimeEvoDataFullbox(TNG50_3, haloInds=sel['haloInds'][0:20])
+
+# add auxcats
+from ..load.auxcat import fieldComputeFunctionMapping as ac
+
+ac['Subhalo_RadialMassFlux_SubfindWithFuzz_Gas'] = partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz')
+ac['Subhalo_RadialMassFlux_SubfindWithFuzz_Wind'] = partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz')
+ac['Subhalo_RadialMassFlux_Global_Gas'] = partial(instantaneousMassFluxes,ptType='gas',scope='global')
+ac['Subhalo_RadialMassFlux_Global_Wind'] = partial(instantaneousMassFluxes,ptType='wind',scope='global')
+
+ac['Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_MgII'] = partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',massField='Mg II mass')
+ac['Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_SiII'] = partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',massField='Si II mass')
+ac['Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_NaI'] = partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',massField='Na I mass')
+
+ac['Subhalo_RadialMass2DProj_SubfindWithFuzz_Gas'] = partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',
+                                                            rawMass=True,fluxMass=False,proj2D=True)
+ac['Subhalo_RadialMass2DProj_SubfindWithFuzz_Wind'] = partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',
+                                                             rawMass=True,fluxMass=False,proj2D=True)
+ac['Subhalo_RadialMass2DProj_SubfindWithFuzz_Gas_SiII'] = partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',
+                                                             rawMass=True,fluxMass=False,proj2D=True,massField='Si II mass')
+ac['Subhalo_RadialMass_SubfindWithFuzz_Gas'] = partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',rawMass=True,fluxMass=False)
+ac['Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr'] = partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous')
+ac['Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-50myr'] = partial(massLoadingsSN,sfr_timescale=50,outflowMethod='instantaneous')
+ac['Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-10myr'] = partial(massLoadingsSN,sfr_timescale=10,outflowMethod='instantaneous')
+
+ac['Subhalo_MassLoadingSN_MgII_SubfindWithFuzz_SFR-100myr'] = partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous',massField='MgII')
+ac['Subhalo_MassLoadingSN_MgII_SubfindWithFuzz_SFR-50myr'] = partial(massLoadingsSN,sfr_timescale=50,outflowMethod='instantaneous',massField='MgII')
+ac['Subhalo_MassLoadingSN_MgII_SubfindWithFuzz_SFR-10myr'] = partial(massLoadingsSN,sfr_timescale=10,outflowMethod='instantaneous',massField='MgII')
+
+ac['Subhalo_RadialEnergyFlux_SubfindWithFuzz_Gas'] = partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',fluxKE=True,fluxMass=False)
+ac['Subhalo_RadialEnergyFlux_SubfindWithFuzz_Wind'] = partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',fluxKE=True,fluxMass=False)
+ac['Subhalo_RadialMomentumFlux_SubfindWithFuzz_Gas'] = partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',fluxP=True,fluxMass=False)
+ac['Subhalo_RadialMomentumFlux_SubfindWithFuzz_Wind'] = partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',fluxP=True,fluxMass=False)
+ac['Subhalo_EnergyLoadingSN_SubfindWithFuzz'] = partial(massLoadingsSN,outflowMethod='instantaneous',fluxKE=True)
+ac['Subhalo_MomentumLoadingSN_SubfindWithFuzz'] = partial(massLoadingsSN,outflowMethod='instantaneous',fluxP=True)
+ac['Subhalo_OutflowVelocity_SubfindWithFuzz'] = partial(outflowVelocities)
+ac['Subhalo_OutflowVelocity_MgII_SubfindWithFuzz'] = partial(outflowVelocities,massField='MgII')
+ac['Subhalo_OutflowVelocity_SiII_SubfindWithFuzz'] = partial(outflowVelocities,massField='SiII')
+ac['Subhalo_OutflowVelocity_NaI_SubfindWithFuzz'] = partial(outflowVelocities,massField='NaI')
+ac['Subhalo_OutflowVelocity2DProj_SubfindWithFuzz'] = partial(outflowVelocities,proj2D=True)
+ac['Subhalo_OutflowVelocity2DProj_SiII_SubfindWithFuzz'] = partial(outflowVelocities,proj2D=True,massField='SiII')
+
+ac['Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_v200norm'] = partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',v200norm=True)
+ac['Subhalo_RadialMassFlux_SubfindWithFuzz_Wind_v200norm'] = partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',v200norm=True)
+ac['Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr_v200norm'] = partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous',v200norm=True)
+ac['Subhalo_OutflowVelocity_SubfindWithFuzz_v200norm'] = partial(outflowVelocities,v200norm=True)
