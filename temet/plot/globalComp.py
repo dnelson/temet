@@ -1359,10 +1359,8 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
 
         # testing
         if sdssFiberFits and sP.simName == 'TNG100-1':
-            from ..plot.general import simSubhaloQuantity
-
             sP.setRedshift(0.1)
-            yy, _, _, _ = simSubhaloQuantity(sP, 'fiber_logzsol')
+            yy = sP.subhalos('fiber_logzsol')
             yy = yy[w]
 
             # only include subhalos with non-nan age entries (e.g. at least 1 real star within radial cut)
@@ -2046,10 +2044,8 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
 
         # testing
         if sdssFiberFits and sP.simName == 'TNG100-1':
-            from ..plot.general import simSubhaloQuantity
-
             sP.setRedshift(0.1)
-            yy, _, _, _ = simSubhaloQuantity(sP, 'fiber_tage')
+            yy = sP.subhalos('fiber_tage')
             yy = yy[w]
 
             # only include subhalos with non-nan age entries (e.g. at least 1 real star within radial cut)
@@ -2098,7 +2094,7 @@ def haloXrayLum(sPs, pdf=None, xlim=[10,12], ylim=[38,45], bolometric=False):
 
     # config
     xQuant = 'mstar_30pkpc'
-    yQuant = 'xray_0.5-2.0kev_r500_halo' if not bolometric else 'xray_r500'
+    yQuant = 'xray_05_2kev_r500_halo' if not bolometric else 'xray_r500'
 
     cenSatSelect  = 'cen'
     scatterPoints = any([sP.simName == 'TNG-Cluster' for sP in sPs]) # TNG-Cluster (+TNG300)

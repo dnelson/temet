@@ -1419,7 +1419,7 @@ def XrayLum_vs_halomass(sPs):
     markersize = 40.0
     sizefac = 0.8 # for single column figure
 
-    yQuant = 'xray_0.5-2.0kev_r500_halo' # 2D: 'xraylum_r500c_2d' (only for TNG-Cluster)
+    yQuant = 'xray_05_2kev_r500_halo' # 2D: 'xraylum_r500c_2d' (only for TNG-Cluster)
     ylim = [42.8, 46.0]
     scatterColor = None
 
@@ -2005,7 +2005,7 @@ def halo_properties_table(sim):
                              'peakoffset_xray_x','peakoffset_xray_y','peakoffset_xray_z',
                              'peakoffset_sz_x','peakoffset_sz_y','peakoffset_sz_z'])
 
-    for field in ['fgas_r500','sfr_30pkpc_log','xray_0.5-2.0kev_r500_halo_log']:
+    for field in ['fgas_r500','sfr_30pkpc_log','xray_05_2kev_r500_halo_log']:
         quant, _, _, _ = sim.simSubhaloQuantity(field)
         subhalos[field] = quant
 
@@ -2080,7 +2080,7 @@ def halo_properties_table(sim):
             'sfr_30pkpc':[subhalos['sfr_30pkpc_log'], # [12]
                           'Star formation rate within 30 pkpc (nan indicates an upper limit of -3.0) [log M$_\\odot$ / yr]',
                           '%5.2f'],
-            'xray_0.5-2.0kev':[subhalos['xray_0.5-2.0kev_r500_halo_log'], # [13]
+            'xray_05_2kev':[subhalos['xray_05_2kev_r500_halo_log'], # [13]
                                'X-ray luminosity 0.5-2 keV soft-band, within r500c in 3D [log erg/s]',
                                '%5.2f'],
             'szy_r500c':[subhalos['szy_r500c_3d_log'], # [14]
@@ -2239,7 +2239,7 @@ def halo_properties_table(sim):
         line += '%5.3f & %5.2f & %5.2f & ' % \
             (subhalos['fgas_r500'][i],subhalos['sfr_30pkpc_log'][i],subhalos['mass_smbh_log'][i])
         line += '%5.2f & %5.2f & %4.2f & %3d & %3s' % \
-            (subhalos['xray_0.5-2.0kev_r500_halo_log'][i],subhalos['szy_r500c_3d_log'][i],
+            (subhalos['xray_05_2kev_r500_halo_log'][i],subhalos['szy_r500c_3d_log'][i],
             subhalos['zform'][i],halos['richness_10.5'][i],cc_str[int(subhalos['coolcore_flag'][i])])
         line += ' \\\\\n'
 

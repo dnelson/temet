@@ -7,6 +7,7 @@ from . import data
 from . import groupcat
 from . import groupcat_fields_custom
 from . import groupcat_fields_aux
+from . import groupcat_fields_post
 from . import simtxt
 from . import snapshot
 from . import snap_fields

@@ -1233,7 +1233,7 @@ def plots():
 def plots_explore(sP):
     """ Driver (exploration 2D histograms, vary over all known quantities as y-axis). """
     cQuants = ['slit_vsigma_halpha','slit_vrot_halpha','slit_voversigma_halpha',
-               'slit_vsigma_starlight','slit_vrot_starlight','slit_voversigma_starlight']
+               'slit_vsigma_stars','slit_vrot_stars','slit_voversigma_stars']
 
     css = 'cen' #['cen','sat','all']
 
@@ -1327,7 +1327,7 @@ def plots4():
     sPs.append( simParams(run='tng100-1', redshift=0.0) )
 
     xQuant = 'mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
-    yQuant = 'xray_0.5-2.0kev_r500'
+    yQuant = 'xray_05_2kev_r500'
     scatterColor = 'ssfr' #'size_gas' #'M_bulge_counter_rot' # 'size_stars'
     cenSatSelect = 'cen'
     filterFlag = False #True

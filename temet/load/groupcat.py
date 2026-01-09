@@ -587,3 +587,16 @@ def groupCatOffsetListIntoSnap(sP):
     print('Wrote: ' + saveFilename)
 
     return r
+
+def groupOrderedValsToSubhaloOrdered(vals_group, sP):
+    """ For an input array of size equal to the number of FoF groups, re-index these 
+    placing each value into the subhalo index of the group's central. Non-centrals 
+    are left at NaN value. """
+    groupFirstSubs = sP.groupCat(fieldsHalos=['GroupFirstSub'])
+    assert groupFirstSubs.shape == vals_group.shape
+
+    vals_sub = np.zeros( sP.numSubhalos, dtype='float64' )
+    vals_sub.fill(np.nan)
+    vals_sub[groupFirstSubs] = vals_group
+
+    return vals_sub
