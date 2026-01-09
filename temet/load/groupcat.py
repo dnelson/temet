@@ -178,12 +178,9 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
             quantName = quant.lower().replace("_log","")
 
             # does (exact) field name exist in custom field registry?
-            partType = 'subhalo' # completely redundant? can remove?
-            kwargs = None # never used? can remove?
-
             if quantName in custom_cat_fields:
                 # yes: load/compute now
-                data = custom_cat_fields[quantName](sP, partType, quantName, kwargs)
+                data = custom_cat_fields[quantName](sP, quantName)
 
                 # if return is None, then this is a fall-through to a normal load
                 if data is not None:
@@ -194,7 +191,7 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 for search_key in custom_cat_multi_fields:
                     # requested field contains search key?
                     if search_key in quantName:
-                        r[field] = custom_cat_multi_fields[search_key](sP, partType, quantName, kwargs)
+                        r[field] = custom_cat_multi_fields[search_key](sP, quantName)
 
             # log?
             if quant[-4:] == '_log':

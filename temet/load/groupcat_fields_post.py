@@ -10,7 +10,7 @@ from .groupcat import catalog_field, groupOrderedValsToSubhaloOrdered
 # ---------------------------- postprocessing/stellarassembly -----------------------------------------------
 
 @catalog_field(aliases=['massfrac_exsitu2', 'massfrac_insitu', 'massfrac_insitu2'])
-def massfrac_exsitu(sim, partType, field, args):
+def massfrac_exsitu(sim, field):
     """ Postprocessing/StellarAssembly: ex-situ or in-situ stellar mass fraction.
     Within the stellar half mass radius, unless '2' in field name, in which case within 2*rhalf. """
     inRadStr = '_in_rad' if '2' in field else ''
@@ -38,7 +38,7 @@ def massfrac_exsitu(sim, partType, field, args):
 
     return vals
 
-massfrac_exsitu.label = lambda sim,pt,f: r'%s Stellar Mass Fraction' % ('Ex-Situ' if '_exsitu' in f else 'In-Situ')
+massfrac_exsitu.label = lambda sim,f: r'%s Stellar Mass Fraction' % ('Ex-Situ' if '_exsitu' in f else 'In-Situ')
 massfrac_exsitu.units = '' # linear dimensionless
 massfrac_exsitu.limits = [0.0, 1.0]
 massfrac_exsitu.log = False
@@ -46,7 +46,7 @@ massfrac_exsitu.log = False
 # ---------------------------- postprocessing/mergerhistory -----------------------------------------------
 
 @catalog_field(multi='num_mergers_', alias='num_mergers')
-def num_mergers_(sim, partType, field, args):
+def num_mergers_(sim, field):
     """ Postprocessing/MergerHistory: number of major/minor mergers, within different time ranges. """
     # num_mergers, num_mergers_{major,minor}, num_mergers_{major,minor}_{250myr,500myr,gyr,z1,z2}
     filePath = sim.postPath + '/MergerHistory/MergerHistory_%03d.hdf5' % (sim.snap)
@@ -84,13 +84,13 @@ def num_mergers_(sim, partType, field, args):
 
     return vals
 
-num_mergers_.label = lambda sim,pt,f: r'Number of Mergers (%s)' % ('-'.join(f.split('_')[2:]))
+num_mergers_.label = lambda sim,f: r'Number of Mergers (%s)' % ('-'.join(f.split('_')[2:]))
 num_mergers_.units = '' # linear dimensionless
 num_mergers_.limits = [0, 10]
 num_mergers_.log = False
 
 @catalog_field
-def mergers_mean_fgas(sim, partType, field, args):
+def mergers_mean_fgas(sim, field):
     """ Postprocessing/MergerHistory: mean property ('cold' i.e. star-forming gas fraction) of mergers.
     Weighted by the maximum stellar mass of the secondary progenitors. """
     filePath = sim.postPath + '/MergerHistory/MergerHistory_%03d.hdf5' % (sim.snap)
@@ -107,7 +107,7 @@ mergers_mean_fgas.limits = [-2.0, 0.0]
 mergers_mean_fgas.log = True
 
 @catalog_field
-def mergers_mean_z(sim, partType, field, args):
+def mergers_mean_z(sim, field):
     """ Postprocessing/MergerHistory: mean property (redshift) of all mergers this subhalo gas undergone.
     Weighted by the maximum stellar mass of the secondary progenitors. """
     filePath = sim.postPath + '/MergerHistory/MergerHistory_%03d.hdf5' % (sim.snap)
@@ -124,7 +124,7 @@ mergers_mean_z.limits = [0.0, 6.0]
 mergers_mean_z.log = False
 
 @catalog_field
-def mergers_mean_mu(sim, partType, field, args):
+def mergers_mean_mu(sim, field):
     """ Postprocessing/MergerHistory: mean property (stellar mass ratio) of mergers.
     Weighted by the maximum stellar mass of the secondary progenitors. """
     filePath = sim.postPath + '/MergerHistory/MergerHistory_%03d.hdf5' % (sim.snap)
@@ -143,7 +143,7 @@ mergers_mean_mu.log = False
 # ---------------------------- postprocessing/lgalaxies -----------------------------------------------
 
 @catalog_field(multi='lgal_')
-def lgal_(sim, partType, field, args):
+def lgal_(sim, field):
     """ Postprocessing/L-Galaxies: (H15) run on dark matter only analog, automatically cross-matched to the
     TNG run such that return has the same shape as sP.numSubhalos (unmatched TNG subs = NaN).
     Examples: LGal_StellarMass, LGal_HotGasMass, LGal_Type, LGal_XrayLum, ...
@@ -190,7 +190,7 @@ def lgal_(sim, partType, field, args):
 
     return vals
 
-lgal_.label = lambda sim,pt,f: r'L-Galaxies (%s)' % (f.split('_', max=1)[1])
+lgal_.label = lambda sim,f: r'L-Galaxies (%s)' % (f.split('_', max=1)[1])
 lgal_.units = '' # variable (todo)
 lgal_.limits = [] # variable (todo)
 lgal_.log = False # variable (todo)
@@ -214,7 +214,7 @@ def _coolcore_load(sim, field):
     return vals
 
 @catalog_field
-def coolcore_flag(sim, partType, field, args):
+def coolcore_flag(sim, field):
     """ Postprocessing/coolcore_criteria: flag (0=SCC, 1=WCC, 2=NCC) based on Lehle+24 central cooling time fiducial definition. """
     return _coolcore_load(sim, 'centralCoolingTime_flag')
 
@@ -224,7 +224,7 @@ coolcore_flag.limits = [0.0, 2.0]
 coolcore_flag.log = False
 
 @catalog_field(alias='tcool0')
-def coolcore_tcool(sim, partType, field, args):
+def coolcore_tcool(sim, field):
     """ Postprocessing/coolcore_criteria: Lehle+24 central cooling time. """
     return _coolcore_load(sim, 'centralCoolingTime')
 
@@ -234,7 +234,7 @@ coolcore_tcool.limits = [0.0, 10.0]
 coolcore_tcool.log = False
 
 @catalog_field(alias='K0')
-def coolcore_entropy(sim, partType, field, args):
+def coolcore_entropy(sim, field):
     """ Postprocessing/coolcore_criteria: Lehle+24 central cooling time. """
     return _coolcore_load(sim, 'centralEntropy')
 
@@ -244,7 +244,7 @@ coolcore_entropy.limits = [1.0, 2.5]
 coolcore_entropy.log = True
 
 @catalog_field
-def coolcore_ne(sim, partType, field, args):
+def coolcore_ne(sim, field):
     """ Postprocessing/coolcore_criteria: Lehle+24 central electron number density. """
     return _coolcore_load(sim, 'centralNumDens')
 
@@ -254,7 +254,7 @@ coolcore_ne.limits = [-3.0, 1.0]
 coolcore_ne.log = True
 
 @catalog_field
-def coolcore_ne_slope(sim, partType, field, args):
+def coolcore_ne_slope(sim, field):
     """ Postprocessing/coolcore_criteria: Lehle+24 central slope of number density. """
     return _coolcore_load(sim, 'slopeNumDens')
 
@@ -264,7 +264,7 @@ coolcore_ne_slope.limits = [0.0, 1.0]
 coolcore_ne_slope.log = False
 
 @catalog_field
-def coolcore_c_phys(sim, partType, field, args):
+def coolcore_c_phys(sim, field):
     """ Postprocessing/coolcore_criteria: Lehle+24 X-ray concentration (40kpc vs 400kpc), physical. """
     return _coolcore_load(sim, 'concentrationPhys')
 
@@ -274,7 +274,7 @@ coolcore_c_phys.limits = [0.0, 1.0]
 coolcore_c_phys.log = False
 
 @catalog_field
-def coolcore_c_scaled(sim, partType, field, args):
+def coolcore_c_scaled(sim, field):
     """ Postprocessing/coolcore_criteria: Lehle+24 X-ray concentration (40kpc vs 400kpc), scaled. """
     return _coolcore_load(sim, 'concentrationScaled')
 
@@ -284,7 +284,7 @@ coolcore_c_scaled.limits = [0.0, 1.0]
 coolcore_c_scaled.log = False
 
 @catalog_field(aliases=['peakoffset_xray_x','peakoffset_xray_y','peakoffset_xray_z'])
-def peakoffset_xray(sim, partType, field, args):
+def peakoffset_xray(sim, field):
     """ Postprocessing/released: Nelson+24 offsets of X-ray peaks. [pkpc] """
     filePath = sim.postPath + '/released/XrayOffsets_%03d.hdf5' % sim.snap
 
@@ -316,7 +316,7 @@ peakoffset_xray.limits = [-1.5, 2.5]
 peakoffset_xray.log = True
 
 @catalog_field(aliases=['peakoffset_sz_x','peakoffset_sz_y','peakoffset_sz_z'])
-def peakoffset_sz(sim, partType, field, args):
+def peakoffset_sz(sim, field):
     """ Postprocessing/released: Nelson+24 offsets of SZ peaks. [pkpc] """
     filePath = sim.postPath + '/released/SZOffsets_%03d.hdf5' % sim.snap
 
@@ -350,7 +350,7 @@ peakoffset_sz.log = True
 # ---------------------------- postprocessing/circularities -----------------------------------------------
 
 @catalog_field(aliases=['fcirc','fcirc_10re_eps07o'])
-def fcirc_all_eps07o(sim, partType, field, args):
+def fcirc_all_eps07o(sim, field):
     """ Postprocessing/circularities/: fraction of disk-stars (circularity > 0.7), all stars in subhalo. """
     sel_str = 'allstars' if 'all_' in field else '10Re'
     basePath = sim.postPath + '/circularities/circularities_aligned_%s' % sel_str
@@ -376,7 +376,7 @@ fcirc_all_eps07o.limits = [0.0, 0.8]
 fcirc_all_eps07o.log = False
 
 @catalog_field(aliases=['fcirc_10re_eps07m'])
-def fcirc_all_eps07m(sim, partType, field, args):
+def fcirc_all_eps07m(sim, field):
     """ Postprocessing/circularities/: fraction of disk-stars (circularity > 0.7), all stars in subhalo. """
     sel_str = 'allstars' if 'all_' in field else '10Re'
     basePath = sim.postPath + '/circularities/circularities_aligned_%s' % sel_str
@@ -404,7 +404,7 @@ fcirc_all_eps07m.log = False
 # ---------------------------- postprocessing/galskitkinematics -----------------------------------------------
 
 @catalog_field
-def slit_vrot_halpha(sim, partType, field, args):
+def slit_vrot_halpha(sim, field):
     """ Postprocessing/galskitkinematics/: Disk rotation velocity based on H-alpha emission. """
     basePath = sim.postPath + '/galslitkinematics/'
     filePath = basePath + 'Subhalo_Halpha_slitKinematics_%03d.hdf5' % sim.snap
@@ -428,7 +428,7 @@ slit_vrot_halpha.limits = [50, 400]
 slit_vrot_halpha.log = False
 
 @catalog_field
-def slit_vrot_stars(sim, partType, field, args):
+def slit_vrot_stars(sim, field):
     """ Postprocessing/galskitkinematics/: Disk rotation velocity based on stellar light. """
     basePath = sim.postPath + '/galslitkinematics/'
     filePath = basePath + 'Subhalo_BuserVLum_slitKinematics_%03d.hdf5' % sim.snap
@@ -452,7 +452,7 @@ slit_vrot_stars.limits = [50, 400]
 slit_vrot_stars.log = False
 
 @catalog_field
-def slit_vsigma_halpha(sim, partType, field, args):
+def slit_vsigma_halpha(sim, field):
     """ Postprocessing/galskitkinematics/: Disk velocity dispersion based on H-alpha emission. """
     basePath = sim.postPath + '/galslitkinematics/'
     filePath = basePath + 'Subhalo_Halpha_slitKinematics_%03d.hdf5' % sim.snap
@@ -476,7 +476,7 @@ slit_vsigma_halpha.limits = [0, 100]
 slit_vsigma_halpha.log = False
 
 @catalog_field
-def slit_vsigma_stars(sim, partType, field, args):
+def slit_vsigma_stars(sim, field):
     """ Postprocessing/galskitkinematics/: Disk velocity dispersion based on stellar light. """
     basePath = sim.postPath + '/galslitkinematics/'
     filePath = basePath + 'Subhalo_BuserVLum_slitKinematics_%03d.hdf5' % sim.snap
@@ -500,7 +500,7 @@ slit_vsigma_stars.limits = [0, 100]
 slit_vsigma_stars.log = False
 
 @catalog_field
-def slit_voversigma_halpha(sim, partType, field, args):
+def slit_voversigma_halpha(sim, field):
     """ Postprocessing/galskitkinematics/: Disk rotational support (V/sigma) based on H-alpha emission. """
     vrot = sim.subhalos(field.replace('_voversigma','_vrot'))
     sigma = sim.subhalos(field.replace('_voversigma','_vsigma'))
@@ -520,7 +520,7 @@ slit_voversigma_halpha.limits = [0, 12]
 slit_voversigma_halpha.log = False
 
 @catalog_field
-def slit_voversigma_stars(sim, partType, field, args):
+def slit_voversigma_stars(sim, field):
     """ Postprocessing/galskitkinematics/: Disk rotational support (V/sigma) based on stellar light. """
     vrot = sim.subhalos(field.replace('_voversigma','_vrot'))
     sigma = sim.subhalos(field.replace('_voversigma','_vsigma'))
@@ -542,7 +542,7 @@ slit_voversigma_stars.log = False
 # ---------------------------- postprocessing/galsizes -----------------------------------------------
 
 @catalog_field
-def size2d_halpha(sim, partType, field, args):
+def size2d_halpha(sim, field):
     """ Postprocessing/galsizes/: Galaxy disk size (from 2D projection) based on H-alpha emission. """
     basePath = sim.postPath + '/galsizes/'
     filePath = basePath + 'Subhalo_Sizes_GalProjs_%03d.hdf5' % sim.snap
@@ -566,7 +566,7 @@ size2d_halpha.limits = [0, 1.2]
 size2d_halpha.log = True
 
 @catalog_field
-def size2d_stars(sim, partType, field, args):
+def size2d_stars(sim, field):
     """ Postprocessing/galsizes/: Galaxy disk size (from 2D projection) based on stellar light. """
     basePath = sim.postPath + '/galsizes/'
     filePath = basePath + 'Subhalo_Sizes_GalProjs_%03d.hdf5' % sim.snap
@@ -590,7 +590,7 @@ size2d_stars.limits = [0, 1.2]
 size2d_stars.log = True
 
 @catalog_field
-def diskheight2d_halpha(sim, partType, field, args):
+def diskheight2d_halpha(sim, field):
     """ Postprocessing/galsizes/: Galaxy disk scale-height (from 2D projection) based on H-alpha emission. """
     basePath = sim.postPath + '/galsizes/'
     filePath = basePath + 'Subhalo_DiskHeights_GalProjs_%03d.hdf5' % sim.snap
@@ -614,7 +614,7 @@ diskheight2d_halpha.limits = [-1.0, 0.2]
 diskheight2d_halpha.log = True
 
 @catalog_field
-def diskheight2d_stars(sim, partType, field, args):
+def diskheight2d_stars(sim, field):
     """ Postprocessing/galsizes/: Galaxy disk scale-height (from 2D projection) based on stellar light. """
     basePath = sim.postPath + '/galsizes/'
     filePath = basePath + 'Subhalo_DiskHeights_GalProjs_%03d.hdf5' % sim.snap
@@ -638,7 +638,7 @@ diskheight2d_stars.limits = [-1.0, 0.2]
 diskheight2d_stars.log = True
 
 @catalog_field
-def diskheightnorm2d_halpha(sim, partType, field, args):
+def diskheightnorm2d_halpha(sim, field):
     """ Postprocessing/galsizes/: Galaxy disk normalized scale-height (h/r) based on H-alpha emission. """
     height = sim.subhalos(field.replace('diskheightnorm2d_','diskheight2d_'))
     size = sim.subhalos(field.replace('diskheightnorm2d_','size2d_'))
@@ -658,7 +658,7 @@ diskheightnorm2d_halpha.limits = [0.0, 0.9]
 diskheightnorm2d_halpha.log = False
 
 @catalog_field
-def diskheightnorm2d_stars(sim, partType, field, args):
+def diskheightnorm2d_stars(sim, field):
     """ Postprocessing/galsizes/: Galaxy disk normalized scale-height (h/r) based on stellar light. """
     height = sim.subhalos(field.replace('diskheightnorm2d_','diskheight2d_'))
     size = sim.subhalos(field.replace('diskheightnorm2d_','size2d_'))
@@ -680,7 +680,7 @@ diskheightnorm2d_stars.log = False
 # ---------------------------- data.files/pillepich/ -----------------------------------------------
 
 @catalog_field
-def mstar_out_10kpc(sim, partType, field, args):
+def mstar_out_10kpc(sim, field):
     """ data.files/pillepich/: Stellar mass outside of 10 kpc. """
     basePath = sim.derivPath + '/pillepich/'
     filePath = basePath + 'Group_StellarMasses_%03d.hdf5' % sim.snap
@@ -733,7 +733,7 @@ def _tr_load(sim, quant, filePath, fieldName):
     return vals
 
 @catalog_field(multi='tr_zacc_mean_', alias='tr_zacc_mean')
-def tr_zacc_mean_(sim, partType, field, args):
+def tr_zacc_mean_(sim, field):
     """ Tracer tracks quantity: mean accretion redshift. (Optionally, specify 'mode=X' and/or 'par=Y'). """
     fieldName = 'Subhalo_Tracers_zAcc_mean'
     filePath = sim.derivPath + 'auxCat/%s_%03d.hdf5' % (fieldName,sim.snap)
@@ -748,7 +748,7 @@ tr_zacc_mean_.limits = [0, 3.5]
 tr_zacc_mean_.log = False
 
 @catalog_field(multi='tr_zacc_mean_over_zform_', alias='tr_zacc_mean_over_zform')
-def tr_zacc_mean_over_zform_(sim, partType, field, args):
+def tr_zacc_mean_over_zform_(sim, field):
     """ Tracer tracks quantity: mean accretion redshift normalized by halo formation redshift.
     (Optionally, specify 'mode=X' and/or 'par=Y'). """
     fieldName = 'Subhalo_Tracers_zAcc_mean_over_zForm'
@@ -768,7 +768,7 @@ tr_zacc_mean_over_zform_.limits = [0, 3.5]
 tr_zacc_mean_over_zform_.log = False
 
 @catalog_field(multi='tr_dthalo_mean_', alias='tr_dthalo_mean')
-def tr_dthalo_mean_(sim, partType, field, args):
+def tr_dthalo_mean_(sim, field):
     """ Tracer tracks quantity: mean halo-crossing time. (Optionally, specify 'mode=X' and/or 'par=Y'). """
     fieldName = 'Subhalo_Tracers_dtHalo_mean'
     filePath = sim.derivPath + 'auxCat/%s_%03d.hdf5' % (fieldName,sim.snap)
@@ -783,7 +783,7 @@ tr_dthalo_mean_.limits = [-0.2, 0.6]
 tr_dthalo_mean_.log = True
 
 @catalog_field(multi='tr_angmom_tacc_', alias='tr_angmom_tacc')
-def tr_angmom_tacc_(sim, partType, field, args):
+def tr_angmom_tacc_(sim, field):
     """ Tracer tracks quantity: angular momentum at accretion time (Optionally, specify 'mode=X' and/or 'par=Y'). """
     fieldName = 'Subhalo_Tracers_angMom_tAcc'
     filePath = sim.derivPath + 'auxCat/%s_%03d.hdf5' % (fieldName,sim.snap)
@@ -798,7 +798,7 @@ tr_angmom_tacc_.limits = [3.0, 5.0]
 tr_angmom_tacc_.log = False # auxCat() angmom vals are in log
 
 @catalog_field(multi='tr_entr_tacc_', alias='tr_entr_tacc')
-def tr_entr_tacc_(sim, partType, field, args):
+def tr_entr_tacc_(sim, field):
     """ Tracer tracks quantity: entropy at accretion time (Optionally, specify 'mode=X' and/or 'par=Y'). """
     fieldName = 'Subhalo_Tracers_entr_tAcc'
     filePath = sim.derivPath + 'auxCat/%s_%03d.hdf5' % (fieldName,sim.snap)
@@ -813,7 +813,7 @@ tr_entr_tacc_.limits = [7.0, 9.0]
 tr_entr_tacc_.log = False # auxCat() entr vals are in log
 
 @catalog_field(multi='tr_temp_tacc_', alias='tr_temp_tacc')
-def tr_temp_tacc_(sim, partType, field, args):
+def tr_temp_tacc_(sim, field):
     """ Tracer tracks quantity: temperature at accretion time (Optionally, specify 'mode=X' and/or 'par=Y'). """
     fieldName = 'Subhalo_Tracers_temp_tAcc'
     filePath = sim.derivPath + 'auxCat/%s_%03d.hdf5' % (fieldName,sim.snap)
@@ -830,7 +830,7 @@ tr_temp_tacc_.log = False # auxCat() temp vals are in log
 # ---------------------------- postprocessing/disperse -----------------------------------------------
 
 @catalog_field
-def d_minima(sim, partType, field, args):
+def d_minima(sim, field):
     """ Postprocessing/disperse/: Distance to nearest cosmic web structure (minima = void), from disperse. """
     basePath = sim.postPath + '/disperse/output_upskl/stel_subhalo/'
     filePath = basePath + 'subhalo_%s_S%d_M8-5_STEL.hdf5' % (sim.simName.split('-')[0], sim.snap)
@@ -851,7 +851,7 @@ d_minima.limits = [-2.0, 2.0]
 d_minima.log = True
 
 @catalog_field
-def d_node(sim, partType, field, args):
+def d_node(sim, field):
     """ Postprocessing/disperse/: Distance to nearest cosmic web structure (node = halo), from disperse. """
     basePath = sim.postPath + '/disperse/output_upskl/stel_subhalo/'
     filePath = basePath + 'subhalo_%s_S%d_M8-5_STEL.hdf5' % (sim.simName.split('-')[0], sim.snap)
@@ -872,7 +872,7 @@ d_node.limits = [-2.0, 2.0]
 d_node.log = True
 
 @catalog_field
-def d_skel(sim, partType, field, args):
+def d_skel(sim, field):
     """ Postprocessing/disperse/: Distance to nearest cosmic web structure (skel = filament), from disperse. """
     basePath = sim.postPath + '/disperse/output_upskl/stel_subhalo/'
     filePath = basePath + 'subhalo_%s_S%d_M8-5_STEL.hdf5' % (sim.simName.split('-')[0], sim.snap)

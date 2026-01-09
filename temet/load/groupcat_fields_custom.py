@@ -1,7 +1,6 @@
 """
 Definitions of custom catalog fields.
 """
-import h5py
 import numpy as np
 
 from .groupcat import catalog_field
@@ -12,7 +11,7 @@ from ..plot.quantities import bandMagRange
 # -------------------- subhalos: meta -------------------------------------------------------------
 
 @catalog_field(aliases=['subhalo_index','id','index'])
-def subhalo_id(sim, partType, field, args):
+def subhalo_id(sim, field):
     """ Subhalo ID/index. """
     assert '_log' not in field
 
@@ -24,7 +23,7 @@ subhalo_id.limits = [0, 7]
 subhalo_id.log = True
 
 @catalog_field(aliases=['cen_flag','is_cen','is_central'])
-def central_flag(sim, partType, field, args):
+def central_flag(sim, field):
     """ Subhalo central flag (1 if central, 0 if not). """
     assert '_log' not in field
 
@@ -43,7 +42,7 @@ central_flag.limits = [0, 1]
 central_flag.log = False
 
 @catalog_field
-def contam_frac(sim, partType, field, args):
+def contam_frac(sim, field):
     """ Subhalo contamination fraction (low-res DM to total DM particle count). """
     SubhaloLenType = sim.subhalos('SubhaloLenType')
 
@@ -61,7 +60,7 @@ contam_frac.limits = [0, 1]
 contam_frac.log = False
 
 @catalog_field
-def redshift(sim, partType, field, args):
+def redshift(sim, field):
     """ Redshift, i.e. constant for all subhalos. """
     vals = np.zeros(sim.numSubhalos, dtype='float32') + sim.redshift
                        
@@ -81,7 +80,7 @@ def mhalo_lim(sim,pt,f):
     if sim.boxSize < 50000: lim = [10.5, 13.5]
     return lim
 
-def _mhalo_load(sim, partType, field, args):
+def _mhalo_load(sim, field):
     """ Helper for the halo mass fields below. """
     haloField = 'Group_M_Crit200' # default for 'mhalo'
     
@@ -110,42 +109,42 @@ def _mhalo_load(sim, partType, field, args):
     return mhalo
 
 @catalog_field(aliases=['mhalo_200_code','mhalo_200_parent','m200','m200c','mhalo'])
-def mhalo_200(sim, partType, field, args):
+def mhalo_200(sim, field):
     """ Parent halo total mass (:math:`\\rm{M_{200,crit}}`).
     Only defined for centrals: satellites are assigned a value of nan (excluded by default), 
     unless '_parent' is specified in the field name, in which case satellites are given 
     the same host halo mass as their central."""
-    return _mhalo_load(sim, partType, field, args)
+    return _mhalo_load(sim, field)
 
-mhalo_200.label = lambda sim,pt,f: r'Halo Mass $\rm{M_{200c%s}}$' % (',parent' if '_parent' in f else '')
-mhalo_200.units = lambda sim,pt,f: r'$\rm{M_{sun}}$' if '_code' not in f else 'code_mass'
+mhalo_200.label = lambda sim,f: r'Halo Mass $\rm{M_{200c%s}}$' % (',parent' if '_parent' in f else '')
+mhalo_200.units = lambda sim,f: r'$\rm{M_{sun}}$' if '_code' not in f else 'code_mass'
 mhalo_200.limits = mhalo_lim
 mhalo_200.log = True
 
 @catalog_field(aliases=['mhalo_500_code','mhalo_500_parent','m500','m500c'])
-def mhalo_500(sim, partType, field, args):
+def mhalo_500(sim, field):
     """ Parent halo total mass (:math:`\\rm{M_{500,crit}}`).
     Only defined for centrals: satellites are assigned a value of nan (excluded by default)."""
-    return _mhalo_load(sim, partType, field, args)
+    return _mhalo_load(sim, field)
 
-mhalo_500.label = lambda sim,pt,f: r'Halo Mass $\rm{M_{500c%s}}$' % (',parent' if '_parent' in f else '')
-mhalo_500.units = lambda sim,pt,f: r'$\rm{M_{sun}}$' if '_code' not in f else 'code_mass'
+mhalo_500.label = lambda sim,f: r'Halo Mass $\rm{M_{500c%s}}$' % (',parent' if '_parent' in f else '')
+mhalo_500.units = lambda sim,f: r'$\rm{M_{sun}}$' if '_code' not in f else 'code_mass'
 mhalo_500.limits = mhalo_lim
 mhalo_500.log = True
 
 @catalog_field(aliases=['mhalo_vir_code','mhalo_vir_parent'])
-def mhalo_vir(sim, partType, field, args):
+def mhalo_vir(sim, field):
     """ Parent halo total mass (:math:`\\rm{M_{vir}}`). Defined by :math:`\\rm{M_{\\Delta}}` 
     where :math:`\\Delta` is the overdensity based on spherical tophat collapse.
     Only defined for centrals: satellites are assigned a value of nan (excluded by default)."""
-    return _mhalo_load(sim, partType, field, args)
+    return _mhalo_load(sim, field)
 
-mhalo_vir.label = lambda sim,pt,f: r'Halo Mass $\rm{M_{vir%s}}$' % (',parent' if '_parent' in f else '')
-mhalo_vir.units = lambda sim,pt,f: r'$\rm{M_{sun}}$' if '_code' not in f else 'code_mass'
+mhalo_vir.label = lambda sim,f: r'Halo Mass $\rm{M_{vir%s}}$' % (',parent' if '_parent' in f else '')
+mhalo_vir.units = lambda sim,f: r'$\rm{M_{sun}}$' if '_code' not in f else 'code_mass'
 mhalo_vir.limits = mhalo_lim
 mhalo_vir.log = True
 
-def _rhalo_load(sim, partType, field, args):
+def _rhalo_load(sim, field):
     """ Helper for the halo radii loads below. """
     rField = 'Group_R_Crit200' if '200' in field else 'Group_R_Crit500'
 
@@ -167,29 +166,29 @@ def _rhalo_load(sim, partType, field, args):
     return rad
 
 @catalog_field(aliases=['rhalo_200_code','rhalo_200_parent','rhalo','r200','rhalo_200','rvir'])
-def rhalo_200(sim, partType, field, args):
+def rhalo_200(sim, field):
     """ Parent halo virial radius (:math:`\\rm{R_{200,crit}}`).
     Only defined for centrals: satellites are assigned a value of nan (excluded by default)."""
-    return _rhalo_load(sim, partType, field, args)
+    return _rhalo_load(sim, field)
 
-rhalo_200.label = lambda sim,pt,f: r'$\rm{R_{halo,200c%s}}$' % (',parent' if '_parent' in f else '')
-rhalo_200.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
+rhalo_200.label = lambda sim,f: r'$\rm{R_{halo,200c%s}}$' % (',parent' if '_parent' in f else '')
+rhalo_200.units = lambda sim,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
 rhalo_200.limits = [1.0, 3.0]
 rhalo_200.log = True
 
 @catalog_field(aliases=['rhalo_500_code','rhalo_500_parent','r500','rhalo_500'])
-def rhalo_500(sim, partType, field, args):
+def rhalo_500(sim, field):
     """ Parent halo :math:`\\rm{R_{500,crit}}` radius.
     Only defined for centrals: satellites are assigned a value of nan (excluded by default)."""
-    return _rhalo_load(sim, partType, field, args)
+    return _rhalo_load(sim, field)
 
-rhalo_500.label = lambda sim,pt,f: r'$\rm{R_{halo,500c%s}}$' % (',parent' if '_parent' in f else '')
-rhalo_500.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
+rhalo_500.label = lambda sim,f: r'$\rm{R_{halo,500c%s}}$' % (',parent' if '_parent' in f else '')
+rhalo_500.units = lambda sim,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
 rhalo_500.limits = [1.0, 3.0]
 rhalo_500.log = True
 
 @catalog_field(aliases=['v200','vvir'])
-def vhalo(sim, partType, field, args):
+def vhalo(sim, field):
     """ Parent halo virial velocity (:math:`\\rm{V_{200}}`).
     Only defined for centrals: satellites are assigned a value of nan (excluded by default)."""
     gc = sim.groupCat(fieldsSubhalos=['mhalo_200_code','rhalo_200_code'])
@@ -201,7 +200,7 @@ vhalo.limits = [0, 200]
 vhalo.log = False
 
 @catalog_field(aliases=['halo_nsubs','nsubs','numsubs'])
-def halo_numsubs(sim, partType, field, args):
+def halo_numsubs(sim, field):
     """ Total number of subhalos in parent dark matter halo. A value of one implies only a 
     central subhalo exists, while a value of two indicates a central and one satellite, 
     and so on. Only defined for centrals: satellites are assigned a value of nan (excluded by default). """
@@ -237,7 +236,7 @@ virtemp.limits = [4.0, 7.0]
 virtemp.log = True
 
 @catalog_field(aliases=['rdist_code','rdist','rdist_rvir','distance_code','distance_rvir'])
-def distance(sim, partType, field, args):
+def distance(sim, field):
     """ Radial distance of satellites to center of parent halo (centrals have zero). """
     gc = sim.groupCat(fieldsHalos=['GroupPos','Group_R_Crit200'], 
                       fieldsSubhalos=['SubhaloPos','SubhaloGrNr'])
@@ -254,15 +253,15 @@ def distance(sim, partType, field, args):
 
     return dist
 
-distance.label = lambda sim,pt,f: r'Radial Distance' if '_rvir' not in f else r'R / R$_{\\rm vir,host}$'
-distance.units = lambda sim,pt,f: 'code_length' if '_code' in f else ('' if '_rvir' in f else r'$\rm{kpc}$')
-distance.limits = lambda sim,pt,f: [0.0, 2.0] if '_rvir' in f else [1.0, 3.5]
-distance.log = lambda sim,pt,f: True if '_rvir' not in f else False # linear for rvir normalized
+distance.label = lambda sim,f: r'Radial Distance' if '_rvir' not in f else r'R / R$_{\\rm vir,host}$'
+distance.units = lambda sim,f: 'code_length' if '_code' in f else ('' if '_rvir' in f else r'$\rm{kpc}$')
+distance.limits = lambda sim,f: [0.0, 2.0] if '_rvir' in f else [1.0, 3.5]
+distance.log = lambda sim,f: True if '_rvir' not in f else False # linear for rvir normalized
 
 # -------------------- subhalos: masses -----------------------------------------------------------
 
 @catalog_field
-def mhalo_subfind(sim, partType, field, args):
+def mhalo_subfind(sim, field):
     """ Parent dark matter (sub)halo total mass, defined by the gravitationally bound mass as determined by Subfind. """
     mhalo = sim.subhalos('SubhaloMass')
     return sim.units.codeMassToMsun(mhalo)
@@ -273,40 +272,40 @@ mhalo_subfind.limits = mhalo_lim
 mhalo_subfind.log = True
 
 @catalog_field
-def mstar1(sim, partType, field, args):
+def mstar1(sim, field):
     """ Galaxy stellar mass, measured within the stellar half mass radius. """
     mass = sim.subhalos('SubhaloMassInHalfRadType')[:,sim.ptNum('stars')]
     return sim.units.codeMassToMsun(mass)
 
 mstar1.label = r'$\rm{M_{\star}}$' # (<r_{\star,1/2})
 mstar1.units = r'$\rm{M_{sun}}$'
-mstar1.limits = lambda sim,pt,f: [9.0, 11.0] if sim.boxSize > 50000 else [8.0, 11.5]
+mstar1.limits = lambda sim,f: [9.0, 11.0] if sim.boxSize > 50000 else [8.0, 11.5]
 mstar1.log = True
 
 @catalog_field
-def mstar2(sim, partType, field, args):
+def mstar2(sim, field):
     """ Galaxy stellar mass, measured within *twice* the stellar half mass radius. """
     mass = sim.subhalos('SubhaloMassInRadType')[:,sim.ptNum('stars')]
     return sim.units.codeMassToMsun(mass)
 
 mstar2.label = r'$\rm{M_{\star}}$' # (<2r_{\star,1/2})
 mstar2.units = r'$\rm{M_{sun}}$'
-mstar2.limits = lambda sim,pt,f: [9.0, 11.0] if sim.boxSize > 50000 else [8.0, 11.5]
+mstar2.limits = lambda sim,f: [9.0, 11.0] if sim.boxSize > 50000 else [8.0, 11.5]
 mstar2.log = True
 
 @catalog_field
-def mstar_tot(sim, partType, field, args):
+def mstar_tot(sim, field):
     """ Galaxy stellar mass, total subhalo/subfind value. """
     mass = sim.subhalos('SubhaloMassType')[:,sim.ptNum('stars')]
     return sim.units.codeMassToMsun(mass)
 
 mstar_tot.label = r'$\rm{M_{\star}}$' # (subfind)
 mstar_tot.units = r'$\rm{M_{sun}}$'
-mstar_tot.limits = lambda sim,pt,f: [9.0, 11.5] if sim.boxSize > 50000 else [8.0, 12.0]
+mstar_tot.limits = lambda sim,f: [9.0, 11.5] if sim.boxSize > 50000 else [8.0, 12.0]
 mstar_tot.log = True
 
 @catalog_field
-def mstar_fof(sim, partType, field, args):
+def mstar_fof(sim, field):
     """ Galaxy stellar mass, total halo (FoF) value. All satellites have same value as their central. """
     halo_mstar = sim.halos('GroupMassType')[:,sim.ptNum('stars')]
     mass = halo_mstar[sim.subhalos('SubhaloGrNr')]
@@ -314,55 +313,55 @@ def mstar_fof(sim, partType, field, args):
 
 mstar_fof.label = r'$\rm{M_{\star,fof}}$'
 mstar_fof.units = r'$\rm{M_{sun}}$'
-mstar_fof.limits = lambda sim,pt,f: [9.5, 12.0] if sim.boxSize > 50000 else [8.5, 12.5]
+mstar_fof.limits = lambda sim,f: [9.5, 12.0] if sim.boxSize > 50000 else [8.5, 12.5]
 mstar_fof.log = True
 
 @catalog_field
-def mgas1(sim, partType, field, args):
+def mgas1(sim, field):
     """ Galaxy gas mass (all phases), measured within the stellar half mass radius. """
     mass = sim.subhalos('SubhaloMassInHalfRadType')[:,sim.ptNum('gas')]
     return sim.units.codeMassToMsun(mass)
 
 mgas1.label = r'$\rm{M_{gas}}$' # (<r_{\star,1/2})
 mgas1.units = r'$\rm{M_{sun}}$'
-mgas1.limits = lambda sim,pt,f: [8.0, 11.0] if sim.boxSize > 50000 else [7.0, 10.5]
+mgas1.limits = lambda sim,f: [8.0, 11.0] if sim.boxSize > 50000 else [7.0, 10.5]
 mgas1.log = True
 
 @catalog_field
-def mgas2(sim, partType, field, args):
+def mgas2(sim, field):
     """ Galaxy gas mass (all phases), measured within *twice* the stellar half mass radius. """
     mass = sim.subhalos('SubhaloMassInRadType')[:,sim.ptNum('gas')]
     return sim.units.codeMassToMsun(mass)
 
 mgas2.label = r'$\rm{M_{gas}}$' # (<2r_{\star,1/2})
 mgas2.units = r'$\rm{M_{sun}}$'
-mgas2.limits = lambda sim,pt,f: [8.0, 11.0] if sim.boxSize > 50000 else [7.0, 10.5]
+mgas2.limits = lambda sim,f: [8.0, 11.0] if sim.boxSize > 50000 else [7.0, 10.5]
 mgas2.log = True
 
 @catalog_field
-def mgas_tot(sim, partType, field, args):
+def mgas_tot(sim, field):
     """ Galaxy gas mass, total subhalo/subfind value. """
     mass = sim.subhalos('SubhaloMassType')[:,sim.ptNum('gas')]
     return sim.units.codeMassToMsun(mass)
 
 mgas_tot.label = r'$\rm{M_{gas}}$' # (subfind)
 mgas_tot.units = r'$\rm{M_{sun}}$'
-mgas_tot.limits = lambda sim,pt,f: [9.0, 11.5] if sim.boxSize > 50000 else [8.0, 12.0]
+mgas_tot.limits = lambda sim,f: [9.0, 11.5] if sim.boxSize > 50000 else [8.0, 12.0]
 mgas_tot.log = True
 
 @catalog_field
-def mdm_tot(sim, partType, field, args):
+def mdm_tot(sim, field):
     """ Galaxy DM mass, total subhalo/subfind value. """
     mass = sim.subhalos('SubhaloMassType')[:,sim.ptNum('dm')]
     return sim.units.codeMassToMsun(mass)
 
 mdm_tot.label = r'$\rm{M_{DM}}$' # (subfind)
 mdm_tot.units = r'$\rm{M_{sun}}$'
-mdm_tot.limits = lambda sim,pt,f: [10.0, 12.5] if sim.boxSize > 50000 else [9.0, 13.0]
+mdm_tot.limits = lambda sim,f: [10.0, 12.5] if sim.boxSize > 50000 else [9.0, 13.0]
 mdm_tot.log = True
 
 @catalog_field(alias='mstar_100kpc')
-def mstar_100pkpc(sim, partType, field, args):
+def mstar_100pkpc(sim, field):
     """ Galaxy stellar mass, measured within a fixed 3D aperture of 100 physical kpc. """
     acField = 'Subhalo_Mass_100pkpc_Stars'
     mass = sim.auxCat(acField)[acField]
@@ -370,12 +369,12 @@ def mstar_100pkpc(sim, partType, field, args):
 
 mstar_100pkpc.label = r'$\rm{M_{\star, <30kpc}}$'
 mstar_100pkpc.units = r'$\rm{M_{sun}}$'
-mstar_100pkpc.limits = lambda sim,pt,f: [9.0, 11.0] if sim.boxSize > 50000 else [8.0, 11.5]
+mstar_100pkpc.limits = lambda sim,f: [9.0, 11.0] if sim.boxSize > 50000 else [8.0, 11.5]
 mstar_100pkpc.log = True
 mstar_100pkpc.auxcat = True
 
 @catalog_field(alias='mstar_30kpc')
-def mstar_30pkpc(sim, partType, field, args):
+def mstar_30pkpc(sim, field):
     """ Galaxy stellar mass, measured within a fixed 3D aperture of 30 physical kpc. """
     acField = 'Subhalo_Mass_30pkpc_Stars'
     mass = sim.auxCat(acField)[acField]
@@ -383,12 +382,12 @@ def mstar_30pkpc(sim, partType, field, args):
 
 mstar_30pkpc.label = r'$\rm{M_{\star, <30kpc}}$'
 mstar_30pkpc.units = r'$\rm{M_{sun}}$'
-mstar_30pkpc.limits = lambda sim,pt,f: [9.0, 11.0] if sim.boxSize > 50000 else [8.0, 11.5]
+mstar_30pkpc.limits = lambda sim,f: [9.0, 11.0] if sim.boxSize > 50000 else [8.0, 11.5]
 mstar_30pkpc.log = True
 mstar_30pkpc.auxcat = True
 
 @catalog_field
-def mstar_5pkpc(sim, partType, field, args):
+def mstar_5pkpc(sim, field):
     """ Galaxy stellar mass, measured within a fixed 3D aperture of 5 physical kpc. """
     acField = 'Subhalo_Mass_5pkpc_Stars'
     mass = sim.auxCat(acField)[acField]
@@ -401,7 +400,7 @@ mstar_5pkpc.log = True
 mstar_5pkpc.auxcat = True
 
 @catalog_field
-def mgas_5pkpc(sim, partType, field, args):
+def mgas_5pkpc(sim, field):
     """ Galaxy gas mass, measured within a fixed 3D aperture of 5 physical kpc. """
     acField = 'Subhalo_Mass_5pkpc_Gas'
     mass = sim.auxCat(acField)[acField]
@@ -414,7 +413,7 @@ mgas_5pkpc.log = True
 mgas_5pkpc.auxcat = True
 
 @catalog_field
-def mdm_5pkpc(sim, partType, field, args):
+def mdm_5pkpc(sim, field):
     """ Galaxy dark matter mass, measured within a fixed 3D aperture of 5 physical kpc. """
     acField = 'Subhalo_Mass_5pkpc_DM'
     mass = sim.auxCat(acField)[acField]
@@ -427,7 +426,7 @@ mdm_5pkpc.log = True
 mdm_5pkpc.auxcat = True
 
 @catalog_field
-def mtot_5pkpc(sim, partType, field, args):
+def mtot_5pkpc(sim, field):
     """ Galaxy total mass (gas + stars + DM + BHs), measured within a fixed 3D aperture of 5 physical kpc. """
     mass = np.zeros(sim.numSubhalos, dtype='float32')
     for pt in ['Gas','Stars','DM','BH']:
@@ -442,7 +441,7 @@ mtot_5pkpc.log = True
 mtot_5pkpc.auxcat = True
 
 @catalog_field
-def mstar_mtot_ratio_5pkpc(sim, partType, field, args):
+def mstar_mtot_ratio_5pkpc(sim, field):
     """ Ratio of galaxy stellar mass, to total mass, both measured within a 3D aperture of 5 physical kpc. """
     mstar = sim.subhalos('mstar_5pkpc')
     mtot = sim.subhalos('mtot_5pkpc')
@@ -456,7 +455,7 @@ mstar_mtot_ratio_5pkpc.log = False
 mstar_mtot_ratio_5pkpc.auxcat = True
 
 @catalog_field
-def mstar2_mhalo200_ratio(sim, partType, field, args):
+def mstar2_mhalo200_ratio(sim, field):
     """ Galaxy stellar mass to halo mass ratio, the former defined as 
     within twice the stellar half mass radius, the latter as M_200_Crit. """
     mstar = sim.subhalos('SubhaloMassInRadType')[:,sim.ptNum('stars')]
@@ -476,7 +475,7 @@ mstar2_mhalo200_ratio.limits = [-3.0, -1.0]
 mstar2_mhalo200_ratio.log = True
 
 @catalog_field(alias='mstar_mhalo_ratio')
-def mstar30pkpc_mhalo200_ratio(sim, partType, field, args):
+def mstar30pkpc_mhalo200_ratio(sim, field):
     """ Galaxy stellar mass to halo mass ratio, the former measured within a 
     fixed 3D aperture of 30 physical kpc, the latter taken as M_200_Crit. """
     acField = 'Subhalo_Mass_30pkpc_Stars'
@@ -498,7 +497,7 @@ mstar30pkpc_mhalo200_ratio.log = True
 mstar30pkpc_mhalo200_ratio.auxcat = True
 
 @catalog_field
-def mstar_r500(sim, partType, field, args):
+def mstar_r500(sim, field):
     """ Subhalo stellar mass (i.e. central+ICL, but no sats), measured within :math:`\\rm{R_{500c}}`. """
     acField = 'Subhalo_Mass_r500_Stars_FoF'
     mass = sim.auxCat(acField, expandPartial=True)[acField]
@@ -511,7 +510,7 @@ mstar_r500.log = True
 mstar_r500.auxcat = True
 
 @catalog_field
-def mgas_r500(sim, partType, field, args):
+def mgas_r500(sim, field):
     """ Subhalo gas mass (all phases), measured within :math:`\\rm{R_{500c}}`. """
     acField = 'Subhalo_Mass_r500_Gas_FoF'
     mass = sim.auxCatSplit(acField, expandPartial=True)[acField]
@@ -524,7 +523,7 @@ mgas_r500.log = True
 mgas_r500.auxcat = True
 
 @catalog_field
-def mgas_halo(sim, partType, field, args):
+def mgas_halo(sim, field):
     """ Halo-scale gas mass, measured within each FoF. """
     acField = 'Subhalo_Mass_FoF_Gas'
     mass = sim.auxCatSplit(acField, expandPartial=True)[acField]
@@ -532,12 +531,12 @@ def mgas_halo(sim, partType, field, args):
 
 mgas_halo.label = r'$\rm{M_{gas, halo}}$'
 mgas_halo.units = r'$\rm{M_{sun}}$'
-mgas_halo.limits = lambda sim,pt,f: [11.0, 14.5] if sim.boxSize > 50000 else [10.0, 13.5]
+mgas_halo.limits = lambda sim,f: [11.0, 14.5] if sim.boxSize > 50000 else [10.0, 13.5]
 mgas_halo.log = True
 mgas_halo.auxcat = True
 
 @catalog_field
-def mhi(sim, partType, field, args):
+def mhi(sim, field):
     """ Galaxy atomic HI gas mass (BR06 molecular H2 model), measured within 
     the entire subhalo (all gravitationally bound gas). """
     acField = 'Subhalo_Mass_HI'
@@ -546,12 +545,12 @@ def mhi(sim, partType, field, args):
 
 mhi.label = r'$\rm{M_{HI, grav}}$'
 mhi.units = r'$\rm{M_{sun}}$'
-mhi.limits = lambda sim,pt,f: [8.0, 11.5] if sim.boxSize > 50000 else [7.0, 10.5]
+mhi.limits = lambda sim,f: [8.0, 11.5] if sim.boxSize > 50000 else [7.0, 10.5]
 mhi.log = True
 mhi.auxcat = True
 
 @catalog_field
-def mhi2(sim, partType, field, args):
+def mhi2(sim, field):
     """ Galaxy atomic HI gas mass (BR06 molecular H2 model), measured within 
     twice the stellar half mass radius. """
     acField = 'Subhalo_Mass_2rstars_HI'
@@ -560,12 +559,12 @@ def mhi2(sim, partType, field, args):
 
 mhi2.label = r'$\rm{M_{HI, <2r_{\star}}}$'
 mhi2.units = r'$\rm{M_{sun}}$'
-mhi2.limits = lambda sim,pt,f: [8.0, 11.5] if sim.boxSize > 50000 else [7.0, 10.5]
+mhi2.limits = lambda sim,f: [8.0, 11.5] if sim.boxSize > 50000 else [7.0, 10.5]
 mhi2.log = True
 mhi2.auxcat = True
 
 @catalog_field
-def mhi_30pkpc(sim, partType, field, args):
+def mhi_30pkpc(sim, field):
     """ Galaxy atomic HI gas mass (BR06 molecular H2 model), measured within 
     a fixed 3D aperture of 30 physical kpc. """
     acField = 'Subhalo_Mass_30pkpc_HI'
@@ -574,12 +573,12 @@ def mhi_30pkpc(sim, partType, field, args):
 
 mhi_30pkpc.label = r'$\rm{M_{HI, <30kpc}}$'
 mhi_30pkpc.units = r'$\rm{M_{sun}}$'
-mhi_30pkpc.limits = lambda sim,pt,f: [8.0, 11.5] if sim.boxSize > 50000 else [7.0, 10.5]
+mhi_30pkpc.limits = lambda sim,f: [8.0, 11.5] if sim.boxSize > 50000 else [7.0, 10.5]
 mhi_30pkpc.log = True
 mhi_30pkpc.auxcat = True
 
 @catalog_field
-def mhi_halo(sim, partType, field, args):
+def mhi_halo(sim, field):
     """ Halo-scale atomic HI gas mass (BR06 molecular H2 model), measured within each FoF. """
     acField = 'Subhalo_Mass_FoF_HI'
     mass = sim.auxCat(acField)[acField]
@@ -587,14 +586,14 @@ def mhi_halo(sim, partType, field, args):
 
 mhi_halo.label = r'$\rm{M_{HI, halo}}$'
 mhi_halo.units = r'$\rm{M_{sun}}$'
-mhi_halo.limits = lambda sim,pt,f: [8.0, 11.5] if sim.boxSize > 50000 else [7.0, 10.5]
+mhi_halo.limits = lambda sim,f: [8.0, 11.5] if sim.boxSize > 50000 else [7.0, 10.5]
 mhi_halo.log = True
 mhi_halo.auxcat = True
 
 # -------------------- subhalos: mass fractions -----------------------------------------------------------
 
 @catalog_field(alias='fgas1_alt')
-def fgas1(sim, partType, field, args):
+def fgas1(sim, field):
     """ Galaxy gas mass fraction (all phases), measured within the stellar half mass radius. """
     mgas = sim.subhalos('SubhaloMassInHalfRadType')[:,sim.ptNum('gas')]
     mstar = sim.subhalos('SubhaloMassInHalfRadType')[:,sim.ptNum('stars')]
@@ -607,13 +606,13 @@ def fgas1(sim, partType, field, args):
 
     return fgas
 
-fgas1.label = lambda sim,pt,f: r'$\rm{f_{gas} = M_{\rm gas} / (M_{gas} + M_\star) (<r_{\star})}$' if '_alt' not in f else r'$\rm{f_{gas} = M_{\rm gas} / M_\star (<r_{\star})}$'
+fgas1.label = lambda sim,f: r'$\rm{f_{gas} = M_{\rm gas} / (M_{gas} + M_\star) (<r_{\star})}$' if '_alt' not in f else r'$\rm{f_{gas} = M_{\rm gas} / M_\star (<r_{\star})}$'
 fgas1.units = '' # dimensionless
 fgas1.limits = [ -3.0, 0.0]
 fgas1.log = True
 
 @catalog_field(alias='fgas2_alt')
-def fgas2(sim, partType, field, args):
+def fgas2(sim, field):
     """ Galaxy gas mass fraction (all phases), measured within twice the stellar half mass radius. """
     mgas = sim.subhalos('SubhaloMassInRadType')[:,sim.ptNum('gas')]
     mstar = sim.subhalos('SubhaloMassInRadType')[:,sim.ptNum('stars')]
@@ -626,13 +625,13 @@ def fgas2(sim, partType, field, args):
 
     return fgas
 
-fgas2.label = lambda sim,pt,f: r'$\rm{f_{gas} = M_{\rm gas} / (M_{gas} + M_\star) (<2r_{\star})}$' if '_alt' not in f else r'$\rm{f_{gas} = M_{\rm gas} / M_\star (<2r_{\star})}$'
+fgas2.label = lambda sim,f: r'$\rm{f_{gas} = M_{\rm gas} / (M_{gas} + M_\star) (<2r_{\star})}$' if '_alt' not in f else r'$\rm{f_{gas} = M_{\rm gas} / M_\star (<2r_{\star})}$'
 fgas2.units = '' # dimensionless
 fgas2.limits = [ -3.0, 0.0]
 fgas2.log = True
 
 @catalog_field(alias='fgas_alt')
-def fgas(sim, partType, field, args):
+def fgas(sim, field):
     """ Galaxy gas mass fraction (all phases), measured within the entire subhalo. """
     mgas = sim.subhalos('SubhaloMassType')[:,sim.ptNum('gas')]
     mstar = sim.subhalos('SubhaloMassType')[:,sim.ptNum('stars')]
@@ -645,13 +644,13 @@ def fgas(sim, partType, field, args):
 
     return fgas
 
-fgas.label = lambda sim,pt,f: r'$\rm{f_{gas} = M_{\rm gas} / (M_{gas} + M_\star)}$' if '_alt' not in f else r'$\rm{f_{gas} = M_{\rm gas} / M_\star}$'
+fgas.label = lambda sim,f: r'$\rm{f_{gas} = M_{\rm gas} / (M_{gas} + M_\star)}$' if '_alt' not in f else r'$\rm{f_{gas} = M_{\rm gas} / M_\star}$'
 fgas.units = '' # dimensionless
 fgas.limits = [ -3.0, 0.0]
 fgas.log = True
 
 @catalog_field
-def fdm(sim, partType, field, args):
+def fdm(sim, field):
     """ Galaxy DM fraction, measured within the entire subhalo. """
     mdm = sim.subhalos('SubhaloMassType')[:,sim.ptNum('dm')]
     mtot = sim.subhalos('SubhaloMass')
@@ -667,7 +666,7 @@ fdm.limits = [ -3.0, 0.0]
 fdm.log = True
 
 @catalog_field
-def fdm1(sim, partType, field, args):
+def fdm1(sim, field):
     """ Galaxy DM fraction, measured within the stellar half mass radius. """
     mdm = sim.subhalos('SubhaloMassInHalfRadType')[:,sim.ptNum('dm')]
     mtot = sim.subhalos('SubhaloMassInHalfRad')
@@ -683,7 +682,7 @@ fdm1.limits = [ -3.0, 0.0]
 fdm1.log = True
 
 @catalog_field
-def fdm2(sim, partType, field, args):
+def fdm2(sim, field):
     """ Galaxy DM fraction, measured within twice the stellar half mass radius. """
     mdm = sim.subhalos('SubhaloMassInRadType')[:,sim.ptNum('dm')]
     mtot = sim.subhalos('SubhaloMassInRad')
@@ -701,7 +700,7 @@ fdm2.log = True
 # -------------------- star formation rates -------------------------------------------------------
 
 @catalog_field
-def sfr1(sim, partType, field, args):
+def sfr1(sim, field):
     """ Galaxy star formation rate (instantaneous, within one times the stellar half mass radius). """
     return sim.subhalos('SubhaloSFRinHalfRad') # units correct
 
@@ -711,7 +710,7 @@ sfr1.limits = [-2.5, 1.0]
 sfr1.log = True
 
 @catalog_field
-def sfr2(sim, partType, field, args):
+def sfr2(sim, field):
     """ Galaxy star formation rate (instantaneous, within twice the stellar half mass radius). """
     return sim.subhalos('SubhaloSFRinRad') # units correct
 
@@ -721,7 +720,7 @@ sfr2.limits = [-2.5, 1.0]
 sfr2.log = True
 
 @catalog_field
-def sfr1_surfdens(sim, partType, field, args):
+def sfr1_surfdens(sim, field):
     """ Galaxy star formation rate surface density (instantaneous, within one times the stellar half mass radius). """
     sfr = sim.subhalos('SubhaloSFRinHalfRad')
     aperture = sim.units.codeLengthToKpc(sim.subhalos('SubhaloHalfmassRadType')[:,sim.ptNum('stars')])
@@ -738,7 +737,7 @@ sfr1_surfdens.limits = [-2.5, 2.0]
 sfr1_surfdens.log = True
 
 @catalog_field
-def sfr2_surfdens(sim, partType, field, args):
+def sfr2_surfdens(sim, field):
     """ Galaxy star formation rate surface density (instantaneous, within twice the stellar half mass radius). """
     sfr = sim.subhalos('SubhaloSFRinRad')
     aperture = 2.0 * sim.units.codeLengthToKpc(sim.subhalos('SubhaloHalfmassRadType')[:,sim.ptNum('stars')])
@@ -755,7 +754,7 @@ sfr2_surfdens.limits = [-3.5, 1.0]
 sfr2_surfdens.log = True
 
 @catalog_field
-def ssfr(sim, partType, field, args):
+def ssfr(sim, field):
     """ Galaxy specific star formation rate [1/yr] (sSFR, instantaneous, both SFR and M* within 2rhalfstars). """
     sfr = sim.subhalos('SubhaloSFRinRad')
     mstar = sim.subhalos('SubhaloMassInRadType')[:,sim.ptNum('stars')]
@@ -775,7 +774,7 @@ ssfr.limits = [-12.0, -8.0]
 ssfr.log = True
 
 @catalog_field
-def ssfr_gyr(sim, partType, field, args):
+def ssfr_gyr(sim, field):
     """ Galaxy specific star formation rate [1/Gyr] (sSFR, instantaneous, both SFR and M* within 2rhalfstars). """
     return sim.subhalos('ssfr') * 1e9
 
@@ -785,7 +784,7 @@ ssfr_gyr.limits = [-3.0, 1.0]
 ssfr_gyr.log = True
 
 @catalog_field
-def ssfr_30pkpc_gyr(sim, partType, field, args):
+def ssfr_30pkpc_gyr(sim, field):
     """ Galaxy specific star formation rate [1/Gyr] (sSFR, instantaneous, SFR within 2rhalfstars, M* within 30kpc). """
     return sim.subhalos('ssfr') * 1e9
 
@@ -795,7 +794,7 @@ ssfr_30pkpc_gyr.limits = [-3.0, 1.0]
 ssfr_30pkpc_gyr.log = True
 
 @catalog_field
-def delta_sfms(sim, partType, field, args):
+def delta_sfms(sim, field):
     """ Offset from the star-formation main sequence (SFMS), taken as the clipped sim median, in dex. """
     mstar = sim.subhalos('SubhaloMassInRadType')[:,sim.ptNum('stars')]
     sfr = sim.subhalos('SubhaloSFRinRad')
@@ -834,7 +833,7 @@ delta_sfms.log = False
 # -------------------- metallicities  ------------------------------------------------
 
 @catalog_field
-def z_stars(sim, partType, field, args):
+def z_stars(sim, field):
     """ Galaxy stellar metallicity, mass-weighted average of all star particles within 2rhalfstars. """
     vals = sim.subhalos('SubhaloStarMetallicity')
     vals = sim.units.metallicityInSolar(vals)
@@ -846,7 +845,7 @@ z_stars.limits = [-2.0, 0.5]
 z_stars.log = True
 
 @catalog_field
-def z_gas(sim, partType, field, args):
+def z_gas(sim, field):
     """ Galaxy gas metallicity, mass-weighted average of all gas cells within 2rhalfstars. """
     vals = sim.subhalos('SubhaloGasMetallicity')
     vals = sim.units.metallicityInSolar(vals)
@@ -858,7 +857,7 @@ z_gas.limits = [-2.0, 0.5]
 z_gas.log = True
 
 @catalog_field
-def z_gas_sfr(sim, partType, field, args):
+def z_gas_sfr(sim, field):
     """ Galaxy gas metallicity, SFR-weighted average of all gas cells within 2rhalfstars. """
     vals = sim.subhalos('SubhaloGasMetallicitySfrWeighted')
     vals = sim.units.metallicityInSolar(vals)
@@ -872,7 +871,7 @@ z_gas_sfr.log = True
 # -------------------- sizes ------------------------------------------------
 
 @catalog_field(aliases=['rhalf_stars','size_stars_code','rhalf_stars_code'])
-def size_stars(sim, partType, field, args):
+def size_stars(sim, field):
     """ Stellar half mass radius. """
     radtype = sim.subhalos('SubhaloHalfmassRadType')
     rad = radtype[:,sim.ptNum('stars')]
@@ -883,12 +882,12 @@ def size_stars(sim, partType, field, args):
     return rad
 
 size_stars.label = r'r$_{\rm 1/2,\star}$'
-size_stars.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
-size_stars.limits = lambda sim,pt,f: [0.0, 1.8] if sim.redshift < 1 else [-0.4, 1.4]
+size_stars.units = lambda sim,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
+size_stars.limits = lambda sim,f: [0.0, 1.8] if sim.redshift < 1 else [-0.4, 1.4]
 size_stars.log = True
 
 @catalog_field(aliases=['size_stars_rvir_ratio'])
-def re_rvir_ratio(sim, partType, field, args):
+def re_rvir_ratio(sim, field):
     """ Stellar half mass radius normalized by parent halo virial radius (r200c). """
     radtype = sim.subhalos('SubhaloHalfmassRadType')
     rad = radtype[:,sim.ptNum('stars')]
@@ -901,11 +900,11 @@ def re_rvir_ratio(sim, partType, field, args):
 
 re_rvir_ratio.label = r'r$_{\rm 1/2,\star}$ / R$_{\rm vir,halo}$'
 re_rvir_ratio.units = '' # dimensionless
-re_rvir_ratio.limits = lambda sim,pt,f: [-2.5,-1.5]
+re_rvir_ratio.limits = lambda sim,f: [-2.5,-1.5]
 re_rvir_ratio.log = True
 
 @catalog_field(aliases=['rhalf_gas','size_gas_code','rhalf_gas_code'])
-def size_gas(sim, partType, field, args):
+def size_gas(sim, field):
     """ Gas half mass radius. """
     radtype = sim.subhalos('SubhaloHalfmassRadType')
     rad = radtype[:,sim.ptNum('gas')]
@@ -916,12 +915,12 @@ def size_gas(sim, partType, field, args):
     return rad
 
 size_gas.label = r'r$_{\rm 1/2,gas}$'
-size_gas.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
-size_gas.limits = lambda sim,pt,f: [1.0, 2.8]
+size_gas.units = lambda sim,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
+size_gas.limits = lambda sim,f: [1.0, 2.8]
 size_gas.log = True
 
 @catalog_field
-def surfdens1_stars(sim, partType, field, args):
+def surfdens1_stars(sim, field):
     """ Galaxy stellar surface density (within the stellar half mass radius). """
     mstar = sim.subhalos('SubhaloMassInHalfRadType')[:,sim.ptNum('stars')]
     mass = sim.units.codeMassToMsun(mstar)
@@ -939,7 +938,7 @@ surfdens1_stars.limits = [6.5, 9.0]
 surfdens1_stars.log = True
 
 @catalog_field
-def surfdens2_stars(sim, partType, field, args):
+def surfdens2_stars(sim, field):
     """ Galaxy stellar surface density (within twice the stellar half mass radius). """
     mstar = sim.subhalos('SubhaloMassInRadType')[:,sim.ptNum('stars')]
     mass = sim.units.codeMassToMsun(mstar)
@@ -957,7 +956,7 @@ surfdens2_stars.limits = [6.5, 9.0]
 surfdens2_stars.log = True
 
 @catalog_field
-def surfdens1_dm(sim, partType, field, args):
+def surfdens1_dm(sim, field):
     """ Galaxy DM surface density (within the stellar half mass radius). """
     mstar = sim.subhalos('SubhaloMassInHalfRadType')[:,sim.ptNum('dm')]
     mass = sim.units.codeMassToMsun(mstar)
@@ -977,7 +976,7 @@ surfdens1_dm.log = True
 # -------------------- general subhalo properties ------------------------------------------------
 
 @catalog_field(aliases=['vc','vmax'])
-def vcirc(sim, partType, field, args):
+def vcirc(sim, field):
     """ Maximum value of the spherically-averaged 3D circular velocity curve 
     (i.e. galaxy circular velocity). """
     return sim.subhalos('SubhaloVmax') # units correct
@@ -988,7 +987,7 @@ vcirc.limits = [1.8, 2.8]
 vcirc.log = True
 
 @catalog_field(alias='vmag')
-def velmag(sim, partType, field, args):
+def velmag(sim, field):
     """ The magnitude of the current velocity of the subhalo through the box, 
     in the simulation reference frame. """
     vel = sim.subhalos('SubhaloVel')
@@ -1003,7 +1002,7 @@ velmag.limits = [1.5, 3.5]
 velmag.log = True
 
 @catalog_field(alias='smag')
-def spinmag(sim, partType, field, args):
+def spinmag(sim, field):
     """ The magnitude of the subhalo spin vector, computed as the mass weighted 
     sum of all subhalo particles/cells. """
     spin = sim.subhalos('SubhaloSpin')
@@ -1020,7 +1019,7 @@ spinmag.log = True
 # -------------------- subhalo photometrics  ------------------------------------------------------
 
 @catalog_field(aliases=['m_u','m_b','m_r'])
-def m_v(sim, partType, field, args):
+def m_v(sim, field):
     """ V-band (B-band, r-band, ...) magnitude (StellarPhotometrics from snapshot). AB system. No dust. """
     assert '_log' not in field
     bandName = field.split('_')[1].upper()
@@ -1039,13 +1038,13 @@ def m_v(sim, partType, field, args):
 
     return mags
 
-m_v.label = lambda sim,pt,f: r'M$_{\\rm %s}$' % f.split("_")[1].upper()
+m_v.label = lambda sim,f: r'M$_{\\rm %s}$' % f.split("_")[1].upper()
 m_v.units = 'abs AB mag'
 m_v.limits = [-24, -16]
 m_v.log = False
 
 @catalog_field(aliases=['color_vb'])
-def color_uv(sim, partType, field, args):
+def color_uv(sim, field):
     """ Integrated photometric/broadband galaxy colors, from snapshot. AB system. No dust. """
     assert '_log' not in field
     bandNames = field.split('color_')[1].upper()
@@ -1057,15 +1056,15 @@ def color_uv(sim, partType, field, args):
 
     return colors
 
-color_uv.label = lambda sim,pt,f: r'(%s-%s) color' % (f.split('color_')[1][0].upper(), f.split('color_')[1][1].upper())
+color_uv.label = lambda sim,f: r'(%s-%s) color' % (f.split('color_')[1][0].upper(), f.split('color_')[1][1].upper())
 color_uv.units = 'mag'
-color_uv.limits = lambda sim,pt,f: bandMagRange(f.split('color_')[1], sim=sim)
+color_uv.limits = lambda sim,f: bandMagRange(f.split('color_')[1], sim=sim)
 color_uv.log = False
 
 # ---------------------------- non-standard ------------------------------------------------------
 
 @catalog_field
-def inclination(sim, partType, field, args):
+def inclination(sim, field):
     """ CUSTOM! We have some particular datsets which generate a property, per subhalo, 
     for each of several random/selected inclinations. The return here is the only 
     case in which it is multidimensional, with the first axis corresponding to subhaloID.
@@ -1087,7 +1086,7 @@ inclination.limits = [0, 90]
 inclination.log = False
 
 @catalog_field
-def inclination_mg2_lumsize(sim, partType, field, args):
+def inclination_mg2_lumsize(sim, field):
     """ CUSTOM! Half-light radii of MgII emission from the halo, as a function of inclination. """
     from ..projects.mg2emission import gridPropertyVsInclinations
 
@@ -1105,7 +1104,7 @@ inclination_mg2_lumsize.limits = [0, 30]
 inclination_mg2_lumsize.log = False
 
 @catalog_field(multi='inclination_mg2_shape_')
-def inclination_mg2_shape_(sim, partType, field, args):
+def inclination_mg2_shape_(sim, field):
     """ CUSTOM! Axis ratio (shape) of MgII emission from the halo, as a function of inclination. """
     from ..projects.mg2emission import gridPropertyVsInclinations
 

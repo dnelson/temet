@@ -12,7 +12,7 @@ from ..cosmo.color import loadColors
 # ---------------------------- auxcat: environment ------------------------------------------------
 
 @catalog_field(multi='isolated3d,')
-def isolated_flag_(sim, partType, field, args):
+def isolated_flag_(sim, field):
     """ Isolated flag (1 if 'isolated', according to criterion, 0 if not, -1 if unprocessed). """
     # e.g. 'isolated3d,mstar30kpc,max,in_300pkpc'
     _, quant, max_type, dist = field.split(',')
@@ -29,7 +29,7 @@ isolated_flag_.limits = [-1, 1]
 isolated_flag_.log = False
 
 @catalog_field(aliases=['d5_mstar_gt7','d5_mstar_gt8'])
-def d5_mstar_gthalf(sim, partType, field, args):
+def d5_mstar_gthalf(sim, field):
     """ Environment: distance to 5th nearest neighbor (subhalo) that has a stellar mass at least half 
     of our own (default unless specified). """
     acField = 'Subhalo_Env_d5_MstarRel_GtHalf' # include galaxies with Mstar > 0.5*of this subhalo
@@ -45,7 +45,7 @@ d5_mstar_gthalf.limits = [1.0, 4.0]
 d5_mstar_gthalf.log = True
 
 @catalog_field(aliases=['delta5_mstar_gt7','delta5_mstar_gt8'])
-def delta5_mstar_gthalf(sim, partType, field, args):
+def delta5_mstar_gthalf(sim, field):
     """ Environment: overdensity based on 5th nearest neighbor (subhalo). """
     d5 = sim.subhalos(field.replace('delta5_','d5_'))
 
@@ -62,7 +62,7 @@ delta5_mstar_gthalf.limits = [-1.0, 2.0]
 delta5_mstar_gthalf.log = True
 
 @catalog_field(aliases=['num_ngb_gt7','num_ngb_gt8','num_ngb_gttenth'])
-def num_ngb_gthalf(sim, partType, field, args):
+def num_ngb_gthalf(sim, field):
     """ Environment: counts of nearby neighbor subhalos, within a given 3D specture, satisfying some 
     minimum (relative) stellar mass criterion. """
     relStr = 'MstarRel_GtHalf' # include galaxies with Mstar > 0.5*of this subhalo
@@ -87,21 +87,21 @@ num_ngb_gthalf.log = False
 # ---------------------------- auxcat: color ------------------------------------------------------
 
 @catalog_field(multi='color_')
-def color_(sim, partType, field, args):
+def color_(sim, field):
     """ Photometric/broadband colors (e.g. 'color_C_gr', 'color_A_ur'). """
     return loadColors(sim, field)
 
-color_.label = lambda sim,pt,f: '(%s-%s) color' % (f.split('_')[2][0], f.split('_')[2][1])
+color_.label = lambda sim,f: '(%s-%s) color' % (f.split('_')[2][0], f.split('_')[2][1])
 color_.units = 'mag'
 color_.limits = [-0.4, 1.0]
 color_.log = False
 
 @catalog_field(multi='mag_')
-def mag_(sim, partType, field, args):
+def mag_(sim, field):
     """ Photometric/broadband magnitudes (e.g. 'mag_C_g', 'mag_A_r'). """
     return loadColors(sim, field)
 
-mag_.label = lambda sim,pt,f: r'$\rm{M_{%s}}$' % (f.split('_')[2])
+mag_.label = lambda sim,f: r'$\rm{M_{%s}}$' % (f.split('_')[2])
 mag_.units = 'mag' # AB
 mag_.limits = [-19,-23]
 mag_.log = False
@@ -109,7 +109,7 @@ mag_.log = False
 # ---------------------------- auxcat: (gas) masses -----------------------------------------------------
 
 @catalog_field
-def mass_ovi(sim, partType, field, args):
+def mass_ovi(sim, field):
     """ Total gas mass in sub-species: OVI. """
     # todo: could generalize to e.g. all ions
     acField = 'Subhalo_Mass_OVI'
@@ -123,7 +123,7 @@ mass_ovi.limits = [5.0, 10.0]
 mass_ovi.log = True
 
 @catalog_field
-def mass_ovii(sim, partType, field, args):
+def mass_ovii(sim, field):
     """ Total gas mass in sub-species: OVII. """
     acField = 'Subhalo_Mass_OVII'
     ac = sim.auxCat(fields=[acField])
@@ -136,7 +136,7 @@ mass_ovii.limits = [5.0, 10.0]
 mass_ovii.log = True
 
 @catalog_field
-def mass_oviii(sim, partType, field, args):
+def mass_oviii(sim, field):
     """ Total gas mass in sub-species: OVIII. """
     acField = 'Subhalo_Mass_OVIII'
     ac = sim.auxCat(fields=[acField])
@@ -149,7 +149,7 @@ mass_oviii.limits = [5.0, 10.0]
 mass_oviii.log = True
 
 @catalog_field
-def mass_o(sim, partType, field, args):
+def mass_o(sim, field):
     """ Total gas mass in sub-species: O. """
     acField = 'Subhalo_Mass_AllGas_Oxygen'
     ac = sim.auxCat(fields=[acField])
@@ -162,7 +162,7 @@ mass_o.limits = [5.0, 10.0]
 mass_o.log = True
 
 @catalog_field
-def mass_z(sim, partType, field, args):
+def mass_z(sim, field):
     """ Total gas mass in sub-species: Z. """
     acField = 'Subhalo_Mass_AllGas_Metal'
     ac = sim.auxCat(fields=[acField])
@@ -175,7 +175,7 @@ mass_z.limits = [6.0, 10.0]
 mass_z.log = True
 
 @catalog_field
-def mass_halogas(sim, partType, field, args):
+def mass_halogas(sim, field):
     """ Total halo (0.15 < r/rvir < 1.0) gas mass. """
     acField = 'Subhalo_Mass_HaloGas'
     ac = sim.auxCat(fields=[acField])
@@ -188,7 +188,7 @@ mass_halogas.limits = [8.0, 14.0]
 mass_halogas.log = True
 
 @catalog_field
-def mass_halogasfof(sim, partType, field, args):
+def mass_halogasfof(sim, field):
     """ Total halo (0.15 < r/rvir < 1.0) gas mass. FoF-scope, centrals only. """
     acField = 'Subhalo_Mass_HaloGasFoF'
     ac = sim.auxCat(fields=[acField])
@@ -201,7 +201,7 @@ mass_halogasfof.limits = [8.0, 14.0]
 mass_halogasfof.log = True
 
 @catalog_field
-def mass_halogas_cold(sim, partType, field, args):
+def mass_halogas_cold(sim, field):
     """ Total halo (0.15 < r/rvir < 1.0) gas mass. Only cold (log T < 4.5 K), star-forming gas at eEOS temp. """
     acField = 'Subhalo_Mass_HaloGas_Cold'
     ac = sim.auxCat(fields=[acField])
@@ -214,7 +214,7 @@ mass_halogas_cold.limits = [7.0, 13.0]
 mass_halogas_cold.log = True
 
 @catalog_field
-def mass_halogas_sfcold(sim, partType, field, args):
+def mass_halogas_sfcold(sim, field):
     """ Total halo (0.15 < r/rvir < 1.0) gas mass. Only cold (log T < 4.5 K), star-forming gas at cold temp. """
     acField = 'Subhalo_Mass_HaloGas_SFCold'
     ac = sim.auxCat(fields=[acField])
@@ -227,7 +227,7 @@ mass_halogas_sfcold.limits = [7.0, 13.0]
 mass_halogas_sfcold.log = True
 
 @catalog_field
-def mass_halogasfof_cold(sim, partType, field, args):
+def mass_halogasfof_cold(sim, field):
     """ Total halo (0.15 < r/rvir < 1.0) gas mass. FoF-scope, centrals only. Only cold (log T < 4.5 K), star-forming gas at eEOS temp. """
     acField = 'Subhalo_Mass_HaloGasFoF_Cold'
     ac = sim.auxCat(fields=[acField])
@@ -240,7 +240,7 @@ mass_halogasfof_cold.limits = [7.0, 13.0]
 mass_halogasfof_cold.log = True
 
 @catalog_field
-def mass_halogasfof_sfcold(sim, partType, field, args):
+def mass_halogasfof_sfcold(sim, field):
     """ Total halo (0.15 < r/rvir < 1.0) gas mass. FoF-scope, centrals only. Only cold (log T < 4.5 K), star-forming gas at cold temp. """
     acField = 'Subhalo_Mass_HaloGasFoF_SFCold'
     ac = sim.auxCat(fields=[acField])
@@ -253,7 +253,7 @@ mass_halogasfof_sfcold.limits = [7.0, 13.0]
 mass_halogasfof_sfcold.log = True
 
 @catalog_field
-def frac_halogas_cold(sim, partType, field, args):
+def frac_halogas_cold(sim, field):
     """ Fraction of halo (0.15 < r/rvir < 1.0) gas mass that is cold (log T < 4.5 K), with star-forming gas at eEOS temp. """
     mass_subset = sim.subhalos('mass_halogas_cold')
     mass_total = sim.subhalos('mass_halogas')
@@ -269,7 +269,7 @@ frac_halogas_cold.limits = [0, 1]
 frac_halogas_cold.log = False
 
 @catalog_field
-def frac_halogas_sfcold(sim, partType, field, args):
+def frac_halogas_sfcold(sim, field):
     """ Fraction of halo (0.15 < r/rvir < 1.0) gas mass that is cold (log T < 4.5 K), with star-forming gas at cold temp. """
     mass_subset = sim.subhalos('mass_halogas_sfcold')
     mass_total = sim.subhalos('mass_halogas')
@@ -285,7 +285,7 @@ frac_halogas_sfcold.limits = [0, 1]
 frac_halogas_sfcold.log = False
 
 @catalog_field
-def frac_halogasfof_cold(sim, partType, field, args):
+def frac_halogasfof_cold(sim, field):
     """ Fraction of halo (0.15 < r/rvir < 1.0) gas mass that is cold (log T < 4.5 K), with star-forming gas at eEOS temp. FoF-scope, centrals only. """
     mass_subset = sim.subhalos('mass_halogasfof_cold')
     mass_total = sim.subhalos('mass_halogasfof')
@@ -301,7 +301,7 @@ frac_halogasfof_cold.limits = [0, 1]
 frac_halogasfof_cold.log = False
 
 @catalog_field
-def frac_halogasfof_sfcold(sim, partType, field, args):
+def frac_halogasfof_sfcold(sim, field):
     """ Fraction of halo (0.15 < r/rvir < 1.0) gas mass that is cold (log T < 4.5 K), with star-forming gas at cold temp. FoF-scope, centrals only. """
     mass_subset = sim.subhalos('mass_halogasfof_sfcold')
     mass_total = sim.subhalos('mass_halogasfof')
@@ -319,7 +319,7 @@ frac_halogasfof_sfcold.log = False
 # ---------------------------- auxcat: (other) masses -----------------------------------------------------
 
 @catalog_field
-def mass_smbh(sim, partType, field, args):
+def mass_smbh(sim, field):
     """ Largest SMBH mass in each subhalo. Avoids summing multiple SMBH masses, if more than one present. """
     acField = 'Subhalo_BH_Mass_largest'
     ac = sim.auxCat(fields=[acField])
@@ -332,7 +332,7 @@ mass_smbh.limits = [6.0, 10.0]
 mass_smbh.log = True
 
 @catalog_field
-def smbh_mdot(sim, partType, field, args):
+def smbh_mdot(sim, field):
     """ Largest SMBH Mdot in each subhalo. Avoids summing multiple SMBHs, if more than one present. """
     acField = 'Subhalo_BH_Mdot_largest'
     ac = sim.auxCat(fields=[acField])
@@ -345,7 +345,7 @@ smbh_mdot.limits = [-4.0, 0.0]
 smbh_mdot.log = True
 
 @catalog_field(aliases=['l_bol','l_agn'])
-def smbh_lum(sim, partType, field, args):
+def smbh_lum(sim, field):
     """ Bolometric luminosity of largest SMBH in each subhalo. Avoids summing multiple SMBHs, if more than one present. """
     acField = 'Subhalo_BH_Mass_largest'
     m_smbh = sim.auxCat(fields=[acField])[acField]
@@ -363,7 +363,7 @@ smbh_lum.log = True
 # ---------------------------- auxcat: mass fractions -----------------------------------------------------
 
 @catalog_field
-def fgas_r200(sim, partType, field, args):
+def fgas_r200(sim, field):
     """ Gas mass fraction (= Mgas/Mtot) within the virial radius, r200c. FoF-scope approximation. """
     acField = 'Subhalo_Mass_r200_Gas'
     M_gas = sim.auxCat(acField, expandPartial=True)[acField]
@@ -385,7 +385,7 @@ fgas_r200.limits = [-2.2, -0.6]
 fgas_r200.log = True
 
 @catalog_field
-def fgas_r500(sim, partType, field, args):
+def fgas_r500(sim, field):
     """ Gas mass fraction (= Mgas/Mtot) within r500c. FoF-scope approximation. """
     M_gas = sim.subhalos('mgas_r500')
     M_tot = sim.subhalos('mhalo_500')
@@ -403,7 +403,7 @@ fgas_r500.log = True
 # ---------------------------- auxcat: sfr --------------------------------------------------------
 
 @catalog_field(aliases=['sfr_30pkpc','sfr_30pkpc_instant'])
-def sfr(sim, partType, field, args):
+def sfr(sim, field):
     """ Galaxy star formation rate (instantaneous, within 30pkpc aperture). """
     acField = 'Subhalo_GasSFR_30pkpc'
     sfr = sim.auxCat(acField)[acField] # units correct
@@ -416,7 +416,7 @@ sfr.log = True
 sfr.auxcat = True
 
 @catalog_field
-def sfr_10myr(sim, partType, field, args):
+def sfr_10myr(sim, field):
     """ Star formation rate (full subhalo) averaged over the past 10 Myr. """
     acField = 'Subhalo_StellarMassFormed_10myr'
 
@@ -433,7 +433,7 @@ sfr_10myr.limits = [-2.5, 1.0]
 sfr_10myr.log = True
 
 @catalog_field
-def sfr_30pkpc_10myr(sim, partType, field, args):
+def sfr_30pkpc_10myr(sim, field):
     """ Star formation rate (30pkpc) averaged over the past 10 Myr. """
     acField = 'Subhalo_StellarMassFormed_10myr_30pkpc'
 
@@ -450,7 +450,7 @@ sfr_30pkpc_10myr.limits = [-2.5, 1.0]
 sfr_30pkpc_10myr.log = True
 
 @catalog_field
-def sfr_50myr(sim, partType, field, args):
+def sfr_50myr(sim, field):
     """ Star formation rate (full subhalo) averaged over the past 50 Myr. """
     acField = 'Subhalo_StellarMassFormed_50myr'
 
@@ -467,7 +467,7 @@ sfr_50myr.limits = [-2.5, 1.0]
 sfr_50myr.log = True
 
 @catalog_field
-def sfr_30pkpc_50myr(sim, partType, field, args):
+def sfr_30pkpc_50myr(sim, field):
     """ Star formation rate (30pkpc) averaged over the past 50 Myr. """
     acField = 'Subhalo_StellarMassFormed_50myr_30pkpc'
 
@@ -483,7 +483,7 @@ sfr_30pkpc_50myr.limits = [-2.5, 1.0]
 sfr_30pkpc_50myr.log = True
 
 @catalog_field
-def sfr_100myr(sim, partType, field, args):
+def sfr_100myr(sim, field):
     """ Star formation rate (full subhalo) averaged over the past 100 Myr. """
     acField = 'Subhalo_StellarMassFormed_100myr'
 
@@ -500,7 +500,7 @@ sfr_100myr.limits = [-2.5, 1.0]
 sfr_100myr.log = True
 
 @catalog_field
-def sfr_30pkpc_100myr(sim, partType, field, args):
+def sfr_30pkpc_100myr(sim, field):
     """ Star formation rate (30pkpc) averaged over the past 100 Myr. """
     acField = 'Subhalo_StellarMassFormed_100myr_30pkpc'
 
@@ -516,7 +516,7 @@ sfr_30pkpc_100myr.limits = [-2.5, 1.0]
 sfr_30pkpc_100myr.log = True
 
 @catalog_field(alias='sfr_10_100')
-def sfr_10_100_ratio(sim, partType, field, args):
+def sfr_10_100_ratio(sim, field):
     """ Ratio of SFR_10Myr / SFR_100Myr (full subhalo) as a burstyness indicator. """
     sfr_10 = sim.subhalos('sfr_10myr')
     sfr_100 = sim.subhalos('sfr_100myr')
@@ -532,7 +532,7 @@ sfr_10_100_ratio.limits = [-1.0, 4.0]
 sfr_10_100_ratio.log = True
 
 @catalog_field(alias='ssfr_30pkpc_instant')
-def ssfr_30pkpc(sim, partType, field, args):
+def ssfr_30pkpc(sim, field):
     """ Galaxy specific star formation rate [1/yr] (sSFR, instantaneous, SFR and M* within 30kpc). """
     sfr = sim.subhalos('sfr_30pkpc')
     mstar = sim.subhalos('mstar_30pkpc')
@@ -552,7 +552,7 @@ ssfr_30pkpc.limits = [-12.0, -8.0]
 ssfr_30pkpc.log = True
 
 @catalog_field
-def ssfr_30pkpc_10myr(sim, partType, field, args):
+def ssfr_30pkpc_10myr(sim, field):
     """ Galaxy specific star formation rate [1/yr] (sSFR, 10 Myr, SFR and M* within 30kpc). """
     sfr = sim.subhalos('sfr_30pkpc_10myr')
     mstar = sim.subhalos('mstar_30pkpc')
@@ -572,7 +572,7 @@ ssfr_30pkpc_10myr.limits = [-12.0, -8.0]
 ssfr_30pkpc_10myr.log = True
 
 @catalog_field
-def ssfr_30pkpc_50myr(sim, partType, field, args):
+def ssfr_30pkpc_50myr(sim, field):
     """ Galaxy specific star formation rate [1/yr] (sSFR, 50 Myr, SFR and M* within 30kpc). """
     sfr = sim.subhalos('sfr_30pkpc_50myr')
     mstar = sim.subhalos('mstar_30pkpc')
@@ -592,7 +592,7 @@ ssfr_30pkpc_50myr.limits = [-12.0, -8.0]
 ssfr_30pkpc_50myr.log = True
 
 @catalog_field
-def ssfr_30pkpc_100myr(sim, partType, field, args):
+def ssfr_30pkpc_100myr(sim, field):
     """ Galaxy specific star formation rate [1/yr] (sSFR, 100 Myr, SFR and M* within 30kpc). """
     sfr = sim.subhalos('sfr_30pkpc_100myr')
     mstar = sim.subhalos('mstar_30pkpc')
@@ -612,7 +612,7 @@ ssfr_30pkpc_100myr.limits = [-12.0, -8.0]
 ssfr_30pkpc_100myr.log = True
 
 @catalog_field(alias='sfr_surfdens_30pkpc_instant')
-def sfr_surfdens(sim, partType, field, args):
+def sfr_surfdens(sim, field):
     """ Star formation surface density (instantaneous, SFR and M* within 30kpc). """
     sfr = sim.subhalos('sfr_30pkpc')
     area = np.pi * (30.0)**2 # kpc^2
@@ -625,7 +625,7 @@ sfr_surfdens.limits = [-7.0, -1.0]
 sfr_surfdens.log = True
 
 @catalog_field
-def sfr_surfdens_30pkpc_10myr(sim, partType, field, args):
+def sfr_surfdens_30pkpc_10myr(sim, field):
     """ Star formation surface density (10 Myr, SFR and M* within 30kpc). """
     sfr = sim.subhalos('sfr_30pkpc_10myr')
     area = np.pi * (30.0)**2 # kpc^2
@@ -638,7 +638,7 @@ sfr_surfdens_30pkpc_10myr.limits = [-7.0, -1.0]
 sfr_surfdens_30pkpc_10myr.log = True
 
 @catalog_field
-def sfr_surfdens_30pkpc_50myr(sim, partType, field, args):
+def sfr_surfdens_30pkpc_50myr(sim, field):
     """ Star formation surface density (50 Myr, SFR and M* within 30kpc). """
     sfr = sim.subhalos('sfr_30pkpc_50myr')
     area = np.pi * (30.0)**2 # kpc^2
@@ -651,7 +651,7 @@ sfr_surfdens_30pkpc_50myr.limits = [-7.0, -1.0]
 sfr_surfdens_30pkpc_50myr.log = True
 
 @catalog_field
-def sfr_surfdens_30pkpc_100myr(sim, partType, field, args):
+def sfr_surfdens_30pkpc_100myr(sim, field):
     """ Star formation surface density (100 Myr, SFR and M* within 30kpc). """
     sfr = sim.subhalos('sfr_30pkpc_100myr')
     area = np.pi * (30.0)**2 # kpc^2
@@ -666,7 +666,7 @@ sfr_surfdens_30pkpc_100myr.log = True
 # ---------------------------- auxcat: gas observables --------------------------------------------
 
 @catalog_field
-def szy_r500c_3d(sim, partType, field, args):
+def szy_r500c_3d(sim, field):
     """ Sunyaev Zeldovich y-parameter within r500c (3d). """
     acField = 'Subhalo_SZY_R500c_3D'
     ac = sim.auxCat(fields=[acField])
@@ -682,7 +682,7 @@ szy_r500c_3d.limits = [-6.0, -3.0]
 szy_r500c_3d.log = True
 
 @catalog_field
-def szy_r500c_2d(sim, partType, field, args):
+def szy_r500c_2d(sim, field):
     """ Sunyaev Zeldovich y-parameter within r500c (2d). """
     acField = 'Subhalo_SZY_R500c_2D_d=r200'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -699,7 +699,7 @@ szy_r500c_2d.limits = [-6.0, -3.0]
 szy_r500c_2d.log = True
 
 @catalog_field
-def xray_r500(sim, partType, field, args):
+def xray_r500(sim, field):
     """ Bolometric X-ray luminosity (simple free-free model), within r500c. """
     # note: computed per group, e.g. for centrals only
     acField = 'Group_XrayBolLum_Crit500'
@@ -716,7 +716,7 @@ xray_r500.limits = [37, 42]
 xray_r500.log = True
 
 @catalog_field
-def xray_subhalo(sim, partType, field, args):
+def xray_subhalo(sim, field):
     """ Bolometric X-ray luminosity (simple free-free model), within full subhalo. """
     acField = 'Subhalo_XrayBolLum'
     ac = sim.auxCat(fields=[acField])[acField]
@@ -731,7 +731,7 @@ xray_subhalo.limits = [37, 42]
 xray_subhalo.log = True
 
 @catalog_field
-def xray_05_2kev_r500(sim, partType, field, args):
+def xray_05_2kev_r500(sim, field):
     """ X-ray luminosity 0.5-2.0 keV (APEC model), within r500c in 3D. """
     acField = 'Subhalo_XrayLum_0.5-2.0kev'
     ac = sim.auxCat(fields=[acField])[acField]
@@ -746,7 +746,7 @@ xray_05_2kev_r500.limits = [37, 42]
 xray_05_2kev_r500.log = True
 
 @catalog_field
-def xray_05_2kev_r500_halo(sim, partType, field, args):
+def xray_05_2kev_r500_halo(sim, field):
     """ X-ray luminosity 0.5-2.0 keV (APEC model), within r500c in 3D (FoF-scope). """
     acField = 'Group_XrayLum_0.5-2.0kev_Crit500'
     ac = sim.auxCat(fields=[acField])[acField]
@@ -762,7 +762,7 @@ xray_05_2kev_r500_halo.limits = [37, 42]
 xray_05_2kev_r500_halo.log = True
 
 @catalog_field
-def xray_01_24kev_r500_halo(sim, partType, field, args):
+def xray_01_24kev_r500_halo(sim, field):
     """ X-ray luminosity 0.1-2.4 keV (APEC model), within r500c in 3D (FoF-scope). """
     acField = 'Group_XrayLum_0.1-2.4kev_Crit500'
     ac = sim.auxCat(fields=[acField])[acField]
@@ -778,7 +778,7 @@ xray_01_24kev_r500_halo.limits = [37, 42]
 xray_01_24kev_r500_halo.log = True
 
 @catalog_field
-def xraylum_r500c_2d(sim, partType, field, args):
+def xraylum_r500c_2d(sim, field):
     """ X-ray luminosity (0.5-2.0 keV) within r500c (2d). """
     acField = 'Subhalo_XrayLum_0.5-2.0kev_R500c_2D_d=r200'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -794,7 +794,7 @@ xraylum_r500c_2d.limits = [41.0, 46.0]
 xraylum_r500c_2d.log = True
 
 @catalog_field(aliases=['xray_peak_offset_2d_rvir','xray_peak_offset_2d_r500'])
-def xray_peak_offset_2d(sim, partType, field, args):
+def xray_peak_offset_2d(sim, field):
     """ Spatial offset between X-ray (0.5-2.0 keV) emission peak and galaxy (SubhaloPos). In 2D projection. """
     acField = 'Subhalo_XrayOffset_2D'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -816,15 +816,15 @@ def xray_peak_offset_2d(sim, partType, field, args):
     
     return vals
 
-xray_peak_offset_2d.label = lambda sim,pt,f: r'$\rm{\Delta_{X-ray,galaxy}^{2d}}$' if f.endswith('_2d') \
+xray_peak_offset_2d.label = lambda sim,f: r'$\rm{\Delta_{X-ray,galaxy}^{2d}}$' if f.endswith('_2d') \
     else (r'$\rm{\Delta_{X-ray,galaxy} / R_{vir}}$' if f.endswith('_rvir') else \
         r'$\rm{\Delta_{X-ray,galaxy} / R_{500}}$')
-xray_peak_offset_2d.units = lambda sim,pt,f: r'$\rm{kpc}$' if f.endswith('_2d') else '' # linear dimensionless
-xray_peak_offset_2d.limits = lambda sim,pt,f: [0.0, 2.5] if f.endswith('_2d') else [-2.0, 0.0]
+xray_peak_offset_2d.units = lambda sim,f: r'$\rm{kpc}$' if f.endswith('_2d') else '' # linear dimensionless
+xray_peak_offset_2d.limits = lambda sim,f: [0.0, 2.5] if f.endswith('_2d') else [-2.0, 0.0]
 xray_peak_offset_2d.log = True
 
 @catalog_field
-def tcool_halo_ovi(sim, partType, field, args):
+def tcool_halo_ovi(sim, field):
     """ Mean cooling time of halo gas, weighted by OVI mass. """
     acField = 'Subhalo_CoolingTime_OVI_HaloGas'
     vals = sim.auxCat(fields=[acField])[acField] # Gyr
@@ -837,7 +837,7 @@ tcool_halo_ovi.limits = [-0.5, 1.5]
 tcool_halo_ovi.log = True
 
 @catalog_field(aliases=['p_sync_ska_eta43','p_sync_ska_alpha15'])
-def p_sync_ska(sim, partType, field, args):
+def p_sync_ska(sim, field):
     """ Synchrotron power radio emission (SKA model). """
     acField = 'Subhalo_SynchrotronPower_SKA'
     if field.endswith('_eta43'):
@@ -855,7 +855,7 @@ p_sync_ska.limits = [16, 26]
 p_sync_ska.log = True
 
 @catalog_field(aliases=['p_sync_vla_eta43','p_sync_vla_alpha15'])
-def p_sync_vla(sim, partType, field, args):
+def p_sync_vla(sim, field):
     """ Synchrotron power radio emission (VLA model). """
     acField = 'Subhalo_SynchrotronPower_VLA'
     if field.endswith('_eta43'):
@@ -875,7 +875,7 @@ p_sync_ska.log = True
 # ---------------------------- auxcat: gas emission (cloudy-based) -----------------------------------
 
 @catalog_field
-def lum_civ1551_outercgm(sim, partType, field, args):
+def lum_civ1551_outercgm(sim, field):
     """ CIV 1551 luminosity in the outer CGM. """
     acField = 'Subhalo_CIV1551_Lum_OuterCGM'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -890,7 +890,7 @@ lum_civ1551_outercgm.limits = [36.0, 45.0]
 lum_civ1551_outercgm.log = True
 
 @catalog_field
-def lum_civ1551_innercgm(sim, partType, field, args):
+def lum_civ1551_innercgm(sim, field):
     """ CIV 1551 luminosity in the inner CGM. """
     acField = 'Subhalo_CIV1551_Lum_InnerCGM'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -905,7 +905,7 @@ lum_civ1551_innercgm.limits = [36.0, 45.0]
 lum_civ1551_innercgm.log = True
 
 @catalog_field
-def lum_heii1640_outercgm(sim, partType, field, args):
+def lum_heii1640_outercgm(sim, field):
     """ HeII 1640 luminosity in the outer CGM. """
     acField = 'Subhalo_HeII1640_Lum_OuterCGM'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -920,7 +920,7 @@ lum_heii1640_outercgm.limits = [36.0, 45.0]
 lum_heii1640_outercgm.log = True
 
 @catalog_field
-def lum_heii1640_innercgm(sim, partType, field, args):
+def lum_heii1640_innercgm(sim, field):
     """ HeII 1640 luminosity in the inner CGM. """
     acField = 'Subhalo_HeII1640_Lum_InnerCGM'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -935,7 +935,7 @@ lum_heii1640_innercgm.limits = [36.0, 45.0]
 lum_heii1640_innercgm.log = True
 
 @catalog_field
-def mg2_lum(sim, partType, field, args):
+def mg2_lum(sim, field):
     """ MgII emission, total luminosity. """
     acField = 'Subhalo_MgII_Lum_DustDepleted'
     ac = sim.auxCat(acField)[acField]
@@ -949,7 +949,7 @@ mg2_lum.limits = [37, 42]
 mg2_lum.log = True
 
 @catalog_field
-def mg2_lumsize(sim, partType, field, args):
+def mg2_lumsize(sim, field):
     """ MgII emission, size (half-light radius). """
     acField = 'Subhalo_MgII_LumSize_DustDepleted'
     ac = sim.auxCat(acField)[acField]
@@ -963,7 +963,7 @@ mg2_lumsize.limits = [1, 10]
 mg2_lumsize.log = False
 
 @catalog_field
-def mg2_lumsize_rel(sim, partType, field, args):
+def mg2_lumsize_rel(sim, field):
     """ MgII emission, size (half-light radius) relative to stellar half mass radius. """
     acField = 'Subhalo_MgII_LumSize_DustDepleted'
     vals = sim.auxCat(acField)[acField]
@@ -979,7 +979,7 @@ mg2_lumsize_rel.limits = [-0.5, 0.5]
 mg2_lumsize_rel.log = True
 
 @catalog_field
-def mg2_m20(sim, partType, field, args):
+def mg2_m20(sim, field):
     """ MgII emission, M20 statistic. """
     acField = 'Subhalo_MgII_Emission_Grid2D_M20'
     vals = np.squeeze(sim.auxCat(acField)[acField])
@@ -992,7 +992,7 @@ mg2_m20.limits = [-3.0, 0.5]
 mg2_m20.log = False
 
 @catalog_field
-def mg2_concentration(sim, partType, field, args):
+def mg2_concentration(sim, field):
     """ MgII emission, concentration statistic. """
     acField = 'Subhalo_MgII_LumConcentration_DustDepleted'
     vals = sim.auxCat(acField)[acField]
@@ -1005,7 +1005,7 @@ mg2_concentration.limits = [2.0, 5.0]
 mg2_concentration.log = False
 
 @catalog_field(multi='mg2_shape_')
-def mg2_shape_(sim, partType, field, args):
+def mg2_shape_(sim, field):
     """ MgII emission, shape (axis ratio) statistic  (at some isophotal level). """
     acField = 'Subhalo_MgII_Emission_Grid2D_Shape'
     ac = sim.auxCat(acField)[acField]
@@ -1024,7 +1024,7 @@ mg2_shape_.limits = [0.95, 2.4]
 mg2_shape_.log = False
 
 @catalog_field(multi='mg2_area_')
-def mg2_area_(sim, partType, field, args):
+def mg2_area_(sim, field):
     """ MgII emission, total area (at some isophotal level). """
     acField = 'Subhalo_MgII_Emission_Grid2D_Area'
     ac = sim.auxCat(acField)[acField]
@@ -1044,7 +1044,7 @@ mg2_area_.limits = [1.0, 4.0]
 mg2_area_.log = True
 
 @catalog_field(multi='mg2_gini_')
-def mg2_gini_(sim, partType, field, args):
+def mg2_gini_(sim, field):
     """ MgII emission, Gini statistic (at some isophotal level). """
     acField = 'Subhalo_MgII_Emission_Grid2D_Gini'
     ac = sim.auxCat(acField)[acField]
@@ -1065,7 +1065,7 @@ mg2_gini_.log = False
 # ---------------------------- auxcat: metallicity ---------------------------------------------------
 
 @catalog_field
-def z_stars_masswt(sim, partType, field, args):
+def z_stars_masswt(sim, field):
     """ Stellar metallicity (no radial restriction), mass weighted. """
     acField = 'Subhalo_StellarZ_NoRadCut_MassWt'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -1078,7 +1078,7 @@ z_stars_masswt.limits = [-3.0, 0.5]
 z_stars_masswt.log = True
 
 @catalog_field
-def z_stars_1kpc_masswt(sim, partType, field, args):
+def z_stars_1kpc_masswt(sim, field):
     """ Stellar metallicity (within 1 kpc, fof-scope), mass weighted. """
     acField = 'Subhalo_StellarZ_1kpc_FoF_MassWt'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -1091,7 +1091,7 @@ z_stars_1kpc_masswt.limits = [-3.0, 0.5]
 z_stars_1kpc_masswt.log = True
 
 @catalog_field
-def z_stars_2rhalfstarsfof_masswt(sim, partType, field, args):
+def z_stars_2rhalfstarsfof_masswt(sim, field):
     """ Stellar metallicity (within 2rhalfstars of fof, and fof-scope), mass weighted. """
     acField = 'Subhalo_StellarZ_2rhalfstars-FoF_MassWt'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -1104,7 +1104,7 @@ z_stars_2rhalfstarsfof_masswt.limits = [-3.0, 0.5]
 z_stars_2rhalfstarsfof_masswt.log = True
 
 @catalog_field
-def z_stars_fof_masswt(sim, partType, field, args):
+def z_stars_fof_masswt(sim, field):
     """ Stellar metallicity (full fof-scope), mass weighted. All satellites have same value as their central."""
     acField = 'Subhalo_StellarZ_FoF_MassWt'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -1117,7 +1117,7 @@ z_stars_fof_masswt.limits = [-3.0, 0.5]
 z_stars_fof_masswt.log = True
 
 @catalog_field
-def z_gas_sfrwt(sim, partType, field, args):
+def z_gas_sfrwt(sim, field):
     """ Gas-phase metallicity (no radial restriction), mass weighted. """
     acField = 'Subhalo_GasZ_NoRadCut_SfrWt'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -1130,7 +1130,7 @@ z_gas_sfrwt.limits = [-3.0, 0.5]
 z_gas_sfrwt.log = True
 
 @catalog_field
-def z_stars_halo(sim, partType, field, args):
+def z_stars_halo(sim, field):
     """ Mean stellar metallicity in the halo (0.15 < r/rvir < 1.0), mass weighted. """
     fieldName1 = 'Subhalo_Mass_HaloStars'
     fieldName2 = 'Subhalo_Mass_HaloStars_Metal'
@@ -1147,7 +1147,7 @@ z_stars_halo.limits = [-3.0, 1.0]
 z_stars_halo.log = True
 
 @catalog_field
-def z_gas_halo(sim, partType, field, args):
+def z_gas_halo(sim, field):
     """ Mean gas metallicity in the halo (0.15 < r/rvir < 1.0), mass weighted. """
     fieldName1 = 'Subhalo_Mass_HaloGas'
     fieldName2 = 'Subhalo_Mass_HaloGas_Metal'
@@ -1166,7 +1166,7 @@ z_gas_halo.log = True
 # ---------------------------- auxcat: stellar/gas kinematics --------------------------------------------
 
 @catalog_field
-def veldisp(sim, partType, field, args):
+def veldisp(sim, field):
     """ Stellar velocity dispersion (3D), within the stellar half mass radius. """
     acField = 'Subhalo_VelDisp3D_Stars_1rhalfstars'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -1179,7 +1179,7 @@ veldisp.limits = [1.0, 3.0]
 veldisp.log = True
 
 @catalog_field
-def veldisp1d(sim, partType, field, args):
+def veldisp1d(sim, field):
     """ Stellar velocity dispersion (1D, from 3D), within the stellar half mass radius. """
     acField = 'Subhalo_VelDisp1D_Stars_1rhalfstars'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -1192,7 +1192,7 @@ veldisp1d.limits = [1.0, 3.0]
 veldisp1d.log = True
 
 @catalog_field
-def veldisp1d_05re(sim, partType, field, args):
+def veldisp1d_05re(sim, field):
     """ Stellar velocity dispersion (1D, from 3D), within 0.5 times the stellar half mass radius. """
     acField = 'Subhalo_VelDisp1D_Stars_05rhalfstars'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -1205,7 +1205,7 @@ veldisp1d_05re.limits = [1.0, 2.8]
 veldisp1d_05re.log = True
 
 @catalog_field
-def veldisp1d_10pkpc(sim, partType, field, args):
+def veldisp1d_10pkpc(sim, field):
     """ Stellar velocity dispersion (1D, in z-direction), within 10pkpc. """
     acField = 'Subhalo_VelDisp1Dz_Stars_10pkpc'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -1218,7 +1218,7 @@ veldisp1d_10pkpc.limits = [1.0, 2.8]
 veldisp1d_10pkpc.log = True
 
 @catalog_field
-def veldisp1d_4pkpc2d(sim, partType, field, args):
+def veldisp1d_4pkpc2d(sim, field):
     """ Stellar velocity dispersion (1D, in z-direction), within 4pkpc (~SDSS fiber low-z) in 2D. """
     acField = 'Subhalo_VelDisp1Dz_Stars_4pkpc2D'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -1231,7 +1231,7 @@ veldisp1d_4pkpc2d.limits = [1.0, 2.8]
 veldisp1d_4pkpc2d.log = True
 
 @catalog_field
-def veldisp_gas_01r500c_xray(sim, partType, field, args):
+def veldisp_gas_01r500c_xray(sim, field):
     """ Gas velocity dispersion (1D, in z-direction), weighted by 0.2-2 keV X-ray luminosity, within 0.1r500c. """
     acField = 'Subhalo_VelDisp1Dz_XrayWt_010r500c'
     ac = sim.auxCat(fields=[acField], expandPartial=True)
@@ -1244,7 +1244,7 @@ veldisp_gas_01r500c_xray.limits = [100, 300] #[1.5, 3.0]
 veldisp_gas_01r500c_xray.log = False #True
 
 @catalog_field
-def gas_vrad_2rhalf(sim, partType, field, args):
+def gas_vrad_2rhalf(sim, field):
     """ Mean gas radial velocity within the galaxy (< 2rhalfstars), mass-weighted. """
     acField = 'Subhalo_Gas_RadialVel_2rhalfstars_massWt'
     vals = sim.auxCat(acField)[acField] # physical km/s (negative = inwards)
@@ -1257,7 +1257,7 @@ gas_vrad_2rhalf.limits = [-300, 300]
 gas_vrad_2rhalf.log = False
 
 @catalog_field
-def gas_vrad_halo(sim, partType, field, args):
+def gas_vrad_halo(sim, field):
     """ Mean gas radial velocity the halo (0.15 < r/rvir < 1), mass-weighted. """
     acField = 'Subhalo_Gas_RadialVel_halo_massWt'
     vals = sim.auxCat(acField)[acField] # physical km/s (negative = inwards)
@@ -1272,7 +1272,7 @@ gas_vrad_halo.log = False
 # ---------------------------- auxcat: virshock ------------------------------------------------------
 
 @catalog_field
-def rshock(sim, partType, field, args):
+def rshock(sim, field):
     """ Virial shock radius, fiducial model choice. """
     return sim.subhalos('rshock_ShocksMachNum_m2p2_kpc')
 
@@ -1282,7 +1282,7 @@ rshock.limits = [1.6, 3.2]
 rshock.log = True
 
 @catalog_field
-def rshock_rvir(sim, partType, field, args):
+def rshock_rvir(sim, field):
     """ Virial shock radius, fiducial model choice. Normalized. """
     return sim.subhalos('rshock_ShocksMachNum_m2p2')
 
@@ -1292,7 +1292,7 @@ rshock_rvir.limits = [0.0, 4.0]
 rshock_rvir.log = False
 
 @catalog_field(multi='rshock_')
-def rshock_(sim, partType, field, args):
+def rshock_(sim, field):
     """ Virial shock radius. [pkpc or rvir]. """
     # "rshock_{Temp,Entropy,RadVel,ShocksMachNum,ShocksEnergyDiss}_mXpY_{kpc,rvir}"
     maps = {'temp':'Temp', 'entropy':'Entropy', 'radvel':'RadVel', 
@@ -1320,15 +1320,15 @@ def rshock_(sim, partType, field, args):
 
     return vals
 
-rshock_.label = lambda sim,pt,f: r'$\rm{R_{shock}' if '_kpc' in f else r'$\rm{R_{shock} / R_{vir}}$'
-rshock_.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_kpc' in f else '' # linear dimensionless
-rshock_.limits = lambda sim,pt,f: [1.6, 3.2] if '_kpc' in f else [0.0, 4.0]
-rshock_.log = lambda sim,pt,f: True if '_kpc' in f else False
+rshock_.label = lambda sim,f: r'$\rm{R_{shock}' if '_kpc' in f else r'$\rm{R_{shock} / R_{vir}}$'
+rshock_.units = lambda sim,f: r'$\rm{kpc}$' if '_kpc' in f else '' # linear dimensionless
+rshock_.limits = lambda sim,f: [1.6, 3.2] if '_kpc' in f else [0.0, 4.0]
+rshock_.log = lambda sim,f: True if '_kpc' in f else False
 
 # ---------------------------- auxcat: gas sizes/shapes ------------------------------------------------------
 
 @catalog_field
-def size_halpha(sim, partType, field, args):
+def size_halpha(sim, field):
     """ Half-light radius of H-alpha emission, based on SFR empirical relation. """
     acField = 'Subhalo_Gas_Halpha_HalfRad'
     ac = sim.auxCat(acField)
@@ -1342,7 +1342,7 @@ size_halpha.limits = [0.0, 1.5]
 size_halpha.log = True
 
 @catalog_field
-def size_halpha_em(sim, partType, field, args):
+def size_halpha_em(sim, field):
     """ Half-light radius of H-alpha emission, based on cloudy. """
     acField = 'Subhalo_Gas_H-alpha_HalfRad'
     ac = sim.auxCat(acField)
@@ -1356,7 +1356,7 @@ size_halpha_em.limits = [0.0, 1.5]
 size_halpha_em.log = True
 
 @catalog_field
-def shape_q_sfrgas(sim, partType, field, args):
+def shape_q_sfrgas(sim, field):
     """ Iterative ellipsoid shape measurement: axis ratio (q) of star-forming gas. """
     acField = 'Subhalo_EllipsoidShape_Gas_SFRgt0_2rhalfstars_shell'
     vals = sim.auxCat(acField)[acField]
@@ -1370,7 +1370,7 @@ shape_q_sfrgas.limits = [0.1, 0.9]
 shape_q_sfrgas.log = False
 
 @catalog_field
-def shape_s_sfrgas(sim, partType, field, args):
+def shape_s_sfrgas(sim, field):
     """ Iterative ellipsoid shape measurement: sphericity (s) of star-forming gas. """
     acField = 'Subhalo_EllipsoidShape_Gas_SFRgt0_2rhalfstars_shell'
     vals = sim.auxCat(acField)[acField]
@@ -1384,7 +1384,7 @@ shape_s_sfrgas.limits = [0.1, 0.9]
 shape_s_sfrgas.log = False
 
 @catalog_field
-def shape_ratio_sfrgas(sim, partType, field, args):
+def shape_ratio_sfrgas(sim, field):
     """ Iterative ellipsoid shape measurement: ratio (s/q) of star-forming gas. """
     acField = 'Subhalo_EllipsoidShape_Gas_SFRgt0_2rhalfstars_shell'
     vals = sim.auxCat(acField)[acField]
@@ -1401,7 +1401,7 @@ shape_ratio_sfrgas.log = False
 # ---------------------------- auxcat: stellar sizes/shapes ------------------------------------------------------
 
 @catalog_field(multi='re_stars_', alias='re_stars')
-def re_stars_(sim, partType, field, args):
+def re_stars_(sim, field):
     """ Half light radii (effective optical radii R_e) of optical light from stars, in a given band. 
     Testing: z-axis 2D (random) projection. """
     acField = 'Subhalo_HalfLightRad_p07c_cf00dust_z'
@@ -1425,12 +1425,12 @@ def re_stars_(sim, partType, field, args):
     return vals
 
 re_stars_.label = r'R$_{\rm e,\star}$'
-re_stars_.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
+re_stars_.units = lambda sim,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
 re_stars_.limits = [0.0, 1.5]
 re_stars_.log = True
 
 @catalog_field
-def r80_stars(sim, partType, field, args):
+def r80_stars(sim, field):
     """ 3D radius enclosing 80% of stellar mass, non-standard. """
     acField = 'Subhalo_Stars_R80'
     vals = sim.auxCat(fields=[acField])[acField]
@@ -1439,12 +1439,12 @@ def r80_stars(sim, partType, field, args):
     return vals
 
 r80_stars.label = r'R$_{\rm 80,\star}$'
-r80_stars.units = lambda sim,pt,f: r'$\rm{kpc}$'
+r80_stars.units = lambda sim,f: r'$\rm{kpc}$'
 r80_stars.limits = [0.0, 1.5]
 r80_stars.log = True
 
 @catalog_field
-def sigma1kpc_stars(sim, partType, field, args):
+def sigma1kpc_stars(sim, field):
     """ Stellar surface density within a central 1 pkpc (2D projected) aperture. """
     acField = 'Subhalo_Mass_1pkpc_2D_Stars'
     vals = sim.auxCat(fields=[acField])[acField]
@@ -1456,12 +1456,12 @@ def sigma1kpc_stars(sim, partType, field, args):
     return vals
 
 sigma1kpc_stars.label = r'$\Sigma_{\rm 1,\star}$'
-sigma1kpc_stars.units = lambda sim,pt,f: r'$\rm{M_{\odot}\, kpc^{-2}}$'
+sigma1kpc_stars.units = lambda sim,f: r'$\rm{M_{\odot}\, kpc^{-2}}$'
 sigma1kpc_stars.limits = [6.5, 11.0]
 sigma1kpc_stars.log = True
 
 @catalog_field(alias='rhalf_stars_fof_code')
-def rhalf_stars_fof(sim, partType, field, args):
+def rhalf_stars_fof(sim, field):
     """ Stellar half-mass radius, computed from all FoF-scope stars. """
     acField = 'Subhalo_Stars_R50_FoF'
     ac = sim.auxCat(acField, expandPartial=True) # saved only for centrals
@@ -1477,12 +1477,12 @@ def rhalf_stars_fof(sim, partType, field, args):
     return vals
 
 rhalf_stars_fof.label = r'r$_{\rm 1/2,\star}$'
-rhalf_stars_fof.units = lambda sim,pt,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
+rhalf_stars_fof.units = lambda sim,f: r'$\rm{kpc}$' if '_code' not in f else 'code_length'
 rhalf_stars_fof.limits = [0.0, 1.5]
 rhalf_stars_fof.log = True
 
 @catalog_field
-def shape_q_stars(sim, partType, field, args):
+def shape_q_stars(sim, field):
     """ Iterative ellipsoid shape measurement: axis ratio (q) of stars. """
     acField = 'Subhalo_EllipsoidShape_Stars_2rhalfstars_shell'
     vals = sim.auxCat(acField)[acField]
@@ -1496,7 +1496,7 @@ shape_q_stars.limits = [0.1, 0.9]
 shape_q_stars.log = False
 
 @catalog_field
-def shape_s_stars(sim, partType, field, args):
+def shape_s_stars(sim, field):
     """ Iterative ellipsoid shape measurement: sphericity (s) of stars. """
     acField = 'Subhalo_EllipsoidShape_Stars_2rhalfstars_shell'
     vals = sim.auxCat(acField)[acField]
@@ -1510,7 +1510,7 @@ shape_s_stars.limits = [0.1, 0.9]
 shape_s_stars.log = False
 
 @catalog_field
-def shape_ratio_stars(sim, partType, field, args):
+def shape_ratio_stars(sim, field):
     """ Iterative ellipsoid shape measurement: ratio (s/q) of stars. """
     acField = 'Subhalo_EllipsoidShape_Stars_2rhalfstars_shell'
     vals = sim.auxCat(acField)[acField]
@@ -1525,7 +1525,7 @@ shape_ratio_stars.limits = [0.1, 0.9]
 shape_ratio_stars.log = False
 
 @catalog_field(aliases=['krot_stars1','krot_stars2'])
-def krot_stars(sim, partType, field, args):
+def krot_stars(sim, field):
     """ Galaxy disk kappa, fraction of stars in ordered rotation. """
     acField = 'Subhalo_StellarRotation'
     if field.endswith('2'):
@@ -1544,7 +1544,7 @@ krot_stars.limits = [0.1, 0.8]
 krot_stars.log = False
 
 @catalog_field(aliases=['krot_gas1','krot_gas2'])
-def krot_gas(sim, partType, field, args):
+def krot_gas(sim, field):
     """ Galaxy disk kappa, fraction of gas in ordered rotation. """
     acField = 'Subhalo_GasRotation'
     if field.endswith('2'):
@@ -1563,7 +1563,7 @@ krot_gas.limits = [0.1, 1.0]
 krot_gas.log = False
 
 @catalog_field(aliases=['krot_oriented_stars1','krot_oriented_stars2'])
-def krot_oriented_stars(sim, partType, field, args):
+def krot_oriented_stars(sim, field):
     """ Galaxy disk kappa, fraction of stars in ordered rotation (J_z > 0). """
     acField = 'Subhalo_StellarRotation'
     if field.endswith('2'):
@@ -1582,7 +1582,7 @@ krot_oriented_stars.limits = [0.1, 0.8]
 krot_oriented_stars.log = False
 
 @catalog_field(aliases=['krot_oriented_gas1','krot_oriented_gas2'])
-def krot_oriented_gas(sim, partType, field, args):
+def krot_oriented_gas(sim, field):
     """ Galaxy disk kappa, fraction of gas in ordered rotation (J_z > 0). """
     acField = 'Subhalo_GasRotation'
     if field.endswith('2'):
@@ -1601,7 +1601,7 @@ krot_oriented_gas.limits = [0.1, 0.8]
 krot_oriented_gas.log = False
 
 @catalog_field(aliases=['arot_stars1','arot_stars2'])
-def arot_stars(sim, partType, field, args):
+def arot_stars(sim, field):
     """ Galaxy disk, fraction of counter-rotating stars. """
     acField = 'Subhalo_StellarRotation'
     if field.endswith('2'):
@@ -1620,7 +1620,7 @@ arot_stars.limits = [0.0, 0.6]
 arot_stars.log = False
 
 @catalog_field(aliases=['arot_gas1','arot_gas2'])
-def arot_gas(sim, partType, field, args):
+def arot_gas(sim, field):
     """ Galaxy disk, fraction of counter-rotating gas. """
     acField = 'Subhalo_GasRotation'
     if field.endswith('2'):
@@ -1639,7 +1639,7 @@ arot_gas.limits = [0.0, 0.4]
 arot_gas.log = False
 
 @catalog_field(aliases=['specangmom_stars1','specangmom_stars2'])
-def specangmom_stars(sim, partType, field, args):
+def specangmom_stars(sim, field):
     """ Galaxy disk, specific angular momentum of stars. """
     acField = 'Subhalo_StellarRotation'
     if field.endswith('2'):
@@ -1658,7 +1658,7 @@ specangmom_stars.limits = [1.0, 5.0]
 specangmom_stars.log = True
 
 @catalog_field(aliases=['specangmom_gas1','specangmom_gas2'])
-def specangmom_gas(sim, partType, field, args):
+def specangmom_gas(sim, field):
     """ Galaxy disk, specific angular momentum of gas. """
     acField = 'Subhalo_GasRotation'
     if field.endswith('2'):
@@ -1677,7 +1677,7 @@ specangmom_gas.limits = [2.0, 5.0]
 specangmom_gas.log = True
 
 @catalog_field
-def m_bulge_counter_rot(sim, partType, field, args):
+def m_bulge_counter_rot(sim, field):
     """ M_bulge estimator: twice the counter-rotating stellar mass within the stellar half-mass radius. """
     acField = 'Subhalo_StellarRotation_1rhalfstars'
 
@@ -1701,7 +1701,7 @@ m_bulge_counter_rot.log = True
 # ---------------------------- auxcat: magnetic fields --------------------------------------------
 
 @catalog_field(alias='bmag_sfrgt0_volwt')
-def bmag_sfrgt0_masswt(sim, partType, field, args):
+def bmag_sfrgt0_masswt(sim, field):
     """ Mean magnetic field amplitude in the ISM (star-forming gas), full subhalo, mass or volume weighted. """
     if '_masswt' in field: wtStr = 'massWt'
     if '_volwt' in field: wtStr = 'volWt'
@@ -1719,7 +1719,7 @@ bmag_sfrgt0_masswt.limits = [0.0, 2.0]
 bmag_sfrgt0_masswt.log = True
 
 @catalog_field(alias='bmag_2rhalf_volwt')
-def bmag_2rhalf_masswt(sim, partType, field, args):
+def bmag_2rhalf_masswt(sim, field):
     """ Mean magnetic field amplitude in the ISM (within 2rhalfstars), mass or volume weighted. """
     if '_masswt' in field: wtStr = 'massWt'
     if '_volwt' in field: wtStr = 'volWt'
@@ -1737,7 +1737,7 @@ bmag_2rhalf_masswt.limits = [0.0, 2.0]
 bmag_2rhalf_masswt.log = True
 
 @catalog_field(alias='bmag_halo_volwt')
-def bmag_halo_masswt(sim, partType, field, args):
+def bmag_halo_masswt(sim, field):
     """ Mean magnetic field amplitude in the halo (0.15 < r/rvir < 1.0), mass or volume weighted. """
     if '_masswt' in field: wtStr = 'massWt'
     if '_volwt' in field: wtStr = 'volWt'
@@ -1755,7 +1755,7 @@ bmag_halo_masswt.limits = [-1.5, 0.0]
 bmag_halo_masswt.log = True
 
 @catalog_field(alias='bmag_r500_volwt')
-def bmag_r500_masswt(sim, partType, field, args):
+def bmag_r500_masswt(sim, field):
     """ Mean magnetic field amplitude within r500c, mass or volume weighted. """
     if '_masswt' in field: wtStr = 'massWt'
     if '_volwt' in field: wtStr = 'volWt'
@@ -1773,7 +1773,7 @@ bmag_r500_masswt.limits = [-1.5, 0.0]
 bmag_r500_masswt.log = True
 
 @catalog_field(alias='bmag_halfr500_volwt')
-def bmag_halfr500_masswt(sim, partType, field, args):
+def bmag_halfr500_masswt(sim, field):
     """ Mean magnetic field amplitude within 0.5 * r500c, mass or volume weighted. """
     if '_masswt' in field: wtStr = 'massWt'
     if '_volwt' in field: wtStr = 'volWt'
@@ -1791,7 +1791,7 @@ bmag_halfr500_masswt.limits = [-1.0, 0.5]
 bmag_halfr500_masswt.log = True
 
 @catalog_field(alias='bmag_volwt')
-def bmag_masswt(sim, partType, field, args):
+def bmag_masswt(sim, field):
     """ Mean magnetic field amplitude (full subhalo), mass or volume weighted. """
     if '_masswt' in field: wtStr = 'massWt'
     if '_volwt' in field: wtStr = 'volWt'
@@ -1809,7 +1809,7 @@ bmag_masswt.limits = [-1.0, 0.5]
 bmag_masswt.log = True
 
 @catalog_field(alias='pratio_halo_volwt')
-def pratio_halo_masswt(sim, partType, field, args):
+def pratio_halo_masswt(sim, field):
     """ Ratio of magnetic to thermal gas pressure in the halo (0.15 < r/rvir < 1.0), mass or volume weighted. """
     if '_masswt' in field: wtStr = 'massWt'
     if '_volwt' in field: wtStr = 'volWt'
@@ -1825,7 +1825,7 @@ pratio_halo_masswt.limits = [-2.0, 1.0]
 pratio_halo_masswt.log = True
 
 @catalog_field(alias='pratio_2rhalf_volwt')
-def pratio_2rhalf_masswt(sim, partType, field, args):
+def pratio_2rhalf_masswt(sim, field):
     """ Ratio of magnetic to thermal gas pressure in the galaxy (r < 2rhalfstars), mass or volume weighted. """
     if '_masswt' in field: wtStr = 'massWt'
     if '_volwt' in field: wtStr = 'volWt'
@@ -1841,7 +1841,7 @@ pratio_2rhalf_masswt.limits = [-2.0, 1.0]
 pratio_2rhalf_masswt.log = True
 
 @catalog_field(alias='bke_ratio_halo_volwt')
-def bke_ratio_halo_masswt(sim, partType, field, args):
+def bke_ratio_halo_masswt(sim, field):
     """ Ratio of magnetic to kinetic energy in the halo (0.15 < r/rvir < 1.0), mass or volume weighted. """
     if '_masswt' in field: wtStr = 'massWt'
     if '_volwt' in field: wtStr = 'volWt'
@@ -1857,7 +1857,7 @@ bke_ratio_halo_masswt.limits = [-2.0, 1.0]
 bke_ratio_halo_masswt.log = True
 
 @catalog_field(alias='bke_ratio_2rhalf_volwt')
-def bke_ratio_2rhalf_masswt(sim, partType, field, args):
+def bke_ratio_2rhalf_masswt(sim, field):
     """ Ratio of magnetic to kinetic energy in the galaxy (r < 2rhalfstars), mass or volume weighted. """
     if '_masswt' in field: wtStr = 'massWt'
     if '_volwt' in field: wtStr = 'volWt'
@@ -1873,7 +1873,7 @@ bke_ratio_2rhalf_masswt.limits = [-2.0, 1.0]
 bke_ratio_2rhalf_masswt.log = True
 
 @catalog_field
-def ptot_gas_halo(sim, partType, field, args):
+def ptot_gas_halo(sim, field):
     """ Total gas thermal pressure in the halo (0.15 < r/rvir < 1.0). """
     acField = 'Subhalo_Ptot_gas_halo'
     vals = sim.auxCat(acField)[acField]
@@ -1886,7 +1886,7 @@ ptot_gas_halo.limits = [5.0, 7.0]
 ptot_gas_halo.log = True
 
 @catalog_field
-def ptot_b_halo(sim, partType, field, args):
+def ptot_b_halo(sim, field):
     """ Total gas magnetic pressure in the halo (0.15 < r/rvir < 1.0). """
     acField = 'Subhalo_Ptot_B_halo'
     vals = sim.auxCat(acField)[acField]
@@ -1901,7 +1901,7 @@ ptot_b_halo.log = True
 # -------------------- smbhs -----------------------------------------------------------
 
 @catalog_field
-def m_bh(sim, partType, field, args):
+def m_bh(sim, field):
     """ Supermassive black hole mass (dynamical). """
     # 'total' black hole mass in this subhalo
     # note: some subhalos (particularly the ~50=~1e-5 most massive) have N>1 BHs, then we here 
@@ -1917,7 +1917,7 @@ m_bh.limits = [6.0, 9.0]
 m_bh.log = True
 
 @catalog_field
-def m_bh(sim, partType, field, args):
+def m_bh(sim, field):
     """ Supermassive black hole mass (actual, i.e. starting from the seed mass). """
     # 'total' black hole mass in this subhalo
     # note: some subhalos (particularly the ~50=~1e-5 most massive) have N>1 BHs, then we here 
@@ -1933,7 +1933,7 @@ m_bh.limits = [6.0, 9.0]
 m_bh.log = True
 
 @catalog_field
-def bh_mdot_edd(sim, partType, field, args):
+def bh_mdot_edd(sim, field):
     """ Blackhole mass accretion rate normalized by its Eddington rate (for most massive BH in each subhalo). """
     fields = ['Subhalo_BH_Mdot_largest','Subhalo_BH_MdotEdd_largest']
     ac = sim.auxCat(fields=fields)
@@ -1948,7 +1948,7 @@ bh_mdot_edd.limits = [-5.0, 0.0]
 bh_mdot_edd.log = True
 
 @catalog_field
-def bh_bollum(sim, partType, field, args):
+def bh_bollum(sim, field):
     """ Blackhole bolometric luminosity (for most massive BH in each subhalo). """
     acField = 'Subhalo_BH_BolLum_largest'
     vals = sim.auxCat(acField)[acField]
@@ -1961,7 +1961,7 @@ bh_bollum.limits = [41.0, 46.0]
 bh_bollum.log = True
 
 @catalog_field
-def bh_bollum_basic(sim, partType, field, args):
+def bh_bollum_basic(sim, field):
     """ Blackhole bolometric luminosity, basic model (for most massive BH in each subhalo). """
     acField = 'Subhalo_BH_BolLum_basic_largest'
     vals = sim.auxCat(acField)[acField]
@@ -1974,7 +1974,7 @@ bh_bollum_basic.limits = [41.0, 46.0]
 bh_bollum_basic.log = True
 
 @catalog_field
-def bh_eddratio(sim, partType, field, args):
+def bh_eddratio(sim, field):
     """ Blackhole Eddington ratio (for most massive BH in each subhalo). """
     acField = 'Subhalo_BH_EddRatio_largest'
     vals = sim.auxCat(acField)[acField]
@@ -1987,7 +1987,7 @@ bh_eddratio.limits = [-4.0, 0.0]
 bh_eddratio.log = True
 
 @catalog_field
-def bh_dedt(sim, partType, field, args):
+def bh_dedt(sim, field):
     """ Blackhole energy injection rate (for most massive BH in each subhalo). """
     acField = 'Subhalo_BH_dEdt_largest'
     vals = sim.auxCat(acField)[acField]
@@ -2000,7 +2000,7 @@ bh_dedt.limits = [42.0, 45.0]
 bh_dedt.log = True
 
 @catalog_field
-def bh_mode(sim, partType, field, args):
+def bh_mode(sim, field):
     """ Blackhole feedback mode [0=low/kinetic, 1=high/quasar] (for most massive BH in each subhalo). """
     acField = 'Subhalo_BH_mode'
     vals = sim.auxCat(acField)[acField]
@@ -2013,7 +2013,7 @@ bh_mode.limits = [-0.1, 1.1]
 bh_mode.log = False
 
 @catalog_field
-def bh_cumegy_low(sim, partType, field, args):
+def bh_cumegy_low(sim, field):
     """ Cumulative energy injected in the low (kinetic) accretion mode. """
     acField = 'Subhalo_BH_CumEgyInjection_Low'
     vals = sim.auxCat(acField)[acField]
@@ -2027,7 +2027,7 @@ bh_cumegy_low.limits = [54, 61]
 bh_cumegy_low.log = True
 
 @catalog_field
-def bh_cumegy_high(sim, partType, field, args):
+def bh_cumegy_high(sim, field):
     """ Cumulative energy injected in the high (thermal/quasar) accretion mode. """
     acField = 'Subhalo_BH_CumEgyInjection_High'
     vals = sim.auxCat(acField)[acField]
@@ -2041,7 +2041,7 @@ bh_cumegy_high.limits = [58, 62]
 bh_cumegy_high.log = True
 
 @catalog_field
-def bh_cummass_low(sim, partType, field, args):
+def bh_cummass_low(sim, field):
     """ Cumulative mass accretion in the low (kinetic) accretion mode. """
     acField = 'Subhalo_BH_CumMassGrowth_Low'
     vals = sim.auxCat(acField)[acField]
@@ -2055,7 +2055,7 @@ bh_cummass_low.limits = [0.0, 7.0]
 bh_cummass_low.log = True
 
 @catalog_field
-def bh_cummass_high(sim, partType, field, args):
+def bh_cummass_high(sim, field):
     """ Cumulative mass accretion in the high (thermal/quasar) accretion mode. """
     acField = 'Subhalo_BH_CumMassGrowth_High'
     vals = sim.auxCat(acField)[acField]
@@ -2069,7 +2069,7 @@ bh_cummass_high.limits = [5.0, 9.0]
 bh_cummass_high.log = True
 
 @catalog_field
-def bh_cumegy_ratio(sim, partType, field, args):
+def bh_cumegy_ratio(sim, field):
     """ Ratio of cumulative energy injected in low vs. high accretion modes. """
     acFields = ['Subhalo_BH_CumEgyInjection_High','Subhalo_BH_CumEgyInjection_Low']
     ac = sim.auxCat(acFields)
@@ -2090,7 +2090,7 @@ bh_cumegy_ratio.limits = [0.0, 4.0]
 bh_cumegy_ratio.log = True
 
 @catalog_field
-def bh_cumegy_ratioinv(sim, partType, field, args):
+def bh_cumegy_ratioinv(sim, field):
     """ Ratio of cumulative energy injected in high vs. low accretion modes. """
     acFields = ['Subhalo_BH_CumMassGrowth_Low','Subhalo_BH_CumMassGrowth_High']
     ac = sim.auxCat(acFields)
@@ -2111,7 +2111,7 @@ bh_cumegy_ratioinv.limits = [-4.0, 0.0]
 bh_cumegy_ratioinv.log = True
 
 @catalog_field
-def bh_cummass_ratio(sim, partType, field, args):
+def bh_cummass_ratio(sim, field):
     """ Ratio of cumulative mass accretion in low vs. high accretion modes. """
     acFields = ['Subhalo_BH_CumMassGrowth_High','Subhalo_BH_CumMassGrowth_Low']
     ac = sim.auxCat(acFields)
@@ -2134,7 +2134,7 @@ bh_cummass_ratio.log = True
 # ---------------------------- auxcat: outflows ------------------------------------------------------
 
 @catalog_field
-def wind_vel(sim, partType, field, args):
+def wind_vel(sim, field):
     """ Wind model: velocity at injection, from star-forming gas. """
     acField = 'Subhalo_Gas_Wind_vel'
     vals = sim.auxCat(acField)[acField]
@@ -2147,7 +2147,7 @@ wind_vel.limits = [1.0, 3.0]
 wind_vel.log = True
 
 @catalog_field
-def wind_etam(sim, partType, field, args):
+def wind_etam(sim, field):
     """ Wind model: mass loading at injection, from star-forming gas. """
     acField = 'Subhalo_Gas_Wind_etaM'
     vals = sim.auxCat(acField)[acField]
@@ -2160,7 +2160,7 @@ wind_etam.limits = [-1.0, 2.0]
 wind_etam.log = True
 
 @catalog_field
-def wind_dedt(sim, partType, field, args):
+def wind_dedt(sim, field):
     """ Wind model: energy injection rate, from star-forming gas. """
     acField = 'Subhalo_Gas_Wind_dEdt'
     vals = sim.auxCat(acField)[acField]
@@ -2174,7 +2174,7 @@ wind_dedt.limits = [39.0, 42.0]
 wind_dedt.log = True
 
 @catalog_field
-def wind_dpdt(sim, partType, field, args):
+def wind_dpdt(sim, field):
     """ Wind model: momemtum injection rate, from star-forming gas. """
     acField = 'Subhalo_Gas_Wind_dPdt'
     vals = sim.auxCat(acField)[acField]
@@ -2188,7 +2188,7 @@ wind_dpdt.limits = [39.0, 42.0]
 wind_dpdt.log = True
 
 @catalog_field(multi='etam_')
-def etam_(sim, partType, field, args):
+def etam_(sim, field):
     """ Outflows: mass loading factor (given a selected timescale, radius, and velocity cut). """
     _, sfr_timescale, rad, vcut = field.split('_')
 
@@ -2217,7 +2217,7 @@ etam_.limits = [0.0, 2.0]
 etam_.log = True
 
 @catalog_field(multi='etae_')
-def etae_(sim, partType, field, args):
+def etae_(sim, field):
     """ Outflows: energy loading factor (given a selected radius, and velocity cut). """
     _, rad, vcut = field.split('_')
 
@@ -2241,7 +2241,7 @@ etae_.limits = [-1.5, 2.5]
 etae_.log = True
 
 @catalog_field(multi='etap_')
-def etap_(sim, partType, field, args):
+def etap_(sim, field):
     """ Outflows: momentum loading factor (given a selected radius, and velocity cut). """
     _, rad, vcut = field.split('_')
 
@@ -2265,7 +2265,7 @@ etap_.limits = [-1.5, 2.5]
 etap_.log = True
 
 @catalog_field(multi='vout_')
-def vout_(sim, partType, field, args):
+def vout_(sim, field):
     """ Outflows: outflow velocity (given a selected percentile and radius). """
     _, perc, rad = field.split('_')
 
@@ -2297,7 +2297,7 @@ vout_.log = True
 # ---------------------------- auxcat: other ------------------------------------------------------
 
 @catalog_field
-def zform(sim, partType, field, args):
+def zform(sim, field):
     """ Formation redshift (of the halo), at which the subhalo had half of its current mass. """
     acField = 'Subhalo_SubLink_zForm_mm5'
     ac = sim.auxCat(fields=[acField])
@@ -2310,7 +2310,7 @@ zform.limits = [0.0, 4.0]
 zform.log = False
 
 @catalog_field
-def stellar_zform_vimos(sim, partType, field, args):
+def stellar_zform_vimos(sim, field):
     """ Stellar formation redshift (mass-weighted mean), using the VIMOS slit aperture of stars. """
     acField = 'Subhalo_StellarZform_VIMOS_Slit'
     ac = sim.auxCat(fields=[acField])
@@ -2323,7 +2323,7 @@ stellar_zform_vimos.limits = [0.5, 6.0]
 stellar_zform_vimos.log = False
 
 @catalog_field
-def stellarage(sim, partType, field, args):
+def stellarage(sim, field):
     """ Mean stellar age (mass-weighted), all stars in subhalo. """
     acField = 'Subhalo_StellarAge_NoRadCut_MassWt'
     vals = sim.auxCat(fields=[acField])[acField]
@@ -2336,7 +2336,7 @@ stellarage.limits = [0.0, 1.0]
 stellarage.log = True
 
 @catalog_field
-def stellarage_4pkpc(sim, partType, field, args):
+def stellarage_4pkpc(sim, field):
     """ Mean stellar age (r-band luminosity weighted), including only stars within a 4 pkpc aperture. """
     acField = 'Subhalo_StellarAge_4pkpc_rBandLumWt'
     vals = sim.auxCat(fields=[acField])[acField]
@@ -2349,7 +2349,7 @@ stellarage_4pkpc.limits = [0.0, 1.0]
 stellarage_4pkpc.log = True
 
 @catalog_field(aliases=['fiber_zred','fiber_mass','fiber_logzsol','fiber_tau','fiber_tage','fiber_dust1','fiber_dust2'])
-def fiber_(sim, partType, field, args):
+def fiber_(sim, field):
     """ Mock SDSS fiber spectrum MCMC fit quantities. """
     # withVel=True, addRealism=True, dustModel=p07c_cf00dust_res_conv, directions=z
     import json
@@ -2385,7 +2385,7 @@ fiber_.limits = [0.0, 1.0] # variable (todo)
 fiber_.log = True # variable (todo)
 
 @catalog_field(alias='temp_halo_volwt')
-def temp_halo(sim, partType, field, args):
+def temp_halo(sim, field):
     """ Mean gas temperature in the halo (0.15 < r/rvir < 1), mass or volume weighted. """
     wtStr = 'massWt' if not '_volwt' in field else 'volWt'
     acField = 'Subhalo_Temp_halo_%s' % wtStr
@@ -2399,7 +2399,7 @@ temp_halo.limits = [4.0, 8.0]
 temp_halo.log = True
 
 @catalog_field(alias='nh_halo_volwt')
-def nh_halo(sim, partType, field, args):
+def nh_halo(sim, field):
     """ Mean hydrogen number density in the halo (0.15 < r/rvir < 1), mass or volume weighted. """
     wtStr = 'massWt' if not '_volwt' in field else 'volWt'
     acField = 'Subhalo_nH_halo_%s' % wtStr
@@ -2413,7 +2413,7 @@ nh_halo.limits = [-5.0, -1.0]
 nh_halo.log = True
 
 @catalog_field(alias='nh_2rhalf_volwt')
-def nh_2rhalf(sim, partType, field, args):
+def nh_2rhalf(sim, field):
     """ Mean hydrogen number density in the galaxy (< 2rhalfstars), mass or volume weighted. """
     wtStr = 'massWt' if not '_volwt' in field else 'volWt'
     acField = 'Subhalo_nH_ISM_%s' % wtStr

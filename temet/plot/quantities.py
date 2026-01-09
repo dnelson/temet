@@ -260,45 +260,42 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     # any of these fields could be functions, in which case our convention is to call with 
     # (sP,pt,field) as the arguments, i.e. in order to make redshift-dependent decisions
-    if label is not None: # remove once migration is complete
-        ptType = 'subhalo' # completely redundant, can remove?
-        ptProperty = quantname # todo: unify and remove redundancy
-        assert units is not None, 'Missing units for custom field (likely typo).'
+    assert units is not None, 'Missing units for custom field (likely typo).'
 
-        if callable(label):
-            label = label(sP, ptType, ptProperty)
+    if callable(label):
+        label = label(sP, quantname)
 
-        if callable(lim):
-            lim = lim(sP, ptType, ptProperty)
+    if callable(lim):
+        lim = lim(sP, quantname)
 
-        if callable(units):
-            units = units(sP, ptType, ptProperty)
+    if callable(units):
+        units = units(sP, quantname)
 
-        if callable(log):
-            log = log(sP, ptType, ptProperty)
+    if callable(log):
+        log = log(sP, quantname)
 
-        # does units refer to a base code unit (code_mass, code_length, or code_velocity)
-        units = units.replace('code_length', sP.units.UnitLength_str)
-        units = units.replace('code_mass', sP.units.UnitMass_str)
-        units = units.replace('code_velocity', sP.units.UnitVelocity_str)
+    # does units refer to a base code unit (code_mass, code_length, or code_velocity)
+    units = units.replace('code_length', sP.units.UnitLength_str)
+    units = units.replace('code_mass', sP.units.UnitMass_str)
+    units = units.replace('code_velocity', sP.units.UnitVelocity_str)
 
-        # does units refer to a derived code unit? (could be improved if we move to symbolic manipulation)
-        units = units.replace('code_density', '%s/(%s)$^3$' % (sP.units.UnitMass_str,sP.units.UnitLength_str))
-        units = units.replace('code_volume', '(%s)^3' % sP.units.UnitLength_str)
+    # does units refer to a derived code unit? (could be improved if we move to symbolic manipulation)
+    units = units.replace('code_density', '%s/(%s)$^3$' % (sP.units.UnitMass_str,sP.units.UnitLength_str))
+    units = units.replace('code_volume', '(%s)^3' % sP.units.UnitLength_str)
 
-        # append units to label
-        if units is not None:
-            logUnitStr = ('%s%s' % ('log ' if log else '',units)).strip()
+    # append units to label
+    if units is not None:
+        logUnitStr = ('%s%s' % ('log ' if log else '',units)).strip()
 
-            # if we have a dimensional unit, or a logarithmic dimensionless unit
-            if logUnitStr != '':
-                label += ' [ %s ]' % logUnitStr
+        # if we have a dimensional unit, or a logarithmic dimensionless unit
+        if logUnitStr != '':
+            label += ' [ %s ]' % logUnitStr
 
-        # load actual values
-        if label is not None:
-            vals = sP.groupCat(sub=quantname)
+    # load actual values
+    if label is not None:
+        vals = sP.groupCat(sub=quantname)
 
-        minMax = lim # temporary
+    minMax = lim # temporary
 
     # take log?
     if '_log' in quant and log:
