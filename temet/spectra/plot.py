@@ -10,12 +10,12 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from os.path import isfile
 
-from ..cosmo.spectrum import integrate_along_saved_rays, deposit_single_line, \
+from ..spectra.spectrum import integrate_along_saved_rays, deposit_single_line, \
                              projAxis_def, nRaysPerDim_def, raysType_def, spectra_filepath
-from ..cosmo.spectrum_util import line_params, _voigt_tau, _equiv_width, \
+from ..spectra.util import line_params, _voigt_tau, _equiv_width, \
                                   lsf_matrix, varconvolve, resample_spectrum, \
                                   create_wavelength_grid, lines, instruments
-from ..cosmo.spectrum_analysis import absorber_catalog, load_spectra_subset, wave_to_dv
+from ..spectra.analysis import absorber_catalog, load_spectra_subset, wave_to_dv
 from ..util.helper import loadColorTable, sampleColorTable, logZeroNaN, iterable, closest, \
                           getWhiteBlackColors
 from ..vis.common import setAxisColors

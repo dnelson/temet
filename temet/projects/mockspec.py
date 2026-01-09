@@ -1,6 +1,6 @@
 """
 The Synthetic Absorption Line Spectral Almanac (SALSA)
-https://arxiv.org/abs/xxxx.xxxxx (in prep)
+https://arxiv.org/abs/2510.19904 (Nelson+ 2026)
 """
 import numpy as np
 import h5py
@@ -13,9 +13,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from os.path import isfile
 from scipy.ndimage import gaussian_filter
 
-from ..cosmo.spectrum import spectra_filepath
-from ..cosmo.spectrum_util import lines, instruments
-from ..plot.spectrum import spectra_gallery_indiv, EW_distribution, dNdz_evolution, EW_vs_coldens, \
+from ..spectra.spectrum import spectra_filepath
+from ..spectra.util import lines, instruments
+from ..spectra.plot import spectra_gallery_indiv, EW_distribution, dNdz_evolution, EW_vs_coldens, \
     instrument_lsf, spectrum_plot_single
 from ..plot.config import *
 from ..util.helper import closest, running_median
@@ -175,7 +175,7 @@ def lightconeSpectra(sim, instrument, ion, solar=False, add_lines=None):
 
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
-      instrument (str): specify observational instrument (from ..cosmo.spectrum.instruments).
+      instrument (str): specify observational instrument (from ..spectra.spectrum.instruments).
       ion (str): space-separated name of ion e.g. 'Mg II'.
       solar (bool): if True, then adopt solar abundance ratio for the given species, instead of snap value.
       add_lines (list[str] or None): if not None, then a list of lines to include. otherwise, include all for this ion.
@@ -266,7 +266,7 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None, SNR=None):
 
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
-      instrument (str): specify observational instrument (from ..cosmo.spectrum.instruments).
+      instrument (str): specify observational instrument (from ..spectra.spectrum.instruments).
       ion (str): space-separated name of ion e.g. 'Mg II'.
       add_lines (list[str] or None): if not None, then a list of lines to include. otherwise, include all for this ion.
       SNR (float): if not None, then add noise to achieve this signal to noise ratio.

@@ -22,7 +22,7 @@ from ..util.rotation import rotateCoordinateArray, perspectiveProjection
 from ..cosmo.cloudy import cloudyIon, cloudyEmission
 from ..cosmo.cloudyGrid import getEmissionLines
 from ..cosmo.stellarPop import sps
-from ..cosmo.spectrum import create_spectra_from_traced_rays
+from ..spectra.spectrum import create_spectra_from_traced_rays
 
 # all frames output here (current directory if empty string)
 savePathDefault = expanduser("~") + '/' # for testing/quick outputs
@@ -735,7 +735,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         assert 'voronoi_proj' in method
 
         # load number density of relevant species as 'mass'
-        from ..cosmo.spectrum_util import lines
+        from ..spectra.util import lines
         line = partField.replace('EW_','')
         element, ionNum = lines[line]['ion'].split(' ')
         field = 'mass'

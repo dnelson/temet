@@ -1113,7 +1113,7 @@ def depletionVsDynamicalTimescale():
 
 def sanch_ovi_groups():
     """ Mock OVI absorption spectra around TNG50-1 z=0.1 groups for Sanch Borthakur. """
-    from ..cosmo.spectrum import integrate_along_saved_rays, generate_rays_voronoi_fullbox
+    from ..spectra.spectrum import integrate_along_saved_rays, generate_rays_voronoi_fullbox
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     from scipy.stats import binned_statistic_2d
 

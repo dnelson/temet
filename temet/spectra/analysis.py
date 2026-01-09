@@ -9,9 +9,9 @@ from numba import jit
 
 from ..util.helper import closest, contiguousIntSubsets, logZeroMin
 from ..util.units import units
-from ..cosmo.spectrum import generate_rays_voronoi_fullbox, integrate_along_saved_rays, \
+from ..spectra.spectrum import generate_rays_voronoi_fullbox, integrate_along_saved_rays, \
                              projAxis_def, nRaysPerDim_def, raysType_def, spectra_filepath
-from ..cosmo.spectrum_util import create_wavelength_grid, lines
+from ..spectra.util import create_wavelength_grid, lines
 from ..plot.config import *
 
 def load_spectra_subset(sim, ion, instrument, mode, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def, 

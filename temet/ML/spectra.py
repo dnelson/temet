@@ -13,8 +13,8 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data.dataloader import default_collate
 
-from ..cosmo.spectrum_analysis import load_spectra_subset, load_absorber_spectra, absorber_catalog
-from ..cosmo.spectrum_util import lines
+from ..spectra.analysis import load_spectra_subset, load_absorber_spectra, absorber_catalog
+from ..spectra.util import lines
 from ..util import simParams
 from ..util.helper import running_median
 from ..plot.config import *

@@ -12,8 +12,8 @@ from numba import jit
 from ..util.helper import pSplitRange, reportMemory
 from ..util.voronoiRay import rayTrace
 from ..cosmo.cloudy import cloudyIon
-from ..cosmo.spectrum_util import *
-from ..cosmo.spectrum_util import _voigt_tau, _equiv_width, _v90
+from ..spectra.util import *
+from ..spectra.util import _voigt_tau, _equiv_width, _v90
 
 # default configuration for ray generation
 #projAxis_def = 2

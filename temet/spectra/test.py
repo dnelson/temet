@@ -5,8 +5,8 @@ import numpy as np
 import h5py
 from os.path import isfile
 
-from ..cosmo.spectrum import create_spectra_from_traced_rays
-from ..cosmo.spectrum_util import create_wavelength_grid, line_params
+from ..spectra.spectrum import create_spectra_from_traced_rays
+from ..spectra.util import create_wavelength_grid, line_params
 from ..util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
                               trace_ray_through_voronoi_mesh_with_connectivity, rayTrace
 from ..util.sphMap import sphGridWholeBox, sphMap
@@ -46,7 +46,7 @@ def deposit_single_line_local(wave_edges_master, tau_master, f, gamma, wave0, N,
     Return:
       None.
     """
-    from ..cosmo.spectrum import _voigt_tau
+    from ..spectra.spectrum import _voigt_tau
     
     if N == 0:
         return # empty

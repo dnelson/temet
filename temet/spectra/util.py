@@ -2,7 +2,6 @@
 Synthetic absorption spectra: data and utilities.
 """
 import numpy as np
-from os.path import isfile
 #from scipy.special import wofz
 
 from numba import jit
