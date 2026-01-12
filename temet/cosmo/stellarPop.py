@@ -1,9 +1,8 @@
 """
-Stellar population synthesis, evolution, photometrics.
+Stellar population synthesis, evolution, photometrics. (FSPS)
 """
 import numpy as np
 import h5py
-import time
 from numba import jit
 from os import mkdir, environ
 from os.path import isfile, isdir, expanduser

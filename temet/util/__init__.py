@@ -4,7 +4,6 @@ from . import dataConvert
 from . import dataConvertSim
 from . import gfmExternalFiles
 from . import helper
-from . import metaPlots
 from . import rotation
 from .simParams import simParams
 from . import sphMap

@@ -13,9 +13,11 @@ from .snapshot import snapshotHeader
 from ..util.helper import iterable, curRepoVersion
 
 # generative functions
-from ..cosmo.auxcatalog import fofRadialSumType, subhaloRadialReduction, subhaloStellarPhot, \
-  wholeBoxColDensGrid, wholeBoxCDDF, mergerTreeQuant, tracerTracksQuant, subhaloCatNeighborQuant, \
-  subhaloRadialProfile
+from ..catalog.group import fofRadialSumType
+from ..catalog.subhalo import subhaloRadialReduction, subhaloStellarPhot, subhaloCatNeighborQuant
+from ..catalog.box import wholeBoxColDensGrid, wholeBoxCDDF
+from ..catalog.temporal import mergerTreeQuant, tracerTracksQuant
+from ..catalog.profile import subhaloRadialProfile
 
 # save these as separate datasets, if present
 largeAttrNames = ['subhaloIDs','partInds','wavelength']

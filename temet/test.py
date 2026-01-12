@@ -582,7 +582,7 @@ def minify_gergo_hydrogen_files():
 def half_Kband_radii():
     """ Test for Hannah's paper. """
     sP = simParams(run='tng50-1',redshift=2.0)
-    from .cosmo.auxcatalog import findHalfLightRadius
+    from .catalog.common import findHalfLightRadius
 
     subhaloIDs = [25821,39745,55106,60750,79350,92271,99303]
 

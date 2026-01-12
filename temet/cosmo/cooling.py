@@ -1,5 +1,5 @@
 """
-Cooling function/table related, including Katz+96 network, Grackle utilities.
+Analysis and plotting related to Grackle-based cooling functions/tables.
 """
 from os.path import isfile
 import matplotlib.pyplot as plt

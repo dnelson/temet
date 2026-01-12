@@ -874,7 +874,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
     momemtum flux rates (outflowing/inflowing), and compute high dimensional histograms of this gas 
     mass/energy/mom flux as a function of (rad,vrad,dens,temp,metallicity), as well as a few particular 
     2D marginalized histograms of interest and 1D marginalized histograms. Note that this is a 
-    :py:mod:`cosmo.auxcatalog` compatible function, and returns standard format auxCats. To run, 
+    :py:mod:`catalog.subhalo` compatible function, and returns standard format auxCats. To run, 
     choose one of: ``rawMass``, ``fluxMass``, ``fluxKE``, or ``fluxP`` (see below).
 
     Args:

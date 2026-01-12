@@ -871,7 +871,7 @@ def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas'
     If ctName is not None, sample from this colormap to choose line color per object. Assign based on the property ctProp.
     If colorbar is not False, then use this field (string) to display a colorbar mapping.
     """
-    from ..cosmo.auxcatalog import subhaloRadialProfile
+    from ..catalog.profile import subhaloRadialProfile
     from ..tracer.tracerMC import match3
 
     # config

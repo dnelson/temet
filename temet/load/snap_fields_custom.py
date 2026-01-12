@@ -5,8 +5,7 @@ import h5py
 import numpy as np
 from functools import partial
 from getpass import getuser
-from os.path import isfile, isdir, getsize
-from os import mkdir
+from os.path import isfile, getsize
 
 from .snapshot import snap_field, _haloOrSubhaloIndRange
 from ..util.helper import numPartToChunkLoadSize, pSplitRange, closest

@@ -5,8 +5,7 @@ import numpy as np
 import h5py
 import subprocess
 import time
-from os.path import isfile, isdir, expanduser
-from os import mkdir
+from os.path import isfile
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable

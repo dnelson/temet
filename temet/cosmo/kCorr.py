@@ -3,7 +3,6 @@ Compute K-corrections following Chilingarian+ (2010).
 """
 from numba import jit
 import numpy as np
-import h5py
 
 coeff = {
     'B_BRc': [

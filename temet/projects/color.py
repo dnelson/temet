@@ -8,6 +8,7 @@ from builtins import *
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+from os.path import isfile, isdir, expanduser
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -15,9 +16,9 @@ from scipy.signal import savgol_filter
 from scipy.stats import gaussian_kde
 
 from ..util import simParams
-from ..util.helper import running_median, setAxisColors, logZeroNaN, closest, loadColorTable, getWhiteBlackColors, leastsq_fit
+from ..util.helper import running_median, setAxisColors, logZeroNaN, closest, loadColorTable, getWhiteBlackColors, leastsq_fit, kde_2d
 from ..tracer.tracerMC import match3
-from ..cosmo.color import loadSimGalColors, stellarPhotToSDSSColor, calcSDSSColors, calcMstarColor2dKDE
+from ..cosmo.color import loadSimGalColors, calcSDSSColors
 from ..projects.color_analysis import calcColorEvoTracks, characterizeColorMassPlane, colorTransitionTimes
 from ..plot.quantities import simSubhaloQuantity, bandMagRange
 from ..plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
@@ -27,8 +28,6 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                    simRedshift=0.0, splitCenSat=False, cenOnly=False, stellarMassBins=None, 
                    addPetro=False, minDMFrac=None):
     """ PDF of galaxy colors (by default: (u-i)), with no dust corrections. (Vog 14b Fig 13) """
-    from ..util import simParams
-
     if cenOnly: assert splitCenSat is False
     allOnly = True if (splitCenSat is False and cenOnly is False) else False
     assert not isinstance(simColorsModels,str) # should be iterable
@@ -333,10 +332,53 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
     pdf.savefig()
     plt.close(fig)
 
+def calcMstarColor2dKDE(bands, gal_Mstar, gal_color, Mstar_range, mag_range, 
+    sP=None, simColorsModel=None, kCorrected=True):
+    """ Quick caching of (slow) 2D KDE calculation of (Mstar,color) plane for SDSS z<0.1 points 
+    if kCorrected==False, then tag filename (assume this is handled prior in calcSDSSColors)
+    if sP is None, otherwise for simulation (Mstar,color) points if sP is specified. """
+    if sP is None:
+        kStr = '' if kCorrected else '_noK'
+        saveFilename = expanduser("~") + "/obs/SDSS/sdss_2dkde_%s_%d-%d_%d-%d%s.hdf5" % \
+          (''.join(bands),Mstar_range[0]*10,Mstar_range[1]*10,mag_range[0]*10,mag_range[1]*10,kStr)
+        dName = 'kde_obs'
+    else:
+        assert simColorsModel is not None
+        savePath = sP.derivPath + "/galMstarColor/"
+
+        if not isdir(savePath):
+            mkdir(savePath)
+
+        saveFilename = savePath + "galMstarColor_2dkde_%s_%s_%d_%d-%d_%d-%d.hdf5" % \
+          (''.join(bands),simColorsModel,sP.snap,
+            Mstar_range[0]*10,Mstar_range[1]*10,mag_range[0]*10,mag_range[1]*10)
+        dName = 'kde_sim'
+
+    # check existence
+    if isfile(saveFilename):
+        with h5py.File(saveFilename,'r') as f:
+            xx = f['xx'][()]
+            yy = f['yy'][()]
+            kde_obs = f[dName][()]
+
+        return xx, yy, kde_obs
+
+    # calculate
+    print('Calculating new: [%s]...' % saveFilename)
+
+    xx, yy, kde2d = kde_2d(gal_Mstar, gal_color, Mstar_range, mag_range)
+
+    # save
+    with h5py.File(saveFilename,'w') as f:
+        f['xx'] = xx
+        f['yy'] = yy
+        f[dName] = kde2d
+    print('Saved: [%s]' % saveFilename)
+
+    return xx, yy, kde2d
+
 def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=False, simRedshift=0.0):
     """ 2D contours of galaxy colors/Mstar plane, multiple bands. """
-    from ..util import simParams
-    
     # config
     obs_color = '#000000'
     Mstar_range = [9.0, 12.0]

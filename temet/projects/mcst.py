@@ -2153,7 +2153,7 @@ def paperPlots(a = False):
 
     # diagnostic: CPU times
     if 0 or a:
-        from ..cosmo.perf import plotCpuTimes
+        from ..plot.perf import plotCpuTimes
         plotCpuTimes(sims, xlim=[0.0, 0.25])
 
     # diagnostic: number of non-contaminated halos vs redshift
