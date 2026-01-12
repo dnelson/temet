@@ -10,10 +10,9 @@ from os import path
 import matplotlib.pyplot as plt
 
 from ..util import simParams
-from ..util.helper import loadColorTable, logZeroNaN, running_median, sampleColorTable
+from ..util.helper import loadColorTable, logZeroNaN, running_median, sampleColorTable, dist_theta_grid
 from ..plot.config import *
 from ..vis.halo import renderSingleHalo
-from ..vis.common import _get_dist_theta_grid
 
 def singleHaloImage(sP, subhaloInd=440839, conf=0):
     """ Metallicity distribution in CGM image. """
@@ -122,7 +121,7 @@ def metallicityVsVradProjected(sP, shIDs=[440839], directCells=False, clean=Fals
             y_data = np.hstack( (y_data, y_data_loc.ravel()) )
 
             # get distances of pixels
-            dist_loc, theta_loc = _get_dist_theta_grid(size, nPixels)
+            dist_loc, theta_loc = dist_theta_grid(size, nPixels)
             dist = np.hstack( (dist, dist_loc.ravel()) )
             theta = np.hstack( (theta, theta_loc.ravel()) )
 
@@ -170,13 +169,13 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
     min_NHI: list of scalars, enforce minimum N_HI column of pixels to consider (log cm-2)
     fullbox: do global projections out to larger distance, otherwise fof-local scope
     distRvir: distBins are in units of rvir """
-    labels = {'metal_solar' : 'Gas Metallicity [log Z$_\odot$]',
-              'Mg II'       : 'Median Mg II Column Density [log cm$^{-2}$]',
-              'O VI'        : 'Median O VI Column Density [log cm$^{-2}$]',
-              'metals_O'    : 'O Column Density [log M$_\odot$ / kpc$^2$]',
-              'metals_Mg'   : 'O Column Density [log M$_\odot$ / kpc$^2$]',
-              'HI'          : 'HI Column Density [log cm$^{-2}$]',
-              'temp_sfcold' : 'Gas Temperature [log K]'}
+    labels = {'metal_solar' : r'Gas Metallicity [log Z$_\odot$]',
+              'Mg II'       : r'Median Mg II Column Density [log cm$^{-2}$]',
+              'O VI'        : r'Median O VI Column Density [log cm$^{-2}$]',
+              'metals_O'    : r'O Column Density [log M$_\odot$ / kpc$^2$]',
+              'metals_Mg'   : r'O Column Density [log M$_\odot$ / kpc$^2$]',
+              'HI'          : r'HI Column Density [log cm$^{-2}$]',
+              'temp_sfcold' : r'Gas Temperature [log K]'}
 
     assert dataField in labels.keys()
     assert isinstance(massBins,list) and len(massBins) >= 1
@@ -206,7 +205,7 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
     #min_NHI = [None] # 18.0, enforce minimum HI column?
     #nThetaBins = 90
 
-    dist, theta = _get_dist_theta_grid(size, nPixels)
+    dist, theta = dist_theta_grid(size, nPixels)
 
     # start figure
     figsize_loc = [figsize[0]*sizefac, figsize[1]*sizefac]
@@ -566,7 +565,7 @@ def stackedImageProjection():
         p = {'grid':stacks[i]['grid'],
              'labelZ':True if i == len(massBins)-1 else False,
              'subhaloInd':stacks[i]['sub_inds'][int(len(stacks[i]['sub_inds'])/2)],
-             'title':'log M$_{\\rm \star}$ = %.1f M$_\odot$' % np.mean(massBin)}
+             'title':r'log M$_{\rm \star}$ = %.1f M$_\odot$' % np.mean(massBin)}
 
         panels.append(p)
 

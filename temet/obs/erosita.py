@@ -18,11 +18,10 @@ Observational data processing, reduction, and analysis (eROSITA).
 import numpy as np
 import h5py
 from os.path import expanduser, isfile
-from ..util.helper import logZeroNaN, loadColorTable, running_median
+from ..util.helper import logZeroNaN, loadColorTable, running_median, dist_theta_grid
 from ..plot.config import figsize
 from ..util.simParams import simParams
 from ..util.rotation import rotationMatrixFromAngle
-from ..vis.common import _get_dist_theta_grid
 
 from scipy.ndimage import gaussian_filter, shift, center_of_mass, rotate
 from scipy.interpolate import interp1d
@@ -965,7 +964,7 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
         if rel:
             # subtract radially symmetric profile
             size_kpc = px_scale_target_kpc * stack_px
-            dist, _ = _get_dist_theta_grid(size_kpc, [stack_px,stack_px])
+            dist, _ = dist_theta_grid(size_kpc, [stack_px,stack_px])
 
             w = np.where(~np.isnan(im))
             xx, yy, _ = running_median(dist[w], im[w], nBins=20) # in log

@@ -546,7 +546,7 @@ cellsize_ckpc.log = True
 def hsml(sim, partType, field, args):
     """ Smoothing length i.e. characteristic size, possibly for visualization purposes. """
     assert args['inds'] is None # otherwise generalize
-    from ..vis.common import getHsmlForPartType, defaultHsmlFac
+    from ..vis.render import getHsmlForPartType, defaultHsmlFac
 
     indRange = args['indRange']
     if args['haloID'] is not None or args['subhaloID'] is not None:

@@ -12,8 +12,7 @@ from matplotlib.ticker import FormatStrFormatter
 from scipy.signal import savgol_filter
 from scipy.interpolate import interp1d
 
-from ..vis.common import _get_dist_theta_grid
-from ..util.helper import loadColorTable, logZeroNaN, running_median
+from ..util.helper import loadColorTable, logZeroNaN, running_median, dist_theta_grid
 from ..plot.config import *
 from ..vis.box import renderBox
 from ..util import simParams
@@ -220,10 +219,10 @@ def radialProfile(sim, haloID, b, line="O--7-21.6020A"):
     # start plot
     fig, (ax, subax) = plt.subplots(ncols=1, nrows=2, sharex=True, height_ratios=[0.8,0.2], figsize=(10.4,8.8))
 
-    title = 'O VII 21.6020$\\rm{\AA}$'
-    if line == 'O--8-18.9709A': title = 'O VIII 18.9709$\\rm{\AA}$'
+    title = r'O VII 21.6020$\rm{\AA}$'
+    if line == 'O--8-18.9709A': title = r'O VIII 18.9709$\rm{\AA}$'
 
-    ax.set_title('%s (%s $\cdot$ HaloID %d $\cdot\, \\rm{M_\star = 10^{%.1f} \,M_\odot}$)' % (title,sim,haloID,mstar))
+    ax.set_title(r'%s (%s $\cdot$ HaloID %d $\cdot\, \rm{M_\star = 10^{%.1f} \,M_\odot}$)' % (title,sim,haloID,mstar))
     ax.set_xlabel('Projected Distance [pkpc]')
     ax.set_yscale('log')
     ax.set_ylabel('Surface Brightness [ erg s$^{-1}$ kpc$^{-2}$ ]')
@@ -289,7 +288,7 @@ def radialProfiles(sim, haloID, b):
     # start plot
     fig, (ax, subax) = plt.subplots(ncols=1, nrows=2, sharex=True, height_ratios=[0.8,0.3], figsize=(10.4,9.8))
 
-    ax.set_title('O VII 21.6020$\\rm{\AA}$ (%s $\cdot$ HaloID %d $\cdot\, \\rm{M_\star = 10^{%.1f} \,M_\odot}$)' % (sim, haloID, mstar))
+    ax.set_title(r'O VII 21.6020$\rm{\AA}$ (%s $\cdot$ HaloID %d $\cdot\, \rm{M_\star = 10^{%.1f} \,M_\odot}$)' % (sim, haloID, mstar))
     ax.set_xlabel('Projected Distance [pkpc]')
     ax.set_yscale('log')
     ax.set_ylabel('Surface Brightness [ erg s$^{-1}$ kpc$^{-2}$ ]')
@@ -473,7 +472,7 @@ def stackedRadialProfiles(sim, haloIDs, b, addObsThresholds=True):
 
     for i, mstarBin in enumerate(mstarBins):        
         # plot median radial profiles of intrinsic (input) versus scattered (peeling)
-        label = '%.1f < log($M_\star / \\rm{M}_{\odot}$) < %.1f' % (mstarBin[0],mstarBin[1])
+        label = r'%.1f < log($M_\star / \rm{M}_{\odot}$) < %.1f' % (mstarBin[0],mstarBin[1])
 
         l, = ax.plot(rad_mid, intr_stack[i,1,:], lw=lw, linestyle=':', label='')
         ax.plot(rad_mid, scat_stack[i,1,:], lw=lw, linestyle='-', label=label, color=l.get_color())
@@ -600,8 +599,8 @@ def imageSBcomp(sim, haloID, b, line="O--7-21.6020A"):
 
     # left: intrinsic
     ax_left.set_title('Intrinsic (no RT)')
-    ax_left.set_xlabel('$\\rm{\Delta\,x}$ [pkpc]')
-    ax_left.set_ylabel('$\\rm{\Delta\,y}$ [pkpc]')
+    ax_left.set_xlabel(r'$\rm{\Delta\,x}$ [pkpc]')
+    ax_left.set_ylabel(r'$\rm{\Delta\,y}$ [pkpc]')
 
     im_intrinsic = _sb_image(sim, photons_input, attrs, halo, size=size)
     im_left = ax_left.imshow(im_intrinsic, cmap='inferno', extent=[-size,size,-size,size], aspect=1.0, vmin=vmm[0], vmax=vmm[1])
@@ -609,10 +608,10 @@ def imageSBcomp(sim, haloID, b, line="O--7-21.6020A"):
     ax_left.add_artist(plt.Circle((0,0), halo_r200, **circOpts))
     ax_left.add_artist(plt.Circle((0,0), halo_r500, **circOpts))
 
-    title = 'O VII 21.6020$\\rm{\AA}$'
-    if line == 'O--8-18.9709A': title = 'O VIII 18.9709$\\rm{\AA}$'
+    title = r'O VII 21.6020$\rm{\AA}$'
+    if line == 'O--8-18.9709A': title = r'O VIII 18.9709$\rm{\AA}$'
 
-    s = '%s\n%s\nHaloID %d\n$\\rm{M_\star = 10^{%.1f} \,M_\odot}$' % (title, sim, haloID, mstar)
+    s = r'%s\n%s\nHaloID %d\n$\rm{M_\star = 10^{%.1f} \,M_\odot}$' % (title, sim, haloID, mstar)
     ax_left.text(0.03, 0.03, s, ha='left', va='bottom', color='#fff', alpha=0.5, transform=ax_left.transAxes)
 
     cax = make_axes_locatable(ax_left).append_axes('right', size='4%', pad=0.1)
@@ -621,8 +620,8 @@ def imageSBcomp(sim, haloID, b, line="O--7-21.6020A"):
 
     # middle: scattered
     ax_mid.set_title('Scattered (w/ RT)')
-    ax_mid.set_xlabel('$\\rm{\Delta\,x}$ [pkpc]')
-    ax_mid.set_ylabel('$\\rm{\Delta\,y}$ [pkpc]')
+    ax_mid.set_xlabel(r'$\rm{\Delta\,x}$ [pkpc]')
+    ax_mid.set_ylabel(r'$\rm{\Delta\,y}$ [pkpc]')
 
     im_scattered = _sb_image(sim, photons_peeling, attrs, halo, size=size)
     im_mid = ax_mid.imshow(im_scattered, cmap='inferno', extent=[-size,size,-size,size], aspect=1.0, vmin=vmm[0], vmax=vmm[1])
@@ -636,8 +635,8 @@ def imageSBcomp(sim, haloID, b, line="O--7-21.6020A"):
 
     # right: ratio
     ax_right.set_title('Ratio (Scattered / Intrinsic)')
-    ax_right.set_xlabel('$\\rm{\Delta\,x}$ [pkpc]')
-    ax_right.set_ylabel('$\\rm{\Delta\,y}$ [pkpc]')
+    ax_right.set_xlabel(r'$\rm{\Delta\,x}$ [pkpc]')
+    ax_right.set_ylabel(r'$\rm{\Delta\,y}$ [pkpc]')
 
     vmm = [-1.0,1.0]
     if line == 'O--8-18.9709A': vmm = [-0.1,0.1]
@@ -718,8 +717,8 @@ def imageSBgallery(sim, haloIDs, b):
         ax.add_artist(plt.Circle((0,0), halo_r500, **circOpts))
 
         # add text
-        s = '%s HaloID %d $\\rm{M_\star = 10^{%.1f} \,M_\odot}$' % (sim, haloID, mstar)
-        s += ' SFR = %.1f $\\rm{M_\odot yr^{-1}}$' % sfr
+        s = r'%s HaloID %d $\rm{M_\star = 10^{%.1f} \,M_\odot}$' % (sim, haloID, mstar)
+        s += r' SFR = %.1f $\rm{M_\odot yr^{-1}}$' % sfr
         ax.text(0.03, 0.03, s, ha='left', va='bottom', color='#fff', alpha=0.5, transform=ax.transAxes)
 
         # disable ticks and add scalebar
@@ -760,10 +759,10 @@ def spectrum(sim, haloID, b):
     # start plot
     fig, ax = plt.subplots(figsize=figsize)
 
-    ax.set_title('O VII 21.6020$\\rm{\AA}$ (%s $\cdot$ HaloID %d) (%d < R/kpc < %d)' % (sim, haloID, radbin[0], radbin[1]))
-    ax.set_xlabel('Offset from Line Center $\\rm{\Delta \lambda} \ [ \AA ]}$')
+    ax.set_title(r'O VII 21.6020$\rm{\AA}$ (%s $\cdot$ HaloID %d) (%d < R/kpc < %d)' % (sim, haloID, radbin[0], radbin[1]))
+    ax.set_xlabel(r'Offset from Line Center $\rm{\Delta \lambda} \ [ \AA ]}$')
     #ax.set_xlabel('Offset from Line Center $\\rm{\Delta E} \ [ keV ]}$')
-    ax.set_ylabel('Spectrum [ erg s$^{-1}$ $\\rm{\AA}^{-1}$ ]')
+    ax.set_ylabel(r'Spectrum [ erg s$^{-1}$ $\rm{\AA}^{-1}$ ]')
     #ax.set_yscale('log')
 
     # loop for intrinsic vs. scattered
@@ -1114,7 +1113,7 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
             im_scattered = 10.0**(_sb_image(sim, photons_peeling, attrs, halo, size=size, nbins=nbins))
             im_ratio = im_scattered / im_intrinsic # linear ratio
 
-            dist, theta = _get_dist_theta_grid(2*size, [nbins,nbins]) # 2*size for convention
+            dist, theta = dist_theta_grid(2*size, [nbins,nbins]) # 2*size for convention
 
             for j in range(5):
                 # radial range selection
@@ -1222,15 +1221,15 @@ def enhancementVsMass(sim, haloIDs, b, range_select=4, color_quant='sfr', median
     if color_quant == 'mbh':
         cvals = sim.units.codeMassToLogMsun(mbh)
         cminmax = [7.5,8.5]
-        clabel = 'SMBH Mass [ log $\\rm{M_\odot}$ ]'
+        clabel = r'SMBH Mass [ log $\rm{M_\odot}$ ]'
     if color_quant == 'm200':
         cvals = m200
         cminmax = [11.4, 12.6]
-        clabel = 'Halo Mass $\\rm{M_{200c}}$ [ log $\\rm{M_\odot}$ ]'
+        clabel = r'Halo Mass $\rm{M_{200c}}$ [ log $\rm{M_\odot}$ ]'
     if color_quant == 'meansb_r200':
         cvals = np.log10(sb_scattered_mean[:,4])
         cminmax = [30.5, 33]
-        clabel = '$<\\rm{SB}>$ [ log erg s$^{-1}$ kpc$^{-2}$ ]'
+        clabel = r'$<\rm{SB}>$ [ log erg s$^{-1}$ kpc$^{-2}$ ]'
 
     # select which radial range, and statistic
     if pxRatios:

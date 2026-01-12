@@ -256,7 +256,7 @@ def magicCGMEmissionTrends():
 
 def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
     """ Hubble MST Proposal 2024 of Kate Rubin, and MAGIC-2 proposal. """
-    from ..vis.common import _get_dist_theta_grid
+    from ..util.helper import dist_theta_grid
     from ..cosmo.util import subsampleRandomSubhalos
 
     #sim = simParams(simname, redshift=0.36) # MCT
@@ -298,7 +298,7 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
 
     subInds, mstar = subsampleRandomSubhalos(sim, num_per_dex, [mstar_min,mstar_max], cenOnly=True)
 
-    dist, _ = _get_dist_theta_grid(size, nPixels)
+    dist, _ = dist_theta_grid(size, nPixels)
     
     # check for existence of cache
     grids = {}

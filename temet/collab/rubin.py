@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from ..util import simParams
-from ..util.helper import running_median, logZeroNaN
+from ..util.helper import running_median, logZeroNaN, dist_theta_grid
 from ..plot.config import *
 from ..vis.halo import renderSingleHalo
 
@@ -124,7 +124,6 @@ def hubbleMCT_gibleVis(conf=1):
 
 def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
     """ Hubble MST Proposal 2024 of Kate Rubin. """
-    from ..vis.common import _get_dist_theta_grid
     from ..cosmo.util import subsampleRandomSubhalos
 
     sim = simParams(simname, redshift=0.36) # tng50-1, eagle, simba
@@ -150,7 +149,7 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
 
     subInds, mstar = subsampleRandomSubhalos(sim, num_per_dex, [mstar_min,mstar_max], cenOnly=True)
 
-    dist, _ = _get_dist_theta_grid(size, nPixels)
+    dist, _ = dist_theta_grid(size, nPixels)
     
     # check for existence of cache
     grids = {}

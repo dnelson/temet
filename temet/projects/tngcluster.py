@@ -16,8 +16,7 @@ from ..cosmo.zooms import contamination_mindist
 from ..plot.cosmoGeneral import quantMedianVsSecondQuant
 from ..plot.cosmoMisc import simClustersComparison
 from ..plot.config import *
-from ..util.helper import logZeroNaN, running_median, loadColorTable
-from ..vis.common import _get_dist_theta_grid
+from ..util.helper import logZeroNaN, running_median, loadColorTable, dist_theta_grid
 from ..tracer.tracerMC import match3
 
 def vis_fullbox_virtual(sP, conf=0):
@@ -1111,7 +1110,7 @@ def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0
             f['r200c'] = r200c
             f['r500c'] = r500c
 
-            dist, theta = _get_dist_theta_grid(size, nPixels)
+            dist, theta = dist_theta_grid(size, nPixels)
 
             f['grid_dist'] = dist
             f['grid_angle'] = theta

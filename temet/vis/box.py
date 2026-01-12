@@ -7,7 +7,8 @@ from os.path import isfile, isdir
 from os import makedirs
 from copy import deepcopy
 
-from ..vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac, gridBox
+from ..vis.common import renderMultiPanel, savePathDefault
+from ..vis.render import defaultHsmlFac, gridBox
 from ..cosmo.util import multiRunMatchedSnapList
 from ..util.helper import iterable, pSplit
 from ..util.boxRemap import findCuboidRemapInds

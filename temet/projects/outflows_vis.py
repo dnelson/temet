@@ -15,12 +15,11 @@ from functools import partial
 
 from ..util import simParams
 from ..util.helper import loadColorTable, logZeroNaN, closest, getWhiteBlackColors, setAxisColors, setColorbarColors
-from ..util.rotation import rotationMatrixFromAngleDirection, momentOfInertiaTensor, \
-  rotationMatricesFromInertiaTensor
+from ..util.rotation import rotationMatrixFromAngleDirection
 from ..plot.config import *
 from ..cosmo.mergertree import mpbPositionComplete
-from ..vis.common import gridBox
-from ..vis.halo import renderSingleHalo, selectHalosFromMassBin
+from ..vis.render import gridBox
+from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
 from ..projects.outflows_analysis import halo_selection, selection_subbox_overlap, haloTimeEvoDataSubbox, haloTimeEvoDataFullbox
 
@@ -383,7 +382,7 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
             yy_label = 'BH Mass'
         if conf == 2:
             # BH mdot and SFR on y-axis 1
-            ax.set_ylabel('SFR or $\dot{M}_{\\rm BH}$ [log M$_{\\rm sun}$ / yr]')
+            ax.set_ylabel(r'SFR or $\dot{M}_{\rm BH}$ [log M$_{\rm sun}$ / yr]')
             yy = bh_mdot
             yy_label = 'BH Mdot'
 
@@ -416,7 +415,7 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
             # blackhole energetics
             ax2 = ax.twinx()
             setAxisColors(ax2, color2)
-            ax2.set_ylabel('BH $\Delta$ E$_{\\rm low}$ (dotted), E$_{\\rm high}$ (solid) [ log erg ]')
+            ax2.set_ylabel(r'BH $\Delta$ E$_{\rm low}$ (dotted), E$_{\rm high}$ (solid) [ log erg ]')
 
             l, = ax2.plot(redshifts[w], dy_high[w], '-', lw=lw, alpha=0.7)
             ax2.plot(redshifts[w], dy_low[w], ':', lw=lw, alpha=0.7, color=l.get_color())
@@ -751,7 +750,7 @@ def subboxOutflowTimeEvoPanels(conf=0, depth=10):
         target_times.append(sPother.scalefac)
         tage.append(sPother.tage)
         dt = (sPother.tage - tage[0]) * 1000.0
-        custom_labels.append( ['$\Delta$t=%d Myr' % int(np.round(dt/10)*10)] )
+        custom_labels.append( [r'$\Delta$t=%d Myr' % int(np.round(dt/10)*10)] )
         print('dt: %.2f Myr' % (dt))
 
     # determine center positions at each time

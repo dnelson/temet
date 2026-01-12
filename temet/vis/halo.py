@@ -7,7 +7,8 @@ from os.path import isfile
 from copy import deepcopy
 from getpass import getuser
 
-from ..vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac, gridBox
+from ..vis.common import renderMultiPanel, savePathDefault
+from ..vis.render import gridBox, defaultHsmlFac
 from ..util.rotation import meanAngMomVector, rotationMatrixFromVec, momentOfInertiaTensor, \
   rotationMatricesFromInertiaTensor, rotationMatrixFromAngleDirection
 from ..util.simParams import simParams

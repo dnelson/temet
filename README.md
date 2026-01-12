@@ -25,23 +25,25 @@ If you find it useful and/or make use of it for a scientific publication, please
 Organization
 ------------
 
+* catalog/ - creation of post-processing catalogs.
 * cosmo/ - analysis specific for cosmological/comoving boxes
-* collab/ - exploration and plots for collaborations/non-first author papers
 * data/ - external text data files from the literature
 * ICs/ - initial condition generation
 * load/ - loading of group catalogs, snapshots, auxcats
 * ML/ - machine learning
 * obs/ - analysis and data reduction for observations
 * plot/ - generalized plotting
-* projects/ - analysis and plots for first-author papers/projects
 * tables/ - large pre-computed datafiles (empty until downloaded)
 * tracer/ - Monte Carlo tracer particles
-* util/ - misc helper utilities
+* util/ - helper utilities and general algorithms.
 * vis/ - visualization
 
 
 Reproducing Published Papers
 ----------------------------
+
+* collab/ - exploration and plots for collaborations/non-first author papers
+* projects/ - analysis and plots for first-author papers/projects
 
 The complete analysis and plot set of published papers can (theoretically) be reproduced with the following entry points 
 inside the `projects/` directory. Note that in practice some analyses are costly and would better be done (and were actually 
@@ -55,6 +57,8 @@ version, tagged on the date near the finalization of the paper.
 * [Nelson et al. (2021) - TNG50 MgII emission](http://arxiv.org/abs/2106.09023) - `projects.mg2emission.paperPlots()`
 * [Nelson et al. (2023) - OVII X-ray Scattering](https://arxiv.org/abs/2306.05453) - `projects.xray_scattering.paperPlots()`
 * [Nelson et al. (2024) - Introducing TNG-Cluster](https://arxiv.org/abs/2311.06338) - `projects.tngcluster.paperPlots()`
+* [Nelson et al. (2025) - SALSA](https://arxiv.org/abs/2510.19904) - `projects.mockspec.paperPlots()`
+
 
 Contributing
 ------------

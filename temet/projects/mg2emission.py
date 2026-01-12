@@ -12,12 +12,11 @@ from scipy.ndimage import gaussian_filter
 from scipy.stats import binned_statistic
 
 from ..vis.halo import renderSingleHalo
-from ..util.helper import running_median, sampleColorTable, loadColorTable, logZeroNaN, mvbe
+from ..util.helper import running_median, sampleColorTable, loadColorTable, logZeroNaN, mvbe, dist_theta_grid
 from ..plot.cosmoGeneral import quantMedianVsSecondQuant
 from ..plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
 from ..cosmo.util import subsampleRandomSubhalos
 from ..plot.config import *
-from ..vis.common import _get_dist_theta_grid
 
 def singleHaloImageMGII(sP, subhaloInd, conf=1, size=100, rotation='edge-on', labelCustom=None,
                         rVirFracs=[0.25], fracsType='rVirial', font=16, cbars=True, psf=False):
@@ -280,7 +279,7 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
     # loop over runs
     for k, sP in enumerate(sPs):
         # load catalog
-        dist, _ = _get_dist_theta_grid(size, nPixels)
+        dist, _ = dist_theta_grid(size, nPixels)
 
         mstar = sP.subhalos('mstar_30pkpc_log')
         cen_flag = sP.subhalos('central_flag')
@@ -426,9 +425,9 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
                     ax.plot(radMidPts, savgol_filter(yy,sKn,sKo,axis=0), '-', color=c)
             else:
                 # compute stack of 'per halo profiles' and plot
-                label = 'M$_{\star}$ = %.1f' % (massBin[0])
-                if massBin[0] == 10.4: label = 'M$_{\star}$ = 10.5'
-                if massBin[0] == 10.9: label = 'M$_{\star}$ = 11.0'
+                label = r'M$_{\star}$ = %.1f' % (massBin[0])
+                if massBin[0] == 10.4: label = r'M$_{\star}$ = 10.5'
+                if massBin[0] == 10.9: label = r'M$_{\star}$ = 11.0'
                 if psf == 'both': label += ' (no PSF)'
 
                 if psf != 'both' and len(sPs) == 1:
@@ -449,7 +448,7 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
                     #ax.fill_between(radMidPts, yy[0,:], yy[2,:], color=l.get_color(), alpha=0.15)
 
                 if psf == 'both':
-                    label = 'M$_{\star}$ = %.1f (w/ PSF)' % (massBin[0])
+                    label = r'M$_{\star}$ = %.1f (w/ PSF)' % (massBin[0])
                     yy = np.nanpercentile(sbr_indiv_mean_psf, percs, axis=0)
                     l, = ax.plot(radMidPts, yy[1,:], lw=lw, linestyle=':', color=colors[i], label=label)
                     ax.fill_between(radMidPts, yy[0,:], yy[2,:], color=l.get_color(), alpha=0.15)
@@ -619,7 +618,7 @@ def gridPropertyVsInclinations(sP, propName='mg2_lumsize'):
     smoothFWHM = sP.units.arcsecToAngSizeKpcAtRedshift(0.7) # MUSE UDF, PSF FWHM ~ 0.7 arcsec
 
     # loop over subhalos
-    dist, _ = _get_dist_theta_grid(size, nPixels)
+    dist, _ = dist_theta_grid(size, nPixels)
     dist = dist.ravel()
     unique_dists = np.unique(dist)
 
@@ -735,7 +734,7 @@ def cumulativeLumVsVrad(sP):
 
     haloIDs = {}
     for mStarBin in mStarBins[1::2]: # every other
-        key = 'M$_{\star} = 10^{%.1f}$' % mStarBin[0]
+        key = r'M$_{\star} = 10^{%.1f}$' % mStarBin[0]
         haloIDs[key] = _select_haloIDs(sP, mStarBin)
 
     def f_post(ax, **kwargs):
@@ -1033,7 +1032,7 @@ def paperPlots():
 
             l, = ax.plot( mstar_log, area_log_kpc2, ':', lw=2.5 )
 
-            label = '$A_{\\rm MgII} \\propto M_\star^{%.1f}$' % plaw_index
+            label = r'$A_{\rm MgII} \propto M_\star^{%.1f}$' % plaw_index
             ax.text(np.mean(mstar_log), np.mean(area_log_kpc2), label, 
                     color=l.get_color(), va='top', ha='center', fontsize=26, rotation=24)
 
@@ -1047,7 +1046,7 @@ def paperPlots():
         haloIDs = _select_haloIDs(sP, mStarBin)
 
         def _f_post(ax):
-            ax.text(0.97, 0.97, 'M$_{\\star} = 10^{%d}\,$M$_{\odot}$' % np.round(mStarBin[0]), transform=ax.transAxes, 
+            ax.text(0.97, 0.97, r'M$_{\star} = 10^{%d}\,$M$_{\odot}$' % np.round(mStarBin[0]), transform=ax.transAxes, 
                     color='#ffffff', fontsize=22, ha='right', va='top')
 
         plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc_linear', yQuant='vrad', weights=['MgII lum_dustdepleted'], meancolors=None, 

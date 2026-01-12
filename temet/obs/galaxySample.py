@@ -8,7 +8,7 @@ from os import mkdir
 
 from ..load.data import werk2013, johnson2015, berg2019, chen2018zahedy2019
 from ..cosmo.util import redshiftToSnapNum
-from ..vis.common import getHsmlForPartType
+from ..vis.render import getHsmlForPartType
 from ..util.sphMap import sphMap
 from ..util.helper import logZeroNaN, closest, iterable, reportMemory
 from ..cosmo.cloudy import cloudyIon

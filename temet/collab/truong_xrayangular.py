@@ -11,11 +11,10 @@ from os.path import isfile
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
-from ..util.helper import running_median, sampleColorTable
+from ..util.helper import running_median, sampleColorTable, dist_theta_grid
 from ..plot.config import *
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
-from ..vis.common import _get_dist_theta_grid
 
 valMinMaxQuant = {'coldens' : [18.5, 20.0], # in case we render actual quantities instead of deltas
                   'xray_lum_05-2kev' : [33, 37],
@@ -246,7 +245,7 @@ def stackedHaloImage(sP, mStarBin, conf=0, renderIndiv=False, median=True, rvirU
 
     else:
         # we have gridded an actual cell property, derive mean radial profile now and remove it
-        dist, _ = _get_dist_theta_grid(size, nPixels)
+        dist, _ = dist_theta_grid(size, nPixels)
 
         xx, yy, _ = running_median(dist, np.log10(grid), nBins=50)
 
@@ -323,7 +322,7 @@ def stackedPropVsTheta(sP, mStarBin, distBins, conf=0, depthFac=1.0, stack2Dmaps
         # temperature cut, except for x-ray where it isn't needed
         ptRestrictions = {'temp_sfcold_log':['gt',6.0]}
 
-    dist, theta = _get_dist_theta_grid(size, nPixels)
+    dist, theta = dist_theta_grid(size, nPixels)
 
     labels = {'temp': 'Relative Temperature [linear]',
               'coldens' : 'Relative Gas Column Density [linear]',

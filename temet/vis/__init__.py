@@ -12,3 +12,5 @@ from . import halo
 from . import haloDrivers
 from . import haloMovieDrivers
 from . import lic
+from . import render
+from . import quantities
