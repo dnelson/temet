@@ -2,7 +2,6 @@
 For the most part, each module herein contains the code to fully replicate one published paper.
 In this case, the single ``paperPlots()`` at the bottom will produce the full set of figures. """
 
-from . import clustering
 from . import color_analysis
 from . import color
 from . import lrg

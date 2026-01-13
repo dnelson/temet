@@ -13,8 +13,10 @@ from glob import glob
 
 from ..cosmo.color import loadSimGalColors, calcSDSSColors
 from ..util.helper import leastsq_fit, least_squares_fit
-from ..plot.config import defSimColorModel
 from ..plot.quantities import bandMagRange
+
+# the dust model used by default for all colors
+defSimColorModel = 'p07c_cf00dust_res_conv_ns1_rad30pkpc'
 
 def calcColorEvoTracks(sP, bands=['g','r'], simColorsModel=defSimColorModel):
     """ Using already computed StellarPhot auxCat's at several snapshots, load the MPBs and 

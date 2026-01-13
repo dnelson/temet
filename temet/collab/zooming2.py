@@ -11,6 +11,7 @@ from scipy.interpolate import interp1d
 
 from ..util.simParams import simParams
 from ..util.helper import running_median, logZeroNaN
+from ..util.match import match
 from ..plot.general import plotPhaseSpace2D, plotHistogram1D, plotSingleRadialProfile
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
@@ -288,8 +289,6 @@ def figure1_res_statistics(conf=0):
 def tracer_ambient_hot_halo():
     """ Check the existence of an ambient/pre-existing hot halo at r<0.25rvir, as opposed to the possibility that all 
     hot gas is arising from wind. """
-    from ..tracer.tracerMC import match3
-
     sP = simParams(res=11,run='zooms2_josh',redshift=2.25,variant='FP',hInd=2)
 
     temp_bins = [ [4.0,4.5], [4.5, 4.8], [4.8,5.0], [5.0,5.2], [5.2,5.4], [5.4, 5.6], [5.6, 5.8], [5.8, 6.0], [6.0, 6.2], [6.2, 6.5]]
@@ -317,7 +316,7 @@ def tracer_ambient_hot_halo():
     print('Loaded temperatures.')
 
     # crossmatch and take selection
-    ind_cat, ind_snap = match3(ParentIDs, ids[ww])
+    ind_cat, ind_snap = match(ParentIDs, ids[ww])
 
     print('Crossmatched.')
 
@@ -586,7 +585,6 @@ def gas_components_radial_profiles():
 def mgii_radial_profile():
     """ Compare MgII column density profiles. """
     from ..cosmo.cloudy import cloudyIon
-    from ..tracer.tracerMC import match3
 
     redshift = 2.25
 
@@ -639,7 +637,7 @@ def mgii_radial_profile():
         if ac[fieldName] is None: continue
 
         # crossmatch 'subhaloIDs' to cssInds
-        ac_inds, css_inds = match3( ac['subhaloIDs'], cssInds )
+        ac_inds, css_inds = match(ac['subhaloIDs'], cssInds)
         ac[fieldName] = ac[fieldName][ac_inds,:]
         rad_loc = rad[css_inds]
 

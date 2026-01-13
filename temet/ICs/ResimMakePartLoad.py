@@ -5,10 +5,12 @@ Step two is to run the external program ``N-GenICResim`` on the generated partic
 import numpy as np
 import h5py
 import time
-from os import path
+from os.path import isfile, expanduser
+from numba import jit
 
 from ..ICs.utilities import write_ic_file
-from numba import jit
+from ..util.helper import pSplitRange
+from ..util.match import match
 
 @jit(nopython=True, cache=True)
 def _fof_periodic_wrap(x, BoxSize):
@@ -267,11 +269,6 @@ def _generate_grid(level, i, j, k, Radius, Angle, pIndex, BoxSize, MaxLevel, Min
 
 def _get_ic_inds(sP, dmIDs_halo, simpleMethod=False):
     """ Helper function for below, return the DM particle indices from the ICs snapshot corresponding to dmIDs_halo. """
-    from ..util.helper import pSplitRange
-    from ..tracer.tracerMC import match3
-    from os.path import isfile
-    from sys import stdout
-
     assert sP.snap == 'ics'
 
     start_time = time.time()
@@ -283,7 +280,7 @@ def _get_ic_inds(sP, dmIDs_halo, simpleMethod=False):
         print(' load done, took [%g] sec.' % (time.time()-start_time))
         next_time = time.time()
 
-        inds_ics, inds_halo = match3(dmIDs_ics, dmIDs_halo)
+        inds_ics, inds_halo = match(dmIDs_ics, dmIDs_halo)
 
         assert inds_ics.size == inds_halo.size == dmIDs_halo.size
         print(' match done, took [%g] sec.' % (time.time()-next_time))
@@ -329,7 +326,7 @@ def _get_ic_inds(sP, dmIDs_halo, simpleMethod=False):
             sort_inds = f['sort_inds'][range_loc[0]:range_loc[1]]
             ids_sorted = f['ids_sorted'][range_loc[0]:range_loc[1]]
 
-        inds_ics_loc, inds_halo = match3(ids_sorted, dmIDs_halo, firstSorted=True)
+        inds_ics_loc, inds_halo = match(ids_sorted, dmIDs_halo, firstSorted=True)
 
         if inds_halo is None:
             continue # no matches in current chunk
@@ -376,13 +373,13 @@ def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
     floatType = 'float64' # float64 == DOUBLEPRECISION, otherwise float32
     idType = 'int64' # int64 == LONGIDS, otherwise int32
 
-    basePath = path.expanduser("~") + "/sims.TNG_zooms/ICs/output/"
+    basePath = expanduser("~") + "/sims.TNG_zooms/ICs/output/"
     ZoomLevel = np.log2(ZoomFactor)
     assert ZoomLevel == int(ZoomLevel), 'Unusual that ZoomFactor is not a power of 2. Check! Generalize filename.'
     
     saveFilename = basePath + 'partload_%s_halo%d_L%d_sf%.1f.hdf5' % (sP.simName, fofID, MaxLevel+ZoomLevel, EnlargeHighResFactor)
 
-    if path.isfile(saveFilename):
+    if isfile(saveFilename):
         print('skip [%s], already exists...' % saveFilename)
         return
 

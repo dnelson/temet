@@ -10,6 +10,7 @@ import multiprocessing as mp
 from os.path import isfile
 from numba import jit, prange
 from ..util.sphMap import _NEAREST
+from ..util.match import match
 
 # DOUBLEPRECISION == 1
 MyFloat = np.float64
@@ -2703,8 +2704,6 @@ def run_subfind_customfof0save_phase2(sP, GrNr=0):
 
 def verify_results(sP, GrNr=0):
     """ Check results vs. actual group catalog for a test run where the subgroups of FOF0 are computed in AREPO. """
-    from ..tracer.tracerMC import match3
-
     # load group catalog
     fof0 = sP.groupCatSingle(haloID=GrNr)
     print("Actual Fof0 has [%d] subhalos." % fof0['GroupNsubs'])
@@ -2748,7 +2747,7 @@ def verify_results(sP, GrNr=0):
         snap_ids = sP.snapshotSubset(pt, 'ids', haloID=GrNr)
 
         # minor differences in BindingEnergy lead to slightly permuted particle ordering inside subhalos
-        ind0, ind1 = match3(snap_ids, result['sort_inds_%d_ids' % pt])
+        ind0, ind1 = match(snap_ids, result['sort_inds_%d_ids' % pt])
         assert ind0.size == ind1.size == snap_ids.size
 
         eb_rank_diff = ind0 - np.arange(ind0.size)
@@ -2964,8 +2963,6 @@ def add_so_quantities(sP, GrNr=0):
 
 def rewrite_snapshot(sP, GrNr=0):
     """ Rewrite a snapshot which is missing FOF0 subhalos using the phase2 (final) results. """
-    from ..tracer.tracerMC import match3
-
     assert GrNr == 0 # no generalization
     assert 'fof0test' in sP.arepoPath # testing, only modify L35n2160TNG_fof0test/ files
 
@@ -3017,7 +3014,7 @@ def rewrite_snapshot(sP, GrNr=0):
     for pt in ptTypes:
         print('finding shuffle: ', pt)
         snap_ids = sP.snapshotSubset(pt, 'id', haloID=GrNr)
-        particle_sort['sort_inds_%d' % pt], _ = match3(snap_ids, particle_sort['sort_inds_%d_ids' % pt])
+        particle_sort['sort_inds_%d' % pt], _ = match(snap_ids, particle_sort['sort_inds_%d_ids' % pt])
         assert particle_sort['sort_inds_%d' % pt].size == snap_ids.size
 
     # list of all fields we will need to rewrite
@@ -3073,8 +3070,6 @@ def rewrite_snapshot(sP, GrNr=0):
 def rewrite_particle_level_cat(sP, filename, partType):
     """ Take an input HDF5 filename (with at most one dataset), whose size is assumed to correspond to the 
     size of sP.NumPart[partType] at that snapshot, and shuffle the fof0 segment into the new order. """
-    from ..tracer.tracerMC import match3
-
     GrNr = 0
     final_save_file = sP.derivPath + 'fof0/fof0_save_%s_%d.hdf5' % (sP.simName,sP.snap)
 
@@ -3102,7 +3097,7 @@ def rewrite_particle_level_cat(sP, filename, partType):
         snap_ids = sP.snapshotSubset(partType, 'id', haloID=GrNr)
 
         print('Finding shuffle...')
-        sort_inds, _ = match3(snap_ids, particle_sort)
+        sort_inds, _ = match(snap_ids, particle_sort)
         assert sort_inds.size == snap_ids.size
 
         # save for future uses

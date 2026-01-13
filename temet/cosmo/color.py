@@ -11,11 +11,20 @@ gfmBands = {'U':0, 'B':1, 'V':2, 'K':3,
 
 vegaMagCorrections = {'V': 0.02, 'U':0.79, 'B':-0.09}
 
+colorModelNames = {'A' :'p07c_nodust',
+                   'B' :'p07c_cf00dust',
+                   'Br':'p07c_cf00dust_rad30pkpc',
+                   'C' :'p07c_cf00dust_res_conv_ns1_rad30pkpc',
+                   'nodust'    : 'p07c_nodust', # same as A
+                   'C-30kpc-z' : 'p07c_cf00dust_res_conv_z_30pkpc', # z-axis only instead of 12 healpix projections
+                   'snap'      : 'snap'}
+
+# abbreviations or alternative band names, mapped to FSPS appropriate names
+bandRenamesToFSPS = {'J': '2mass_j'}
+
 def loadColors(sP, quantName):
     """ Wrap the below function including some logic to take only a single lowercase string 'quantName' input.
     Loads either a color (difference of two band magntiudes), or just a band magnitude, for every subhalo. """
-    from ..plot.config import colorModelNames, bandRenamesToFSPS
-
     names = {}
     for key,val in colorModelNames.items():
         names[key.lower()] = val

@@ -8,7 +8,8 @@ from scipy.signal import savgol_filter
 from scipy import interpolate
 
 import illustris_python as il
-from ..util.helper import logZeroNaN, running_sigmawindow, iterable, closest, cache
+from ..util.helper import logZeroNaN, iterable, closest, cache
+from ..util.match import match
 
 treeName_default = "SubLink"
 
@@ -187,7 +188,6 @@ def mpbPositionComplete(sP, id, extraFields=None):
     """ Load a particular MPB of subhalo id, and return it along with a filled version of SubhaloPos 
     which interpolates for any skipped intermediate snapshots as well as back beyond the end of the 
     tree to the beginning of the simulation. The return indexed by snapshot number. """
-    from ..tracer.tracerMC import match3
     if extraFields is None: extraFields = []
 
     fields = ['SubfindID','SnapNum','SubhaloPos']
@@ -234,7 +234,7 @@ def mpbPositionComplete(sP, id, extraFields=None):
     posComplete = np.zeros( (times.size,3), dtype=SubhaloPos.dtype )
     wExtrap = np.where( (times < mpbTimes.min()) | (times > mpbTimes.max()) )
 
-    ind0, ind1 = match3(snaps, SnapNum)
+    ind0, ind1 = match(snaps, SnapNum)
     posComplete[ind0,:] = SubhaloPos[ind1,:]
 
     for j in range(3):

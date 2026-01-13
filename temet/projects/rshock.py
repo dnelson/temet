@@ -1,6 +1,5 @@
 """
-TNG virial shock radius paper.
-(in prep)
+Virial shock radius: methods based on spherical healpix shell samplings of gas properties.
 """
 import numpy as np
 import h5py

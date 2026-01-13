@@ -1,5 +1,5 @@
 """
-Global plot-related configuration which is imported into other plotting submodules.
+Global plot-related configuration which can be imported into other plotting submodules.
 """
 import matplotlib.pyplot as plt
 
@@ -25,20 +25,6 @@ linestyles += linestyles
 colors     += colors
 markers    += markers
 
-# the dust model used by default for all colors
-defSimColorModel = 'p07c_cf00dust_res_conv_ns1_rad30pkpc'
-
 cssLabels = {'all':'All Galaxies',
              'cen':'Centrals Only',
              'sat':'Satellites Only'}
-
-colorModelNames = {'A' :'p07c_nodust',
-                   'B' :'p07c_cf00dust',
-                   'Br':'p07c_cf00dust_rad30pkpc',
-                   'C' :'p07c_cf00dust_res_conv_ns1_rad30pkpc',
-                   'nodust'    : 'p07c_nodust', # same as A
-                   'C-30kpc-z' : 'p07c_cf00dust_res_conv_z_30pkpc', # z-axis only instead of 12 healpix projections
-                   'snap'      : 'snap'}
-
-# abbreviations or alternative band names, mapped to FSPS appropriate names
-bandRenamesToFSPS = {'J': '2mass_j'}

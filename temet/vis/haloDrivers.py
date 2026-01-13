@@ -682,7 +682,7 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
     In either case, choose blueSample, redSample, or greenSample.
     If curPage specified, do a paged exploration instead. """
     from ..cosmo.color import loadSimGalColors
-    from ..plot.config import defSimColorModel
+    from ..projects.color_analysis import defSimColorModel
 
     # we have chosen by hand for L75n1820TNG z=0 from the massBin = [12.0,12.2] below these two sets
     # we define blue as (g-r)<0.6, red as (g-r)>0.7 and green as 0.5<(g-r)<0.7

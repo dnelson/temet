@@ -6,6 +6,7 @@ import h5py
 from os.path import isfile, isdir
 from os import mkdir
 from ..util.helper import closest
+from ..util.match import match
 
 # --- snapshot configuration & spacing ---
 
@@ -367,7 +368,6 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
     for TNG_method runs, or postprocessing/SubhaloMatchingToDark/ for Illustris/TNG to DMO runs, or 
     postprocessing/SubhaloMatchingToIllustris/ for TNG->Illustris runs.
     Return is an int32 array of the same size as input, where -1 indicates no match. """
-    from ..tracer.tracerMC import match3
     from ..util.simParams import simParams
 
     assert method in ['LHaloTree','SubLink','Lagrange','Positional','PositionalAll']
@@ -387,7 +387,7 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
         cen_inds_to = cenSatSubhaloIndices(sP_to, cenSatSelect=css)
         cen_inds_from = cenSatSubhaloIndices(sP_from, cenSatSelect=css)
 
-        _, ind_from = match3(cen_inds_from, subhaloInds_from_search)
+        _, ind_from = match(cen_inds_from, subhaloInds_from_search)
         subhaloInds_from = subhaloInds_from_search[ind_from]
 
         # load halo masses and positions from both runs
@@ -441,7 +441,7 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
             cand_inds_tng = inds_tng[w]
 
             # which are centrals? take min ID (most massive)
-            cand_inds_tng, _ = match3(cen_inds_to, cand_inds_tng)
+            cand_inds_tng, _ = match(cen_inds_to, cand_inds_tng)
 
             r[i] = cen_inds_to[cand_inds_tng].min()
 
@@ -462,7 +462,7 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
                 inds_illustris = f['SubhaloIndexTo'][()]
                 score = f['Score'][()]
 
-            match_inds_source, match_inds_search = match3(inds_tng, subhaloInds_from_search)
+            match_inds_source, match_inds_search = match(inds_tng, subhaloInds_from_search)
             r[match_inds_search] = inds_illustris[match_inds_source]
 
         return r
@@ -539,7 +539,7 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
         subhaloInds_from, subhaloInds_to = subhaloInds_to, subhaloInds_from
 
     # find matches and make return
-    match_inds_source, match_inds_search = match3(subhaloInds_from, subhaloInds_from_search)
+    match_inds_source, match_inds_search = match(subhaloInds_from, subhaloInds_from_search)
 
     r = np.zeros( len(subhaloInds_from_search), dtype='int32' ) - 1
 

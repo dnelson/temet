@@ -5,12 +5,13 @@ import numpy as np
 import h5py
 import glob
 import time
-from os import path, mkdir, rename
+from os import path, rename
 import matplotlib.pyplot as plt
 
 import temet.cosmo
 from .plot.config import figsize
 from .util import simParams
+from .util.match import match
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -666,8 +667,6 @@ def copy_eagle_config_param_attrs(snap=28):
 
 def rewrite_sfrs_eagle(snap=28):
     """ Rewrite particle-level SFR values from original EAGLE snaps into new snaps. """
-    from .tracer.tracerMC import match3
-
     loadPath = '/virgo/simulations/Eagle/L0100N1504/REFERENCE/data/'
     savePath = '/virgo/simulations/Illustris/Eagle-L68n1504FP/output/'
 
@@ -715,7 +714,7 @@ def rewrite_sfrs_eagle(snap=28):
     # cross-match
     print('Matching...',flush=True)
 
-    inds, _ = match3(ids, ids_new)
+    inds, _ = match(ids, ids_new)
     assert inds.size == ids.size
 
     ids = ids[inds]
@@ -1426,7 +1425,6 @@ def check_load_memusage():
 def check_groupcat_snap_rewrite(GrNr=0):
     """ Check custom Subfind. """
     sP = simParams(res=2160,run='tng',snap=69) # 69-99
-    from .tracer.tracerMC import match3
     #sP = simParams(res=128,run='tng',snap=4,variant='0000')
 
     final_save_file = sP.derivPath + 'fof0_save_%s_%d.hdf5' % (sP.simName,sP.snap)
@@ -1640,7 +1638,6 @@ def try_hsc_gri_composite():
 
 def check_tracer_tmax_vs_curtemp():
     """ Can a tracer maxtemp ever be below the current parent gas cell temperature? """
-    from .tracer.tracerMC import match3
     #sP = simParams(res=11,run='zooms2_josh',redshift=2.25,hInd=2,variant='FPorig') # snap=52
     sP = simParams(res=11,run='zooms2_josh',redshift=2.25,hInd=2,variant='FP')
     #sP = simParams(res=11,run='zooms2_josh',snap=10,hInd=2,variant='FPorig')
@@ -1659,8 +1656,8 @@ def check_tracer_tmax_vs_curtemp():
 
     # cross-match
     print('match...')
-    gas_inds, tr_inds_gas = match3(gas_id, par_id)
-    star_inds, tr_inds_star = match3(star_id, par_id)
+    gas_inds, tr_inds_gas = match(gas_id, par_id)
+    star_inds, tr_inds_star = match(star_id, par_id)
 
     # fill
     tr_par_type = np.zeros( par_id.size, dtype='int16' )
@@ -1701,7 +1698,7 @@ def check_tracer_tmax_vs_curtemp():
 
     # match tracers between snaps
     print('match tr...')
-    tr_inds_cur, tr_inds_prev = match3(tr_id, tr_id_prev) 
+    tr_inds_cur, tr_inds_prev = match(tr_id, tr_id_prev) 
     assert tr_inds_cur.size == tr_id.size # must find all
 
     tmax_prev = tmax[tr_inds_cur]
@@ -1713,7 +1710,7 @@ def check_tracer_tmax_vs_curtemp():
 
     # match previous snap tracers to their parents (gas only, will only find some)
     print('match gas...')
-    gas_id_prev_inds, tr_inds_prev_gas = match3(gas_id_prev, par_id_prev)
+    gas_id_prev_inds, tr_inds_prev_gas = match(gas_id_prev, par_id_prev)
 
     tmax_prev = tmax_prev[tr_inds_prev_gas] # same tmax restricted to these gas matches
     tr_par_sfr2 = tr_par_sfr2[tr_inds_prev_gas]
@@ -1920,44 +1917,6 @@ def check_reza_vrel():
     ids = sP.snapshotSubset('dm','ids',inds=w[0])
 
     import pdb; pdb.set_trace()
-
-from numba import jit
-@jit(nopython=True, nogil=True, cache=True)
-def _numba_argsort(x):
-    return np.argsort(x)
-
-def benchmark_sort():
-    """ Testing sort speed. """
-    import time
-    from .util import parallelSort
-    from .tracer.tracerMC import match3, _match3
-
-    N = 80000000
-    N2 = 10000
-    maxNum = 6000000000 # 6 billion
-    dtype = np.int64
-
-    rng = np.random.default_rng(424242)
-    x = rng.integers(1, maxNum, size=N, dtype=dtype)
-
-    y = x.copy()
-    rng.shuffle(y)
-    y = y[0:N2] # random subset of these
-
-    # sort
-    start_time = time.time()
-
-    nLoops = 4
-
-    for i in np.arange(nLoops):
-        print(i)
-        #q = np.argsort(x, kind='mergesort')
-        q2 = parallelSort.argsort(x)
-        #assert np.array_equal(q,q2)
-        #q3 = _numba_argsort(x)
-        #q3 = match3(x, y)
-
-    print('[%d] loops took [%g] sec on avg' % (nLoops,(time.time()-start_time)/nLoops))
 
 def vis_cholla_snapshot():
     """ Testing. """
@@ -2473,7 +2432,6 @@ def checkColorCombos():
 
 def checkInfallTime():
     """ Check infall times. """
-    from .tracer.tracerMC import match3
     from .util.helper import closest
 
     sP = simParams(res=1820, run='tng', redshift=0.0)
@@ -2490,7 +2448,7 @@ def checkInfallTime():
     sub_mpb = sP.loadMPB(subhaloID, treeName=treeName)
     parent_mpb = sP.loadMPB(parent_halo['GroupFirstSub'], treeName=treeName)
 
-    ind_par, ind_sub = match3( parent_mpb['SnapNum'], sub_mpb['SnapNum'] )
+    ind_par, ind_sub = match(parent_mpb['SnapNum'], sub_mpb['SnapNum'])
 
     # distance
     parent_r200 = parent_mpb['Group_R_Crit200'][ind_par]
@@ -2925,7 +2883,6 @@ def checkIllustrisMetalRatioVsSolar():
 
 def checkTracerLoad():
     """ Check new code to load tracers from snapshots. """
-    from .tracer.tracerMC import match3
 
     #basePath = '/n/home07/dnelson/dev.prime/realizations/L25n32_trTest/output/'
     basePath = '/n/home07/dnelson/sims.zooms/128_20Mpc_h0_L9/output/'
@@ -3055,7 +3012,7 @@ def checkTracerLoad():
                         continue
 
                     # crossmatch member gas/stars/bhs to all ParentIDs of tracers
-                    ia, ib = match3( ids_type, snap_new['trmc']['ParentID'] )
+                    ia, ib = match(ids_type, snap_new['trmc']['ParentID'])
                     if ia is not None:
                         locTrCount += ia.size
 

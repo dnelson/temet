@@ -13,6 +13,7 @@ from scipy.stats import binned_statistic, binned_statistic_2d
 from ..util import simParams
 from ..util.helper import loadColorTable, sampleColorTable, running_median, \
   logZeroNaN, iterable, cache, gaussian_filter_nan, closest
+from ..util.match import match
 from ..plot.config import *
 
 def plotHistogram1D(sPs, ptType='gas', ptProperty='temp', ptWeight=None, subhaloIDs=None, haloIDs=None, 
@@ -872,7 +873,6 @@ def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas'
     If colorbar is not False, then use this field (string) to display a colorbar mapping.
     """
     from ..catalog.profile import subhaloRadialProfile
-    from ..tracer.tracerMC import match3
 
     # config
     if xlim is None: xlim = [0.0,3.0] # for plot only [loc pkpc]
@@ -931,7 +931,7 @@ def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas'
         for j in range(nSamples):
             # crossmatch attrs['objIDs'] with subhalo[key] sub-list if needed
             subIDsLoc = subhaloIDs[i][list(subhaloIDs[i].keys())[j]] if isinstance(subhaloIDs[i],dict) else objIDs
-            w, _ = match3( attrs['subhaloIDs'], subIDsLoc )
+            w, _ = match(attrs['subhaloIDs'], subIDsLoc)
             assert len(w) == len(subIDsLoc)
 
             # calculate median radial profile and scatter

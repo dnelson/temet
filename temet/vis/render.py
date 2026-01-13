@@ -14,6 +14,7 @@ from ..util.sphMap import sphMap
 from ..util.treeSearch import calcHsml
 from ..util.voronoiRay import rayTrace
 from ..util.helper import logZeroMin, pSplitRange
+from ..util.match import match
 from ..util.boxRemap import remapPositions
 from ..util.rotation import rotateCoordinateArray, perspectiveProjection
 from ..cosmo.cloudy import cloudyEmission
@@ -980,15 +981,13 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
             if excludeSubhaloFlag and method == 'sphMap':
                 # exclude any subhalos flagged as clumps, currently for fof-scope renders only
-                from ..tracer.tracerMC import match3
-
                 SubhaloFlag = sP.subhalos('SubhaloFlag')
                 sub_ids = sP.snapshotSubset(partType, 'subhalo_id', indRange=indRange)
 
                 flagged_ids = np.where(SubhaloFlag == 0)[0] # 0=bad, 1=ok
                 if len(flagged_ids):
                     # cross-match
-                    inds_flag, inds_snap = match3(flagged_ids, sub_ids)
+                    inds_flag, inds_snap = match(flagged_ids, sub_ids)
                     if inds_snap is not None and len(inds_snap):
                         mass[inds_snap] = 0.0
             if excludeSubhaloFlag and method != 'sphMap':

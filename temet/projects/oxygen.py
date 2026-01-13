@@ -11,20 +11,19 @@ from matplotlib.colors import Normalize, colorConverter
 from scipy.signal import savgol_filter
 from scipy.stats import gaussian_kde
 from scipy.interpolate import interp1d
-from os.path import isfile
 from functools import partial
 
 from ..util import simParams
 from ..load.data import werk2013, johnson2015, berg2019, chen2018zahedy2019
 from ..plot.config import *
-from ..util.helper import running_median, logZeroNaN, iterable, contourf, loadColorTable, \
-    getWhiteBlackColors, setAxisColors, closest, reducedChiSq
+from ..util.helper import running_median, logZeroNaN, loadColorTable, closest, reducedChiSq
+from ..util.match import match
 from ..cosmo.cloudy import cloudyIon
 from ..plot.general import plotPhaseSpace2D
-from ..plot.quantities import simSubhaloQuantity, bandMagRange, quantList
+from ..plot.quantities import quantList
 from ..plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from ..plot.cloudy import ionAbundFracs2DHistos
-from ..cosmo.util import cenSatSubhaloIndices, redshiftToSnapNum, periodicDists
+from ..cosmo.util import cenSatSubhaloIndices
 from ..obs.galaxySample import obsMatchedSample, addIonColumnPerSystem, ionCoveringFractions
 
 def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=False):
@@ -673,8 +672,6 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
       emFlux (bool): then plot [photon/s/cm^2/ster].
       combine2Halo (bool): combine the other-halo and diffuse terms.
     """
-    from ..tracer.tracerMC import match3
-
     # config
     percs = [16,50,84] # [10,90] for oxygen paper
 
@@ -775,7 +772,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                 if ac[fieldName] is None: continue
 
                 # crossmatch 'subhaloIDs' to cssInds
-                ac_inds, css_inds = match3( ac['subhaloIDs'], cssInds )
+                ac_inds, css_inds = match( ac['subhaloIDs'], cssInds )
                 ac[fieldName] = ac[fieldName][ac_inds,:]
                 masses_loc = masses[css_inds]
                 rad_loc = rad[css_inds]

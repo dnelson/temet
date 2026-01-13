@@ -12,6 +12,7 @@ from datetime import datetime
 
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from ..obs.sdss import _indivSavePath, loadSDSSSpectrum, load_obs, mockSpectraAuxcatName, percentiles
+from ..util.match import match
 from ..plot.config import *
 
 from ..load.data import loadSDSSFits
@@ -232,8 +233,6 @@ def plotMultiSpectra(doSim, simInds, sdssInds):
 def talkPlots():
     """ Quick driver (plots for Ringberg17 talk). """
     from ..util.simParams import simParams
-    from ..tracer.tracerMC import match3
-    from ..cosmo.util import cenSatSubhaloIndices
     from prospect.sources import CSPSpecBasis
 
     singleInds = np.arange(300,400,20) # central #
@@ -242,13 +241,13 @@ def talkPlots():
     multiIndsSDSS = [0, 1]
 
     sP = simParams(res=1820,run='tng',redshift=0.1)
-    cen_inds = cenSatSubhaloIndices(sP, cenSatSelect='cen')
+    cen_inds = sP.cenSatSubhaloIndices(sP, cenSatSelect='cen')
 
     # what ids are in catalog?
     acName = mockSpectraAuxcatName % 'Vel'
     ac_ids = sP.auxCat(acName, onlyMeta=True)['subhaloIDs']
 
-    ind_cen, ind_ac = match3(cen_inds, ac_ids)
+    ind_cen, ind_ac = match(cen_inds, ac_ids)
 
     # setup
     sps = CSPSpecBasis(zcontinuous=True,compute_vega_mags=False)

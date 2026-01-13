@@ -17,9 +17,9 @@ from scipy.stats import gaussian_kde
 
 from ..util import simParams
 from ..util.helper import running_median, setAxisColors, logZeroNaN, closest, loadColorTable, getWhiteBlackColors, leastsq_fit, kde_2d
-from ..tracer.tracerMC import match3
+from ..util.match import match
 from ..cosmo.color import loadSimGalColors, calcSDSSColors
-from ..projects.color_analysis import calcColorEvoTracks, characterizeColorMassPlane, colorTransitionTimes
+from ..projects.color_analysis import calcColorEvoTracks, characterizeColorMassPlane, colorTransitionTimes, defSimColorModel
 from ..plot.quantities import simSubhaloQuantity, bandMagRange
 from ..plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from ..plot.config import *
@@ -148,9 +148,9 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                 # replicate galaxy selections by crossmatching original selection indices with replicated list
                 origSatSize = w_sat.size
                 origCenSize = w_cen.size
-                _, w_cen = match3(w_cen, gc_inds)
-                _, w_sat = match3(w_sat, gc_inds)
-                _, w_all = match3(w_all, gc_inds)
+                _, w_cen = match(w_cen, gc_inds)
+                _, w_sat = match(w_sat, gc_inds)
+                _, w_all = match(w_all, gc_inds)
                 assert w_sat.size == 12*Nside**2 * origSatSize
                 assert w_cen.size == 12*Nside**2 * origCenSize
             else:
@@ -768,7 +768,7 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
 
     # central/satellite selection?
     wSelect_orig = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
-    wSelect, _ = match3(subhalo_ids, wSelect_orig)
+    wSelect, _ = match(subhalo_ids, wSelect_orig)
 
     frac_global = float(wSelect_orig.size) / sim_xvals.size * 100
     frac_local  = float(wSelect.size) / subhalo_ids.size * 100
@@ -1608,7 +1608,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
         # stamp all quantities, arranged as snapshot subhalos
         for css in cenSatSelects:
             # cross-match evo subhalo_ids to css ids
-            snap_indices, evo_indices = match3(css_inds[css], evo['subhalo_ids'])
+            snap_indices, evo_indices = match(css_inds[css], evo['subhalo_ids'])
 
             # allocate and store split by cen/sat/all selection
             for k in dataKeys:

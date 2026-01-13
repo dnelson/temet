@@ -19,9 +19,9 @@ from ..cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndic
 from ..cosmo.mergertree import loadMPBs, mpbPositionComplete
 from ..plot.quantities import simSubhaloQuantity
 from ..util.helper import pSplitRange, logZeroNaN, iterable
+from ..util.match import match
 from ..util.treeSearch import calcParticleIndices, buildFullTree
 from ..util.rotation import momentOfInertiaTensor, rotationMatricesFromInertiaTensor, rotateCoordinateArray
-from ..tracer.tracerMC import match3
 from ..util import simParams
 
 def fit_vout():
@@ -444,7 +444,7 @@ def selection_subbox_overlap(sP, sbNum, sel, verbose=False):
             return None
 
         # cross-match to locate target subhalos in these datasets
-        sel_inds, subbox_inds = match3(sel['subInds'], sbSubIDs)
+        sel_inds, subbox_inds = match(sel['subInds'], sbSubIDs)
 
         # load remaining datasets
         subboxScaleFac = f['SubboxScaleFac'][()]
@@ -1550,7 +1550,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
     # load some group catalog properties and crossmatch for convenience
     gcIDs = np.arange(0, sP.numSubhalos)
 
-    gc_inds, ac_inds = match3(gcIDs, ac['subhaloIDs'])
+    gc_inds, ac_inds = match(gcIDs, ac['subhaloIDs'])
     assert ac_inds.size == ac['subhaloIDs'].size
 
     mstar = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])
@@ -1628,7 +1628,7 @@ def massLoadingsSN(sP, pSplit, sfr_timescale=100, scope='SubfindWithFuzz', third
 
     # cross-match with group catalog
     gcIDs = np.arange(0, sP.numSubhalos)
-    gc_inds, ac_inds = match3(gcIDs, ac_subhaloIDs)
+    gc_inds, ac_inds = match(gcIDs, ac_subhaloIDs)
     assert ac_inds.size == ac_subhaloIDs.size
 
     select = "All Subfind subhalos (the subset which have computed radial mass fluxes)."

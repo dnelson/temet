@@ -3,17 +3,11 @@ Helper functions to efficiently work with the Monte Carlo tracers.
 """
 import numpy as np
 import h5py
-import glob
-import time
 from os.path import isfile, isdir, expanduser
 from os import mkdir
 
-try:
-    from ..util.parallelSort import argsort as p_argsort
-except:
-    from numpy import argsort as p_argsort # fallback
-
 from ..util.helper import iterable, nUnique, bincount, reportMemory, pSplitRange
+from ..util.match import match, match1
 from ..cosmo.mergertree import loadTreeFieldnames
 from ..cosmo.util import inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
 
@@ -38,193 +32,6 @@ halo_rel_fields = {'rad'        : ['pos'],
                    'vrad_vvir'  : ['pos','vel'],
                    'angmom'     : ['pos','vel','mass']}
 
-def match(ar1, ar2, uniq=False):
-    """ My version of numpy.in1d with invert=False. Return is a ndarray of indices into ar1, 
-        corresponding to elements which exist in ar2. Meant to be used e.g. as ar1=all IDs in
-        snapshot, and ar2=some IDs to search for, where ar2 could be e.g. ParentID from the 
-        tracers, in which case they are generally not unique (multiple tracers can exist in the 
-        same parent). """
-    start = time.time()
-
-    # flatten both arrays (behavior for the first array could be different)
-    ar1 = np.asarray(ar1).ravel()
-    ar2 = np.asarray(ar2).ravel()
-
-    # tuning: special case for small B arrays (significantly faster than the full sort)
-    if len(ar2) < 10 * len(ar1) ** 0.145:
-        mask = np.zeros(len(ar1), dtype='bool')
-        for a in ar2:
-            mask |= (ar1 == a)
-        return mask
-
-    # otherwise use sorting of the concatenated array: here we use a stable 'mergesort', 
-    # such that the values from the first array are always before the values from the second
-    start_uniq = time.time()
-    if not uniq:
-        ar1, rev_idx = np.unique(ar1, return_inverse=True)
-        ar2 = np.unique(ar2)
-    end_uniq = time.time()
-
-    ar = np.concatenate((ar1, ar2))
-
-    start_sort = time.time()
-    order = ar.argsort(kind='mergesort')
-    end_sort = time.time()
-
-    # construct the output index list
-    ar = ar[order]
-    bool_ar = (ar[1:] == ar[:-1])
-
-    ret = np.empty(ar.shape, dtype=bool)
-    ret[order] = bool_ar
-
-    if uniq:
-        inds = ret[:len(ar1)].nonzero()[0]
-    else:
-        inds = ret[rev_idx].nonzero()[0]
-
-    if debug:
-        print(' match: '+str(round(time.time()-start,2))+' sec '+\
-              '[sort: '+str(round(end_sort-start_sort,2))+' sec] '+\
-              '[uniq: '+str(round(end_uniq-start_uniq,2))+' sec]')
-
-    return inds
-
-def match2(ar1, ar2):
-    """ My alternative version of numpy.in1d with invert=False, which is more similar to calcMatch(). 
-        Return is two ndarrays. The first is indices into ar1, the second is indices into ar2, such 
-        that ar1[inds1] = ar2[inds2]. Both ar1 and ar2 are assumed to contain unique values. Can be 
-        used to e.g. crossmatch between two TracerID sets from different snapshots, or between some 
-        ParentIDs and ParticleIDs of other particle types. The approach is a concatenated mergesort 
-        of ar1,ar2 combined, therefore O( (N_ar1+N_ar2)*log(N_ar1+N_ar2) ) complexity. """
-    start = time.time()
-
-    # flatten both arrays (behavior for the first array could be different)
-    ar1 = np.asarray(ar1).ravel()
-    ar2 = np.asarray(ar2).ravel()
-
-    # make concatenated list of ar1,ar2 and a combined list of indices, and a flag for which array
-    # each index belongs to (0=ar1, 1=ar2)
-    c = np.concatenate((ar1, ar2))
-    ind = np.concatenate(( np.arange(ar1.size), np.arange(ar2.size) ))
-    vec = np.concatenate(( np.zeros(ar1.size, dtype='int16'), np.zeros(ar2.size, dtype='int16')+1 ))
-
-    # sort combined list
-    order = c.argsort(kind='mergesort')
-
-    c   = c[order]
-    ind = ind[order]
-    vec = vec[order]
-
-    # find duplicates in sorted combined list
-    firstdup = np.where( (c == np.roll(c,-1)) & (vec != np.roll(vec,-1)) )[0]
-
-    if firstdup.size == 0:
-        return None,None
-
-    dup = np.zeros( firstdup.size*2, dtype='uint64' )
-    even = np.arange( firstdup.size, dtype='uint64' )*2
-
-    dup[even] = firstdup
-    dup[even+1] = firstdup+1
-
-    ind = ind[dup]
-    vec = vec[dup]
-
-    inds1 = ind[np.where(vec == 0)]
-    inds2 = ind[np.where(vec == 1)]
-
-    if debug:
-        if not np.array_equal(ar1[inds1],ar2[inds2]):
-            raise Exception('match2 fail')
-        print(' match2: '+str(round(time.time()-start,2))+' sec')
-
-    return inds1, inds2
-
-def match3(ar1, ar2, firstSorted=False, parallel=True):
-    """ Returns index arrays i1,i2 of the matching elements between ar1 and ar2. While the elements of ar1 
-        must be unique, the elements of ar2 need not be. For every matched element of ar2, the return i1 
-        gives the index in ar1 where it can be found. For every matched element of ar1, the return i2 gives 
-        the index in ar2 where it can be found. Therefore, ar1[i1] = ar2[i2]. The order of ar2[i2] preserves 
-        the order of ar2. Therefore, if all elements of ar2 are in ar1 (e.g. ar1=all TracerIDs in snap, 
-        ar2=set of TracerIDs to locate) then ar2[i2] = ar2. The approach is one sort of ar1 followed by 
-        bisection search for each element of ar2, therefore O(N_ar1*log(N_ar1) + N_ar2*log(N_ar1)) ~= 
-        O(N_ar1*log(N_ar1)) complexity so long as N_ar2 << N_ar1. """
-    if not isinstance(ar1,np.ndarray): ar1 = np.array(ar1)
-    if not isinstance(ar2,np.ndarray): ar2 = np.array(ar2)
-    assert ar1.ndim == ar2.ndim == 1
-    
-    if debug:
-        start = time.time()
-        assert np.unique(ar1).size == len(ar1)
-
-    if not firstSorted:
-        # need a sorted copy of ar1 to run bisection against
-        if parallel:
-            index = p_argsort(ar1)
-        else:
-            index = np.argsort(ar1)
-        ar1_sorted = ar1[index]
-        ar1_sorted_index = np.searchsorted(ar1_sorted, ar2)
-        ar1_sorted = None
-        ar1_inds = np.take(index, ar1_sorted_index, mode="clip")
-        ar1_sorted_index = None
-        index = None
-    else:
-        # if we can assume ar1 is already sorted, then proceed directly
-        ar1_sorted_index = np.searchsorted(ar1, ar2)
-        ar1_inds = np.take(np.arange(ar1.size), ar1_sorted_index, mode="clip")
-
-    mask = (ar1[ar1_inds] == ar2)
-    ar2_inds = np.where(mask)[0]
-    ar1_inds = ar1_inds[ar2_inds]
-
-    if not len(ar1_inds):
-        return None,None
-
-    if debug:
-        if not np.array_equal(ar1[ar1_inds],ar2[ar2_inds]):
-            raise Exception('match3 fail')
-        print(' match3: '+str(round(time.time()-start,2))+' sec')
-
-    return ar1_inds, ar2_inds
-
-from numba import jit
-@jit(nopython=True, nogil=True, cache=True)
-def _match3(ar1, ar2, firstSorted=False):
-    """ Test. """
-    assert ar1.ndim == ar2.ndim == 1
-    
-    if not firstSorted:
-        # need a sorted copy of ar1 to run bisection against
-        index = np.argsort(ar1)
-        ar1_sorted = ar1[index]
-        ar1_sorted_index = np.searchsorted(ar1_sorted, ar2)
-
-        for i in range(ar1_sorted_index.size): # mode="clip"
-            if ar1_sorted_index[i] >= index.size:
-                ar1_sorted_index[i] = index.size
-
-        ar1_inds = np.take(index, ar1_sorted_index)
-    else:
-        # if we can assume ar1 is already sorted, then proceed directly
-        ar1_sorted_index = np.searchsorted(ar1, ar2)
-
-        for i in range(ar1_sorted_index.size): # mode="clip"
-            if ar1_sorted_index[i] >= index.size:
-                ar1_sorted_index[i] = index.size
-
-        ar1_inds = np.take(np.arange(ar1.size), ar1_sorted_index)
-
-    mask = (ar1[ar1_inds] == ar2)
-    ar2_inds = np.where(mask)[0]
-    ar1_inds = ar1_inds[ar2_inds]
-
-    if not len(ar1_inds):
-        return None,None
-
-    return ar1_inds, ar2_inds
-
 def getTracerChildren(sP, parentSearchIDs, inds=False, ParentID=None, ParentIDSortInds=None):
     """ For an input list of parent IDs (a UNIQUE list of an unknown mixture of gas/star/BH IDs), return 
         the complete list of child MC tracers belonging to those parents (either their IDs or their 
@@ -240,18 +47,18 @@ def getTracerChildren(sP, parentSearchIDs, inds=False, ParentID=None, ParentIDSo
               ' max: '+str(parentSearchIDs.max()))
 
     # ID crossmatch: find matching elements
-    # trInds,_ = match3(ParentID,parentSearchIDs) is not appropriate here: we have possibly multiple 
+    # trInds,_ = match(ParentID,parentSearchIDs) is not appropriate here: we have possibly multiple 
     # matches inside ParentID for each element of parentSearchIDs. Instead, we can do 
-    # _,trInds = match3(parentSearchIDs,ParentID) and get all the indices of ParentID which are found 
+    # _,trInds = match(parentSearchIDs,ParentID) and get all the indices of ParentID which are found 
     # anywhere inside parentSearchIDs
-    _,trInds = match3(parentSearchIDs, ParentID)
+    _,trInds = match(parentSearchIDs, ParentID)
 
     if trInds is None:
         return None # no children
     
     if debug:
         # old method: keep for debugging
-        comp1 = match(ParentID, parentSearchIDs)
+        comp1 = match1(ParentID, parentSearchIDs)
         
         if not np.array_equal(trInds,comp1):
             raise Exception('trInds comp1 mismatch')
@@ -300,7 +107,7 @@ def mapParentIDsToIndsByType(sP, parentIDs):
             continue
 
         # crossmatch the two ID lists and request the match indices into both
-        parIndsType, wMatched = match3(parIDsType, parentIDs)
+        parIndsType, wMatched = match(parIDsType, parentIDs)
 
         if parIndsType is None:
             continue # parentIDs contain none of this particle type
@@ -431,7 +238,7 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
 
                 # (C): verify self consistency of par -> tr -> par
                 debugTracerIDs = sP.snapshotSubsetP('tracer', 'TracerID')
-                debugTracerInds = match(debugTracerIDs, trIDs, uniq=True)
+                debugTracerInds = match1(debugTracerIDs, trIDs, uniq=True)
                 debugTracerParIDs = sP.snapshotSubset('tracer', 'ParentID', inds=debugTracerInds)
                 debugTracerPars = mapParentIDsToIndsByType(sP, debugTracerParIDs)
                 debugwType = np.where( debugTracerPars['parentTypes'] == sP.ptNum(parPartType) )[0]
@@ -574,7 +381,7 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
         # ID crossmatch: find matching elements, where trInds gives the indices list of all child tracers 
         # in all the parIDsType parents. But, they are ordered according to ParentID, therefore also 
         # capture parInds and sort them, then rearrange trInds according to the sort of parInds
-        parInds,trInds = match3(parIDsType, ParentID)
+        parInds,trInds = match(parIDsType, ParentID)
         parIndsSortInds = np.argsort(parInds, kind='mergesort')
 
         # dealing with a pre-sorted ParentID, so take the inverse of our locate indices
@@ -732,7 +539,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
         if parent_indextype is None:
             tracerIDsLocal  = sP.snapshotSubsetP('tracer', 'TracerID')
 
-            tracerIndsLocal, tracerSearchIndsLocal = match3(tracerIDsLocal, tracerSearchIDs)
+            tracerIndsLocal, tracerSearchIndsLocal = match(tracerIDsLocal, tracerSearchIDs)
             tracerIDsLocalCheck = tracerIDsLocal[tracerIndsLocal]
 
             if not np.array_equal(tracerIDsLocalCheck, tracerSearchIDs) and not sP.isSubbox:
@@ -744,7 +551,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
             else:
                 # only need this for subboxes where we may not find all tracers searched for
                 # in this case, must write to r[] in the correct locations (normally, since 
-                # match3 is order preserving, tracerIndsLocal is in the order of tracerSearchIDs)
+                # match is order preserving, tracerIndsLocal is in the order of tracerSearchIDs)
                 tracerSearchIndsLocal = None
 
             tracerIDsLocal = None
@@ -819,7 +626,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
                 # at any snap other than startSnap, the parents may have additional child tracers in them, 
                 # so at best we verify that our search group is a subset of all current children
-                debugTracerIDsIndMatch,_ = match3(debugTracerIDs,tracerSearchIDs)
+                debugTracerIDsIndMatch,_ = match(debugTracerIDs,tracerSearchIDs)
                 #if not np.array_equal(np.sort(debugTracerIDs),np.sort(tracerSearchIDs)): # only true at startSnap
                 if not np.array_equal(debugTracerIDs[debugTracerIDsIndMatch],tracerSearchIDs):
                     raise Exception(' tTE: Debug check on tr -> par -> tr self-consistency fail.')
@@ -1287,7 +1094,7 @@ def globalTracerLength(sP, halos=False, subhalos=False, haloTracerOffsets=None):
                 offset += gc[i,ptNum]
 
             # cross-match
-            objInds, trInds = match3(ids_in_objs, ParentID)
+            objInds, trInds = match(ids_in_objs, ParentID)
 
             # count (can be duplicate objInds)
             counts = np.bincount(objInds, minlength=ids_in_objs.size)
@@ -1430,13 +1237,13 @@ def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=Fals
         if id not in mpbs: continue # central subhalo not in tree at sP.snap
 
         # crossmatch MPB snapshots we have with target snaps, and save subhalo IDs
-        w1, w2 = match3(mpbs[id]['SnapNum'], evoSnaps)
+        w1, w2 = match(mpbs[id]['SnapNum'], evoSnaps)
 
         mpb['subhalo_ids_evo'][w2,i] = mpbs[id]['SubfindID'][w1]
 
     # save a mapping between the subhalo IDs of each tracer here at sP.snap and the unique 
     # subhalo tracks we have saved in subhalo_ids_evo
-    wUniq, _ = match3(uniqSubhaloIDs, trVals['subhalo_id'])
+    wUniq, _ = match(uniqSubhaloIDs, trVals['subhalo_id'])
     mpb['subhalo_evo_index'] = wUniq
 
     assert wUniq.size == trIDs.size == trVals['subhalo_id'].size == trVals['halo_id'].size
@@ -1567,7 +1374,7 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
         # save the parent IDs of these tracers in the same order
         TracerID = sP.snapshotSubsetP('tracer', 'TracerID')
 
-        trInds,_ = match3(TracerID,trIDs)
+        trInds,_ = match(TracerID,trIDs)
         assert trInds.size == trIDs.size
 
         trVals['ParentIDs'] = sP.snapshotSubsetP('tracer', 'ParentID', inds=trInds)

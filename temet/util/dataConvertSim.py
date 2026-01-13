@@ -10,6 +10,9 @@ from os import path, mkdir
 from scipy.ndimage.interpolation import map_coordinates
 from os.path import isdir, expanduser
 
+from ..util.match import match
+from ..util.helper import isUnique
+
 def convertGadgetICsToHDF5(aip=False):
     """ Convert a Gadget-1/2 binary format ICs (dm-only, only pos/vel/IDs) into HDF5 format (keep original ordering). """
     ptNum = 1
@@ -174,8 +177,6 @@ def convertGadgetICsToHDF5(aip=False):
 
 def convertMillenniumSubhaloCatalog(snap=63):
     """ Convert a subhalo catalog ('sub_tab_NNN.X' files), custom binary format of Millennium simulation to Illustris-like HDF5. """
-    from ..tracer.tracerMC import match3
-
     savePath = path.expanduser("~") + '/sims.other/Millennium-1/output/'
     loadPath = '/virgo/simulations/Millennium/'
 
@@ -419,7 +420,7 @@ def convertMillenniumSubhaloCatalog(snap=63):
     assert GroupLen[0] == GroupLen.max()
     w = np.where(NSubsPerHalo == 0)
     if len(w[0]):
-        a, b = match3(w[0],SubParentHalo)
+        a, b = match(w[0],SubParentHalo)
         assert a is None and b is None
         FirstSubOfHalo[w] = -1 # convention
 
@@ -536,8 +537,6 @@ def convertMillenniumSubhaloCatalog(snap=63):
 
 def convertMillennium2SubhaloCatalog(snap=67):
     """ Convert a subhalo catalog ('subhalo_tab_NNN.X' files), custom binary format of Millennium-2 simulation to TNG-like HDF5. """
-    from ..tracer.tracerMC import match3
-
     savePath = path.expanduser("~") + '/sims.other/Millennium-2/output/'
     loadPath = '/virgo/simulations/Millennium2/BigRun/'
 
@@ -716,7 +715,7 @@ def convertMillennium2SubhaloCatalog(snap=67):
     assert GroupLen[0] == GroupLen.max()
     w = np.where(NSubsPerHalo == 0)
     if len(w[0]):
-        a, b = match3(w[0],SubGrNr)
+        a, b = match(w[0],SubGrNr)
         assert a is None and b is None
         FirstSubOfHalo[w] = -1 # modify GroupFirstSub, convention
 
@@ -806,9 +805,6 @@ def convertMillennium2SubhaloCatalog(snap=67):
 
 def convertMillenniumSnapshot(snap=63):
     """ Convert a complete Millennium snapshot (+IDS) into Illustris-like group-ordered HDF5 format. """
-    from ..tracer.tracerMC import match3
-    from ..util.helper import isUnique
-
     savePath = path.expanduser("~") + '/sims.other/Millennium-1/output/'
     loadPath = '/virgo/simulations/Recovered_Millennium/' 
     #loadPath = '/virgo/simulations/MilliMillennium/'
@@ -960,7 +956,7 @@ def convertMillenniumSnapshot(snap=63):
             print('Matching two ID sets now...')
             start = time.time()
 
-            ind_snapordered, ind_groupordered = match3(ids_snapordered, ids_groupordered)
+            ind_snapordered, ind_groupordered = match(ids_snapordered, ids_groupordered)
             # note: ids_snapordered[ind_snapordered] puts them into group ordering
             print(' took: '+str(round(time.time()-start,2))+' sec')
 
@@ -1064,9 +1060,6 @@ def convertMillenniumSnapshot(snap=63):
 def convertMillennium2Snapshot(snap=67):
     """ Convert a complete Millennium-2 snapshot into TNG-like group-ordered HDF5 format. 
     Note all snapshots except 4-7 (inclusive) are already group-ordered. """
-    from ..tracer.tracerMC import match3
-    from ..util.helper import isUnique
-
     savePath = path.expanduser("~") + '/sims.other/Millennium-2/output/'
     loadPath = '/virgo/simulations/Millennium2/BigRun/'
 
@@ -1203,7 +1196,7 @@ def convertMillennium2Snapshot(snap=67):
             print('Matching two ID sets now...')
             start = time.time()
 
-            ind_snapordered, ind_groupordered = match3(ids_snapordered, ids_groupordered)
+            ind_snapordered, ind_groupordered = match(ids_snapordered, ids_groupordered)
             # note: ids_snapordered[ind_snapordered] puts them into group ordering
             print(' took: '+str(round(time.time()-start,2))+' sec')
 

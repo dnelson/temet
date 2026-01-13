@@ -18,10 +18,6 @@ Observational data processing, reduction, and analysis (eROSITA).
 import numpy as np
 import h5py
 from os.path import expanduser, isfile
-from ..util.helper import logZeroNaN, loadColorTable, running_median, dist_theta_grid
-from ..plot.config import figsize
-from ..util.simParams import simParams
-from ..util.rotation import rotationMatrixFromAngle
 
 from scipy.ndimage import gaussian_filter, shift, center_of_mass, rotate
 from scipy.interpolate import interp1d
@@ -33,6 +29,12 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import astropy.io.fits as pyfits
 from astropy.wcs import WCS
 from reproject import reproject_adaptive, reproject_interp
+
+from ..util.helper import logZeroNaN, loadColorTable, running_median, dist_theta_grid
+from ..plot.config import figsize
+from ..util.simParams import simParams
+from ..util.rotation import rotationMatrixFromAngle
+from ..util.match import match
 
 # config
 basePath = expanduser("~") + '/obs/eFEDS/'
@@ -445,8 +447,6 @@ def gama_overlap():
     """ Load GAMA catalog, find sources which are in the eFEDS footprint. 
     Note this defines the input catalog for the aperture photometry, so changing here e.g. the 
     additional catalogs we cross-match against requires new photometry to be run. """
-    from ..tracer.tracerMC import match3
-
     path = basePathGAMA + 'LambdarInputCatUVOptNIR.fits'
 
     # open fits catalog file of Lambdar photometry
@@ -485,7 +485,7 @@ def gama_overlap():
     mstar = mstar[w2]
 
     # cross-match ids, construct catalog of available galaxies
-    inds1, inds2 = match3(gama_id, gama_id2)
+    inds1, inds2 = match(gama_id, gama_id2)
 
     cat = {'gama_id' : gama_id[inds1],
            'RA'      : ra[inds1],
@@ -506,7 +506,7 @@ def gama_overlap():
         sfr_100myr = f[1].data['sfr18_percentile50'] # dex(msun/yr)
 
     # cross-match ids
-    inds_cat, inds3 = match3(cat['gama_id'], gama_id3)
+    inds_cat, inds3 = match(cat['gama_id'], gama_id3)
 
     # update properties of available galaxies
     for key in cat:
@@ -530,7 +530,7 @@ def gama_overlap():
         ellip_r = f[1].data['GALELLIP_r']
 
     # cross-match ids
-    inds_cat, inds4 = match3(cat['gama_id'], gama_id4)
+    inds_cat, inds4 = match(cat['gama_id'], gama_id4)
     assert inds_cat.size == cat['gama_id'].size # must find all
 
     cat_new = {'pa_r' : pa_r[inds4],
@@ -547,7 +547,7 @@ def gama_overlap():
         theta_j2000 = f[1].data['THETA_J2000'] # Position angle on sky (east of north, r band)
 
     # cross-match ids
-    inds_cat, inds5 = match3(cat['gama_id'], gama_id5)
+    inds_cat, inds5 = match(cat['gama_id'], gama_id5)
     assert inds_cat.size == cat['gama_id'].size # must find all
 
     cat_new = {'theta_image' : theta_image[inds5],

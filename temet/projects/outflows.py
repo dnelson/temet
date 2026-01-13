@@ -14,13 +14,13 @@ from scipy.interpolate import griddata, interp1d
 from functools import partial
 
 from ..util import simParams
-from ..util.helper import running_median, logZeroNaN, nUnique, loadColorTable, sgolay2d, sampleColorTable, leastsq_fit
+from ..util.helper import running_median, logZeroNaN, nUnique, loadColorTable, sgolay2d, sampleColorTable
+from ..util.match import match
 from ..plot.config import *
 from ..plot.general import plotHistogram1D, plotPhaseSpace2D
 from ..plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
-from ..projects.outflows_analysis import halo_selection, loadRadialMassFluxes
+from ..projects.outflows_analysis import loadRadialMassFluxes
 from ..projects.outflows_vis import subboxOutflowTimeEvoPanels, galaxyMosaic_topN, singleHaloDemonstrationImage
-from ..tracer.tracerMC import match3
 
 labels = {'rad'     : 'Radius [ pkpc ]',
           'vrad'    : 'Radial Velocity [ km/s ]',
@@ -2027,7 +2027,7 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
 
             gcIDs = np.arange(0, sP.numSubhalos)
             assert sP.numSubhalos == sfr_smoothed.size
-            gc_inds, ac_inds = match3(gcIDs, subids)
+            gc_inds, _ = match(gcIDs, subids)
 
             sfr_smoothed = sfr_smoothed[gc_inds]
 
@@ -2317,7 +2317,7 @@ def stackedRadialProfiles(sPs, field, cenSatSelect='cen', projDim='3D', xaxis='l
             ac[fieldName] = ac[fieldName] / (ac[fieldName] + ac2[fieldName2])
 
         # crossmatch 'subhaloIDs' to cssInds
-        ac_inds, css_inds = match3( ac['subhaloIDs'], cssInds )
+        ac_inds, css_inds = match(ac['subhaloIDs'], cssInds)
         ac[fieldName] = ac[fieldName][ac_inds,:]
 
         masses    = masses[css_inds]

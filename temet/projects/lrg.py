@@ -16,25 +16,24 @@ from os.path import isfile
 
 from ..util import simParams
 from ..util.helper import running_median, logZeroNaN, loadColorTable
+from ..util.match import match
 from ..util.voronoi import voronoiThresholdSegmentation
 from ..load.data import werk2013, berg2019, chen2018zahedy2019
 from ..cosmo.util import subboxSubhaloCat
 from ..plot.config import *
 from ..plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
 from ..plot.cosmoGeneral import quantMedianVsSecondQuant
-from ..tracer.tracerMC import match3, globalAllTracersTimeEvo
+from ..tracer.tracerMC import globalAllTracersTimeEvo
 from ..tracer import tracerEvo
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
-from ..projects.oxygen import obsSimMatchedGalaxySamples, obsColumnsDataPlot, obsColumnsDataPlotExtended, \
+from ..projects.oxygen import obsSimMatchedGalaxySamples, obsColumnsDataPlotExtended, \
                             ionTwoPointCorrelation, totalIonMassVsHaloMass, stackedRadialProfiles, obsColumnsLambdaVsR
 
 def radialResolutionProfiles(sPs, saveName, redshift=0.5, cenSatSelect='cen', 
                              radRelToVirRad=False, haloMassBins=None, stellarMassBins=None):
     """ Plot average/stacked radial gas cellsize profiles in stellar mass bins. Specify one of 
     haloMassBins or stellarMassBins. If radRelToVirRad, then [r/rvir] instead of [pkpc]. """
-    from ..tracer.tracerMC import match3
-
     # config
     percs = [10,90]
     # # 'Mean' or 'Median' or 'Min' or 'p10', 'Gas_SFReq0' or 'Gas'
@@ -100,7 +99,7 @@ def radialResolutionProfiles(sPs, saveName, redshift=0.5, cenSatSelect='cen',
             yy = ac[fieldName]
 
             # crossmatch 'subhaloIDs' to cssInds
-            ac_inds, css_inds = match3( ac['subhaloIDs'], cssInds )
+            ac_inds, css_inds = match(ac['subhaloIDs'], cssInds)
             ac[fieldName] = ac[fieldName][ac_inds,:]
             masses_loc = masses[css_inds]
             rad_loc = rad[css_inds]            
@@ -1307,7 +1306,7 @@ def clumpDemographics(sPs, haloID, stackHaloIDs=None, trAnalysis=False):
             gasIDs_loc = gasIDs[inds]
 
             print(' matching [%d cells]...' % inds.size)
-            _, trInds = match3(gasIDs_loc, parIDs)
+            _, trInds = match(gasIDs_loc, parIDs)
 
             accTime_loc = accTime[trInds]
             accMode_loc = accMode[trInds]
@@ -1509,7 +1508,7 @@ def clumpTracerTracksLoad(sP, haloID, clumpID, sbNum=None, posOnly=False):
         # intersect with all haloIDs sets
         for i, haloIDset in enumerate(haloIDs):
             subIDset = GroupFirstSub[haloIDset]
-            inds_cat, inds_sample = match3(cat['SubhaloIDs'], subIDset)
+            inds_cat, inds_sample = match(cat['SubhaloIDs'], subIDset)
 
             num_matched = inds_cat.size if inds_cat is not None else 0
 
@@ -1561,7 +1560,7 @@ def clumpTracerTracksLoad(sP, haloID, clumpID, sbNum=None, posOnly=False):
     tr_meta = globalAllTracersTimeEvo(sP_tracks, 'meta')
 
     # cross-match IDs, get tracer catalog indices of the clump member gas cells
-    _, inds_cat = match3(cell_ids, tr_meta['ParentIDs'])
+    _, inds_cat = match(cell_ids, tr_meta['ParentIDs'])
     indRange = [inds_cat.min(), inds_cat.max()+1]
     inds_cat -= inds_cat.min()
 
@@ -1659,7 +1658,7 @@ def clumpTracerTracksLoad(sP, haloID, clumpID, sbNum=None, posOnly=False):
         SubhaloPos_trSnaps = subhaloCen[data['snaps'],:]
     else:
         # MPB fields are never guaranteed to be complete (and also descending), cross-match
-        i1, i2 = match3(subMPB['SnapNum'], data['snaps'])
+        i1, i2 = match(subMPB['SnapNum'], data['snaps'])
         inds = np.zeros( data['snaps'].size, dtype='int32' ) - 1
         inds[i2] = i1 # unmatched snapshots will take last value
         SubhaloPos_trSnaps = subhaloCen[inds,:]

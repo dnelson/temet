@@ -1,11 +1,11 @@
 """
-Calculations for TNG clustering paper.
+Galaxy clustering statistics, e.g. two-point correlation functions.
 """
 import numpy as np
 import h5py
 import time
 import glob
-from os.path import isfile, isdir, expanduser
+from os.path import isfile, isdir
 from os import mkdir
 from scipy.interpolate import interp1d
 from collections import OrderedDict

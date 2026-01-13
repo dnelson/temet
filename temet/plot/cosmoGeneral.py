@@ -411,11 +411,7 @@ def quantHisto2D(sP, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=Non
         cLevels = [0.75,0.95]
         cAlphas = [0.5,0.8]
 
-        # determine which color model/bands are requested
-        _, model, bands = yQuant.split("_")
-        simColorsModel = colorModelNames[model]
-        bands = [bands[0],bands[1]]
-
+        # run 2d kernel density estimate
         xx, yy, kde_sim = kde_2d(sim_xvals, sim_yvals, xMinMax, yMinMax)
 
         for k in range(kde_sim.shape[0]):

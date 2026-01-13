@@ -499,7 +499,7 @@ def finalizeSubfindHBTGroupCat(snap, prep=False):
     (iv) create SubLinkHBT trees, (v) run makeSubgroupOffsetsIntoSublinkTreeGlobal(basePath, treeName='SubLinkHBT'),
     (vi) run finalizeSubfindHBTGroupCat() to finish. """
     from ..util.simParams import simParams
-    from ..tracer.tracerMC import match3
+    from ..util.match import match
     from ..util.helper import crossmatchHalosByCommonIDs
 
     sP = simParams(run='tng100-2',snap=snap)
@@ -674,7 +674,7 @@ def finalizeSubfindHBTGroupCat(snap, prep=False):
         # indices gives, for each ids_new, the index where it is found in ids_old
         # such that indices[subhalohbt_start:subhalohbt_end] provides the particle 
         # indices in the original snapshot of the new subfind-hbt subhalo
-        indices, _ = match3(ids_old, ids_new)
+        indices, _ = match(ids_old, ids_new)
 
         assert indices.size == ids_new.size
 

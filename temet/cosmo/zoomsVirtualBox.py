@@ -9,6 +9,7 @@ from os import mkdir
 from numba import jit
 
 from ..util.simParams import simParams
+from ..util.match import match
 from ..plot.config import *
 from ..cosmo.zooms import _halo_ids_run
 
@@ -118,7 +119,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
     simulation, i.e. concatenate the output/group* and output/snap* of these runs. 
     Process a single snapshot, since all are independent. Note that we write exactly one
     output groupcat file per zoom halo, and exactly two output snapshot files. """
-    from ..tracer.tracerMC import globalTracerChildren, globalTracerLength, match3
+    from ..tracer.tracerMC import globalTracerChildren, globalTracerLength
 
     outPath = '/u/dnelson/sims.TNG/L680n8192TNG/output/'
     parent_sim = simParams('tng-cluster')
@@ -176,7 +177,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
             # load all TracerIDs, get those not in FoFs
             TracerID = sP.snapshotSubsetP('tracer', 'TracerID')
 
-            trInds,_ = match3(TracerID,trIDs)
+            trInds,_ = match(TracerID,trIDs)
             assert trInds.size == trIDs.size
 
             mask = np.zeros(TracerID.size, dtype='int8')
@@ -569,7 +570,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
                     # z=0 ordered TracerIDs
                     TracerID_z0 = f['TracerID'][()]
 
-                inds_snap, inds_z0 = match3(data[gName]['TracerID'], TracerID_z0)
+                inds_snap, inds_z0 = match(data[gName]['TracerID'], TracerID_z0)
                 assert data[gName]['TracerID'].size == TracerID_z0.size
                 assert inds_z0.size == TracerID_z0.size
 

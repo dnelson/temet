@@ -2353,7 +2353,7 @@ def fiber_(sim, field):
     """ Mock SDSS fiber spectrum MCMC fit quantities. """
     # withVel=True, addRealism=True, dustModel=p07c_cf00dust_res_conv, directions=z
     import json
-    from ..tracer.tracerMC import match3
+    from ..util.match import match
     
     acField = 'Subhalo_SDSSFiberSpectraFits_Vel-Realism_p07c_cf00dust_res_conv_z'
     ac = sim.auxCat(fields=[acField])
@@ -2369,7 +2369,7 @@ def fiber_(sim, field):
     # non-dense in subhaloIDs, crossmatch and leave missing at nan
     subhaloIDs_snap = np.arange(sim.numSubhalos)
 
-    gc_inds, _ = match3(subhaloIDs_snap, ac['subhaloIDs'])
+    gc_inds, _ = match(subhaloIDs_snap, ac['subhaloIDs'])
     assert gc_inds.size == ac['subhaloIDs'].size
 
     vals = np.zeros(len(subhaloIDs_snap), dtype='float32')

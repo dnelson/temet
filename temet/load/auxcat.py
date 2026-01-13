@@ -11,6 +11,7 @@ from getpass import getuser
 
 from .snapshot import snapshotHeader
 from ..util.helper import iterable, curRepoVersion
+from ..util.match import match
 
 # generative functions
 from ..catalog.group import fofRadialSumType
@@ -114,12 +115,10 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                     readFields = sorted([key for key in f.keys() if field in key], key=_comparatorListInds)
 
                 # load specific subhalos?
-                if subhaloIDs is not None:
-                    from ..tracer.tracerMC import match3
-                    
+                if subhaloIDs is not None:                    
                     subhaloIDs = iterable(subhaloIDs)
                     subIDs_file = f['subhaloIDs'][()]
-                    subInds_file, _ = match3(subIDs_file, subhaloIDs)
+                    subInds_file, _ = match(subIDs_file, subhaloIDs)
                     assert subInds_file.size == len(subhaloIDs), 'Failed to find all subhaloIDs in auxCat!'
 
                 # load data

@@ -17,7 +17,7 @@ from ..plot.cosmoGeneral import quantMedianVsSecondQuant
 from ..plot.cosmoMisc import simClustersComparison
 from ..plot.config import *
 from ..util.helper import logZeroNaN, running_median, loadColorTable, dist_theta_grid
-from ..tracer.tracerMC import match3
+from ..util.match import match
 
 def vis_fullbox_virtual(sP, conf=0):
     """ Visualize the entire virtual reconstructed box. """
@@ -383,7 +383,7 @@ def sample_halomasses_vs_redshift(sPs):
                 mpb = sP.loadMPB(subhaloIDs[j], fields=['SubfindID','SnapNum'])
 
                 # match to master snapshot list
-                inds, _ = match3(snaps, mpb['SnapNum'])
+                inds, _ = match(snaps, mpb['SnapNum'])
                 subid[j,inds] = mpb['SubfindID']
 
             # loop over each snapshot
