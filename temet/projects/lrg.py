@@ -23,8 +23,8 @@ from ..cosmo.util import subboxSubhaloCat
 from ..plot.config import *
 from ..plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
 from ..plot.cosmoGeneral import quantMedianVsSecondQuant
-from ..tracer.tracerMC import globalAllTracersTimeEvo
-from ..tracer import tracerEvo
+from ..tracer.montecarlo import globalAllTracersTimeEvo
+from ..tracer import evo as tracerEvo
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
 from ..projects.oxygen import obsSimMatchedGalaxySamples, obsColumnsDataPlotExtended, \

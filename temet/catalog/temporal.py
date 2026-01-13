@@ -257,9 +257,9 @@ def tracerTracksQuant(sP, pSplit, quant, op, time, norm=None):
       - **result** (:py:class:`~numpy.ndarray`): 1d array, value for each subhalo.
       - **attrs** (dict): metadata.
     """
-    from ..tracer.tracerEvo import tracersTimeEvo, tracersMetaOffsets, trValsAtAccTimes, \
+    from ..tracer.evo import tracersTimeEvo, tracersMetaOffsets, trValsAtAccTimes, \
       accTime, accMode, ACCMODES, mpbValsAtRedshifts, mpbValsAtAccTimes
-    from ..tracer.tracerMC import defParPartTypes
+    from ..tracer.montecarlo import defParPartTypes
 
     assert pSplit is None # not implemented
     assert op in ['mean'] #,'sample']

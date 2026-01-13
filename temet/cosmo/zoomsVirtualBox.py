@@ -119,7 +119,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
     simulation, i.e. concatenate the output/group* and output/snap* of these runs. 
     Process a single snapshot, since all are independent. Note that we write exactly one
     output groupcat file per zoom halo, and exactly two output snapshot files. """
-    from ..tracer.tracerMC import globalTracerChildren, globalTracerLength
+    from ..tracer.montecarlo import globalTracerChildren, globalTracerLength
 
     outPath = '/u/dnelson/sims.TNG/L680n8192TNG/output/'
     parent_sim = simParams('tng-cluster')

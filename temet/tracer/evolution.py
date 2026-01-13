@@ -7,7 +7,7 @@ from os.path import isfile, isdir
 from os import mkdir
 from collections import OrderedDict
 
-from ..tracer.tracerMC import subhaloTracersTimeEvo, subhalosTracersTimeEvo, \
+from ..tracer.montecarlo import subhaloTracersTimeEvo, subhalosTracersTimeEvo, \
   globalAllTracersTimeEvo, globalTracerMPBMap, defParPartTypes
 from ..util.helper import pSplitRange
 

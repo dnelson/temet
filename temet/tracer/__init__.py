@@ -1,4 +1,4 @@
 """ Monte Carlo tracer particles. """
-from . import tracerEvo
-from . import tracerMC
-from . import tracerPlot
+from . import evolution
+from . import montecarlo
+from . import plot

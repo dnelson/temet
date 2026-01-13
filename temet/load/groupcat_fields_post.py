@@ -704,8 +704,8 @@ mstar_out_10kpc.log = True
 
 def _tr_load(sim, quant, filePath, fieldName):
     """ Helper function to load tracer tracks auxcat data. """
-    from ..tracer.tracerMC import defParPartTypes
-    from ..tracer.tracerEvo import ACCMODES
+    from ..tracer.montecarlo import defParPartTypes
+    from ..tracer.evo import ACCMODES
     ACCMODES['ALL'] = len(ACCMODES) # add 'all' mode last
     defParPartTypes.append('all') # add 'all' parent type last
 

@@ -147,8 +147,6 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
 
     return hsml.astype('float32')
 
-    raise Exception('Unimplemented partType.')
-
 def defaultHsmlFac(partType):
     """ Helper, set default hsmlFac for a given partType if not input. """
     if partType == 'gas':

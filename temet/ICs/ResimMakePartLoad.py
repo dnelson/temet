@@ -1,6 +1,6 @@
 """
 Cosmological zoom/resimulation ICs: step one, i.e. handle functionality previously in P-Resim-MakePartLoad.
-Step two is to run the external program ``N-GenICResim`` on the generated particle load.
+Step two is to run the external program ``P-Resim-MakeICs`` on the generated particle load.
 """
 import numpy as np
 import h5py

@@ -12,7 +12,7 @@ from scipy.signal import savgol_filter
 from os.path import isfile, isdir
 from os import mkdir
 
-from ..tracer import tracerEvo
+from ..tracer import evo
 from ..util.helper import loadColorTable, logZeroSafe, closest
 from ..cosmo.util import redshiftToSnapNum, snapNumToRedshift
 
@@ -25,9 +25,9 @@ linestyles = ['-','--',':','-.'] # for [L11/L10/L9] or [AllModes/Smooth/Merger/S
                                  # when combining into the same panel with one color
 
 modes = {None                       : "All Modes",
-         tracerEvo.ACCMODE_SMOOTH   : "Smooth",
-         tracerEvo.ACCMODE_MERGER   : "Merger",
-         tracerEvo.ACCMODE_STRIPPED : "Stripped"}
+         evo.ACCMODE_SMOOTH   : "Smooth",
+         evo.ACCMODE_MERGER   : "Merger",
+         evo.ACCMODE_STRIPPED : "Stripped"}
 
 def addRedshiftAgeImageAxes(ax, sP, snaps):
     """ Add a redshift (bottom) and age (top) pair of axes for imshow plots. Top axis does not work 
@@ -164,14 +164,14 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
 
     if sP.isZoom:
         saveFilename = sP.derivPath + '/trValHist/shID_%d_hf%d_snap_%d-%d-%d_%s_2d_%s.hdf5' % \
-          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(tracerEvo.maxRedshift,sP),snapStep,field,trIndStr)
+          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(evo.maxRedshift,sP),snapStep,field,trIndStr)
     else:
         boxOrHaloStr = 'box'
         if sP.haloInd is not None: boxOrHaloStr = 'halo-%d' % sP.haloInd
         if sP.subhaloInd is not None: boxOrHaloStr = 'subhalo-%d' % sP.subhaloInd
         
         saveFilename = sP.derivPath + '/trValHist/%s_2d_%s_snap_%d-%d-%d_%s.hdf5' % \
-          (field,boxOrHaloStr,sP.snap,redshiftToSnapNum(tracerEvo.maxRedshift,sP),snapStep,trIndStr)
+          (field,boxOrHaloStr,sP.snap,redshiftToSnapNum(evo.maxRedshift,sP),snapStep,trIndStr)
 
     if not isdir(sP.derivPath + '/trValHist'):
         mkdir(sP.derivPath + '/trValHist')
@@ -187,13 +187,13 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
 
     # load data
     if accMode is None:
-        accMode = tracerEvo.accMode(sP, snapStep)
+        accMode = evo.accMode(sP, snapStep)
     if accTime is None:
-        accTime = tracerEvo.accTime(sP, snapStep)
+        accTime = evo.accTime(sP, snapStep)
 
     _, _, valMinMax, loadField = plotConfig(field)
 
-    data = tracerEvo.tracersTimeEvo(sP, loadField, snapStep, all=False)
+    data = evo.tracersTimeEvo(sP, loadField, snapStep, all=False)
 
     # normalize?
     w0 = np.where( data[loadField] == 0.0 )
@@ -202,9 +202,9 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
         assert sP.haloInd is None and sP.subhaloInd is None # todo
 
         if "_tviracc" in field:
-            normVal = 10.0**tracerEvo.mpbValsAtAccTimes(sP, 'tvir', rVirFac=1.0)
+            normVal = 10.0**evo.mpbValsAtAccTimes(sP, 'tvir', rVirFac=1.0)
         if "_sviracc" in field:
-            normVal = 10.0**tracerEvo.mpbValsAtAccTimes(sP, 'svir', rVirFac=1.0)
+            normVal = 10.0**evo.mpbValsAtAccTimes(sP, 'svir', rVirFac=1.0)
         
         data[loadField] = 10.0**data[loadField]
 
@@ -292,8 +292,8 @@ def plotEvo2D(ii):
     #trIndRanges = [None, [0.5,1080]]    
 
     # load accretion times, accretion modes (can change to None after cached)
-    accTime = tracerEvo.accTime(sP)
-    accMode = tracerEvo.accMode(sP)
+    accTime = evo.accTime(sP)
+    accMode = evo.accMode(sP)
 
     for field in fieldNames: #[fieldNames[ii]]:
         ctName, label, valMinMax, _ = plotConfig(field)
@@ -384,8 +384,8 @@ def plotEvo1D():
                   "rad_rvir","vrad","angmom"] # dens
 
     # load accretion times and modes for selections
-    #accTime = tracerEvo.accTime(sP)
-    accMode = tracerEvo.accMode(sP)
+    #accTime = evo.accTime(sP)
+    accMode = evo.accMode(sP)
 
     pdf = PdfPages('evo1D_%s_nF%d.pdf' % (sP.simName,len(fieldNames)))
 
@@ -394,7 +394,7 @@ def plotEvo1D():
 
         # load
         #evo = getEvo2D(sP, field, trIndRange=trIndRange, accTime=accTime, accMode=accMode)
-        data = tracerEvo.tracersTimeEvo(sP, fieldName, all=False)
+        data = evo.tracersTimeEvo(sP, fieldName, all=False)
         data2d = np.transpose(data[fieldName].copy())
 
         for j,(modeVal,modeName) in enumerate( modes.items() ):
@@ -406,7 +406,7 @@ def plotEvo1D():
             fig = plt.figure( figsize=figsize1 )
             ax = fig.add_subplot(1,1,1)
             ax.set_title(modeName)
-            #ax.set_xlim([sP.redshift,tracerEvo.maxRedshift])
+            #ax.set_xlim([sP.redshift,evo.maxRedshift])
             ax.set_xlabel('Redshift')
             ax.set_ylabel(label)
 
@@ -447,7 +447,7 @@ def getValHistos(sP, field, extType, accMode=None):
 
     # check for existence
     saveFilename = sP.derivPath + '/trValHist/shID_%d_hf%d_snap_%d-%d-%d_%s-%s.hdf5' % \
-          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(tracerEvo.maxRedshift,sP),1,field,extType)
+          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(evo.maxRedshift,sP),1,field,extType)
 
     if not isdir(sP.derivPath + '/trValHist'):
         mkdir(sP.derivPath + '/trValHist')
@@ -468,27 +468,27 @@ def getValHistos(sP, field, extType, accMode=None):
 
     # load data
     if accMode is None:
-        accMode = tracerEvo.accMode(sP)
+        accMode = evo.accMode(sP)
 
-    if extType in tracerEvo.allowedExtTypes:
+    if extType in evo.allowedExtTypes:
         # the extremum values of field, one per tracer
-        data = tracerEvo.valExtremum(sP, loadField, extType=extType)
+        data = evo.valExtremum(sP, loadField, extType=extType)
         data = data['val']
     elif extType in ['t_acc']:
         # the values of field at the acc time, one per tracer
-        data = tracerEvo.trValsAtAccTimes(sP, loadField, rVirFac=1.0)
+        data = evo.trValsAtAccTimes(sP, loadField, rVirFac=1.0)
     else:
         # the values of field at the time of the extremum (min/max) of a second field
         _, extFieldName, extFieldType = extType.split('__')
 
-        data = tracerEvo.trValsAtExtremumTimes(sP, loadField, extFieldName, extType=extFieldType)
+        data = evo.trValsAtExtremumTimes(sP, loadField, extFieldName, extType=extFieldType)
 
     # normalize?
     if "_tviracc" in field or "_sviracc" in field:
         if "_tviracc" in field:
-            normVal = 10.0**tracerEvo.mpbValsAtAccTimes(sP, 'tvir', rVirFac=1.0)
+            normVal = 10.0**evo.mpbValsAtAccTimes(sP, 'tvir', rVirFac=1.0)
         if "_sviracc" in field:
-            normVal = 10.0**tracerEvo.mpbValsAtAccTimes(sP, 'svir', rVirFac=1.0)
+            normVal = 10.0**evo.mpbValsAtAccTimes(sP, 'svir', rVirFac=1.0)
 
         ww = np.where( data == 0.0 ) # e.g. tracer_maxtemp has 0 for missing values
         data = logZeroSafe( 10.0**data / normVal )
@@ -554,7 +554,7 @@ def plotValHistos():
     for sP in sPs:
 
         # load global quantities for this run (can replace with None once all cached)
-        accMode = tracerEvo.accMode(sP)
+        accMode = evo.accMode(sP)
 
         pdf = PdfPages('valExtremumHistos_ByAccMode_' + sP.simName + '.pdf')
 
