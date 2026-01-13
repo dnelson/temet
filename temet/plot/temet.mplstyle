@@ -11,7 +11,8 @@
 # The default backend; one of GTK GTKAgg GTKCairo GTK3Agg GTK3Cairo
 # CocoaAgg MacOSX Qt4Agg Qt5Agg TkAgg WX WXAgg Agg Cairo GDK PS PDF SVG
 # Template.
-backend      : Agg #TkAgg # for interactive (X-forwarded) matplotlib
+# cannot set in style file, only in matplotlibrc
+#backend      : Agg #TkAgg # for interactive (X-forwarded) matplotlib
 
 ### LINES
 # See http://matplotlib.org/api/artist_api.html#module-matplotlib.lines

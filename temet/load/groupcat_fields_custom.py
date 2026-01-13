@@ -73,7 +73,7 @@ redshift.log = False
 
 # -------------------- subhalos: halo-related properties ------------------------------------------
 
-def mhalo_lim(sim,pt,f):
+def mhalo_lim(sim,f):
     """ Limits for halo masses. """
     lim = [11.0, 14.0]
     if sim.boxSize > 200000: lim = [11.0, 15.0]

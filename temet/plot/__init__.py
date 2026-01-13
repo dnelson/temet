@@ -9,3 +9,8 @@ from . import perf
 from . import quantities
 from . import sizes
 from .config import *
+
+import matplotlib
+import matplotlib.pyplot as plt
+matplotlib.use('Agg')
+plt.style.use('temet/plot/temet.mplstyle')
