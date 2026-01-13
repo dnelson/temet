@@ -2,7 +2,6 @@
     Inspired by the version from SWIFT. """
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import binned_statistic
 from scipy.special import gamma
 
 def calc_a(g, nu=3):

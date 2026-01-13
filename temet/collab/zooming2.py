@@ -348,7 +348,7 @@ def tracer_ambient_hot_halo():
     ax.set_xlim([2.2,2.6])
 
     for i, temp_bin in enumerate(temp_bins):
-        label = 'T$_{\\rm zf}$ $\in$ [%.1f, %.1f]' % (temp_bin[0],temp_bin[1])
+        label = r'T$_{\rm zf}$ $\in$ [%.1f, %.1f]' % (temp_bin[0],temp_bin[1])
         ax.plot( redshifts, temp_prev[i,:], '-', lw=2.0, label=label)
 
     ax.legend()
@@ -365,7 +365,7 @@ def tracer_ambient_hot_halo():
     ax.set_xlim([2.2,2.6])
 
     for i, temp_bin in enumerate(temp_bins):
-        label = 'T$_{\\rm zf}$ $\in$ [%.1f, %.1f]' % (temp_bin[0],temp_bin[1])
+        label = r'T$_{\rm zf}$ $\in$ [%.1f, %.1f]' % (temp_bin[0],temp_bin[1])
         ax.plot( redshifts, frac_prev[i,:], '-', lw=2.0, label=label)
 
     ax.legend()

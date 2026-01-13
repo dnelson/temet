@@ -976,9 +976,9 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
             im = np.log10(im)
 
             # set bounds
-            ylabel = '$\phi$-Relative SB Flux [log]'
+            ylabel = r'$\phi$-Relative SB Flux [log]'
             if vminmax[1] > 0:
-                ylabel = '$\phi$-Relative SB [log]'
+                ylabel = r'$\phi$-Relative SB [log]'
             vminmax = [-0.2, 0.2]
 
         norm = Normalize(vmin=vminmax[0], vmax=vminmax[1])
