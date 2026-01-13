@@ -1,3 +1,7 @@
+
+# https://til.simonwillison.net/python/pyproject
+
+
 import atexit
 import os
 import sys

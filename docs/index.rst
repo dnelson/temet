@@ -42,14 +42,15 @@ with this toolkit.
     :maxdepth: 1
     :caption: Reference
 
-    source/temet.ICs
-    source/temet.collab
+    source/temet.catalog
     source/temet.cosmo
+    source/temet.ICs
     source/temet.load
     source/temet.ML
     source/temet.obs
     source/temet.plot
     source/temet.projects
+    source/temet.spectra
     source/temet.tracer
     source/temet.util
     source/temet.vis

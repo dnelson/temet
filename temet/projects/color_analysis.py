@@ -2,9 +2,6 @@
 TNG galaxy color paper: analysis.
 https://arxiv.org/abs/1707.03395
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import time

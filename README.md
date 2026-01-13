@@ -42,8 +42,7 @@ Organization
 Reproducing Published Papers
 ----------------------------
 
-* collab/ - exploration and plots for collaborations/non-first author papers
-* projects/ - analysis and plots for first-author papers/projects
+* projects/ - analysis and plots for specific papers/projects
 
 The complete analysis and plot set of published papers can (theoretically) be reproduced with the following entry points 
 inside the `projects/` directory. Note that in practice some analyses are costly and would better be done (and were actually 

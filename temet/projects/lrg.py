@@ -24,7 +24,7 @@ from ..plot.config import *
 from ..plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
 from ..plot.cosmoGeneral import quantMedianVsSecondQuant
 from ..tracer.montecarlo import globalAllTracersTimeEvo
-from ..tracer import evo as tracerEvo
+from ..tracer import evolution as tracerEvo
 from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
 from ..projects.oxygen import obsSimMatchedGalaxySamples, obsColumnsDataPlotExtended, \
@@ -54,7 +54,7 @@ def radialResolutionProfiles(sPs, saveName, redshift=0.5, cenSatSelect='cen',
         ax.set_xlabel('Radius [ log pkpc ]')
 
     ax.set_ylim([-0.9,1.0])
-    ax.set_ylabel('Gas Resolution $r_{\\rm cell}$ [ log kpc ]')
+    ax.set_ylabel(r'Gas Resolution $r_{\rm cell}$ [ log kpc ]')
 
     # init
     colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
@@ -160,8 +160,8 @@ def radialResolutionProfiles(sPs, saveName, redshift=0.5, cenSatSelect='cen',
                     yp = savgol_filter(yp,sKn_loc,sKo+1,axis=1) # P[10,90]
 
                 # plot median line
-                label = '%.1f < $M_{\\rm halo}$ < %.1f' % (massBin[0],massBin[1]) if (i == 0 and j == 0) else ''
-                label = '$M_{\\rm halo}$ = %.1f' % (0.5*(massBin[0]+massBin[1])) if (i == 0 and j == 0) else ''
+                label = r'%.1f < $M_{\rm halo}$ < %.1f' % (massBin[0],massBin[1]) if (i == 0 and j == 0) else ''
+                label = r'$M_{\rm halo}$ = %.1f' % (0.5*(massBin[0]+massBin[1])) if (i == 0 and j == 0) else ''
                 alpha = 1.0 if j == 0 else 0.3
                 linewidth = lw if j == 0 else lw-1
 
@@ -173,7 +173,7 @@ def radialResolutionProfiles(sPs, saveName, redshift=0.5, cenSatSelect='cen',
 
                 if not radRelToVirRad:
                     xrvir = np.log10( [avg_rvir_code, avg_rvir_code] )
-                    textStr = 'R$_{\\rm vir}$'
+                    textStr = r'R$_{\rm vir}$'
                     yrvir[1] += 0.0 * k
                 else:
                     rvir_150pkpc_ratio = sP.units.physicalKpcToCodeLength(150.0) / avg_rvir_code
@@ -315,7 +315,7 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
 
     if ycum:
         cMinMax = [-2.0, 0.0] # log fraction
-        clabel  = "Covering Fraction $\,\kappa\,$(N$_{\\rm %s} \geq$ N)" % ionName
+        clabel  = r"Covering Fraction $\,\kappa\,$(N$_{\rm %s} \geq$ N)" % ionName
     else:
         cMinMax = [-3.0, -1.8] # log fraction
         #if 'MHI' in ion: cMinMax = [-3.0, -1.4]
@@ -346,7 +346,7 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
             ax.set_xlabel('Impact Parameter [ pkpc ]')
 
     ax.set_ylim(ylim)
-    ax.set_ylabel('N$_{\\rm %s}$ [ log cm$^{-2}$ ]' % ionName)
+    ax.set_ylabel(r'N$_{\rm %s}$ [ log cm$^{-2}$ ]' % ionName)
 
     # plot
     w = np.where( (dist_global > 0) & np.isfinite(grid_global) )
@@ -514,7 +514,7 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
     cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
     cb = plt.colorbar(cax=cax)
     cb.ax.set_ylabel(clabel)
-    #ax.set_title('%.1f < M$_{\\rm halo}$ [log M$_\odot$] < %.1f' % (haloMassBin[0],haloMassBin[1]))
+    #ax.set_title(r'%.1f < M$_{\rm halo}$ [log M$_\odot$] < %.1f' % (haloMassBin[0],haloMassBin[1]))
 
     fig.savefig('ionColumnsVsImpact2D_%s_%s_%.1f-%.1f_rvir=%d_xlog=%d_ycum=%d_fd=%d.pdf' % \
         (sP.simName,ion,haloMassBin[0],haloMassBin[1],radRelToVirRad,xlog,ycum,fullDepth))
@@ -598,7 +598,7 @@ def ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthresh, sPs2=None, rad
         xx, fc = _covering_fracs(dist_global, grid_global, N)
 
         # plot global
-        label = 'N$_{\\rm %s}$ > 10$^{%.1f}$ cm$^{-2}$' % (ion,N)
+        label = r'N$_{\rm %s}$ > 10$^{%.1f}$ cm$^{-2}$' % (ion,N)
         ax.plot(10**xx, fc[:,-1], '-', lw=3.0, alpha=1.0, label=label)
 
         # fill band (1 sigma halo-to-halo variation) for first column threshold only
@@ -636,7 +636,7 @@ def ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthresh, sPs2=None, rad
          color='black', ecolor='black', alpha=0.4, capsize=0.0, fmt='D', label=b14_label)
 
     # observations: Lan+14 Fig 8: fc (W > 1 Ang, "passive" i < 20.6)
-    lan14_label = "Lan+ (2014) W$_{\\rm 0}^{\\rm MgII}$ > 1$\AA$"
+    lan14_label = r"Lan+ (2014) W$_{\rm 0}^{\rm MgII}$ > 1$\AA$"
     lan14_rp  = [25.0, 36.0, 50.0, 70.0, 100, 150, 210, 300, 430]
     lan14_fc  = np.array([0.1, 0.147, 0.093, 0.048, 0.034, 0.019, 0.013, 0.0088, 0.0071])
     lan14_up  = np.array([0.149, 0.189, 0.118, 0.064, 0.044, 0.026, 0.018, 0.012, 0.010])
@@ -646,7 +646,7 @@ def ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthresh, sPs2=None, rad
          color='black', ecolor='black', alpha=0.6, capsize=0.0, fmt='s', label=lan14_label)
 
     # observations: Lan+18: fc (W > 0.4 Ang, LRGs, DR14)
-    lan18_label = "Lan+ (2018) W$_{\\rm 0}^{\\rm MgII}$ > 0.4$\AA$"
+    lan18_label = r"Lan+ (2018) W$_{\rm 0}^{\rm MgII}$ > 0.4$\AA$"
     lan18_rp   = [23, 35, 48, 68, 95, 135, 189, 265, 380, 525, 740, 1.0e3]
     lan18_fc   = np.array([0.205, 0.187, 0.291, 0.142, 0.196, 0.068, 0.061, 0.047, 0.027, 0.026, 0.014, 0.007])
     lan18_up   = np.array([0.371, 0.417, 0.383, 0.203, 0.250, 0.097, 0.089, 0.061, 0.038, 0.034, 0.020, 0.011])
@@ -656,7 +656,7 @@ def ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthresh, sPs2=None, rad
          color='black', ecolor='black', alpha=0.9, capsize=0.0, fmt='p', label=lan18_label)
 
     # observations: Zahedy+19 COS-LRG: fc (N_MgII > 10^13 cm^-3, poor statistics)
-    z19_label = "Zahedy+ (2019) N$_{\\rm MgII}$ > 10$^{13}$ cm$^{-3}$"
+    z19_label = r"Zahedy+ (2019) N$_{\rm MgII}$ > 10$^{13}$ cm$^{-3}$"
     z19_rp    = [50, 130] # very rough averages of "d<100kpc" and "d = 100-160kpc"
     z19_fc    = np.array([0.60, 0.0])
     z19_up    = np.array([0.85, 0.2])
@@ -1011,7 +1011,7 @@ def cloudEvoVis(sP, haloID, clumpID, sbNum, sizeParam=False):
         customCircles['rad'] = data['size_halfmassrad'][0] * 2
         customCrosses['rad'] = np.zeros(data['pos'].shape[1]) + indivCircSize
 
-        labelCustom = ['$\Delta t$ = %.2f Myr' % data['dt'][i]]
+        labelCustom = [r'$\Delta t$ = %.2f Myr' % data['dt'][i]]
 
         class plotConfig:
             plotStyle    = 'open' # edged
@@ -1093,7 +1093,7 @@ def cloudEvoVisFigure(sP, haloID, clumpID, sbNum, constSize=False):
         customCircles_loc['rad'] = data['size_halfmassrad'][0] * 2
         customCrosses_loc['rad'] = np.zeros(data['pos'].shape[1]) + indivCircSize
 
-        labelCustom_loc = ['$\Delta t$ = %d Myr' % data['dt'][i]]
+        labelCustom_loc = [r'$\Delta t$ = %d Myr' % data['dt'][i]]
 
         # panel
         panel = {'snap':loc_snap, 'boxCenter':boxCenter_loc, 'extent':extent_loc, 'subhaloInd':subhaloInd_loc,
@@ -1134,23 +1134,23 @@ lims = {'size'     : [0, 3.0],    # linear pkpc
         'mg2_mass' : [0.0, 5.0],  # log msun
         'hi_mass'  : [2.0, 7.0]}  # log msun
 
-labels = {'size'     : 'Clump Radius [ kpc ]',
-          'mass'     : 'Clump Total Mass [ log M$_{\\rm sun}$ ]',
-          'ncells'   : 'Number of Gas Cells [ linear ]',
-          'dist'     : 'Halocentric Distance [ kpc ]',
-          'dens'     : 'Mean Hydrogen Number Density [ log cm$^{-3}$ ]',
-          'temp'     : 'Mean Clump Temperature [ log K ]',
-          'bmag'     : 'Mean Clump Magnetic Field Strength [ log $\mu$G ]',
-          'beta'     : 'Mean $\\beta = \\rm{P}_{\\rm gas} / \\rm{P}_{\\rm B}$ [ log ]',
-          'sfr'      : 'Total Clump Star Formation Rate [ M$_{\\rm sun}$ / yr ]',
-          'vrad'     : 'Mean Halo-centric Radial Velocity [ km/s ]',
-          'specj'    : 'Total Specific Angular Momentum [ log kpc km/s ]',
-          'metal'    : 'Mean Clump Gas Metallicity [ log Z$_{\\rm sun}$ ]',
-          'rcell1'   : 'Average Member Gas r$_{\\rm cell}$ [ parsec ]',
-          'rcell2'   : 'Smallest Member Gas r$_{\\rm cell}$ [ parsec ]',
-          'mg2_mass' : 'Total MgII Mass [ log M$_{\\rm sun}$ ]',
-          'hi_mass'  : 'Total Neutral HI Mass [ log M$_{\\rm sun}$ ]',
-          'number'   : 'Number of Discrete Clouds'}
+labels = {'size'     : r'Clump Radius [ kpc ]',
+          'mass'     : r'Clump Total Mass [ log M$_{\rm sun}$ ]',
+          'ncells'   : r'Number of Gas Cells [ linear ]',
+          'dist'     : r'Halocentric Distance [ kpc ]',
+          'dens'     : r'Mean Hydrogen Number Density [ log cm$^{-3}$ ]',
+          'temp'     : r'Mean Clump Temperature [ log K ]',
+          'bmag'     : r'Mean Clump Magnetic Field Strength [ log $\mu$G ]',
+          'beta'     : r'Mean $\beta = \rm{P}_{\rm gas} / \rm{P}_{\rm B}$ [ log ]',
+          'sfr'      : r'Total Clump Star Formation Rate [ M$_{\rm sun}$ / yr ]',
+          'vrad'     : r'Mean Halo-centric Radial Velocity [ km/s ]',
+          'specj'    : r'Total Specific Angular Momentum [ log kpc km/s ]',
+          'metal'    : r'Mean Clump Gas Metallicity [ log Z$_{\rm sun}$ ]',
+          'rcell1'   : r'Average Member Gas r$_{\rm cell}$ [ parsec ]',
+          'rcell2'   : r'Smallest Member Gas r$_{\rm cell}$ [ parsec ]',
+          'mg2_mass' : r'Total MgII Mass [ log M$_{\rm sun}$ ]',
+          'hi_mass'  : r'Total Neutral HI Mass [ log M$_{\rm sun}$ ]',
+          'number'   : r'Number of Discrete Clouds'}
 
 # default segmentation config
 thPropName = 'Mg II numdens'
@@ -1187,7 +1187,7 @@ def clumpDemographics(sPs, haloID, stackHaloIDs=None, trAnalysis=False):
     threshSets = []
 
     for val in [1e-6,1e-7,1e-8,1e-9,1e-10]: #[1e-5,1e-6,1e-7,1e-8,1e-9,1e-10,1e-15]:
-        label = "n$_{\\rm Mg II}$ > %s cm$^{-3}$" % val
+        label = r"n$_{\rm Mg II}$ > %s cm$^{-3}$" % val
         threshSets.append( {'propName':'Mg II numdens', 'propThreshComp':'gt', 'propThresh':val, 'label':label})
 
     #for val in [4.0,4.2,4.4,4.8]:
@@ -1195,9 +1195,9 @@ def clumpDemographics(sPs, haloID, stackHaloIDs=None, trAnalysis=False):
     #    threshSets.append( {'propName':'temp_sfcold', 'propThreshComp':'lt', 'propThresh':val, 'label':label})
 
     #threshSets.append( {'propName':'sfr', 'propThreshComp':'gt', 'propThresh':1e-10, 'label':'SFR > 0'})
-    #threshSets.append( {'propName':'nh', 'propThreshComp':'gt', 'propThresh':0.02, 'label':'n$_{\\rm H}$ > 0.02 cm$^{-3}$'})
-    #threshSets.append( {'propName':'nh', 'propThreshComp':'gt', 'propThresh':0.1, 'label':'n$_{\\rm H}$ > 0.1 cm$^{-3}$'})
-    #threshSets.append( {'propName':'nh', 'propThreshComp':'gt', 'propThresh':0.5, 'label':'n$_{\\rm H}$ > 0.5 cm$^{-3}$'})
+    #threshSets.append( {'propName':'nh', 'propThreshComp':'gt', 'propThresh':0.02, 'label':r'n$_{\rm H}$ > 0.02 cm$^{-3}$'})
+    #threshSets.append( {'propName':'nh', 'propThreshComp':'gt', 'propThresh':0.1, 'label':r'n$_{\rm H}$ > 0.1 cm$^{-3}$'})
+    #threshSets.append( {'propName':'nh', 'propThreshComp':'gt', 'propThresh':0.5, 'label':r'n$_{\rm H}$ > 0.5 cm$^{-3}$'})
 
     nBins1D = 100 # 1d histograms
 
@@ -1723,13 +1723,13 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None, posOnly=False):
     labels = {'size_halfmassrad'   : 'Clump Half-mass Radius [ kpc ]',
               'size_maxseparation' : 'Clump Size: Max Pairwise Separation [ kpc ]',
               'dist'               : 'Halocentric Distance [ kpc ]',
-              'dist_rvir'          : 'Halocentric Distance / r$_{\\rm vir}$',
+              'dist_rvir'          : r'Halocentric Distance / r$_{\rm vir}$',
               'hdens'              : 'Hydrogen Number Density [ log cm$^{-3}$ ]',
               'temp'               : 'Temperature [ log K ]',
               'metal'              : 'Metallicity [ log (not solar) ]',
               'parent_frac_wind'   : 'Fraction of PT4 parents which are wind phase [ log ]',
               'tcool'              : 'Cooling Time [ log Gyr ]',
-              'beta'               : '$\\beta = \\rm{P}_{\\rm gas} / \\rm{P}_{\\rm B}$ [ log ]'}
+              'beta'               : r'$\beta = \rm{P}_{\rm gas} / \rm{P}_{\rm B}$ [ log ]'}
 
     time_xlim = [-1000,300] if sbNum is not None else [-3000, 100] # [-500,300]
     lineAlpha = 0.05 # for individual tracers
@@ -1823,8 +1823,8 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None, posOnly=False):
         ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
         aspect = ax.get_window_extent().height / ax.get_window_extent().width
 
-        ax.set_xlabel('$\Delta$ %s [kpc]' % ['x','y','z'][axes[0]])
-        ax.set_ylabel('$\Delta$ %s [kpc]' % ['x','y','z'][axes[1]])
+        ax.set_xlabel(r'$\Delta$ %s [kpc]' % ['x','y','z'][axes[0]])
+        ax.set_ylabel(r'$\Delta$ %s [kpc]' % ['x','y','z'][axes[1]])
 
         xylim = np.array([data[prop][:,:,axes].min(), data[prop][:,:,axes].max()]) * 0.8
         ax.set_xlim(xylim)
@@ -1900,8 +1900,8 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None, posOnly=False):
         ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
         aspect = ax.get_window_extent().height / ax.get_window_extent().width
 
-        ax.set_xlabel('$\Delta$ %s [kpc]' % ['x','y','z'][axes[0]])
-        ax.set_ylabel('$\Delta$ %s [kpc]' % ['x','y','z'][axes[1]])
+        ax.set_xlabel(r'$\Delta$ %s [kpc]' % ['x','y','z'][axes[0]])
+        ax.set_ylabel(r'$\Delta$ %s [kpc]' % ['x','y','z'][axes[1]])
 
         # shrinking center, relative coordinates
         xx = data['pos_rel'][i,:,axes[0]]
@@ -1918,7 +1918,7 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None, posOnly=False):
         ax.set_ylim(xylim*aspect) # ax is non-square, so make limits reflect the correct aspect ratio
 
         # plot
-        ax.plot(xx, yy, 'o', markersize=2, linestyle='None', label='$\Delta t$ = %.3f Myr' % data['dt'][i])
+        ax.plot(xx, yy, 'o', markersize=2, linestyle='None', label=r'$\Delta t$ = %.3f Myr' % data['dt'][i])
 
         ax.plot([0.0,0.0], ax.get_ylim(), '-', color='#777777', alpha=0.4)
         ax.plot(ax.get_xlim(), [0.0,0.0], '-', color='#777777', alpha=0.4)
@@ -1952,7 +1952,7 @@ def clumpPropertiesVsHaloMass(sPs):
     minMaxHaloMass = [11.0, 14.0]
     numPerBin = 10
     xQuant = 'mhalo_200_log'
-    xlabel = "Halo Mass [ log M$_{\\rm sun}$ ]"
+    xlabel = r'Halo Mass [ log M$_{\rm sun}$ ]'
     xlim = [10.95, 14.05]
 
     minCellsPerClump = 10
@@ -2244,7 +2244,7 @@ def clumpRadialProfiles(sP, haloID, selections, norm=False):
 
         if norm:
             ylog = False
-            ylabel = 'Z$_{\\rm gas}$ / Z$_{\\rm gas,10kpc}$ [linear]'
+            ylabel = r'Z$_{\rm gas}$ / Z$_{\rm gas,10kpc}$ [linear]'
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
@@ -2274,7 +2274,7 @@ def clumpRadialProfiles(sP, haloID, selections, norm=False):
 
             # plot median and percentile band
             label = ', '.join(['%.1f < %s < %.1f' % (bound[0],key,bound[1]) for key,bound in selection.items()])
-            if len(selection) == 1 and 'size' in selection: label = 'r$_{\\rm cloud}$ = %.1f kpc' % selection['size'][0]
+            if len(selection) == 1 and 'size' in selection: label = r'r$_{\rm cloud}$ = %.1f kpc' % selection['size'][0]
 
             l, = ax.plot(bin_cens, yy[:,1], '-', lw=lw, label=label)
 

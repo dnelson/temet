@@ -107,7 +107,7 @@ For a halo-based render, the process is the same, and `subhaloInd` specifies the
 Data Catalogs
 -------------
 
-All "supplementary data catalog" types products are produced in `cosmo/auxcatalog.py`. At the bottom of this file all 
+All "supplementary data catalog" types products are produced in `load/auxcat.py`. At the bottom of this file all 
 known data catalog names are listed, together with their functional definition (i.e., how to compute them, and with 
 what parameters). For example, 
 

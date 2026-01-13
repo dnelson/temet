@@ -17,7 +17,7 @@ together with any required arguments for that function. For example::
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0),
 
 is the definition of the ``Subhalo_Mass_30pkpc_Stars`` catalog, a commonly used measurement for the 
-stellar mass of a galaxy. To create this catalog, the :py:func:`~cosmo.auxcatalog.subhaloRadialReduction` 
+stellar mass of a galaxy. To create this catalog, the :py:func:`~catalog.subhalo.subhaloRadialReduction` 
 function is called. This is a versatile analysis function which applies a particular 'reduction operation' 
 (i.e. mathematical/statistical method) to a particular field of the particles/cells which 
 belong to a subhalo. Its behavior is controlled by setting the following options:
@@ -137,31 +137,31 @@ Analysis Capabilities
 The following functions currently exist to compute catalogs of these types. First, to compute one or more 
 values per halo or subhalo, based on the particles/cells which belong to each halo or subhalo:
 
-* :py:func:`~cosmo.auxcatalog.fofRadialSumType` - sum a property of a given particle type, within a 
+* :py:func:`~catalog.group.fofRadialSumType` - sum a property of a given particle type, within a 
   particular aperture, for all FoF halos.
-* :py:func:`~cosmo.auxcatalog.subhaloRadialReduction` - compute an arbitrary summary statistic on any 
+* :py:func:`~catalog.subhalo.subhaloRadialReduction` - compute an arbitrary summary statistic on any 
   particle/cell quantity, for all subhalos.
-* :py:func:`~cosmo.auxcatalog.subhaloStellarPhot` - compute photometry, half-light radii, and similar 
+* :py:func:`~catalog.subhalo.subhaloStellarPhot` - compute photometry, half-light radii, and similar 
   properties based on stellar light mocks, for all subhalos.
-* :py:func:`~cosmo.auxcatalog.subhaloRadialProfile` - compute radial profiles, for any particle/cell 
+* :py:func:`~catalog.subhalo.subhaloRadialProfile` - compute radial profiles, for any particle/cell 
   quantity, for all subhalos.
 
 To compute a value per subhalo, based on past history:
 
-* :py:func:`~cosmo.auxcatalog.mergerTreeQuant` - compute a property for each subhalo based on its merger 
+* :py:func:`~catalog.temporal.mergerTreeQuant` - compute a property for each subhalo based on its merger 
   tree, for instance halo formation time, number of mergers, and so on.
-* :py:func:`~cosmo.auxcatalog.tracerTracksQuant` - compute a property for each subhalo based on the 
+* :py:func:`~catalog.temporal.tracerTracksQuant` - compute a property for each subhalo based on the 
   Lagrangian histories of its member tracer particles, for instance the average entropy of smoothly accreted 
   gas at the time of its accretion.
 
 To compute a value per subhalo, based on other group catalog objects:
 
-* :py:func:`~cosmo.auxcatalog.subhaloCatNeighborQuant` - compute a property for each subhalo, based on the 
+* :py:func:`~catalog.subhalo.subhaloCatNeighborQuant` - compute a property for each subhalo, based on the 
   other subhalos in the catalog, for instance the number of neighbors, and other environmental densities.
 
 To compute a statistic or value for an entire simulation as a whole:
 
-* :py:func:`~cosmo.auxcatalog.wholeBoxCDDF` - compute the column density distribution function for a given 
+* :py:func:`~catalog.box.wholeBoxCDDF` - compute the column density distribution function for a given 
   gas species (e.g. HI, H2, OVI, and so on) by projecting the entire simulation onto a very large uniform 
   2D grid.
 
@@ -193,14 +193,14 @@ are relevant for a specific catalog:
 :op: a mathematical operation, typically can be one of e.g. ``min``, ``max``, ``sum``, ``mean``, 
   ``median``, and so on. Often can be any python function, e.g. :py:func:`numpy.std` or even a function 
   you define yourself. Can also frequently be a "custom user-defined function" defined by a string. 
-  These are mostly handled inside :py:func:`cosmo.auxcatalog._process_custom_func`, some examples being 
+  These are mostly handled inside :py:func:`catalog.subhalo._process_custom_func`, some examples being 
   ``Krot`` (the :math:`\kappa_{\rm \star,rot}` measurement of stellar rotational support) or ``halfrad`` 
   (the radius enclosing half of the total of the given quantity). Additional custom operations can be 
   added to this function.
 
 :rad: a radial restriction. If not specified, all particles/cells in the given scope are included. If a 
   number, should be input in **pkpc**. Otherwise can be a string understood by 
-  :py:func:`cosmo.auxcatalog._radialRestriction`, for instance ``r015_1rvir_halo``, ``rvir``, 
+  :py:func:`catalog.common._radialRestriction`, for instance ``r015_1rvir_halo``, ``rvir``, 
   ``2rhalfstars``, ``sdss_fiber``, ``legac_slit``, and so on. Additional specialized radial restrictions 
   can be added to this function.
 
@@ -239,7 +239,7 @@ Current Catalog Definitions
 ---------------------------
 
 The code base currently has the following catalog definitions, as listed in the 
-``fieldComputeFunctionMapping`` dictionary of :py:mod:`cosmo.auxcatalog`.
+``fieldComputeFunctionMapping`` dictionary of :py:mod:`load.auxcat`.
 
 .. exec::
 
