@@ -1,6 +1,8 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+#requires = ["setuptools>=61.0", "pybind11>=2.10"]
+#build-backend = "setuptools.build_meta"
+requires = ["pybind11", "scikit-build-core>=0.11"]
+build-backend = "scikit_build_core.build"
 
 [tool.setuptools]
 packages = [
@@ -16,44 +18,29 @@ version = "0.9"
 authors = [
     { name="Dylan Nelson", email="dnelson@uni-heidelberg.de" },
 ]
-description="temet simulation analysis framework."
+description = "temet simulation analysis framework."
+license = "MIT"
 readme = "README.md"
 requires-python = ">3.11.0"
 dependencies = [
     "astropy",
     "cmocean",
-    #"corner",
-    #"emcee",
     #"fsps",
     "h5py",
-    #"healpy",
+    "healpy",
     "matplotlib",
     "numba",
     "numpy",
-    #"psutil",
-    #"pyslurm",
     #"requests",
     #"requests-oathlib",
     "scipy",
-    #"astro-sedpy",
-    #"astro-prospector",
-    #"reproject",
-    #"scikit-image",
-    #"pybind11",
-    #"illustris_python @ git+https://github.com/illustristng/illustris_python@master",
-    #"torch",
-    #"torchvision",
-    #"tensorboard",
-    #"sbi",
-    #"sphinx", "breathe", "exhale", 
-    #"buildbot",
-    #"pytest", "pytest-cov",
+    "pybind11",
+    "illustris_python @ git+https://github.com/illustristng/illustris_python@master",
 ]
 keywords = ["astronomy", "simulation", "cosmology", "astrophysics"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -61,6 +48,33 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Astronomy",
     "Topic :: Scientific/Engineering :: Physics",
+]
+
+[optional-dependncies] #[dependency-groups]
+test = [
+    "pytest",
+    "pytest-cov",
+]
+dev = [
+    "buildbot",
+    "pyslurm",
+    "torch",
+    "torchvision",
+    "tensorboard",
+    "sbi",
+    "reproject",
+    "astro-sedpy",
+    "astro-prospector",
+    "scikit-image",
+    "corner",
+    "emcee",
+    "healpy",
+    "psutil",
+]
+docs = [
+    "sphinx",
+    "breathe",
+    "exhale",
 ]
 
 [project.urls]
@@ -72,11 +86,6 @@ classifiers = [
 # Roboto font
 # download tables/
 # download AtomDB tables
-
-# compile any external/c++ bindings
-#cmd = "c++ -O3 -Wall -shared -std=c++11 -fopenmp -D_GLIBCXX_PARALLEL -fPIC $(python3 -m pybind11 --includes) parallelSort.cpp -o parallelSort.so"
-#cwd = install_path / "util"
-#run(cmd, shell=True, cwd=cwd)
 
 [tool.pytest]
 markers = ["requires_data: requires access to (original) data files.", "slow: test is long-running."]

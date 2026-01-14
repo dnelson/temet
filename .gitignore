@@ -25,3 +25,4 @@ temet/util/*.so
 .vscode
 wandb/
 cache/
+dist/
