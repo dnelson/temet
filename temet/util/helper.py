@@ -9,7 +9,7 @@ import h5py
 from functools import wraps
 from os.path import isfile
 from scipy.optimize import leastsq, least_squares
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 from scipy.stats import binned_statistic, gaussian_kde
 from numba import jit
 from inspect import getsource

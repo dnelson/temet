@@ -2,7 +2,7 @@
 Line integral convolution algorithm.
 """
 import numpy as np
-from scipy.ndimage.interpolation import map_coordinates
+from scipy.ndimage import map_coordinates
 
 def line_integral_convolution(input, velocity, kernel, origin=0, order=3,
                               weighted='average', step_size='unit_length',

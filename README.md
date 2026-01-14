@@ -75,8 +75,3 @@ Additional code contributions, fixes, and suggestions to this package have been 
 * Annalisa Pillepich
 * Rahul Ramesh
 
-
-License
--------
-
-TODO.

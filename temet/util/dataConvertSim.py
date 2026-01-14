@@ -7,7 +7,7 @@ import glob
 import time
 import struct
 from os import path, mkdir
-from scipy.ndimage.interpolation import map_coordinates
+from scipy.ndimage import map_coordinates
 from os.path import isdir, expanduser
 
 from ..util.match import match
