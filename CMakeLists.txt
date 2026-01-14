@@ -4,6 +4,11 @@ project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
 set(PYBIND11_FINDPYTHON ON)
 find_package(pybind11 CONFIG REQUIRED)
 
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(MyTarget PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
 pybind11_add_module(parallelSort MODULE temet/util/parallelSort.cpp)
-install(TARGETS parallelSort DESTINATION ${SKBUILD_PROJECT_NAME})
+install(TARGETS util/parallelSort DESTINATION ${SKBUILD_PROJECT_NAME})
 
