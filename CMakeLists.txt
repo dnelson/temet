@@ -12,4 +12,4 @@ if(OpenMP_CXX_FOUND)
     target_link_libraries(parallelSort PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
-install(TARGETS util/parallelSort DESTINATION ${SKBUILD_PROJECT_NAME})
+install(TARGETS parallelSort DESTINATION ${SKBUILD_PROJECT_NAME}/util)
