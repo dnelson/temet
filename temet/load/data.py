@@ -1819,7 +1819,7 @@ def pintoscastro19(sP):
     r = {'z'     : z,
          'm500'  : np.log10(m500), # msun -> log[msun]
          'm200'  : m200,
-         'label' : 'HSC$\,$x$\,$SpARCS (Pintos-Castro+19)'}
+         'label' : r'HSC$\,$x$\,$SpARCS (Pintos-Castro+19)'}
 
     return r
 
@@ -2191,7 +2191,7 @@ def foersterSchreiber2018():
         color_UV[i] = float(line[11])
         i += 1
 
-    r = {'label':'F$\\rm{\ddot{o}}$rster Schreiber+ (2018) SINS-AO',
+    r = {'label':r'F$\rm{\ddot{o}}$rster Schreiber+ (2018) SINS-AO',
          'name':name,
          'mag_K':mag_K,
          'z':z,
@@ -3103,8 +3103,8 @@ def decia2018():
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
 
-        ax.set_xlabel('Dust-Corrected Metallicity [Fe/H]$_{\\rm tot}$')
-        ax.set_ylabel('$\delta_{\\rm X}$')
+        ax.set_xlabel(r'Dust-Corrected Metallicity [Fe/H]$_{\rm tot}$')
+        ax.set_ylabel(r'$\delta_{\rm X}$')
         for i, X in enumerate(['Zn','Si','Fe']):
             ax.plot(data['FeHtot'], data['delta_%s' % X], ['o','s','D'][i], label=X)
         xx = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], 100)

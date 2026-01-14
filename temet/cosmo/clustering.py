@@ -58,9 +58,9 @@ def twoPointAutoCorrelationPeriodicCube(sP, cenSatSelect='all', minRad=10.0, num
 
     Returns:
       a 4-tuple composed of
-      
+
       - **rad** (ndarray): distance bin mid-points [code units].
-      - **xi** (ndarray): the two-point auto correlation function :math:`\chi(r) = \\rm{DD}/\\rm{RR} - 1` 
+      - **xi** (ndarray): the two-point auto correlation function :math:`\\chi(r) = \\rm{DD}/\\rm{RR} - 1` 
         where ``xi[i]`` is computed between ``rad[i]:rad[i+1]``.
       - **xi_err** (ndarray): one sigma errors derived from the covariance (None if ``jackKnifeNumSub`` is None).
       - **covar** (ndarray): 2d covariance matrix (None if ``jackKnifeNumSub`` is None).

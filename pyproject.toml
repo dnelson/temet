@@ -10,7 +10,7 @@ packages = [
 ]
 
 [tool.setuptools.package-data]
-temet = ["temet/matplotlibrc", "temet/util/*.cpp"]
+temet = ["temet/plot/temet.mplstyle", "temet/util/*.cpp"]
 
 [project]
 name = "temet"
@@ -81,11 +81,6 @@ docs = [
 "Homepage" = "https://www.github.com/dnelson86/temet/"
 "Bug Tracker" = "https://www.github.com/dnelson86/temet/issues"
 "Documentation" = "https://temet.tng-project.org/"
-
-# todo:
-# Roboto font
-# download tables/
-# download AtomDB tables
 
 [tool.pytest]
 markers = ["requires_data: requires access to (original) data files.", "slow: test is long-running."]

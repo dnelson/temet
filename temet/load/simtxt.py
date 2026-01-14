@@ -606,11 +606,11 @@ def sf_sn_details(sim, overwrite=False):
         with h5py.File(cachefile['sf'],'r') as f:
             for key in f:
                 stars[key] = f[key][()]
-        print(f'Loaded [{cachefile['sf']}].')
+        print(f"Loaded [{cachefile['sf']}].")
         with h5py.File(cachefile['sn'],'r') as f:
             for key in f:
                 supernovae[key] = f[key][()]
-        print(f'Loaded [{cachefile['sn']}].')
+        print(f"Loaded [{cachefile['sn']}].")
         
         w = np.where((stars['Density'] <= 0) | (stars['Time'] <= 0) | (stars['Temperature'] <= 0))[0]
         if len(w):
