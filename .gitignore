@@ -12,6 +12,7 @@ docs/quants*custom.rst
 .so
 .ipynb_checkpoints
 .startup.py
+.coverage
 illustris_website
 illustris_python
 illustris_idl
