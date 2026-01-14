@@ -1756,7 +1756,7 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
         # finish plot
         hInds = sorted(list(set([sim.hInd for sim in sims])))
         ax.legend(loc='upper right')
-        fig.savefig(f'{'sn' if supernovae else 'sf'}_{field}{'_h'+str(hInds[0]) if len(hInds) == 1 else ''}.pdf')
+        fig.savefig(f'{"sn" if supernovae else "sf"}_{field}{"_h"+str(hInds[0]) if len(hInds) == 1 else ""}.pdf')
         plt.close(fig)
 
 def select_ics():

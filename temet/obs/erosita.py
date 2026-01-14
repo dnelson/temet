@@ -28,7 +28,6 @@ from matplotlib.lines import Line2D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import astropy.io.fits as pyfits
 from astropy.wcs import WCS
-from reproject import reproject_adaptive, reproject_interp
 
 from ..util.helper import logZeroNaN, loadColorTable, running_median, dist_theta_grid
 from ..plot.config import figsize
@@ -780,6 +779,7 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
         faster interpolation algorithm within reproject. If False, do a very simple 
         shift approach, with no sub-pixel sampling, and no support for rotation.
     """
+    from reproject import reproject_adaptive, reproject_interp
 
     # config
     stack_px = 40 # final map size, per dimension

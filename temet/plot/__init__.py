@@ -10,7 +10,10 @@ from . import quantities
 from . import sizes
 from .config import *
 
+import pathlib
 import matplotlib
 import matplotlib.pyplot as plt
 matplotlib.use('Agg')
-plt.style.use('temet/plot/temet.mplstyle')
+
+style_path = pathlib.Path(__file__).parent.resolve()
+plt.style.use(str(style_path / 'mpl.style'))

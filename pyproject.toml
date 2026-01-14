@@ -10,7 +10,7 @@ packages = [
 ]
 
 [tool.setuptools.package-data]
-temet = ["temet/plot/temet.mplstyle", "temet/util/*.cpp"]
+temet = ["temet/plot/mpl.style", "temet/util/*.cpp"]
 
 [project]
 name = "temet"
@@ -50,7 +50,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 
-[optional-dependncies] #[dependency-groups]
+[project.optional-dependencies] #[dependency-groups]
 test = [
     "pytest",
     "pytest-cov",
