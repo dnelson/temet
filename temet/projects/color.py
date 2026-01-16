@@ -5,6 +5,7 @@ https://arxiv.org/abs/1707.03395
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+from os import mkdir
 from os.path import isfile, isdir, expanduser
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.patches import FancyArrowPatch
@@ -19,7 +20,7 @@ from ..cosmo.color import loadSimGalColors, calcSDSSColors
 from ..projects.color_analysis import calcColorEvoTracks, characterizeColorMassPlane, colorTransitionTimes, defSimColorModel
 from ..plot.quantities import simSubhaloQuantity, bandMagRange
 from ..plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
-from ..plot.config import *
+from ..plot.config import figsize, lw, linestyles, pStyle, sKn, sKo, cssLabels, binSize
 
 def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel], 
                    simRedshift=0.0, splitCenSat=False, cenOnly=False, stellarMassBins=None, 
@@ -309,7 +310,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
         handlesO.append(plt.Line2D( (0,1),(0,0),color=petro_color,lw=3.0,marker='',linestyle='-'))
         labelsO.append('SDSS z<0.1 Petrosian')
 
-    legend2 = axes[iLeg].legend(handlesO+handles, labelsO+labels, loc=legendPos)
+    axes[iLeg].legend(handlesO+handles, labelsO+labels, loc=legendPos)
 
     # legend (central/satellite split)
     if splitCenSat:
@@ -317,14 +318,14 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
         lExtra = ['all galaxies','centrals','satellites']
 
         handles, labels = axes[iLeg+1].get_legend_handles_labels()
-        legend3 = axes[iLeg+1].legend(handles+sExtra, labels+lExtra, loc='upper right')
+        axes[iLeg+1].legend(handles+sExtra, labels+lExtra, loc='upper right')
 
     if allOnly and len(stellarMassBins) > 3:
         sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles[0:2]]
         lExtra = ['all galaxies','centrals only']
 
         handles, labels = axes[0].get_legend_handles_labels()
-        legend3 = axes[0].legend(handles+sExtra, labels+lExtra, loc='upper right')
+        axes[0].legend(handles+sExtra, labels+lExtra, loc='upper right')
 
     pdf.savefig()
     plt.close(fig)
@@ -723,7 +724,7 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
     if 'sim_xvals' in sP.data:
         sim_xvals, xlabel, xMinMax = sP.data['sim_xvals'], sP.data['xlabel'], sP.data['xMinMax']
     else:
-        sim_xvals, xlabel, xMinMax, _ = simSubhaloQuantity(sP, xQuant, clean)
+        sim_xvals, xlabel, xMinMax, _ = simSubhaloQuantity(sP, xQuant)
         sP.data['sim_xvals'], sP.data['xlabel'], sP.data['xMinMax'] = sim_xvals, xlabel, xMinMax
 
     # y-axis: load/calculate evolution of simulation colors, cached in sP.data
@@ -752,7 +753,7 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
     # load x-axis quantity at final (to) time
     origSnap = sP.snap
     sP.setSnap( snaps[zIndTo] )
-    sim_xvals_to, _, _, _ = simSubhaloQuantity(sP, xQuant, clean)
+    sim_xvals_to, _, _, _ = simSubhaloQuantity(sP, xQuant)
     ageTo = sP.tage
 
     sP.setSnap( origSnap )
@@ -1027,7 +1028,7 @@ def _get_red_blue_2params(params, method, iterNum):
 
     return val_blue, val_red
 
-def _get_red_blue_errors(errors, method, iterNum, errInds=[1,3]):
+def _get_red_blue_errors(errors, method, iterNum, params, errInds=[1,3]):
     """ Helper function for plotting color-mass plane fits. """
     if 'rel' in method:
         mu1 = errors[errInds,0]
@@ -1150,7 +1151,7 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
             for i in range(len(masses)):
                 val_blue[i], val_red[i] = _get_red_blue_2params(params[:,i], method, iterNum)
                 err_blue_down[i], err_blue_up[i], err_red_down[i], err_red_up[i] = \
-                  _get_red_blue_errors(errors[:,:,i], method, iterNum)
+                  _get_red_blue_errors(errors[:,:,i], method, iterNum, params)
 
             ax.plot(masses[:-ind_b],val_blue[:-ind_b],marker+ls,color=cBlue,alpha=alpha,lw=lw)
             ax.plot(masses[ind_b:],val_blue[ind_b:],marker+ls,color=cBlue,alpha=alpha/af,lw=lw)
@@ -1169,7 +1170,7 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
 
         # make legends
         loc = 'upper left' if iterNum == 0 else 'lower right'
-        legend2 = ax.legend(sExtra, lExtra, loc=loc)
+        ax.legend(sExtra, lExtra, loc=loc)
 
     # start figure
     fig = plt.figure(figsize=(figsize[0],figsize[1]*2),facecolor=color1)
@@ -1914,7 +1915,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
                 if j > 0:
                     # show percentile scatter only for 'all galaxies'
                     continue
-                
+
                 ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.2)
 
         # legends
@@ -2214,9 +2215,10 @@ def paperPlots():
 
     # figure 5: fullbox demonstratrion projections
     if 0:
+        from ..vis.boxDrivers import TNG_colorFlagshipBoxImage
         # render each fullbox image used in the composite
         for part in [0,1,2,3,4]:
-            vis.boxDrivers.TNG_colorFlagshipBoxImage(part=part)
+            TNG_colorFlagshipBoxImage(part=part)
 
     # figure 6, grid of L205_cen 2d color histos vs. several properties (2x3)
     if 0:
@@ -2277,15 +2279,15 @@ def paperPlots():
                 sP_loc = sP.copy()
                 sP_loc.setRedshift(bhRedshift)
 
-                sim_x_loc, _, _, take_log2 = sP_loc.simSubhaloQuantity(xQuant, clean)
+                sim_x_loc, _, _, take_log2 = sP_loc.simSubhaloQuantity(xQuant)
                 if take_log2: sim_x_loc = logZeroNaN(sim_x_loc) # match
 
                 # same filters as above
-                wSelect = sP_loc.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
+                wSelect = sP_loc.cenSatSubhaloIndices(cenSatSelect=css)
                 sim_x_loc = sim_x_loc[wSelect]
 
                 for bhPropNum, bhPropName in enumerate(['BH_mass','BH_Mdot_edd']):
-                    sim_m_bh, _, _, take_log2 = sP_loc.simSubhaloQuantity(bhPropName, clean)
+                    sim_m_bh, _, _, take_log2 = sP_loc.simSubhaloQuantity(bhPropName)
                     if not take_log2: sim_m_bh = 10.0**sim_m_bh # undo log then
 
                     # same filters as above

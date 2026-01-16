@@ -2,20 +2,24 @@
 "Zooming in on accretion" paper series (II) - Suresh+ 2019.
 http://arxiv.org/abs/1811.01949
 """
-import numpy as np
+from os.path import isfile
+
 import h5py
 import matplotlib.pyplot as plt
-from os.path import isfile
-from scipy.signal import savgol_filter
+import numpy as np
 from scipy.interpolate import interp1d
+from scipy.signal import savgol_filter
 
-from ..util.simParams import simParams
-from ..util.helper import running_median, logZeroNaN
-from ..util.match import match
-from ..plot.general import plotPhaseSpace2D, plotHistogram1D, plotSingleRadialProfile
-from ..vis.halo import renderSingleHalo
-from ..vis.box import renderBox
-from ..plot.config import *
+from ...cosmo.cloudy import cloudyIon
+from ...obs.galaxySample import addIonColumnPerSystem, ionCoveringFractions
+from ...plot.config import colors, figsize, linestyles, lw, sKn, sKo
+from ...plot.general import plotHistogram1D, plotPhaseSpace2D, plotSingleRadialProfile
+from ...util.helper import logZeroNaN, running_median
+from ...util.match import match
+from ...util.simParams import simParams
+from ...vis.box import renderBox
+from ...vis.halo import renderSingleHalo
+
 
 def check_box(snap):
     panels = []
@@ -106,7 +110,7 @@ def visualize_halo(conf=1, quadrant=False, snap=None):
         # gas metallicity
         panels.append( {'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-2.0,0.0]} )
         nPixels = [600,600]
-        
+
     class plotConfig:
         plotStyle    = 'open'
         rasterPx     = int(nPixels[0]*1.0)
@@ -158,7 +162,7 @@ def visualize_compare_vs_normal(conf=1):
         # temperature
         panels.append( {'variant':'FPorig', 'partType':'gas', 'partField':'temp', 'valMinMax':[4.2,5.9]} )
         panels.append( {'variant':'FP', 'partType':'gas', 'partField':'temp', 'valMinMax':[4.2,5.9]} )
-        
+
     panels[0]['labelScale'] = 'physical'
     panels[1]['labelZ'] = True
 
@@ -188,7 +192,7 @@ def phase_diagram_ovi():
 
     plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloIDs=haloIDs, 
                      clim=cMinMax, xlim=xMinMax, ylim=yMinMax, 
-                     contours=contours, smoothSigma=smoothSigma, hideBelow=True)
+                     contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
 
 def phase_diagram_coolingtime():
     # cooling time phase diagram
@@ -209,7 +213,7 @@ def phase_diagram_coolingtime():
 
     plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloIDs=haloIDs, 
                      clim=cMinMax, xlim=xMinMax, ylim=yMinMax, 
-                     contours=contours, smoothSigma=smoothSigma, hideBelow=True)
+                     contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
 
 def phase_diagram_vs_L11():
     # phase diagram (gas), comparing L11_FP to L11_12_FP
@@ -230,9 +234,9 @@ def phase_diagram_vs_L11():
     haloIDs = [0]
 
     plotPhaseSpace2D(sP1, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloIDs=haloIDs, clim=cMinMax, 
-                     xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=True)
+                     xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
     plotPhaseSpace2D(sP2, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloIDs=haloIDs, clim=cMinMax, 
-                     xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=True)
+                     xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
 
 def phase_diagram_ovi_tng50_comparison():
     # TNG50 analog for comparison
@@ -252,7 +256,7 @@ def phase_diagram_ovi_tng50_comparison():
     smoothSigma = 1.0
 
     plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloIDs=haloIDs, clim=cMinMax, 
-                     xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=True)
+                     xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
 
 def figure1_res_statistics(conf=0):
     """ Figure 1: resolution statistics in mass/size for gas cells, comparing runs. """
@@ -584,8 +588,6 @@ def gas_components_radial_profiles():
 
 def mgii_radial_profile():
     """ Compare MgII column density profiles. """
-    from ..cosmo.cloudy import cloudyIon
-
     redshift = 2.25
 
     sPs = []
@@ -595,7 +597,6 @@ def mgii_radial_profile():
 
     ion = 'MgII'
     cenSatSelect = 'cen'
-    haloMassBins = [[11.3,12.0]]
     projDim = '2Dz_2Mpc'
     combine2Halo = True
     radRelToVirRad = False
@@ -604,7 +605,7 @@ def mgii_radial_profile():
     lw = 3.0
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
-    
+
     radStr = 'Radius' if '3D' in projDim else 'Impact Parameter'
     if radRelToVirRad:
         ax.set_xlim([-2.0, 2.0])
@@ -634,7 +635,8 @@ def mgii_radial_profile():
         print('[%s]: %s' % (ion,sP.simName))
 
         ac = sP.auxCat(fields=[fieldName])
-        if ac[fieldName] is None: continue
+        if ac[fieldName] is None:
+            continue
 
         # crossmatch 'subhaloIDs' to cssInds
         ac_inds, css_inds = match(ac['subhaloIDs'], cssInds)
@@ -653,11 +655,9 @@ def mgii_radial_profile():
 
         if ac[fieldName].ndim == 2:
             yy /= ac[fieldName+'_attrs'][normField]
-            nRadTypes = 1
         else:
             for radType in range(ac[fieldName].shape[2]):
                 yy[:,:,radType] /= ac[fieldName+'_attrs'][normField]
-            nRadTypes = 4
 
         # from e.g. [code mass / code length^3] -> [ions/cm^3]
         species = ion.replace('I','').replace('V','').replace('X','') # e.g. 'OVI' -> 'O'
@@ -724,15 +724,13 @@ def mgii_radial_profile():
                 fontsize=20.0, alpha=0.1, rotation=90)
 
     # legend
-    legend2 = ax.legend(loc='upper right')
+    ax.legend(loc='upper right')
 
     fig.savefig('figure_9.pdf')
     plt.close(fig)
 
 def hi_covering_frac():
     """ Plot radial profiles of HI covering fractions. """
-    from ..obs.galaxySample import addIonColumnPerSystem, ionCoveringFractions
-
     redshift = 2.25
 
     sPs = []
@@ -796,7 +794,7 @@ def hi_covering_frac():
             label = sP.simName if j == len(colDensThresholds)-1 else ''
             ax.plot(xx, yy, lw=lw, color=colors[i], linestyle='-', label=label)
 
-        legend = ax.legend(loc='upper right')
+        ax.legend(loc='upper right')
 
     # finish
     fig.savefig('figure_8.pdf')

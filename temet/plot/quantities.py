@@ -2,10 +2,7 @@
 Load functions for group catalog as well as particle/cell-level quantities, including 
 relevant metadata and default plotting hints (labels, default bounds, units).
 """
-import numpy as np
-
 from ..util.helper import logZeroNaN
-from ..plot.config import *
 
 # todo: these are for the web interface, take instead (unify with) docstring
 quantDescriptions = {
@@ -209,11 +206,11 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     return quantList
 
-def simSubhaloQuantity(sP, quant, clean=False, tight=False):
+def simSubhaloQuantity(sP, quant, tight=False):
     """ Return a 1D vector of size Nsubhalos, one quantity per subhalo as specified by the string 
     cQuant, wrapping any special loading or processing. Also return an appropriate label and range.
-    If clean is True, label is cleaned up for presentation. If tight is true, alternative range is 
-    used (less restrictive, targeted for y-axes/slice1D/medians instead of histo2D colors). """
+    If tight is true, alternative range is used (less restrictive, targeted for y-axes/slice1D/medians 
+    instead of histo2D colors). """
     from ..load.groupcat import groupcat_fields, custom_cat_fields, custom_cat_multi_fields
 
     prop = quant.lower().replace('_log','') # new
@@ -223,7 +220,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     log = True # default
 
     # cached? immediate return
-    cacheKey = 'sim_%s_%s_%s' % (quant,clean,tight)
+    cacheKey = 'sim_%s_%s' % (quant,tight)
 
     if cacheKey in sP.data:
         # data already exists in sP cache? return copies rather than views in case data or metadata are modified

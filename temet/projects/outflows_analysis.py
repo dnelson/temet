@@ -1414,14 +1414,17 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
             dsetName = '%s.%s.%s' % (firstQuant,secondQuant,thirdQuant)
 
     selStr = '' if selNum is None else '_sel%d' % selNum
-    cacheFile = sP.cachePath + '%s_%s-%s-%s-%s%s%s_%d.hdf5' % (acField,firstQuant,secondQuant,thirdQuant,fourthQuant,selStr,flowStr,sP.snap)
+    cacheFile = sP.cachePath + '%s_%s-%s-%s-%s%s%s_%d.hdf5' % \
+        (acField,firstQuant,secondQuant,thirdQuant,fourthQuant,selStr,flowStr,sP.snap)
 
     # overrides (after cache filename)
     dsetNameOrig = dsetName
     if dsetName == '%s.%s.%s' % (rad,rad,vel):
-        dsetName = '%s.%s' % (rad,vel) # fine-grained vrad/vlos sampling (need to differentiate from '%s.%s.temp' case above, could be cleaned up)
+        # fine-grained vrad/vlos sampling (need to differentiate from '%s.%s.temp' case above, could be fixed)
+        dsetName = '%s.%s' % (rad,vel)
     if dsetName == '%s.%s.%s' % (rad,vel,vel):
-        dsetName = '%s.%s' % (rad,vel) # fine-grained vrad/vlos sampling (e.g. 1D plot of outflow rates vs vrad)
+        # fine-grained vrad/vlos sampling (e.g. 1D plot of outflow rates vs vrad)
+        dsetName = '%s.%s' % (rad,vel)
         thirdQuant = None
 
     # quick file cache, since these auxCat's are large
@@ -1594,7 +1597,7 @@ def massLoadingsSN(sP, pSplit, sfr_timescale=100, scope='SubfindWithFuzz', third
 
     Returns:
       tuple: a 2-tuple composed of:
-      
+
       - **result** (ndarray[float][nSubsInAuxCat,nRadBins,nVradCuts]): 3d array, 
         containing result(s) for each processed subhalo.
       - **attrs** (dict): metadata.

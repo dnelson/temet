@@ -903,13 +903,13 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
     return r
 
 def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
-                         bands=['g','r'], cenSatSelect='cen', simColorsModel=defSimColorModel):
+                         bands=['g','r'], simColorsModel=defSimColorModel):
     """ Measure the various color boundary crossing times for all galaxies. """
-    assert cenSatSelect in ['cen'] # actually UNUSED! delete and cleanup (all galaxies are handled)
     import json
     import matplotlib.pyplot as plt # for debug plots
 
     # analysis config
+    cenSatSelect = 'cen' # actually UNUSED! delete (all galaxies are handled)
     fit_method = 'Crel' # method/model used to characterize red vs blue populations in the C-M plane
     cmPlaneCSS = 'all' # which galaxies to use for color-mass plane fits
     cmPlaneRedshifts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0] # when to load color-mass plane fits
@@ -967,8 +967,8 @@ def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
     for redshift in cmPlaneRedshifts:
         sP.setRedshift(redshift)
         print('load cm-plane fits: snap [%d] z = %.1f' % (sP.snap,redshift))
-        fits_local = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cmPlaneCSS, 
-                       simColorsModel=cmPlaneColorModel, nBurnIn=nBurnIn, remakeFlag=False, newErrors=newErrors)
+        fits_local = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cmPlaneCSS,
+                       simColorsModel=cmPlaneColorModel, nBurnIn=nBurnIn, remakeFlag=False)
         cm_fits.append(fits_local)
 
     sP.setRedshift(redshifts[0])

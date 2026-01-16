@@ -1,18 +1,20 @@
 """
 Annalisa Pillepich
 """
-import numpy as np
-import matplotlib.pyplot as plt
-import h5py
 from os import path
+
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
 from scipy.signal import savgol_filter
 
-from ..util.simParams import simParams
-from ..plot.config import *
-from ..util.helper import running_median
-from ..cosmo.util import crossMatchSubhalosBetweenRuns
-from ..vis.halo import renderSingleHalo
-from ..vis.common import savePathDefault
+from ...cosmo.util import crossMatchSubhalosBetweenRuns
+from ...plot.config import *
+from ...util.helper import running_median
+from ...util.simParams import simParams
+from ...vis.common import savePathDefault
+from ...vis.halo import renderSingleHalo
+
 
 def stellarMergerContribution(sP):
     """ Analysis routine for TNG flagship paper on stellar mass content. """
@@ -261,7 +263,7 @@ def stellarMergerContributionPlot():
     ax.plot(histMinMax, [0.1,0.1], ':', color='black', alpha=0.05)
     ax.plot(histMinMax, [0.5,0.5], ':', color='black', alpha=0.05)
     ax.plot(histMinMax, [0.9,0.9], ':', color='black', alpha=0.05)
-    
+
     for j, haloMassBin in enumerate(md[sP.simName]['haloMassBins']):
         for i, sP in enumerate(sPs):
 
@@ -273,7 +275,7 @@ def stellarMergerContributionPlot():
             # if mergermass==nan (originally -1), then we will not sum all 
             # the weights, such that mergerMassHisto[j,:].sum() <= totalStarMass[j]
             yy /= md[sP.simName]['mergerMassHisto'][j,:].sum() 
-            
+
             yy_cum = yy[::-1].cumsum()[::-1] # above a given subhalo mass threshold
             #label = '%.1f < M$_{\\rm halo}$ < %.1f' % (haloMassBin[0],haloMassBin[1])
 
@@ -320,7 +322,7 @@ def stellarMergerContributionPlot():
 
                 if apertureIter > 0 or threshIter == 1 or i > 0:
                     continue # show percentile scatter only for first aperture
-                
+
                 ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=l.get_color(), interpolate=True, alpha=0.1)
 
     # legend
@@ -396,7 +398,7 @@ def tngMethods2_windPatterns(conf=1, pageNum=0):
     # pick halos from this run and crossmatch
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
     sP2 = simParams(res=res, run=run, redshift=redshift, variant=matchedToVariant)
-    
+
     # z2_11.5_page (z=2)
     #selectHalosFromMassBin(): In massBin [11.5 11.7] have 85 halos total.
     #pages = [[3498, 3833, 3861, 4097], [4250, 4481, 4511, 4578], [4601, 4656, 4720, 4763], 
@@ -550,7 +552,7 @@ def gjoshi_clustermaps(conf=0, haloID=0):
     #excludeSubhaloFlag = True
 
     sP = simParams(res=res, run=run, redshift=redshift, hInd=haloID, variant=variant)
-    
+
     if not sP.isZoom:
         # periodic box, FoF/Halo ID
         subhaloInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
@@ -690,7 +692,7 @@ def pgalan_tng50_fornax(setType='fornax10', partType='stars', partField='coldens
     """ Author: A. Pillepich """
     """ Galan et al. 2022 (Fig. 1): stellar mass maps of Fornax-like groups and clusters """
     """ Other interesting options for partType='gas': xray_lum, coldens_msunkpc2, machnum, P_gas, P_B, entropy, temperature, metal_solar, vrad, bmag_uG, HI_segmented, OVI_OVII_ionmassratio, SN_IaII_ratio_Fe """
-    
+
     panels = []
 
     # imaging options
@@ -716,7 +718,7 @@ def pgalan_tng50_fornax(setType='fornax10', partType='stars', partField='coldens
     size       = 4.0
     sizeType   = 'rVirial' #'kpc'
     setNum     = 0
-    
+
     if setType == 'fornax10':
         ids         = [2, 3, 4, 6, 7, 8, 9, 10, 11, 13]
         numPerSet   = 10
@@ -739,8 +741,8 @@ def pgalan_tng50_fornax(setType='fornax10', partType='stars', partField='coldens
         valMinMax = [33.0, 36.0]
     if partField == 'xray_lum_05-2kev':
         valMinMax = [33.0, 36.0]
-    
-    # configure panels:  
+
+    # configure panels:
     for i in range(int(plotConfig.nRows*nCols)):
         local_subhaloInd = sP.groupCatSingle(haloID=shIDs[i])['GroupFirstSub']
         panels.append( {'subhaloInd':local_subhaloInd, **plotOptions} )
@@ -749,14 +751,13 @@ def pgalan_tng50_fornax(setType='fornax10', partType='stars', partField='coldens
           (setType,sP.run,sP.res,snap,method,partType,partField) 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-
 def cengler_tng50_MWM31satellites(setNum=0, setType='MWM31satellites_selection', setMaps='stellarmass'):
     """ Author: A. Pillepich """
     """ Engler et al. 2022 (Fig. 1): stellar mass and gas maps of massive MW/M31-like galaxies """
     """ Selection of satellites: MW/M31-like hosts, <300 kpc, massive """
     """ To be run for setNum = 0, ...11 """
     """ To be run for setMaps='stellarmass',gasmass,... """ 
-    
+
     panels = []
 
     # imaging options
@@ -782,7 +783,7 @@ def cengler_tng50_MWM31satellites(setNum=0, setType='MWM31satellites_selection',
     rVirFracs  = [0.5, 1.0]
     size       = 100
     sizeType   = 'kpc'
-    
+
     if setType == 'MWM31satellites':
         ids         = np.loadtxt('/u/apillepi/sims.TNG/L35n2160TNG/appostprocessing/mwm31s/L35n2160TNG_099_SubfindIDs_MassiveSats_MWM31like.txt', dtype='int')
         numPerSet   = 20
@@ -818,7 +819,7 @@ def cengler_tng50_MWM31satellites(setNum=0, setType='MWM31satellites_selection',
         valMinMax = [33.0, 36.0]
     if partField == 'xray_lum_05-2kev':
         valMinMax = [33.0, 36.0]
-    
+
     # configure panels:  
     for i in range(int(plotConfig.nRows*nCols)):
         panels.append( {'subhaloInd':shIDs[i], **plotOptions} )
@@ -833,7 +834,7 @@ def apillepich_TNG50MWM31s_maps(setType='TNG50MWM31s', setMaps='stellarlight'):
     """ Pillepich et al. 2022 (Figs. XXX): various maps of the MW/M31-like galaxies in TNG50, random projections """
     """ Selection of galaxies: TNG50 MW/M31-like hosts """
     """ To be run for setMaps='stellarlight', 'stellarmass',gasmass,... """ 
-    
+
     panels = []
 
     # imaging options
@@ -859,7 +860,7 @@ def apillepich_TNG50MWM31s_maps(setType='TNG50MWM31s', setMaps='stellarlight'):
     rVirFracs  = [0.5, 1.0]
     size       = 100
     sizeType   = 'kpc'
-    
+
     if setType == 'TNG50MWM31s':
         fname       = '/u/apillepi/sims.TNG/L35n2160TNG/appostprocessing/mwm31s/TNG_L35n2160TNG_099_MWM31likeGalaxies.txt'
         data        = np.genfromtxt(fname, skip_header=4)
@@ -879,7 +880,7 @@ def apillepich_TNG50MWM31s_maps(setType='TNG50MWM31s', setMaps='stellarlight'):
         partType    = 'gas'
         partField   = 'coldens_msunkpc2'
         valMinMax   = [4.0,8.0]
-    
+
     # configure panels:  
     for i in ids:
         panels = []

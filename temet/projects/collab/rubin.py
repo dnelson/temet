@@ -1,16 +1,19 @@
 """
 Kate Rubin / HST MST 2024 Proposal
 """
-import numpy as np
-import h5py
 from os.path import isfile
+
+import h5py
 import matplotlib.pyplot as plt
+import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from ..util import simParams
-from ..util.helper import running_median, logZeroNaN, dist_theta_grid
-from ..plot.config import *
-from ..vis.halo import renderSingleHalo
+from ...cosmo.util import subsampleRandomSubhalos
+from ...plot.config import figsize, markers, lw, linestyles
+from ...util import simParams
+from ...util.helper import dist_theta_grid, logZeroNaN, running_median
+from ...vis.halo import renderSingleHalo
+
 
 def hubbleMCT_gibleVis(conf=1):
     """ Visualization of CGM emission from a GIBLE or TNG50 halo. """
@@ -56,7 +59,7 @@ def hubbleMCT_gibleVis(conf=1):
     labelZ     = True #False
     rotation   = 'edge-on'
     labelScale = False
-    
+
     vmm = [-20.0, -16.5] # log sb
     ctName = 'magma_gray' # 'magma_gray'
     colorbarnoticks = True
@@ -88,7 +91,7 @@ def hubbleMCT_gibleVis(conf=1):
         grid_OVI1038, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
 
         grid_ratio = np.log10(10.0**grid_CIII / (10.0**grid_OVI1032 + 10.0**grid_OVI1038))
-                              
+
         panels[0]['grid'] = grid_ratio
         panels[0]['valMinMax'] = [-1.0, 1.0]
         panels[0]['colorbarlabel'] = '(CIII/OVI) Surface Brightness Ratio [log]'
@@ -124,8 +127,6 @@ def hubbleMCT_gibleVis(conf=1):
 
 def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
     """ Hubble MST Proposal 2024 of Kate Rubin. """
-    from ..cosmo.util import subsampleRandomSubhalos
-
     sim = simParams(simname, redshift=0.36) # tng50-1, eagle, simba
 
     # grid config
@@ -150,7 +151,7 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
     subInds, mstar = subsampleRandomSubhalos(sim, num_per_dex, [mstar_min,mstar_max], cenOnly=True)
 
     dist, _ = dist_theta_grid(size, nPixels)
-    
+
     # check for existence of cache
     grids = {}
     sb_percs = {}
@@ -226,7 +227,7 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
 
     if cQuant is not None:
         #c_vals = sim.subhalos(cQuant)[subInds]
-        sim_cvals, clabel, cMinMax, cLog = sim.simSubhaloQuantity(cQuant, clean)
+        sim_cvals, clabel, cMinMax, cLog = sim.simSubhaloQuantity(cQuant)
         sim_cvals = sim_cvals[subInds]
         if cLog: sim_cvals = logZeroNaN(sim_cvals)
         clim = None
@@ -263,7 +264,7 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
 
     fig.savefig('mst_OVI_CIII_annuli_vs_mstar_%s.pdf' % sim.simName)
     plt.close(fig)
-    
+
 def hubbleMCT_emissionTrendsVsSim():
     """ Combine results from above into a summary plot. """
     # config
@@ -287,7 +288,7 @@ def hubbleMCT_emissionTrendsVsSim():
             subInds = f['subInds'][()]
 
         mstar[simname] = sim.subhalos('mstar_30pkpc_log')[subInds]
-        
+
     # plot
     fig, (ax1,ax2) = plt.subplots(nrows=1, ncols=2, figsize=(figsize[0]*1.5,figsize[1]))
 

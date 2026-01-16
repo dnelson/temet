@@ -1,15 +1,19 @@
 """
 Celine Peroux
 """
-import numpy as np
 import h5py
-from scipy.signal import savgol_filter
 import matplotlib.pyplot as plt
+import numpy as np
+from scipy.signal import savgol_filter
 
-from ..util import simParams
-from ..plot.config import *
-from ..util.helper import logZeroNaN, running_median
-from ..vis.halo import renderSingleHalo
+from ...plot.config import figsize, lw, sKn, sKo
+from ...plot.general import plotStackedRadialProfiles1D
+from ...util import simParams
+from ...util.helper import logZeroNaN, running_median
+from ...util.rotation import momentOfInertiaTensor, rotationMatricesFromInertiaTensor
+from ...util.simParams import simParams
+from ...vis.halo import renderSingleHalo
+
 
 def writeH2CDDFBand():
     """ Use H2 CDDFs with many variations (TNG100) to derive an envelope band, f(N_H2) vs. N_H2, and write a text file.
@@ -18,7 +22,7 @@ def writeH2CDDFBand():
 
     vars_sfr = ['nH2_GK_depth10','nH2_GK_depth10_allSFRgt0','nH2_GK_depth10_onlySFRgt0']
     vars_model = ['nH2_BR_depth10','nH2_KMT_depth10']
-    vars_diemer = ['nH2_GD14_depth10','nH2_GK11_depth10','nH2_K13_depth10','nH2_S14_depth10']
+    #vars_diemer = ['nH2_GD14_depth10','nH2_GK11_depth10','nH2_K13_depth10','nH2_S14_depth10']
     vars_cellsize = ['nH2_GK_depth10_cell3','nH2_GK_depth10_cell1']
     vars_depth = ['nH2_GK_depth5','nH2_GK_depth20','nH2_GK_depth1']
 
@@ -54,7 +58,6 @@ def writeH2CDDFBand():
     fN_H2_high = savgol_filter(fN_H2_high[w],sKn,sKo)
 
     # plot
-    figsize = np.array([14,10]) * 0.7
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
@@ -168,9 +171,6 @@ def galaxyImage():
 def radialProfilesHIH2():
     """ Compute stacked radial profiles of N_HI(b) and N_H2(b). 
     https://arxiv.org/abs/2011.01935 (Figure 1). """
-    from ..util.simParams import simParams
-    from ..plot.general import plotStackedRadialProfiles1D
-
     sPs = []
     sPs.append( simParams(res=1820,run='tng',redshift=2.0) )
 
@@ -194,7 +194,6 @@ def radialProfilesHIH2():
 
 def numdensHIVsColumn():
     """ Re-create Rahmati+ (2013) Fig 2. https://arxiv.org/abs/2011.01935 (Figure 1). """
-    from ..util.simParams import simParams
     sP = simParams(run='tng100-1', redshift=3.0)
 
     N_HI = sP.snapshotSubset('gas', 'hi_column')
@@ -244,7 +243,6 @@ def numdensHIVsColumn():
     nh_percs  = logZeroNaN(nh_percs)
 
     # plot
-    figsize = np.array([14,10]) * 0.8
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
@@ -284,8 +282,6 @@ def numdensHIVsColumn():
 
 def galaxyRotationAngles():
     """ For Daniela filaments project. """
-    from ..util.rotation import momentOfInertiaTensor, rotationMatricesFromInertiaTensor
-
     sim = simParams('tng50-1', redshift=2.0)
     mstar = sim.subhalos('mstar_30kpc_log')
 

@@ -10,7 +10,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
 
-from ..plot.config import *
+from ..plot.config import sKn, sKo, figsize, lw
 from ..util.helper import cache, closest, gaussian_filter_nan, iterable, loadColorTable, logZeroNaN, \
     running_median, sampleColorTable
 from ..util.match import match
@@ -1162,7 +1162,7 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp', subhaloIDs=Non
             yy['perc ']= savgol_filter(yy['perc'],sKn,sKo,axis=1) # P[10,90]
 
         # plot lines
-        label = '%s haloID=%d [%s]' % (sP.simName,haloID,scope) if not clean else sP.simName
+        label = '%s h%d' % (sP.simName,haloID)
         l, = ax.plot(yy['rad'], yy['mean'], '--', lw=lw)
         ax.plot(yy['rad'], yy['median'], '-', lw=lw, color=l.get_color(), label=label)
 

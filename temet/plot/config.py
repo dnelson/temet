@@ -10,7 +10,6 @@ binSize = 0.2 # dex in stellar mass/halo mass for median lines
 percs   = [16,50,84] # +/- 1 sigma (50 must be in the middle for many analyses)
 
 figsize = (11.2, 8.0) # (8,6), [14,10]*0.8
-clean   = True    # make visually clean plots with less information (TODO: remove)
 pStyle  = 'white' # white or black background
 sizefac = 0.8     # for single column figures
 figsize_sm = [figsize[0] * sizefac, figsize[1] * sizefac]

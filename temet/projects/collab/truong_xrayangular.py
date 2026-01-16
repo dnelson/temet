@@ -4,17 +4,19 @@ https://arxiv.org/abs/2109.06884
 OVII and OVIII emission (Troung+22).
 https://arxiv.org/abs/2307.01277
 """
-import numpy as np
-import h5py
 import hashlib
 from os.path import isfile
-from scipy.interpolate import interp1d
-import matplotlib.pyplot as plt
 
-from ..util.helper import running_median, sampleColorTable, dist_theta_grid
-from ..plot.config import *
-from ..vis.halo import renderSingleHalo
-from ..vis.box import renderBox
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.interpolate import interp1d
+
+from ...plot.config import figsize, linestyles, lw, percs
+from ...util.helper import closest, dist_theta_grid, running_median, sampleColorTable
+from ...vis.box import renderBox
+from ...vis.halo import renderSingleHalo
+from ..util.simParams import simParams
 
 valMinMaxQuant = {'coldens' : [18.5, 20.0], # in case we render actual quantities instead of deltas
                   'xray_lum_05-2kev' : [33, 37],
@@ -25,7 +27,6 @@ valMinMaxQuant = {'coldens' : [18.5, 20.0], # in case we render actual quantitie
 
 def _get():
     """ TEST. """
-    from ..util.simParams import simParams
 
     sP = simParams(run='tng100-1', redshift=0.0)
     subhaloInd = 472174
@@ -95,8 +96,6 @@ def _get():
     w3 = np.where(np.isfinite(grid))
 
     print('number of non-empty pixels: ',len(w1[0]), len(w2[0]), len(w3[0]))
-
-    import pdb; pdb.set_trace()
 
 def _get_panels(conf, stack2Dmaps, median, renderIndiv):
     """ Common config. """
@@ -340,7 +339,7 @@ def stackedPropVsTheta(sP, mStarBin, distBins, conf=0, depthFac=1.0, stack2Dmaps
     ax.set_ylabel(labels[dataField])
 
     ax.plot(ax.get_xlim(), [1.0,1.0], '-', color='black', lw=lw*4, alpha=0.1)
-    
+
     # loop over mass/distance bins
     colors = sampleColorTable('plasma', len(mStarBin)*len(distBins), bounds=[0.1,0.7])
     #colors = sampleColorTable('plasma', 5, bounds=[0.1,0.8])
@@ -447,9 +446,6 @@ def stackedPropVsTheta(sP, mStarBin, distBins, conf=0, depthFac=1.0, stack2Dmaps
 
 def singleHaloImage():
     """ Quick test. """
-    from ..util import simParams
-    from ..util.helper import closest
-
     # select halo
     sP = simParams(run='tng100-1', redshift=0.0)
     mstar = sP.subhalos('mstar_30pkpc_log')
@@ -495,8 +491,6 @@ def singleHaloImage():
 
 def paperPlots():
     """ Plots for Truong+21 x-ray emission angular dependence paper. """
-    from ..util import simParams
-    
     sP = simParams(run='tng100-1', redshift=0.0)
     mStarBin = [10.90, 11.10]
 
@@ -522,8 +516,6 @@ def paperPlots():
 
 def fullboxEmissionO8():
     """ Create fullbox emission figure for Truong+22. """
-    from ..util import simParams
-    
     # panels
     redshift = 0.0
     panels = []

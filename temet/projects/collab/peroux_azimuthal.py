@@ -2,17 +2,19 @@
 Azimuthal angle dependence of CGM properties (Peroux+, TNG50)
 https://arxiv.org/abs/2009.07809
 """
-import numpy as np
-import h5py
 import hashlib
 import itertools
 from os import path
-import matplotlib.pyplot as plt
 
-from ..util import simParams
-from ..util.helper import loadColorTable, logZeroNaN, running_median, sampleColorTable, dist_theta_grid
-from ..plot.config import *
-from ..vis.halo import renderSingleHalo
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+
+from ...plot.config import figsize, lw
+from ...util import simParams
+from ...util.helper import dist_theta_grid, logZeroNaN, running_median, sampleColorTable
+from ...vis.halo import renderSingleHalo
+
 
 def singleHaloImage(sP, subhaloInd=440839, conf=0):
     """ Metallicity distribution in CGM image. """
@@ -56,7 +58,7 @@ def singleHaloImage(sP, subhaloInd=440839, conf=0):
     # render
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def metallicityVsVradProjected(sP, shIDs=[440839], directCells=False, clean=False, distBin=None, ylim=None):
+def metallicityVsVradProjected(sP, shIDs=[440839], directCells=False, distBin=None, ylim=None):
     """ Plot correlation of gas metallicity and vrad (i.e. mass flow rate) in projection 
     by using the images directly. """
     rVirFracs  = [0.5]
@@ -75,18 +77,10 @@ def metallicityVsVradProjected(sP, shIDs=[440839], directCells=False, clean=Fals
         dummy = True
 
     # start plot
-    if clean:
-        figsize_loc = (figsize[0]*2,figsize[1]*2) # (figsize[1]*2,figsize[1]*2) # square
-        fig = plt.figure(figsize=figsize_loc, frameon=False, tight_layout=False, facecolor='black')
-        ax = fig.add_axes([0,0,1,1], facecolor='black')
-        markersize = 3.0
-        outFormat = 'png'
-    else:
-        fig = plt.figure(figsize=(figsize[0]*0.8,figsize[1]*0.8))
-        ax = fig.add_subplot(111)
-        ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
-        markersize = 1.5
-        outFormat = 'pdf'
+    figsize_loc = (figsize[0]*2,figsize[1]*2) # (figsize[1]*2,figsize[1]*2) # square
+    fig = plt.figure(figsize=figsize_loc, frameon=False, tight_layout=False, facecolor='black')
+    ax = fig.add_axes([0,0,1,1], facecolor='black')
+    markersize = 3.0
 
     # compute
     x_data = []
@@ -143,19 +137,8 @@ def metallicityVsVradProjected(sP, shIDs=[440839], directCells=False, clean=Fals
     # scatterplot
     s = ax.scatter(x_data, y_data, s=markersize, c=theta, marker='.', zorder=0) # dist
 
-    if not clean:
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel)
-
-        ax.plot([0,0],ax.get_ylim(),'-',color='black', alpha=0.5)
-
-        # colorbar
-        cax = fig.add_axes([0.80,0.2,0.04,0.54])
-        cb = plt.colorbar(s, cax=cax)
-        cb.ax.set_ylabel(clabel)
-
     hStr = shIDs[0] if len(shIDs) == 1 else ('stack-%s' % len(shIDs))
-    fig.savefig('scatter_%s_%s_vs_%s_h%s.%s' % (sP.simName,y_field,x_field,hStr,outFormat), facecolor=fig.get_facecolor())
+    fig.savefig('scatter_%s_%s_vs_%s_h%s.png' % (sP.simName,y_field,x_field,hStr), facecolor=fig.get_facecolor())
     plt.close(fig)
 
 def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRestrictions=None, 
@@ -606,7 +589,7 @@ def paperPlots():
         subhaloIDs = np.where( (mstar>9.95) & (mstar<10.05) & cen_flag )[0]
         print(subhaloIDs.size)
 
-        metallicityVsVradProjected(TNG50, directCells=False, clean=False, shIDs=subhaloIDs, distBin=distBin, ylim=ylim)
+        metallicityVsVradProjected(TNG50, directCells=False, shIDs=subhaloIDs, distBin=distBin, ylim=ylim)
 
     if 0:
         # figure 4: main comparison of TNG vs EAGLE
@@ -677,13 +660,13 @@ def paperPlots():
         metallicityVsTheta(sPs, field, massBins=massBins, distBins=distBins, sizefac=sf)
 
     if 0:
-        # explore: metallicity vs rad/massflowrate (clean/black background vis gallery)
+        # explore: metallicity vs rad/massflowrate (black background vis gallery)
         mstar = TNG50.subhalos('mstar_30pkpc_log')
         cen_flag = TNG50.subhalos('central_flag')
         subhaloIDs = np.where( (mstar>8.49) & (mstar<8.51) & cen_flag )[0]
 
         for shID in subhaloIDs:
-            metallicityVsVradProjected(TNG50, shIDs=[shID], clean=True)
+            metallicityVsVradProjected(TNG50, shIDs=[shID])
 
 def paperPlotsB():
     """ Azimuthal angle variation of B field strength. """

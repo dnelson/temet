@@ -88,7 +88,7 @@ def _fix_grid_border_artifacts(grid):
 
     return grid
 
-def visualize_result_2d(basePath):
+def visualize_result_2d(basePath, noaxes=False):
     """ Helper function to load density_field_NNN projection files and plot a series of PNG frames. """
     from os import getcwd, path
 
@@ -96,7 +96,6 @@ def visualize_result_2d(basePath):
     cmap = 'magma'
 
     figsize = None # automatic # (16,14)
-    clean = True
 
     if 'config_1' in getcwd():
         vMM = [0.0, 1.2]
@@ -154,8 +153,8 @@ def visualize_result_2d(basePath):
 
         fig = plt.figure(figsize=figsize)
 
-        # plot (clean)
-        if clean:
+        # plot only image
+        if noaxes:
             ax = fig.add_axes([0.0, 0.0, 1.0, 1.0])
             ax.set_axis_off()
 
@@ -164,9 +163,8 @@ def visualize_result_2d(basePath):
             plt.clim(vMM)
 
             ax.text(nPixelsX-10, nPixelsY-10, "t = %5.3f" % time, color='white', alpha=0.6, ha='right', va='top')
-
-        # plot (with axes, colorbar)
-        if not clean:
+        else:
+            # plot with axes and colorbar
             ax = fig.add_subplot(111)
 
             plt.imshow(grid.T, extent=[0,boxSize,0,boxSize], cmap=cmap, aspect='equal')
@@ -200,7 +198,7 @@ def histogram_result_2d(basePath):
     fig = plt.figure(figsize=(16,10))
     ax = fig.add_subplot(111)
     ax.set_xlabel('Density Value')
-    ax.set_ylabel('log N$_{\\rm pixels}$')
+    ax.set_ylabel(r'log N$_{\rm pixels}$')
 
     # loop over snapshots
     nSnaps = len(glob.glob(path + 'density_field_*'))

@@ -3,17 +3,18 @@ Run summary plots and produce a booklet of comparisons to observational constrai
 cosmological simulations. Includes the usual comparisons such as stellar to halo mass ratio (SMHM), 
 the stellar mass function (SMF), and so on.
 """
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from scipy.signal import savgol_filter
 
 from ..load.data import *
 from ..load.simtxt import sfrTxt
-from ..util.helper import running_median, running_histogram, logZeroNaN, iterable
-from ..plot.sizes import galaxySizes, galaxyHISizeMass
+from ..plot.config import binSize, colors, figsize, linestyles, lw, sKn, sKo
 from ..plot.cosmoGeneral import addRedshiftAgeAxes, quantMedianVsSecondQuant
+from ..plot.driversSizes import galaxyHISizeMass, galaxySizes
 from ..plot.general import plotPhaseSpace2D
-from ..plot.config import *
+from ..util.helper import iterable, logZeroNaN, running_histogram, running_median
+
 
 def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False, 
                         simRedshift=0.0, dataRedshift=0.0, fig_subplot=[None,None]):
@@ -445,19 +446,11 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
 
     xlim_def = [8.5, 13.0]
     ylim_def = [5.5, 11.0]
-    
+
     ax.set_xlim(xlim_def if xlim is None else xlim)
     ax.set_ylim(ylim_def if ylim is None else ylim)
 
     ylabel = r'Black Hole Mass [ log M$_{\rm sun}$ ]'
-    
-    if not clean:
-        if not actualBHMasses and not actualLargestBHMasses:
-            ylabel += ' [ tot dyn sum, only cen ]'
-        if actualBHMasses:
-            ylabel += ' [ actual sum, only cen ]'
-        if actualLargestBHMasses:
-            ylabel += ' [ actual max, only cen ]'
 
     ax.set_ylabel(ylabel)
 
@@ -608,7 +601,6 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
 
     if use30kpc:
         ax.set_xlabel(r'Galaxy Stellar Mass [ log M$_{\rm sun}$ ] [ < 30 pkpc ]')
-        if clean: ax.set_xlabel(r'Galaxy Stellar Mass [ log M$_{\rm sun}$ ]')
     if use30H:
         ax.set_xlabel(r'Galaxy Stellar Mass [ log M$_{\rm sun}$ ] [ < min(2r$_{\star,1/2}$,30 pkpc) ]')
     if useP10:
@@ -1202,7 +1194,7 @@ def HIvsHaloMass(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
         sExtra.append( plt.Line2D( (0,1), (0,0), color='black', marker='', lw=lw, linestyle=linestyles[i]) )
         lExtra.append( acField )
 
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
+    ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
 
     # finish figure
     finishFlag = False
@@ -1223,12 +1215,8 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
     metalFields   = ['SubhaloStarMetallicityHalfRad',
                      'SubhaloStarMetallicity',
                      'SubhaloStarMetallicityMaxRad']
-    if clean: metalFields = []
-    if clean: acMetalFields = [acMetalFields[0]]
 
-    minNumStars = 1
-    if clean: minNumStars = 1 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
-    if clean: from ..plot.config import figsize # do not override
+    minNumStars = 1 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
 
     # plot setup
     if fig_subplot[0] is None:
@@ -1238,15 +1226,12 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
         # add requested subplot to existing figure
         fig = fig_subplot[0]
         ax = fig.add_subplot(fig_subplot[1])
-    
+
     ax.set_xlim([8.0, 12.5])
     ax.set_ylim([-1.5,1.0])
 
     xlabel = r'Stellar Mass [ log M$_{\rm sun}$ ]'
     ylabel = r'Z$_{\rm stars}$ [ log Z$_{\rm sun}$ ]'
-    if not clean:
-        xlabel += ' [ < 2r$_{1/2}$ ]'
-        ylabel += ' [ centrals and satellites ]'
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
@@ -1306,8 +1291,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
         # metallicities based on auxCat calculation?
         for i, acMetalField in enumerate(acMetalFields):
 
-            iters = [0]
-            if clean: iters = [0,1] # add Guidi corrections
+            iters = [0,1] # add Guidi corrections
 
             for i_num in iters:
                 yy = logZeroNaN( ac[acMetalField][w] / sP.units.Z_solar )
@@ -1377,24 +1361,17 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
 
     # second legend
     handles, labels = ax.get_legend_handles_labels()
-    sExtra = []
-    lExtra = []
 
-    if not clean:
-        sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[0]),
-                  plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[1]),
-                  plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[2]),
-                  plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[3])]
-        lExtra = [r'Z$_{\rm stars}$ (r < 4pkpc, rBand-LumWt)',
-                  r'Z$_{\rm stars}$ (r < 1r$_{1/2})$', 
-                  r'Z$_{\rm stars}$ (r < 2r$_{1/2})$',
-                  r'Z$_{\rm stars}$ (r < r$_{\rm max})$']
-    else:
-        pass
-        #sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[2])]
-        #lExtra = ['Guidi+ (2016) Correction'] 
+    sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[0]),
+                plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[1]),
+                plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[2]),
+                plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[3])]
+    lExtra = [r'Z$_{\rm stars}$ (r < 4pkpc, rBand-LumWt)',
+                r'Z$_{\rm stars}$ (r < 1r$_{1/2})$', 
+                r'Z$_{\rm stars}$ (r < 2r$_{1/2})$',
+                r'Z$_{\rm stars}$ (r < r$_{\rm max})$']
 
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
+    ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
 
     # finish figure
     finishFlag = False
@@ -1909,7 +1886,7 @@ def velocityFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
 
     # second legend
     handles, labels = ax.get_legend_handles_labels()
-    legend2 = ax.legend(handles, labels, loc='lower left')
+    ax.legend(handles, labels, loc='lower left')
 
     pdf.savefig()
     plt.close(fig)
@@ -1920,11 +1897,8 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
                 'Subhalo_StellarAge_4pkpc_rBandLumWt',
                 'Subhalo_StellarAge_NoRadCut_MassWt',
                 'Subhalo_StellarAge_NoRadCut_rBandLumWt']
-    if clean: ageTypes = [ageTypes[0]]
 
-    minNumStars = 1
-    if clean: minNumStars = 1 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
-    if clean: from ..plot.config import figsize # do not override
+    minNumStars = 1 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
 
     # plot setup
     if fig_subplot[0] is None:
@@ -1934,17 +1908,12 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
         # add requested subplot to existing figure
         fig = fig_subplot[0]
         ax = fig.add_subplot(fig_subplot[1])
-    
+
     ax.set_xlim([8.0,12.5])
     ax.set_ylim([0,14])
 
-    xlabel = r'Stellar Mass [ log M$_{\rm sun}$ ]'
-    if not clean: xlabel += r' [ < 2r$_{\star,1/2}$ ]'
-    ax.set_xlabel(xlabel)
-
-    cenSatStr = ' [ centrals only ]' if centralsOnly else ' [ centrals & satellites ]'
-    if clean: cenSatStr = ''
-    ax.set_ylabel('Stellar Age [ Gyr ]%s' % cenSatStr)
+    ax.set_xlabel(r'Stellar Mass [ log M$_{\rm sun}$ ]')
+    ax.set_ylabel('Stellar Age [ Gyr ]')
 
     # observational points
     g05 = gallazzi2005(sPs[0])
@@ -2007,7 +1976,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
         for i, ageType in enumerate(ageTypes):
 
             iters = [0]
-            #if clean: iters = [0,1] # show Guidi correction
+            #iters = [0,1] # show Guidi correction
 
             for i_num in iters:
                 yy = ac[ageType][w]
@@ -2062,19 +2031,14 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
 
     # legend
     handles, labels = ax.get_legend_handles_labels()
-    sExtra = []
-    lExtra = []
 
-    if not clean:
-        sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[i]) \
-                    for i,ageType in enumerate(ageTypes)]
-        lExtra = [', '.join(ageType.split("_")[2:]) for ageType in ageTypes]
-    else:
-        pass
-        #sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[2])]
-        #lExtra = ['Guidi+ (2016) Correction'] 
+    sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[i]) \
+                for i,ageType in enumerate(ageTypes)]
+    lExtra = [', '.join(ageType.split("_")[2:]) for ageType in ageTypes]
+    #sExtra += [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[2])]
+    #lExtra += ['Guidi+ (2016) Correction']
 
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower right')
+    ax.legend(handles+sExtra, labels+lExtra, loc='lower right')
 
     # finish figure
     finishFlag = False
@@ -2094,7 +2058,7 @@ def haloXrayLum(sPs, pdf=None, xlim=[10,12], ylim=[38,45], bolometric=False):
     yQuant = 'xray_05_2kev_r500_halo' if not bolometric else 'xray_r500'
 
     cenSatSelect  = 'cen'
-    scatterPoints = any([sP.simName == 'TNG-Cluster' for sP in sPs]) # TNG-Cluster (+TNG300)
+    scatterPoints = any(sP.simName == 'TNG-Cluster' for sP in sPs) # TNG-Cluster (+TNG300)
     drawMedian    = not scatterPoints
     markersize    = 40.0
     sizefac       = 0.8 # for single column figure

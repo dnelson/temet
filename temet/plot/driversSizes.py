@@ -46,22 +46,17 @@ def galaxySizes(sPs, vsHaloMass=False, simRedshift=0.0, addHalfLightRad=None, on
 
     ax.set_ylim([0.3,1e2] if ylim is None else ylim)
 
-    ylabel = 'Galaxy Size [ kpc ]'
-    if not clean: ylabel += ' [ r$_{\\rm 1/2, stars/gas}$ ] [ only centrals ]'
-    if clean: ylabel += ' [ Halfmass Radius ]'
-    ax.set_ylabel(ylabel)
+    ax.set_ylabel(r'Galaxy Size r$_{\rm 1/2, stars/gas}$ [ kpc ]')
     ax.set_yscale('log')
 
     if vsHaloMass:
-        ax.set_xlabel('Halo Mass [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200c}$ ]')
+        ax.set_xlabel(r'Halo Mass [ log M$_{\rm sun}$ ] [ M$_{\rm 200c}$ ]')
         ax.set_xlim([9,14.5])
         ax.set_ylim([0.7,8e2])
     else:
-        xlabel = 'Galaxy Stellar Mass [ log M$_{\\rm sun}$ ]'
-        if not clean: xlabel += ' [ < 2r$_{1/2}$ ]'
+        xlabel = r'Galaxy Stellar Mass [ log M$_{\rm sun}$ ]'
         ax.set_xlabel(xlabel)
-        ax.set_xlim([7,12.0])
-        if clean: ax.set_xlim([8.0,12.0])
+        ax.set_xlim([8.0,12.0])
 
     if xlim is not None: ax.set_xlim(xlim)
 
@@ -162,7 +157,7 @@ def galaxySizes(sPs, vsHaloMass=False, simRedshift=0.0, addHalfLightRad=None, on
 
             # split by each projection
             yy_stars_Re = []
-            
+
             for i in range(ac[acField].shape[2]):
                 yy_stars_Re.append( sP.units.codeLengthToKpc(ac[acField][w,bandNum,i]) )         
 
@@ -206,9 +201,6 @@ def galaxySizes(sPs, vsHaloMass=False, simRedshift=0.0, addHalfLightRad=None, on
         if sP.redshift > 0.0: label += ' z=%.1f' % sP.redshift
         l, = ax.plot(xm_stars, ym_stars, linestyles[0], lw=3.0, label=label)
 
-        if not clean:
-            l, = ax.plot(xm_gas, ym_gas, linestyles[1], color=l.get_color(), lw=3.0)
-
         if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2):
             y_down = np.array(ym_stars) - sm_stars
             y_up   = np.array(ym_stars) + sm_stars
@@ -224,7 +216,7 @@ def galaxySizes(sPs, vsHaloMass=False, simRedshift=0.0, addHalfLightRad=None, on
                 xm_stars = xm_stars[ww_stars]
 
                 l, = ax.plot(xm_stars[1:-1], ym_stars[1:-1], linestyles[0], lw=3.0, 
-                             label='R$_{\\rm e}$ '+addHalfLightRad[1]+' '+Re_labels[i])
+                             label=r'R$_{\rm e}$ '+addHalfLightRad[1]+' '+Re_labels[i])
 
                 if i == 0:
                     y_down = np.array(ym_stars[1:-1]) - sm_stars[1:-1]
@@ -252,17 +244,8 @@ def galaxySizes(sPs, vsHaloMass=False, simRedshift=0.0, addHalfLightRad=None, on
             # plot scatter
             sc = ax.scatter(xx, yy, s=markersize, **opts, zorder=0)
 
-    # second legend
-    handles, labels = ax.get_legend_handles_labels()
-    sExtra = []
-    lExtra = []
-
-    if not clean:
-        sExtra = [plt.Line2D( (0,1), (0,0), color='black', marker='', lw=3.0, linestyle=linestyles[0]),
-                  plt.Line2D( (0,1), (0,0), color='black', marker='', lw=3.0, linestyle=linestyles[1])]
-        lExtra = [r'stars',r'gas']
-
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower right')
+    # legend
+    ax.legend(loc='lower right')
 
     # finish figure
     finishFlag = False
@@ -287,12 +270,10 @@ def galaxyHISizeMass(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
         ax = fig.add_subplot(fig_subplot[1])
 
     cenSatSelect = 'cen'
-    ylabel = 'D$_{\\rm HI}$ [ log kpc ]'
-    if clean: ylabel += ' [ Halfmass Radius ] [ only centrals ]'
+    ylabel = r'D$_{\rm HI}$ [ log kpc ]'
     ax.set_ylabel(ylabel)
 
-    xlabel = 'M$_{\\rm HI}$ [ log M$_{\\rm sun}$ ]'
-    if not clean: xlabel += ' [ < 2r$_{1/2}$ ]'
+    xlabel = r'M$_{\rm HI}$ [ log M$_{\rm sun}$ ]'
     ax.set_xlabel(xlabel)
 
     ax.set_ylim([-0.7, 2.5])
@@ -404,7 +385,7 @@ def sizeModelsRatios():
         ax = fig.add_subplot(111)
         ax.set_title('%s z=%.1f band=%s' % (sP.simName,sP.redshift,band))
 
-        xlabel = 'Galaxy Stellar Mass [ log M$_{\\rm sun}$ ]' + ' [ < 2r$_{1/2}$ ]'
+        xlabel = r'Galaxy Stellar Mass [ log M$_{\rm sun}$ ]' + ' [ < 2r$_{1/2}$ ]'
         ax.set_xlabel(xlabel)
         ax.set_xlim([7.0,12.5])
 
@@ -508,7 +489,7 @@ def lumModelsRatios(res=1820, run='tng', redshifts=[0.0]):
         ax = fig.add_subplot(111)
         ax.set_title('%s z=%.1f' % (sP.simName,sP.redshift))
 
-        xlabel = 'Galaxy Stellar Mass [ log M$_{\\rm sun}$ ]' + ' [ < 2r$_{1/2}$ ]'
+        xlabel = r'Galaxy Stellar Mass [ log M$_{\rm sun}$ ]' + ' [ < 2r$_{1/2}$ ]'
         ax.set_xlabel(xlabel)
         ax.set_xlim([7.0,12.5])
 
@@ -567,12 +548,12 @@ def clumpSizes(sP):
     ax = fig.add_subplot(111)
     ax.set_title(sP.simName + ' z=%.1f' % sP.redshift)
 
-    ylabel = 'Subhalo Size [ kpc ] [ r$_{\\rm 1/2, stars}$ ]'
+    ylabel = r'Subhalo Size [ kpc ] [ r$_{\rm 1/2, stars}$ ]'
     if centralsOnly: ylabel += ' [ only centrals ]'
     ax.set_ylabel(ylabel)
     ax.set_yscale('log')
 
-    ax.set_xlabel('Parent Group Mass [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200c}$ ]')
+    ax.set_xlabel(r'Parent Group Mass [ log M$_{\rm sun}$ ] [ M$_{\rm 200c}$ ]')
     ax.set_xlim([8,14.5])
     ax.set_ylim([0.1,10])
 
@@ -597,7 +578,7 @@ def clumpSizes(sP):
         xx_code = gc['subhalos']['SubhaloMassInRadType'][w,sP.ptNum('stars')]
         xx = sP.units.codeMassToLogMsun( xx_code )
         ax.set_xlim([6.0,11.5])
-        ax.set_xlabel('Subhalo Stellar Mass [ log M$_{\\rm sun}$ ] [ <2r$_{\\rm 1/2, stars}$ ]')
+        ax.set_xlabel(r'Subhalo Stellar Mass [ log M$_{\rm sun}$ ] [ <2r$_{\rm 1/2, stars}$ ]')
 
     # sizes
     yy_stars = gc['subhalos']['SubhaloHalfmassRadType'][w,sP.ptNum('stars')]
@@ -625,13 +606,13 @@ def characteristicSizes(sP, vsHaloMass=False):
 
     reBand = 'jwst_f115w' # for half light radii
 
-    labels = {'stars'    : 'r$_{\\rm 1/2,\star}$',
-              'dm'       : 'r$_{\\rm 1/2,DM}$',
-              'gas'      : 'r$_{\\rm 1/2,gas}$',
-              'gas_sf'   : 'R$_{\\rm SF,H\\alpha}$',
-              'gas_hi'   : 'R$_{\\rm HI}$',
-              'stars_re' : 'R$_{\\rm e,stars}$',
-              'rvir'     : 'r$_{\\rm vir,halo}$'}
+    labels = {'stars'    : r'r$_{\rm 1/2,\star}$',
+              'dm'       : r'r$_{\rm 1/2,DM}$',
+              'gas'      : r'r$_{\rm 1/2,gas}$',
+              'gas_sf'   : r'R$_{\rm SF,H\alpha}$',
+              'gas_hi'   : r'R$_{\rm HI}$',
+              'stars_re' : r'R$_{\rm e,stars}$',
+              'rvir'     : r'r$_{\rm vir,halo}$'}
 
     # plot setup
     fig = plt.figure(figsize=figsize)
@@ -644,11 +625,11 @@ def characteristicSizes(sP, vsHaloMass=False):
     ax.set_yscale('log')
 
     if vsHaloMass:
-        ax.set_xlabel('Halo Mass [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200c}$ ]')
+        ax.set_xlabel(r'Halo Mass [ log M$_{\rm sun}$ ] [ M$_{\rm 200c}$ ]')
         ax.set_xlim([10.0,14.0])
         ax.set_ylim([0.7,8e2])
     else:
-        ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ]')
+        ax.set_xlabel(r'Galaxy Stellar Mass [ log M$_{\rm sun}$ ]')
         ax.set_xlim([6.5,11.5])
 
     # observational points

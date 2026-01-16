@@ -194,11 +194,11 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Fal
     if vstng50:
         sim_parent_relation = simParams(run='tng50-1', redshift=sim_parent.redshift)
 
-    parent_xvals, xlabel, xMinMax, xLog = sim_parent_relation.simSubhaloQuantity(xQuant, clean, tight=True)
+    parent_xvals, xlabel, xMinMax, xLog = sim_parent_relation.simSubhaloQuantity(xQuant, tight=True)
     if xlim is not None: xMinMax = xlim
     if xLog: parent_xvals = logZeroNaN(parent_xvals)
 
-    parent_yvals, ylabel, yMinMax, yLog = sim_parent_relation.simSubhaloQuantity(yQuant, clean, tight=True)
+    parent_yvals, ylabel, yMinMax, yLog = sim_parent_relation.simSubhaloQuantity(yQuant, tight=True)
     if ylim is not None: yMinMax = ylim
     if yLog: parent_yvals = logZeroNaN(parent_yvals)
     
@@ -235,8 +235,8 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Fal
     # individual zoom runs
     for i, sim in enumerate(sims):
         # load
-        xvals, _, _, _ = sim.simSubhaloQuantity(xQuant, clean, tight=True)
-        yvals, _, _, _ = sim.simSubhaloQuantity(yQuant, clean, tight=True)
+        xvals, _, _, _ = sim.simSubhaloQuantity(xQuant, tight=True)
+        yvals, _, _, _ = sim.simSubhaloQuantity(yQuant, tight=True)
 
         if xLog: xvals = logZeroNaN(xvals)
         if yLog: yvals = logZeroNaN(yvals)
@@ -334,8 +334,8 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Fal
     sim_parent_load = sim_parent.copy()
     sim_parent_load.setRedshift(sims[0].redshift)
 
-    xvals, _, _, _ = sim_parent_load.simSubhaloQuantity(xQuant, clean, tight=True)
-    yvals, _, _, _ = sim_parent_load.simSubhaloQuantity(yQuant, clean, tight=True)    
+    xvals, _, _, _ = sim_parent_load.simSubhaloQuantity(xQuant, tight=True)
+    yvals, _, _, _ = sim_parent_load.simSubhaloQuantity(yQuant, tight=True)
 
     for i, hInd in enumerate(hInds):
         # zooms at a different redshift than the parent volume?
@@ -455,7 +455,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
         return star_zform, np.nan, star_mass
 
     # field metadata
-    _, ylabel, yMinMax, yLog = sims[0].simSubhaloQuantity(quant, clean, tight=True)
+    _, ylabel, yMinMax, yLog = sims[0].simSubhaloQuantity(quant, tight=True)
     if ylim is not None: yMinMax = ylim
     if sfh_lin:
         yMinMax[0] = 0.0
@@ -469,7 +469,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
 
     ax.set_xlabel('Redshift')
     ax.set_ylabel(ylabel)
-    
+
     ax.set_xlim(xMinMax)
     ax.set_ylim(yMinMax)
 
@@ -496,7 +496,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
         subhaloIDs = _zoomSubhaloIDsToPlot(sim)
 
         # load
-        vals, _, _, valLog = sim.simSubhaloQuantity(quant, clean, tight=True)
+        vals, _, _, valLog = sim.simSubhaloQuantity(quant, tight=True)
 
         # loop over each subhalo
         for j, subhaloID in enumerate(subhaloIDs):
@@ -569,7 +569,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
                 ax.plot(mpb['z'], vals_track, ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha_loc)
 
     # galaxies from parent box
-    vals, _, _, _ = sim_parent.simSubhaloQuantity(quant, clean, tight=True)
+    vals, _, _, _ = sim_parent.simSubhaloQuantity(quant, tight=True)
     parent_GroupFirstSub = sim_parent.halos('GroupFirstSub')
 
     for i, hInd in enumerate(hInds):
@@ -1331,7 +1331,7 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
     fig.savefig('mjeans_cumsum_n%d_z%d.pdf' % (len(sims),sims[0].redshift))
     plt.close(fig)
 
-def blackhole_properties_vs_time(sim, clean=False):
+def blackhole_properties_vs_time(sim):
     """ Plot SMBH mass growth and accretion rates vs time, from the txt files. """
     # load
     smbhs = blackhole_details_mergers(sim)
@@ -1344,7 +1344,7 @@ def blackhole_properties_vs_time(sim, clean=False):
     for smbh_id in smbhs.keys():
         if smbh_id == 'mergers':
             continue
-        
+
         w = np.where(smbhs['mergers']['ids'] == smbh_id)[0]
         if len(w) > 0:
             print(' NOTE: SMBH ID [{smbh_id}] involved in mergers, TODO.')
@@ -1365,7 +1365,7 @@ def blackhole_properties_vs_time(sim, clean=False):
 
         redshift = 1.0 / time - 1
 
-        if clean: xlim[0] = np.max(redshift) + 0.2
+        xlim[0] = np.max(redshift) + 0.2
 
         # plot
         step = 1
@@ -1376,10 +1376,7 @@ def blackhole_properties_vs_time(sim, clean=False):
         hsml = smbhs[smbh_id]['hsml']
 
         # mass
-        if clean:
-            fig, ax = plt.subplots(nrows=2, figsize=(figsize[0]*1.2,figsize[1]*0.8))#, sharex=True)
-        else:
-            fig, ax = plt.subplots(nrows=4, figsize=(14,18))#, sharex=True)
+        fig, ax = plt.subplots(nrows=2, figsize=(figsize[0]*1.2,figsize[1]*0.8))#, sharex=True)
 
         ax[0].set_xlabel('Redshift')
         ax[0].set_xlim(xlim)
@@ -1399,27 +1396,8 @@ def blackhole_properties_vs_time(sim, clean=False):
         ax[1].plot(redshift[::step], mdot_edd, lw=lw, color='black', label='Eddington')
         ax[1].plot(redshift[::step], mdot_limit, lw=lw, color='black', alpha=0.4, label='Limit')
 
-        if not clean:
-            # mdot: high values only
-            ax[2].set_xlabel('Redshift')
-            ax[2].set_xlim(xlim)
-            ax[2].set_ylabel(r'$\dot{M}_{\rm SMBH}$' + '\n' + r'[ log M$_{\rm sun}$ yr$^{-1}$ ]')
-            ax[2].set_ylim([-5.2, 0.0])
-
-            ax[2].plot(redshift[::step], mdot[::step], lw=lw, zorder=0)
-            ax[2].plot(redshift[::step], mdot_edd, lw=lw, color='black', label='Eddington')
-            ax[2].plot(redshift[::step], mdot_limit, lw=lw, color='black', alpha=0.4, label='Limit')
-
-            ax[2].legend(loc='best')
-
-            # ngbmaxdist
-            ax[3].set_xlabel('Redshift')
-            ax[3].set_xlim(xlim)
-            ax[3].set_ylabel('NGB Max Dist\n[ ckpc/h ]')
-
-            ax[3].plot(redshift[::step], ngbmaxdist[::step], lw=lw, zorder=0)
-
-        for a in ax: a.set_rasterization_zorder(1) # elements below z=1 are rasterized
+        for a in ax:
+            a.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
         fig.savefig(f'smbh_vs_time_{sim.simName}_{smbh_id}.pdf')
         plt.close(fig)
@@ -2045,7 +2023,7 @@ def paperPlots(a = False):
     # fig 11c - black hole time evolution
     if 0 or a:
         for sim in sims:
-            blackhole_properties_vs_time(sim, clean=False) # clean=True
+            blackhole_properties_vs_time(sim)
             #blackhole_position_vs_time(sim, snap_based=True)
             blackhole_position_vs_time(sim, snap_based=False)
 

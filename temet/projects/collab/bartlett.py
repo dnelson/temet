@@ -1,23 +1,26 @@
 """
 James Bartlett / MAGIC mission proposal
 """
-import numpy as np
+import hashlib
+from os import path
+
 import h5py
 import matplotlib.pyplot as plt
+import numpy as np
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from ..util import simParams
-from ..plot.config import *
-from ..vis.halo import renderSingleHalo
+from ...plot.config import figsize, markers
+from ...util import simParams
+from ...util.helper import logZeroNaN
+from ...vis.halo import renderSingleHalo
+
 
 def magicCGMEmissionMaps(vis_indiv=False):
     """ Emission maps (single, or in stacked M* bins) for MAGIC-II proposal.
-    
+
     Args:
       vis_indiv (bool): if True, render visualizations of each subhalo.
     """
-    from os import path
-    import hashlib
-
     sP = simParams(run='tng50-1',redshift=0.5)
 
     lines = ['O--6-1037.62A',
@@ -220,8 +223,7 @@ def magicCGMEmissionMaps(vis_indiv=False):
 
 def magicCGMEmissionTrends():
     """ Emission summary statisics (auxCat-based) as a function of galaxy properties, for MAGIC-II proposal. """
-    from os import path
-    from ..plot.cosmoGeneral import quantMedianVsSecondQuant
+    from ...plot.cosmoGeneral import quantMedianVsSecondQuant
 
     sim = simParams(run='tng50-1',redshift=0.3)
 
@@ -305,7 +307,7 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
     sb_percs = {}
     cacheFile = sim.cachePath + 'magic2_grids_z05.hdf5' # hstmst_grids.hdf5
 
-    if isfile(cacheFile):
+    if path.isfile(cacheFile):
         # load cached result
         with h5py.File(cacheFile,'r') as f:
             for field in fields:
@@ -408,7 +410,7 @@ def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
 
             if cQuant is not None:
                 #c_vals = sim.subhalos(cQuant)[subInds]
-                sim_cvals, clabel, cMinMax, cLog = sim.simSubhaloQuantity(cQuant, clean)
+                sim_cvals, clabel, cMinMax, cLog = sim.simSubhaloQuantity(cQuant)
                 sim_cvals = sim_cvals[subInds]
                 if cLog: sim_cvals = logZeroNaN(sim_cvals)
                 clim = None

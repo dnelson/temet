@@ -2,9 +2,6 @@
 Render specific fullbox (movie frame) visualizations.
 """
 import numpy as np
-from datetime import datetime
-from os.path import isfile, expanduser
-from scipy.interpolate import interp1d
 
 from ..vis.common import savePathBase
 from ..vis.box import renderBox, renderBoxFrames

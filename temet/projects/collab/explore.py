@@ -1,16 +1,18 @@
 """
 * Misc exploration plots and testing, checks for others.
 """
-import numpy as np
-import h5py
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from scipy.stats import binned_statistic_2d
 
-from ..util import simParams
-from ..util.helper import logZeroNaN, running_median
-from ..plot.config import *
-from ..vis.halo import renderSingleHalo
-from ..vis.box import renderBox
+from ...plot.config import figsize, lw
+from ...util import simParams
+from ...util.helper import loadColorTable, running_median, savgol_filter
+from ...vis.box import renderBox
+from ...vis.halo import renderSingleHalo
+
 
 def amyDIGzProfiles():
     """ Use some projections to create the SB(em lines) vs z plot. """
@@ -258,7 +260,7 @@ def auroraVoyage2050WhitePaper():
 
 def smitaXMMproposal():
     """ Dependence of OVII on sSFR at fixed mass. """
-    from ..plot.cosmoGeneral import quantHisto2D
+    from ...plot.cosmoGeneral import quantHisto2D
 
     sP =  simParams(res=1820, run='tng', redshift=0.0)
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
@@ -285,8 +287,8 @@ def smitaXMMproposal():
 
 def nachoAngularQuenchingDens():
     """ Variation of CGM gas density with azimuthal angle (for Martin Navarro+20). """
-    from ..projects.outflows import gasOutflowRates2DStackedInMstar
-    from ..projects.outflows_analysis import loadRadialMassFluxes
+    from ...projects.outflows import gasOutflowRates2DStackedInMstar
+    from ...projects.outflows_analysis import loadRadialMassFluxes
 
     sP = simParams(run='tng100-1',redshift=0.0)
     #mStarBins = [[9.8,10.2],[10.4,10.6],[10.9,11.1],[11.3,11.7]] # exploration
@@ -373,7 +375,7 @@ def nachoAngularQuenchingDens():
 
 def nachoAngularQuenchingImage():
     """ Images of delta rho/rho (for Martin Navarro+20). """
-    from ..collab.truong_xrayangular import stackedHaloImage
+    from .truong_xrayangular import stackedHaloImage
 
     conf = 0
     median = True
@@ -389,7 +391,7 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, hot=F
     """ Compute Omega_Q(z) for various components (Q). Rob Yates paper 2021. """
     from ..cosmo.hydrogen import neutral_fraction
     sP = simParams(run='eagle')
-    
+
     snaps = sP.validSnapList(onlyFull=True)
     redshifts = np.zeros(snaps.size, dtype='float32')
 
@@ -592,7 +594,7 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, hot=F
 
 def abhijeetMgIISurfDens():
     """ Test for Anand+ (2022). """
-    from ..projects.oxygen import stackedRadialProfiles
+    from ...projects.oxygen import stackedRadialProfiles
 
     sPs = [simParams(run='tng100-1',redshift=0.5)]
 
@@ -626,7 +628,7 @@ def xenoSNevo_profiles():
     ax3.set_ylabel('Radial Velocity [km/s]')
 
     # loop over snaps
-    for i in range(8): #range(sim.numSnaps)[::skip]:
+    for i in range(sim.numSnaps)[::skip]:
         sim.setSnap(i)
         sim.refPos = np.array([sim.boxSize/2, sim.boxSize/2, sim.boxSize/2]) # for vrad
         sim.refVel = np.array([0,0,0]) # for vrad
@@ -748,7 +750,7 @@ def arjenMasses5kpc():
 def yenting_vis_sample(redshift=1.0):
     """ For the raw TNG-Cluster halos (not in the virtual box), render some views of RIZ stellar 
     composite and SFR, to identify rings like Yen-Ting is after."""
-    from ..cosmo.zooms import _halo_ids_run
+    from ...cosmo.zooms import _halo_ids_run
 
     zoomHaloInds = _halo_ids_run(onlyDone=False)[1:] # skip first
 
@@ -837,15 +839,15 @@ def benedetta_vis_sample():
 
         #panels.append( {'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
         #panels.append( {'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w', 'rotation':'face-on', 'labelScale':'physical'} )
-        
+
         plotConfig.saveFilename = 'benedetta_haloID-%d.pdf' % (haloIDs[i])
 
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 def erica_tng50_sfrmaps():
     """ Render some SFR surface density maps of TNG50 galaxies for Nelson, E.+2021 vs. 3D-HST paper. """
-    from ..util import simParams
-    from ..util.helper import closest
+    from ...util import simParams
+    from ...util.helper import closest
 
     # select halo
     sP = simParams(run='tng50-1', redshift=1.0)
@@ -980,7 +982,7 @@ def depletionVsDynamicalTimescale():
     m_star = sP.units.codeMassToLogMsun(ac['Subhalo_Mass_30pkpc_Stars'])
 
     w_central = np.where( gc['halos'] >= 0 )
-    
+
     centralsMask = np.zeros( gc['subhalos']['count'], dtype=np.int16 )
     centralsMask[gc['halos'][w_central]] = 1
 
@@ -1113,9 +1115,7 @@ def depletionVsDynamicalTimescale():
 
 def sanch_ovi_groups():
     """ Mock OVI absorption spectra around TNG50-1 z=0.1 groups for Sanch Borthakur. """
-    from ..spectra.spectrum import integrate_along_saved_rays, generate_rays_voronoi_fullbox
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-    from scipy.stats import binned_statistic_2d
+    from ...spectra.spectrum import integrate_along_saved_rays, generate_rays_voronoi_fullbox
 
     sim = simParams(run='tng50-1', redshift=0.1)
 
@@ -1127,7 +1127,7 @@ def sanch_ovi_groups():
     # load
     coldens = integrate_along_saved_rays(sim, 'O VI numdens', nRaysPerDim=300, raysType='sample_localized', 
                                          subhaloIDs=subhaloIDs, pSplit=pSplit)
-    
+
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
         generate_rays_voronoi_fullbox(sim, nRaysPerDim=nRaysPerDim, raysType=raysType, 
                                       subhaloIDs=subhaloIDs, pSplit=pSplit)
@@ -1148,7 +1148,7 @@ def sanch_ovi_groups():
 
     h2d, _, _, _ = binned_statistic_2d(x, y, coldens, statistic='mean', bins=[nbins,nbins], 
                                        range=[[-mm,mm],[-mm,mm]])
-    
+
     h2d = h2d.T
     h2d = np.log10(h2d)
 

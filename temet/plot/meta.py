@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.dates import DateFormatter, DayLocator, HourLocator, WeekdayLocator
 from scipy.signal import savgol_filter
 from datetime import datetime
-from os.path import isfile, isdir, expanduser
+from os.path import expanduser
 
 from ..plot.config import linestyles, figsize, lw
 
@@ -651,7 +651,7 @@ def periodic_slurm_status(machine='vera',nosave=False):
 
         ax = fig.add_subplot(1,len(rackVisBoxes),i+1)
         ax.set_position([i*0.25+0.005,0.01,0.24,0.87]) # left,bottom,width,height
-        
+
         ax.set_xlim([0,1])
         ax.set_ylim([-1,maxNodesPerRack])
         ax.set_xlabel('')
