@@ -717,6 +717,8 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', nRaysPerDim=
 
     for line in lineNames:
         line = line.replace('_',' ')
+        if line not in lines:
+            continue # old datasets
         lines_wavemin = np.clip(lines_wavemin, lines[line]['wave0'], np.inf)
         lines_wavemax = np.clip(lines_wavemax, 0, lines[line]['wave0'])
 
@@ -918,6 +920,8 @@ def spectra_gallery_indiv(sim, ion='Mg II', instrument='4MOST-HRS', nRaysPerDim=
 
             for line, yy in zip(lineNames,ypos):
                 line = line.replace('_',' ')
+                if line not in lines:
+                    continue # old datasets
                 wave_z = lines[line]['wave0'] * (1 + sim.redshift)
                 ax.text(wave_z, yy, line, **opts)
 

@@ -1059,7 +1059,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 s_long = np.arctan2(pos[:,1], pos[:,0]) # longitude (lambda) in [-pi,pi]
 
                 # restrict to sphere, instead of cube, to avoid differential ray lengths
-                w = np.where(s_sP.boxSize/2)
+                w = np.where(s_rad < sP.boxSize/2)
                 mass[w] = 0.0
 
                 # hsml: convert from kpc to deg (compute angular diameter)

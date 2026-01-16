@@ -1293,8 +1293,8 @@ def paperPlots():
         ions = ['O VI', 'N V', 'N II', 'N III', 'Si III', 'H I']
         opts = {'ion':ions, 'instrument':'COS-G130M', 'EW_minmax':None, 'num':None, 'SNR':10}
 
-        #spectra_gallery_indiv(sim, mode='inds', inds=np.arange(15000), style='2d', **opts)
-        spectra_gallery_indiv(sim, mode='all', style='2d', **opts)
+        spectra_gallery_indiv(sim, mode='inds', inds=np.arange(15000), style='2d', **opts)
+        #spectra_gallery_indiv(sim, mode='all', style='2d', **opts)
 
     # table: transitions
     if 0:

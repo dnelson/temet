@@ -16,7 +16,7 @@ from ..load.simtxt import *
 from ..plot.config import *
 
 def _redshiftAxisHelper(ax):
-    """ Add a redshift axis to the top of a single-panel plot. """
+    """ Add a redshift axis to the top of a single-panel plot, assuming bottom axis is scale factor."""
     zVals = np.array([20.0,15.0,10.0,6.0,4.0,3.0,2.0,1.5,1.0,0.75,0.5,0.25,0.0])
     axTop = ax.twiny()
     axTickVals = 1/(1 + zVals)

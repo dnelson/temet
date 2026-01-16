@@ -2,12 +2,13 @@
 #from . import clustering
 from . import cosmoGeneral
 from . import cosmoMisc
+from . import drivers
+from . import driversObs
+from . import driversSizes
 from . import general
-from . import globalComp
 from . import meta
 from . import perf
 from . import quantities
-from . import sizes
 from .config import *
 
 import pathlib

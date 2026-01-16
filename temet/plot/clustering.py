@@ -9,7 +9,7 @@ from collections import OrderedDict
 from ..util.helper import logZeroNaN, sampleColorTable, setAxisColors
 from ..util.match import match
 from ..cosmo.clustering import twoPointAutoCorrelationPeriodicCube, conformityRedFrac
-from ..plot.config import *
+from ..plot.config import figsize, lw
 
 def galaxyTwoPoint(sPs, saveBase='', cenSatSelects=['all','cen','sat'], 
                    colorBin=None, cType=None, mstarBin=None, mType=None):
@@ -18,7 +18,6 @@ def galaxyTwoPoint(sPs, saveBase='', cenSatSelects=['all','cen','sat'],
     # visual config
     rMinMax = [0.01, 100.0] # log Mpc
     yMinMax = [1e-2, 5e4]
-    lw = 2.5
 
     rLabel = 'r [ Mpc ]'
     yLabel = r'$\xi(r \pm \Delta r)$  [ real space two-point autocorr ]'
@@ -79,7 +78,6 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
     yMinMaxSub = [0.1, 10]
     alpha      = 0.9
     alphaFill  = 0.05
-    lw         = 2.0
 
     ratioSubPlotHSpace = 0.02 # zero for none
     drawSymbols = True
@@ -87,7 +85,6 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
 
     rLabel = 'r [ log Mpc ]'
     yLabel = 'log %s$\\xi(r)$'
-    #if not clean: yLabel += '  [ real space two-point autocorr ]'
 
     # load/calculate
     cfs = OrderedDict()
@@ -337,7 +334,6 @@ def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
     yMinMax   = [0.2, 0.8] # red fraction
     alpha     = 0.9
     alphaFill = 0.05
-    lw        = 2.0
 
     drawSymbols = False
     symSize = 7.0

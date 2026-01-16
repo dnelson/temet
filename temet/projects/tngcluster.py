@@ -2299,7 +2299,7 @@ def paperPlots():
 
     # figure 9 - halo synchrotron power
     if 0:
-        from ..plot.globalComp import haloSynchrotronPower
+        from ..plot.driversObs import haloSynchrotronPower
         haloSynchrotronPower(sPs, xlim=[14.0,15.3], ylim=[21.5,28.5])
 
     # figure 10 - SZ-y and X-ray vs mass scaling relations
@@ -2309,7 +2309,7 @@ def paperPlots():
 
     # figure 11 - X-ray scaling relations
     if 0:
-        from ..plot.globalComp import haloXrayLum
+        from ..plot.driversObs import haloXrayLum
         sPs_loc = [sP.copy() for sP in sPs]
         for sP in sPs_loc: sP.setRedshift(0.3) # median of data at high-mass end
         haloXrayLum(sPs_loc, xlim=[11.4,12.7], ylim=[41.6,45.7])
@@ -2327,7 +2327,7 @@ def paperPlots():
 
     # figure 13 - black hole mass scaling relation
     if 0:
-        #from ..plot.globalComp import blackholeVsStellarMass
+        #from ..plot.driversObs import blackholeVsStellarMass
         #pdf = PdfPages('blackhole_masses_vs_mstar_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
         #blackholeVsStellarMass(sPs, pdf, twiceR=True, xlim=[11,13.0], ylim=[7.5,11], sizefac=0.8)
         #pdf.close()

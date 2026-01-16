@@ -1,22 +1,21 @@
 """
 Misc plots related to cosmological boxes.
 """
-import numpy as np
+import glob
+from os.path import expanduser, isfile
+
 import h5py
 import matplotlib.pyplot as plt
-import glob
-from matplotlib.backends.backend_pdf import PdfPages
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from os.path import isfile, isdir, expanduser
-from os import mkdir
+import numpy as np
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic
 
-from .cosmoGeneral import addRedshiftAxis
 from ..cosmo.util import snapNumToRedshift
-from ..util.simParams import simParams
-from ..util.helper import running_median, logZeroNaN, loadColorTable
 from ..plot.config import *
+from ..util.helper import running_median
+from ..util.simParams import simParams
+from .cosmoGeneral import addRedshiftAxis
+
 
 def plotRedshiftSpacings():
     """ Compare redshift spacing of snapshots of different runs. """
@@ -46,7 +45,7 @@ def plotRedshiftSpacings():
 
     ax.set_yticks( np.arange(len(sPs))+1 )
     ax.set_yticklabels(runNames)
-    
+
     # loop over each run
     for i, sP in enumerate(sPs):
         zVals = snapNumToRedshift(sP,all=True)
@@ -68,7 +67,7 @@ def plotMassFunctions():
     # config
     mass_ranges = [ [6.0, 16.0], [4.4, 13.0] ] # m_halo, m_star
     binSize = 0.2
-    
+
     sPs = []
     sPs.append( simParams(run='tng100-1',redshift=0.0) )
     sPs.append( simParams(run='tng300-1',redshift=0.0) )
@@ -98,7 +97,7 @@ def plotMassFunctions():
 
         yy_max = 1.0
 
-        for i, sP in enumerate(sPs):
+        for sP in sPs:
             print(j,sP.simName)
 
             if j == 0:
@@ -523,7 +522,7 @@ def simResolutionVolumeComparison():
 
     # legend and finish
     legParams = {'ncol':2, 'columnspacing':1.0, 'fontsize':fs3, 'markerscale':0.6} #, 'frameon':1, 'framealpha':0.9, 'fancybox':False}
-    legend = ax.legend(loc='lower left', **legParams)
+    ax.legend(loc='lower left', **legParams)
 
     fig.savefig('sim_comparison_meta.pdf')
     plt.close(fig)
@@ -694,7 +693,7 @@ def simHydroResolutionComparison():
     # plot (A) - all simulation types, global view
     fig = plt.figure(figsize=[figsize[0]*0.8, figsize[1]])
     ax = fig.add_subplot(111)
-    
+
     ax.set_xlim([200, 0.001])
     ax.set_ylim([1e-9, 1e7])
 
@@ -730,7 +729,7 @@ def simHydroResolutionComparison():
     # plot (B) - only cosmological boxes
     fig = plt.figure(figsize=[figsize[0]*0.8, figsize[1]])
     ax = fig.add_subplot(111)
-    
+
     ax.set_xlim([100, 0.1])
     ax.set_ylim([5e-5, 1e7])
 
@@ -750,7 +749,7 @@ def simHydroResolutionComparison():
     # plot (C) - only cosmological zooms
     fig = plt.figure(figsize=[figsize[0]*0.8, figsize[1]])
     ax = fig.add_subplot(111)
-    
+
     ax.set_xlim([10, 0.01])
     ax.set_ylim([5e-12, 1e1])
 
@@ -782,7 +781,7 @@ def simHydroResolutionProfileComparison(onlyCold=False, ckpc=False):
                 rad_rvir_cen = f['rad_rvir_cen'][()]
                 res_pkpc = f['res_pkpc'][()]
             return rad_rvir_cen, res_pkpc
-        
+
         # zoom vs full box
         if sP.isZoom:
             cellsize = sP.gas(res_field) # pkpc
@@ -968,7 +967,7 @@ def simHydroResolutionProfileComparison(onlyCold=False, ckpc=False):
     # plot
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
-    
+
     ax.set_xlim([0.0, 1.0])
     ax.set_ylim([0.003, 10])
 
@@ -1014,7 +1013,7 @@ def simHydroResolutionProfileComparison(onlyCold=False, ckpc=False):
         l, = ax.plot(xx, yy, ls='dotted', lw=lw, label=ideal['name'])
 
     legParams = {'ncol':3, 'columnspacing':1.1, 'fontsize':11, 'markerscale':0.6}
-    legend = ax.legend(loc='lower right', **legParams)
+    ax.legend(loc='lower right', **legParams)
 
     fig.savefig('sim_comparison_res_profiles%s%s.pdf' % ('_cold' if onlyCold else '','_ckpc' if ckpc else ''))
     plt.close(fig)
@@ -1041,7 +1040,7 @@ def compareEOSFiles(doTempNotPres=False):
     ax.set_ylim([0,13])
     if doTempNotPres: ax.set_ylim([4,8])
     ax.set_xlim([-6,5])
-    
+
     # load eos.txt details and plot
     for i, eosFile in enumerate(eosFiles):
         # load and unit conversion
@@ -1063,7 +1062,7 @@ def compareEOSFiles(doTempNotPres=False):
     # load actual sim data and plot
     for sP in sPs:
         print(sP.simName)
-        
+
         sim_dens = sP.gas('nh_log')
 
         if doTempNotPres:
@@ -1112,7 +1111,7 @@ def simHighZComparison():
     ax = fig.add_subplot(111)
     fig.subplots_adjust(right=0.8)
     ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
-    
+
     ax.set_xlim([1.2e5, 1e0])
     ax.set_ylim([5e8, 1.5e12])
     ax.set_xscale('log')
@@ -1120,7 +1119,7 @@ def simHighZComparison():
 
     ax.set_xlabel(r'Baryon Mass Resolution [ M$_{\odot}$ ]')
     ax.set_ylabel(r'Halo Mass at $z=%d$ [ M$_{\odot}$ ]' % redshift)
-    
+
     # raw MCST data (temporary, z=6)
     mcst_h31619 = [9.1,9.0,8.38] # h31619_L15_ST8
     mcst_h12688 = [9.02,8.78,9.04,8.59,8.49] # h12688_L14_ST8
@@ -1267,7 +1266,7 @@ def simHighZComparison():
     # construct third y-axis for stellar mass (also on the right), using UniverseMachine as a reference
     ax3 = ax.twinx()
     ax3.spines['right'].set_position(('axes', 1.15))
-    
+
     def make_patch_spines_invisible(axis):
         axis.set_frame_on(True)
         axis.patch.set_visible(False)
@@ -1285,7 +1284,7 @@ def simHighZComparison():
     um = behrooziUM(sim)
     w = np.where(np.isfinite(um['mstar_mid']))
     ym_right = um['mstar_mid'][w]
-    ym_left = um['haloMass'][w]    
+    ym_left = um['haloMass'][w]
 
     mstar_ticks = np.array([5.0, 6.0, 7.0, 8.0, 9.0, 10.0]) # cannot go above 1e10, as TNG50 has no sampling
     mhalo_vals_at_these_ticks = np.interp(mstar_ticks, ym_right, ym_left)
@@ -1322,7 +1321,6 @@ def simHighZComparison():
     for i, sim in enumerate(zooms):
         y = 10.0**np.array(sim['M_halo'])
         x = np.zeros(y.size) + sim['m_gas']
-        zorder = 1
 
         if i == 10: ax.plot([],[]) # skip first color i.e. red (given to MCST) to avoid confusion
         marker_normal = 'D' if i < 10 else 's' # colors start to repeat
@@ -1356,7 +1354,7 @@ def simHighZComparison():
 
     # legend and finish
     legParams = {'ncol':2, 'columnspacing':1.0, 'fontsize':fs1, 'markerscale':0.9} #, 'frameon':1, 'framealpha':0.9, 'fancybox':False}
-    legend = ax.legend(loc='upper right', **legParams)
+    ax.legend(loc='upper right', **legParams)
 
     fig.savefig('sim_comparison.pdf')
     plt.close(fig)

@@ -1,20 +1,20 @@
 """
 Fully generalized plotting of particle/cell-level data of single halos or entire boxes.
 """
-import numpy as np
-import matplotlib.pyplot as plt
 import warnings
 
+import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.colors import Normalize
-from mpl_toolkits.axes_grid1 import make_axes_locatable, inset_locator
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
 
-from ..util import simParams
-from ..util.helper import loadColorTable, sampleColorTable, running_median, \
-  logZeroNaN, iterable, cache, gaussian_filter_nan, closest
-from ..util.match import match
 from ..plot.config import *
+from ..util.helper import cache, closest, gaussian_filter_nan, iterable, loadColorTable, logZeroNaN, \
+    running_median, sampleColorTable
+from ..util.match import match
+
 
 def plotHistogram1D(sPs, ptType='gas', ptProperty='temp', ptWeight=None, subhaloIDs=None, haloIDs=None, 
       ylog=True, ylim=None, xlim=None, qRestrictions=None, nBins=400, medianPDF=False, 
@@ -136,7 +136,7 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp', ptWeight=None, subhalo
             #    w = np.where( (vals >= bins[j]) & (vals < bins[j+1]) )
             #    yy4[j] = np.sum(weights[w])
             #yy4 /= (np.sum(weights)*binsize)
-            
+
             #yy2, xx2, _ = binned_statistic(vals, weights, statistic='sum', bins=bins)
             #yy2 /= (vals.size*binsize)
             #yy3, xx3 = np.histogram(vals, bins=bins, weights=weights, density=False)
@@ -275,7 +275,6 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             # one-dim specified (2d binning set below based on aspect ratio)
             nBins = nBins
 
-    sizefac = 0.9
     clim_default = [-4.5,-0.5]
 
     # binned_statistic_2d instead of histogram2d?
@@ -362,7 +361,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             xvals = xvals[w_fin]
             yvals = yvals[w_fin]
             weight = weight[w_fin]
-                
+
             # plot 2D image, each pixel colored by the mean value of a third quantity
             clabel, clim_quant, clog = sP.simParticleQuantity(partType, wtProp, haloLims=(haloIDs is not None))
             wtStr = clabel # 'Mean ' + clabel
@@ -477,7 +476,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
                 ax.plot( [xx,xx], yy, '-', lw=lw, color=textOpts['color'])
                 ax.text( xx - xoff, yy[0], '$r_{\\rm vir}$/%d'%fac if fac != 1 else '$r_{\\rm vir}$', **textOpts)
-        
+
         if yQuant == 'vrad' and ax.get_ylim()[1] > 0 and ax.get_ylim()[0] < 0:
             # mark inflow-outflow boundary
             ax.plot(ax.get_xlim(), [0,0], '-', lw=lw, color='#000000', alpha=0.5)
@@ -507,7 +506,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
         rect = ax.get_position().bounds # [left,bottom,width,height]
         ax.set_position([rect[0],rect[1],rect[2],rect[3]-height-hpad*2])
-        
+
         rect_new = [rect[0], rect[1]+rect[3]-height+hpad, rect[2], height]
         if addHistY: rect_new[2] -= (width+wpad*2) # pre-emptively adjust width
         ax_histx = fig.add_axes(rect_new)
@@ -582,7 +581,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         for rFieldName, rFieldMin, rFieldMax in qRestrictions:
             #rLabel, _, _ = sP.simParticleQuantity(partType, rFieldName)
             qLabels.append('%g < %s < %g' % (rFieldMin,rFieldName,rFieldMax))
-        
+
         if sP.run in ['structures']: qLabels.append('z = %.1f' % sP.redshift)
 
         handles = [plt.Line2D( (0,1), (0,0), lw=0) for i in range(len(qLabels)) ]
@@ -730,7 +729,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
             if radMaxKpc is not None or radMinKpc is not None:
                 # load radii
                 rad = _load_all_halos(sP, partType, 'rad_kpc', haloIDsLoc)
-                
+
                 if radMinKpc is None:
                     w = np.where( (rad <= radMaxKpc) )
                 elif radMaxKpc is None:
@@ -756,7 +755,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
 
                 if ylog:
                     ym = logZeroNaN(ym)
-                
+
                 ym = savgol_filter(ym,sKn,sKo)
 
                 # plot
@@ -1166,7 +1165,7 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp', subhaloIDs=Non
         label = '%s haloID=%d [%s]' % (sP.simName,haloID,scope) if not clean else sP.simName
         l, = ax.plot(yy['rad'], yy['mean'], '--', lw=lw)
         ax.plot(yy['rad'], yy['median'], '-', lw=lw, color=l.get_color(), label=label)
-        
+
         if len(sPs) <= 2:
             for j in range(int(yy['perc'].shape[0]/2)):
                 ax.fill_between(yy['rad'], yy['perc'][0+j,:], yy['perc'][-(j+1),:], 
@@ -1349,7 +1348,7 @@ def plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='temp', subhaloI
     ax.text(10, r200c[10]*1.05, r'r$_{200c}$', color=l.get_color(), fontsize=20, va='bottom', ha='left')
     l, = ax.plot(rhalf, '--', color='black')
     ax.text(5, rhalf[5]+0.1, r'r$_{\rm 1/2\star}$', color=l.get_color(), fontsize=20, va='bottom', ha='left')
-    
+
     # contour lines in the color quantity
     #for cval in [-1.0, 0.0, 1.0]:
     #    XX, YY = np.meshgrid(zvals, yy['rad'], indexing='ij')
@@ -1561,258 +1560,3 @@ def plot2DStackedRadialProfiles(sPs, ptType='gas', ptProperty='temp', ylim=[0.0,
     sPstr = '-'.join([sP.simName for sP in sPs])
     fig.savefig('radProfiles2DStack_%s_%d_%s_%s_vs_%s.pdf' % (sPstr,sPs[0].snap,ptType,ptProperty,xQuant))
     plt.close(fig)
-
-# -------------------------------------------------------------------------------------------------
-
-def compareRuns_PhaseDiagram():
-    """ Driver. Compare a series of runs in a PDF booklet of phase diagrams. """
-    import glob
-    from matplotlib.backends.backend_pdf import PdfPages
-
-    # config
-    redshift = 0.0
-    yQuant = 'temp'
-    xQuant = 'numdens'
-
-    # get list of all 512 method runs via filesystem search
-    sP = simParams(res=512,run='tng',redshift=redshift,variant='0000')
-    dirs = glob.glob(sP.arepoPath + '../L25n512_*')
-    variants = sorted([d.rsplit("_",1)[1] for d in dirs])
-    variants = ['0000','1006']
-
-    # start PDF, add one page per run
-    pdf = PdfPages('compareRunsPhaseDiagram.pdf')
-
-    for variant in variants:
-        sP = simParams(res=512,run='tng',redshift=redshift,variant=variant)
-        if sP.simName == 'DM only': continue
-        print(variant,sP.simName)
-        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, pdf=pdf)
-
-    pdf.close()
-
-def oneRun_PhaseDiagram(redshift=None, snaps=None, hInd=10677, res=13, variant='ST7'):
-    """ Driver. """
-    from matplotlib.backends.backend_pdf import PdfPages
-
-    # config
-    sim = simParams(run='structures',hInd=hInd,res=res,variant=variant,redshift=redshift)
-
-    yQuant = 'temp'
-    xQuant = 'nh'
-
-    if sim.isZoom:
-        xlim = [-7.0, 5.0]
-        ylim = [1.0, 7.0]
-        haloIDs = None #[0]
-        qRestrictions = [['rad_rvir',0.0,5.0]] # None # 
-        clim = [-2.0, -0.2]
-    else:
-        xlim = [-9.0, 2.0]
-        ylim = [2.0, 8.5]
-        clim = [-6.0,-0.2]
-        haloIDs = None # full box
-    
-    # single snapshot, or multiple?
-    if redshift is None and snaps is None:
-        snaps = sim.validSnapList()[::10] # [99]
-    if redshift is not None:
-        snaps = [sim.snap]
-    
-    # start PDF, add one page per snapshot
-    for snap in snaps:
-        sim.setSnap(snap)
-
-        pdf = PdfPages('phaseDiagram_%s_%s_%d.pdf' % (yQuant,sim.simName,snap))
-
-        plotPhaseSpace2D(sim, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs, qRestrictions=qRestrictions,
-            xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, pdf=pdf)
-
-        pdf.close()
-
-def oneRun_tempcheck():
-    """ Driver. """
-    from matplotlib.backends.backend_pdf import PdfPages
-
-    # config
-    sP = simParams(run='tng50-1')
-    xQuant = 'nh'
-
-    xlim = [-9.0, 3.0]
-    ylim = [1.0, 8.5]
-    clim   = [-6.0,-0.2]
-
-    snaps = sP.validSnapList()
-
-    # start PDF, add one page for temp, one for old_temp
-    for snap in snaps:
-        sP.setSnap(snap)
-        print(snap)
-
-        pdf = PdfPages('phaseCheck_%s_%d.pdf' % (sP.simName,snap))
-
-        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant='temp', 
-            xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, pdf=pdf)
-        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant='temp_old', 
-            xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, pdf=pdf)
-
-        pdf.close()
-
-def compareRuns_RadProfiles():
-    """ Driver. Compare median radial profile of a quantity, differentiating between two runs. """
-    #from ..projects.oxygen import variantsMain as variants
-    variants = ['0000','0010']
-
-    sPs = []
-    subhaloIDs = []
-
-    for variant in variants:
-        sPs.append( simParams(res=512,run='tng',redshift=0.0,variant=variant) )
-
-        mhalo = sPs[-1].groupCat(fieldsSubhalos=['mhalo_200_log'])
-        with np.errstate(invalid='ignore'):
-            w = np.where( (mhalo > 11.5) & (mhalo < 12.5) )
-
-        subhaloIDs.append( w[0] )
-
-    for field in ['temp']: #,'dens','P_gas','z_solar']:
-        plotStackedRadialProfiles1D(sPs, subhaloIDs=subhaloIDs, ptType='gas', ptProperty=field, weighting='O VI mass')
-
-def compareHaloSets_RadProfiles():
-    """ Driver. Compare median radial profile of a quantity, differentiating between two different 
-    types of halos. One run. """
-    sPs = []
-    sPs.append( simParams(res=1820,run='tng',redshift=2.0) )
-    #sPs.append( simParams(res=1820,run='tng',redshift=2.0) )
-    #sPs.append( simParams(res=1820,run='tng',redshift=2.0) )
-
-    # select subhalos
-    mhalo = sPs[0].groupCat(fieldsSubhalos=['mhalo_200_log'])
-
-    if 0:
-        gr,_,_,_ = sPs[0].simSubhaloQuantity('color_B_gr')
-
-        with np.errstate(invalid='ignore'):
-            w1 = np.where( (mhalo > 11.8) & (mhalo < 12.2) & (gr < 0.35) )
-            w2 = np.where( (mhalo > 11.8) & (mhalo < 12.2) & (gr > 0.65) )
-
-        print( len(w1[0]), len(w2[0]) )
-
-        subhaloIDs = [{'11.8 < M$_{\\rm halo}$ < 12.2, (g-r) < 0.35':w1[0], 
-                       '11.8 < M$_{\\rm halo}$ < 12.2, (g-r) > 0.65':w2[0]}]
-
-    if 1:
-        with np.errstate(invalid='ignore'):
-            w0 = np.where( (mhalo > 11.3) & (mhalo < 13.4) )
-            w1 = np.where( (mhalo > 11.9) & (mhalo < 12.1) )
-            w2 = np.where( (mhalo > 12.2) & (mhalo < 12.4) )
-            w3 = np.where( (mhalo > 12.5) & (mhalo < 12.7) )
-
-        #subhaloIDs = [{'M$_{\\rm halo}$ = 12.0':w1[0]},
-        #            {'M$_{\\rm halo}$ = 12.3':w2[0]},
-        #            {'M$_{\\rm halo}$ = 12.6':w3[0]}]
-        subhaloIDs = [{'M$_{\\rm halo}$ = 12.0':w1[0]}]
-        #subhaloIDs = [{'M$_{\\rm halo}$ broad':w0[0]}]
-
-    # select properties
-    ptType = 'dm' # 'gas'
-    #fields = ['tcool'] #['metaldens','dens','temp','P_gas','z_solar']
-    fields = ['mass']
-    weighting = None #'O VI mass'
-    op = 'sum'
-    plotIndiv = True
-
-    #proj2D = [2, None] # z-axis, no depth restriction
-    proj2D = [2, 10.0] # z-axis, 10 code units depth = 10 pkpc at z=2
-
-    for field in fields:
-        plotStackedRadialProfiles1D(sPs, subhaloIDs=subhaloIDs, ptType=ptType, ptProperty=field, op=op, 
-                                    weighting=weighting, proj2D=proj2D, plotIndiv=plotIndiv)
-
-def compareHaloSets_1DHists():
-    """ Driver. Compare 1D histograms of a quantity, overplotting several halos. One run. """
-    sPs = []
-
-    sPs.append( simParams(res=910,run='tng',redshift=0.0) )
-    mhalo = sPs[-1].groupCat(fieldsSubhalos=['mhalo_200_log'])
-    with np.errstate(invalid='ignore'):
-        w1 = np.where( (mhalo > 11.8) & (mhalo < 12.2)  )
-    subhaloIDs = [w1[0][0:5]]
-
-    if 0:
-        # add a second run
-        sPs.append( simParams(res=455,run='tng',redshift=0.0) )
-        mhalo = sPs[-1].groupCat(fieldsSubhalos=['mhalo_200_log'])
-        with np.errstate(invalid='ignore'):
-            w2 = np.where( (mhalo > 11.8) & (mhalo < 12.2)  )
-        subhaloIDs.append( w2[0][0:5] )
-
-    for field in ['temp']: #['tcool','vrad']:
-        plotHistogram1D(sPs, subhaloIDs=subhaloIDs, ptType='gas', ptProperty=field)
-
-def singleHaloProperties():
-    """ Driver. Several phase/radial profile plots for a single halo. """
-    sP = simParams(res=256,run='tng',redshift=0.0,variant='0000')
-
-    partType = 'gas'
-    xQuant = 'coolrate'
-    yQuant = 'dens'
-
-    # pick a MW
-    #gc = sP.groupCat(fieldsHalos=['Group_M_Crit200','GroupPos'])
-    #haloMasses = sP.units.codeMassToLogMsun(gc['Group_M_Crit200'])
-
-    #haloIDs = np.where( (haloMasses > 12.02) & (haloMasses < 12.03) )[0]
-    #haloIDs = [haloIDs[6]] # random: 3, 4, 5, 6
-
-    haloID = None
-    rMin = None
-    rMax = None
-
-    plotParticleMedianVsSecondQuant([sP], partType=partType, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs, 
-                                   radMinKpc=rMin, radMaxKpc=rMax)
-
-    #for prop in ['hdens','cellsize_kpc','radvel','temp']:
-    #    plotStackedRadialProfiles1D([sP], haloIDs=haloID, ptType='gas', ptProperty=prop)
-    #    plotPhaseSpace2D(sP, partType='gas', xQuant='hdens', yQuant=prop, haloIDs=[haloID])
-
-def compareRuns_particleQuant():
-    """ Driver. Compare a series of runs in a single panel plot of a particle median quantity vs another. """
-
-    # config
-    yQuant = 'tcool'
-    xQuant = 'dens_critb'
-    ptType = 'gas'
-    variants = ['0000'] #,'2102','2202','2302']
-
-    # start PDF, add one page per run
-    sPs = []
-    for variant in variants:
-        sP = simParams(res=512,run='tng',redshift=0.0,variant=variant)
-        if sP.simName == 'DM only': continue
-        sPs.append(sP)
-
-    plotParticleMedianVsSecondQuant(sPs, partType=ptType, xQuant=xQuant, yQuant=yQuant)
-
-def coolingPhase():
-    """ Driver. """
-    from matplotlib.backends.backend_pdf import PdfPages
-
-    # config
-    yQuant = 'temp'
-    xQuant = 'numdens'
-    cQuants = ['coolrate','heatrate','coolrate_powell']
-    xlim   = [-9.0, 2.0]
-    ylim   = [2.0, 8.0]
-
-    #sP = simParams(res=256,run='tng',redshift=0.0,variant='0000')
-    sP = simParams(res=1820,run='tng',redshift=0.0)
-
-    # start PDF, add one page per run
-    pdf = PdfPages('phaseDiagram_B_%s_%d.pdf' % (sP.simName,sP.snap))
-
-    for cQuant in cQuants:
-        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, meancolors=[cQuant], xlim=xlim, ylim=ylim, 
-                         weights=None, hideBelow=False, haloIDs=None, pdf=pdf)
-
-    pdf.close()

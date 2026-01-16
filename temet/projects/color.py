@@ -2193,15 +2193,16 @@ def paperPlots():
 
     # figure 3, stellar ages and metallicities vs mstar (2x1 in a row)
     if 0:
+        from ..plot.driversObs import stellarAges, massMetallicityStars
         sPs = [L75, L205] # L75FP
         simRedshift = 0.1
         sdssFiberFits = False
 
         pdf = PdfPages('figure3a_stellarAges_%s.pdf' % '_'.join([sP.simName for sP in sPs]))
-        plot.globalComp.stellarAges(sPs, pdf, simRedshift=simRedshift, sdssFiberFits=sdssFiberFits, centralsOnly=True)
+        stellarAges(sPs, pdf, simRedshift=simRedshift, sdssFiberFits=sdssFiberFits, centralsOnly=True)
         pdf.close()
         pdf = PdfPages('figure3b_massMetallicityStars_%s.pdf' % '_'.join([sP.simName for sP in sPs]))
-        plot.globalComp.massMetallicityStars(sPs, pdf, sdssFiberFits=sdssFiberFits, simRedshift=simRedshift)
+        massMetallicityStars(sPs, pdf, sdssFiberFits=sdssFiberFits, simRedshift=simRedshift)
         pdf.close()
 
     # figure 4: double gaussian fits, [peak/scatter vs Mstar] 2-panel
