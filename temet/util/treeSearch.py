@@ -1053,7 +1053,7 @@ def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, posMask=None, tr
 def benchmark():
     """ Benchmark performance of calcHsml(). """
     import matplotlib.pyplot as plt
-    from ..util.simParams import simParams
+    from ..util import simParams
     from ..plot.config import figsize, lw
 
     # config data

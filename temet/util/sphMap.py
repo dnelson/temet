@@ -1307,7 +1307,7 @@ def sphGridWholeBox(sP, pos, hsml, mass, quant, nCells=32):
 def benchmark():
     """ Benchmark performance of sphMap(). """
     np.random.seed(424242)
-    from ..util.simParams import simParams
+    from ..util import simParams
     import time
 
     # config data

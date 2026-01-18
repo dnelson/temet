@@ -12,6 +12,7 @@ from os import mkdir, remove
 
 from ..cosmo import hydrogen
 from ..util.helper import closest, logZeroNaN, rootPath
+from ..util import simParams
 
 basePath = rootPath + "tables/cloudy/"
 basePathTemp = expanduser("~") + "/data/cloudy_tables/"
@@ -384,7 +385,6 @@ def _loadExternalUVB(redshifts=None, hm12=False, puchwein19=False):
     if puchwein19:
         filePath = rootPath + '/data/puchwein/p19.uvb.txt'
 
-    from ..util.simParams import simParams
     sP = simParams(res=1820,run='tng') # for units
 
     # make sure fields is not a single element
@@ -439,7 +439,6 @@ def loadUVB(uvb='FG11', redshifts=None):
 
 def loadUVBRates(uvb='FG11'):
     """ Load the photoionization [1/s] and photoheating [erg/s] rates for a given UVB. """
-    from ..util.simParams import simParams
     sP = simParams(run='tng100-1') # for units
 
     if uvb == 'FG11':

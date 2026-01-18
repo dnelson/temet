@@ -1,19 +1,18 @@
 """
 Prepare simulation outputs for SKIRT9 radiative transfer runs, execute, and vis/analyze.
 """
-import numpy as np
-import h5py
 import subprocess
 import time
 from os.path import isfile
 
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+import numpy as np
 from astropy.io import fits
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+from ..util import simParams
 from ..util.helper import logZeroMin, logZeroNaN
-from ..util.simParams import simParams
-from ..util.rotation import momentOfInertiaTensor, rotationMatricesFromInertiaTensor, rotateCoordinateArray
+from ..util.rotation import momentOfInertiaTensor, rotateCoordinateArray, rotationMatricesFromInertiaTensor
 
 stars_source_fsps = """
     <ParticleSource filename="{filenameStars}" importVelocity="true" importVelocityDispersion="false" useColumns="" sourceWeight="1" wavelengthBias="0.5">
@@ -702,7 +701,7 @@ def vis(subhaloID=343503):
 
             cax = make_axes_locatable(ax).append_axes('right', size='5%', pad=0.15)
             cb = plt.colorbar(cax=cax)
-            cb.ax.set_ylabel('Relative Error R = $[ \Sigma w_i^2 / (\Sigma w_i)^2 - 1 / N ]^{1/2}$')
+            cb.ax.set_ylabel(r'Relative Error R = $[ \Sigma w_i^2 / (\Sigma w_i)^2 - 1 / N ]^{1/2}$')
 
             fig.savefig('image_sh%d_%s_%s_relerr.pdf' % (subhaloID,instName,filterName))
             plt.close(fig)
@@ -736,8 +735,8 @@ def plot_sed(subhaloID=343503):
 
         ax.set_xlim(np.log10([0.09,100]))
         ax.set_ylim([-22,-10])
-        ax.set_xlabel('$\lambda$ [log micron]')
-        ax.set_ylabel('$\lambda$ F$_{\lambda}$ [W m$^{-2}$]')
+        ax.set_xlabel(r'$\lambda$ [log micron]')
+        ax.set_ylabel(r'$\lambda$ F$_{\lambda}$ [W m$^{-2}$]')
 
         xx = np.log10(data[:,0])
 
@@ -756,8 +755,8 @@ def plot_sed(subhaloID=343503):
 
         ax.set_xlim([900, 10000])
         ax.set_ylim([-13,-10])
-        ax.set_xlabel('$\lambda$ [Angstrom]')
-        ax.set_ylabel('$\lambda$ F$_{\lambda}$ [W m$^{-2}$]')
+        ax.set_xlabel(r'$\lambda$ [Angstrom]')
+        ax.set_ylabel(r'$\lambda$ F$_{\lambda}$ [W m$^{-2}$]')
 
         xx = data[ww[0],0] * 1e4 # micron -> ang
 

@@ -1,20 +1,24 @@
 """
 Helper functions related to cosmo box simulations.
 """
-import numpy as np
-import h5py
-from os.path import isfile, isdir
 from os import mkdir
-from ..util.helper import closest
+from os.path import isdir, isfile
+
+import h5py
+import numpy as np
+from scipy import interpolate
+
+from ..cosmo.mergertree import loadMPBs
+from ..load.snapshot import subboxVals
+from ..util import simParams
+from ..util.helper import closest, contiguousIntSubsets, evenlySample
 from ..util.match import match
+from ..util.treeSearch import buildFullTree, calcQuantReduction
 
 # --- snapshot configuration & spacing ---
 
 def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False, load=False):
     """ Convert one or more input redshifts to closest matching snapshot numbers for a given sP. """
-    from ..util.helper import closest
-    from ..load.snapshot import subboxVals
-
     assert sP is not None, "Must input sP."
 
     if redshifts is None:
@@ -80,10 +84,10 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False, lo
                     f[key] = r[key]
         else:
             print("Warning: Permission error saving [%s], skipping." % saveFilename)
-    
+
     if np.sum(redshifts) == -1:
         raise Exception("Old behavior, used to return !NULL.")
-    
+
     # return everything
     if load:
         return r
@@ -110,7 +114,7 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False, lo
             r['redshifts'][w_nan] = np.nan # do not select non-existent snapshot
 
             zFound, w = closest(r['redshifts'], redshift)
-            
+
             if np.abs(zFound-redshift) > 0.1 and zFound > redshift:
                 # try to recompute in case we have a partial save from a previously in progress run
                 # and more snapshots exist than previously existed
@@ -128,11 +132,10 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False, lo
         snaps = snaps[0]
 
     return snaps
-  
+
 def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=False,
                   reqTr=False, reqFluidQuants=False):
     """ Return a list of all snapshot numbers which exist. """
-    from ..util.helper import evenlySample, closest, contiguousIntSubsets
     if reqFluidQuants: assert reqTr
 
     if minRedshift is None:
@@ -368,8 +371,6 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
     for TNG_method runs, or postprocessing/SubhaloMatchingToDark/ for Illustris/TNG to DMO runs, or 
     postprocessing/SubhaloMatchingToIllustris/ for TNG->Illustris runs.
     Return is an int32 array of the same size as input, where -1 indicates no match. """
-    from ..util.simParams import simParams
-
     assert method in ['LHaloTree','SubLink','Lagrange','Positional','PositionalAll']
     assert sP_from != sP_to
 
@@ -986,10 +987,6 @@ def subboxSubhaloCat(sP, sbNum):
     """ Generate/return the SubboxSubhaloList catalog giving the intersection of fullbox subhalos 
     with the subbox volumes across time, using the merger trees, and some interpolated properties 
     of relevant subhalos at each subbox snapshot. """
-    from ..cosmo.mergertree import loadMPBs
-    from ..util.simParams import simParams
-    from scipy import interpolate
-
     minEdgeDistRedshifts = [100.0, 6.0, 4.0, 3.0, 2.0, 1.0, 0.0]
 
     def _inSubbox(pos):
@@ -1170,14 +1167,10 @@ def subboxSubhaloCat(sP, sbNum):
     print('Saved intermediate: [%s]' % filePath)
 
     return r
-    
+
 def subboxSubhaloCatExtend(sP, sbNum, redo=False):
     """ Extend the SubboxSubhaloList catalog with particle-level interpolated properties (i.e. M* < 30pkpc) of 
     the relevant subhalos at each subbox snapshot. Separated into second step since this is a heavy calculation, restartable. """
-    from ..cosmo.mergertree import loadMPBs
-    from ..util.simParams import simParams
-    from ..util.treeSearch import calcQuantReduction, buildFullTree
-
     fileBase = sP.postPath + '/SubboxSubhaloList/'
     filePath = fileBase + 'subbox%d_%d.hdf5' % (sbNum, sP.snap)
 
@@ -1233,8 +1226,8 @@ def subboxSubhaloCatExtend(sP, sbNum, redo=False):
                 loadFields.append('BH_Mass')
                 loadFields.append('BH_Mdot')
                 loadFields.append('BH_MdotEddington')
-                
-            # particle data load   
+
+            # particle data load
             x = sP_sub.snapshotSubset(ptType, loadFields)
 
             if x['count'] == 0:

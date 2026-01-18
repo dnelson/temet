@@ -465,7 +465,7 @@ def ellipsoidfit(pos_in, mass, scalerad, rin, rout, weighted=False):
     
 def ellipsoidfit_run():
     """ Find the shape (in stars, gas, or DM) of a set of galaxies/halos using the iterative ellipsoid method. """
-    from ..util.simParams import simParams
+    from ..util import simParams
 
     sP = simParams(res=2160, run='tng', redshift=2.0)
 

@@ -12,6 +12,7 @@ from ..util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
 from ..util.sphMap import sphGridWholeBox, sphMap
 from ..util.voronoi import loadSingleHaloVPPP, loadGlobalVPPP
 from ..util.treeSearch import buildFullTree
+from ..util import simParams
 
 def create_spectrum_from_traced_ray(sP, line, instrument, cell_dens, cell_dx, cell_temp, cell_vellos):
     """ Given a completed (single) ray traced through a volume, and the properties of all the intersected 
@@ -199,7 +200,6 @@ def deposit_single_line_local(wave_edges_master, tau_master, f, gamma, wave0, N,
             # how much total EW? (debugging only)
             if N > 1e14 and debug:
                 print(f'   updated tau_master[{master_ind:2d}] = {tau_master[master_ind]:.4f}, {local_EW = :.4f}, {localEW_to_tau = }')
-                #import pdb; pdb.set_trace()
 
             # move to next master bin
             master_ind += 1
@@ -218,14 +218,11 @@ def deposit_single_line_local(wave_edges_master, tau_master, f, gamma, wave0, N,
         print(f'  {EW_local = :.6f}, {EW_master = :.6f}, {tau_local_tot = :.5f}, {tau_master_tot = :.5f}')
         print(f'  {dwave_local = }, {wave_mid_local.size = }')
         print(f'  {tau_master[116] = }')
-        #import pdb; pdb.set_trace()
 
     return
 
 def generate_spectrum_uniform_grid():
     """ Generate an absorption spectrum by ray-tracing through a uniform grid (deposit using sphMap). """
-    from ..util.simParams import simParams
-
     # config
     sP = simParams(run='tng50-4', redshift=0.5)
 
@@ -351,8 +348,6 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
       debug (int): verbosity level for diagnostic outputs: 0 (silent), 1, 2, or 3 (most verbose).
       verify (bool): if True, brute-force distance calculation verify parent cell at each step.
     """
-    from ..util.simParams import simParams
-
     # config
     sP = simParams(run='tng50-4', redshift=0.5)
 
@@ -455,9 +450,6 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
 
 def generate_spectra_voronoi_halo():
     """ Generate a large grid of (halocentric) absorption spectra by ray-tracing through the Voronoi mesh. """
-    from ..util.simParams import simParams
-    from ..cosmo.cloudy import cloudyIon
-
     # config
     sP = simParams(run='tng50-1', redshift=0.5)
 

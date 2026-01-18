@@ -11,7 +11,7 @@ from ..vis.common import renderMultiPanel, savePathDefault
 from ..vis.render import gridBox, defaultHsmlFac
 from ..util.rotation import meanAngMomVector, rotationMatrixFromVec, momentOfInertiaTensor, \
   rotationMatricesFromInertiaTensor, rotationMatrixFromAngleDirection
-from ..util.simParams import simParams
+from ..util import simParams
 
 def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclination, mpb, cenShift, 
                  depthFac, depth, depthType, **kwargs):

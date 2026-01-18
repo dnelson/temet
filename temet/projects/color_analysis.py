@@ -5,12 +5,14 @@ https://arxiv.org/abs/1707.03395
 import numpy as np
 import h5py
 import time
+import warnings
 from os.path import isfile, expanduser
 from glob import glob
 
 from ..cosmo.color import loadSimGalColors, calcSDSSColors
 from ..util.helper import leastsq_fit, least_squares_fit
 from ..plot.quantities import bandMagRange
+from ..util import simParams
 
 # the dust model used by default for all colors
 defSimColorModel = 'p07c_cf00dust_res_conv_ns1_rad30pkpc'
@@ -19,8 +21,6 @@ def calcColorEvoTracks(sP, bands=['g','r'], simColorsModel=defSimColorModel):
     """ Using already computed StellarPhot auxCat's at several snapshots, load the MPBs and 
     re-organize the band magnitudes into tracks in time for each galaxy. Do for one band 
     combination, saving only the color, while keeping all viewing angles. """
-    import warnings
-
     savePath = sP.derivPath + "/auxCat/"
 
     # how many computed StellarPhot auxCats already exist?
@@ -343,8 +343,6 @@ def _fitCMPlaneMCMC(masses, colors, chain_start, xMinMax, mag_range, skipNBinsRe
         mu_mm = [0.0,1.0] # min max tophat prior
         sigma_mm = [0.0,1.0] # min max tophat prior
 
-        #import pdb; pdb.set_trace()
-
         if (mu1 > mu2).sum() > 0:
             return -np.inf
         if mu1.min() <= mu_mm[0] or mu1.max() >= mu_mm[1] or \
@@ -607,7 +605,6 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
     """ Do double gaussian and other methods to characterize the red and blue populations, e.g. their 
     location, extent, relative numbers, for sP at sP.snap, and save the results. """
     assert cenSatSelect in ['all', 'cen', 'sat']
-    from ..util.simParams import simParams
 
     # global analysis config
     mag_range = bandMagRange(bands, tight=False)

@@ -15,25 +15,25 @@ Observational data processing, reduction, and analysis (eROSITA).
   - could do: radial profiles
   - could do: angular anisotropy signal (truong) - not clearly there
 """
-import numpy as np
-import h5py
 from os.path import expanduser, isfile
 
-from scipy.ndimage import gaussian_filter, shift, center_of_mass, rotate
-from scipy.interpolate import interp1d
-from scipy.stats import binned_statistic_2d
+import astropy.io.fits as pyfits
+import h5py
 import matplotlib.pyplot as plt
+import numpy as np
+from astropy.wcs import WCS
 from matplotlib.colors import Normalize
 from matplotlib.lines import Line2D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-import astropy.io.fits as pyfits
-from astropy.wcs import WCS
+from scipy.interpolate import interp1d
+from scipy.ndimage import center_of_mass, gaussian_filter, rotate, shift
+from scipy.stats import binned_statistic_2d
 
-from ..util.helper import logZeroNaN, loadColorTable, running_median, dist_theta_grid
 from ..plot.config import figsize
-from ..util.simParams import simParams
-from ..util.rotation import rotationMatrixFromAngle
+from ..util import simParams
+from ..util.helper import dist_theta_grid, loadColorTable, logZeroNaN, running_median
 from ..util.match import match
+from ..util.rotation import rotationMatrixFromAngle
 
 # config
 basePath = expanduser("~") + '/obs/eFEDS/'

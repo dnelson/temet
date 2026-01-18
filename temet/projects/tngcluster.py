@@ -2,21 +2,23 @@
 TNG-Cluster: introduction paper.
 https://arxiv.org/abs/2311.06338
 """
-import numpy as np
+import warnings
+from functools import partial
+from os.path import isfile
+
 import h5py
 import matplotlib.pyplot as plt
-import warnings
+import numpy as np
+from matplotlib.colors import Normalize
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
-from os.path import isfile
-from matplotlib.colors import Normalize
-from functools import partial
 
 from ..cosmo.zooms import contamination_mindist
 from ..plot import subhalos
-from ..plot.cosmoMisc import simClustersComparison
 from ..plot.config import *
-from ..util.helper import logZeroNaN, running_median, loadColorTable, dist_theta_grid
+from ..plot.cosmoMisc import simClustersComparison
+from ..util import simParams
+from ..util.helper import dist_theta_grid, loadColorTable, logZeroNaN, running_median
 from ..util.match import match
 
 def vis_fullbox_virtual(sP, conf=0):
@@ -75,7 +77,6 @@ def vis_fullbox_virtual(sP, conf=0):
         ptRestrictions = {'Masses':['lt',maxGasCellMass]}
 
     if conf == 6:
-        from ..util.simParams import simParams
         sP = simParams(run='tng_dm',res=2048,redshift=0.0) # parent box
         method = 'sphMap'
         panels = [{'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[7.0,8.4]}]
@@ -222,7 +223,6 @@ def vis_gallery(sP, conf=0, num=20):
 def mass_function(secondaries=False):
     """ Plot halo mass function from the parent box (TNG300) and the zoom sample. 
     If secondaries == True, then also include non-targeted halos with no/little contamination. """
-    from ..util import simParams
     from ..cosmo.zooms import _halo_ids_run
     
     mass_range = [14.0, 15.5]
@@ -2252,8 +2252,6 @@ def halo_properties_table(sim):
 
 def paperPlots():
     """ Plots for TNG-Cluster intro paper. """
-    from ..util.simParams import simParams
-
     # all analysis at z=0 unless changed below
     TNG300 = simParams(run='tng300-1', redshift=0.0)
     TNG_C  = simParams(run='tng-cluster', redshift=0.0)

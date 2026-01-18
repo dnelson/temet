@@ -154,8 +154,9 @@ def histogram1D(sPs, ptType='gas', ptProperty='temp', ptWeight=None, subhaloIDs=
             label = '%s [%d]' % (sP.simName,objID) if len(sPs) > 1 else str(objID)
             ls = ':' if sP.simName == 'L11 (Primordial Only)' else '-'
             lw_loc = lw-1 if len(sP_objIDs) < 10 else 1
-            color = None if len(sP_objIDs) < 10 else (None if j == 0 else l.get_color())
-            if ctName is not None: color = cmap.to_rgba(cmap_props[j]) #color = colors[j]
+            color = None if len(sP_objIDs) < 10 else (None if j == 0 else l.get_color())  # noqa: F821
+            if ctName is not None:
+                color = cmap.to_rgba(cmap_props[j]) #color = colors[j]
 
             if medianPDF != 'only':
                 l, = ax.plot(xx, yy, linestyle=ls, lw=lw_loc, color=color, label=label)
@@ -730,11 +731,11 @@ def median(sPs, partType='gas', xQuant='hdens', yQuant='temp',
                 rad = _load_all_halos(sP, partType, 'rad_kpc', haloIDsLoc)
 
                 if radMinKpc is None:
-                    w = np.where( (rad <= radMaxKpc) )
+                    w = np.where(rad <= radMaxKpc)
                 elif radMaxKpc is None:
-                    w = np.where( (rad > radMinKpc) )
+                    w = np.where(rad > radMinKpc)
                 else:
-                    w = np.where( (rad > radMinKpc) & (rad <= radMaxKpc) )
+                    w = np.where((rad > radMinKpc) & (rad <= radMaxKpc))
 
                 sim_xvals = sim_xvals[w]
                 sim_yvals = sim_yvals[w]

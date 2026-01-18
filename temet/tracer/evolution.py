@@ -10,6 +10,7 @@ from collections import OrderedDict
 from ..tracer.montecarlo import subhaloTracersTimeEvo, subhalosTracersTimeEvo, \
   globalAllTracersTimeEvo, globalTracerMPBMap, defParPartTypes
 from ..util.helper import pSplitRange
+from ..util import simParams
 
 # integer flags for accretion modes
 ACCMODE_NONE     = -1
@@ -30,8 +31,6 @@ maxRedshift = 10.0
 
 def zoomDataDriver(sP, fields, snapStep=1):
     """ Run and save data files for tracer evolution in several quantities of interest. """
-    from ..util import simParams
-
     #sP = simParams(res=11, run='zooms2', redshift=2.0, hInd=2)
     #fields = ['tracer_maxtemp','tracer_maxent','rad_rvir','vrad','entr','temp','sfr','subhalo_id']
     subhaloID = sP.zoomSubhaloID
@@ -40,8 +39,6 @@ def zoomDataDriver(sP, fields, snapStep=1):
 
 def boxTracerDataCutout(snap=None):
     """ Extract cutout tracer data for individual subhalos from a full box. """
-    from ..util.simParams import simParams
-
     sP = simParams(res=1820, run='illustris', redshift=0.0)
 
     # config

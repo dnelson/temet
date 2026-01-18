@@ -14,9 +14,9 @@ from ...cosmo.cloudy import cloudyIon
 from ...obs.galaxySample import addIonColumnPerSystem, ionCoveringFractions
 from ...plot import snapshot
 from ...plot.config import colors, figsize, linestyles, lw, sKn, sKo
+from ...util import simParams
 from ...util.helper import logZeroNaN, running_median
 from ...util.match import match
-from ...util.simParams import simParams
 from ...vis.box import renderBox
 from ...vis.halo import renderSingleHalo
 

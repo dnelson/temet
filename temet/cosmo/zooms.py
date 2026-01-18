@@ -11,15 +11,14 @@ from collections import OrderedDict
 from glob import glob
 
 from ..load.simtxt import getCpuTxtLastTimestep
-from ..util.simParams import simParams
+from ..util import simParams
 from ..util.helper import logZeroNaN, running_median
-from ..vis.halo import renderSingleHalo
+from ..vis.halo import renderSingleHalo, selectHalosFromMassBins
 from ..vis.box import renderBox
 from ..plot.config import *
 
 def pick_halos():
     """ Testing. """
-    from ..vis.halo import selectHalosFromMassBins
     sP = simParams(res=2048, run='tng_dm', redshift=0.0)
     #sP = simParams(res=2500, run='tng', redshift=0.0)
 

@@ -2,23 +2,24 @@
 MCST: exploratory plots / intro paper.
 https://arxiv.org/abs/xxxx.xxxxx
 """
-import numpy as np
-import h5py
-import matplotlib.pyplot as plt
-from matplotlib.ticker import ScalarFormatter
-from matplotlib.collections import LineCollection
-from matplotlib.colors import to_rgb
-from scipy.signal import savgol_filter
 from os.path import isfile
 
-from ..util.simParams import simParams
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.collections import LineCollection
+from matplotlib.colors import to_rgb
+from matplotlib.ticker import ScalarFormatter
+from scipy.signal import savgol_filter
+
+from ..load.simtxt import blackhole_details_mergers, sf_sn_details
+from ..plot import snapshot
 from ..plot.config import *
-from ..util.helper import running_median, logZeroNaN, closest, cache, colored_line
 from ..plot.cosmoMisc import simHighZComparison
 from ..plot.subhalos import addUniverseAgeAxis
-from ..plot import snapshot
-from ..load.simtxt import blackhole_details_mergers, sf_sn_details
 from ..projects.mcst_vis import *
+from ..util import simParams
+from ..util.helper import cache, closest, colored_line, logZeroNaN, running_median
 
 def _get_existing_sims(variants, res, hInds, redshift, all=False, single=False):
     """ Return a list of simulation objects, only for those runs which exist (and have reached redshift).

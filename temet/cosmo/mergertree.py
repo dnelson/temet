@@ -1,14 +1,15 @@
 """
 Cosmological simulations - working with merger trees (SubLink, LHaloTree, C-Trees).
 """
-import numpy as np
 import h5py
-from numba import jit
-from scipy.signal import savgol_filter
-from scipy import interpolate
-
 import illustris_python as il
-from ..util.helper import logZeroNaN, iterable, closest, cache
+import numpy as np
+from numba import jit
+from scipy import interpolate
+from scipy.signal import savgol_filter
+
+from ..util import simParams
+from ..util.helper import cache, closest, iterable, logZeroNaN
 from ..util.match import match
 
 treeName_default = "SubLink"
@@ -618,13 +619,14 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
         canvas.draw()
 
         width, height = fig.get_size_inches() * fig.get_dpi()
-        image = np.fromstring(canvas.tostring_rgb(), dtype='uint8').reshape(int(height), int(width), 3)
+        # canvas.tostring_rgb() removed in matplotlib >=3.10
+        #image = np.fromstring(canvas.tostring_rgb(), dtype='uint8').reshape(int(height), int(width), 3)
+        image = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8).reshape(int(height), int(width), 4)[:,:,:3] # drop alpha channel
         plt.close(fig)
 
         return image
 
 def test_plot_tree():
-    from ..util.simParams import simParams
     sP = simParams(res=1820,run='tng',redshift=0.0)
 
     for haloID in [200]: #[20,200,210,600,2000,20000]:
@@ -634,12 +636,12 @@ def test_plot_tree():
 
         plot_tree(sP, subhaloID, saveFilename)
 
-def test_plot_tree_mem(haloID=19):
-    from io import BytesIO
+def test_plot_tree_mem(haloID=190):
     import time
+    from io import BytesIO
+
     from imageio import imread, imwrite
-    from scipy.misc import imresize
-    from ..util.simParams import simParams
+    from skimage.transform import resize
 
     # config
     sP = simParams(res=1820,run='tng',snap=99)
@@ -665,7 +667,9 @@ def test_plot_tree_mem(haloID=19):
 
     # 'resize'
     if output_fmt in ['png','jpg']:
-        im = imresize(im, 1.0/supersample, interp='bicubic')
+        output_shape = (im.shape[0]//supersample, im.shape[1]//supersample)
+        im = resize(im, output_shape, order=3)
+        im = (im * 255).astype('uint8')
 
         # 'save'
         buf = BytesIO()

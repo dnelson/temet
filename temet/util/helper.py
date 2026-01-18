@@ -193,7 +193,7 @@ def dist_theta_grid(size, nPixels):
 
 def cache(_func=None, *, overwrite=False):
     """ Decorator to cache the return (dict) of a function. Cache filename depends on arguments. """
-    from ..util.simParams import simParams
+    from ..util import simParams
 
     def decorator_cache(func):
         @wraps(_func)

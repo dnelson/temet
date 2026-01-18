@@ -2,13 +2,12 @@
 Render specific fullbox visualizations.
 """
 import numpy as np
-from datetime import datetime
 
-from ..vis.common import savePathDefault
+from ..util import simParams
+from ..util.rotation import rotationMatrixFromVec
 from ..vis.box import renderBox, renderBoxFrames
+from ..vis.common import savePathDefault
 from ..vis.halo import renderSingleHalo
-from ..util.helper import pSplit
-from ..util.simParams import simParams
 
 def realizations(conf=1):
     """ Render a whole box image at one redshift, of one field, comparing multiple runs. """
@@ -353,8 +352,6 @@ def fullBox360(res, conf=34, variant=None, snap=None):
 
 def smuggleMWAndromedaMergerDome(snap=100):
     """ Create 180 degree dome renders for the smuggle Andromeda-Milky Way merger sim. """
-    from ..util.rotation import rotationMatrixFromVec
-
     sim_path = '/u/dnelson/data/sims.other/local_group_smuggle/1e3_100IGM/'
 
     sP = simParams(sim_path, snap=snap)
@@ -915,8 +912,7 @@ def box_slices(curSlice=7, conf=0):
         nPixels  = int(7.14*1200)
 
     panels, _, _, _ = _TNGboxFieldConfig(res, conf=1, thinSlice=False)
-    print(panels[0]['valMinMax'])
-    import pdb; pdb.set_trace()
+
     sP = simParams(res=res, run=run, redshift=redshift)
     ###panels[0]['valMinMax'] += np.array([0.4,0.0])
 

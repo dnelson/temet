@@ -2,30 +2,31 @@
 The Synthetic Absorption Line Spectral Almanac (SALSA)
 https://arxiv.org/abs/2510.19904 (Nelson+ 2026)
 """
-import numpy as np
+import glob
+from os.path import isfile
+
 import h5py
 import matplotlib.pyplot as plt
-import glob
-from matplotlib.ticker import ScalarFormatter
-from matplotlib.patches import ConnectionPatch
+import numpy as np
 from matplotlib.colors import Normalize
+from matplotlib.patches import ConnectionPatch
+from matplotlib.ticker import ScalarFormatter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from os.path import isfile
 from scipy.ndimage import gaussian_filter
 
-from ..spectra.spectrum import spectra_filepath
-from ..spectra.util import lines, instruments
-from ..spectra.plot import spectra_gallery_indiv, EW_distribution, dNdz_evolution, EW_vs_coldens, \
-    instrument_lsf, spectrum_plot_single
+from ..cosmo.cloudy import cloudyIon
 from ..plot.config import *
+from ..spectra.plot import EW_distribution, EW_vs_coldens, dNdz_evolution, \
+    instrument_lsf, spectra_gallery_indiv, spectrum_plot_single
+from ..spectra.spectrum import spectra_filepath
+from ..spectra.util import instruments, lines
+from ..util import simParams
 from ..util.helper import closest, running_median
-from ..vis.halo import renderSingleHalo
 from ..vis.box import renderBox
+from ..vis.halo import renderSingleHalo
 
 def metalAbundancesVsSolar(sim, ion='Mg II'):
     """ Diagnostic plot of how much various metal abundances actual vary vs. the solar abundance ratio. """
-    from ..cosmo.cloudy import cloudyIon
-
     n_thresh = -8.0 # for second histogram
     nbins = 200
     minmax = [-11.0, -1.0] # abundance
@@ -1117,8 +1118,6 @@ def ion_redshift_coverage(sim, single=False, all=True, lowz=False):
     plt.close(fig)
 
 def paperPlots():
-    from ..util.simParams import simParams
-
     # fig 1: visual overview: full box TNG50 of N_ion, halo zoom, draw sightline going through
     if 0:
         sim = simParams('tng50-1', redshift=0.7) # OVI at z=0.2 or NeVIII at z=0.7

@@ -1,17 +1,23 @@
 """
 Conversion of data (snapshots/catalogs) between different cosmological simulations.
 """
-import numpy as np
-import h5py
 import glob
-import time
 import struct
-from os import path, mkdir
-from scipy.ndimage import map_coordinates
-from os.path import isdir, expanduser
+import time
+from os import mkdir, path
+from os.path import expanduser, isdir
 
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.backends.backend_pdf import PdfPages
+from scipy.ndimage import map_coordinates
+
+from ..cosmo.hydrogen import neutral_fraction
+from ..plot.config import figsize
+from ..util import simParams
+from ..util.helper import closest, isUnique, rootPath
 from ..util.match import match
-from ..util.helper import isUnique
 
 def convertGadgetICsToHDF5(aip=False):
     """ Convert a Gadget-1/2 binary format ICs (dm-only, only pos/vel/IDs) into HDF5 format (keep original ordering). """
@@ -726,14 +732,14 @@ def convertMillennium2SubhaloCatalog(snap=67):
 
     snapOffsetsGroup = np.zeros( TotNGroups, dtype='int64' )
     snapOffsetsSubhalo = np.zeros( TotNSubs, dtype='int64' )
-    
+
     snapOffsetsGroup[1:] = np.cumsum( GroupLen )[:-1]
-    
+
     for k in np.arange(TotNGroups):
         # subhalo offsets depend on group (to allow fuzz)
         if NSubsPerHalo[k] > 0:
             snapOffsetsSubhalo[subgroupCount] = snapOffsetsGroup[k]
-            
+
             subgroupCount += 1
             for m in np.arange(1, NSubsPerHalo[k]):
                 snapOffsetsSubhalo[subgroupCount] = snapOffsetsSubhalo[subgroupCount-1] + SubLen[subgroupCount-1]
@@ -842,7 +848,7 @@ def convertMillenniumSnapshot(snap=63):
     if not path.isfile(saveFile):
         # first, load all IDs from the sub files
         Nids_tot = 0
-        
+
         if path.isfile(savePath + 'gorder_%d.hdf5' % snap):
             offset = 0
 
@@ -962,7 +968,6 @@ def convertMillenniumSnapshot(snap=63):
 
             assert ind_snapordered.size == ids_groupordered.size # must have found them all
             ids_groupordered = None
-            ind_groupordered = None
 
             # create mask for outer FoF fuzz
             mask = np.zeros( ids_snapordered.size, dtype='bool' )
@@ -1147,8 +1152,7 @@ def convertMillennium2Snapshot(snap=67):
         print('[%4d] Snap IDs [%8d] particles, from [%10d] to [%10d] min = %10d' % \
             (i, npart_local, offset, offset+npart_local, min_val))
         offset += npart_local
-        if min_val == 0:
-            import pdb; pdb.set_trace()
+        assert min_val != 0
 
     if nChunksIDs > 0:
         # need to reshuffle
@@ -1291,9 +1295,6 @@ def convertMillennium2Snapshot(snap=67):
 
 def convertEagleSnapshot(snap=20):
     """ Convert an EAGLE simulation snapshot (HDF5) to a TNG-like snapshot (field names, units, etc). """
-    from ..util.simParams import simParams
-    from ..cosmo.hydrogen import neutral_fraction
-
     loadPath = '/virgo/simulations/Eagle/L0100N1504/REFERENCE/data/'
     #loadPath = '/virgo/simulations/EagleDM/L0100N1504/DMONLY/data/'
     #savePath = '/virgo/simulations/Illustris/Eagle-L68n1504DM/output/'
@@ -1475,7 +1476,7 @@ def convertEagleSnapshot(snap=20):
             for i, band in enumerate(photoBandsOrdered):
                 mags_1msun = map_coordinates( gfm_photo['Magnitude_%s' % band], iND, order=1, mode='nearest')
                 data['PartType4']['GFM_StellarPhotometrics'][:,i] = mags_1msun - 2.5 * stars_masslogmsun
-        
+
         # BHs: accretion rates (1e3 from Mpc in UnitTime)
         if 'PartType5' in data:
             data['PartType5']['BH_Mdot'] /= 1e3
@@ -1533,9 +1534,6 @@ def convertEagleSnapshot(snap=20):
 
 def convertSimbaSnapshot(snap=151):
     """ Convert an SIMBA simulation snapshot (HDF5) to a TNG-like snapshot (field names, units, etc). """
-    from ..util.simParams import simParams
-    from ..util.helper import rootPath
-
     run = 'm25n512' # 'm50n512', 'm100n1024'
 
     # derived paths
@@ -1714,7 +1712,7 @@ def convertSimbaSnapshot(snap=151):
             else:
                 # all other fields
                 wind_data = data['PartType0'][key][w_wind]
-                
+
             if key in data['PartType4']:
                 # normal case, adding to existing stars
                 axis = 0 if wind_data.ndim > 1 else None
@@ -1812,7 +1810,7 @@ def convertSimbaSnapshot(snap=151):
         for i, band in enumerate(photoBandsOrdered):
             mags_1msun = map_coordinates(gfm_photo['Magnitude_%s' % band], iND, order=1, mode='nearest')
             data['PartType4']['GFM_StellarPhotometrics'][w,i] = mags_1msun[w] - 2.5 * stars_masslogmsun
-    
+
     # BHs: eddington mdot
     if header['NumPart_Total'][5] > 0:
         UnitMass_over_UnitTime = 10.22
@@ -1837,7 +1835,6 @@ def convertSimbaSnapshot(snap=151):
     print('Done.')
 
 def fixSimbaSMBHs(snap=112):
-    from ..util.simParams import simParams
     sP = simParams("simba100", snap=snap)
 
     # global load
@@ -1849,7 +1846,7 @@ def fixSimbaSMBHs(snap=112):
 
     w2 = i1[np.where(dists == 0)]
     w1 = i1[np.where(dists <= 1e-4)]
-    
+
     #assert np.array_equal(w1,w2)
 
     # take unique subset
@@ -1884,12 +1881,6 @@ def fixSimbaSMBHs(snap=112):
 
 def testSimba(redshift=0.0):
     """ Compare all snapshot fields (1d histograms) vs TNG to check unit conversions, etc. """
-    import matplotlib.pyplot as plt
-    from matplotlib.backends.backend_pdf import PdfPages
-    from ..util.helper import closest
-    from ..plot.config import figsize
-    from ..util.simParams import simParams
-
     # config (z=0,2,5)
     sP1 = simParams(run='tng50-3', redshift=redshift)
     sP2 = simParams(run='simba50', redshift=redshift)
@@ -1995,11 +1986,6 @@ def testSimba(redshift=0.0):
 
 def testSimbaCat(redshift=0.0):
     """ Compare all group cat fields (1d histograms) to check unit conversions, etc. """
-    import matplotlib.pyplot as plt
-    from matplotlib.backends.backend_pdf import PdfPages
-    from ..plot.config import figsize
-    from ..util.simParams import simParams
-
     # config
     nBins = 50
 

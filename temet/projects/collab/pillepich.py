@@ -10,15 +10,13 @@ from scipy.signal import savgol_filter
 
 from ...cosmo.util import crossMatchSubhalosBetweenRuns
 from ...plot.config import *
+from ...util import simParams
 from ...util.helper import running_median
-from ...util.simParams import simParams
 from ...vis.common import savePathDefault
 from ...vis.halo import renderSingleHalo
 
-
 def stellarMergerContribution(sP):
     """ Analysis routine for TNG flagship paper on stellar mass content. """
-
     # config
     haloMassBins = [[11.4, 11.6], [11.9, 12.1], [12.4,12.6], [12.9,13.1], 
                     [13.4,13.6], [13.9, 14.1], [14.3, 14.7]]
@@ -573,10 +571,10 @@ def gjoshi_clustermaps(conf=0, haloID=0):
         saveFilename = './gjoshi_clustermaps_%d_%s_%d_%d_ID-%d_%s.pdf' % \
           (conf,run,res,sP.snap,haloID,method)
 
-#    plotSubhaloIDs = [15, 26, 29, 38, 39, 44, 48, 54, 63, 67, 73] #fof0 of TNG50: disks at accretion, not disks at z=0
-#    plotSubhaloIDs = [10, 24] #fof0 of TNG50: disks at accretion, still disks at z=0
-#    plotSubhaloIDs = [63877, 63878, 63884, 63893, 63898, 63899, 63902, 63917]
-#    plotSubhaloIDs = [ 63869, 63872, 63879,63882, 63883, 63894]
+    #plotSubhaloIDs = [15, 26, 29, 38, 39, 44, 48, 54, 63, 67, 73] #fof0 of TNG50: disks at accretion, not disks at z=0
+    #plotSubhaloIDs = [10, 24] #fof0 of TNG50: disks at accretion, still disks at z=0
+    #plotSubhaloIDs = [63877, 63878, 63884, 63893, 63898, 63899, 63902, 63917]
+    #plotSubhaloIDs = [ 63869, 63872, 63879,63882, 63883, 63894]
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -677,7 +675,7 @@ def apillepich_TNG50MWM31s_bubbles_top30(setType='top30', partType='gas', partFi
     if partField == 'machnum':
         valMinMax = [0.0, 5.0]
     if partField == 'metal_solar':
-        valMinMax = [-1.0, 1.0]        
+        valMinMax = [-1.0, 1.0]
 
     # configure panels: only edge-on 
     for i in range(int(plotConfig.nRows)):

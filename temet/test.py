@@ -415,7 +415,6 @@ def marc_sigma1():
 def exportBoxGrids(sP, partType='dm', partField='mass', nCells=[64,128,256,512]):
     """ Export 3D uniform Cartesian grids, of different resolutions. """
     from .util.sphMap import sphGridWholeBox
-    from .util.simParams import simParams
     from .util.helper import logZeroSafe
 
     # config
@@ -2040,7 +2039,7 @@ def new_mw_fgas_sample():
 
 def bh_details_check():
     """ Check gaps in TNG100-1 blackhole_details.hdf5. """
-    with file('out.txt','r') as f:
+    with open('out.txt','r') as f:
         lines = f.read()
 
     lines = lines.split('\n')
@@ -3024,8 +3023,6 @@ def checkTracerLoad():
 
         print(name1,gc_new_totTr,gc_new_count)
         assert gc_new_totTr == gc_new_count
-
-    pdb.set_trace()
 
 def checkLastStarTimeIllustris():
     """ Plot histogram of LST. """

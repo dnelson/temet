@@ -12,8 +12,8 @@ from scipy.stats import binned_statistic
 
 from ..cosmo.util import snapNumToRedshift
 from ..plot.config import *
+from ..util import simParams
 from ..util.helper import running_median
-from ..util.simParams import simParams
 from .subhalos import addRedshiftAxis
 
 def plotRedshiftSpacings():

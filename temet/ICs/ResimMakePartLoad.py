@@ -2,13 +2,15 @@
 Cosmological zoom/resimulation ICs: step one, i.e. handle functionality previously in P-Resim-MakePartLoad.
 Step two is to run the external program ``P-Resim-MakeICs`` on the generated particle load.
 """
-import numpy as np
-import h5py
 import time
-from os.path import isfile, expanduser
+from os.path import expanduser, isfile
+
+import h5py
+import numpy as np
 from numba import jit
 
 from ..ICs.utilities import write_ic_file
+from ..util import simParams
 from ..util.helper import pSplitRange
 from ..util.match import match
 
@@ -516,8 +518,6 @@ def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
 
 def generate_set():
     """ Driver. """
-    from ..util.simParams import simParams
-
     if 0:
         # TNG-Cluster
         sP = simParams(res=2048,run='tng_dm',redshift=0.0)

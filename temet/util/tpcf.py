@@ -4,9 +4,8 @@ Two-point correlation functions (pairwise distances).
 import numpy as np
 import threading
 from numba import jit
-from scipy.special import gamma
 
-from ..util.helper import pSplit, pSplitRange
+from ..util.helper import pSplitRange
 from ..util.sphMap import _NEAREST
 
 @jit(nopython=True, nogil=True, cache=True)
@@ -416,7 +415,7 @@ def benchmark():
     """ Benchmark performance of tpcf(). 
     Single thread: 600sec for 100k points, perfect O(N^2) scaling, so 16.7 hours for 1M points. """
     np.random.seed(424242)
-    from ..util.simParams import simParams
+    from ..util import simParams
     import matplotlib.pyplot as plt
     import time
 

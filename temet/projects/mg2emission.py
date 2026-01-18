@@ -15,6 +15,7 @@ from scipy.stats import binned_statistic
 from ..cosmo.util import subsampleRandomSubhalos
 from ..plot import snapshot, subhalos
 from ..plot.config import *
+from ..util import simParams
 from ..util.helper import dist_theta_grid, loadColorTable, logZeroNaN, mvbe, sampleColorTable
 from ..vis.halo import renderSingleHalo
 
@@ -895,8 +896,6 @@ def _select_haloIDs(sP, mStarBin):
 
 def paperPlots():
     """ Plots for the TNG50 MgII CGM emission paper. """
-    from ..util.simParams import simParams
-
     redshifts = [0.3, 0.7, 1.0, 2.0]
 
     sP = simParams(run='tng50-1', redshift=0.7) # default unless changed

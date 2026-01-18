@@ -8,6 +8,8 @@ from os.path import expanduser
 from scipy.integrate import cumulative_trapezoid
 
 from ..util.helper import rootPath, closest
+from ..util.helper import plothist, plotxy
+from ..util  import simParams
 
 basePath = rootPath + "tables/xray/"
 
@@ -474,7 +476,6 @@ class xrayEmission():
 
 def plotXrayEmissivities():
     """ Debug plots of the x-ray emissivity table trends with (z,band,T,Z). """
-    from ..util import simParams
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
     from ..util.helper import contourf, evenlySample, sampleColorTable
@@ -549,7 +550,7 @@ def plotXrayEmissivities():
         for j, metal in enumerate(xray.grid['metal']):
             T, emis = xray.slice('emis_' + band, redshift=redshift, metal=metal)
             emis = np.log10(emis)
-            
+
             label = 'Z = '+str(metal) if np.abs(metal-round(metal)) < 0.00001 else ''
             ax.plot(T, emis, lw=lw, color=cm[j], label=label)
 
@@ -586,7 +587,7 @@ def plotXrayEmissivities():
             for j, temp in enumerate(xray.grid['temp'][w]):
                 T, emis = xray.slice('emis_' + band, redshift=redshift, temp=temp)
                 emis = np.log10(emis)
-                
+
                 label = 'T = %.1f keV' % temp if (j % int(len(w[0])/8) == 0) or j == len(w[0])-1 else ''
                 ax.plot(T, emis, lw=lw, color=cm[j], label=label)
 
@@ -660,8 +661,7 @@ def plotXrayEmissivities():
 
 def compare_tables_single_cell():
     """ Debugging: compare XSPEC-based and APEC_based tables, for single cell results. """
-    from ..util.helper import plothist, plotxy
-    from ..util.simParams import simParams
+    from ..util import simParams
 
     # config
     sP = simParams(run='tng100-1', redshift=0.0)
@@ -719,13 +719,8 @@ def compare_tables_single_cell():
     for metal in np.linspace(-2.0, 0.0, 9): # log solar
         _run()
 
-    import pdb; pdb.set_trace()
-
 def compare_tables():
     """ Debugging: compare XSPEC-based and APEC-based tables. """
-    from ..util.helper import plothist, plotxy
-    from ..util.simParams import simParams
-
     # config
     sP = simParams(run='tng100-1', redshift=0.0)
 

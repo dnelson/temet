@@ -1,17 +1,25 @@
 """
 Various data exporters/converters, between different formats, etc.
 """
-import numpy as np
-import h5py
-from os import path, mkdir, remove
+import csv
 import glob
 import struct
+from io import BytesIO
+from os import mkdir, path, remove
+from os.path import isfile
+
+import h5py
+import numpy as np
+
+from ..cosmo.util import multiRunMatchedSnapList, snapNumToAgeFlat, snapNumToRedshift
+from ..util import simParams
+from ..util.helper import crossmatchHalosByCommonIDs, logZeroMin, nUnique, pSplitRange
+from ..util.match import match
+from ..util.sphMap import sphGridWholeBox, sphMap
 
 def concatSubboxFilesAndMinify():
     """ Minify a series of subbox snapshots but removing unwanted fields, and re-save concatenated 
     into a smaller number of chunks. """
-    from ..util.helper import pSplitRange
-
     # config
     outputPath = path.expanduser("~") + '/sims.TNG/L35n2160TNG/output/'
     sbNum = 2
@@ -220,8 +228,6 @@ def concatSubboxFilesAndMinify():
 
 def groupCutoutFromSnap(run='tng'):
     """ Create a [full] subhalo/fof cutout from a snapshot (as would be done by the Web API). """
-    from ..util.simParams import simParams
-
     ptTypes = ['gas','dm','bhs','stars']
 
     # (A) subhalo indices (z=0): TNG100-1, Illustris-1 (Lagrangian match), Illustris-1 (positional match)
@@ -309,7 +315,6 @@ def groupCutoutFromSnap(run='tng'):
 
 def tracerCutoutFromTracerTracksCat():
     """ Create a subhalo cutout of tracers from the full postprocessing/tracer_tracks/ catalog. """
-    from ..util.simParams import simParams
     ptTypes = ['gas','stars','bhs']
 
     # get subhaloIDs
@@ -498,10 +503,6 @@ def finalizeSubfindHBTGroupCat(snap, prep=False):
     above, (ii) run Gadget-4 SubfindHBT, (iii) run finalizeSubfindHBTGroupCat(prep=True), 
     (iv) create SubLinkHBT trees, (v) run makeSubgroupOffsetsIntoSublinkTreeGlobal(basePath, treeName='SubLinkHBT'),
     (vi) run finalizeSubfindHBTGroupCat() to finish. """
-    from ..util.simParams import simParams
-    from ..util.match import match
-    from ..util.helper import crossmatchHalosByCommonIDs
-
     sP = simParams(run='tng100-2',snap=snap)
     basePath = path.expanduser("~") + '/data/gadget4/'
 
@@ -786,8 +787,6 @@ def finalizeSubfindHBTGroupCat(snap, prep=False):
 
 def makeSdssSpecObjIDhdf5():
     """ Transform some CSV files into a HDF5 for SDSS objid -> specobjid mapping. """
-    from ..util.helper import nUnique
-
     files = sorted(glob.glob('z*.txt'))
     objid = np.zeros( (10000000), dtype='uint64' )
     specobjid = np.zeros( (10000000), dtype='uint64' )
@@ -872,8 +871,6 @@ def createEmptyMissingGroupCatChunk():
 
 def combineAuxCatSubdivisions():
     """ Combine a subdivision of a pSplit auxCat calculation. """
-    from os.path import isfile
-
     basePath = path.expanduser("~") + '/sims.TNG/L205n2500TNG/data.files/auxCat/'
     field    = 'Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1' # _rad30pkpc
     fileBase = field + '_099-split-%d-%d.hdf5'
@@ -956,9 +953,6 @@ def combineAuxCatSubdivisions():
 
 def snapRedshiftsTxt():
     """ Output a text-file of snapshot redshifts, etc. """
-    from ..util.simParams import simParams
-    from ..cosmo.util import multiRunMatchedSnapList, snapNumToRedshift, snapNumToAgeFlat
-
     # config
     sP = simParams(res=1820,run='tng',redshift=0.0,variant='subbox0')
     minZ      = 0.0
@@ -985,8 +979,6 @@ def snapRedshiftsTxt():
 
 def tngVariantsLatexOrWikiTable(variants='all', fmt='wiki'):
     """ Output latex-syntax table describing the TNG model variations runs. """
-    import csv
-
     run_file = path.expanduser("~") + '/sims.TNG_method/runs.csv'
 
     with open(run_file) as f:
@@ -1046,7 +1038,6 @@ def tngVariantsLatexOrWikiTable(variants='all', fmt='wiki'):
 
 def splitSingleHDF5IntoChunks(snap=151):
     """ Split a single-file snapshot/catalog/etc HDF5 into a number of roughly equally sized chunks. """
-    from ..util.helper import pSplitRange
     basePath = path.expanduser("~") + '/sims.other/Simba-L25n512FP/output/snapdir_%03d/' % snap
     fileName = 'snap_%03d.hdf5' % snap
     numChunksSave = 16
@@ -1214,9 +1205,6 @@ def combineMultipleHDF5FilesIntoSingle():
 
 def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
     """ Read the Voronoi mesh data from Chris Byrohl using his vppp (voro++ parallel) approach, save to HDF5. """
-    from ..util.simParams import simParams
-    from ..util.helper import pSplitRange
-
     sP = simParams(run='tng50-2', redshift=0.5)
     basepath = "/freya/ptmp/mpa/cbyrohl/public/vppp_dataset/IllustrisTNG50-2_z0.5_posdata"
 
@@ -1489,8 +1477,6 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
 
 def exportSubhalosBinary():
     """ Export a very minimal group catalog to a flat binary format (for WebGL/Explorer3D). """
-    from ..util.simParams import simParams
-
     # config
     sP = simParams(run='eagle',redshift=0.0)
     cenSatSelect = 'cen'
@@ -1590,11 +1576,6 @@ def exportHierarchicalBoxGrids(sP, partType='gas', partField='mass', nCells=[32,
       This function is used to pre-compute the grids used in the Explorer3D WebGL volume rendering interface, as 
       well as on-the-fly grid generation for halo-scope volume rendering.
     """
-    from ..util.sphMap import sphGridWholeBox, sphMap
-    from ..util.simParams import simParams
-    from ..util.helper import logZeroSafe, logZeroMin
-    from io import BytesIO
-
     # config
     label, limits, takeLog = sP.simParticleQuantity(partType, partField)
 

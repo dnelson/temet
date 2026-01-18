@@ -1,19 +1,20 @@
 """
 Visualizations for whole (cosmological) boxes.
 """
-import numpy as np
-from datetime import datetime
-from os.path import isfile, isdir
-from os import makedirs
 from copy import deepcopy
+from datetime import datetime
+from os import makedirs
+from os.path import isdir, isfile
 
+import numpy as np
+
+from ..cosmo.util import multiRunMatchedSnapList
+from ..util import simParams
+from ..util.boxRemap import findCuboidRemapInds
+from ..util.helper import iterable, pSplit
+from ..util.rotation import rotationMatrixFromAngleDirection
 from ..vis.common import renderMultiPanel, savePathDefault
 from ..vis.render import defaultHsmlFac, gridBox
-from ..cosmo.util import multiRunMatchedSnapList
-from ..util.helper import iterable, pSplit
-from ..util.boxRemap import findCuboidRemapInds
-from ..util.rotation import rotationMatrixFromAngleDirection
-from ..util.simParams import simParams
 
 def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, nPixels, boxOffset, remapRatio, **kwargs):
     """ Factor out some box/image related calculations common to all whole box plots. 

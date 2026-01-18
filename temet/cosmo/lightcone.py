@@ -1,16 +1,17 @@
 """
 Cosmological simulations - generating and working with lightcones. (w/ Andres Aramburo-Garcia)
 """
-import h5py
 import time
-import numpy as np
-import matplotlib.pyplot as plt
 from os.path import isfile
 
-from ..util.boxRemap import remapPositions, findCuboidRemapInds
-from ..util.simParams import simParams
-from ..util.helper import pSplitRange
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+
 from ..plot.config import figsize, lw
+from ..util import simParams
+from ..util.boxRemap import findCuboidRemapInds, remapPositions
+from ..util.helper import pSplitRange
 
 def _load(sP,group,field,inds):
     """ Helper to handle loading a subset, specified by inds, of a particle dataset vs halo catalog

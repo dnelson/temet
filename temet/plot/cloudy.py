@@ -7,16 +7,17 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import Normalize
 from datetime import datetime
+from scipy.interpolate import interp1d
 
 from ..util.helper import contourf, evenlySample, sampleColorTable, closest, logZeroNaN, loadColorTable, rootPath
 from ..cosmo.cloudyGrid import loadUVB
 from ..cosmo.cloudy import cloudyIon
 from ..cosmo.hydrogen import photoCrossSecGray, photoRate, uvbEnergyDensity
 from ..plot.config import *
+from ..util import simParams
 
 def plotUVB(uvb='FG11'):
     """ Debug plots of the UVB(nu) as a function of redshift. """
-
     # config
     redshifts = [0.0, 2.0, 4.0, 6.0, 7.0, 8.0, 9.0]
     nusRyd = [0.9,1.1,1.7,1.9,5.0,10.0,100.0] #[0.9,1.1,3.9,4.1,20.0]
@@ -104,8 +105,6 @@ def plotUVB(uvb='FG11'):
 
 def plotIonAbundances(res='lg_c17', elements=['Magnesium']):
     """ Debug plots of the cloudy element ion abundance trends with (z,dens,Z,T). """
-    from ..util import simParams   
-
     # plot config
     abund_range = [-6.0,0.0]
     lw = 3.0
@@ -172,7 +171,7 @@ def plotIonAbundances(res='lg_c17', elements=['Magnesium']):
                 # load table slice and plot
                 for j, dens in enumerate(ion.grid['dens']):
                     T, ionFrac = ion.slice(element, ionNum, redshift=redshift, dens=dens, metal=metal)
-                    
+
                     # dens labels only even ints
                     label = 'dens = '+str(dens) if np.abs(dens-round(dens/2)*2) < 0.00001 else ''
                     ax.plot(T, ionFrac, lw=lw, color=cm[j], label=label)
@@ -185,7 +184,7 @@ def plotIonAbundances(res='lg_c17', elements=['Magnesium']):
         # (C): 2d histograms (x=T, y=dens, color=log fraction) (different panels for ions)
         metal = 1.0
         ionGridSize = int(np.ceil(np.sqrt(ion.numIons[element])))
-        
+
         for redshift in np.arange(ion.grid['redshift'].max()+1):
             print(' [%s] 2d, z = %2d' % (element,redshift))
             fig = plt.figure(figsize=(26,16))
@@ -241,7 +240,7 @@ def plotIonAbundances(res='lg_c17', elements=['Magnesium']):
                 # loop over all ions of this elemnet
                 for j, ionNum in enumerate(np.arange(ion.numIons[element])+1):
                     T, ionFrac = ion.slice(element, ionNum, redshift=redshift, dens=dens, metal=metal)
-                
+
                     label = ion._elementNameToSymbol(element) + ion.numToRoman(ionNum)
                     ax.plot(T, ionFrac, lw=lw, color=cm[j], label=label)
 
@@ -339,7 +338,7 @@ def grackleTable():
 
         # plot book
         pdf = PdfPages('grackle_%s.pdf' % filename)
-        
+
         # (A) - plot vs. temperature, lines for different dens, pages for different redshifts
         gridSize = 6 # 5*6=30 to cover 29 different densities
         gridSize = int(np.ceil(np.sqrt(hdens.size+2)))
@@ -422,7 +421,7 @@ def grackleTable():
 
     prim_net_ratio = logZeroNaN((data2['Primordial']['Cooling'] - data2['Primordial']['Heating']) / \
                                 (data1['Primordial']['Cooling'] - data1['Primordial']['Heating']))
-    
+
     metal_net_ratio = logZeroNaN((data2['Metals']['Cooling'] - data2['Metals']['Heating']) / \
                                  (data1['Metals']['Cooling'] - data1['Metals']['Heating']))
 
@@ -469,7 +468,7 @@ def grackleTable():
 
     opts_ratio = {'extent':extent, 'norm':norm, 'origin':'lower', 'interpolation':'nearest', 'aspect':'auto', 'cmap':cmap}
     opts = {'extent':extent, 'norm':norm2, 'origin':'lower', 'interpolation':'nearest', 'aspect':'auto'}
-            
+
     pdf = PdfPages('grackle_ratio2d_%s.pdf' % filename2)
     for redshift_ind, z in enumerate(redshift[0:1]): # redshift
 
@@ -560,7 +559,7 @@ def grackleTable():
 def gracklePhotoCrossSec(uvb='FG11'):
     """ Plot the photo-ionization cross sections from Grackle. Compare to new derivation. """
     filepath = '/u/dnelson/sims.structures/grackle/grackle_data_files/input/'
-    
+
     filename = None
     if uvb == 'FG11': filename = 'CloudyData_UVB=FG2011_shielded.h5' # orig
     if uvb == 'HM12': filename = 'CloudyData_UVB=HM2012_shielded.h5' # orig
@@ -583,7 +582,7 @@ def gracklePhotoCrossSec(uvb='FG11'):
 
     for i, u in enumerate(uvbs):
         J_loc = 10.0**u['J_nu'].astype('float64') # linear
-        
+
         for ion in ['H I','He I', 'He II']:
             cs_new[ion][i] = photoCrossSecGray(u['freqRyd'], J_loc, ion=ion)
 
@@ -620,7 +619,7 @@ def gracklePhotoCrossSec(uvb='FG11'):
 def grackleReactionRates():
     """ Plot the photo-ionization cross sections from Grackle. Compare to new derivation. """
     filepath = '/u/dnelson/sims.structures/grackle/grackle_data_files/input/'
-    
+
     filenames = ['CloudyData_UVB=FG2011_shielded.h5', # FG11 orig
                  'grid_cooling_UVB=FG11_withH2.hdf5', # FG2011 my new version
                  'CloudyData_UVB=HM2012_shielded.h5', # HM12 orig
@@ -661,14 +660,14 @@ def grackleReactionRates():
 
         for i, u in enumerate(uvbs):
             J_loc = 10.0**u['J_nu'].astype('float64') # linear
-            
+
             k24_local[i] = photoRate(u['freqRyd'], J_loc, ion='H I') # [1/s]
             k27_local[i] = photoRate(u['freqRyd'], J_loc, ion='k27')
             k28_local[i] = photoRate(u['freqRyd'], J_loc, ion='k28')
             k29_local[i] = photoRate(u['freqRyd'], J_loc, ion='k29')
             k30_local[i] = photoRate(u['freqRyd'], J_loc, ion='k30')
             k31_local[i] = photoRate(u['freqRyd'], J_loc, ion='k31')
-        
+
         k['k24_custom'] = k24_local
         k['k27_custom'] = k27_local
         k['k28_custom'] = k28_local
@@ -767,10 +766,7 @@ def grackleReactionRates():
     plt.close(fig)
 
 def uvbEnergyDens():
-    """ Plot the UVB energy density as a function of redshift, integrating  """
-    from datetime import datetime
-    from scipy.interpolate import interp1d
-
+    """ Plot the UVB energy density as a function of redshift, integrating over some frequency ranges.  """
     # config
     uvb_names = ['HM12','P19','FG11','FG20']
     eV_min = 6.0 # 11.2
@@ -788,7 +784,7 @@ def uvbEnergyDens():
 
         for i, u in enumerate(uvbs):
             J_loc = 10.0**u['J_nu'].astype('float64') # linear
-            
+
             u_local[i] = uvbEnergyDensity(u['freqRyd'], J_loc, eV_min=eV_min, eV_max=eV_max)
             #u_local[i] /= np.pi
             u_local[i] = np.log10(u_local[i])
@@ -862,9 +858,7 @@ def uvbEnergyDens():
 
 def ionAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshift=0.0, metal=-1.0):
     """ Plot 2D histograms of ion abundance fraction in (density,temperature) space at one Z,z. 
-    Metal is metallicity in [log Solar]. """
-    from ..util.simParams import simParams
-    
+    Metal is metallicity in [log Solar]. """    
     # visual config
     abund_range = [-6.0,0.0]
     nContours = 30

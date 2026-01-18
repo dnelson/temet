@@ -1,10 +1,13 @@
 """
 Creation and update of the virtual 'simulation.hdf5' file.
 """
-import numpy as np
-import h5py
-from os import path, getcwd
 import glob
+from os import getcwd, path
+
+import h5py
+import numpy as np
+
+from ..util import simParams
 
 def _addPostprocessingCat(fSim,filepath,baseName,gNames,rootOnly=False):
     """ Helper for createVirtualSimHDF5() below. Add one postprocessing catalog specification in. """
@@ -84,8 +87,6 @@ def createVirtualSimHDF5():
     """ Create a single 'simulation.hdf5' file which is made up of virtual datasets (HDF5 1.1x/h5py 2.9.x features). 
     Note: dataset details acquired from first chunk of last snapshot! Snapshot must be full, and first chunk must have 
     at least one of every particle type! Note: run in simulation root dir, since we make relative path links. """
-    from ..util.simParams import simParams
-
     sP = simParams(run='tng-cluster')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() or sP.simName.replace('-','/') in getcwd() # careful
 
@@ -389,8 +390,6 @@ def createVirtualSimHDF5():
 
 def supplementVirtualSimHDF5AddSnapField():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
-    from ..util.simParams import simParams
-
     sP = simParams(res=1080,run='tng')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
 
@@ -484,8 +483,6 @@ def supplementVirtualSimHDF5AddSnapField():
 
 def supplementVirtualSimHDF5AddOrUpdateGroupcatField():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
-    from ..util.simParams import simParams
-
     sP = simParams(res=1820,run='illustris')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
 
@@ -575,8 +572,6 @@ def supplementVirtualSimHDF5AddOrUpdateGroupcatField():
 
 def supplementVirtualSimHDF5():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
-    from ..util.simParams import simParams
-
     sP = simParams(run='tng50-2')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
 

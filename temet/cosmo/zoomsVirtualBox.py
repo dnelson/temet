@@ -1,17 +1,21 @@
 """
 Creation of 'virtual (uniform) boxes' from a number of zoom resimulations.
 """
-import numpy as np
+from os import mkdir
+from os.path import isdir, isfile
+
 import h5py
 import matplotlib.pyplot as plt
-from os.path import isfile, isdir
-from os import mkdir
+import numpy as np
+from matplotlib.backends.backend_pdf import PdfPages
 from numba import jit
 
-from ..util.simParams import simParams
-from ..util.match import match
-from ..plot.config import *
 from ..cosmo.zooms import _halo_ids_run
+from ..plot.config import *
+from ..tracer.montecarlo import globalTracerChildren, globalTracerLength
+from ..util import simParams
+from ..util.helper import closest
+from ..util.match import match
 
 @jit(nopython=True, nogil=True, cache=True)
 def _mark_mask(mask, pxsize, pos, value):
@@ -119,8 +123,6 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
     simulation, i.e. concatenate the output/group* and output/snap* of these runs. 
     Process a single snapshot, since all are independent. Note that we write exactly one
     output groupcat file per zoom halo, and exactly two output snapshot files. """
-    from ..tracer.montecarlo import globalTracerChildren, globalTracerLength
-
     outPath = '/u/dnelson/sims.TNG/L680n8192TNG/output/'
     parent_sim = simParams('tng-cluster')
 
@@ -706,8 +708,6 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
 
 def testVirtualParentBoxGroupCat(snap=99):
     """ Compare all group cat fields (1d histograms) vs TNG300-1 to check unit conversions, etc. """
-    from matplotlib.backends.backend_pdf import PdfPages
-
     # config
     nBins = 50
 
@@ -720,7 +720,7 @@ def testVirtualParentBoxGroupCat(snap=99):
     m200_sP2 = sP2.units.codeMassToLogMsun(sP2.halos('Group_M_Crit200'))
 
     haloIDs_1 = np.where( (contam < 0.01) & (m200 > 14.0) )[0]
-    haloIDs_2 = np.where( (m200_sP2 > 14.0) )[0]
+    haloIDs_2 = np.where( m200_sP2 > 14.0 )[0]
 
     haloIDs = [haloIDs_1, haloIDs_2]
 
@@ -781,9 +781,6 @@ def testVirtualParentBoxGroupCat(snap=99):
 
 def testVirtualParentBoxSnapshot(snap=99):
     """ Compare all snapshot fields (1d histograms) vs TNG300-1 to check unit conversions, etc. """
-    from matplotlib.backends.backend_pdf import PdfPages
-    from ..util.helper import closest
-
     # config
     haloID = 0 # for particle comparison, indexing primary targets of TNG-Cluster
     nBins = 50
@@ -816,8 +813,6 @@ def testVirtualParentBoxSnapshot(snap=99):
 
         print(sP1.simName, ' min max mean: ', vals1.min(), vals1.max(), np.mean(vals1))
         print(sP2.simName, ' min max mean: ', vals2.min(), vals2.max(), np.mean(vals2))
-
-        import pdb; pdb.set_trace()
 
     # loop over part types
     for ptNum in [0,1,4,5]: # skip low-res DM (2) and tracers (3)

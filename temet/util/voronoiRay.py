@@ -814,9 +814,9 @@ def rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=None, quant2=None, mode=
 
 def benchmark_test_raytracing():
     """ Run a large number of rays using the threaded-code. """
-    import matplotlib.pyplot as plt
-    from ..plot.config import figsize, lw
-    from ..util.simParams import simParams
+    #import matplotlib.pyplot as plt
+    #from ..plot.config import figsize, lw
+    from ..util import simParams
 
     # config
     sP = simParams(run='tng100-3', redshift=0.5)
@@ -890,7 +890,7 @@ def benchmark_test_voronoi(compare=True):
     Returns:
       None
     """
-    from ..util.simParams import simParams
+    from ..util import simParams
 
     # config
     sP = simParams(run='tng50-4', redshift=0.5)
