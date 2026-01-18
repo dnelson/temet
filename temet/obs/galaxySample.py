@@ -1,17 +1,19 @@
 """
 Observations: re-create various mock galaxy samples to match surveys/datasets.
 """
-import numpy as np
-import h5py
-from os.path import isfile, isdir
 from os import mkdir
+from os.path import isdir, isfile
 
-from ..load.data import werk2013, johnson2015, berg2019, chen2018zahedy2019
-from ..cosmo.util import redshiftToSnapNum
-from ..vis.render import getHsmlForPartType
-from ..util.sphMap import sphMap
-from ..util.helper import logZeroNaN, closest, iterable, reportMemory
+import h5py
+import numpy as np
+
 from ..cosmo.cloudy import cloudyIon
+from ..cosmo.util import redshiftToSnapNum
+from ..load.data import berg2019, chen2018zahedy2019, johnson2015, werk2013
+from ..util.helper import closest, iterable, logZeroNaN, reportMemory
+from ..util.sphMap import sphMap
+from ..vis.render import getHsmlForPartType
+
 
 def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
     """ Get a matched sample of simulated galaxies which match an observational abs. line dataset. """
@@ -724,7 +726,7 @@ def ionCoveringFractions(sP, sim_sample, config='COS-Halos'):
         # compute binned values across all realized galaxies
         for i, thresh in enumerate(colDensThresholds):
             for j in range(numRadBins):
-                
+
                 # different subsets of the galaxy sample, including 'all'
                 for gs in gal_subsets:
                     local_vals = r['galaxies_indiv%s' % relStr][:,:,i,j].ravel()

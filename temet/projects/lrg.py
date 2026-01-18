@@ -21,8 +21,8 @@ from ..util.voronoi import voronoiThresholdSegmentation
 from ..load.data import werk2013, berg2019, chen2018zahedy2019
 from ..cosmo.util import subboxSubhaloCat
 from ..plot.config import *
-from ..plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
-from ..plot.cosmoGeneral import quantMedianVsSecondQuant
+from ..plot import snapshot
+from ..plot import subhalos
 from ..tracer.montecarlo import globalAllTracersTimeEvo
 from ..tracer import evolution as tracerEvo
 from ..vis.halo import renderSingleHalo
@@ -2442,9 +2442,9 @@ def paperPlots():
         subhaloIDs = _get_halo_ids(sP, bin_inds=[1,2], subhaloIDs=True)
 
         # create density PDF of gas in radRangeRvir
-        plotHistogram1D([sP], ptType='gas', ptProperty=ptProperty, xlim=xlim, nBins=nBins, medianPDF=medianPDF, 
-                        qRestrictions=qRestrictions, subhaloIDs=[subhaloIDs], ctName='plasma', ctProp='mhalo_200_log', 
-                        legend=False, colorbar=True)
+        snapshot.histogram1d([sP], ptType='gas', ptProperty=ptProperty, xlim=xlim, nBins=nBins, medianPDF=medianPDF, 
+                             qRestrictions=qRestrictions, subhaloIDs=[subhaloIDs], ctName='plasma', ctProp='mhalo_200_log', 
+                             legend=False, colorbar=True)
 
     # fig 6b - cgm gas (n,T) 2D phase diagrams
     if 0:
@@ -2468,7 +2468,7 @@ def paperPlots():
         saveStr = weights[0] if weights is not None else meancolors[0]
         pdf = PdfPages('phase2d_%s_%d_h%d_%s_%s_%s.pdf' % (sP.simName,sP.snap,haloIDs[0],xQuant,yQuant,saveStr))
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant=xQuant, yQuant=yQuant, weights=weights, meancolors=meancolors, 
+        snapshot.phaseSpace2d(sP, partType='gas', xQuant=xQuant, yQuant=yQuant, weights=weights, meancolors=meancolors, 
                      haloIDs=haloIDs, pdf=pdf, xlim=xlim, ylim=ylim, clim=clim, nBins=None, 
                      contours=contours, contourQuant=contourQuant, qRestrictions=qRestrictions)
         pdf.close()
@@ -2479,11 +2479,11 @@ def paperPlots():
         sP = TNG50
         subIDs = _get_halo_ids(sP, bin_inds=[2,1], subhaloIDs=True)
 
-        plotStackedRadialProfiles1D([sP], ptType='gas', ptProperty='tcool_tff', op='median', subhaloIDs=[subIDs], 
+        snapshot.stackedlProfiles1d([sP], ptType='gas', ptProperty='tcool_tff', op='median', subhaloIDs=[subIDs], 
             xlim=[1.0,3.0], ylim=[-0.3,2.5], plotIndiv=True, ptRestrictions={'temp_log':['gt',5.5]},
             ctName='plasma', ctProp='mhalo_200_log', colorbar=True)
 
-        plotStackedRadialProfiles1D([sP], ptType='gas', ptProperty='entr', op='median', subhaloIDs=[subIDs], 
+        snapshot.stackedProfiles1d([sP], ptType='gas', ptProperty='entr', op='median', subhaloIDs=[subIDs], 
             xlim=[1.0,3.0], ylim=[7.2,9.05], plotIndiv=True, ptRestrictions={'temp_log':['gt',5.5]},
             ctName='plasma', ctProp='mhalo_200_log', figsize=[7,5]) # inset
 
@@ -2519,7 +2519,7 @@ def paperPlots():
                 normColMax = False
                 ctName = 'curl'
 
-            plotPhaseSpace2D(sP, partType='gas', xQuant=xQuant, yQuant=yQuant, weights=weights, meancolors=meancolors, 
+            snapshot.phaseSpace2d(sP, partType='gas', xQuant=xQuant, yQuant=yQuant, weights=weights, meancolors=meancolors, 
                          haloIDs=[haloID], xlim=xlim, ylim=ylim, clim=clim, nBins=200, ctName=ctName, 
                          contours=contours, contourQuant='mass', normColMax=normColMax, 
                          normContourQuantColMax=True, smoothSigma=1.0, colorEmpty=False)
@@ -2544,12 +2544,12 @@ def paperPlots():
         yQuants = ['mass_halogas_sfcold']
         xQuant = 'mhalo_200_log'
 
-        quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', 
-                                     sQuant=None, sLowerPercs=None, sUpperPercs=None, sizefac=1.0, alpha=1.0, 
-                                     qRestrictions=None, f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
-                                     scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, 
-                                     markSubhaloIDs=None, cRel=None, mark1to1=False, drawMedian=True, medianLabel=None, 
-                                     extraMedians=None,legendLoc='best', xlim=[10.5,13.0], ylim=None, clim=None, cbarticks=None, pdf=None)
+        subhalos.median(sPs, yQuants, xQuant, cenSatSelect='cen', 
+                        sQuant=None, sLowerPercs=None, sUpperPercs=None, sizefac=1.0, alpha=1.0, 
+                        qRestrictions=None, f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
+                        scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, 
+                        markSubhaloIDs=None, cRel=None, mark1to1=False, drawMedian=True, medianLabel=None, 
+                        extraMedians=None,legendLoc='best', xlim=[10.5,13.0], ylim=None, clim=None, cbarticks=None, pdf=None)
 
     # --- clump analysis ---
 

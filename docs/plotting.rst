@@ -13,7 +13,7 @@ Exploratory Plots for Galaxies (Catalog Values)
 -----------------------------------------------
 
 We continue from the :doc:`first_steps` here. The plotting functions in 
-:py:mod:`plot.cosmoGeneral <temet.plot.cosmoGeneral>` can be useful for exploring trends in the 
+:py:mod:`plot.subhalos <temet.plot.subhalos>` can be useful for exploring trends in the 
 objects of the group catalogs, i.e. galaxies (subhalos).
 
 Let's examine a classic observed galaxy scaling relation: the correlation between gas-phase metallicity, 
@@ -23,7 +23,7 @@ and stellar mass, the "mass-metallicity relation" (MZR).
 
     sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    temet.plot.cosmoGeneral.quantMedianVsSecondQuant(sim, 'Z_gas', 'mstar_30pkpc')
+    temet.plot.subhalos.median(sim, 'Z_gas', 'mstar_30pkpc')
 
 This produces a PDF figure named ``medianQuants_TNG100-1_Z_gas_mstar_30pkpc_cen.pdf`` in the current working 
 directory. It shows the mass-metallicity relation of TNG100 galaxies at :math:`z=0`, and looks like this:
@@ -36,7 +36,7 @@ include individual subhalos as colored points, coloring based on gas fraction::
 
     sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    temet.plot.cosmoGeneral.quantMedianVsSecondQuant(sim, 'Z_gas', 'mstar_30pkpc', 
+    temet.plot.subhalos.median(sim, 'Z_gas', 'mstar_30pkpc', 
       xlim=[8.0, 11.5], scatterColor='fgas2')
 
 This produces the following figure, which highlights how lower mass galaxies have high gas fractions of 
@@ -54,7 +54,7 @@ Instead of using color to represent the actual gas fraction values, we can inste
 
     sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    temet.plot.cosmoGeneral.quantMedianVsSecondQuant(sim, 'Z_gas', 'mstar_30pkpc', 
+    temet.plot.subhalos.median(sim, 'Z_gas', 'mstar_30pkpc', 
       xlim=[8.0, 11.5], scatterColor='fgas2', cRel=[0.5,2.0,False])
 
 More generally, the color quantity is made relative to its running median value as a function of the 
@@ -76,7 +76,7 @@ number of objects in each pixel::
 
     sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    temet.plot.cosmoGeneral.quantHisto2D(sim, 'Z_gas', 'mstar_30pkpc', xlim=[8.0, 11.5])
+    temet.plot.subhalos.histogram2d(sim, 'Z_gas', 'mstar_30pkpc', xlim=[8.0, 11.5])
 
 .. image:: _static/plotting_histo2D_1.png
 
@@ -88,7 +88,7 @@ Alternatively, the color can indicate the median value of a third property for a
 
     sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    temet.plot.cosmoGeneral.quantHisto2D(sim, 'Z_gas', 'mstar_30pkpc', cQuant='size_stars', xlim=[8.0, 11.5])
+    temet.plot.subhalos.histogram2d(sim, 'Z_gas', 'mstar_30pkpc', cQuant='size_stars', xlim=[8.0, 11.5])
 
 .. image:: _static/plotting_histo2D_2.png
 
@@ -99,7 +99,7 @@ For example, given the plot above, we can look at the correlation between gas me
 
     sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    temet.plot.cosmoGeneral.quantSlice1D([sim], xQuant='size_stars', yQuants=['Z_gas'], sQuant='mstar_30pkpc_log',
+    temet.plot.subhalos.slice([sim], xQuant='size_stars', yQuants=['Z_gas'], sQuant='mstar_30pkpc_log',
       sRange=[[9.5, 9.6],[10.5, 10.6]], ylim=[-0.5, 0.5], xlim=[0.0, 1.2])
 
 .. image:: _static/plotting_histo2D_3.png
@@ -117,7 +117,7 @@ Exploratory Plots for Snapshots (Particle/Cell Values)
 
 Here we also continue from the corresponding section of the :doc:`first_steps`.
 
-Similar to above, :py:mod:`plot.general <temet.plot.general>` provides general plotting routines focused 
+Similar to above, :py:mod:`plot.snapshot <temet.plot.snapshot>` provides general plotting routines focused 
 on snapshots, i.e. particle-level data. These are also then suitable for non-cosmological simulations.
 
 For example, we could plot the traditional 2D "phase diagram" of density versus temperature. However, we can 
@@ -127,7 +127,7 @@ the relationship between gas pressure and magnetic field strength at :math:`z=0`
 
     sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    temet.plot.general.plotPhaseSpace2D(sim, 'gas', xQuant='pres', yQuant='bmag')
+    temet.plot.snapshot.phaseSpace2d(sim, 'gas', xQuant='pres', yQuant='bmag')
 
 .. image:: _static/first_steps_phase2D_1.png
 
@@ -139,7 +139,7 @@ matter particles within the tenth most massive halo of TNG50-1 at :math:`z=2`::
     haloIDs = [9]
 
     opts = {'xlim':[-0.6,0.3], 'ylim':[-800,600], 'clim':[-4.7,-2.3], 'ctName':'inferno'}
-    temet.plot.general.plotPhaseSpace2D(sim, 'dm', xQuant='rad_rvir', yQuant='vrad', haloIDs=haloIDs, **opts)
+    temet.plot.snapshot.phaseSpace2d(sim, 'dm', xQuant='rad_rvir', yQuant='vrad', haloIDs=haloIDs, **opts)
 
 .. image:: _static/first_steps_phase2D_2.png
 

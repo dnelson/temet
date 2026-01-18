@@ -13,7 +13,7 @@ from matplotlib.colors import Normalize
 from functools import partial
 
 from ..cosmo.zooms import contamination_mindist
-from ..plot.cosmoGeneral import quantMedianVsSecondQuant
+from ..plot import subhalos
 from ..plot.cosmoMisc import simClustersComparison
 from ..plot.config import *
 from ..util.helper import logZeroNaN, running_median, loadColorTable, dist_theta_grid
@@ -523,7 +523,7 @@ def sample_halomasses_vs_redshift(sPs):
     plt.close(fig)
 
 def bfield_strength_vs_halomass(sPs, redshifts):
-    """ Driver for quantMedianVsSecondQuant. """
+    """ Driver for subhalos.median. """
     sPs_in = []
     for redshift in redshifts:
         for sP in sPs:
@@ -593,10 +593,10 @@ def bfield_strength_vs_halomass(sPs, redshifts):
         legend2 = ax.legend(handles, [sP.simName for sP in sPs], borderpad=0.4, loc='upper right')
         ax.add_artist(legend2)
 
-    quantMedianVsSecondQuant(sPs_in, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
-                             xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_pre=_draw_data, f_post=_draw_data2, legendLoc='lower right', labelSims=False, pdf=None)
+    subhalos.median(sPs_in, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                    xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    f_pre=_draw_data, f_post=_draw_data2, legendLoc='lower right', labelSims=False, pdf=None)
 
 def stellar_mass_vs_halomass(sPs, conf=0):
     """ Plot various stellar mass quantities vs halo mass. """
@@ -776,10 +776,10 @@ def stellar_mass_vs_halomass(sPs, conf=0):
             legend = ax.legend(handles, labels, loc='lower right')
             ax.add_artist(legend)
 
-    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
-                             xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_post=_draw_data, ylabel=ylabel, legendLoc='upper left', pdf=None)
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                    xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    f_post=_draw_data, ylabel=ylabel, legendLoc='upper left', pdf=None)
 
 def gas_fraction_vs_halomass(sPs):
     """ Plot f_gas vs halo mass. """
@@ -874,10 +874,10 @@ def gas_fraction_vs_halomass(sPs):
         legend = ax.legend(handles, labels, loc='lower right')
         ax.add_artist(legend)
 
-    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
-                             xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_post=_draw_data, legendLoc='upper left', pdf=None)
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                    xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    f_post=_draw_data, legendLoc='upper left', pdf=None)
 
 def sfr_vs_halomass(sPs):
     """ Plot star formation rate vs halo mass. """
@@ -930,10 +930,10 @@ def sfr_vs_halomass(sPs):
 
         ax.plot(xx[w_cc], yy[w_cc], lw=0, marker='x', ms=8, mfc='none', markeredgecolor='#000', markeredgewidth=1, alpha=0.5)
 
-    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
-                             xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_pre=_draw_data, f_post=_draw_cc, legendLoc='upper left', pdf=None)
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                    xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    f_pre=_draw_data, f_post=_draw_cc, legendLoc='upper left', pdf=None)
 
 def mhi_vs_halomass(sPs):
     """ Plot cold gas mass (M_HI) vs halo mass. """
@@ -977,7 +977,7 @@ def mhi_vs_halomass(sPs):
         legend = ax.legend(handles, labels, loc='lower right')
         ax.add_artist(legend)
 
-    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                              f_pre=_draw_data, legendLoc='upper left', pdf=None)                
@@ -1401,10 +1401,10 @@ def szy_vs_halomass(sPs):
         # second legend
         ax2.legend(loc='lower right')
 
-    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
-                             xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
-                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_pre=_draw_data_pre, f_post=_draw_data, legendLoc='upper left', pdf=None)
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                    xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    f_pre=_draw_data_pre, f_post=_draw_data, legendLoc='upper left', pdf=None)
 
 def XrayLum_vs_halomass(sPs):
     """ Plot X-ray luminosity vs halo mass. """
@@ -1446,10 +1446,10 @@ def XrayLum_vs_halomass(sPs):
         legend2 = ax.legend(handles, labels, borderpad=0.4, loc='lower right')
         ax.add_artist(legend2)
 
-    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
-                             xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
-                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_post=_draw_data, legendLoc='upper left', pdf=None)
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                    xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    f_post=_draw_data, legendLoc='upper left', pdf=None)
 
 def smbh_mass_vs_veldisp(sPs):
     """ Plot SMBH mass versus stellar velocity dispersion. """
@@ -1538,10 +1538,10 @@ def smbh_mass_vs_veldisp(sPs):
         legend = ax.legend(handles, labels, loc='lower right')
         ax.add_artist(legend)
 
-    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
-                             xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
-                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_pre=_draw_data, legendLoc='upper left', pdf=None)
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                    xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    f_pre=_draw_data, legendLoc='upper left', pdf=None)
 
 def smbh_mass_vs_halomass(sPs):
     """ Plot SMBH mass versus halo mass (m500c). """
@@ -1617,10 +1617,10 @@ def smbh_mass_vs_halomass(sPs):
         legend = ax.legend(handles, labels, loc='lower right')
         ax.add_artist(legend)
 
-    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
-                             xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
-                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_pre=_draw_data, legendLoc='upper left', pdf=None)
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                    xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    f_pre=_draw_data, legendLoc='upper left', pdf=None)
 
 def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
     """ Plot radial profiles for various quantities. 

@@ -9,12 +9,12 @@ from scipy.signal import savgol_filter
 
 from ..load.data import *
 from ..load.simtxt import sfrTxt
+from ..plot import subhalos
 from ..plot.config import binSize, colors, figsize, linestyles, lw, sKn, sKo
-from ..plot.cosmoGeneral import addRedshiftAgeAxes, quantMedianVsSecondQuant
 from ..plot.driversSizes import galaxyHISizeMass, galaxySizes
-from ..plot.general import plotPhaseSpace2D
+from ..plot import snapshot
 from ..util.helper import iterable, logZeroNaN, running_histogram, running_median
-
+from .subhalos import addRedshiftAgeAxes
 
 def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False, 
                         simRedshift=0.0, dataRedshift=0.0, fig_subplot=[None,None]):
@@ -2080,10 +2080,10 @@ def haloXrayLum(sPs, pdf=None, xlim=[10,12], ylim=[38,45], bolometric=False):
         legend1 = ax.legend([l1], [a15['label']], loc='lower right')
         ax.add_artist(legend1)
 
-    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
-                             xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
-                             scatterPoints=scatterPoints, sizefac=sizefac, 
-                             f_post=_draw_data, legendLoc='upper left', pdf=pdf)
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                    xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
+                    scatterPoints=scatterPoints, sizefac=sizefac, 
+                    f_post=_draw_data, legendLoc='upper left', pdf=pdf)
 
 def haloSynchrotronPower(sPs, pdf=None, xlim=[12.5,15.5], ylim=[19,26]):
     """ Halo total synchrotron power at 1.4 Ghz (VLA configuration) vs M500 (e.g. Marinacci 2017 Fig 15). """
@@ -2113,10 +2113,10 @@ def haloSynchrotronPower(sPs, pdf=None, xlim=[12.5,15.5], ylim=[19,26]):
         legend1 = ax.legend([l1], [c13['label']], loc='lower right')
         ax.add_artist(legend1)
 
-    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
-                             xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
-                             scatterPoints=scatterPoints, sizefac=sizefac, 
-                             f_post=_draw_data, legendLoc='upper left', pdf=pdf)
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                    xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
+                    scatterPoints=scatterPoints, sizefac=sizefac, 
+                    f_post=_draw_data, legendLoc='upper left', pdf=pdf)
 
 def plots():
     """ Plot portfolio of global population comparisons between runs. """
@@ -2226,7 +2226,7 @@ def plots():
     galaxyHISizeMass(sPs, pdf, simRedshift=zZero)
 
     for sP in sPs:
-        plotPhaseSpace2D(sP, xQuant='numdens', yQuant='temp', pdf=pdf) #xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, 
+        snapshot.phaseSpace2d(sP, xQuant='numdens', yQuant='temp', pdf=pdf) #xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, 
 
     # todo: Vmax vs Mstar (tully-fisher) (Torrey Fig 9) (Vog 14b Fig 23) (Schaye Fig 12)
     # todo: Mbaryon vs Mstar (baryonic tully-fisher) (Vog 14b Fig 23)

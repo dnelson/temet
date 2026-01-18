@@ -4,4 +4,3 @@ from . import convert
 from . import erosita
 from . import galaxySample
 #from . import sdss
-#from . import plot

@@ -393,7 +393,7 @@ def hbt_check():
 
 def marc_sigma1():
     """ Test. """
-    from .plot.cosmoGeneral import quantMedianVsSecondQuant
+    from .plot import subhalos
     sP = simParams(run='tng300-1',redshift=0.0)
 
     xQuant = 'sigma1kpc_stars'
@@ -408,9 +408,9 @@ def marc_sigma1():
 
     qRestrictions = [['mstar_30pkpc_log',10.2,np.inf]]
 
-    quantMedianVsSecondQuant(sP, pdf=None, yQuants=[yQuant], xQuant=xQuant, xlim=xlim, ylim=ylim, scatterColor=cQuant,
-        scatterPoints=True, markersize=30, qRestrictions=qRestrictions, clim=clim, ctName=ctName,
-        maxPointsPerDex=maxPointsPerDex)
+    subhalos.median(sP, pdf=None, yQuants=[yQuant], xQuant=xQuant, xlim=xlim, ylim=ylim, scatterColor=cQuant,
+                   scatterPoints=True, markersize=30, qRestrictions=qRestrictions, clim=clim, ctName=ctName,
+                   maxPointsPerDex=maxPointsPerDex)
 
 def exportBoxGrids(sP, partType='dm', partField='mass', nCells=[64,128,256,512]):
     """ Export 3D uniform Cartesian grids, of different resolutions. """

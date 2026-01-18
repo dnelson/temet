@@ -12,14 +12,13 @@ from scipy.signal import savgol_filter
 
 from ...cosmo.cloudy import cloudyIon
 from ...obs.galaxySample import addIonColumnPerSystem, ionCoveringFractions
+from ...plot import snapshot
 from ...plot.config import colors, figsize, linestyles, lw, sKn, sKo
-from ...plot.general import plotHistogram1D, plotPhaseSpace2D, plotSingleRadialProfile
 from ...util.helper import logZeroNaN, running_median
 from ...util.match import match
 from ...util.simParams import simParams
 from ...vis.box import renderBox
 from ...vis.halo import renderSingleHalo
-
 
 def check_box(snap):
     panels = []
@@ -190,9 +189,9 @@ def phase_diagram_ovi():
     smoothSigma = 1.5
     haloIDs = [0] # None for fullbox
 
-    plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloIDs=haloIDs, 
-                     clim=cMinMax, xlim=xMinMax, ylim=yMinMax, 
-                     contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
+    snapshot.phaseSpace2d(sP, ptType, xQuant, yQuant, weights=weights, haloIDs=haloIDs, 
+                          clim=cMinMax, xlim=xMinMax, ylim=yMinMax, 
+                          contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
 
 def phase_diagram_coolingtime():
     # cooling time phase diagram
@@ -211,9 +210,9 @@ def phase_diagram_coolingtime():
     smoothSigma = 1.5
     haloIDs = [0] # None for fullbox
 
-    plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloIDs=haloIDs, 
-                     clim=cMinMax, xlim=xMinMax, ylim=yMinMax, 
-                     contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
+    snapshot.phaseSpace2d(sP, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloIDs=haloIDs, 
+                          clim=cMinMax, xlim=xMinMax, ylim=yMinMax, 
+                          contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
 
 def phase_diagram_vs_L11():
     # phase diagram (gas), comparing L11_FP to L11_12_FP
@@ -233,10 +232,10 @@ def phase_diagram_vs_L11():
     smoothSigma = 1.5
     haloIDs = [0]
 
-    plotPhaseSpace2D(sP1, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloIDs=haloIDs, clim=cMinMax, 
-                     xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
-    plotPhaseSpace2D(sP2, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloIDs=haloIDs, clim=cMinMax, 
-                     xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
+    snapshot.phaseSpace2d(sP1, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloIDs=haloIDs, clim=cMinMax, 
+                          xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
+    snapshot.phaseSpace2d(sP2, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloIDs=haloIDs, clim=cMinMax, 
+                          xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
 
 def phase_diagram_ovi_tng50_comparison():
     # TNG50 analog for comparison
@@ -255,8 +254,8 @@ def phase_diagram_ovi_tng50_comparison():
     hideBelow = True
     smoothSigma = 1.0
 
-    plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloIDs=haloIDs, clim=cMinMax, 
-                     xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
+    snapshot.phaseSpace2d(sP, ptType, xQuant, yQuant, weights=weights, haloIDs=haloIDs, clim=cMinMax, 
+                          xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
 
 def figure1_res_statistics(conf=0):
     """ Figure 1: resolution statistics in mass/size for gas cells, comparing runs. """
@@ -277,17 +276,17 @@ def figure1_res_statistics(conf=0):
 
     if conf == 0:
         # Figure 1, lower left panel
-        plotHistogram1D(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', sfreq0=True, xlim=[2.0,4.7])
+        snapshot.histogram1d(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', sfreq0=True, xlim=[2.0,4.7])
     if conf == 3:
         # unused (cellsize histograms)
-        plotHistogram1D(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='cellsize_kpc', sfreq0=True)
+        snapshot.histogram1d(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='cellsize_kpc', sfreq0=True)
     if conf == 1:
         # Figure 1, lower right panel
-        plotSingleRadialProfile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='cellsize_kpc', 
+        snapshot.profile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='cellsize_kpc', 
             sfreq0=True, xlim=[-0.5,3.0], scope='global')
     if conf == 2:
         # Figure 1, upper panel
-        plotSingleRadialProfile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', 
+        snapshot.profile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', 
             xlim=[2.0,4.7], scope='global')
 
 def tracer_ambient_hot_halo():

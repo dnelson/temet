@@ -17,8 +17,8 @@ from ..util import simParams
 from ..util.helper import running_median, logZeroNaN, nUnique, loadColorTable, sgolay2d, sampleColorTable
 from ..util.match import match
 from ..plot.config import *
-from ..plot.general import plotHistogram1D, plotPhaseSpace2D
-from ..plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
+from ..plot import snapshot
+from ..plot import subhalos
 from ..projects.outflows_analysis import loadRadialMassFluxes
 from ..projects.outflows_vis import subboxOutflowTimeEvoPanels, galaxyMosaic_topN, singleHaloDemonstrationImage
 
@@ -45,35 +45,35 @@ def explore_vrad_halos(sP, haloIDs):
 
         pdf = PdfPages('halo_%s_%d_halo-%d.pdf' % (sP.simName,sP.snap,haloID))
 
-        plotHistogram1D([sP], haloIDs=[haloID], ptType='gas', ptProperty='vrad', 
+        snapshot.histogram1d([sP], haloIDs=[haloID], ptType='gas', ptProperty='vrad', 
             sfreq0=False, ylim=[-6.0,-2.0], xlim=vrad_lim, pdf=pdf)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', haloIDs=[haloID], pdf=pdf, **commonOpts)
+        snapshot.phaseSpace2d(sP, partType='gas', xQuant='numdens', haloIDs=[haloID], pdf=pdf, **commonOpts)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='rad', haloIDs=[haloID], pdf=pdf, **commonOpts)
+        snapshot.phaseSpace2d(sP, partType='gas', xQuant='rad', haloIDs=[haloID], pdf=pdf, **commonOpts)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='rad', haloIDs=[haloID], pdf=pdf, 
+        snapshot.phaseSpace2d(sP, partType='gas', xQuant='rad', haloIDs=[haloID], pdf=pdf, 
             yQuant='vrelmag', ylim=[0,3000], nBins=nBins, clim=clim)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc_linear', haloIDs=[haloID], pdf=pdf, 
+        snapshot.phaseSpace2d(sP, partType='gas', xQuant='rad_kpc_linear', haloIDs=[haloID], pdf=pdf, 
             yQuant='vrad', ylim=vrad_lim, nBins=nBins, clim=[-4.5,-7.0])
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='rad', haloIDs=[haloID], pdf=pdf, sfreq0=True, **commonOpts)
+        snapshot.phaseSpace2d(sP, partType='gas', xQuant='rad', haloIDs=[haloID], pdf=pdf, sfreq0=True, **commonOpts)
 
-        plotPhaseSpace2D(sP, partType='wind_real', xQuant='rad', haloIDs=[haloID], pdf=pdf, **commonOpts)
+        snapshot.phaseSpace2d(sP, partType='wind_real', xQuant='rad', haloIDs=[haloID], pdf=pdf, **commonOpts)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='temp', haloIDs=[haloID], pdf=pdf, **commonOpts)
+        snapshot.phaseSpace2d(sP, partType='gas', xQuant='temp', haloIDs=[haloID], pdf=pdf, **commonOpts)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='temp', yQuant='vrad', ylim=vrad_lim, nBins=nBins, 
+        snapshot.phaseSpace2d(sP, partType='gas', xQuant='temp', yQuant='vrad', ylim=vrad_lim, nBins=nBins, 
             meancolors=['rad'], weights=None, haloIDs=[haloID], pdf=pdf)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='vrad', ylim=vrad_lim, nBins=nBins, 
+        snapshot.phaseSpace2d(sP, partType='gas', xQuant='numdens', yQuant='vrad', ylim=vrad_lim, nBins=nBins, 
             meancolors=['temp'], weights=None, haloIDs=[haloID], pdf=pdf)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='rad', yQuant='vrad', ylim=vrad_lim, nBins=nBins, 
+        snapshot.phaseSpace2d(sP, partType='gas', xQuant='rad', yQuant='vrad', ylim=vrad_lim, nBins=nBins, 
             meancolors=['temp'], weights=None, haloIDs=[haloID], pdf=pdf)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', nBins=nBins, 
+        snapshot.phaseSpace2d(sP, partType='gas', xQuant='numdens', yQuant='temp', nBins=nBins, 
             meancolors=['vrad'], weights=None, haloIDs=[haloID], clim=vrad_lim, pdf=pdf)
 
         pdf.close()
@@ -2707,9 +2707,9 @@ def paperPlots(sPs=None):
             ax.plot(rad_code[1:], vesc[1:], '-', lw=lw, color='#000000', alpha=0.5)
             #ax.text(rad_code[-17], vesc[-17]*1.02, '$v_{\\rm esc}(r)$', color='#000000', alpha=0.5, fontsize=18.0, va='bottom', rotation=-4.0)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc', xlim=[0.0,2.0], haloIDs=[haloID],
+        snapshot.phaseSpace2d(sP, partType='gas', xQuant='rad_kpc', xlim=[0.0,2.0], haloIDs=[haloID],
             yQuant=yQuant, ylim=ylim, nBins=nBins, normColMax=normColMax, clim=clim, median=False, f_post=f_post)
-        #plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc_linear', xlim=[0,80], haloIDs=[haloID],
+        #snapshot.phaseSpace2d(sP, partType='gas', xQuant='rad_kpc_linear', xlim=[0,80], haloIDs=[haloID],
         #    yQuant=yQuant, ylim=ylim, nBins=nBins, normColMax=normColMax, clim=clim, f_post=f_post)
 
     if 0:
@@ -2767,7 +2767,7 @@ def paperPlots(sPs=None):
 
         pdf = PdfPages('histo2d_x=%s_y=%s_c=%s_%s_%d.pdf' % (xQuant,yQuant,cQuant,sP.simName,sP.snap))
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, yQuant=yQuant, fig_subplot=[fig,111], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, fig_subplot=[fig,111], pdf=pdf, **params)
         pdf.close()
 
         # inset: trend of relative vout with delta_MS for two M* slices
@@ -2781,8 +2781,8 @@ def paperPlots(sPs=None):
         yQuant  = cQuant #'vout_50_20kpc'
 
         pdf = PdfPages('slice_%s_%d_x=%s_y=%s_s=%s_%s.pdf' % (sP.simName,sP.snap,xQuant,yQuant,sQuant,css))
-        quantSlice1D([sP], xQuant=xQuant, yQuants=[yQuant], sQuant=sQuant, 
-                     sRange=sRange, xlim=xlim, yRel=yRel, sizefac=sizefac, cenSatSelect=css, pdf=pdf)
+        subhalos.slice([sP], xQuant=xQuant, yQuants=[yQuant], sQuant=sQuant, 
+                       sRange=sRange, xlim=xlim, yRel=yRel, sizefac=sizefac, cenSatSelect=css, pdf=pdf)
         pdf.close()
 
     if 0:
@@ -2801,7 +2801,7 @@ def paperPlots(sPs=None):
 
         pdf = PdfPages('histofrac2d_x=%s_y=%s_c=%s_%s_%d.pdf' % (xQuant,yQuant,cQuant,sP.simName,sP.snap))
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, xQuant=xQuant, yQuant=yQuant, fig_subplot=[fig,111], pdf=pdf, **params)
+        subhalos.histogram2d(sP, xQuant=xQuant, yQuant=yQuant, fig_subplot=[fig,111], pdf=pdf, **params)
         pdf.close()
 
     if 0:
@@ -3019,15 +3019,15 @@ def paperPlots(sPs=None):
             # individual plot per y-quantity:
             pdf = PdfPages('medianTrends_%s_x=%s_%s_slice=%s.pdf' % (sPs[0].simName,xQuant,css,priQuant))
             for yQuant in quants:
-                quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
-                                         sQuant=priQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
+                subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
+                                sQuant=priQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
             pdf.close()
 
             # individual plot per s-quantity:
             pdf = PdfPages('medianTrends_%s_x=%s_%s_y=%s.pdf' % (sPs[0].simName,xQuant,css,priQuant))
             for sQuant in quants:
-                quantMedianVsSecondQuant(sPs, yQuants=[priQuant], xQuant=xQuant, cenSatSelect=css,
-                                         sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
+                subhalos.median(sPs, yQuants=[priQuant], xQuant=xQuant, cenSatSelect=css,
+                                sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
 
             pdf.close()
 
@@ -3051,7 +3051,7 @@ def paperPlots(sPs=None):
         for xQuant in xQuants:
             pdf = PdfPages('histo2d_x=%s_y=%s_c=%s_%s_%d.pdf' % (xQuant,yQuant,cQuant,sP.simName,sP.snap))
             fig = plt.figure(figsize=figsize_loc)
-            quantHisto2D(sP, xQuant=xQuant, yQuant=yQuant, fig_subplot=[fig,111], pdf=pdf, **params)
+            subhalos.histogram2d(sP, xQuant=xQuant, yQuant=yQuant, fig_subplot=[fig,111], pdf=pdf, **params)
             pdf.close()
 
     # exploration: 2d histos of everything vs M*, color on e.g. eta/vout
@@ -3075,12 +3075,12 @@ def paperPlots(sPs=None):
 
                     pdf = PdfPages('histo2d_x=%s_c=%s_set-%d_%s_%d%s.pdf' % (xQuant,cQuant,j,sP.simName,sP.snap,'_rel' if cRel is not None else ''))
                     fig = plt.figure(figsize=figsize_loc)
-                    quantHisto2D(sP, yQuant=yQuants[0], fig_subplot=[fig,321], pdf=pdf, **params)
-                    quantHisto2D(sP, yQuant=yQuants[1], fig_subplot=[fig,322], pdf=pdf, **params)
-                    quantHisto2D(sP, yQuant=yQuants[2], fig_subplot=[fig,323], pdf=pdf, **params)
-                    quantHisto2D(sP, yQuant=yQuants[3], fig_subplot=[fig,324], pdf=pdf, **params)
-                    quantHisto2D(sP, yQuant=yQuants[4], fig_subplot=[fig,325], pdf=pdf, **params)
-                    quantHisto2D(sP, yQuant=yQuants[5], fig_subplot=[fig,326], pdf=pdf, **params)
+                    subhalos.histogram2d(sP, yQuant=yQuants[0], fig_subplot=[fig,321], pdf=pdf, **params)
+                    subhalos.histogram2d(sP, yQuant=yQuants[1], fig_subplot=[fig,322], pdf=pdf, **params)
+                    subhalos.histogram2d(sP, yQuant=yQuants[2], fig_subplot=[fig,323], pdf=pdf, **params)
+                    subhalos.histogram2d(sP, yQuant=yQuants[3], fig_subplot=[fig,324], pdf=pdf, **params)
+                    subhalos.histogram2d(sP, yQuant=yQuants[4], fig_subplot=[fig,325], pdf=pdf, **params)
+                    subhalos.histogram2d(sP, yQuant=yQuants[5], fig_subplot=[fig,326], pdf=pdf, **params)
                     pdf.close()
 
     # exploration: 2d histos of new quantities (vout,eta,BH_BolLum,etc) vs M*, colored by everything else
@@ -3104,12 +3104,12 @@ def paperPlots(sPs=None):
 
                     pdf = PdfPages('histo2d_x=%s_y=%s_set-%d_%s_%d%s.pdf' % (xQuant,yQuant,j,sP.simName,sP.snap,'_rel' if cRel is not None else ''))
                     fig = plt.figure(figsize=figsize_loc)
-                    quantHisto2D(sP, cQuant=cQuants[0], fig_subplot=[fig,321], pdf=pdf, **params)
-                    quantHisto2D(sP, cQuant=cQuants[1], fig_subplot=[fig,322], pdf=pdf, **params)
-                    quantHisto2D(sP, cQuant=cQuants[2], fig_subplot=[fig,323], pdf=pdf, **params)
-                    quantHisto2D(sP, cQuant=cQuants[3], fig_subplot=[fig,324], pdf=pdf, **params)
-                    quantHisto2D(sP, cQuant=cQuants[4], fig_subplot=[fig,325], pdf=pdf, **params)
-                    quantHisto2D(sP, cQuant=cQuants[5], fig_subplot=[fig,326], pdf=pdf, **params)
+                    subhalos.histogram2d(sP, cQuant=cQuants[0], fig_subplot=[fig,321], pdf=pdf, **params)
+                    subhalos.histogram2d(sP, cQuant=cQuants[1], fig_subplot=[fig,322], pdf=pdf, **params)
+                    subhalos.histogram2d(sP, cQuant=cQuants[2], fig_subplot=[fig,323], pdf=pdf, **params)
+                    subhalos.histogram2d(sP, cQuant=cQuants[3], fig_subplot=[fig,324], pdf=pdf, **params)
+                    subhalos.histogram2d(sP, cQuant=cQuants[4], fig_subplot=[fig,325], pdf=pdf, **params)
+                    subhalos.histogram2d(sP, cQuant=cQuants[5], fig_subplot=[fig,326], pdf=pdf, **params)
                     pdf.close()
 
     # exploration: outlier check (for Fig 14 discussion/text)
@@ -3132,5 +3132,5 @@ def paperPlots(sPs=None):
                 for cQuant in cQuants:
                     pdf = PdfPages('histo2d_x=%s_y=%s_c=%s_%s_%d.pdf' % (xQuant,yQuant,cQuant,sP.simName,sP.snap))
                     fig = plt.figure(figsize=figsize_loc)
-                    quantHisto2D(sP, xQuant=xQuant, yQuant=yQuant, cQuant=cQuant, fig_subplot=[fig,111], pdf=pdf, **params)
+                    subhalos.histogram2d(sP, xQuant=xQuant, yQuant=yQuant, cQuant=cQuant, fig_subplot=[fig,111], pdf=pdf, **params)
                     pdf.close()

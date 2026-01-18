@@ -85,7 +85,7 @@ and stellar mass, the "mass-metallicity relation" (MZR).
 
     sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    temet.plot.cosmoGeneral.quantMedianVsSecondQuant(sim, 'Z_gas', 'mstar_30pkpc')
+    temet.plot.subhalos.median(sim, 'Z_gas', 'mstar_30pkpc')
 
 This produces a PDF figure named ``medianQuants_TNG100-1_Z_gas_mstar_30pkpc_cen.pdf`` in the current working 
 directory. It shows the mass-metallicity relation of TNG100 galaxies at :math:`z=0`, and looks like this:
@@ -98,7 +98,7 @@ include individual subhalos as colored points, coloring based on gas fraction::
 
     sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    temet.plot.cosmoGeneral.quantMedianVsSecondQuant(sim, 'Z_gas', 'mstar_30pkpc', 
+    temet.plot.subhalos.median(sim, 'Z_gas', 'mstar_30pkpc', 
       xlim=[8.0, 11.5], scatterColor='fgas2')
 
 This produces the following figure, which highlights how lower mass galaxies have high gas fractions of 
@@ -130,7 +130,7 @@ the relationship between gas pressure and magnetic field strength at :math:`z=0`
 
     sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    temet.plot.general.plotPhaseSpace2D(sim, 'gas', xQuant='pres', yQuant='bmag')
+    temet.plot.snapshot.phaseSpace2d(sim, 'gas', xQuant='pres', yQuant='bmag')
 
 .. image:: _static/first_steps_phase2D_1.png
 
@@ -142,7 +142,7 @@ matter particles within the tenth most massive halo of TNG50-1 at :math:`z=2`::
     haloIDs = [9]
 
     opts = {'xlim':[-0.6,0.3], 'ylim':[-800,600], 'clim':[-4.7,-2.3], 'ctName':'inferno'}
-    temet.plot.general.plotPhaseSpace2D(sim, 'dm', xQuant='rad_rvir', yQuant='vrad', haloIDs=haloIDs, **opts)
+    temet.plot.snapshot.phaseSpace2d(sim, 'dm', xQuant='rad_rvir', yQuant='vrad', haloIDs=haloIDs, **opts)
 
 .. image:: _static/first_steps_phase2D_2.png
 

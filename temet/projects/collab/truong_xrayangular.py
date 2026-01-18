@@ -13,17 +13,16 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 from ...plot.config import figsize, linestyles, lw, percs
+from ...util import simParams
 from ...util.helper import closest, dist_theta_grid, running_median, sampleColorTable
 from ...vis.box import renderBox
 from ...vis.halo import renderSingleHalo
-from ..util.simParams import simParams
 
 valMinMaxQuant = {'coldens' : [18.5, 20.0], # in case we render actual quantities instead of deltas
                   'xray_lum_05-2kev' : [33, 37],
                   'temp': [6.2, 6.6],
                   'xray_lum': [33, 37],
-                  'metal_solar':[-0.5, 0.0],
-                  'xray_lum_05-2kev_nomet':[33, 37]}
+                  'metal_solar':[-0.5, 0.0]}
 
 def _get():
     """ TEST. """
@@ -113,7 +112,7 @@ def _get_panels(conf, stack2Dmaps, median, renderIndiv):
     if conf == 4:
         panels = [{'partType':'gas', 'partField':'delta_metal_solar', 'valMinMax':[-0.2,0.2]}]
     if conf == 5:
-        panels = [{'partType':'gas', 'partField':'delta_xray_lum_05-2kev_nomet', 'valMinMax':[-0.3,0.3]}]
+        panels = [{'partType':'gas', 'partField':'delta_xray_lum_05-2kev', 'valMinMax':[-0.3,0.3]}]
         if median: panels[0]['valMinMax'][1] = 0.1
 
     # or: create normal projections of original quantities, stack, and then remove radial profile in 2D?
@@ -484,7 +483,6 @@ def singleHaloImage():
 
     panels = [ {'partField':'xray_lum', 'valMinMax':[33, 37]},
                {'partField':'xray_lum_05-2kev', 'valMinMax':[33, 37]},
-               {'partField':'xray_lum_05-2kev_nomet', 'valMinMax':[33, 37]},
                {'partField':'xray_lum_0.5-2.0kev', 'valMinMax':[33, 37]} ]
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)

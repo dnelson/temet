@@ -1,14 +1,14 @@
 """ Plotting routines. """
-#from . import clustering
-from . import cosmoGeneral
+from . import clustering
 from . import cosmoMisc
 from . import drivers
 from . import driversObs
 from . import driversSizes
-from . import general
 from . import meta
 from . import perf
 from . import quantities
+from . import snapshot
+from . import subhalos
 from .config import *
 
 import pathlib

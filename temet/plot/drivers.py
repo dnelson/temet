@@ -4,13 +4,11 @@ Drivers (i.e. examples) of plots using the generalized functionality.
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 
-from ..plot.cosmoGeneral import quantHisto2D, quantMedianVsSecondQuant, quantSlice1D
-from ..plot.general import plotPhaseSpace2D, plotStackedRadialProfiles1D, plotHistogram1D, \
-    plotParticleMedianVsSecondQuant
+from ..plot import snapshot, subhalos
 from ..plot.quantities import quantList
 from ..util import simParams
 
-# cosmoGeneral
+# --- subhalos ---
 
 def plots():
     """ Driver (exploration 2D histograms, vary over all known quantities as cQuant). """
@@ -39,9 +37,9 @@ def plots():
             pdf = PdfPages('galaxy_2dhistos_%s_%d_%s_%s_%s.pdf' % (sP.simName,sP.snap,yQuant,xQuant,css))
 
             for cQuant in quants:
-                quantHisto2D(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim, minCount=minCount,
-                             nBins=nBins, qRestrictions=qRestrictions, medianLine=medianLine, cenSatSelect=css,
-                             cQuant=cQuant, cStatistic=cStatistic, cRel=cRel, pdf=pdf)
+                subhalos.histogram2d(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim, minCount=minCount,
+                                     nBins=nBins, qRestrictions=qRestrictions, medianLine=medianLine, cenSatSelect=css,
+                                     cQuant=cQuant, cStatistic=cStatistic, cRel=cRel, pdf=pdf)
 
             pdf.close()
 
@@ -61,7 +59,7 @@ def plots_explore(sP):
         pdf = PdfPages('2dhistos_%s_%d_x=%s_y=all_c=%s_%s.pdf' % (sP.simName,sP.snap,xQuant,cQuant,css))
 
         for yQuant in yQuants:
-            quantHisto2D(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, cenSatSelect=css, cQuant=cQuant, pdf=pdf)
+            subhalos.histogram2d(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, cenSatSelect=css, cQuant=cQuant, pdf=pdf)
 
         pdf.close()
 
@@ -84,15 +82,15 @@ def plots2():
             ('-'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
 
         # all quantities on one multi-panel page:
-        #quantSlice1D(sPs, xQuant=xQuant, yQuants=quants, sQuant=sQuant,
-        #             sRange=sRange, cenSatSelect=css, pdf=pdf)
-        #quantSlice1D(sPs, xQuant=xQuant, yQuants=quantsTr, sQuant=sQuant,
-        #             sRange=sRange, cenSatSelect=css, pdf=pdf)
+        #subhalos.slice(sPs, xQuant=xQuant, yQuants=quants, sQuant=sQuant,
+        #  sRange=sRange, cenSatSelect=css, pdf=pdf)
+        #subhalos.slice(sPs, xQuant=xQuant, yQuants=quantsTr, sQuant=sQuant,
+        #  sRange=sRange, cenSatSelect=css, pdf=pdf)
 
         # one page per quantity:
         for yQuant in quants + quantsTr:
-            quantSlice1D(sPs, xQuant=xQuant, yQuants=[yQuant], sQuant=sQuant,
-                         sRange=sRange, cenSatSelect=css, pdf=pdf)
+            subhalos.slice(sPs, xQuant=xQuant, yQuants=[yQuant], sQuant=sQuant,
+                           sRange=sRange, cenSatSelect=css, pdf=pdf)
 
         pdf.close()
 
@@ -119,18 +117,18 @@ def plots3():
             ('-'.join([sP.simName for sP in sPs]),xQuant,css,sQuant))
 
         # all quantities on one multi-panel page:
-        quantMedianVsSecondQuant(sPs, yQuants=yQuants, xQuant=xQuant, cenSatSelect=css,
-                                 sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
+        subhalos.median(sPs, yQuants=yQuants, xQuant=xQuant, cenSatSelect=css,
+                        sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
 
         # individual plot per y-quantity:
         #for yQuant in yQuants:
-        #    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
-        #                             sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
+        #    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
+        #      sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
 
         # individual plot per s-quantity:
         #for sQuant in sQuants:
-        #    quantMedianVsSecondQuant(sPs, yQuants=yQuant, xQuant=xQuant, cenSatSelect=css,
-        #                             sQuant=[sQuant], sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
+        #    subhalos.median(sPs, yQuants=yQuant, xQuant=xQuant, cenSatSelect=css,
+        #      sQuant=[sQuant], sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, pdf=pdf)
 
         pdf.close()
 
@@ -165,12 +163,12 @@ def plots4():
         (xQuant,yQuant,cenSatSelect,sQuant,sPs[0].simName,sPs[0].redshift))
 
     # one quantity
-    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect,
-                             #sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs,
-                             qRestrictions=qRestrictions,
-                             xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                             scatterPoints=scatterPoints, scatterColor=scatterColor, maxPointsPerDex=maxPointsPerDex,
-                             markSubhaloIDs=None, filterFlag=filterFlag, pdf=pdf)
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect,
+                    #sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs,
+                    qRestrictions=qRestrictions,
+                    xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, maxPointsPerDex=maxPointsPerDex,
+                    markSubhaloIDs=None, filterFlag=filterFlag, pdf=pdf)
 
     pdf.close()
 
@@ -207,11 +205,11 @@ def plots5():
         (xQuant,yQuant,cenSatSelect,sQuant,sPs[0].simName,sPs[0].redshift))
 
     # one quantity
-    quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect,
-                             qRestrictions=qRestrictions,
-                             xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                             scatterPoints=scatterPoints, scatterColor=scatterColor, maxPointsPerDex=maxPointsPerDex,
-                             markSubhaloIDs=None, filterFlag=filterFlag, pdf=pdf)
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect,
+                    qRestrictions=qRestrictions,
+                    xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, maxPointsPerDex=maxPointsPerDex,
+                    markSubhaloIDs=None, filterFlag=filterFlag, pdf=pdf)
 
     pdf.close()
 
@@ -254,9 +252,9 @@ def plots_uvj():
             pdf = PdfPages('galaxy_2dhistos_%s_%d_%s_%s_%s_%s.pdf' % (sP.simName,sP.snap,yQuant,xQuant,cs,css))
 
             for cQuant in quants:
-                quantHisto2D(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim,
-                             cNaNZeroToMin=cNaNZeroToMin, minCount=minCount, medianLine=medianLine, cenSatSelect=css,
-                             cQuant=cQuant, cStatistic=cs, qRestrictions=qRestrictions, pStyle=pStyle, pdf=pdf)
+                subhalos.histogram2d(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim,
+                                     cNaNZeroToMin=cNaNZeroToMin, minCount=minCount, medianLine=medianLine, cenSatSelect=css,
+                                     cQuant=cQuant, cStatistic=cs, qRestrictions=qRestrictions, pStyle=pStyle, pdf=pdf)
 
             pdf.close()
 
@@ -291,14 +289,14 @@ def plots_tng50_structural(rel=False, sP=None):
         for cQuant in quants_gas + quants_stars + yQuants:
             if cQuant == yQuant: continue
 
-            quantHisto2D(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, clim=clim,
-                         cenSatSelect=css, cQuant=cQuant, nBins=nBins, cRel=cRel, pdf=pdf)
+            subhalos.histogram2d(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, clim=clim,
+                                 cenSatSelect=css, cQuant=cQuant, nBins=nBins, cRel=cRel, pdf=pdf)
         pdf.close()
 
     # return with all cached data, can be passed back in for rapid re-plotting
     return sP
 
-# general
+# --- snapshot ---
 
 def compareRuns_PhaseDiagram():
     """ Driver. Compare a series of runs in a PDF booklet of phase diagrams. """
@@ -323,7 +321,7 @@ def compareRuns_PhaseDiagram():
         sP = simParams(res=512,run='tng',redshift=redshift,variant=variant)
         if sP.simName == 'DM only': continue
         print(variant,sP.simName)
-        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, pdf=pdf)
+        snapshot.phaseSpace2d(sP, xQuant=xQuant, yQuant=yQuant, pdf=pdf)
 
     pdf.close()
 
@@ -361,7 +359,7 @@ def oneRun_PhaseDiagram(redshift=None, snaps=None, hInd=10677, res=13, variant='
 
         pdf = PdfPages('phaseDiagram_%s_%s_%d.pdf' % (yQuant,sim.simName,snap))
 
-        plotPhaseSpace2D(sim, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs, qRestrictions=qRestrictions,
+        snapshot.phaseSpace2d(sim, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs, qRestrictions=qRestrictions,
             xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, pdf=pdf)
 
         pdf.close()
@@ -387,9 +385,9 @@ def oneRun_tempcheck():
 
         pdf = PdfPages('phaseCheck_%s_%d.pdf' % (sP.simName,snap))
 
-        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant='temp', 
+        snapshot.phaseSpace2d(sP, xQuant=xQuant, yQuant='temp', 
             xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, pdf=pdf)
-        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant='temp_old', 
+        snapshot.phaseSpace2d(sP, xQuant=xQuant, yQuant='temp_old', 
             xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, pdf=pdf)
 
         pdf.close()
@@ -412,7 +410,7 @@ def compareRuns_RadProfiles():
         subhaloIDs.append( w[0] )
 
     for field in ['temp']: #,'dens','P_gas','z_solar']:
-        plotStackedRadialProfiles1D(sPs, subhaloIDs=subhaloIDs, ptType='gas', ptProperty=field, weighting='O VI mass')
+        snapshot.profilesStacked1d(sPs, subhaloIDs=subhaloIDs, ptType='gas', ptProperty=field, weighting='O VI mass')
 
 def compareHaloSets_RadProfiles():
     """ Driver. Compare median radial profile of a quantity, differentiating between two different 
@@ -462,8 +460,8 @@ def compareHaloSets_RadProfiles():
     proj2D = [2, 10.0] # z-axis, 10 code units depth = 10 pkpc at z=2
 
     for field in fields:
-        plotStackedRadialProfiles1D(sPs, subhaloIDs=subhaloIDs, ptType=ptType, ptProperty=field, op=op, 
-                                    weighting=weighting, proj2D=proj2D, plotIndiv=plotIndiv)
+        snapshot.profilesStacked1d(sPs, subhaloIDs=subhaloIDs, ptType=ptType, ptProperty=field, op=op, 
+                                   weighting=weighting, proj2D=proj2D, plotIndiv=plotIndiv)
 
 def compareHaloSets_1DHists():
     """ Driver. Compare 1D histograms of a quantity, overplotting several halos. One run. """
@@ -484,7 +482,7 @@ def compareHaloSets_1DHists():
         subhaloIDs.append( w2[0][0:5] )
 
     for field in ['temp']: #['tcool','vrad']:
-        plotHistogram1D(sPs, subhaloIDs=subhaloIDs, ptType='gas', ptProperty=field)
+        snapshot.histogram1d(sPs, subhaloIDs=subhaloIDs, ptType='gas', ptProperty=field)
 
 def singleHaloProperties():
     """ Driver. Several phase/radial profile plots for a single halo. """
@@ -503,7 +501,7 @@ def singleHaloProperties():
     rMin = None
     rMax = None
 
-    plotParticleMedianVsSecondQuant([sP], partType=partType, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs,
+    snapshot.median([sP], partType=partType, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs,
                                    radMinKpc=rMin, radMaxKpc=rMax)
 
 def compareRuns_particleQuant():
@@ -522,7 +520,7 @@ def compareRuns_particleQuant():
         if sP.simName == 'DM only': continue
         sPs.append(sP)
 
-    plotParticleMedianVsSecondQuant(sPs, partType=ptType, xQuant=xQuant, yQuant=yQuant)
+    snapshot.median(sPs, partType=ptType, xQuant=xQuant, yQuant=yQuant)
 
 def coolingPhase():
     """ Driver. """
@@ -542,7 +540,7 @@ def coolingPhase():
     pdf = PdfPages('phaseDiagram_B_%s_%d.pdf' % (sP.simName,sP.snap))
 
     for cQuant in cQuants:
-        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, meancolors=[cQuant], xlim=xlim, ylim=ylim, 
+        snapshot.phaseSpace2d(sP, xQuant=xQuant, yQuant=yQuant, meancolors=[cQuant], xlim=xlim, ylim=ylim, 
                          weights=None, hideBelow=False, haloIDs=None, pdf=pdf)
 
     pdf.close()

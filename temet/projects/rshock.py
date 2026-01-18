@@ -18,7 +18,7 @@ from ..util import simParams
 from ..util.helper import running_median, logZeroNaN, logZeroSafe, loadColorTable, last_nonzero
 from ..util.treeSearch import calcParticleIndices, buildFullTree, calcHsml, calcQuantReduction
 from ..plot.config import *
-from ..plot.cosmoGeneral import quantHisto2D
+from ..plot import subhalos
 from ..vis.halo import renderSingleHalo
 
 def plotHealpixShells(rad, data, label, rads=None, clim=None, ctName='viridis', saveFilename='plot.pdf'):
@@ -926,7 +926,7 @@ def paperPlots():
 
         pdf = PdfPages('histo2d_x=%s_y=%s_c=%s_%s_%d.pdf' % (xQuant,yQuant,cQuant,sP.simName,sP.snap))
         fig = plt.figure(figsize=figsize)
-        quantHisto2D(sP, yQuant=yQuant, fig_subplot=[fig,111], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, fig_subplot=[fig,111], pdf=pdf, **params)
         pdf.close()
 
     # figure X: explore 5rvir vs 10rvir max radius

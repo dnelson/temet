@@ -1,16 +1,18 @@
 """
 Observational data importers/converters, between different formats, etc.
 """
-import numpy as np
-import h5py
-from os.path import isdir, isfile
 import glob
-import matplotlib.pyplot as plt
 import multiprocessing as mp
+from os.path import isdir, isfile
 
-from ..util.helper import reportMemory
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
 from astropy.io import fits as pyfits
-from ..plot.config import *
+
+from ..plot.config import figsize, sKn, sKo
+from ..util.helper import reportMemory
+
 
 def keck_esi_kodiaq_dr3():
     """ Convert the original KODIAQ DR3 of KECK-ESI QSO spectra into a single HDF5 file.
@@ -199,7 +201,7 @@ def keck_hires_kodiaq_dr2():
         fOut[obj_name + '/flux' + str(count)] = loc_flux
         fOut[obj_name + '/error' + str(count)] = loc_error
         fOut[obj_name + '/wave' + str(count)] = wave
-        
+
         fOut[obj_name + '/flux' + str(count)].attrs['decker'] = DECKER
         fOut[obj_name + '/flux' + str(count)].attrs['deckraw'] = DECKRAW
         fOut[obj_name + '/flux' + str(count)].attrs['wave_min'] = WAVEMIN
@@ -218,7 +220,7 @@ def plot_dr3_spectrum(path='/virgotng/mpia/obs/KECK/KODIAQ_DR3.hdf5', name='J214
     with h5py.File(path,'r') as f:
         names = f['qso_name'][()]
         w = np.where(names == name.encode('utf-8'))[0][0]
-        
+
         print(f'Found [{name}] at index [{w}], loading.')
         flux = f['flux'][w,:]
         error = f['error'][w,:]
@@ -237,7 +239,7 @@ def plot_dr3_spectrum(path='/virgotng/mpia/obs/KECK/KODIAQ_DR3.hdf5', name='J214
     # flux is calibrated, and in units of erg/s/cm^2/Ang
     flux *= 1e16
     ax.set_ylabel('Flux [10$^{-16}$ erg cm$^{-2}$ s$^{-1}$ $\\rm{\\AA}^{-1}$]')
-    
+
     ax.plot(wave, flux, lw=1, label=name)
     ax.set_ylim([0, flux.max()*1.5])
 
@@ -270,7 +272,7 @@ def plot_dr2_spectrum(path='/virgotng/mpia/obs/KECK/KODIAQ_DR2.hdf5', name='J220
 
     # flux is continuum normalized
     ax.set_ylabel('Normalized Flux')
-    
+
     ax.plot(wave, savgol_filter(flux,sKn*3,sKo), lw=1, label=name)
     ax.set_ylim([0, 1.5])
 
@@ -420,12 +422,12 @@ def xqr30():
             'NIR':np.zeros((nspec, max_nwave['NIR']), dtype='float32')}
     error = {'VIS':np.zeros((nspec, max_nwave['VIS']), dtype='float32'),
              'NIR':np.zeros((nspec, max_nwave['NIR']), dtype='float32')}
-    
+
     flux_nocorr = {'VIS':np.zeros((nspec, max_nwave['VIS']), dtype='float32'),
                    'NIR':np.zeros((nspec, max_nwave['NIR']), dtype='float32')}
     error_nocorr = {'VIS':np.zeros((nspec, max_nwave['VIS']), dtype='float32'),
                     'NIR':np.zeros((nspec, max_nwave['NIR']), dtype='float32')}
-    
+
     for spec_name in ['VIS','NIR']:
         flux[spec_name].fill(np.nan)
         error[spec_name].fill(np.nan)
@@ -474,9 +476,9 @@ def xqr30():
 
     # open output file
     filename = basepath + '%s.hdf5' % metadata['dataset_name']
-    
+
     with h5py.File(filename,'w') as fOut:
-    
+
         # write header and metadata
         head = fOut.create_group('Header')
         for key, item in metadata.items():
@@ -534,7 +536,7 @@ def hsla():
         target_name = path.split('/')[-1]
 
         spectra = glob.glob(path + '/*.fits')
-        
+
         for spec in spectra:
             spec_name = spec.split('/')[-1].replace('.fits','')
             _, _, grating, _, lifetime = spec_name.split('_')
@@ -584,7 +586,7 @@ def hsla():
     # allocate
     flux = {}
     error = {}
-    
+
     for grating in wave.keys():
         flux[grating] = np.zeros((counts[grating], wave[grating].size), dtype='float32')
         error[grating] = np.zeros((counts[grating], wave[grating].size), dtype='float32')
@@ -597,7 +599,7 @@ def hsla():
         # load
         if i % 100 == 0: print(f'[{i:3d} of {len(paths):3d}] {path}')
         spectra = glob.glob(path + '/*.fits')
-        
+
         for spec in spectra:
             _, _, grating, _, lifetime = spec.split('_')
 
@@ -623,9 +625,9 @@ def hsla():
 
     # open output file
     filename = basepath + '%s.hdf5' % metadata['dataset_name']
-    
+
     with h5py.File(filename,'w') as fOut:
-    
+
         # write header and metadata
         head = fOut.create_group('Header')
         for key, item in metadata.items():
@@ -675,7 +677,7 @@ def sdss_dr17_spectra():
     metadata['dataset_description'] = 'Sloan Digital Sky Survey (SDSS) DR17. ' + \
                                       'All (final) spectra from SDSS and BOSS instruments. ' + \
                                       'Includes all targets: galaxies, stars, and quasars.'
-    
+
     metadata['dataset_reference'] = 'Accetta+2022 (https://www.sdss4.org/dr17/)'
 
     filename = '/virgotng/mpia/obs/SDSS/%s.hdf5' % metadata['dataset_name']
@@ -723,7 +725,7 @@ def sdss_dr17_spectra():
             attrs[name].fill(np.nan)
         elif dtype in ['int8', 'int16', 'int32', 'int64']:
             attrs[name].fill(-1)
-            
+
     # async callback approach
     def _callback(local_data): #(i, header, data, data_a):
 
@@ -779,7 +781,7 @@ def sdss_dr17_spectra():
 
     # open output file
     with h5py.File(filename,'w') as fOut:
-    
+
         # write header and metadata
         head = fOut.create_group('Header')
         for key, item in metadata.items():
@@ -820,5 +822,3 @@ def sdss_dr17_spectra():
     fOut.close()
 
     print('Wrote: [%s]' % filename)
-
-    

@@ -19,7 +19,7 @@ from ..util.match import match
 from ..cosmo.color import loadSimGalColors, calcSDSSColors
 from ..projects.color_analysis import calcColorEvoTracks, characterizeColorMassPlane, colorTransitionTimes, defSimColorModel
 from ..plot.quantities import simSubhaloQuantity, bandMagRange
-from ..plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
+from ..plot import subhalos
 from ..plot.config import figsize, lw, linestyles, pStyle, sKn, sKo, cssLabels, binSize
 
 def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel], 
@@ -2229,12 +2229,12 @@ def paperPlots():
 
         pdf = PdfPages('figure6_%s.pdf' % sP.simName)
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, yQuant=yQuant, cQuant='ssfr', fig_subplot=[fig,321], pdf=pdf, **params)
-        quantHisto2D(sP, yQuant=yQuant, cQuant='Z_gas', fig_subplot=[fig,322], pdf=pdf, **params)
-        quantHisto2D(sP, yQuant=yQuant, cQuant='fgas2', fig_subplot=[fig,323], pdf=pdf, **params)
-        quantHisto2D(sP, yQuant=yQuant, cQuant='stellarage', fig_subplot=[fig,324], pdf=pdf, **params)
-        quantHisto2D(sP, yQuant=yQuant, cQuant='bmag_2rhalf_masswt', fig_subplot=[fig,325], pdf=pdf, **params)
-        quantHisto2D(sP, yQuant=yQuant, cQuant='pratio_halo_masswt', fig_subplot=[fig,326], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant='ssfr', fig_subplot=[fig,321], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant='Z_gas', fig_subplot=[fig,322], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant='fgas2', fig_subplot=[fig,323], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant='stellarage', fig_subplot=[fig,324], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant='bmag_2rhalf_masswt', fig_subplot=[fig,325], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant='pratio_halo_masswt', fig_subplot=[fig,326], pdf=pdf, **params)
         pdf.close()
 
     # figure 7: slice through 2d histo (one property)
@@ -2248,7 +2248,7 @@ def paperPlots():
 
         pdf = PdfPages('figure7_%s_slice_%s_%s-%.1f-%.1f_%s.pdf' % \
             ('_'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
-        quantSlice1D(sPs, xQuant=xQuant, yQuants=[quant], sQuant=sQuant,
+        slice(sPs, xQuant=xQuant, yQuants=[quant], sQuant=sQuant,
                      sRange=sRange, cenSatSelect=css, pdf=pdf)
         pdf.close()
 
@@ -2315,7 +2315,7 @@ def paperPlots():
 
         pdf = PdfPages('figure8_medianTrend_%s_%s-%s_%s.pdf' % \
             ('_'.join([sP.simName for sP in sPs]),xQuant,yQuant,css))
-        quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
+        median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
             f_post=_add_theory_line, pdf=pdf)
         pdf.close()
 
@@ -2401,9 +2401,9 @@ def paperPlots():
 
         pdf = PdfPages('appendix4.pdf')
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(L75, bands, cenSatSelect='all', cQuant=None, fig_subplot=[fig,131], pdf=pdf)
-        quantHisto2D(L75, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132], pdf=pdf)
-        quantHisto2D(L205, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133], pdf=pdf)
+        subhalos.histogram2d(L75, bands, cenSatSelect='all', cQuant=None, fig_subplot=[fig,131], pdf=pdf)
+        subhalos.histogram2d(L75, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132], pdf=pdf)
+        subhalos.histogram2d(L205, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133], pdf=pdf)
         pdf.close()
 
     # supplemental figures:
@@ -2417,12 +2417,12 @@ def paperPlots():
 
         pdf = PdfPages('supp1_%s.pdf' % sP.simName)
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, yQuant=yQuant, cQuant='surfdens1_stars', fig_subplot=[fig,321], pdf=pdf, **params)
-        quantHisto2D(sP, yQuant=yQuant, cQuant='Z_stars', fig_subplot=[fig,322], pdf=pdf, **params)
-        quantHisto2D(sP, yQuant=yQuant, cQuant='Krot_oriented_stars2', fig_subplot=[fig,323], pdf=pdf, **params)
-        quantHisto2D(sP, yQuant=yQuant, cQuant='Krot_oriented_gas2', fig_subplot=[fig,324], pdf=pdf, **params)
-        quantHisto2D(sP, yQuant=yQuant, cQuant='xray_r500', fig_subplot=[fig,325], pdf=pdf, **params)
-        quantHisto2D(sP, yQuant=yQuant, cQuant='size_stars', fig_subplot=[fig,326], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant='surfdens1_stars', fig_subplot=[fig,321], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant='Z_stars', fig_subplot=[fig,322], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant='Krot_oriented_stars2', fig_subplot=[fig,323], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant='Krot_oriented_gas2', fig_subplot=[fig,324], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant='xray_r500', fig_subplot=[fig,325], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant='size_stars', fig_subplot=[fig,326], pdf=pdf, **params)
         pdf.close()
 
     if 0:
@@ -2439,7 +2439,7 @@ def paperPlots():
         for quant in quants:
             pdf = PdfPages('supp2_%s_slice_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
                 ('_'.join([sP.simName for sP in sPs]),quant,xQuant,sQuant,sRange[0],sRange[1],css))
-            quantSlice1D(sPs, xQuant=xQuant, yQuants=[quant], sQuant=sQuant,
+            slice(sPs, xQuant=xQuant, yQuants=[quant], sQuant=sQuant,
                          sRange=sRange, cenSatSelect=css, pdf=pdf)
             pdf.close()
 
@@ -2451,12 +2451,6 @@ def paperPlots():
 
         pdf = PdfPages('supp3_%s.pdf' % sP.simName)
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, yQuant='ssfr', cQuant=None, fig_subplot=[fig,211], pdf=pdf, **params)
-        quantHisto2D(sP, yQuant='ssfr', cQuant='color_C_gr', fig_subplot=[fig,212], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant='ssfr', cQuant=None, fig_subplot=[fig,211], pdf=pdf, **params)
+        subhalos.histogram2d(sP, yQuant='ssfr', cQuant='color_C_gr', fig_subplot=[fig,212], pdf=pdf, **params)
         pdf.close()
-
-    if 0:
-        # individual galaxy time evolution tracks, matched TNG <-> Illustris, multiple quantities
-        from ..plot.compareTwoHalos import illustrisVsTNG_RedEvoComp
-        for candInd in range(10):
-            illustrisVsTNG_RedEvoComp(candInd=candInd)

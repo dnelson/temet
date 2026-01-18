@@ -6,14 +6,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import savgol_filter
 
+from ...plot import snapshot
 from ...plot.config import figsize, lw, sKn, sKo
-from ...plot.general import plotStackedRadialProfiles1D
 from ...util import simParams
 from ...util.helper import logZeroNaN, running_median
 from ...util.rotation import momentOfInertiaTensor, rotationMatricesFromInertiaTensor
-from ...util.simParams import simParams
 from ...vis.halo import renderSingleHalo
-
 
 def writeH2CDDFBand():
     """ Use H2 CDDFs with many variations (TNG100) to derive an envelope band, f(N_H2) vs. N_H2, and write a text file.
@@ -189,8 +187,8 @@ def radialProfilesHIH2():
     proj2D    = [2, None] # z-axis, no depth restriction
 
     for field in fields:
-        plotStackedRadialProfiles1D(sPs, subhaloIDs=subhaloIDs, ptType='gas', ptProperty=field, op=op, 
-                                    weighting=weighting, proj2D=proj2D)
+        snapshot.profilesStacked1d(sPs, subhaloIDs=subhaloIDs, ptType='gas', ptProperty=field, op=op, 
+                                   weighting=weighting, proj2D=proj2D)
 
 def numdensHIVsColumn():
     """ Re-create Rahmati+ (2013) Fig 2. https://arxiv.org/abs/2011.01935 (Figure 1). """
@@ -251,13 +249,13 @@ def numdensHIVsColumn():
     ax.set_xlim([15, 23])
     ax.set_ylim([-6.0, 2.0])
 
-    l, = ax.plot(N_HI_vals, nh_percs[1,:], '-', lw=2.0, label='n$_{\\rm H}$')
+    l, = ax.plot(N_HI_vals, nh_percs[1,:], '-', lw=lw, label='n$_{\\rm H}$')
     ax.fill_between(N_HI_vals, nh_percs[0,:], nh_percs[-1,:], alpha=0.5, color=l.get_color())
 
-    l, = ax.plot(N_HI_vals, nhi_percs[1,:], '-', lw=2.0, label='n$_{\\rm HI}$')
+    l, = ax.plot(N_HI_vals, nhi_percs[1,:], '-', lw=lw, label='n$_{\\rm HI}$')
     ax.fill_between(N_HI_vals, nhi_percs[0,:], nhi_percs[-1,:], alpha=0.5, color=l.get_color())
 
-    ax.plot(N_HI_vals, nh2_percs[1,:], '-', lw=2.0, label='n$_{\\rm H2}$')
+    ax.plot(N_HI_vals, nh2_percs[1,:], '-', lw=lw, label='n$_{\\rm H2}$')
     ax.fill_between(N_HI_vals, nh2_percs[0,:], nh2_percs[-1,:], alpha=0.5, color=l.get_color())
 
     ax.legend()

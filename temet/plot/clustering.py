@@ -1,15 +1,16 @@
 """
 Plots related to galaxy clustering statistics, two-point correlation functions, and conformity.
 """
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib import gridspec
 from collections import OrderedDict
 
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib import gridspec
+
+from ..cosmo.clustering import conformityRedFrac, twoPointAutoCorrelationPeriodicCube
+from ..plot.config import figsize, lw
 from ..util.helper import logZeroNaN, sampleColorTable, setAxisColors
 from ..util.match import match
-from ..cosmo.clustering import twoPointAutoCorrelationPeriodicCube, conformityRedFrac
-from ..plot.config import figsize, lw
 
 def galaxyTwoPoint(sPs, saveBase='', cenSatSelects=['all','cen','sat'], 
                    colorBin=None, cType=None, mstarBin=None, mType=None):

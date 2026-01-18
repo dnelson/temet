@@ -1,5 +1,5 @@
 """
-Fully generalized plotting of particle/cell-level data of single halos or entire boxes.
+Generalized plotting of particle/cell-level data from snapshots.
 """
 import warnings
 
@@ -10,13 +10,12 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
 
-from ..plot.config import sKn, sKo, figsize, lw
-from ..util.helper import cache, closest, gaussian_filter_nan, iterable, loadColorTable, logZeroNaN, \
-    running_median, sampleColorTable
+from ..plot.config import figsize, lw, sKn, sKo, linestyles
+from ..util.helper import cache, closest, gaussian_filter_nan, iterable, logZeroNaN, running_median
+from ..util.helper import loadColorTable, sampleColorTable
 from ..util.match import match
 
-
-def plotHistogram1D(sPs, ptType='gas', ptProperty='temp', ptWeight=None, subhaloIDs=None, haloIDs=None, 
+def histogram1D(sPs, ptType='gas', ptProperty='temp', ptWeight=None, subhaloIDs=None, haloIDs=None, 
       ylog=True, ylim=None, xlim=None, qRestrictions=None, nBins=400, medianPDF=False, 
       legend=True, ctName=None, ctProp=None, colorbar=False, pdf=None):
     """ Simple 1D histogram/PDF of some quantity ptProperty of ptType, either of the whole box (subhaloIDs and haloIDs 
@@ -27,8 +26,8 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp', ptWeight=None, subhalo
     If ylim is None, then hard-coded typical limits for PDFs. If 'auto', then autoscale. Otherwise, 2-tuple to use as limits. 
     If medianPDF is True, then add this mean (per sP) on top. If meanPDF is 'only', then skip the individual objects. 
     If ctName is not None, sample from this colormap to choose line color per object. Assign based on the property ctProp.
-    If colorbar is not False, then use this field (string) to display a colorbar mapping. """
-
+    If colorbar is not False, then use this field (string) to display a colorbar mapping.
+    """
     # config
     if ylog:
         ylabel = 'PDF [ log ]'
@@ -205,7 +204,7 @@ def _draw_special_lines(sP, ax, ptProperty):
     if ptProperty in ['tcool','tff']:
         tage = np.log10( sP.units.redshiftToAgeFlat(0.0) )
         ax.plot(ax.get_xlim(), [tage,tage], ':', lw=lw, alpha=0.3, color='#ffffff')
-        
+
     if ptProperty in ['tcool_tff']:
         ax.plot(ax.get_xlim(), [0.0, 0.0], ':', lw=lw, alpha=0.3, color='#ffffff')
         ax.plot(ax.get_xlim(), [1.0, 1.0], ':', lw=lw, alpha=0.3, color='#ffffff')
@@ -236,7 +235,7 @@ def _load_all_halos(sP, partType, partField, haloIDs, GroupLenType=None):
 
     return vals
 
-def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloIDs=None, 
+def phaseSpace2d(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloIDs=None, 
                      xlim=None, ylim=None, clim=None, contours=None, contourQuant=None, normColMax=False, hideBelow=False, 
                      ctName='viridis', colorEmpty=False, smoothSigma=0.0, nBins=None, qRestrictions=None, median=False, 
                      normContourQuantColMax=False, addHistX=False, addHistY=False, colorbar=True, f_pre=None, f_post=None, 
@@ -451,7 +450,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         if len(weights) > 1: # text label inside panel
             wtStr = 'Gas Oxygen Ion Mass'
             labelText = wtProp.replace(" mass","").replace(" ","")
-            ax.text(xlim[0]+0.3, yMinMax[-1]-0.3, labelText, 
+            ax.text(xlim[0]+0.3, ylim[-1]-0.3, labelText, 
                 va='top', ha='left', color='black', fontsize='40')
 
         # median/percentiles line(s)?
@@ -491,7 +490,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             f_post(ax)
 
     # marginalized 1D distributions
-    aspect = fig.get_size_inches()[0] / fig.get_size_inches()[1]
+    #aspect = fig.get_size_inches()[0] / fig.get_size_inches()[1]
 
     height = 0.12
     hpad = 0.004
@@ -601,11 +600,11 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         fig.savefig(saveFilename)
     plt.close(fig)
 
-def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant='temp', 
-                                    haloIDs=None, radMinKpc=None, radMaxKpc=None, xlim=None, ylim=None, 
-                                    nBins=50, legendLoc='best', total=False, totalCum=False, sizefac=1.0, 
-                                    totalCumBoundsX=None, totalCumRangeX=None, totalCumLog=False,
-                                    f_pre=None, f_post=None):
+def median(sPs, partType='gas', xQuant='hdens', yQuant='temp', 
+           haloIDs=None, radMinKpc=None, radMaxKpc=None, xlim=None, ylim=None, 
+           nBins=50, legendLoc='best', total=False, totalCum=False, sizefac=1.0, 
+           totalCumBoundsX=None, totalCumRangeX=None, totalCumLog=False,
+           f_pre=None, f_post=None):
     """ Plot the relationship between two particle/cell properties, either across a full box 
     (if haloIDs is None), or else for one or more (sets of) halos.
 
@@ -614,7 +613,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
       haloIDs (list[int or list or dict]): one entry per sPs entry. For each entry, if haloIDs[i] is a single halo 
           ID number, then one halo only. If a list, then median relation. If a dict, then k:v pairs where 
           keys are a string description, and values are haloID lists, which are then overplotted. 
-          This is the same behavior as :py:func:`plotStackedRadialProfiles1D`.
+          This is the same behavior as :py:func:`profilesStacked1d`.
       radMinKpc (float): if by-halo loading, optionally restrict to radii above this value (physical kpc).
       radMaxKpc (float): above, optionally restrict to radii below this value (physical kpc).
         (Can generalize to qRestrictions approach).
@@ -852,9 +851,9 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
     fig.savefig('particle%s_%s_%s-vs-%s_%s_%s.pdf' % (plotType,partType,xQuant,yQuant,sStr,hStr))
     plt.close(fig)
 
-def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas', ptProperty='temp', op='mean', weighting=None, 
-                                ptRestrictions=None, proj2D=None, xlim=None, ylim=None, plotMedian=True, plotIndiv=False, 
-                                ctName=None, ctProp=None, colorbar=False, figsize=figsize):
+def profilesStacked1d(sPs, subhaloIDs=None, haloIDs=None, ptType='gas', ptProperty='temp', op='mean', weighting=None, 
+                      ptRestrictions=None, proj2D=None, xlim=None, ylim=None, plotMedian=True, plotIndiv=False, 
+                      ctName=None, ctProp=None, colorbar=False, figsize=figsize):
     """ Radial profile(s) of some quantity ptProperty of ptType vs. radius from halo centers 
     (parent FoF particle restricted, using non-caching auxCat functionality). 
     subhaloIDs is a list, one entry per sPs entry. For each entry of subhaloIDs:
@@ -1090,8 +1089,8 @@ def _radial_profile_dens(sim, ptType, xlim, nRadBins, xlog=False, haloID=None, s
 
     return yy
 
-def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp', subhaloIDs=None, haloIDs=None, 
-    xlog=True, xlim=None, ylog=None, ylim=None, sfreq0=False, scope='fof'):
+def profile(sPs, ptType='gas', ptProperty='temp', subhaloIDs=None, haloIDs=None, 
+            xlog=True, xlim=None, ylog=None, ylim=None, sfreq0=False, scope='fof'):
     """ Radial profile of some quantity ptProperty of ptType vs. radius from halo center,
     where subhaloIDs (or haloIDs) is an ID list with one entry per sPs entry. 
     If haloIDs is not None, then use these FoF IDs as inputs instead of Subfind IDs. 
@@ -1203,9 +1202,9 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp', subhaloIDs=Non
     fig.savefig('radProfile_%s_%s_%s_%s_scope-%s.pdf' % (sPstr,ptType,ptProperty,hStr,scope))
     plt.close(fig)
 
-def plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='temp', subhaloID=None, haloID=None, 
-    rlog=True, rlim=None, clog=None, clim=None, sfreq0=False, max_z=20.0, scope='fof', ctName='viridis'):
-    """ 2D stacked radial profile of some quantity vs. distance, as a function of time (temporal-spatial).
+def profilesStacked2d(sim, ptType='gas', ptProperty='temp', subhaloID=None, haloID=None, 
+                      rlog=True, rlim=None, clog=None, clim=None, sfreq0=False, max_z=20.0, scope='fof', ctName='viridis'):
+    """ 2D stacked radial profile of some quantity vs. distance, for one halo, as a function of time (temporal-spatial).
     Tracking through time is based on the merger tree MPB.
 
     Args:
@@ -1386,9 +1385,9 @@ def plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='temp', subhaloI
     fig.savefig('radProfile2DEvo_%s_%s_%s_%s_scope-%s.pdf' % (sim,ptType,ptProperty,hStr,scope))
     plt.close(fig)
 
-def plot2DStackedRadialProfiles(sPs, ptType='gas', ptProperty='temp', ylim=[0.0, 2.0], median=True, 
-                                cLog=True, clim=[-1.0,0.5], cNormQuant='virtemp', smoothSigma=2.0, 
-                                xQuant='mhalo_200_log', xlim=[9.0,15.0], xbinsize=None, ctName='viridis'):
+def profileEvo2d(sPs, ptType='gas', ptProperty='temp', ylim=[0.0, 2.0], median=True, 
+                 cLog=True, clim=[-1.0,0.5], cNormQuant='virtemp', smoothSigma=2.0, 
+                 xQuant='mhalo_200_log', xlim=[9.0,15.0], xbinsize=None, ctName='viridis'):
     """ 2D Stacked radial profile(s) of some quantity ptProperty of ptType vs. radius from (all) halo centers 
     (spatial_global based, using caching auxCat functionality, restricted to >1000 dm particle limit). 
     Note: Combination of {ptType,ptProperty} must already exist in auxCat mapping.

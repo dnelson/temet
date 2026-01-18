@@ -5,14 +5,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d
 
+from ...plot import subhalos
 from ...plot.config import figsize, lw
 from ...util import simParams
-from ...util.helper import loadColorTable, running_median, savgol_filter
+from ...util.helper import loadColorTable, running_median
 from ...vis.box import renderBox
 from ...vis.halo import renderSingleHalo
-
 
 def amyDIGzProfiles():
     """ Use some projections to create the SB(em lines) vs z plot. """
@@ -260,8 +261,6 @@ def auroraVoyage2050WhitePaper():
 
 def smitaXMMproposal():
     """ Dependence of OVII on sSFR at fixed mass. """
-    from ...plot.cosmoGeneral import quantHisto2D
-
     sP =  simParams(res=1820, run='tng', redshift=0.0)
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
@@ -280,9 +279,9 @@ def smitaXMMproposal():
     qRestrictions = None
     pdf = None
 
-    quantHisto2D(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim, minCount=minCount, 
-                 qRestrictions=qRestrictions, medianLine=medianLine, cenSatSelect=cenSatSelect, 
-                 cNaNZeroToMin=cNaNZeroToMin, cQuant=cQuant, pdf=pdf)
+    subhalos.histogram2d(sP, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim, minCount=minCount, 
+                         qRestrictions=qRestrictions, medianLine=medianLine, cenSatSelect=cenSatSelect, 
+                         cNaNZeroToMin=cNaNZeroToMin, cQuant=cQuant, pdf=pdf)
 
 
 def nachoAngularQuenchingDens():
@@ -711,8 +710,6 @@ def xenoSNevo_movie(conf=1):
 
 def arjenMasses5kpc():
     """ Explore Mtot_5kpc vs M*_5kpc. """
-    from ..plot.cosmoGeneral import quantMedianVsSecondQuant
-
     # config
     redshift = 0.0 #0.8
     runs = ['tng100-1','eagle','simba','illustris-1']
@@ -739,11 +736,11 @@ def arjenMasses5kpc():
     pdf = PdfPages('galaxy_%s_z%.1f_x=%s_%s.pdf' % ('-'.join(runs),redshift,xQuant,css))
 
     for yQuant in yQuants:
-        quantMedianVsSecondQuant(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css, 
-                                 qRestrictions=qRestrictions,
-                                 xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                                 scatterPoints=scatterPoints, scatterColor=scatterColor, maxPointsPerDex=maxPointsPerDex, 
-                                 pdf=pdf)
+        subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css, 
+                        qRestrictions=qRestrictions,
+                        xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                        scatterPoints=scatterPoints, scatterColor=scatterColor, maxPointsPerDex=maxPointsPerDex, 
+                        pdf=pdf)
 
     pdf.close()
 

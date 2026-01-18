@@ -1,20 +1,20 @@
 """
-Fully generalized plots and general plot helpers related to group catalog objects of cosmological boxes.
+Generalized plots based on group catalog objects (i.e. subhalos) of cosmological boxes.
 """
-import numpy as np
 import warnings
-import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from matplotlib.colors import Normalize, colorConverter
 from getpass import getuser
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import Normalize, colorConverter
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d
 
-from ..util.helper import running_median, running_median_sub, logZeroNaN, loadColorTable, \
-       getWhiteBlackColors, sampleColorTable, binned_stat_2d, lowess, iterable, kde_2d, \
-       setAxisColors, setColorbarColors
 from ..cosmo.util import subsampleRandomSubhalos
 from ..plot.config import *
+from ..util.helper import binned_stat_2d, getWhiteBlackColors, iterable, kde_2d, loadColorTable, logZeroNaN, \
+    lowess, running_median, running_median_sub, sampleColorTable, setAxisColors, setColorbarColors
 
 def addRedshiftAxis(ax, sP, zVals=[0.0,0.25,0.5,0.75,1.0,1.5,2.0,3.0,4.0,6.0,10.0]):
     """ Add a redshift axis as a second x-axis on top (assuming bottom axis is Age of Universe [Gyr]). """
@@ -68,10 +68,10 @@ def addRedshiftAgeAxes(ax, sP, xrange=[-1e-4,8.0], xlog=True):
 
     addUniverseAgeAxis(ax, sP)
 
-def quantHisto2D(sP, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, xlim=None, ylim=None, clim=None, 
-                 cStatistic=None, cNaNZeroToMin=False, minCount=None, cRel=None, cFrac=None, nBins=None, qRestrictions=None, 
-                 filterFlag=False, medianLine=True, sizeFac=1.0, 
-                 fig_subplot=[None,None], pStyle='white', ctName=None, saveFilename=None, output_fmt=None, pdf=None):
+def histogram2d(sP, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, xlim=None, ylim=None, clim=None, 
+                cStatistic=None, cNaNZeroToMin=False, minCount=None, cRel=None, cFrac=None, nBins=None, qRestrictions=None, 
+                filterFlag=False, medianLine=True, sizeFac=1.0, 
+                fig_subplot=[None,None], pStyle='white', ctName=None, saveFilename=None, output_fmt=None, pdf=None):
     """ Make a 2D histogram of subhalos with one quantity on the y-axis, another property on the x-axis, 
     and optionally a third property as the colormap per bin. minCount specifies the minimum number of 
     points a bin must contain to show it as non-white. If '_nan' is not in cStatistic, then by default, 
@@ -509,8 +509,8 @@ def quantHisto2D(sP, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=Non
 
     return True
 
-def quantSlice1D(sPs, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', yRel=None, xlim=None, ylim=None, 
-                 filterFlag=False, sizefac=None, fig_subplot=[None,None], pdf=None):
+def slice(sPs, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', yRel=None, xlim=None, ylim=None, 
+          filterFlag=False, sizefac=None, fig_subplot=[None,None], pdf=None):
     """ Make a 1D slice through the 2D histogram by restricting to some range sRange of some quantity
     sQuant which is typically Mstar (e.g. 10.4<log_Mstar<10.6 to slice in the middle of the bimodality).
     For all subhalos in this slice, optically restricted by cenSatSelect, load a set of quantities 
@@ -678,13 +678,13 @@ def quantSlice1D(sPs, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', yRel=
             fig.savefig('slice1d_%s_%s_%s_%s.pdf' % ('-'.join(yQuants),xQuant,sQuant,cenSatSelect))
         plt.close(fig)
 
-def quantMedianVsSecondQuant(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=None, sLowerPercs=None, sUpperPercs=None, 
-                             sizefac=1.0, alpha=1.0, nBins=50, qRestrictions=None, indivRestrictions=False, 
-                             f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
-                             scatterPoints=None, markersize=6.0, maxPointsPerDex=None, scatterColor=None, ctName=None, 
-                             markSubhaloIDs=None, cRel=None, mark1to1=False, drawMedian=True, medianLabel=None, 
-                             extraMedians=None, legendLoc='best', labelSims=True, xlim=None, ylim=None, clim=None, cbarticks=None,
-                             filterFlag=False, colorbarInside=False, fig_subplot=[None,None], pdf=None):
+def median(sPs, yQuants, xQuant, cenSatSelect='cen', sQuant=None, sLowerPercs=None, sUpperPercs=None, 
+           sizefac=1.0, alpha=1.0, nBins=50, qRestrictions=None, indivRestrictions=False, 
+           f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
+           scatterPoints=None, markersize=6.0, maxPointsPerDex=None, scatterColor=None, ctName=None, 
+           markSubhaloIDs=None, cRel=None, mark1to1=False, drawMedian=True, medianLabel=None, 
+           extraMedians=None, legendLoc='best', labelSims=True, xlim=None, ylim=None, clim=None, cbarticks=None,
+           filterFlag=False, colorbarInside=False, fig_subplot=[None,None], pdf=None):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, load a set of quantities 
     yQuants (could be just one) and plot this (y-axis) against the xQuant. Supports multiple sPs 

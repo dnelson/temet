@@ -14,9 +14,9 @@ from os.path import isfile
 from ..util.simParams import simParams
 from ..plot.config import *
 from ..util.helper import running_median, logZeroNaN, closest, cache, colored_line
-from ..plot.general import plotPhaseSpace2D, plotSingleRadialProfile, plot2DStackedRadialProfileEvo
 from ..plot.cosmoMisc import simHighZComparison
-from ..plot.cosmoGeneral import addUniverseAgeAxis
+from ..plot.subhalos import addUniverseAgeAxis
+from ..plot import snapshot
 from ..load.simtxt import blackhole_details_mergers, sf_sn_details
 from ..projects.mcst_vis import *
 
@@ -33,7 +33,7 @@ def _get_existing_sims(variants, res, hInds, redshift, all=False, single=False):
     """
     LINE_UP = '\033[1A'
     LINE_CLEAR = '\x1b[2K'
-    
+
     sims = []
     for hInd in hInds:
         for variant in variants:
@@ -100,7 +100,7 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
 
     if len(hInds) == 1 and lineplot:
         return
-        
+
     # legend two
     handles = []
     labels = []
@@ -134,7 +134,7 @@ def _zoomSubhaloIDsToPlot(sim, verbose=False):
     subhaloIDs = w
 
     print(f'[{sim}] Showing {len(subhaloIDs)} subhalos.')
-    
+
     for subid in subhaloIDs:
         #lowres_dist = sim.snapshotSubset('dmlowres', 'rad_kpc', subhaloID=subid)
         print(f' h[{grnr[subid]}] sub[{subid:4d}] mhalo = {mhalo[subid]:.2f} mstar = {mstar[subid]:.2f} contam_frac = {contam_frac[subid]:.3g}')
@@ -201,7 +201,7 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Fal
     parent_yvals, ylabel, yMinMax, yLog = sim_parent_relation.simSubhaloQuantity(yQuant, tight=True)
     if ylim is not None: yMinMax = ylim
     if yLog: parent_yvals = logZeroNaN(parent_yvals)
-    
+
     parent_cen = sim_parent_relation.subhalos('cen_flag')
     w = np.where(parent_cen == 1)
 
@@ -222,7 +222,7 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Fal
     ax.set_ylabel(ylabel)
     ax.set_xlim(xMinMax)
     ax.set_ylim(yMinMax)
-    
+
     # parent box relation
     pm = savgol_filter(pm,sKn,sKo,axis=1)
     ax.fill_between(xm, pm[0,:], pm[-1,:], color='#bbb', alpha=0.4)
@@ -263,7 +263,7 @@ def twoQuantScatterplot(sims, xQuant, yQuant, xlim=None, ylim=None, vstng100=Fal
                 xval = xMinMax[0] #+ (xMinMax[1]-xMinMax[0])/25 * rng.uniform(0.6, 1.0)
                 print(f' set [x] {xQuant}={xval:.3f} for visibility.')
                 marker_lim = True # 8 #CARETLEFTBASE #r'$\leftarrow$'
-                                            
+
             # color set by hInd
             c = colors[hInds.index(sim.hInd)]
 
@@ -421,7 +421,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
         sort_inds = np.argsort(star_zform)[::-1]
         star_zform = star_zform[sort_inds]
         star_mass = star_mass[sort_inds]
-        
+
         if 'sfr' in quant:
             # sfh (sfr vs redshift)
             star_mass = sim.units.codeMassToMsun(star_mass)
@@ -554,7 +554,7 @@ def quantVsRedshift(sims, quant, xlim=None, ylim=None, sfh_lin=False, sfh_treeba
 
                 w = np.where(star_zform < xMinMax[0])
                 ax.plot(star_zform[w], star_mass[w], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha_loc)
-                
+
                 # extend to symbol
                 if len(w[0]) > 0:
                     x = star_zform[w][-1]
@@ -619,7 +619,7 @@ def smhm_relation(sims):
     yQuant = 'mstar2_log'
     xlim = [7.3, 10.3]
     ylim = [4.0, 8.5] # log mstar
-    
+
     # focus on low-mass end:
     #xlim = [5.5, 9.3]
     #ylim = [2.4, 7.0]
@@ -637,7 +637,7 @@ def smhm_relation(sims):
         #ax.fill_between(b19_um['haloMass'], b19_um['mstar_low'], b19_um['mstar_high'], color='#bbb', hatch='X', alpha=0.4)
 
     twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
-    
+
 def sfr_vs_mstar(sims, yQuant):
     """ Diagnostic plot of SFR vs Mstar including observational data. """
     from ..load.data import curti23, nakajima23
@@ -707,7 +707,7 @@ def sfr_vs_mstar(sims, yQuant):
             ax.plot(xlim, np.log10(sfr), '--', color='#555', lw=lw, alpha=0.7, label=label)
 
     twoQuantScatterplot(sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data)
-    
+
 def mbh_vs_mhalo(sims):
     """ SMBH mass versus halo mass. """
     from ..load.data import zhang21
@@ -786,7 +786,7 @@ def mbh_vs_mstar(sims):
 
         ax.errorbar(b25_mstar, b25_mbh, xerr=b25_mstar_err, yerr=b25_mbh_err, 
                     fmt='o', color='#555', lw=lw, alpha=0.8, label=b25_label)
-        
+
         # Brooks+25 upper limit at z=5.3
         ax.errorbar([7.26], [4.99], xerr=[0.26], fmt='o', color='#555', lw=lw, alpha=0.8)
         ax.annotate('', xy=(7.26, 4.99 - 0.4), xytext=(7.26, 4.99),
@@ -1003,7 +1003,7 @@ def phase_diagram(sim):
     clim = [-4.0, -0.2]
 
     saveFilename = 'phase_%s_%s_%s_%03d.png' % (sim.simName, xQuant, yQuant, sim.snap)
-    
+
     # MCS model: star formation threshold
     def _f_post(ax):
         from ..util.units import units
@@ -1023,7 +1023,7 @@ def phase_diagram(sim):
 
             ax.plot(xx, np.log10(temp), ls=[':','--'][i], color='black', lw=lw, alpha=0.7)
 
-    plotPhaseSpace2D(sim, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs, qRestrictions=qRestrictions,
+    snapshot.phaseSpace2d(sim, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs, qRestrictions=qRestrictions,
         xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, f_post=_f_post, saveFilename=saveFilename)
 
 def diagnostic_numhalos_uncontaminated(sims):
@@ -1077,8 +1077,8 @@ def diagnostic_numhalos_uncontaminated(sims):
         handles.append(plt.Line2D( (0,1), (0,0), marker=markers[0], color=colors[i], lw=0))
         labels.append('Halo ID#%d' % i)
 
-    legend = ax.legend(handles, labels, loc='upper left')
-    
+    ax.legend(handles, labels, loc='upper left')
+
     fig.savefig('contam_frac_z_%s.pdf' % sims[0].simName)
     plt.close(fig)
 
@@ -1120,7 +1120,7 @@ def diagnostic_snapshot_spacing(sims):
             ax.plot(redshifts[1:], dt, 'o-', ms=4.0, color=c, label='%s request' % label)
 
     ax.legend()
-    
+
     fig.savefig('snapshot_spacing_%s.pdf' % sims[0].simName)
     plt.close(fig)
 
@@ -1128,11 +1128,11 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
     """ CHECK: load all gas properties, convert to proper, calculate the jeans mass and 
         cell diameter yourself, calculate SFR yourself, plot against what the code is reporting 
         (what is in the snap), should be 1-to-1, if not may be a factor of a or h missing. """
-    
+
     # AREPO/SFR_MCS calculation:
     # dens = SphP[i].Density;
     # Sfr = 0.0;
-    
+
     # /* Used for only SF when local Jeans mass < All.SfrCritJeansMassN * mcell */
     # All.SfrCritFactor  = pow(GAMMA, 1.5) * pow(M_PI, 2.5) / (6.0 * pow(All.G, 1.5) * All.SfrCritJeansMassN);
 
@@ -1157,13 +1157,13 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
 
         # load
         M_J = sim.snapshotSubset('gas', 'mjeans', haloID=haloID) # msun
-        
+
         mass = sim.snapshotSubset('gas', 'mass_msun', haloID=haloID) # msun
         dens = sim.snapshotSubset('gas', 'dens', haloID=haloID) # code
         dens = sim.units.codeDensToPhys(dens, cgs=True, numDens=True) # physical [1/cm^3]
 
         rad_rvir = sim.snapshotSubset('gas', 'rad_rvir', haloID=haloID)
-        
+
         tff = sim.snapshotSubset('gas', 'tff_local', haloID=haloID) # yr
 
         # calculate SFR that we would expect
@@ -1184,7 +1184,7 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
         #frac = len(ww) / len(mass)
         #print('Found [%d/%d] cells (%.2f%%) with M_J > N_J * m_cell (not star-forming).' % (len(ww),len(mass),frac*100))
         #sfr_calc[ww] = 0.0
-        
+
         # compare to SFR in snapshot
         sfr_snap = sim.snapshotSubset('gas', 'sfr', haloID=haloID) # msun/yr
 
@@ -1215,7 +1215,7 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
             w_rad = np.where(rad_rvir < rad_cut)
             M_J_loc = M_J[w_rad]
             mass_loc = mass[w_rad]
-            
+
             # calc
             N_J_realized = M_J_loc / mass_loc
 
@@ -1236,7 +1236,7 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
             w_dens = np.where(dens > dens_cut)
             M_J_loc = M_J[w_dens]
             mass_loc = mass[w_dens]
-            
+
             # calc
             N_J_realized = M_J_loc / mass_loc
 
@@ -1494,7 +1494,7 @@ def _blackhole_position_vs_time(sim, n_pts=400):
 
         # interpolate subhalo positions to blackhole times
         bh_time = smbhs[smbh_id]['time']
-        
+
         sub_pos = np.zeros( (bh_time.size, 3), dtype='float32' )
         for i in range(3):
             sub_pos[:,i] = np.interp(bh_time, parent_time[::-1], mpb['SubhaloPos'][:,i][::-1])
@@ -1720,7 +1720,7 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
 
                 # plot hist
                 label = f'{sim.simName}' if j == 0 else ''
-               
+
                 c = colors[i % len(colors)]
                 l = ax.hist(vals[w], bins=40, histtype='step', lw=lw, linestyle=linestyles[j], color=c, label=label)
 
@@ -2033,19 +2033,19 @@ def paperPlots(a = False):
     if 0 or a:
         haloIDs = [0] * len(sims) # assume first
 
-        plotSingleRadialProfile(sims, ptType='gas', ptProperty='numdens', haloIDs=haloIDs, 
+        snapshot.profile(sims, ptType='gas', ptProperty='numdens', haloIDs=haloIDs, 
             xlog=True, xlim=[-2.0, 1.5], ylim=[-4.5, 4.0], ylog=True, scope='global')
-        
-        plotSingleRadialProfile(sims, ptType='stars', ptProperty='dens', haloIDs=haloIDs, 
+
+        snapshot.profile(sims, ptType='stars', ptProperty='dens', haloIDs=haloIDs, 
             xlog=True, xlim=[-2.0, 1.5], ylim=[2.5, 11.0], ylog=True, scope='global')
 
-        plotSingleRadialProfile(sims, ptType='gas', ptProperty='temp', haloIDs=haloIDs, 
+        snapshot.profile(sims, ptType='gas', ptProperty='temp', haloIDs=haloIDs, 
             xlog=True, xlim=[-2.0, 1.5], ylim=[3.0, 6.0], ylog=True, scope='global')
 
-        plotSingleRadialProfile(sims, ptType='gas', ptProperty='menc_vesc', haloIDs=haloIDs, 
+        snapshot.profile(sims, ptType='gas', ptProperty='menc_vesc', haloIDs=haloIDs, 
             xlog=True, xlim=[-2.0, 1.5], ylim=[0.0, 1.7], ylog=True, scope='fof')
 
-        plotSingleRadialProfile(sims, ptType='gas', ptProperty='cellsize_kpc', haloIDs=haloIDs, 
+        snapshot.profile(sims, ptType='gas', ptProperty='cellsize_kpc', haloIDs=haloIDs, 
             xlog=True, xlim=[-2.0, 1.5], ylim=[-3.5, -0.5], ylog=True, scope='global')
 
     # radial profiles: 2d vs time
@@ -2055,19 +2055,19 @@ def paperPlots(a = False):
         haloID = 0
 
         for sim in sims:
-            plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='numdens', haloID=haloID, 
+            snapshot.profileEvo2d(sim, ptType='gas', ptProperty='numdens', haloID=haloID, 
                 rlog=True, rlim=[-2.0, 1.5], clim=[-2.0, 3.0], clog=True, max_z=max_z, scope='global', ctName='magma')
 
-            plot2DStackedRadialProfileEvo(sim, ptType='stars', ptProperty='dens', haloID=haloID, 
+            snapshot.profileEvo2d(sim, ptType='stars', ptProperty='dens', haloID=haloID, 
                 rlog=True, rlim=[-2.0, 1.5], clim=[3.0, 10.0], clog=True, max_z=max_z, scope='global', ctName='magma')
 
-            plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='temp', haloID=haloID, 
+            snapshot.profileEvo2d(sim, ptType='gas', ptProperty='temp', haloID=haloID, 
                 rlog=True, rlim=[-2.0, 1.5], clim=[3.0, 6.0], clog=True, max_z=max_z, scope='global', ctName='thermal')
-            
-            plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='vrad', haloID=haloID, 
+
+            snapshot.profileEvo2d(sim, ptType='gas', ptProperty='vrad', haloID=haloID, 
                 rlog=True, rlim=[-2.0, 1.5], clim=[-50,50], clog=False, max_z=max_z, scope='global', ctName='curl')
 
-            plot2DStackedRadialProfileEvo(sim, ptType='gas', ptProperty='menc_vesc', haloID=haloID, 
+            snapshot.profileEvo2d(sim, ptType='gas', ptProperty='menc_vesc', haloID=haloID, 
                 rlog=True, rlim=[-2.0, 1.5], clim=[0.0, 1.7], clog=True, max_z=max_z, scope='fof', ctName='afmhot')
 
     # ------------
@@ -2108,7 +2108,7 @@ def paperPlots(a = False):
             mdm = sim.subhalos('mdm_tot')[sub_ids]
 
             w = np.where((mstar > 0) & (mdm == 0))[0]
-            
+
             label = f'{sim.simName} (N={len(w)} of {mstar.size} subhalos)'
             ax.hist(np.log10(mstar[w]), bins=30, histtype='step', lw=lw, label=label)
 

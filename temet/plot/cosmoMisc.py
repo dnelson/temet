@@ -14,12 +14,10 @@ from ..cosmo.util import snapNumToRedshift
 from ..plot.config import *
 from ..util.helper import running_median
 from ..util.simParams import simParams
-from .cosmoGeneral import addRedshiftAxis
-
+from .subhalos import addRedshiftAxis
 
 def plotRedshiftSpacings():
     """ Compare redshift spacing of snapshots of different runs. """
-
     # config
     sPs = []
     sPs.append( simParams(res=512,run='tracer') )

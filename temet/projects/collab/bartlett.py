@@ -9,11 +9,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+from ...plot import subhalos
 from ...plot.config import figsize, markers
 from ...util import simParams
 from ...util.helper import logZeroNaN
 from ...vis.halo import renderSingleHalo
-
 
 def magicCGMEmissionMaps(vis_indiv=False):
     """ Emission maps (single, or in stacked M* bins) for MAGIC-II proposal.
@@ -223,8 +223,6 @@ def magicCGMEmissionMaps(vis_indiv=False):
 
 def magicCGMEmissionTrends():
     """ Emission summary statisics (auxCat-based) as a function of galaxy properties, for MAGIC-II proposal. """
-    from ...plot.cosmoGeneral import quantMedianVsSecondQuant
-
     sim = simParams(run='tng50-1',redshift=0.3)
 
     #fields = ['lum_civ1551_outercgm','lum_civ1551_innercgm']
@@ -251,10 +249,10 @@ def magicCGMEmissionTrends():
 
     # plot
     for field in fields:
-        quantMedianVsSecondQuant([sim], yQuants=[field], xQuant=xQuant, cenSatSelect=cenSatSelect, 
-                                xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                                scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                                maxPointsPerDex=maxPointsPerDex, legendLoc='upper left', pdf=None)
+        subhalos.median([sim], yQuants=[field], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                        xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                        scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                        maxPointsPerDex=maxPointsPerDex, legendLoc='upper left', pdf=None)
 
 def hubbleMCT_emissionTrends(simname='tng50-1', cQuant=None):
     """ Hubble MST Proposal 2024 of Kate Rubin, and MAGIC-2 proposal. """
