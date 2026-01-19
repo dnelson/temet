@@ -435,14 +435,14 @@ def convertMillenniumSubhaloCatalog(snap=63):
 
     snapOffsetsGroup = np.zeros( TotNGroups, dtype='int64' )
     snapOffsetsSubhalo = np.zeros( TotNSubs, dtype='int64' )
-    
+
     snapOffsetsGroup[1:] = np.cumsum( GroupLen )[:-1]
-    
+
     for k in np.arange(TotNGroups):
         # subhalo offsets depend on group (to allow fuzz)
         if NSubsPerHalo[k] > 0:
             snapOffsetsSubhalo[subgroupCount] = snapOffsetsGroup[k]
-            
+
             subgroupCount += 1
             for m in np.arange(1, NSubsPerHalo[k]):
                 snapOffsetsSubhalo[subgroupCount] = snapOffsetsSubhalo[subgroupCount-1] + SubLen[subgroupCount-1]
@@ -1063,8 +1063,10 @@ def convertMillenniumSnapshot(snap=63):
         print('All done.')
 
 def convertMillennium2Snapshot(snap=67):
-    """ Convert a complete Millennium-2 snapshot into TNG-like group-ordered HDF5 format. 
-    Note all snapshots except 4-7 (inclusive) are already group-ordered. """
+    """ Convert a complete Millennium-2 snapshot into TNG-like group-ordered HDF5 format.
+
+    Note all snapshots except 4-7 (inclusive) are already group-ordered.
+    """
     savePath = path.expanduser("~") + '/sims.other/Millennium-2/output/'
     loadPath = '/virgo/simulations/Millennium2/BigRun/'
 
@@ -1878,7 +1880,6 @@ def fixSimbaSMBHs(snap=112):
 
     assert offset == ids.size
 
-
 def testSimba(redshift=0.0):
     """ Compare all snapshot fields (1d histograms) vs TNG to check unit conversions, etc. """
     # config (z=0,2,5)
@@ -1961,7 +1962,7 @@ def testSimba(redshift=0.0):
                     print(i)
                     vals1 = data1[:,i]
                     vals2 = data2[:,i]
-            
+
                     # histogram
                     fig = plt.figure(figsize=figsize)
                     ax = fig.add_subplot(111)

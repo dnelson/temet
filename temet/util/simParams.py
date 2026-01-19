@@ -1,5 +1,6 @@
 """
 The ``simParams`` class encapsulates all meta-data and details for a particular simulation.
+
 In addition, it can hold specifications to point to a specific part of a given simulation, 
 for instance a particular snapshot/redshift or halo/subhalo. We often start analysis by 
 creating an instance of this class as:
@@ -52,19 +53,20 @@ different simulations.
 To add a new simulation (suite), one of the existing examples should be copied and adapted 
 as needed.
 """
-import platform
-import numpy as np
 import getpass
-import h5py
-import os
 import hashlib
-from os import path, mkdir
+import os
+import platform
 from functools import partial
 from glob import glob
+from os import mkdir, path
 from pathlib import Path
 
-from ..util.units import units
+import h5py
+import numpy as np
 from illustris_python.util import partTypeNum
+
+from ..util.units import units
 
 run_abbreviations = {'illustris-1':['illustris',1820],
                      'illustris-2':['illustris',910],
@@ -130,7 +132,7 @@ class simParams:
     run           = ''    # copied from input
     res           = 0     # copied from input
     variant       = ''    # copied from input (to pick any sim with variations beyond run/res/hInd)
-    
+
     groupOrdered  = None  # False: IDs stored in group catalog, True: snapshot is group ordered (by type)
     comoving      = True  # True for cosmological runs with comoving coordinates (have scalefactor/redshift)
 
@@ -151,7 +153,7 @@ class simParams:
     subbox        = None  # integer >= 0 if the snapshot of this sP instance corresponds to a subbox snap
     subboxCen     = None  # list of subbox center coordinate ([x0,y0,z0],[x1,y1,z1],...)
     subboxSize    = None  # list of subbox extents in code units (ckpc/h)
-    
+
     # zoom runs only
     levelmin       = 0    # power of two minimum level parameter (e.g. MUSIC L7=128, L8=256, L9=512, L10=1024)
     levelmax       = 0    # power of two maximum level parameter (equals levelmin for non-zoom runs)
@@ -168,7 +170,7 @@ class simParams:
     targetRedshift = 0.0  # maximum redshift the halo can be resimulated to
     ids_offset     = 0    # IDS_OFFSET configuration parameter
     sP_parent      = None # simParams() instance of parent box at halo selection redshift
-    
+
     # tracers
     trMassConst  = 0.0  # mass per tracerMC under equal mass assumption (=TargetGasMass/trMCPerCell)
     trMCPerCell  = 0    # starting number of monte carlo tracers per cell
@@ -185,7 +187,7 @@ class simParams:
     colors = None # color sequence (one per res level)
     marker = None # matplotlib marker (for placing single points for zoom sims)
     data   = None # per session memory-based cache (cleared if snap/redshift changes)
-    
+
     # physical models: GFM and other indications of optional snapshot fields
     metals    = None  # list of string labels for runs saving abundances by species
     eEOS      = False # >0 if star-forming gas on effective equation of state (1=Illustris/TNG, 2=EAGLE, 3=SIMBA)
@@ -197,7 +199,6 @@ class simParams:
                        hInd=None, haloInd=None, subhaloInd=None, arepoPath=None,
                        simName=None):
         """ Fill parameters based on inputs. """
-
         self.basePath = path.expanduser("~") + '/'
 
         if getpass.getuser() == 'wwwrun': # freyator
@@ -312,7 +313,7 @@ class simParams:
             return "%s z=%d" % (self.simName, self.redshift)
         return "%s z=%.1f" % (self.simName, self.redshift)
         #return "%s (z=%.1f, snapshot %d)" % (self.simName, self.redshift, self.snap)
-    
+
     def __eq__(self, other):
         """ Comparison of two simParams instances. """
         print('compare')
@@ -402,7 +403,6 @@ class simParams:
     def lookup_simulation(self, res=None, run=None, variant=None, redshift=None, time=None, snap=None, hInd=None,
                           haloInd=None, subhaloInd=None):
         """ Fill parameters based on inputs. (hardcoded)"""
-
         # general validation
         if run.lower() in run_abbreviations:
             # is run one of our known abbreviations? then fill in other parameters
@@ -517,7 +517,7 @@ class simParams:
             self.star   = 1
             self.winds  = 2
             self.BHs    = 2
-            
+
             # DM-only runs:
             if '_dm' in run:
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
@@ -1141,7 +1141,7 @@ class simParams:
 
             if '_tng' in run:
                 self.trMCFields = [0,1,2,3,4,5,6,7,-1,-1,-1,-1,-1,-1,8] # shock_maxmach added
-                
+
                 self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
                 self.star   = 1
                 self.winds  = 2
@@ -1636,7 +1636,7 @@ class simParams:
         self.subhaloInd = None
         self.refPos     = None
         self.refVel     = None
-        
+
         # clear cache
         old_data = {}
         for key in self.data:
@@ -1647,7 +1647,9 @@ class simParams:
 
     def ptNum(self, partType):
         """ Return particle type number (in snapshots) for input partType string. 
-        Allows different simulations to use arbitrary numbers for each type (so far they do not). """
+
+        Allows different simulations to use arbitrary numbers for each type (so far they do not).
+        """
         if partType in ['dmlowres','dmcoarse']:
             assert self.isZoom or self.simName == 'TNG-Cluster'
             return 2 # sims.zooms, sims.zooms2 ICs configuration
@@ -1658,19 +1660,21 @@ class simParams:
         return partTypeNum(partType)
 
     def isPartType(self, ptToCheck, ptToCheckAgainst):
-        """ Return either True or False depending on if ptToCheck is the same particle type as 
+        """ Check whether the two particle types are the same.
+
+        Return either True or False depending on if ptToCheck is the same particle type as 
         ptToCheckAgainst. For example, ptToCheck could be 'star', 'stars', or 'stellar' and 
         ptToCheckAgainst could then be e.g. 'stars'. The whole point is to remove any hard-coded 
         dependencies on numeric particle types. Otherwise, you would naively check that e.g. 
-        partTypeNum(ptToCheck)==4. This can now vary for different simulations (so far it does not). """
+        partTypeNum(ptToCheck)==4. This can now vary for different simulations (so far it does not).
+        """
         try:
             return self.ptNum(ptToCheck) == self.ptNum(ptToCheckAgainst)
         except:
             return ptToCheck == ptToCheckAgainst
 
     def copy(self):
-        """ Return a deep copy of this simParams object, which can then be manipulated/changed without 
-        affecting the original. """
+        """ Return a deep copy of this simparams, which can be manipulated/changed without affecting the original. """
         from copy import deepcopy
         return deepcopy(self)
 
@@ -1686,7 +1690,7 @@ class simParams:
     @property
     def isZoomOrVirtualBox(self):
         return ((self.zoomLevel != 0) or (self.simName == 'TNG-Cluster'))
-    
+
     @property
     def isDMO(self):
         return self.targetGasMass == 0.0
@@ -1724,7 +1728,7 @@ class simParams:
         if self.metals:
             return len(self.metals)
         return 0
-    
+
     @property
     def scalefac(self):
         if self.redshift is None:
@@ -1737,7 +1741,7 @@ class simParams:
         if self.redshift is None:
             raise Exception("Need sP.redshift")
         return self.units.redshiftToAgeFlat(self.redshift)
-   
+
     @property
     def tlookback(self):
         """ Current lookback time [Gyr]. """
@@ -1754,7 +1758,7 @@ class simParams:
     @property
     def boxSizeCubicComovingMpc(self):
         return (self.units.codeLengthToComovingKpc(self.boxSize)/1000.0)**3
-   
+
     @property
     def boxLengthDeltaRedshift(self):
         """ The redshift interval dz corresponding to traversing one box side-length. """
@@ -1798,19 +1802,19 @@ class simParams:
 
         # target must be a central and have low contamination
         cand_inds = np.where(cen_flag & (contam_frac < 0.1))[0]
-        
+
         # ideally, the central of the first halo
         targetSubhaloID = cand_inds[0]
 
         # if this is not a candidate, then select: the one with the largest stellar mass
         if targetSubhaloID != 0:
             targetSubhaloID = cand_inds[np.argmax(mstar[cand_inds])]
-            
+
             haloID = self.subhalo(targetSubhaloID)['SubhaloGrNr']
             print(f'Warning: [{self.simName}] zoomSubhaloID = {targetSubhaloID} ({haloID = }) as the max mstar uncontaminated central.')
-        
+
         return targetSubhaloID
-    
+
     @property
     def dmParticleMass(self):
         """ Return dark matter particle mass (scalar constant) in code units. """
@@ -1831,7 +1835,7 @@ class simParams:
         if self.isSubbox:
             return 0
         header = self.groupCatHeader()
-        
+
         if 'Nsubgroups_Total' in header:
             return header['Nsubgroups_Total']
         return header['Nsubhalos_Total']
@@ -1840,7 +1844,7 @@ class simParams:
     def subhaloIndsCen(self):
         """ Return indices of central subhalos in the group catalog at this sP.snap. """
         return self.cenSatSubhaloIndices(cenSatSelect='cen')
-    
+
     @property
     def subhaloIndsSat(self):
         """ Return indices of satellite subhalos in the group catalog at this sP.snap. """
@@ -1864,18 +1868,18 @@ class simParams:
         """ Return CPU core hours to z=0 for this simulation. """
         from ..load.simtxt import loadCpuTxt
         data = loadCpuTxt(self.arepoPath, keys=['total','numCPUs'])
-        
+
         final_timestep_sec_per_cpu = np.squeeze(data['total'])[-1,2] # cumulative
         core_hours = final_timestep_sec_per_cpu * data['numCPUs'] / 3600
 
         return core_hours
-    
+
     @property
     def config(self):
         """ Return Config.sh variable dict (from snapshot metadata). """
         from ..load.snapshot import snapConfigVars, snapParameterVars
         return snapConfigVars(self)
-    
+
     @property
     def params(self):
         """ Return param.txt variable dict (from snapshot metadata). """
@@ -1890,5 +1894,3 @@ def hash_path(path,length=16):
     sha = hashlib.sha256()
     sha.update(path.strip("/ ").encode())
     return sha.hexdigest()[:length]
-
-

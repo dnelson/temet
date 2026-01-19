@@ -8,7 +8,6 @@ from numba import jit
 from scipy import interpolate
 from scipy.signal import savgol_filter
 
-from ..util import simParams
 from ..util.helper import cache, closest, iterable, logZeroNaN
 from ..util.match import match
 
@@ -625,55 +624,3 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
         plt.close(fig)
 
         return image
-
-def test_plot_tree():
-    sP = simParams(res=1820,run='tng',redshift=0.0)
-
-    for haloID in [200]: #[20,200,210,600,2000,20000]:
-        print(haloID)
-        subhaloID = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
-        saveFilename = 'mergertree_%s_%d.png' % (sP.simName,haloID)
-
-        plot_tree(sP, subhaloID, saveFilename)
-
-def test_plot_tree_mem(haloID=190):
-    import time
-    from io import BytesIO
-
-    from imageio import imread, imwrite
-    from skimage.transform import resize
-
-    # config
-    sP = simParams(res=1820,run='tng',snap=99)
-
-    supersample = 4
-    output_fmt = 'png'
-
-    # start
-    buf = None # return image array by default
-
-    if output_fmt == 'pdf':
-        # fill memory buffer instead
-        buf = BytesIO()
-
-    subhaloID = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
-
-    # render
-    start_time = time.time()
-
-    im = plot_tree(sP, subhaloID, saveFilename=buf, dpi=100*supersample, output_fmt=output_fmt)
-
-    print('plotting done, [%.1f sec]' % (time.time()-start_time))
-
-    # 'resize'
-    if output_fmt in ['png','jpg']:
-        output_shape = (im.shape[0]//supersample, im.shape[1]//supersample)
-        im = resize(im, output_shape, order=3)
-        im = (im * 255).astype('uint8')
-
-        # 'save'
-        buf = BytesIO()
-        imwrite(buf, im, format=output_fmt)
-
-    with open('mergertree_%s_snap-%d_%d.%s' % (sP.simName,sP.snap,haloID,output_fmt),'wb') as f:
-        f.write(buf.getvalue())

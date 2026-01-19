@@ -18,7 +18,7 @@ from ..util.match import match
 from ..util.sphMap import sphGridWholeBox, sphMap
 
 def concatSubboxFilesAndMinify():
-    """ Minify a series of subbox snapshots but removing unwanted fields, and re-save concatenated 
+    """ Minify a series of subbox snapshots, removing unwanted fields and resaving concatenated 
     into a smaller number of chunks. """
     # config
     outputPath = path.expanduser("~") + '/sims.TNG/L35n2160TNG/output/'
@@ -1155,7 +1155,7 @@ def combineMultipleHDF5FilesIntoSingle():
                     shape[0] = f['Header'].attrs['Nsubgroups_Total']
                 else:
                     assert 0 # handle
-                
+
                 # allocate
                 data[gName][field] = np.zeros(shape, dtype=f[gName][field].dtype)
 
@@ -1392,7 +1392,7 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
                 locrange = pSplitRange( [0,tot_num_entries], 20, i)
                 print(i,locrange,flush=True)
                 ngb_inds[locrange[0]:locrange[1]] = -1
-        
+
     # convert stage (7): rewrite ngb_inds into dense, contiguous subsets following snapshot order
     nTasks = 10 #140
 
@@ -1536,7 +1536,7 @@ def exportSubhalosBinary():
         # header (28 bytes)
         binVersion   = 1
         headerBytes  = 7*4
-        
+
         header = np.array( [binVersion, headerBytes, nSubhalos, nValsPerHalo, sP.snap], dtype='int32' )
         f.write( struct.pack('iiiii', *header) )
         header = np.array( [sP.redshift, sP.boxSize], dtype='float32' )
@@ -1631,7 +1631,7 @@ def exportHierarchicalBoxGrids(sP, partType='gas', partField='mass', nCells=[32,
     # header (24 bytes + 12 bytes per grid)
     binVersion   = 1
     headerBytes  = 6*4 + len(nCells)*12
-    
+
     header = np.array( [binVersion, headerBytes, len(nCells), sP.snap], dtype='int32' )
     f.write( struct.pack('iiii', *header) )
     header = np.array( [sP.redshift, sP.boxSize], dtype='float32' )

@@ -1,10 +1,11 @@
 """
-Algorithms and methods related to construction and use of the Voronoi mesh.
+Algorithms and methods related to the use and analysis of the Voronoi mesh.
 """
-import numpy as np
-import h5py
 import time
 from os.path import isfile
+
+import h5py
+import numpy as np
 from numba import jit
 
 def loadSingleHaloVPPP(sP, haloID):
@@ -328,7 +329,7 @@ def voronoiThresholdSegmentation(sP, haloID, propName, propThresh, propThreshCom
         props['cen_masswt'][i,:] = np.average( pos[loc_inds,:], axis=0, weights=mass[loc_inds] )
         props['cen_denswt'][i,:] = np.average( pos[loc_inds,:], axis=0, weights=dens[loc_inds] )
         props['cen_propwt'][i,:] = np.average( pos[loc_inds,:], axis=0, weights=prop_val[loc_inds] )
-        
+
         props['vrel'][i,:] = np.average( vrel[loc_inds,:], axis=0 )
         props['vrel_masswt'][i,:] = np.average( vrel[loc_inds,:], axis=0, weights=mass[loc_inds] )
         props['vrel_denswt'][i,:] = np.average( vrel[loc_inds,:], axis=0, weights=dens[loc_inds] )
@@ -337,7 +338,7 @@ def voronoiThresholdSegmentation(sP, haloID, propName, propThresh, propThreshCom
         props['prop_tot'][i] = prop_val[loc_inds].sum()
         props['prop_mean'][i] = np.nanmean( prop_val[loc_inds] )
         props['prop_median'][i] = np.nanmedian( prop_val[loc_inds] )
-    
+
     props['radius'] = (props['vol'] * 3.0 / (4*np.pi))**(1.0/3.0) # code units
 
     halo_cen = sP.groupCatSingle(haloID=haloID)['GroupPos']
@@ -373,9 +374,8 @@ def voronoiWatershed(sP, haloID, propName):
 
     assert prop_val.shape[0] == num_ngb.size
 
-    
-
     # sort all cells which satisfy threshold by decreasing/increasing value
+    # todo: finish
 
 def _circumsphereCenter(p1,p2,p3,p4):
     """ For four points in 3D making up a tetra, compute the circumsphere center. 
@@ -593,7 +593,7 @@ def _findCellFaces(i, num_ngb, ngb_inds, offset_ngb, pos):
                     #    print('  no tetra, count = %d' % count)
 
             print(' k = %2d done' % k)
-            
+
         print('j = %2d done (n_tetra = %d)' % (ind_j,n_tetra))
 
         # compute circumsphere centers of each tetra
@@ -642,6 +642,8 @@ def _findCellFaces(i, num_ngb, ngb_inds, offset_ngb, pos):
         #plotFacePolygon(pos[i,:]-face_cen, pos[ind_j,:]-face_cen, tetra_cen[0:n_tetra,:])
         #import pdb; pdb.set_trace()
 
+    # todo: finish
+
 def voronoiSliceWithPlane():
     """ Testing. """
     from ..util import simParams
@@ -657,5 +659,4 @@ def voronoiSliceWithPlane():
     cell_ind = 0
     _findCellFaces(cell_ind, num_ngb, ngb_inds, offset_ngb, pos)
 
-
-    import pdb; pdb.set_trace()
+    # todo: finish

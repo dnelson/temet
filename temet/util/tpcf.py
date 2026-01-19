@@ -1,8 +1,9 @@
 """
 Two-point correlation functions (pairwise distances).
 """
-import numpy as np
 import threading
+
+import numpy as np
 from numba import jit
 
 from ..util.helper import pSplitRange
@@ -70,14 +71,18 @@ def _calcTPCFBinnedWeighted(pos, weights, pos2, weights2, rad_bins_sq, boxSizeSi
 
             # calculate 3d periodic squared distance
             dx = _NEAREST(pi_0-pj_0,boxHalf,boxSizeSim)
-            if dx > rad_bins_sq_max: continue
+            if dx > rad_bins_sq_max:
+                continue
             dy = _NEAREST(pi_1-pj_1,boxHalf,boxSizeSim)
-            if dy > rad_bins_sq_max: continue
+            if dy > rad_bins_sq_max:
+                continue
             dz = _NEAREST(pi_2-pj_2,boxHalf,boxSizeSim)
-            if dz > rad_bins_sq_max: continue
+            if dz > rad_bins_sq_max:
+                continue
 
             r2 = dx*dx + dy*dy + dz*dz
-            if r2 > rad_bins_sq_max: continue
+            if r2 > rad_bins_sq_max:
+                continue
 
             # find histogram bin and accumulate
             k = 1
@@ -118,11 +123,14 @@ def _reduceQuantsInRad(pos_search, pos_target, radial_bins, quants, reduced_quan
 
             # calculate 3d periodic squared distance
             dx = _NEAREST(pi_0-pj_0,boxHalf,boxSizeSim)
-            if dx > radial_bins_max: continue
+            if dx > radial_bins_max:
+                continue
             dy = _NEAREST(pi_1-pj_1,boxHalf,boxSizeSim)
-            if dy > radial_bins_max: continue
+            if dy > radial_bins_max:
+                continue
             dz = _NEAREST(pi_2-pj_2,boxHalf,boxSizeSim)
-            if dz > radial_bins_max: continue
+            if dz > radial_bins_max:
+                continue
 
             r2 = dx*dx + dy*dy + dz*dz
 
@@ -260,7 +268,7 @@ def tpcf(pos, radialBins, boxSizeSim, weights=None, pos2=None, weights2=None, nT
             super(mapThread, self).__init__()
 
             # allocate local returns as attributes of the function
-            self.xi_int = np.zeros( rad_bins_sq.size - 1, dtype='int64' )
+            self.xi_int = np.zeros( rad_bins_sq.size - 1, dtype=xi_dtype )
 
             # determine local slice (these are views not copies, even better)
             self.threadNum = threadNum
@@ -279,10 +287,10 @@ def tpcf(pos, radialBins, boxSizeSim, weights=None, pos2=None, weights2=None, nT
         def run(self):
             # call JIT compiled kernel
             if weights is not None:
-                _calcTPCFBinnedWeighted(self.pos, self.weights, self.pos2, self.weights2, 
+                _calcTPCFBinnedWeighted(self.pos, self.weights, self.pos2, self.weights2,
                     self.rad_bins_sq, self.boxSizeSim, self.xi_int, self.start_ind, self.stop_ind)
             else:
-                _calcTPCFBinned(self.pos, self.pos2, self.rad_bins_sq, self.boxSizeSim, 
+                _calcTPCFBinned(self.pos, self.pos2, self.rad_bins_sq, self.boxSizeSim,
                                 self.xi_int, self.start_ind, self.stop_ind)
 
     # create threads
@@ -410,87 +418,3 @@ def quantReductionInRad(pos_search, pos_target, radial_bins, quants, reduce_op, 
         reduced_quants[thread.start_ind : thread.stop_ind,:,:] = thread.reduced_quants
 
     return reduced_quants
-
-def benchmark():
-    """ Benchmark performance of tpcf(). 
-    Single thread: 600sec for 100k points, perfect O(N^2) scaling, so 16.7 hours for 1M points. """
-    np.random.seed(424242)
-    from ..util import simParams
-    import matplotlib.pyplot as plt
-    import time
-
-    # config
-    rMin = 10.0 # kpc/h
-    numRadBins = 40
-
-    nLoops = 2 # for each configuration
-    nThreadsTest = [8,16,32,64]
-    nPtsTest = [50000] # if None, load actual sim data
-
-    for nThreads in nThreadsTest:
-        for nPts in nPtsTest:
-            # config data
-            if nPts is not None:
-                # generate random testing data
-                class sP:
-                    boxSize = 100.0
-
-                pos = np.random.uniform(low=0.0, high=sP.boxSize, size=(nPts,3)).astype('float32')
-                weights = np.random.uniform(low=0.0, high=1.0, size=(nPts)).astype('float32')
-                #sP.boxSize = 20.0 # reduce max bin to leverage early termination
-            else:
-                # load some galaxies in a box
-                sP = simParams(res=256, run='tng', redshift=0.0, variant='0000')
-                pos = sP.groupCat(fieldsSubhalos=['SubhaloPos'])
-                nPts = pos.shape[0]
-                weights = None
-
-            # make radial bin edges
-            rMax = sP.boxSize/2
-            radialBins = np.logspace( np.log10(rMin), np.log10(rMax), numRadBins)
-
-            rrBinSizeLog = (np.log10(rMax) - np.log10(rMin)) / numRadBins
-            rr = 10.0**(np.log10(radialBins) + rrBinSizeLog/2)[:-1]
-
-            # calculate and time
-            start_time = time.time()
-
-            for i in np.arange(nLoops):
-                xi = tpcf(pos, radialBins, sP.boxSize, weights=weights, nThreads=nThreads)
-
-            sec_per = (time.time()-start_time)/nLoops
-            print('[%s] iterations took [%.3f] sec, nPts = %d nThreads = %d' % (nLoops,sec_per,nPts,nThreads))
-
-def benchmark2():
-    """ Benchmark performance of quantReductionInRad(). 100k points, 16 threads in 23 sec."""
-    np.random.seed(424242)
-    import time
-
-    # config
-    radSearch  = 100.0 # code units
-    nSearch    = 50000
-    boxSizeSim = 50000.0
-    nTarget    = nSearch
-    nQuants    = 4
-    reduce_op  = 'max'
-
-    # generate random testing data
-    pos_search = np.random.uniform(low=0.0, high=boxSizeSim, size=(nSearch,3)).astype('float32')
-    pos_target = np.random.uniform(low=0.0, high=boxSizeSim, size=(nTarget,3)).astype('float32')
-    quants     = np.random.uniform(low=0.1, high=1.0, size=(nTarget,nQuants)).astype('float32')
-
-    rsave = None
-    for nThreads in [16,8,4,2,1]:
-        # calculate and time
-        start_time = time.time()
-        nLoops = 1
-
-        for i in np.arange(nLoops):
-            r = quantReductionInRad(pos_search, pos_target, radSearch, quants, reduce_op, 
-                                    boxSizeSim, nThreads=nThreads)
-
-        sec_per = (time.time()-start_time)/nLoops
-        print('2 iterations took [%.3f] sec, nSearch = %d nThreads = %d' % (sec_per,nSearch,nThreads))
-
-        if rsave is None: rsave = r
-        assert np.array_equal(rsave,r)

@@ -162,7 +162,7 @@ def createVirtualSimHDF5():
             if sP.simName == 'Simba-L50n512' and mode == 'snaps' and snap in [126]:
                 print(' SKIPPING, corrupt...')
                 continue
-            
+
             if mode == 'snaps': header = sP.snapshotHeader()
             if mode == 'groups': header = sP.groupCatHeader()
 
@@ -420,8 +420,8 @@ def supplementVirtualSimHDF5AddSnapField():
 
         if sP.simName == 'Illustris-1' and snap in [53,55]:
             print(' SKIPPING, corrupt...')
-            continue 
-        
+            continue
+
         header = sP.snapshotHeader()
 
         # get number of particles of this type
@@ -510,7 +510,7 @@ def supplementVirtualSimHDF5AddOrUpdateGroupcatField():
         # load snapshot and group catalog headers
         print('snap [%3d]' % snap)
         sP.setSnap(snap)
-        
+
         header = sP.groupCatHeader()
 
         # get number of elements (particles of this type, or groups/subhalos)

@@ -1,19 +1,22 @@
 """
 Interpolation of scattered point sets onto a uniform grid using the SPH spline kernel deposition method.
 """
-import numpy as np
 import threading
+
+import numpy as np
 from numba import jit
+
 from ..util.helper import pSplit
 
 @jit(nopython=True, nogil=True, cache=True)
 def _NEAREST(x, BoxHalf, BoxSize):
-    """ Periodic wrap distance. 
-        #define NEAREST(x) (((x)>BoxHalf)?((x)-BoxSize):(((x)<-BoxHalf)?((x)+BoxSize):(x)))
+    """ Periodic wrap distance.
+
+    #define NEAREST(x) (((x)>BoxHalf)?((x)-BoxSize):(((x)<-BoxHalf)?((x)+BoxSize):(x)))
     """
     if BoxSize == 0.0:
         return x
-    
+
     if x > BoxHalf:
         return x-BoxSize
     else:
@@ -24,8 +27,9 @@ def _NEAREST(x, BoxHalf, BoxSize):
 
 @jit(nopython=True, nogil=True, cache=True)
 def _NEAREST_POS(x, BoxSize):
-    """ Periodic wrap position. 
-        #define NEAREST_POS(x) (((x)>BoxSize)?((x)-BoxSize):(((x)<0)?((x)+BoxSize):(x)))
+    """ Periodic wrap position.
+
+    #define NEAREST_POS(x) (((x)>BoxSize)?((x)-BoxSize):(((x)<0)?((x)+BoxSize):(x)))
     """
     if BoxSize == 0.0:
         return x
@@ -239,10 +243,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
 def _calcSphGrid(pos, hsml, mass, quant, dens_out, quant_out,
                  boxSizeImg, boxSizeSim, boxCen, ndims, nPixels,
                  normVolDens, maxIntProj, minIntProj):
-    """
-    Core routine for sphMap() that does 3D gridding.
-    """
-
+    """ Core routine for sphMap() that does 3D gridding. """
     # init
     NumPart = pos.shape[0]
 
@@ -411,9 +412,12 @@ def _calcSphGrid(pos, hsml, mass, quant, dens_out, quant_out,
 def _calcSphMapPixelRel(pos,hsml,mass,quant,dens_out,quant_out,ref_grid,
                         boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,
                         normColDens,maxIntProj,minIntProj):
-    """ Core routine for sphMap(), see below. For quant, instead of summing mass-weighted values, 
-    sum squares of differences between the mass-weighted particle quantity and the value (i.e. mean) 
-    of a reference_grid at that pixel location (i.e. for standard deviation per pixel). """
+    """ Core routine for sphMap(), see below.
+
+    For quant, instead of summing mass-weighted values,
+    sum squares of differences between the mass-weighted particle quantity and the value (i.e. mean)
+    of a reference_grid at that pixel location (i.e. for standard deviation per pixel).
+    """
     # init
     NumPart = pos.shape[0]
     axis3   = 3 - axes[0] - axes[1]
@@ -577,10 +581,14 @@ def _calcSphMapAsymmetric(pos,hsml_0,hsml_1,mass,quant,dens_out,quant_out,
                 continue
 
         # clamp smoothing length
-        if h0 < hsmlMin: h0 = hsmlMin
-        if h0 > hsmlMax: h0 = hsmlMax
-        if h1 < hsmlMin: h1 = hsmlMin
-        if h1 > hsmlMax: h1 = hsmlMax
+        if h0 < hsmlMin:
+            h0 = hsmlMin
+        if h0 > hsmlMax:
+            h0 = hsmlMax
+        if h1 < hsmlMin:
+            h1 = hsmlMin
+        if h1 > hsmlMax:
+            h1 = hsmlMax
 
         # clip points outside box (x,y) dimensions
         if np.abs( _NEAREST(p0-boxCen[0],BoxHalf[0],boxSizeSim[0]) ) > 0.5*boxSizeImg[0]+h0 or \
@@ -760,7 +768,7 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
     for i in range(NumPart):
         pos_axis3[i] = _NEAREST(pos_axis3[i]-min_axis3,BoxHalf[2],boxSizeSim[2])
     for i in range(NumTarget):
-        posTarget_axis3[i] = _NEAREST(posTarget_axis3[i]-min_axis3,BoxHalf[2],boxSizeSim[2]) 
+        posTarget_axis3[i] = _NEAREST(posTarget_axis3[i]-min_axis3,BoxHalf[2],boxSizeSim[2])
 
     pos_sortInds = np.argsort(pos_axis3) # requires numba 0.28+
     posTarget_sortInds = np.argsort(posTarget_axis3)
@@ -857,7 +865,7 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
 
         # calculate sum (normalization)
         kSum = 0.0
-        
+
         for dx in range(-nx,nx+1):
             for dy in range(-ny,ny+1):
                 # distance of covered pixel from actual position
@@ -937,10 +945,12 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
 
 def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels, ndims, hsml_1=None,
            colDens=False, nThreads=16, multi=False, posTarget=None, maxIntProj=False, minIntProj=False, refGrid=None):
-    """ Simultaneously calculate a gridded map of projected mass and some other mass weighted
+    """ Calculate gridded maps of scattered pointsets using the SPH spline kernel.
+
+    Simultaneously calculate a gridded map of projected mass and some other mass weighted
     quantity (e.g. temperature) with the sph spline kernel. If quant=None, the map of mass is
     returned, optionally converted to a column density map if colDens=True. If quant is specified,
-    the mass-weighted map of the quantity is additionally returned. If len(nPixels) is three, compute 
+    the mass-weighted map of the quantity is additionally returned. If len(nPixels) is three, compute
     grid and not image.
 
     Args:
@@ -948,24 +958,24 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
       hsml (ndarray[float][N]): smoothing lengths to use for the particles, same units as pos.
       mass (ndarray[float][N or 1]): mass to deposit, can be scalar value if all particles have the same mass.
       quant (ndarray[float][N]): some quantity to calculate a mass-weighted projection of (None=skip).
-      axes (list[int][2]): two axis indices defining the projection direction, 
+      axes (list[int][2]): two axis indices defining the projection direction,
         e.g. [0,1] for x,y (project along z-axis).
       boxSizeImg (list[float][3]): the physical size the image should cover, same units as pos.
       boxSizeSim (list[float][3]): the physical size of the simulation box for periodic wrapping (0=non periodic).
       boxCen (list[float][3]): (x,y,z) coordinates of the center of the imaging box, same units as pos.
-      nPixels (list[int][2 or 3]): number of pixels in x,y directions for output image or number of cells 
+      nPixels (list[int][2 or 3]): number of pixels in x,y directions for output image or number of cells
         in x,y,z directions for output grid.
       ndims (int): number of dimensions of simulation (1,2,3), to set SPH kernel coefficients.
-      hsml_1 (ndarray[float][N]): if not None, do asymmetric sph kernel projection with 
+      hsml_1 (ndarray[float][N]): if not None, do asymmetric sph kernel projection with
         ``hsml==hsml_0`` (x), and ``hsml_1`` (y).
       colDens (bool): if True, normalize each grid value by its area (default=False).
       nThreads (int): do multithreaded calculation (mem required=nThreads times more).
       multi (bool): if True, return the tuple (dens,quant) instead of selecting one, under the
         assumption that we are using sphMap() in a chunked mode and have to normalize later.
-      posTarget (ndarray[float][N,3]): array of 3-coordinates for a set of targets (e.g. star particle 
+      posTarget (ndarray[float][N,3]): array of 3-coordinates for a set of targets (e.g. star particle
         locations). If not None, then both pos and posTarget will be sorted on the 3rd (projection
-        direction) coordinate, and mapping will be front to back, such that the grid value at the position 
-        (2D+depth) of each posTarget is estimated. In this case, the return is of shape [N(posTarget)] 
+        direction) coordinate, and mapping will be front to back, such that the grid value at the position
+        (2D+depth) of each posTarget is estimated. In this case, the return is of shape [N(posTarget)]
         giving the projected density or mass weighted quantity along the line of sight to each posTarget.
       maxIntProj (bool): perform a maximum intensity projection (MIP) instead of the usual weighting.
       minIntProj (bool): perform a minimum intensity projection, instead of the usual weighting.
@@ -979,8 +989,8 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
         ``axes=[0,1]`` gives ``imshow(return[i,j])`` with x and y axes corresponding correctly to
         code coordinates. This does not apply if ``len(nPixels) == 3`` and a 3D grid is computed.
         No transpose is taken in that case.
-      * the entries of ``boxSizeImg``, ``boxCenter``, and ``boxSizeSim`` correspond to 
-        ``[axes[0],axes[1],axes[2]]``, meaning ``pos[:,axes[0]]`` is compared against the first entries 
+      * the entries of ``boxSizeImg``, ``boxCenter``, and ``boxSizeSim`` correspond to
+        ``[axes[0],axes[1],axes[2]]``, meaning ``pos[:,axes[0]]`` is compared against the first entries
         ``boxSizeImg[0]`` and ``boxCenter[0]`` and not compared against e.g. ``boxSizeImg[axes[0]]``.
     """
     # input sanity checks
@@ -1082,7 +1092,8 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     rDensT  = np.zeros( nTargets, dtype='float32' )
     rQuantT = np.zeros( nTargets, dtype='float32' )
 
-    if minIntProj: rQuant.fill(np.inf)
+    if minIntProj:
+        rQuant.fill(np.inf)
 
     # single threaded?
     # ----------------
@@ -1142,11 +1153,13 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     # else, multithreaded
     # -------------------
     class mapThread(threading.Thread):
-        """ Subclass Thread() to provide local storage (rDens,rQuant) which can be retrieved after 
-            this thread terminates and added to the global return. Note (on Ody2): This technique with this 
-            algorithm has ~94 percent scaling efficiency to 16 threads, drops to ~70 percent at 32. """
+        """ Subclass Thread() to provide local storage (rDens,rQuant).
+
+        This local data can be retrieved after this thread terminates and added to the global return.
+        Performance note (Ody2): ~94 percent scaling efficiency to 16 threads, drops to ~70 percent at 32 threads.
+        """
         def __init__(self, threadNum, nThreads):
-            super(mapThread, self).__init__()
+            super().__init__()
 
             # allocate local return grids as attributes of the function
             self.rDens  = np.zeros( nPixels, dtype='float32' )
@@ -1154,7 +1167,8 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
             self.rDensT  = np.zeros( nTargets, dtype='float32' )
             self.rQuantT = np.zeros( nTargets, dtype='float32' )
 
-            if minIntProj: self.rQuant.fill(np.inf)
+            if minIntProj:
+                self.rQuant.fill(np.inf)
 
             # debugging:
             self.rDensT.fill(np.nan)
@@ -1211,7 +1225,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
                     # asymmetric
                     _calcSphMapAsymmetric(self.pos,self.hsml,self.hsml_1,self.mass,self.quant,self.rDens,self.rQuant,
                                           self.boxSizeImg,self.boxSizeSim,self.boxCen,self.axes,self.ndims,self.nPixels,
-                                          self.colDens,self.maxIntProj,self.minIntProj) 
+                                          self.colDens,self.maxIntProj,self.minIntProj)
             else:
                 _calcSphMapTargets(self.pos,self.hsml,self.mass,self.quant,self.posTarget,
                                    self.rDens,self.rQuant,self.rDensT,self.rQuantT,
@@ -1274,11 +1288,13 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     elif len(nPixels) == 3:
         return rDens
 
-def sphMapWholeBox(pos, hsml, mass, quant, axes, nPixels, sP, 
+def sphMapWholeBox(pos, hsml, mass, quant, axes, nPixels, sP,
                    colDens=False, nThreads=8, multi=False, posTarget=None, sliceFac=1.0):
-    """ Wrap sphMap() specialized to projecting an entire cosmological/periodic box (or subbox). 
-    Specifically, (ndims,boxSizeSim,boxSizeImg,boxCen) are derived from sP, and nPixels should 
-    be input as a single scalar which is then assumed to be square. """
+    """ Wrap sphMap() specialized to projecting an entire cosmological/periodic box (or subbox).
+
+    Specifically, (ndims,boxSizeSim,boxSizeImg,boxCen) are derived from sP, and nPixels should
+    be input as a single scalar which is then assumed to be square.
+    """
     boxSizeImg = sP.boxSize * np.array([1.0,1.0,1.0*sliceFac])
     boxCen = sP.boxSize * np.array([0.5,0.5,0.5])
 
@@ -1286,9 +1302,9 @@ def sphMapWholeBox(pos, hsml, mass, quant, axes, nPixels, sP,
         boxSizeImg = sP.subboxSize[sP.subbox] * np.array([1.0,1.0,1.0*sliceFac])
         boxCen = sP.subboxCen[sP.subbox]
 
-    return sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, 
-                   ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, 
-                   boxCen=boxCen, nPixels=[nPixels,nPixels], 
+    return sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes,
+                   ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg,
+                   boxCen=boxCen, nPixels=[nPixels,nPixels],
                    colDens=colDens, nThreads=nThreads, multi=multi, posTarget=posTarget )
 
 def sphGridWholeBox(sP, pos, hsml, mass, quant, nCells=32):
@@ -1300,87 +1316,6 @@ def sphGridWholeBox(sP, pos, hsml, mass, quant, nCells=32):
         boxSizeImg = sP.subboxSize[sP.subbox] * np.array([1.0,1.0,1.0])
         boxCen = sP.subboxCen[sP.subbox]
 
-    return sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=[0,1], 
-                   ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, 
+    return sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=[0,1],
+                   ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg,
                    boxCen=boxCen, nPixels=[nCells, nCells, nCells] )
-
-def benchmark():
-    """ Benchmark performance of sphMap(). """
-    np.random.seed(424242)
-    from ..util import simParams
-    import time
-
-    # config data
-    if 0:
-        # generate random testing data
-        class sP:
-            boxSize = 100.0
-
-        nPts = 200000
-        posDtype = 'float32'
-        hsmlMinMax = [1.0,10.0]
-        massMinMax = [1e-5,1e-4]
-
-        pos   = np.random.uniform(low=0.0, high=sP.boxSize, size=(nPts,3)).astype(posDtype)
-        hsml  = np.random.uniform(low=hsmlMinMax[0], high=hsmlMinMax[1], size=nPts).astype('float32')
-        mass  = np.random.uniform(low=massMinMax[0], high=massMinMax[1], size=nPts).astype('float32')
-        quant = np.zeros( nPts, dtype='float32' ) + 10.0
-
-    if 1:
-        # load some gas in a box
-        sP = simParams(res=128, run='tracer', redshift=0.0)
-        pos   = sP.snapshotSubset('gas', 'pos')
-        hsml  = sP.snapshotSubset('gas', 'cellrad')
-        mass  = sP.snapshotSubset('gas', 'mass')
-        quant = sP.snapshotSubset('gas', 'temp')
-
-    # config imaging
-    nPixels    = 100
-    axes       = [0,1]
-
-    # map and time
-    start_time = time.time()
-    nLoops = 1
-
-    for i in np.arange(nLoops):
-        densMap  = sphMapWholeBox(pos, hsml, mass, None, axes, nPixels, sP)
-        quantMap = sphMapWholeBox(pos, hsml, mass, quant, axes, nPixels, sP)
-
-    print('2 maps took [' + str((time.time()-start_time)/nLoops) + '] sec')
-
-def benchmarkTarget():
-    """ Benchmark performance of sphMap with posTargets. """
-    np.random.seed(424242)
-    import time
-
-    # config imaging
-    nPixels    = 20
-    axes       = [0,1]
-
-    nLoops = 1
-
-    # generate random testing data
-    class sP:
-        boxSize = 100.0
-
-    nPts = 2000
-    nTarg = 100
-    posDtype = 'float32'
-    hsmlMinMax = [1.0,10.0]
-    massMinMax = [1e-2,1e-3]
-
-    # map and time
-    start_time = time.time()
-
-    for i in np.arange(nLoops):
-        pos   = np.random.uniform(low=0.0, high=sP.boxSize, size=(nPts,3)).astype(posDtype)
-        hsml  = np.random.uniform(low=hsmlMinMax[0], high=hsmlMinMax[1], size=nPts).astype('float32')
-        mass  = np.random.uniform(low=massMinMax[0], high=massMinMax[1], size=nPts).astype('float32')
-        quant = np.zeros( nPts, dtype='float32' ) + 10.0
-
-        posTarget = np.random.uniform(low=0.0, high=sP.boxSize, size=(nTarg,3)).astype(posDtype)
-
-        densMap  = sphMapWholeBox(pos, hsml, mass, None, axes, nPixels, sP, nThreads=1, posTarget=posTarget)
-        #quantMap = sphMapWholeBox(pos, hsml, mass, quant, axes, nPixels, sP, nThreads=1, posTarget=posTarget)
-
-    print('%s maps took [%g] sec avg' % (nLoops,(time.time()-start_time)/nLoops))

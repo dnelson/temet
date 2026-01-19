@@ -1,16 +1,18 @@
 """
 Implementation of (serial) subfind algorithm.
 """
-import numpy as np
-import time
 import glob
-import struct
-import h5py
 import multiprocessing as mp
+import struct
+import time
 from os.path import isfile
+
+import h5py
+import numpy as np
 from numba import jit, prange
-from ..util.sphMap import _NEAREST
+
 from ..util.match import match
+from ..util.sphMap import _NEAREST
 
 # DOUBLEPRECISION == 1
 MyFloat = np.float64
@@ -511,7 +513,7 @@ def load_custom_dump(sP, GrNr, phase1=False):
             if 0:
                 # and likewise for StarP.PID (unused)
                 StarP[NumStarP:NumStarP+NumStarP_loc]['PID'] = global_p_inds
-                
+
                 assert np.array_equal(StarP_temp[Pw_aux]['PID']-min_ind, w_star[0])
                 assert np.array_equal(P_temp['AuxDataID'][ StarP_temp[Pw_aux]['PID']-min_ind ], Pw_aux)
 
@@ -610,7 +612,7 @@ def load_snapshot_data(sP, GrNr):
 
     for ptNum in range(numPartType.size):
         print(' loading ptNum [%d]...' % ptNum)
-        
+
         # general
         for field in ['Pos','Vel','Mass','Potential','ID']:
             if field == 'Mass' and sP.isPartType(ptNum, 'dm'):
@@ -935,10 +937,7 @@ def _constructTree(P,boxSizeSim,xyzMin,xyzMax,extent,next_node,tree_nodes,ForceS
 def _treeSearchIndices(P,xyz,h,boxSizeSim,next_node,tree_nodes):
     """ Helper routine for calcParticleIndices(), see below. """
     boxHalf = 0.5 * boxSizeSim
-
     h2 = h * h
-    hinv = 1.0 / h
-
     numNgbInH = 0
 
     # allocate, unfortunately unclear how safe we have to be here
@@ -947,10 +946,10 @@ def _treeSearchIndices(P,xyz,h,boxSizeSim,next_node,tree_nodes):
     dists2 = np.empty( NumPart, dtype=np.float64 )
 
     # 3D-normalized kernel
-    C1 = 2.546479089470  # COEFF_1
-    C2 = 15.278874536822 # COEFF_2
-    C3 = 5.092958178941  # COEFF_5
-    CN = 4.188790204786  # NORM_COEFF (4pi/3)
+    #C1 = 2.546479089470  # COEFF_1
+    #C2 = 15.278874536822 # COEFF_2
+    #C3 = 5.092958178941  # COEFF_5
+    #CN = 4.188790204786  # NORM_COEFF (4pi/3)
 
     # start search
     no = NumPart
@@ -1889,7 +1888,7 @@ def subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime,
         mass_grid       *= 0
         sblim_list_rr   *= 0
         sblim_list_mass *= 0
-        
+
         mass          = np.double(0.0)
         massinrad     = np.double(0.0)
         massinhalfrad = np.double(0.0)
@@ -2558,7 +2557,7 @@ def set_softenings(P, SphP, sP, snapLoaded=False):
 def load_gfm_stellar_photometrics():
     """ Load photometrics table for interpolation later. """
     from os.path import expanduser
-    
+
     gfmPhotoPath = expanduser("~") + '/data/Arepo_GFM_Tables_TNG/Photometrics/stellar_photometrics.hdf5'
     photoBandsOrdered = ['U','B','V','K','g','r','i','z']
 
@@ -2674,7 +2673,7 @@ def run_subfind_customfof0save_phase2(sP, GrNr=0):
 
     Subgroup = subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, sP.units.H_of_a, sP.units.G, sP.boxSize,
                                     LogMetallicity_bins, LogAgeInGyr_bins, TableMags, SofteningTable, GrNr)
-                                    
+
     print('subfind_properties_2: %g sec' % (time.time()-start_time))
     start_time = time.time()
 

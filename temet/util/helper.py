@@ -1,22 +1,22 @@
 """
 General helper functions, small algorithms, basic I/O, etc.
 """
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
 import collections.abc as collections
-import h5py
 from functools import wraps
-from os.path import isfile
-from scipy.optimize import leastsq, least_squares
-from scipy.ndimage import gaussian_filter
-from scipy.stats import binned_statistic, gaussian_kde
-from numba import jit
-from inspect import getsource
 from hashlib import sha256
+from inspect import getsource
+from os.path import abspath, dirname, isfile
+
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.collections import LineCollection
+from numba import jit
+from scipy.ndimage import gaussian_filter
+from scipy.optimize import least_squares, leastsq
+from scipy.stats import binned_statistic, gaussian_kde
 
 # --- root path (e.g. '/home/username/temet/temet/') ----
-from os.path import dirname, abspath
 rootPath = abspath(dirname(__file__) + '/../') + '/'
 
 # --- utility functions ---
@@ -193,7 +193,7 @@ def dist_theta_grid(size, nPixels):
 
 def cache(_func=None, *, overwrite=False):
     """ Decorator to cache the return (dict) of a function. Cache filename depends on arguments. """
-    from ..util import simParams
+    from ..util.simParams import simParams
 
     def decorator_cache(func):
         @wraps(_func)
@@ -1337,7 +1337,7 @@ def faddeeva985(x, y):
         z_sq = z**2
         r = g0 + z_sq*(g1 + z_sq*(g2 + z_sq*(g3 + z_sq*(g4 + z_sq*(g5 + z_sq*g6)))))
         t = l0 + z_sq*(l1 + z_sq*(l2 + z_sq*(l3 + z_sq*(l4 + z_sq*(l5 + z_sq*(l6 + z_sq))))))
-        
+
         result = np.exp(-x_sq) + z*r/t * (0 + 1j)
         return result.real
     elif s > s4 and y_sq < t5:
@@ -1425,7 +1425,7 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
     """
     if ctName is None: return None
 
-    from matplotlib.pyplot import cm, colormaps
+    from matplotlib.pyplot import get_cmap, colormaps
     from matplotlib.colors import LinearSegmentedColormap
     import cmocean
     import copy # cannot modify default cmap, must make copy, e.g. for cmap.set_bad()
@@ -1433,11 +1433,11 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
 
     # matplotlib
     if ctName in colormaps():
-        cmap = copy.copy(cm.get_cmap(ctName, lut=numColors))
+        cmap = copy.copy(get_cmap(ctName, lut=numColors))
 
     # cmocean
     if 'cmo.%s' % ctName in colormaps():
-        cmap = copy.copy(cm.get_cmap('cmo.%s' % ctName, lut=numColors))
+        cmap = copy.copy(get_cmap('cmo.%s' % ctName, lut=numColors))
 
     # cubehelix (with arbitrary parameters)
     # ...
@@ -1750,7 +1750,7 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
                     xx = cmap._segmentdata[k][j]
                 cdict[k].append( [xx[0]**plaw_index, xx[1], xx[2]] )
             #assert (cdict[k][0] < 0 or cdict[k][-1] > 1) # outside [0,1]
-            
+
         return LinearSegmentedColormap(ctName+'_p', cdict, N=N)
 
     if plawScale is not None:
@@ -1771,9 +1771,7 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
 
 def sampleColorTable(ctName, num, bounds=None):
     """ Grab a sequence of colors, evenly spaced, from a given colortable. """
-    from matplotlib.pyplot import cm, colormaps
-
-    import cmocean
+    from matplotlib.pyplot import get_cmap, colormaps
 
     # cmocean
     if 'cmo.%s' % ctName in colormaps():
@@ -1788,7 +1786,7 @@ def sampleColorTable(ctName, num, bounds=None):
         if len(r) == 1: return r[0]
         return r
 
-    cmap = cm.get_cmap(ctName)
+    cmap = get_cmap(ctName)
     if bounds is None: bounds = [0,1]
     return cmap( np.linspace(bounds[0],bounds[1],num) )
 
@@ -1892,7 +1890,7 @@ def plothist(x, filename='out.pdf', nBins=50, norm=False, skipzeros=True):
             x_plot = xx_lin
             y_plot = yy_lin
             ax.set_xlim(x_range)
-            
+
         if i in [2,3]: ax.set_yscale('log')
 
         ax.plot(x_plot,y_plot, '-', lw=2.5)
@@ -1986,7 +1984,7 @@ def curRepoVersion():
         chdir(Path(__file__).parent.parent.absolute())
     else:
         chdir('/var/www/python/')
-    
+
     command = ["git", "rev-parse", "--short", "HEAD"]
     repoRevStr = subprocess.check_output(command, stderr=subprocess.DEVNULL).strip()
     chdir(oldCwd)

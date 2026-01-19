@@ -1,10 +1,11 @@
 """
 Adaptive estimation of a smoothing length (radius of sphere enclosing N nearest neighbors) using oct-tree.
 """
-import numpy as np
 import threading
 import time
-from numba import jit, void, int32
+
+import numpy as np
+from numba import jit
 
 from ..util.helper import pSplit
 from ..util.sphMap import _NEAREST, _getkernel
@@ -70,7 +71,7 @@ def _constructTree(pos,boxSizeSim,next_node,length,center,suns,sibling,nextnode)
     #  Nodes just points to Nodes_base-NumPart (such that Nodes[no]=Nodes_base[no-NumPart])
     xyzMin = np.zeros( 3, dtype=np.float32 )
     xyzMax = np.zeros( 3, dtype=np.float32 )
-    
+
     # select first node
     NumPart = pos.shape[0]
     nFree = NumPart
@@ -409,7 +410,7 @@ def _treeSearchNearest(xyz,h,NumPart,boxSizeSim,pos,posMask,next_node,length,cen
             dx = _NEAREST( pos[p,0] - xyz[0], boxHalf, boxSizeSim )
             dy = _NEAREST( pos[p,1] - xyz[1], boxHalf, boxSizeSim )
             dz = _NEAREST( pos[p,2] - xyz[2], boxHalf, boxSizeSim )
-            
+
             r2 = dx*dx + dy*dy + dz*dz
 
             if r2 == 0:
@@ -479,7 +480,7 @@ def _treeSearchNearestSingle(xyz,pos,boxSizeSim,next_node,length,center,sibling,
                 dx = _NEAREST( pos[p,0] - xyz[0], boxHalf, boxSizeSim )
                 dy = _NEAREST( pos[p,1] - xyz[1], boxHalf, boxSizeSim )
                 dz = _NEAREST( pos[p,2] - xyz[2], boxHalf, boxSizeSim )
-                
+
                 r2 = dx*dx + dy*dy + dz*dz
 
                 if r2 == 0:
@@ -725,11 +726,12 @@ def buildFullTree(pos, boxSizeSim, treePrec=None, verbose=False):
 
 def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, nDims=3, weighted_num=False, 
              treePrec='single', tree=None, nThreads=32, nearest=False, verbose=False):
-    """ Calculate a characteristic 'size' ('smoothing length') given a set of input particle coordinates, 
-    where the size is defined as the radius of the sphere (or circle in 2D) enclosing the nNGB nearest 
+    """ Calculate a characteristic size (i.e. smoothing length) given a set of input particle coordinates.
+
+    The size is defined as the radius of the sphere (or circle in 2D) enclosing the nNGB nearest 
     neighbors. If posSearch==None, then pos defines both the neighbor and search point sets, otherwise 
     a radius for each element of posSearch is calculated by searching for nearby points in pos.
-        
+
     Args:
       pos (ndarray[float][N,3]/[N,2]): array of 3-coordinates for the particles (or 2-coords for 2D).
       boxSizeSim (float): the physical size of the simulation box for periodic wrapping (0=non periodic).
@@ -745,6 +747,7 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
       nThreads (int): do multithreaded calculation (on treefind, while tree construction remains serial).
       nearest (bool): if True, then instead of returning hsml values based on nNGB, return indices and 
         distances to single closest match only.
+      verbose (bool): print timing and warning messages.
 
     Returns:
       ndarray[float or int]: derived smoothing length for each input point (if not ``nearest``). Instead if 
@@ -779,7 +782,7 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
 
     if posSearch.shape[0] < nThreads:
         nThreads = 1
-        if verbose: print('WARNING: Less particles than requested threads. Just running in serial.') 
+        if verbose: print('WARNING: Less particles than requested threads. Just running in serial.')
 
     start_time = time.time()
 
@@ -859,7 +862,7 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
     # launch each thread, detach, and then wait for each to finish
     for thread in threads:
         thread.start()
-        
+
     for thread in threads:
         thread.join()
 
@@ -877,10 +880,12 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
     return hsml
 
 def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePrec='single', tree=None, nThreads=32):
-    """ Calculate a reduction of a given quantity reduction on all the particles within a fixed search 
+    """ Reduction operation on all particles/cells within a fixed search distance around each position.
+
+    Calculate a reduction of a given quantity on all the particles within a fixed search 
     distance hsml around each pos. If posSearch==None, then pos defines both the neighbor and search point 
     sets, otherwise a reduction at the location of each posSearch is calculated by searching for nearby points in pos.
-        
+
     Args:
       pos (ndarray[float][N,3]/[N,2]): array of 3-coordinates for the particles (or 2-coords for 2D).
       quant (ndarray[float][N]): array of quantity values (i.e. mass, temperature).
@@ -888,9 +893,9 @@ def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePre
       op (str): 'min', 'max', 'mean', 'kernel_mean', 'sum', 'count'.
       boxSizeSim (float): the physical size of the simulation box for periodic wrapping (0=non periodic).
       posSearch (ndarray[float][N,3]): search coordinates (optional).
-      treePrec (str): construct the tree using 'single' or 'double' precision for coordinates.
-      tree (list or None) if not None, should be a list of all the needed tree arrays (pre-computed), 
+      tree (list or None): if not None, should be a list of all the needed tree arrays (pre-computed), 
                         i.e the exact return of buildFullTree().
+      treePrec (str): construct the tree using 'single' or 'double' precision for coordinates.
       nThreads (int): do multithreaded calculation (on treefind, while tree construction remains serial).
 
     Returns:
@@ -909,7 +914,7 @@ def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePre
     assert pos.shape[1] in treeDims, 'Invalid ndims specification (3D only).'
     assert quant.ndim == 1 and quant.size == pos.shape[0], 'Strange quant shape.'
     assert op in ops.keys(), 'Unrecognized reduction operation.'
-    
+
     if posSearch is None:
         assert hsml.size in [1,quant.size], 'Strange hsml shape.'
     else:
@@ -992,7 +997,7 @@ def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePre
     # launch each thread, detach, and then wait for each to finish
     for thread in threads:
         thread.start()
-        
+
     for thread in threads:
         thread.join()
 
@@ -1049,127 +1054,3 @@ def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, posMask=None, tr
 
     #print(' calcParticleIndices(): took [%g] sec (serial).' % (time.time()-build_done_time))
     return result
-
-def benchmark():
-    """ Benchmark performance of calcHsml(). """
-    import matplotlib.pyplot as plt
-    from ..util import simParams
-    from ..plot.config import figsize, lw
-
-    # config data
-    if 0:
-        # generate random testing data
-        class sP:
-            boxSize = 100.0
-
-        rng = np.random.default_rng(424242)
-
-        nPts = 100000
-
-        posDtype = 'float32'
-        pos = rng.uniform(low=0.0, high=sP.boxSize, size=(nPts,3)).astype(posDtype)
-
-    if 1:
-        # load some gas in a box
-        sP = simParams(run='tng50-4', redshift=0.0)
-        pos = sP.snapshotSubsetP('gas', 'pos')
-
-    # config
-    nNGB = 32
-    nNGBDev = 1
-    treePrec = 'single'
-    nThreads = [1,1,2,4,8,16,32]
-    posSearch = pos[0:50000,:] # None #
-
-    # build tree
-    tree = buildFullTree(pos,sP.boxSize,pos.dtype,verbose=True)
-
-    # calculate and time
-    nLoops = 4
-    times = []
-
-    for nThread in nThreads:
-
-        start_time = time.time()
-
-        for i in np.arange(nLoops):
-            hsml = calcHsml(pos,sP.boxSize,posSearch=posSearch,
-                            nNGB=nNGB,nNGBDev=nNGBDev,tree=tree,nThreads=nThread)
-
-        times.append( (time.time() - start_time)/nLoops )
-        print('[nThreads=%2d] estimate of HSMLs took [%g] sec on avg' % (nThread,times[-1]))
-        print(' hsml min %g max %g mean %g' % (np.min(hsml), np.max(hsml), np.mean(hsml)))
-
-    # scaling plot
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
-
-    ax.set_xlabel('Number of Threads')
-    ax.set_ylabel('Time [sec]')
-    ax.plot(nThreads[1:], times[1:], 'o-', lw=lw)
-
-    fig.savefig('benchmark_treeSearch.pdf')
-    plt.close(fig)
-
-def checkVsSubfindHsml():
-    """ Compare our result vs SubfindHsml output. """
-    from ..util import simParams
-    import matplotlib.pyplot as plt
-
-    nNGB = 64
-    nNGBDev = 1
-
-    sP = simParams(res=128,run='tng',redshift=0.0,variant='0000')
-
-    pos = sP.snapshotSubset('dm', 'pos')
-    subfind_hsml = sP.snapshotSubset('dm', 'SubfindHsml')
-
-    N = int(1e5)
-    subfind_hsml = subfind_hsml[0:N]
-    posSearch = pos[0:N,:]
-
-    hsml = calcHsml(pos, sP.boxSize, posSearch=posSearch, nNGB=nNGB, nNGBDev=nNGBDev, treePrec='double')
-
-    # check deviations
-    ratio = hsml/subfind_hsml
-    print('ratio, min max mean: ',ratio.min(),ratio.max(),ratio.mean())
-
-    allowed_dev = 2.0*nNGBDev / nNGB # in NGB, not necessarily in hsml
-    w_high = np.where( ratio > (1+allowed_dev) )
-    w_low = np.where( ratio < (1-allowed_dev) )
-
-    print('allowed dev = %.3f (above: %d = %.4f%%) (below: %d = %.4f%%)' % \
-        (allowed_dev,len(w_high[0]),len(w_high[0])/ratio.size,len(w_low[0]),len(w_low[0])/ratio.size))
-
-    # verify
-    checkInds = np.hstack( (np.arange(10),w_high[0][0:10],w_low[0][0:10]) )
-
-    for i in checkInds:
-        dists = sP.periodicDists(posSearch[i,:],pos)
-        dists = np.sort(dists)
-        ww = np.where(dists < hsml[i])
-        ww2 = np.where(dists < subfind_hsml[i])
-        numInHsml = len(ww[0])
-        numInHsmlSnap = len(ww2[0])
-        passMine = (numInHsml >= (nNGB-nNGBDev)) & (numInHsml <= (nNGB+nNGBDev))
-        passSnap = (numInHsmlSnap >= (nNGB-nNGBDev)) & (numInHsmlSnap <= (nNGB+nNGBDev))
-        print('[%2d] hsml: %.3f hsmlSnap: %.3f, myNumInHsml: %d (pass: %s) numInHsmlSnap: %d (pass: %s)' % \
-            (i,hsml[i],subfind_hsml[i],numInHsml,passMine,numInHsmlSnap,passSnap))
-    import pdb; pdb.set_trace()
-
-    # plot
-    fig = plt.figure(figsize=(20,20))
-
-    ax = fig.add_subplot(111)
-    ax.set_xlabel('SubfindHSML')
-    ax.set_ylabel('CalcHsml')
-
-    ax.set_xlim([0,50])
-    ax.set_ylim([0,50])
-
-    ax.scatter(subfind_hsml,hsml)
-    ax.plot([0,45],[0,45],'r')
-
-    fig.savefig('hsml.png')
-    plt.close(fig)
-

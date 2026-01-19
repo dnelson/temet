@@ -54,6 +54,7 @@ classifiers = [
 test = [
     "pytest",
     "pytest-cov",
+    "pytest-benchmark",
 ]
 dev = [
     "buildbot",
@@ -111,3 +112,5 @@ lines-after-imports = 1
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D103"] # Missing docstring in function

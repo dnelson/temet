@@ -1,12 +1,12 @@
-"""
-Create external data files required for GFM runs (photometrics, cooling, etc)
-"""
-import numpy as np
-import h5py
+""" Create external data files required for GFM runs (photometrics, cooling, etc). """
 import glob
+
+import h5py
+import numpy as np
 
 def makeStellarPhotometricsHDF5_BC03():
     """ Create stellar_photometrics.hdf5 file using BC03 models, as used for Illustris and IllustrisTNG runs.
+
     Bands: UBVK (Buser U,B3,V,IR K filter + Palomar200 IR detectors + atmosphere.57) in Vega, griz (sdss) in AB.
 
     Notes:

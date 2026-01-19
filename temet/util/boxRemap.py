@@ -1,9 +1,11 @@
 """
 Implementation of 'a volume and local structure preserving mapping of periodic boxes' (Carlson, White 2010) http://mwhite.berkeley.edu/BoxRemap/.
 """
+from math import fmod
+
 import numpy as np
 from numba import jit
-from math import fmod
+
 from ..util.helper import closest, rootPath
 
 class Plane:
@@ -335,20 +337,3 @@ def remapPositions(sP, pos, remapRatio, nPixels):
 
     return pos_remapped, newBoxSize
 
-def test():
-    # config 1
-    nPixels = [2000, 2000]
-    remapRatio = [2.44, 2.44, 0.168]
-
-    # config 2
-    nPixels = [1920, 1080] * 2
-    remapRatio = [5.0, 2.8125, 0.0711] # must satisfy L1*L2*L3 == 1 constraint, last entry gives fractional z-width
-
-    # load from data
-    from ..util import simParams
-    sP = simParams(res=512, run='tng', redshift=0.0, variant='0000')
-    pos = sP.snapshotSubset('gas','pos')
-
-    pos_new, newBoxSize = remapPositions(sP, pos, remapRatio, nPixels)
-
-    import pdb; pdb.set_trace()

@@ -1,28 +1,34 @@
 """
 Helper function to efficiently match elements between two arrays.
 """
-import numpy as np
 import time
+
+import numpy as np
 from numba import jit
 
 try:
     from ..util.parallelSort import argsort as p_argsort
-except:
-    from numpy import argsort as p_argsort # fallback
+except ImportError:
+    from numpy import argsort as p_argsort  # fallback
 
 def match(ar1, ar2, firstSorted=False, parallel=True, debug=False):
-    """ Returns index arrays i1,i2 of the matching elements between ar1 and ar2. While the elements of ar1 
-        must be unique, the elements of ar2 need not be. For every matched element of ar2, the return i1 
-        gives the index in ar1 where it can be found. For every matched element of ar1, the return i2 gives 
-        the index in ar2 where it can be found. Therefore, ar1[i1] = ar2[i2]. The order of ar2[i2] preserves 
-        the order of ar2. Therefore, if all elements of ar2 are in ar1 (e.g. ar1=all TracerIDs in snap, 
-        ar2=set of TracerIDs to locate) then ar2[i2] = ar2. The approach is one sort of ar1 followed by 
-        bisection search for each element of ar2, therefore O(N_ar1*log(N_ar1) + N_ar2*log(N_ar1)) ~= 
-        O(N_ar1*log(N_ar1)) complexity so long as N_ar2 << N_ar1. """
-    if not isinstance(ar1,np.ndarray): ar1 = np.array(ar1)
-    if not isinstance(ar2,np.ndarray): ar2 = np.array(ar2)
+    """ Calculate the common elements between two arrays and their respective indices.
+
+    Returns index arrays i1,i2 of the matching elements between ar1 and ar2.While the elements of ar1
+    must be unique, the elements of ar2 need not be. For every matched element of ar2, the return i1
+    gives the index in ar1 where it can be found. For every matched element of ar1, the return i2 gives
+    the index in ar2 where it can be found. Therefore, ar1[i1] = ar2[i2]. The order of ar2[i2] preserves
+    the order of ar2. Therefore, if all elements of ar2 are in ar1 (e.g. ar1=all TracerIDs in snap,
+    ar2=set of TracerIDs to locate) then ar2[i2] = ar2. The approach is one sort of ar1 followed by
+    bisection search for each element of ar2, therefore O(N_ar1*log(N_ar1) + N_ar2*log(N_ar1)) ~=
+    O(N_ar1*log(N_ar1)) complexity so long as N_ar2 << N_ar1.
+    """
+    if not isinstance(ar1,np.ndarray):
+        ar1 = np.array(ar1)
+    if not isinstance(ar2,np.ndarray):
+        ar2 = np.array(ar2)
     assert ar1.ndim == ar2.ndim == 1
-    
+
     if debug:
         start = time.time()
         assert np.unique(ar1).size == len(ar1)
@@ -59,11 +65,14 @@ def match(ar1, ar2, firstSorted=False, parallel=True, debug=False):
     return ar1_inds, ar2_inds
 
 def match1(ar1, ar2, uniq=False, debug=False):
-    """ My version of numpy.in1d with invert=False. Return is a ndarray of indices into ar1, 
-        corresponding to elements which exist in ar2. Meant to be used e.g. as ar1=all IDs in
-        snapshot, and ar2=some IDs to search for, where ar2 could be e.g. ParentID from the 
-        tracers, in which case they are generally not unique (multiple tracers can exist in the 
-        same parent). """
+    """ Calculate the common elements between two arrays and their respective indices (unused version 1).
+
+    My version of numpy.in1d with invert=False. Return is a ndarray of indices into ar1,
+    corresponding to elements which exist in ar2. Meant to be used e.g. as ar1=all IDs in
+    snapshot, and ar2=some IDs to search for, where ar2 could be e.g. ParentID from the
+    tracers, in which case they are generally not unique (multiple tracers can exist in the
+    same parent).
+    """
     start = time.time()
 
     # flatten both arrays (behavior for the first array could be different)
@@ -77,7 +86,7 @@ def match1(ar1, ar2, uniq=False, debug=False):
             mask |= (ar1 == a)
         return mask
 
-    # otherwise use sorting of the concatenated array: here we use a stable 'mergesort', 
+    # otherwise use sorting of the concatenated array: here we use a stable 'mergesort',
     # such that the values from the first array are always before the values from the second
     start_uniq = time.time()
     if not uniq:
@@ -111,12 +120,15 @@ def match1(ar1, ar2, uniq=False, debug=False):
     return inds
 
 def match2(ar1, ar2, debug=False):
-    """ My alternative version of numpy.in1d with invert=False, which is more similar to calcMatch(). 
-        Return is two ndarrays. The first is indices into ar1, the second is indices into ar2, such 
-        that ar1[inds1] = ar2[inds2]. Both ar1 and ar2 are assumed to contain unique values. Can be 
-        used to e.g. crossmatch between two TracerID sets from different snapshots, or between some 
-        ParentIDs and ParticleIDs of other particle types. The approach is a concatenated mergesort 
-        of ar1,ar2 combined, therefore O( (N_ar1+N_ar2)*log(N_ar1+N_ar2) ) complexity. """
+    """ Calculate the common elements between two arrays and their respective indices (unused version 2).
+
+    My alternative version of numpy.in1d with invert=False, which is more similar to calcMatch().
+    Return is two ndarrays. The first is indices into ar1, the second is indices into ar2, such
+    that ar1[inds1] = ar2[inds2]. Both ar1 and ar2 are assumed to contain unique values. Can be
+    used to e.g. crossmatch between two TracerID sets from different snapshots, or between some
+    ParentIDs and ParticleIDs of other particle types. The approach is a concatenated mergesort
+    of ar1,ar2 combined, therefore O( (N_ar1+N_ar2)*log(N_ar1+N_ar2) ) complexity.
+    """
     start = time.time()
 
     # flatten both arrays (behavior for the first array could be different)
@@ -165,7 +177,7 @@ def match2(ar1, ar2, debug=False):
 def _match_jit(ar1, ar2, firstSorted=False):
     """ Test. """
     assert ar1.ndim == ar2.ndim == 1
-    
+
     if not firstSorted:
         # need a sorted copy of ar1 to run bisection against
         index = np.argsort(ar1)

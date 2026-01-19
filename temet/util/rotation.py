@@ -3,6 +3,7 @@ Find rotation matrices (moment of inertia tensors) to place galaxies edge-on/fac
 """
 import numpy as np
 from numba import jit, prange
+
 from ..util.helper import cache
 
 def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
@@ -122,7 +123,7 @@ def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subh
         # use all star-forming gas cells within 2*rHalf
         if gas['count'] == 1:
             return np.identity(3)
-            
+
         wGas = np.where( (rad_gas <= 2.0*rHalf) & (gas['StarFormationRate'] > 0.0) )[0]
 
         masses = gas['Masses'][wGas]
@@ -238,13 +239,17 @@ def rotationMatrixFromVec(i_v_in, target_vec=None):
     return mat
 
 def rotationMatrixFromAngleDirection(angle, direction):
-    """ Calculate 3x3 rotation matrix for input angle about an axis defined by the input direction 
-    about the origin. Input angle in degrees. """
+    """ Calculate 3x3 rotation matrix for input angle about an axis defined by the input direction.
+
+    Args:
+      angle (float): rotation angle in degrees.
+      direction (ndarray[float][3] or list[float][3]): 3-vector defining direction of rotation, about the origin.
+    """
     assert not isinstance(angle,np.ndarray) # single value
     assert len(direction) == 3 # 3-tuple or ndarray of length 3
-    
+
     angle_rad = np.radians(angle)
-    
+
     sin_a = np.sin(angle_rad)
     cos_a = np.cos(angle_rad)
     direction /= np.linalg.norm(direction,2)
@@ -307,16 +312,18 @@ def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter, shiftBack=True):
 
 @jit(nopython=True, parallel=True)
 def perspectiveProjection(n,f,l,r,b,t,pos,hsml,axes):
-    """ 
-    Transforms coordinates using the Perspective Projection Matrix and sizes using the ratio of 
+    """
+    Transforms coordinates using a perspective projection, taking into account finite sizes.
+
+    Based on the Perspective Projection Matrix using the ratio of
     similar triangles (http://www.songho.ca/opengl/gl_projectionmatrix.html).
-    
+
     The truncated pyramid frustrum is defined by: 
       n (float): The distance to the near plane along the line of sight direction.
       f (float): The distance to the far plane along the line of sight direction.
       [l, r] ([float, float]): The range of "x-axis" coordinates along the near plane.
       [b, t] ([float, float]): The range of "y-axis" coordinates along the near plane.
-      
+
       (l,b)/(r,t) thus correspond to the bottom-left/top-right corners of the frustum projected onto the near plane.
 
     The Perspective Projection Matrix computed from this set of parameters is thereafter used to transform:
@@ -330,7 +337,7 @@ def perspectiveProjection(n,f,l,r,b,t,pos,hsml,axes):
         left as is for use in, e.g., sphMap(). This, however, means that the transformed coordinates cannot be unprojected.
       tHsml (ndarray[float][N]): Transformed hsml; equal to original hsml along the near plane, and scales 
         inversely with projection distance farther away from camera. 
-      
+
     Notes:
       * The tranformed values of hsml will be negative if the point is behind the camera.
     """
@@ -348,15 +355,18 @@ def perspectiveProjection(n,f,l,r,b,t,pos,hsml,axes):
         y += (t+b)/2
         tPos[j][1] = y
         tPos[j][2] = pos[j][axis2]
-        
+
         tHsml[j] = n * hsml[j] / (-pos[j][axis2])
 
     return(tPos, tHsml) 
 
 def ellipsoidfit(pos_in, mass, scalerad, rin, rout, weighted=False):
-    """ Iterative algorithm to derive the shape (axes ratios) of a set of particles/cells given by pos_in and mass, 
-    within a radial shell defined by rin, rout. Positions should be unitless, normalized by scalerad (a scaling factor, 
-    could be the virial radius or e.g. a half mass radius). Originally from Eddie Chua.  """
+    """ Iterative algorithm to derive the shape (axes ratios) of a set of particles/cells.
+
+    Their distribution is given by pos_in and mass, within a radial shell defined by rin, rout. 
+    Positions should be unitless, normalized by scalerad (a scaling factor, could be e.g. r200 or half mass radius).
+    Originally from Eddie Chua.
+    """
     pos = pos_in.copy()
     assert pos.shape[0] == mass.size
 
@@ -462,143 +472,3 @@ def ellipsoidfit(pos_in, mass, scalerad, rin, rout, weighted=False):
         return np.nan, np.nan, 0, axes
 
     return q, s, mass_loc.size, axes
-    
-def ellipsoidfit_run():
-    """ Find the shape (in stars, gas, or DM) of a set of galaxies/halos using the iterative ellipsoid method. """
-    from ..util import simParams
-
-    sP = simParams(res=2160, run='tng', redshift=2.0)
-
-    # field config
-    ptType = 'gas' # 'gas'
-    massField = 'mass' # 'sfr'
-
-    # bin config
-    solid  = False # otherwise shell
-    binwidth = 0.3
-
-    if 0:
-        # generate a number of bins from the halo center to scalerad
-        nbins = 10
-        rmin  = 1e-2 # linear, fractions of scalerad
-        rmax  = 1.0  # linear, fractions of scalerad
-
-        logr = np.linspace( np.log10(rmin), np.log10(rmax), nbins)
-
-        rin  = 10**(logr - binwidth/2.0)
-        rout = 10**(logr + binwidth/2.0)
-
-    if 1:
-        # or: use exact 'input' bin midpoints
-        rbins = np.array([2.0]) #np.array([1.9,2.1]) # np.array([0.5,1.0,2.0,4.0])
-        logr  = np.log10( rbins )
-        nbins = len(rbins)
-
-        rin  = rbins - binwidth/2.0
-        rout = rbins + binwidth/2.0
-
-    # select objects
-    shIDs_z2_final25 = [29443,79350,60750,8069,57099,
-                        68178,110543,90627,55107,102285,
-                        113349,121252,125841,115247,115582,
-                        127580,132290,130665,129661,139177,
-                        145492,146306,154635,189521,246343]
-
-    for subhaloID in shIDs_z2_final25:
-        # load a normalization/scale radius
-        #scalerad = sP.groupCatSingle(haloID=groupID)['Group_R_Crit200']
-        scalerad = sP.groupCatSingle(subhaloID=subhaloID)['SubhaloHalfmassRadType'][sP.ptNum('stars')]
-
-        # load: halo properties and member-particles (scope is subhalo only)
-        pos = sP.snapshotSubset(ptType, 'pos_rel', subhaloID=subhaloID)
-        pos /= scalerad
-        mass = sP.snapshotSubset(ptType, massField, subhaloID=subhaloID)
-
-        # for gas, filter to SFR>0 gas, and in general filter out all zero-weighted particles (for speed)
-        if ptType == 'gas':
-            sfr = sP.snapshotSubset(ptType, 'sfr', subhaloID=subhaloID)
-            w = np.where(sfr > 0.0)
-            mass = mass[w]
-            pos = pos[w[0],:]
-
-        w = np.where(mass > 0.0)
-        mass = mass[w]
-        pos = pos[w[0],:]
-
-        # allocate
-        q = np.zeros(nbins, dtype='float32')
-        s = np.zeros(nbins, dtype='float32')
-        n = np.zeros(nbins, dtype='int32')
-
-        axes = np.zeros( (nbins,3,3), dtype='float32')
-
-        # fit (multiple radial shells)
-        for i in range(nbins):
-            if solid:
-                ret = ellipsoidfit(pos, mass, scalerad, 0.0, 10**logr[i], weighted=True)
-            else:
-                ret = ellipsoidfit(pos, mass, scalerad, rin[i], rout[i])
-
-            q[i], s[i], n[i], axes[i] = ret
-
-            #print('[%6d %s] [r = %.2f] q = %.3f s = %.3f ratio = %.2f' % (subhaloID,ptType,10.0**logr[i],q[i],s[i],s[i]/q[i]))
-            print(subhaloID,q[i],s[i])
-
-def ellipsoidfit_test(N=1000, h=0.1, R=10.0, q=1.0, s=1.0, phi=0.0, theta=0.0, noise_frac=0.0):
-    """ Generate random points in an ellipsoidal shell and test the iterative fitting algorithm. """
-    allphi   = np.random.rand(N)*2.0*np.pi
-    costheta = 2.0*np.random.rand(N)-1.0
-    alltheta = np.arccos(costheta)
-
-    r = np.zeros(N)
-    tot = 0
-
-    while tot < N:
-        u = np.random.rand(1)
-        t = R* u**(1.0/3.0)
-        if t > (1-h)*R:
-            r[tot] = t
-            tot += 1          
-
-    x = R*np.sin(alltheta)*np.cos(allphi)
-    y = q*R*np.sin(alltheta)*np.sin(allphi)
-    z = s*R*np.cos(alltheta)
-
-    # rotate ellipsoid
-    phi   = np.deg2rad(phi)
-    theta = np.deg2rad(theta)
-    Rp    = np.array([[np.cos(phi),-np.sin(phi),0.0],[np.sin(phi),np.cos(phi),0.0],[0.0,0.0,1.0]])
-    Rt    = np.array([[1.0,0.0,0.0],[0,np.cos(theta),-np.sin(theta)],[0.0,np.sin(theta),np.cos(theta)]])
-    Rtot  = Rt.dot(Rp)
-
-    pos = np.vstack([x,y,z]).T
-    pos = np.dot(Rtot,pos.T).T
-
-    # add noise
-    noise = np.random.normal( loc=0.0, scale=noise_frac, size=pos.shape )
-    pos += noise
-
-    # fit
-    rvir = 1.0
-    mass = np.ones(N, dtype='float32')
-    rin  = 0.0
-    rout = 1e10
-
-    out = ellipsoidfit(pos, mass, rvir, rin, rout, weighted=False)
-
-    print('q=',out[0],'expected=',q)
-    print('s=',out[1],'expected=',s)
-    print('R=',out[3])
-    print(Rtot)
-    rdot = [out[3][:,i].dot(Rtot[:,i]) for i in range(3)]
-    print(rdot)
-
-def ellipsoidfit_test_run():
-    """ Execute some tests. """
-    N = 5000
-
-    ellipsoidfit_test(N,q=1.0,s=1.0)
-    ellipsoidfit_test(N,q=0.2,s=1.0,noise_frac=0.1)
-    ellipsoidfit_test(N,q=0.2,s=1.0,phi=45.0,theta=0.0,noise_frac=0.0)
-    ellipsoidfit_test(N,q=0.2,s=1.0,phi=45.0,theta=0.0,noise_frac=0.1)
-    ellipsoidfit_test(N,q=0.2,s=1.0,phi=30.0,theta=45.0,noise_frac=0.1)

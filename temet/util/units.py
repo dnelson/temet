@@ -130,7 +130,7 @@ class units(object):
     kmS_in_kpcGyr = None
     kpc_in_cm     = None
     msunKpc3_in_gCm3 = None
-    
+
     def __init__(self, sP=None):
         """ Compute derived and redshift dependent units and values. """
         self._sP = sP
@@ -241,13 +241,13 @@ class units(object):
         """ Convert mass from code units (10**10 msun/h) to (msun). """
         mass = np.atleast_1d(mass)        
         mass_msun = mass.astype('float32') * (self.UnitMass_in_Msun) / self._sP.HubbleParam
-        
+
         return mass_msun
 
     def codeMassToLogMsun(self, mass):
         """ Convert mass from code units (10**10 msun/h) to (log msun). """
         return logZeroNaN( self.codeMassToMsun(mass) )
-    
+
     def msunToCodeMass(self, mass):
         """ Convert mass in [msun] to code units. """
         return (mass / self.UnitMass_in_Msun * self._sP.HubbleParam)
@@ -279,7 +279,7 @@ class units(object):
         Tvir = 1.98e4 * (meanmolwt/0.6) * (mass_msun/1e8*little_h)**(2.0/3.0) * \
                         (self._sP.omega_m/omega_m_z * Delta_c / 18.0 / np.pi**2.0)**(1.0/3.0) * \
                         (1.0 + self._sP.redshift)/10.0 # K
-             
+
         if log:
             Tvir = logZeroSafe(Tvir)
         return Tvir.astype('float32')
@@ -511,7 +511,7 @@ class units(object):
 
         # SH03 Eqn. 18 (cold cloud fraction)
         x = 1 + 1/(2*y) - np.sqrt( 1/y + 1/(4*y**2) )
-        
+
         # clip from [0,1] and set to zero below star-formation threshold (use sfr directly to avoid 
         # any possible mismatch between pressurized and unpressurized cells)
         x = np.clip(x, 0.0, 1.0)
@@ -566,7 +566,7 @@ class units(object):
         area *= self.scalefac**2 # comoving -> physical
 
         return area
-    
+
     def codeAreaToMpc2(self, x):
         """ Convert an area [length^2] in code units to physical Mpc^2. """
         return self.codeAreaToKpc2(x) / 1000.0**2
@@ -590,7 +590,7 @@ class units(object):
         vol *= self.scalefac**3 # comoving -> physical
 
         return vol
-    
+
     def codeVolumeToMpc3(self, x):
         """ Convert a volume [length^3] in code units to physical Mpc^3. """
         return self.codeVolumeToKpc3(x) / 1000.0**3
@@ -914,7 +914,7 @@ class units(object):
 
         # convert to 'physical code units' of 10^10 Msun/kpc^2
         colDensPhys = colDens.astype('float64') * self._sP.HubbleParam / self.scalefac**2.0
-        
+
         if cgs:
             UnitColumnDensity_in_cgs = self.UnitMass_in_g / self.UnitLength_in_cm**2.0
             colDensPhys *= UnitColumnDensity_in_cgs # g/cm^2
@@ -993,7 +993,7 @@ class units(object):
 
         dens_cgs = self.codeDensToPhys(code_dens, cgs=True) # g/cm^3
         energy_rate = energy_vol_rate / dens_cgs # [erg/s/g]
-        
+
         return energy_rate # positive = heating, negative = cooling
 
     def coolingTimeGyr(self, code_dens, code_gfmcoolrate, code_u):
@@ -1158,7 +1158,7 @@ class units(object):
         # entropy in [K cm^2]
         dens_fac = self.UnitDensity_in_cgs/self.mass_proton*a3inv
         entropy  = pressure / (dens_phys * dens_fac)**self.gamma
-      
+
         if log:
             entropy = logZeroSafe(entropy)
         return entropy
@@ -1221,7 +1221,7 @@ class units(object):
         if log:
             csnd = logZeroNaN(csnd)
         return csnd
-    
+
     def soundSpeedFromTemp(self, temp, log=False):
         """ Calculate sound speed given temperature [in Kelvin] in physical km/s. """
 
@@ -1409,7 +1409,7 @@ class units(object):
     def codeEnergyToErg(self, energy, log=False):
         """ Convert energy from code units (unitMass*unitLength^2/unitTime^2) to [erg]. (for BH_CumEgy*). """
         energy_cgs = energy.astype('float64') * self.UnitEnergy_in_cgs / self._sP.HubbleParam
-        
+
         if log:
             return logZeroNaN(energy_cgs).astype('float32')
         return energy_cgs
@@ -1422,7 +1422,7 @@ class units(object):
         if log:
             return logZeroNaN(energy_rate_cgs)
         return energy_rate_cgs
-    
+
     def codeEnergyDensToErgPerCm3(self, energy_dens, log=False):
         """ Convert energy/volume from -proper- code units (unitEnergy/unitDensity) to [erg/cm^3] (for RadiationEnergyDensity)."""
         edens_cgs = energy_dens.astype('float64') * self.UnitEnergy_in_cgs / self.UnitLength_in_cm**3 / self._sP.HubbleParam**2
@@ -1618,7 +1618,7 @@ class units(object):
 
         age = np.zeros(redshifts.size, dtype='float32')
         age.fill(np.nan) # leave negative/nan redshifts unset
-        
+
         arcsinh_arg = np.sqrt( (1-self._sP.omega_m)/self._sP.omega_m ) * (1+redshifts[w])**(-3.0/2.0)
         age[w] = 2 * np.arcsinh(arcsinh_arg) / (self.H0_kmsMpc * 3 * np.sqrt(1-self._sP.omega_m))
         age[w] *= 3.085678e+19 / 3.15576e+7 / 1e9 # Gyr
@@ -1747,12 +1747,12 @@ class units(object):
         dA = self.redshiftToAngDiamDist(z)
         size_mpc = dA * ang_diam * self.arcsec_in_rad
         return size_mpc * 1000.0
-    
+
     def arcsecToCodeLength(self, x_arcsec, z=None):
         """ Convert an angle in arcseconds to an angular/tranverse size (in code length units). """
         x_kpc = self.arcsecToAngSizeKpcAtRedshift(x_arcsec, z)
         return self.physicalKpcToCodeLength(x_kpc)
-    
+
     def degToAngSizeKpcAtRedshift(self, ang_diam_deg, z):
         """ Convert an angle in degrees to a physical size [kpc] at redshift z. """
         arcsec_per_deg = 60 * 60
