@@ -285,13 +285,16 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=
     return w
 
 def multiRunMatchedSnapList(runList, method='expand', **kwargs):
-    """ For an input runList of dictionaries containing a sP key corresponding to a simParams 
-    for each run, produce a 'matched'/unified set of snapshot numbers, one set per run, with 
-    all the same length, e.g. for comparative analysis at matched redshifts, or for rendering 
-    movie frames comparing runs at the same redshift. If method is 'expand', inflate the 
-    snapshot lists of all runs to the size of the maximal (duplicates are then guaranteed). 
-    If method is 'condense', shrink the snapshot lists of all runs to the size of the minimal 
-    (skips are then guaranteed). """
+    """ Match snapshots across multiple simulations at a common set of redshifts.
+
+    For an input runList of dictionaries containing a sP key corresponding to a simParams
+    for each run, produce a 'matched'/unified set of snapshot numbers, one set per run, with
+    all the same length, e.g. for comparative analysis at matched redshifts, or for rendering
+    movie frames comparing runs at the same redshift. If method is 'expand', inflate the
+    snapshot lists of all runs to the size of the maximal (duplicates are then guaranteed).
+    If method is 'condense', shrink the snapshot lists of all runs to the size of the minimal
+    (skips are then guaranteed).
+    """
     assert method in ['expand','condense']
 
     snapLists = []
@@ -343,9 +346,6 @@ def snapNumToRedshift(sP, snap=None, time=False, all=False):
     _, sbStr1, _ = subboxVals(sP.subbox)
 
     # load snapshot -> redshift mapping files
-    r = {}
-    saveFilename = sP.derivPath + 'snapnum.' + sbStr1 + 'redshift.hdf5'
-
     snaps = redshiftToSnapNum(load=True, sP=sP)
 
     # scale factor or redshift?
@@ -367,10 +367,12 @@ def snapNumToAgeFlat(sP, snap=None):
 
 def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, method='LHaloTree'):
     """ Given a set of subhaloInds_from_search in sP_from, find matched subhalos in sP_to.
+
     Can implement many methods. For now, uses external (pre-generated) postprocessing/SubhaloMatching/ 
     for TNG_method runs, or postprocessing/SubhaloMatchingToDark/ for Illustris/TNG to DMO runs, or 
     postprocessing/SubhaloMatchingToIllustris/ for TNG->Illustris runs.
-    Return is an int32 array of the same size as input, where -1 indicates no match. """
+    Return is an int32 array of the same size as input, where -1 indicates no match.
+    """
     assert method in ['LHaloTree','SubLink','Lagrange','Positional','PositionalAll']
     assert sP_from != sP_to
 
@@ -588,7 +590,7 @@ def correctPeriodicPosBoxWrap(vecs, sP):
 
     return r
 
-def periodicDists(pt, vecs, sP, chebyshev=False, xyzMin=False):
+def periodicDists(pt, vecs, sP, chebyshev=False):
     """ Calculate distances correctly taking into account periodic boundary conditions.
 
     Args:
@@ -598,7 +600,6 @@ def periodicDists(pt, vecs, sP, chebyshev=False, xyzMin=False):
       sP (:py:class:`~util.simParams`): simulation instance.
       chebyshev (bool): use Chebyshev distance metric (greatest difference in positions along any one axis)
     """
-    assert not (chebyshev and xyzMin), 'At most one.'
     assert vecs.ndim in [1,2]
     assert pt.ndim in [1,2]
 
@@ -648,7 +649,7 @@ def periodicDists(pt, vecs, sP, chebyshev=False, xyzMin=False):
 
     return dists
 
-def periodicDists2D(pt, vecs, sP, chebyshev=False, xyzMin=False):
+def periodicDists2D(pt, vecs, sP, chebyshev=False):
     """ Calculate 2D distances correctly taking into account periodic boundary conditions.
 
     Args:
@@ -658,7 +659,6 @@ def periodicDists2D(pt, vecs, sP, chebyshev=False, xyzMin=False):
       sP (:py:class:`~util.simParams`): simulation instance.
       chebyshev (bool): use Chebyshev distance metric (greatest difference in positions along any one axis)
     """
-    assert not (chebyshev and xyzMin), 'At most one.'
     assert vecs.ndim in [1,2]
     assert pt.ndim in [1,2]
 
@@ -691,8 +691,10 @@ def periodicDists2D(pt, vecs, sP, chebyshev=False, xyzMin=False):
     return dists
 
 def periodicDistsSq(pt, vecs, sP):
-    """ As cosmo.util.periodicDists() but specialized, without error checking, and no sqrt. 
-    Works either for 2D or 3D, where the dimensions of pt and vecs should correspond. """
+    """ As cosmo.util.periodicDists() but specialized, without error checking, and no sqrt.
+
+    Works either for 2D or 3D, where the dimensions of pt and vecs should correspond.
+    """
     if len(pt) == 2:
         assert vecs.shape[1] == 2
 
@@ -704,7 +706,7 @@ def periodicDistsSq(pt, vecs, sP):
             correctPeriodicDistVecs(yDist, sP)
 
         return xDist*xDist + yDist*yDist
-    
+
     # fall through to normal 3D case
     xDist = vecs[:,0] - pt[0]
     yDist = vecs[:,1] - pt[1]
@@ -752,11 +754,13 @@ def periodicPairwiseDists(pts, sP):
 
 def inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName, debug=False, flagFuzz=True,
                                       SubhaloLenType=None, SnapOffsetsSubhalo=None):
-    """ For a particle type ptName and snapshot indices for that type indsType, compute the 
-        subhalo ID to which each particle index belongs. Optional: SubhaloLenType (from groupcat) 
-        and SnapOffsetsSubhalo (from groupCatOffsetListIntoSnap()), otherwise loaded on demand.
-        If flagFuzz is True (default), particles in FoF fuzz are marked as outside any subhalo, 
-        otherwise they are attributed to the closest (prior) subhalo.
+    """ Compute the subhalo ID that each particle/cell belongs to.
+
+    For a particle type ptName and snapshot indices for that type indsType, compute the
+    subhalo ID to which each particle index belongs. Optional: SubhaloLenType (from groupcat)
+    and SnapOffsetsSubhalo (from groupCatOffsetListIntoSnap()), otherwise loaded on demand.
+    If flagFuzz is True (default), particles in FoF fuzz are marked as outside any subhalo,
+    otherwise they are attributed to the closest (prior) subhalo.
     """
     if SubhaloLenType is None:
         SubhaloLenType = sP.groupCat(fieldsSubhalos=['SubhaloLenType'])
@@ -766,17 +770,17 @@ def inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName, debug=False, flagFuz
     gcLenType = SubhaloLenType[:,sP.ptNum(ptName)]
     gcOffsetsType = SnapOffsetsSubhalo[:,sP.ptNum(ptName)][:-1]
 
-    # val gives the indices of gcOffsetsType such that, if each indsType was inserted 
+    # val gives the indices of gcOffsetsType such that, if each indsType was inserted
     # into gcOffsetsType just -before- its index, the order of gcOffsetsType is unchanged
-    # note 1: (gcOffsetsType-1) so that the case of the particle index equaling the 
+    # note 1: (gcOffsetsType-1) so that the case of the particle index equaling the
     # subhalo offset (i.e. first particle) works correctly
-    # note 2: np.ss()-1 to shift to the previous subhalo, since we want to know the 
+    # note 2: np.ss()-1 to shift to the previous subhalo, since we want to know the
     # subhalo offset index -after- which the particle should be inserted
     val = np.searchsorted( gcOffsetsType - 1, indsType ) - 1
     val = val.astype('int32')
 
-    # search and flag all matches where the indices exceed the length of the 
-    # subhalo they have been assigned to, e.g. either in fof fuzz, in subhalos with 
+    # search and flag all matches where the indices exceed the length of the
+    # subhalo they have been assigned to, e.g. either in fof fuzz, in subhalos with
     # no particles of this type, or not in any subhalo at the end of the file
     if flagFuzz:
         gcOffsetsMax = gcOffsetsType + gcLenType - 1
@@ -797,11 +801,13 @@ def inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName, debug=False, flagFuz
 
     return val
 
-def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName, 
+def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName,
                                    GroupLenType=None, SnapOffsetsGroup=None, debug=False):
-    """ For a particle type ptName and snapshot indices for that type indsType, compute the 
-        halo/fof ID to which each particle index belongs. Optional: GroupLenType (from groupcat) 
-        and SnapOffsetsGroup (from groupCatOffsetListIntoSnap()), otherwise loaded on demand.
+    """ Compute the halo ID that each particle/cell belongs to.
+
+    For a particle type ptName and snapshot indices for that type indsType, compute the
+    halo/fof ID to which each particle index belongs. Optional: GroupLenType (from groupcat)
+    and SnapOffsetsGroup (from groupCatOffsetListIntoSnap()), otherwise loaded on demand.
     """
     if GroupLenType is None:
         GroupLenType = sP.groupCat(fieldsHalos=['GroupLenType'])
@@ -811,11 +817,11 @@ def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName,
     gcLenType = GroupLenType[:,sP.ptNum(ptName)]
     gcOffsetsType = SnapOffsetsGroup[:,sP.ptNum(ptName)][:-1]
 
-    # val gives the indices of gcOffsetsType such that, if each indsType was inserted 
+    # val gives the indices of gcOffsetsType such that, if each indsType was inserted
     # into gcOffsetsType just -before- its index, the order of gcOffsetsType is unchanged
-    # note 1: (gcOffsetsType-1) so that the case of the particle index equaling the 
+    # note 1: (gcOffsetsType-1) so that the case of the particle index equaling the
     # subhalo offset (i.e. first particle) works correctly
-    # note 2: np.ss()-1 to shift to the previous subhalo, since we want to know the 
+    # note 2: np.ss()-1 to shift to the previous subhalo, since we want to know the
     # subhalo offset index -after- which the particle should be inserted
     val = np.searchsorted( gcOffsetsType - 1, indsType ) - 1
     val = val.astype('int32')
@@ -839,13 +845,19 @@ def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName,
     return val
 
 def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubhalos=False):
-    """ For a list of subhalo IDs, return a dictionary with an entry for each partType, 
-    whose value is a 2-tuple of the particle index range bounding the members of the 
-    parent groups of this list of subhalo IDs. Indices are inclusive in the sense of 
-    sP.snapshotSubset(). If groups==True, then the input IDs are assumed to be 
-    actually group (FoF) IDs, and we return bounding ranges for them. If strictSubhalos==True, 
-    then do not use parent groups to bound subhalo members, instead return exact bounding 
-    index ranges. """
+    """ For a list of subhalo IDs, identfy the particle index that bounds all their members.
+
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      subhaloIDs (array-like): list of subhalo IDs.
+      groups (bool): if True, input IDs are group (FoF) IDs, not subhalo IDs.
+      strictSubhalos (bool): if True, do not use parent groups to bound subhalo members, instead return exact
+        bounding index ranges.
+
+    Return:
+      dict: with an entry for each partType, whose value is a 2-tuple of the particle index range bounding the
+        members of the parent groups of this list of subhalo IDs. Indices are inclusive as in snapshotSubset().
+    """
     if strictSubhalos: assert not groups
     if groups: assert not strictSubhalos # mutually exclusive
 
@@ -898,7 +910,7 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubha
         r[ptName][1] -= 1
 
         if strictSubhalos:
-            # need to use the end of the final subhalo, instead of the beginning of the one after, 
+            # need to use the end of the final subhalo, instead of the beginning of the one after,
             # as they are not necessarily contiguous (if they span across groups)
             # also solves the issue of using the very last subhalo of the catalog
             r[ptName] = offsets_pt[ [first_sub_groupID,last_sub_groupID], sP.ptNum(ptName) ]
@@ -911,7 +923,8 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubha
             assert subLenType.sum() == 0 and r[ptName][0] == 0
             r[ptName][1] = 0
         else:
-            assert r[ptName][1] >= 0 or snapHeader['NumPart'][sP.ptNum(ptName)] == 1 # otherwise we read the last/unused element of offsets_pt
+            # otherwise we read the last/unused element of offsets_pt
+            assert r[ptName][1] >= 0 or snapHeader['NumPart'][sP.ptNum(ptName)] == 1
 
     if 'stars' in r:
         r['wind'] = r['stars']
@@ -919,8 +932,7 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubha
     return r
 
 def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
-    """ Return a tuple of three sets of indices into the group catalog for subhalos: 
-      centrals only, centrals & satellites together, and satellites only. """
+    """ Return a tuple of three sets of subhalo IDs: centrals only, centrals & satellites, and satellites only. """
     if sP is None:
         assert 'halos' in gc
         assert 'GroupFirstSub' in gc['halos'] and 'Group_M_Crit200' in gc['halos']
@@ -932,7 +944,7 @@ def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
         if gc is None:
             # load what we need
             assert sP is not None
-            
+
             gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
 
         mask = np.zeros( sP.numSubhalos, dtype='int16' )
@@ -979,9 +991,12 @@ def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
     if cenSatSelect is None:
         return w1, w2, w3
 
-    if cenSatSelect in ['cen','pri','primary','central','centrals']: return w1
-    if cenSatSelect in ['sat','sec','secondary','satellite','satellites']: return w3
-    if cenSatSelect in ['all','both']: return w2
+    if cenSatSelect in ['cen','pri','primary','central','centrals']:
+        return w1
+    if cenSatSelect in ['sat','sec','secondary','satellite','satellites']:
+        return w3
+    if cenSatSelect in ['all','both']:
+        return w2
 
 def subboxSubhaloCat(sP, sbNum):
     """ Generate/return the SubboxSubhaloList catalog giving the intersection of fullbox subhalos 
@@ -990,8 +1005,8 @@ def subboxSubhaloCat(sP, sbNum):
     minEdgeDistRedshifts = [100.0, 6.0, 4.0, 3.0, 2.0, 1.0, 0.0]
 
     def _inSubbox(pos):
-        """ Return a vector of True or False entries, if pos (3-vector, or [N,3] vector) is inside subbox. 
-        Also return the minimum distance between pos and the subbox boundaries along any of (x,y,z) directions at each time. """
+        # return a vector of True or False entries, if pos (3-vector, or [N,3] vector) is inside subbox.
+        # also return the minimum distance between pos and the subbox boundaries along any coordinate at each time.
         dist_x = np.abs(pos[:,0] - subboxCen[0])
         dist_y = np.abs(pos[:,1] - subboxCen[1])
         dist_z = np.abs(pos[:,2] - subboxCen[2])
@@ -1016,7 +1031,7 @@ def subboxSubhaloCat(sP, sbNum):
         return r
 
     r = {}
-    
+
     # calculate new
     if not isdir(fileBase):
         mkdir(fileBase)
@@ -1153,7 +1168,7 @@ def subboxSubhaloCat(sP, sbNum):
             r['SubhaloMinEdgeDist'][i,j] = min_axis_dists[ minEdgeIndices[j] ].min() 
 
         if len(w) == 0:
-            # mpb['SubhaloPos'] is inside, but pos is not: should be extremely rare (and require SnapNumMapApprox.sum()>0)
+            # mpb['SubhaloPos'] is inside, but pos is not: should be rare (and require SnapNumMapApprox.sum()>0)
             print('Warning: subhalo [%d] ID [%d] interpolated positions never inside subbox...' % (i,subhaloID))
             continue
 

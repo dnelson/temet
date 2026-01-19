@@ -119,10 +119,12 @@ def maskBoxRegionsByHalo():
     assert np.abs( totOccupiedVolFrac - (100-frac) ) < 1e-6 # total occupied should equal 1-(total unoccupied)
 
 def combineZoomRunsIntoVirtualParentBox(snap=99):
-    """ Combine a set of individual zoom simulations into a 'virtual' parent 
-    simulation, i.e. concatenate the output/group* and output/snap* of these runs. 
-    Process a single snapshot, since all are independent. Note that we write exactly one
-    output groupcat file per zoom halo, and exactly two output snapshot files. """
+    """ Combine a set of individual zoom simulations into a 'virtual' parent simulation.
+
+    We concatenate the output/group* and output/snap* of these runs, and process a single snapshot,
+    since all are independent. Note that we write exactly one  output groupcat file per zoom halo,
+    and exactly two output snapshot files.
+    """
     outPath = '/u/dnelson/sims.TNG/L680n8192TNG/output/'
     parent_sim = simParams('tng-cluster')
 
@@ -134,9 +136,11 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
     hInds = _halo_ids_run(res=res, onlyDone=True)
 
     def _newpartid(old_ids, halo_ind, ptNum):
-        """ Define convention to offset particle/cell/tracer IDs based on zoom run halo ID. 
-        No zoom halo has more than 100M (halo 0 has ~85M) of any type. This requires conversion 
-        to LONGIDS by definition. """
+        """ Define convention to offset particle/cell/tracer IDs based on zoom run halo ID.
+
+        No zoom halo has more than 100M (halo 0 has ~85M) of any type. This requires conversion
+        to LONGIDS by definition.
+        """
         new_ids = old_ids.astype('uint64')
 
         # shift to start at 1 instead of 1000000000 (for IC-split/spawned types)
@@ -201,7 +205,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
 
             TracerID = TracerID[trInds_final]
 
-            # save            
+            # save
             with h5py.File(saveFilename,'w') as f:
                 # lengths and offsets
                 for key in trCounts_halo.keys():
@@ -322,7 +326,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
                         data[gName][field][start:start+length] = f[gName][field][()]
 
                     offsets_loc[gName] += length
-        
+
         if lengths['Group'][hCount]:
             # allocate fields to save originating zoom run IDs
             data['Group']['GroupOrigHaloID'] = np.zeros(lengths['Group'][hCount], dtype='int32')
@@ -649,7 +653,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
             else:
                 headers['Header']['NumPart_ThisFile'] = np.int32(OuterFuzzLenType_hInd[hCount,:])
                 start = GroupLenType_hInd[hCount,:]
-            
+
             outFile = "snap_%03d.%d.hdf5" % (snap,hCount+len(hInds)*fileNum)
 
             with h5py.File(savePath + outFile, 'w') as f:
@@ -683,7 +687,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
 
     # compute offsets and insert them (e.g. new/MTNG convention)
     parent_sim.snap = snap # avoid setSnap() since our snap<->redshift mapping file is incomplete
-    
+
     offsets = parent_sim.groupCatOffsetListIntoSnap()
 
     w_offset_halos = 0
@@ -998,67 +1002,3 @@ def check_particle_property():
     ax.legend(loc='best')
     fig.savefig('check_%s_%s.pdf' % (pt,prop))
     plt.close(fig)
-
-def fix_tracer_offsets():
-    """ Fix Group and Subhalo TracerOffsetType fields, which had overflow in original virtual box. """
-    sim = simParams(run='tng-cluster', snap=99)
-
-    # load
-    GroupTracerLengthType = sim.groups('TracerLengthType')
-    SubhaloTracerLengthType = sim.subhalos('TracerLengthType')
-    GroupNsubs = sim.groups('GroupNsubs')
-
-    #GroupOff_old = sim.groups('TracerOffsetType')
-    #SubhaloOff_old = sim.subhalos('TracerOffsetType')
-
-    # allocate
-    nTypes = 6
-    offsetsGroup   = np.zeros((sim.numHalos, nTypes), dtype=np.int64)
-    offsetsSubhalo = np.zeros((sim.numSubhalos, nTypes), dtype=np.int64)
-
-    # remake offsets
-    for j in range(nTypes):
-        print(j)
-        subgroupCount = 0
-        
-        # compute group offsets first (first entry is zero!)
-        offsetsGroup[1:,j] = np.cumsum(GroupTracerLengthType[:,j], dtype=np.int64)[:-1]
-
-        for k in range(sim.numHalos):
-            # subhalo offsets depend on group (to allow fuzz)
-            if GroupNsubs[k] > 0:
-                offsetsSubhalo[subgroupCount,j] = offsetsGroup[k,j]
-                
-                subgroupCount += 1
-                for m in np.arange(1, GroupNsubs[k]):
-                    offsetsSubhalo[subgroupCount,j] = \
-                    offsetsSubhalo[subgroupCount-1,j] + SubhaloTracerLengthType[subgroupCount-1,j]
-                    subgroupCount += 1
-    
-    # save
-    with h5py.File('tracer_offsets.hdf5','w') as f:
-        f['Group'] = offsetsGroup
-        f['Subhalo'] = offsetsSubhalo
-    print('Wrote: [tracer_offsets.hdf5]')
-
-    # overwrite existing old fields in TNG-Cluster group catalogs at snap 99
-    path = '/virgotng/mpia/TNG-Cluster/TNG-Cluster/output/groups_099/'
-    w_offset1 = 0
-    w_offset2 = 0
-
-    for i in range(352):
-        print(i, w_offset1, w_offset2)
-        with h5py.File(path+'fof_subhalo_tab_099.%d.hdf5' % i, 'r+') as f:
-            Nsubhalos = f['Header'].attrs['Nsubgroups_ThisFile']
-            Nhalos = f['Header'].attrs['Ngroups_ThisFile']
-
-            del f['Group']['TracerOffsetType'] # wrong dtype
-            del f['Subhalo']['TracerOffsetType']
-
-            f['Group/TracerOffsetType'] = offsetsGroup[w_offset1:w_offset1+Nhalos]
-            f['Subhalo/TracerOffsetType'] = offsetsSubhalo[w_offset2:w_offset2+Nsubhalos]
-
-            w_offset1 += Nhalos
-            w_offset2 += Nsubhalos
-
-    print('Done.')

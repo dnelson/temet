@@ -1,15 +1,17 @@
 """
 Generate x-ray emissivity tables using AtomDB/XSPEC and apply these to gas cells.
 """
-import numpy as np
-import h5py
-import astropy.io.fits as pyfits
+import time
 from os.path import expanduser
-from scipy.integrate import cumulative_trapezoid
 
-from ..util.helper import rootPath, closest
-from ..util.helper import plothist, plotxy
-from ..util  import simParams
+import astropy.io.fits as pyfits
+import h5py
+import numpy as np
+from scipy.integrate import cumulative_trapezoid
+from scipy.ndimage import map_coordinates
+
+from ..util import simParams
+from ..util.helper import closest, plothist, plotxy, rootPath
 
 basePath = rootPath + "tables/xray/"
 
@@ -47,12 +49,13 @@ abundance_tables = { # NOTE: AG89 is the assumed abundances inside APEC
 }
 
 def integrate_to_common_grid(bins_in, cont_in, bins_out):
-    """ Convert a 'compressed' APEC spectrum into a normally binned one, by interpolating 
-    from an input (bins,cont) pair to (bins_out). """
+    """ Convert a 'compressed' APEC spectrum into a normally binned one.
 
+    Interpolate from an input (bins,cont) pair to (bins_out).
+    """
     # concatenate compressed spectrum bins (input) and requested bin edges (output)
     bins_all = np.append(bins_in, bins_out)
-    
+
     # interpolate compressed spectrum emis (input) to requested bin edges (output)
     cont_tmp = np.interp(bins_out, bins_in, cont_in)
 
@@ -243,7 +246,7 @@ def apec_convert_tables():
     # loop over requested energy bands (are always observed frame)
     for i, (emin,emax) in enumerate(bands):
         # allocate grid across requested redshifts
-        emis = np.zeros( (len(redshifts),spec_grid_3d.shape[0],spec_grid_3d.shape[1]), dtype=dtype)    
+        emis = np.zeros( (len(redshifts),spec_grid_3d.shape[0],spec_grid_3d.shape[1]), dtype=dtype)
 
         # loop over requested redshifts
         for j, redshift in enumerate(redshifts):
@@ -357,6 +360,7 @@ class xrayEmission():
 
     def emis(self, instrument, metal, temp, norm=None, redshift=0.0):
         """ Interpolate the x-ray table, return fluxes [erg/s/cm^2], luminosities [10^44 erg/s], or counts [1/s].
+
         Input gas properties can be scalar or np.array(), in which case they must have the same size.
 
         Args:
@@ -366,18 +370,15 @@ class xrayEmission():
           temp (float or ndarray[float]): boltzmann constant * temperature [log keV].
           redshift (float):
 
-        Returns
+        Return:
           emis (ndarray[float]): x-ray emission per cell.
         """
-        from scipy.ndimage import map_coordinates
-        import time
-
         if instrument not in self.data:
             raise Exception('Requested instrument [' + instrument + '] not in grid.')
 
         start_time = time.time()
         # convert input interpolant point into fractional 3D array indices
-        # Note: we are clamping here at [0,size-1], which means that although we never 
+        # Note: we are clamping here at [0,size-1], which means that although we never
         # extrapolate below (nearest grid edge value is returned), there is no warning given
         if self.use_apec:
             redshifts = np.zeros( temp.size, dtype='float32' ) + redshift # all the same
@@ -409,11 +410,13 @@ class xrayEmission():
         return emis
 
     def _prefac(self, redshift=0.01):
-        """ Return pre-factor for normalisation used in tables. 
-        Note that z=0.01 is hard-coded in the "z=0" table, i.e. we should set z=0.01 to 
+        """ Return pre-factor for normalisation used in tables.
+
+        Note that z=0.01 is hard-coded in the "z=0" table, i.e. we should set z=0.01 to
         use the table at z=0. To use the z=0.4 table at z=0.4, we should use redshift=0.4.
-        However, we can approximate any redshift by using the "z=0" table and multiplying 
-        the normalisation by the ratio of two prefactors, (z0/zother). TBD! """
+        However, we can approximate any redshift by using the "z=0" table and multiplying
+        the normalisation by the ratio of two prefactors, (z0/zother). TBD!
+        """
         assert redshift == 0.01 # otherwise not yet understood
 
         ang_diam = self.sP.units.redshiftToAngDiamDist(redshift) * self.sP.units.Mpc_in_cm
@@ -423,11 +426,14 @@ class xrayEmission():
         return prefac
 
     def calcGasEmission(self, sP, instrument, subhaloID=None, indRange=None, tempSfCold=True):
-        """ Compute x-ray emission, either (i) flux [erg/s/cm^2], (ii) luminosity [erg/s], or 
-         (iii) counts for a particular observational setup [count/s], always linear,
-         for gas particles in the whole snapshot, optionally restricted to an indRange.
-         tempSfCold : set temperature of SFR>0 gas to cold phase temperature (1000 K, i.e. no x-ray
-         emission) instead of the effective EOS temp. """
+        """ Compute x-ray emission for all gas, optionally restricted to an index range.
+
+        Compute either (i) flux [erg/s/cm^2], (ii) luminosity [erg/s], or 
+        (iii) counts for a particular observational setup [count/s], always linear,
+        for gas particles in the whole snapshot, optionally restricted to an indRange.
+        tempSfCold : set temperature of SFR>0 gas to cold phase temperature (1000 K, i.e. no x-ray
+        emission) instead of the effective EOS temp.
+        """
         assert subhaloID is None or indRange is None # choose one
 
         instrument = instrument.replace("_NoMet","") # this is used to change the table file itself in init()
@@ -453,7 +459,7 @@ class xrayEmission():
         tempField = 'temp_sfcold' if tempSfCold else 'temp' # use cold phase temperature for eEOS gas (by default)
         temp = sP.snapshotSubset('gas', tempField, subhaloID=subhaloID, indRange=indRange) # K
         temp_keV = np.log10(temp / sP.units.boltzmann_keV) # log keV
-        
+
         # interpolate for flux, luminosity, or counts
         vals = self.emis(instrument, metal_logSolar, temp_keV, norm=norm, redshift=sP.redshift)
 
@@ -478,7 +484,8 @@ def plotXrayEmissivities():
     """ Debug plots of the x-ray emissivity table trends with (z,band,T,Z). """
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
-    from ..util.helper import contourf, evenlySample, sampleColorTable
+
+    from ..util.helper import contourf, sampleColorTable
 
     # plot config
     emis_range = [-25.7,-21.8] # log erg cm^3 s^-1

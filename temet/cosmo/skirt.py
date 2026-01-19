@@ -130,7 +130,7 @@ ski_template = """
                     <VoronoiMeshSpatialGrid minX="{minX}" maxX="{maxX}" minY="{minY}" maxY="{maxY}" minZ="{minZ}" maxZ="{maxZ}" policy="ImportedMesh">
                     </VoronoiMeshSpatialGrid>
                 </grid>
-                
+
             </MediumSystem>
         </mediumSystem>
 
@@ -197,7 +197,7 @@ def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='
     gas   = sP.snapshotSubset('gas', fields_gas, subhaloID=subhaloID, haloID=haloID)
     stars = sP.snapshotSubset('stars_real', fields_stars, subhaloID=subhaloID, haloID=haloID)
 
-    # rotation: we will orient the galaxy using our usual technique, then simultaneously save edge-on, face-on, and random outputs
+    # rotation: we will orient the galaxy, then simultaneously save edge-on, face-on, and random outputs
     pos_stars_rot, _ = rotateCoordinateArray(sP, stars['pos_rel'], rotMatrices['face-on'], [0,0,0], shiftBack=False)
     pos_gas_rot, _ = rotateCoordinateArray(sP, gas['pos_rel'], rotMatrices['face-on'], [0,0,0], shiftBack=False)
 
@@ -253,7 +253,8 @@ def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='
                        gas['vel_rel'][:,1],
                        gas['vel_rel'][:,2]) ).T
 
-    header = '\ncolumn 1: position x (kpc)\ncolumn 2: position y (kpc)\ncolumn 3: position z (kpc)\ncolumn 4: mass density (Msun/pc3)\n'
+    header = '\ncolumn 1: position x (kpc)\ncolumn 2: position y (kpc)\ncolumn 3: position z (kpc)\n'
+    header += 'column 4: mass density (Msun/pc3)\n'
     header += 'column 5: velocity x (km/s)\ncolumn 6: velocity y (km/s)\ncolumn 7: velocity z (km/s)\n'
 
     np.savetxt(filename_gas, data, fmt='%g', header=header, newline='\n')
@@ -289,10 +290,11 @@ def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='
                                np.zeros(inds_young.size) + P0,
                                np.zeros(inds_young.size) + fPDR) ).T
 
-        filename_stars1 = 'sh%d_stars_young_%s_%d_fof=%s_%s.txt' % (subhaloID_sP.simName,sP.snap,fofScope,star_model)
+        filename_stars1 = 'sh%d_stars_young_%s_%d_fof=%s_%s.txt' % (subhaloID,sP.simName,sP.snap,fofScope,star_model)
         header = '\ncolumn 1: position x (kpc)\ncolumn 2: position y (kpc)\ncolumn 3: position z (kpc)\n'
-        header += 'column 4: size h (kpc)\ncolumn 5: velocity x (km/s)\ncolumn 6: velocity y (km/s)\ncolumn 7: velocity z (km/s)\n'
-        header += 'column 8: SFR (Msun/yr)\ncolumn 9: metallicity (1)\ncolumn 10: logC (1)\ncolumn 11: P0 (Pa)\ncolumn 12: fPDR (1)\n'
+        header += 'column 4: size h (kpc)\ncolumn 5: velocity x (km/s)\ncolumn 6: velocity y (km/s)\n'
+        header += 'column 7: velocity z (km/s)\ncolumn 8: SFR (Msun/yr)\n'
+        header += 'column 9: metallicity (1)\ncolumn 10: logC (1)\ncolumn 11: P0 (Pa)\ncolumn 12: fPDR (1)\n'
 
         np.savetxt(filename_stars1, data, fmt='%.10g', header=header, newline='\n')
         print('Wrote: [%s] with [%d] stars.' % (filename_stars1,inds_young.size))
@@ -314,7 +316,8 @@ def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='
 
         filename_stars2 = 'sh%d_stars_old_%s_%d_fof=%s_%s.txt' % (subhaloID,sP.simName,sP.snap,fofScope,star_model)
         header = '\ncolumn 1: position x (kpc)\ncolumn 2: position y (kpc)\ncolumn 3: position z (kpc)\n'
-        header += 'column 4: size h (kpc)\ncolumn 5: velocity x (km/s)\ncolumn 6: velocity y (km/s)\ncolumn 7: velocity z (km/s)\n'
+        header += 'column 4: size h (kpc)\n'
+        header += 'column 5: velocity x (km/s)\ncolumn 6: velocity y (km/s)\ncolumn 7: velocity z (km/s)\n'
         header += 'column 8: initial mass (Msun)\ncolumn 9: metallicity (1)\ncolumn 10: age (Gyr)\n'
 
         np.savetxt(filename_stars2, data, fmt='%.10g', header=header, newline='\n')
@@ -339,7 +342,8 @@ def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='
 
         filename_stars = 'sh%d_stars_%s_%d_fof=%s_%s.txt' % (subhaloID,sP.simName,sP.snap,fofScope,star_model)
         header = '\ncolumn 1: position x (kpc)\ncolumn 2: position y (kpc)\ncolumn 3: position z (kpc)\n'
-        header += 'column 4: size h (kpc)\ncolumn 5: velocity x (km/s)\ncolumn 6: velocity y (km/s)\ncolumn 7: velocity z (km/s)\n'
+        header += 'column 4: size h (kpc)\n'
+        header += 'column 5: velocity x (km/s)\ncolumn 6: velocity y (km/s)\ncolumn 7: velocity z (km/s)\n'
         header += 'column 8: initial mass (Msun)\ncolumn 9: metallicity (1)\ncolumn 10: age (Gyr)\n'
 
         np.savetxt(filename_stars, data, fmt='%.10g', header=header, newline='\n')
@@ -393,9 +397,11 @@ def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='
     return filename_ski
 
 def driver_single():
-    """ Prepare and execute a single SKIRT run of one subhalo. Note that all input and output files 
-    are created in the working directory, and left there after for visualization. By default, 
-    three projections are made simultaneously: edge-on, face-on, and one random orientation. """
+    """ Prepare and execute a single SKIRT run of one subhalo.
+
+    Note that all input and output files are created in the working directory, and left there after for visualization. 
+    By default, three projections are made simultaneously: edge-on, face-on, and one random orientation.
+    """
     sP = simParams(run='tng100-1', redshift=0.05)
     subhaloID = 343503 # almost edge-on disk
 
@@ -450,7 +456,7 @@ def driver_sample(sP, subhaloIDs):
 
     maxSimultaneousJobs = 4
 
-    # use ExtinctionOnly for UV+Opt+NIR. If we want IR dust emission, should switch to 
+    # use ExtinctionOnly for UV+Opt+NIR. If we want IR dust emission, should switch to
     # DustEmissionWithSelfAbsorption and increase maxWavelength to ~100 microns.
     params = {'numPackets'     : 5e6,
               'numPixelsX'     : 400,
@@ -507,8 +513,14 @@ def _log(x):
     return r
 
 def convolve_cube_with_filter(data, wavelengths, filterName, raw=False):
-    """ Return convolution of IFU (x,y,wave) cube with a given broadband. If raw is True, 
-    then do not do any unit conversions (e.g. for stats0 analysis). """
+    """ Return convolution of IFU (x,y,wave) cube with a given broadband.
+
+    Args:
+        data (ndarray[float]): 3D array (x,y,wavelength) of flux values.
+        wavelengths (ndarray[float]): wavelengths corresponding to the 3rd axis of data [micron].
+        filterName (str): name of the filter, e.g. 'sdss_g'.
+        raw (bool): if True, do not do any unit conversions (e.g. for stats0 analysis).
+    """
     # get broadband filter and normalize
     import fsps
 
@@ -531,7 +543,8 @@ def convolve_cube_with_filter(data, wavelengths, filterName, raw=False):
     data_loc = data[:,:,w[0]]
 
     # log-log interpolate transmission onto this common grid
-    T = np.exp( np.interp(np.log10(wave_loc), np.log10(filter_wave_micron), _log(filter_trans_norm), left=0.0, right=0.0) )
+    log_trans = _log(filter_trans_norm)
+    T = np.exp(np.interp(np.log10(wave_loc), np.log10(filter_wave_micron), log_trans, left=0.0, right=0.0))
 
     F = data_loc
     result = np.trapz(x=wave_loc, y=F*T)
@@ -544,8 +557,10 @@ def convolve_cube_with_filter(data, wavelengths, filterName, raw=False):
     return result
 
 def vis(subhaloID=343503):
-    """ Load and visualize SKIRT output. This routine simply looks for files in the current 
-    working directory corresponding to the input subhalo ID."""
+    """ Load and visualize SKIRT output.
+
+    This routine simply looks for files in the current  working directory corresponding to the input subhalo ID.
+    """
     instNames = ['faceon','edgeon','random','perspective']
     outTypes = ['total','transparent']
 
@@ -592,7 +607,9 @@ def vis(subhaloID=343503):
 
                 # surface brightness dimming
                 if redshift > 0:
-                    # exponent is 4 for integrated/bolometric flux, 5 for flux per wavelength interval, 3 for flux per frequency interval
+                    # exponent is 4 for integrated/bolometric flux
+                    # 5 for flux per wavelength interval
+                    # 3 for flux per frequency interval
                     convolved /= (1+redshift)**4
 
                 # units: [W/m^2/arcsec^2] -> [erg/s/cm^2/arcsec^2]
@@ -663,7 +680,7 @@ def vis(subhaloID=343503):
         if isfile(statsfile):
             print(statsfile)
             # w_i is the contribution of the i^th photon packet to each pixel
-            # includes contributions of all photon packets peeled-off and/or scattered from 
+            # includes contributions of all photon packets peeled-off and/or scattered from
             # originally launched packets
             with fits.open(statsfile) as f:
                 header = f[0].header # sum of w_i^k for k=1
@@ -688,8 +705,7 @@ def vis(subhaloID=343503):
             rel_err_band = convolve_cube_with_filter(rel_err, wavelengths, filterNames[0], raw=True)
 
             # create image and save
-            fig = plt.figure(figsize=(10,8))
-            ax = fig.add_subplot(111)
+            fig, ax = plt.subplots()
 
             im = np.flip(rel_err_band, axis=1)
             plt.imshow(im, cmap='tab10', aspect='equal', extent=[xvals[0],xvals[-1],yvals[0],yvals[-1]])
@@ -707,10 +723,10 @@ def vis(subhaloID=343503):
             plt.close(fig)
 
 def plot_sed(subhaloID=343503):
-    """ Plot a spectral energy distribution .dat output file. As above, simply looks for 
-    existing output files in the current working directory. """
-    from ..plot.config import lw, figsize
+    """ Plot a spectral energy distribution .dat output file.
 
+    Looks for existing output files in the current working directory.
+    """
     instNames = ['faceon','edgeon','random']
 
     for instName in instNames:
@@ -730,8 +746,7 @@ def plot_sed(subhaloID=343503):
         labels = {1:'total', 2:'transparent', 3:'direct primary', 4:'scattered primary', 5:'direct secondary', 6:'scattered secondary'}
 
         # start plot (full sed)
-        fig = plt.figure(figsize=(figsize[0]*0.8, figsize[1]*0.8))
-        ax = fig.add_subplot(111)
+        fig, ax = plt.subplots()
 
         ax.set_xlim(np.log10([0.09,100]))
         ax.set_ylim([-22,-10])
@@ -741,15 +756,14 @@ def plot_sed(subhaloID=343503):
         xx = np.log10(data[:,0])
 
         for col, label in labels.items():
-            ax.plot(xx, logZeroNaN(data[:,col]), '-', lw=lw, label=label)
+            ax.plot(xx, logZeroNaN(data[:,col]), '-', label=label)
 
         ax.legend(loc='best')
         fig.savefig('sed_sh%d_%s.pdf' % (subhaloID,instName))
         plt.close(fig)
 
         # start plot (optical)
-        fig = plt.figure(figsize=(figsize[0]*0.8, figsize[1]*0.8))
-        ax = fig.add_subplot(111)
+        fig, ax = plt.subplots()
 
         ww = np.where(data[:,0] < 1.0)
 
@@ -761,7 +775,7 @@ def plot_sed(subhaloID=343503):
         xx = data[ww[0],0] * 1e4 # micron -> ang
 
         for col, label in labels.items():
-            ax.plot(xx, logZeroNaN(data[ww[0],col]), '-', lw=lw, label=label)
+            ax.plot(xx, logZeroNaN(data[ww[0],col]), '-', label=label)
 
         ax.legend(loc='best')
         fig.savefig('sed_optical_sh%d_%s.pdf' % (subhaloID,instName))

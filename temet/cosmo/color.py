@@ -3,7 +3,7 @@ Calculations for optical stellar light of galaxies and galaxy colors.
 """
 import numpy as np
 
-from ..cosmo.kCorr import kCorrections, coeff
+from ..cosmo.kCorr import coeff, kCorrections
 
 # dictionary of band name -> SubhaloStellarPhotometrics[:,i] index i (currently same for all sims, otherwise move into sP)
 gfmBands = {'U':0, 'B':1, 'V':2, 'K':3,
@@ -98,7 +98,7 @@ def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None,
             if projs is None:
                 print(' Warning: loadSimGalColors() projs unspecified, returning [random] by default.')
                 projs = 'random'
-            
+
             if projs == 'all':
                 # return all
                 if len(bands) == 1:

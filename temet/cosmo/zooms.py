@@ -1,21 +1,21 @@
 """
 Analysis and helpers specifically for zoom resimulations in cosmological volumes.
 """
-import numpy as np
+from glob import glob
+from os.path import isfile
+
 import h5py
 import matplotlib.pyplot as plt
-from os.path import isfile
+import numpy as np
 from matplotlib.ticker import MultipleLocator
 from scipy.signal import savgol_filter
-from collections import OrderedDict
-from glob import glob
 
 from ..load.simtxt import getCpuTxtLastTimestep
+from ..plot.config import *
 from ..util import simParams
 from ..util.helper import logZeroNaN, running_median
-from ..vis.halo import renderSingleHalo, selectHalosFromMassBins
 from ..vis.box import renderBox
-from ..plot.config import *
+from ..vis.halo import renderSingleHalo, selectHalosFromMassBins
 
 def pick_halos():
     """ Testing. """
@@ -277,7 +277,7 @@ def contamination_mindist():
         #min_ind = np.where(contam['r_frac_cum'] > frac_thresh)[0].min()
         #min_dists_thresh[i] = contam['rr'][min_ind] / halo_zoom['Group_R_Crit200']
         min_dists_thresh[i] = np.interp(frac_thresh, contam['r_frac_cum'], contam['rr']) / halo_zoom['Group_R_Crit200']   
-    
+
     # plot distribution
     xlim = [0.0, 10.0]
     nbins = 60
@@ -326,7 +326,7 @@ def contamination_mindist2():
     """ For a virtual box, plot contamination min dist histograms and trends. """
     # config
     sim = simParams(run='tng-cluster', redshift=0.0) # 7.0
-    
+
     frac_thresh = 1e-3
 
     acField_lr = 'Subhalo_RadProfile3D_Global_LowResDM_Count'
@@ -363,7 +363,7 @@ def contamination_mindist2():
         # distance at which cumulative fraction of LR/HR particles exceeds a threshold (linear interp)
         r_frac_cum  = np.cumsum(profiles_lr[i,:]) / np.cumsum(profiles_hr[i,:])
         min_dists_thresh[i] = np.interp(frac_thresh, r_frac_cum, rad_bins)
-    
+
     # plot distribution
     xlim = [0.0, 10.0]
     nbins = 60
@@ -410,7 +410,6 @@ def contamination_mindist2():
 
 def sizefacComparison():
     """ Compare SizeFac 2,3,4 runs (contamination and CPU times) in the testing set. """
-
     # config
     zoomRes  = 14
     redshift = 0.0
@@ -493,7 +492,7 @@ def sizefacComparison():
             xx = result['hInd'] if rowNum == 0 else result['haloMass']
             color = colors[result['variant']]
             ax.plot( xx, result['contam_min'], 'o', color=color, label='')
-        
+
         ax.legend(handles, ['%s' % variant for variant in colors.keys()], loc='best')
 
         # (B) contamination rvir
@@ -529,9 +528,8 @@ def sizefacComparison():
     plt.close(fig)
 
 def parentBoxVisualComparison(haloID, conf=0):
-    """ Make a visual comparison (density projection images) between halos in the parent box 
-    and their zoom realizations.
-    
+    """ Make a visual comparison between halos in the parent box and their zoom realizations.
+
     Args:
       haloID (int): the zoom halo ID, at the final redshift (z=0).
       variant (str): the zoom variant.
@@ -591,13 +589,12 @@ def parentBoxVisualComparison(haloID, conf=0):
         plotStyle    = 'open'
         rasterPx     = nPixels[0]
         colorbars    = True
-        saveFilename = './zoomParentBoxVisualComparison_%s_z%.1f_%s_snap%d.pdf' % (sPz.simName,sPz.redshift,p['partType'],sPz.snap)
+        saveFilename = './zoomParentVisComp_%s_z%.1f_%s_snap%d.pdf' % (sPz.simName,sPz.redshift,p['partType'],sPz.snap)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
 def zoomBoxVis(sPz=None, conf=0):
     """ Make a visualization of a zoom simulation, without using/requiring group catalog information. """
-
     if sPz is None:
         sPz = simParams(res=11,run='tng100_zoom',redshift=0.0,hInd=5405,variant='sf4')
 
@@ -756,4 +753,3 @@ def plot_timeevo():
     ax.legend(loc='best')
     fig.savefig('time_evo_sh%d_%s_%d.pdf' % (subhaloID,field,fieldIndex))
     plt.close(fig)
-

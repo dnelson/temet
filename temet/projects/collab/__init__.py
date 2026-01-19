@@ -7,3 +7,4 @@ from . import pillepich
 from . import rubin
 from . import truong_xrayangular
 from . import zooming2
+from . import wu

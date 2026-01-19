@@ -1,8 +1,8 @@
 """
 Compute K-corrections following Chilingarian+ (2010).
 """
-from numba import jit
 import numpy as np
+from numba import jit
 
 coeff = {
     'B_BRc': [
@@ -297,12 +297,12 @@ def kCorrections(filter_name, redshifts, color_name, color_values):
     """ Obtain k-correction for a given filter, redshift, and color.
 
     Args:
-      filter_name: name of the filter to calculate K-correction for, e.g. 'u', 'g', 'J2'.
-      redshift: redshift of a galaxy, should be between 0.0 and 0.5.
-      color_name: name of the color, e.g. 'u - g', 'g - r', 'ui'.
-      color_value: value of galaxy color, as specified in color_name.
-    
-    Returns:
+      filter_name (str): name of the filter to calculate K-correction for, e.g. 'u', 'g', 'J2'.
+      redshifts (ndarray[float]): redshifts of galaxies, should be between 0.0 and 0.5.
+      color_name (str): name of the color, e.g. 'u - g', 'g - r', 'ui'.
+      color_values (ndarray[float]): values of galaxy color, as specified in color_name.
+
+    Return:
       K-correction in specified filter for given redshift and color.
     """
     assert redshifts.size == color_values.size
@@ -323,24 +323,3 @@ def kCorrections(filter_name, redshifts, color_name, color_values):
     _kCorrection(r, c, redshifts, color_values)
 
     return r
-    
-def test():
-    """ Benchmark. """
-    import time
-
-    filter_name = 'u'
-    color_name = 'ui'
-
-    N = 1000000
-    redshifts    = np.random.uniform(0.0, 0.1, size=N)
-    color_values = np.random.uniform(0.5, 2.5, size=N)
-
-    start_time = time.time()
-    kCors = kCorrections(filter_name, redshifts, color_name, color_values)
-
-    nLoops = 4
-
-    for i in np.arange(nLoops):
-        kCors = kCorrections(filter_name, redshifts, color_name, color_values)
-
-    print('%d estimates of kCors took [%g] sec on avg' % (nLoops,(time.time()-start_time)/nLoops))

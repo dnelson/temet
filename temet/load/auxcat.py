@@ -951,7 +951,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_HalfLightRad_p07c_cf00dust_z' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_efr2d_rad30pkpc' : \
-      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='efr2d', rad=30.0, sizes=True),   
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='efr2d', rad=30.0, sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_z_rad100pkpc' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', rad=100.0, sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_z' : \
@@ -969,34 +969,12 @@ fieldComputeFunctionMapping = \
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', indivStarMags=True, Nside='z-axis'),
 
    # spectral mocks
-   'Subhalo_SDSSFiberSpectra_NoVel_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='sdss_fiber', 
-                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', 
-                                         fullSubhaloSpectra=1, Nside='z-axis'),
-   'Subhalo_SDSSFiberSpectra_Vel_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='sdss_fiber', 
-                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', 
-                                         fullSubhaloSpectra=2, Nside='z-axis'),
-
-   'Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='legac_slit', 
-                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', 
-                                         fullSubhaloSpectra=1, Nside='z-axis', redshifted=True, minStellarMass=9.8),
-   'Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_p07c_cf00dust_res_conv_z_restframe' : partial(subhaloStellarPhot, rad='legac_slit', 
-                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', 
-                                         fullSubhaloSpectra=1, Nside='z-axis', minStellarMass=9.8),
-
-   'Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_Seeing_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='legac_slit', 
-                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', 
-                                         fullSubhaloSpectra=1, Nside='z-axis', redshifted=True, seeing=0.4, minStellarMass=9.8),
-   'Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_Seeing_p07s_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='legac_slit', 
-                                         iso='padova07', imf='salpeter', dust='cf00_res_conv', 
-                                         fullSubhaloSpectra=1, Nside='z-axis', redshifted=True, seeing=0.4, minStellarMass=9.8),
-
-   'Subhalo_LEGA-C_SlitSpectra_NoVel_Em_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='legac_slit', 
-                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', 
-                                         fullSubhaloSpectra=1, Nside='z-axis', redshifted=True, emlines=True, minStellarMass=9.8),
-   'Subhalo_LEGA-C_SlitSpectra_NoVel_Em_Seeing_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='legac_slit',
+   'Subhalo_SDSSFiberSpectra_NoVel_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='sdss_fiber',
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv',
-                                         fullSubhaloSpectra=1, Nside='z-axis', redshifted=True, emlines=True, seeing=0.4, minStellarMass=9.8),
-
+                                         fullSubhaloSpectra=1, Nside='z-axis'),
+   'Subhalo_SDSSFiberSpectra_Vel_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='sdss_fiber',
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv',
+                                         fullSubhaloSpectra=2, Nside='z-axis'),
 
    # stellar light: UVJ colors (Donnari)
    'Subhalo_StellarPhot_UVJ_p07c_nodust'   : partial(subhaloStellarPhot, 

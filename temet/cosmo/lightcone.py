@@ -1,6 +1,4 @@
-"""
-Cosmological simulations - generating and working with lightcones. (w/ Andres Aramburo-Garcia)
-"""
+""" Cosmological simulations - generating and working with lightcones (w/ Andres Aramburo-Garcia). """
 import time
 from os.path import isfile
 
@@ -14,8 +12,7 @@ from ..util.boxRemap import findCuboidRemapInds, remapPositions
 from ..util.helper import pSplitRange
 
 def _load(sP,group,field,inds):
-    """ Helper to handle loading a subset, specified by inds, of a particle dataset vs halo catalog
-    vs subhalo catalog field. """
+    """ Helper: load a subset, specified by inds, of a particle/halo/subhalo field. """
     if 'PartType' in group:
         ptNum = int(group[-1])
         data = sP.snapshotSubsetC(ptNum, field, inds)
@@ -29,11 +26,13 @@ def _load(sP,group,field,inds):
     return data
 
 def get_cone(sP,group,config,snap_index):
-    """ Load coordinates of a particle type, or halos/subhalos, transform into the lightcone 
+    """ Transform 3D periodic positions into lightcone geometry. 
+
+    Load coordinates of a particle type, or halos/subhalos, transform into the lightcone 
     geometry, subset, and optionally load additional fields for lightcone mmembers.
     Return transformed positions, velocities, additional fields, and indices back into the 
-    original periodic snapshots. """
-
+    original periodic snapshots.
+    """
     # dataset config
     if 'PartType' in group:
         nChunks = 10
@@ -56,7 +55,7 @@ def get_cone(sP,group,config,snap_index):
 
     # allocate
     global_index = np.zeros( numPartTot, dtype='int64' )
-    
+
     offset = 0
     count = 0
 
@@ -76,7 +75,7 @@ def get_cone(sP,group,config,snap_index):
 
         # transform the coordinates, all in [ckpc/h]
         pos_remapped, _ = remapPositions(sP, pos_local, config['remapShape'], nPixels=None)
-        
+
         # get the indices of the particles/cells/groups that are inside the cone
         x_min = config['dists_mid'][snap_index]
         x_max = config['dists_mid'][snap_index+1]
@@ -114,7 +113,7 @@ def get_cone(sP,group,config,snap_index):
     for key in pos_keys + vel_keys:
         if key in data_keys:
             data_keys.remove(key)
-        
+
     # creating minimal lightcone? do not load any extra fields
     if config['minimal']:
         data_keys = []
@@ -123,7 +122,6 @@ def get_cone(sP,group,config,snap_index):
 
 def lightcone_coordinates(sP,group,pos,vel,config,snap_index):
     """ Compute the ra, dec, and redshift given the position and velocity within the lightcone. """
-
     # transform coordinates, center within the lightcone field of view
     pos, _ = remapPositions(sP, pos, config['remapShape'], nPixels=None)
 
@@ -131,7 +129,7 @@ def lightcone_coordinates(sP,group,pos,vel,config,snap_index):
 
     # compute line-of-sight distance from ..observer to points
     r   = np.sqrt(np.square(pos).sum(axis=1)) # ckpc/h
-   
+
     # create mapping from co-moving distance to redshift, for quicker interpolation
     zz = np.linspace(0.0, config['max_z'], 500)
     zz_dist = sP.units.redshiftToComovingDist(zz) * 1000 * sP.HubbleParam # kpc/h
@@ -160,15 +158,17 @@ def lightcone_coordinates(sP,group,pos,vel,config,snap_index):
     # calculate RA and DEC
     dec = np.rad2deg(np.arctan((pos[:,1])/pos[:,0]))
     ra  = np.rad2deg(np.arctan((pos[:,2])/pos[:,0]))
-    
+
     return z_cosmo, z_obs, dec, ra
 
 def generate_lightcone(index_todo=None):
     """ Generate a lightcone from a set of saved snapshots of a cubic periodic cosmological volume. 
+
     Our technique is to apply the volume remapping to reshape the cubic box into an elongated cuboid 
     domain with significant extent along the line-of-sight distance, taken to be the x-axis, while 
     (ra,dec) are mapped from the (y,z) coordinates. If index_todo is not None, then process only this
-    single snapshot. """
+    single snapshot.
+    """
     start_time = time.time()
 
     # config
@@ -181,7 +181,7 @@ def generate_lightcone(index_todo=None):
     remapShape = [10.0499, 0.2985, 0.3333]
 
     data_groups = ['Group','Subhalo','PartType5','PartType4','PartType1','PartType0']
-    
+
     # decide snapshots to use
     snaps = sP.validSnapList(onlyFull=onlyFullSnaps)[::-1]
     redshifts = sP.snapNumToRedshift(snaps)
@@ -231,7 +231,7 @@ def generate_lightcone(index_todo=None):
             continue
 
         sP.setSnap(snap)
-        
+
         # create save file
         saveFilename = sP.postPath + 'lightcones/lightcone.%d.hdf5' % i
 
@@ -272,8 +272,6 @@ def generate_lightcone(index_todo=None):
 def finalize_lightcone():
     """ Write total counts in analogy to normal snapshots to facilitate loading. """
     sP = simParams(run='tng300-1')
-
-    counts = {}
 
     # load metadata
     path = sP.postPath + 'lightcones/lightcone.%d.hdf5'
@@ -318,51 +316,48 @@ def finalize_lightcone():
             f['Header'].attrs['Ngroups_Total'] = NumGroups
             f['Header'].attrs['Nsubgroups_Total'] = NumSubhalos
 
-def plot_z_distributions():
-    """ Debugging. Load lightcone files and plot redshift distributions. """
-    sP = simParams(run='tng300-1')
-    group = 'Group' #'PartType0'
+def lightcone3DtoSkyCoords(pos, vel, sP, velType):
+    """ Transform 3D positions and velocities into (ra,dec,redshift) for a lightcone geometry.
 
-    # load metadata
-    path = sP.postPath + 'lightcones/lightcone.%d.hdf5'
+    pos and vel represent particle or galaxy positions in the periodic cube.
+    The observer is assumed to be placed at the origin of the cube, (0,0,0), and the view direction is hardcoded.
+    """
+    # comoving distance from ..observer, removing little h
+    pos = sP.units.codeLengthToComovingKpc(pos)
 
-    with h5py.File(path % 0, 'r') as f:
-        header = dict(f['Header'].attrs)
-    
-    # allocate
-    if group == 'Subhalo':
-        count = header['Nsubgroups_Total']
-    elif group == 'Group':
-        count = header['Ngroups_Total']
-    else:
-        count = header['NumPart_Total'][int(group[-1])]
+    rr = np.sqrt( pos[:,0]**2 + pos[:,1]**2 + pos[:,2]**2 ) # ckpc
+    xy = np.sqrt( pos[:,0]**2 + pos[:,1]**2 ) # ckpc
 
-    data = np.zeros( count, dtype='float32' )
-    data.fill(np.nan)
+    # radial velocity (verify with other methods)
+    ct = pos[:,2] / rr
+    st = np.sqrt(1 - ct**2)
 
-    # load
-    offset = 0
-    for i in range(header['NumFilesPerSnapshot']):
-        print(i)
-        with h5py.File(path % i, 'r') as f:
-            loc_count = f[group]['z_obs'].size
-            loc_data = f[group]['z_obs'][()]
+    cp = pos[:,0] / xy
+    sp = pos[:,1] / xy
+    vrad = vel[:,0]*st*cp + vel[:,1]*st*sp + vel[:,2]*ct
 
-            data[offset : offset + loc_count] = loc_data
+    # convert to [km/s], unfortunately depends on where these code velocities came from
+    if velType == 'subhalo':
+        vrad = sP.units.subhaloCodeVelocityToKms(vrad)
+    elif velType == 'group':
+        vrad = sP.units.groupCodeVelocityToKms(vrad)
+    elif velType == 'particle':
+        vrad = sP.units.particleCodeVelocityToKms(vrad)
 
-            offset += loc_count
+    # redshift: cosmological plus peculiar
+    z_vals = np.arange(0.0, 2.0, 0.001) # redshifts
+    dists  = sP.units.redshiftToComovingDist(z_vals)
 
-            print(i, loc_data.min(), loc_data.max(), loc_data.mean())
+    interpolant_dist_to_z = np.interp1d(dists, z_vals, kind='cubic')
+    redshift_cosmo = interpolant_dist_to_z(rr)
 
-    # plot
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(1,1,1)
-    ax.set_xlabel('Redshift')
-    ax.set_ylabel('Histogram')
+    redshift = redshift_cosmo + (vrad/sP.units.c_km_s) * (1.0 + redshift_cosmo)
 
-    ax.hist(data, bins=100, lw=lw)
+    # transform (x,y) -> (theta,phi) -> (ra,dec)
+    theta = np.arccos( pos[:,2]/rr )
+    phi = np.arctan2( pos[:,1], pos[:,0] )
 
-    fig.savefig('lightcone_%s_z_obs.pdf' % sP.simName)
-    plt.close(fig)
+    dec = theta - np.pi/2
+    ra = phi
 
-    import pdb; pdb.set_trace()
+    return ra, dec, redshift

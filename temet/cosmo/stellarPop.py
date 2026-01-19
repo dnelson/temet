@@ -1,24 +1,24 @@
 """
-Stellar population synthesis, evolution, photometrics. (FSPS)
+Stellar population synthesis, evolution, photometrics (FSPS).
 """
-import numpy as np
-import h5py
-from numba import jit
-from os import mkdir, environ
-from os.path import isfile, isdir, expanduser
-from scipy.ndimage import map_coordinates
-from scipy.interpolate import interp1d
 from getpass import getuser
+from os import environ, mkdir
+from os.path import expanduser, isdir, isfile
 
-from ..util.helper import logZeroMin, trapsum, iterable, rootPath
+import h5py
+import numpy as np
+from numba import jit
+from scipy.interpolate import interp1d
+from scipy.ndimage import map_coordinates
+
+from ..util.helper import iterable, logZeroMin, rootPath, trapsum
+from ..util.rotation import rotateCoordinateArray, rotationMatrixFromVec
 from ..util.sphMap import sphMap
-from ..util.rotation import rotationMatrixFromVec, rotateCoordinateArray
 
 @jit(nopython=True, nogil=True, cache=True)
 def _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda_sol,redshift,
     beta,Z_solar,gamma,N_H0,f_scattering,metals,ages,wave_ang,spec,calzetti_case):
     """ Helper for sps.dust_tau_model_mags(). Cannot JIT a class member function, so it sits here. """
-
     # accumulate per star attenuated luminosity (wavelength dependent):
     obs_lum = np.zeros( wave.size, dtype=np.float32 )
     atten = np.zeros( wave.size, dtype=np.float32 )
@@ -71,7 +71,7 @@ def _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda
         xt = (x - metals[x_ind0-1]) / (metals[x_ind0]-metals[x_ind0-1])
         yt = (y - ages[y_ind0-1]) / (ages[y_ind0]-ages[y_ind0-1])
         x_ind = (x_ind0-1) * (1 - xt) + x_ind0 * xt
-        y_ind = (y_ind0-1) * (1 - yt) + y_ind0 * yt           
+        y_ind = (y_ind0-1) * (1 - yt) + y_ind0 * yt
 
         # set indices out of bounds on purpose if we are in extrapolation regime, which then causes 
         # below x1_ind==x2_ind or y1_ind==y2_ind such that constant (not linear) extrapolation occurs
@@ -144,7 +144,6 @@ def _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda
 def _dust_tau_model_lum_indiv(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda_sol,redshift,
     beta,Z_solar,gamma,N_H0,f_scattering,metals,ages,wave_ang,spec,calzetti_case):
     """ Helper for sps.dust_tau_model_mags(). Cannot JIT a class member function, so it sits here. """
-
     # accumulate per star attenuated luminosity (wavelength dependent):
     obs_lum_indiv = np.zeros( (N_H.size, wave.size), dtype=np.float32 )
     atten = np.zeros( wave.size, dtype=np.float32 )
@@ -197,9 +196,9 @@ def _dust_tau_model_lum_indiv(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_
         xt = (x - metals[x_ind0-1]) / (metals[x_ind0]-metals[x_ind0-1])
         yt = (y - ages[y_ind0-1]) / (ages[y_ind0]-ages[y_ind0-1])
         x_ind = (x_ind0-1) * (1 - xt) + x_ind0 * xt
-        y_ind = (y_ind0-1) * (1 - yt) + y_ind0 * yt           
+        y_ind = (y_ind0-1) * (1 - yt) + y_ind0 * yt
 
-        # set indices out of bounds on purpose if we are in extrapolation regime, which then causes 
+        # set indices out of bounds on purpose if we are in extrapolation regime, which then causes
         # below x1_ind==x2_ind or y1_ind==y2_ind such that constant (not linear) extrapolation occurs
         if x < metals[0]:
             x_ind = -1.0
@@ -270,37 +269,19 @@ class sps():
 
     imfTypes   = {'salpeter':0, 'chabrier':1, 'kroupa':2}
     isoTracks  = ['mist','padova07','parsec','basti','geneva']
-    stellarLib = ['miles','basel','csk'] # unused
+    stellarLib = ['miles','basel','csk'] # unused herein, but we tend to assume MILES selected in FSPS
     dustModels = ['none','cf00','cf00_res_eff','cf00b_res_conv','cf00_res_conv','cf00_res3_conv']
 
-    # current bands (here as a cache)
-    bands = ['wfpc2_f439w', 'isaac_ks', 'iras_12', 'jwst_f356w', 'scuba_450wb', 'wfc3_uvis_f218w', 'pacs_100', 'buser_b', 
-             'i2300', 'wfc3_ir_f140w', 'wfc_acs_f814w', 'wfc3_uvis_f814w', 'nicmos_f160w', 'wfcam_k', 'steidel_un', 'cousins_r', 
-             'iras_25', 'wfcam_z', 'wfcam_y', 'wfc_acs_f625w', 'wfc3_ir_f098m', 'cousins_i', 'newfirm_j1', 'newfirm_j3', 'i1500', 
-             'newfirm_j2', 'wise_w1', 'ps1_i', 'wise_w3', 'wise_w2', 'wise_w4', 'bessell_l', 'bessell_m', 'ps1_r', 'ps1_y', 'ps1_z', 
-             'jwst_f277w', 'sdss_u', 'des_r', 'des_y', 'des_z', 'bessell_lp', 'wfc3_uvis_f438w', '2mass_ks', 'steidel_rs', 
-             'des_g', 'des_i', 'uvot_m2', 'wfc3_ir_f110w', 'stromgren_u', 'stromgren_v', 'wfc_acs_f850lp', 'wfc3_uvis_f390w', 
-             'stromgren_y', 'stromgren_b', 'wfpc2_f850lp', 'wfc3_uvis_f336w', 'spire_500', 'wfpc2_f555w', 'fors_v', 'uvot_w2', 
-             'fors_r', 'wfc3_uvis_f606w', 'iras_100', 'newfirm_h2', 'newfirm_h1', 'wfc_acs_f475w', 'wfpc2_f814w', 'jwst_f070w', 
-             'mips_24', 'wfc3_uvis_f775w', 'suprimecam_r', 'suprimecam_v', 'suprimecam_i', 'wfc_acs_f435w', 'suprimecam_b', 'mips_70', 
-             '2mass_h', '2mass_j', 'sdss_g', 'wfpc2_f300w', 'sdss_i', 'wfc3_uvis_f475w', 'sdss_r', 'wfc3_uvis_f850lp', 'newfirm_k', 
-             'sdss_z', 'wfc3_ir_f160w', 'wfc_acs_f555w', 'wfc3_ir_f125w', 'i2800', 'vista_y', 'megacam_u', 'megacam_r', 'suprimecam_z', 
-             'wfpc2_f450w', 'wfc3_uvis_f225w', 'wfc_acs_f606w', 'galex_nuv', 'vista_h', 'vista_k', 'vista_j', 'wfpc2_f336w', 
-             'megacam_i', 'b', 'wfc3_ir_f105w', 'galex_fuv', 'mips_160', 'v', 'uvot_w1', 'jwst_f444w', 'wfc3_uvis_f555w', 'wfc3_uvis_f275w', 
-             'wfcam_j', 'spire_350', 'wfcam_h', 'jwst_f200w', 'pacs_160', 'jwst_f150w', 'wfpc2_f255w', 'wfc_acs_f775w', 'jwst_f115w', 
-             'spire_250', 'scuba_850wb', 'wfpc2_f606w', 'ps1_g', 'iras_60', 'nicmos_f110w', 'pacs_70', 'megacam_z', 'irac_4', 'irac_2', 
-             'irac_3', 'irac_1', 'megacam_g', 'cfht_i', 'suprimecam_g', 'cfht_b', 'u', 'steidel_i', 'steidel_g', 'jwst_f090w', 'cfht_r',
-             'lsst_u', 'lsst_g', 'lsst_r', 'lsst_i', 'lsst_z', 'lsst_z', 'lsst_y', 'euclid_vis', 'euclid_y', 'euclid_j', 'euclid_h',
-             'roman_f062', 'roman_f087', 'roman_f106', 'roman_f129', 'roman_f158', 'roman_f184']
-
-    def __init__(self, sP, iso='padova07', imf='chabrier', dustModel='cf00_res_conv', order=3, 
+    def __init__(self, sP, iso='padova07', imf='chabrier', dustModel='cf00_res_conv', order=3,
                  redshifted=False, emlines=False):
-        """ Load the pre-computed stellar photometrics table, computing if it does not yet exist. 
-        If redshifted, then band-magnitudes are attenuated and wavelength shifted into observer-frame 
-        at sP.redshift when initially computed (note: self.wave, self.wave_ang, self.spec are not, and 
-        are saved as-is, i.e. always rest-frame). 
-        Otherwise, band-magnitudes and spectra are in the rest-frame, regardless of sP.redshift. 
-        If emlines, include nebular emission line model for band-magnitudes and spectra, otherwise no. """
+        """ Load the pre-computed stellar photometrics table, computing if it does not yet exist.
+
+        If redshifted, then band-magnitudes are attenuated and wavelength shifted into observer-frame
+        at sP.redshift when initially computed (note: self.wave, self.wave_ang, self.spec are not, and
+        are saved as-is, i.e. always rest-frame).
+        Otherwise, band-magnitudes and spectra are in the rest-frame, regardless of sP.redshift.
+        If emlines, include nebular emission line model for band-magnitudes and spectra, otherwise no.
+        """
         import fsps
 
         assert iso in self.isoTracks
@@ -374,8 +355,8 @@ class sps():
             dust_tesc   = 7.0 # log(yr)
 
         if self.dust == 'bc00':
-            # see Conroy+ (2009) or Charlot & Fall (2000) - note 'bc00' is just a typo for 'cf00' kept 
-            #   here with dust1=1.0 which, because the young populations have both attenuation terms 
+            # see Conroy+ (2009) or Charlot & Fall (2000) - note 'bc00' is just a typo for 'cf00' kept
+            #   here with dust1=1.0 which, because the young populations have both attenuation terms
             #   applied in FSPS, in reality means dust1=1.0+dust2 in the below equation:
             # tau_dust(lambda) = tau_1 * (lambda/lambda_0)^alpha_1      t_ssp <= t_bc
             #                    tau_2 * (lambda/lambda_0)^alpha_2      t_ssp  > t_bc
@@ -387,7 +368,7 @@ class sps():
             dust_tesc   = 7.0  # t_bc [log(yr)] = 0.01 Gyr, timescale to escape/disrupt molecular birth cloud
 
         if self.dust == 'cf00':
-            # same as 'bc00', with the real citation name, and dust1 changed to 0.7 such that 
+            # same as 'bc00', with the real citation name, and dust1 changed to 0.7 such that
             # tau_1 = 1.0 in the given functional form
             dust_type   = 0    # powerlaw taking the above functional form
             dust1       = 0.7  # tau_1
@@ -397,7 +378,7 @@ class sps():
             dust_tesc   = 7.0  # t_bc
 
         if self.dust == 'cf00b':
-            # same as 'cf00' except no diffuse/old attenuation (e.g. assume this is separately taken 
+            # same as 'cf00' except no diffuse/old attenuation (e.g. assume this is separately taken
             # into account with a resolved dust computation)
             dust_type   = 0    # powerlaw taking the above functional form
             dust1       = 1.0  # tau_1
@@ -550,7 +531,7 @@ class sps():
         """ Do possibly expensive pre-calculations for (resolved) dust model. """
         if '_res' not in self.dustModel:
             return
-            
+
         self.lambda_nm = {}
         self.A_lambda_sol = {}
         self.f_scattering = {}
@@ -629,7 +610,7 @@ class sps():
 
             gamma = np.zeros( lambda_nm.size, dtype='float32' )
             gamma[np.where(lambda_nm >= 200)] = 1.6
-            gamma[np.where(lambda_nm < 200)] = 1.35            
+            gamma[np.where(lambda_nm < 200)] = 1.35
 
             # get full tau factor accounting for scattering (Calzetti 1994 internal dust model #5)
             h_lambda = np.zeros( lambda_nm.size, dtype='float32' )
@@ -644,8 +625,8 @@ class sps():
             omega_lambda[w_lt] = 0.43 + 0.366 * (1 - np.exp(-(yy[w_lt]-3)*(yy[w_lt]-3)/0.2))
             omega_lambda[w_gt] = -0.48*yy[w_gt] + 2.41
 
-            # note these are only valid in (100 nm < lambda < 1000 nm) and the given functional forms 
-            # are not so well behaved outside this range, so we should probably enforce constant value 
+            # note these are only valid in (100 nm < lambda < 1000 nm) and the given functional forms
+            # are not so well behaved outside this range, so we should probably enforce constant value
             # at the edges of this range if we were ever to extend the used bands
             h_lambda = np.clip( h_lambda, 0.0, 1.0 )
             omega_lambda = np.clip( omega_lambda, 0.0, 1.0 )
@@ -697,12 +678,13 @@ class sps():
             self.trans_normed[band] = trans_val / self.wave_ang
 
     def convertSpecToSDSSUnitsAndAttenuate(self, spec, output_wave=None):
-        """ Convert a spectrum from FSPS in [Lsun/Hz] to SDSS units [10^-17 erg/cm^2/s/Ang] and, 
-        if self.sP.redshift > 0, attenuate the spectrum by the luminosity distance. 
+        """ Convert a spectrum from FSPS in [Lsun/Hz] to SDSS units [10^-17 erg/cm^2/s/Ang], possibly redshifted.
+
+        If self.sP.redshift > 0, attenuate the spectrum by the luminosity distance. 
         If self.sP.redshift == 0, the rest-frame spectrum is returned at an 
         assumed distance of 10pc (i.e. absolute magnitudes). If output_wave is not None, should 
-        be in Angstroms. """
-
+        be in Angstroms.
+        """
         # shift in wavelength (afterwards, self.wave_ang is now observed-frame instead of rest-frame)
         spec, wave = self.redshiftSpectrum(spec, output_wave=output_wave)
 
@@ -723,10 +705,13 @@ class sps():
         return flux, wave
 
     def redshiftSpectrum(self, spec, output_wave=None):
-        """ If self.sP.redshift > 0, attenuate the spectrum by the luminosity distance and redshift 
-        the wavelength. If self.sP.redshift == 0, the rest-frame spectrum is returned at an 
+        """ Attenuate a spectrum for a given redshift.
+
+        If self.sP.redshift > 0, attenuate the spectrum by the luminosity distance and redshift the wavelength. 
+        If self.sP.redshift == 0, the rest-frame spectrum is returned at an 
         assumed distance of 10pc (i.e. absolute magnitudes). Note that the spectrum is sampled 
-        back onto the original output_wave points, which therefore become observer-frame instead of rest-frame. """
+        back onto the original output_wave points, which therefore become observer-frame instead of rest-frame.
+        """
         flux = spec.copy()
 
         if output_wave is None:
@@ -748,13 +733,11 @@ class sps():
         if 0:
             # DEBUG
             import matplotlib.pyplot as plt
-            from ..plot.config import figsize, linestyles
 
             # plot (A)
-            fig = plt.figure(figsize=figsize)
-            ax = fig.add_subplot(111)
-            ax.set_xlabel('$\lambda$ [ Ang ]')
-            ax.set_ylabel('$f_\lambda$ [ L$_\odot$ / hz ]')
+            fig, ax = plt.subplots()
+            ax.set_xlabel(r'$\lambda$ [ Ang ]')
+            ax.set_ylabel(r'$f_\lambda$ [ L$_\odot$ / hz ]')
             ax.set_xlim([800,10000])
             ax.set_ylim([-15,-13])
 
@@ -768,10 +751,9 @@ class sps():
             plt.close(fig)
 
             # plot (B)
-            fig = plt.figure(figsize=figsize)
-            ax = fig.add_subplot(111)
-            ax.set_xlabel('$\lambda$ [ Ang ]')
-            ax.set_ylabel('$\Delta \lambda$ [ log Ang ]')
+            fig, ax = plt.subplots()
+            ax.set_xlabel(r'$\lambda$ [ Ang ]')
+            ax.set_ylabel(r'$\Delta \lambda$ [ log Ang ]')
             ax.set_xlim([800,10000])
 
             dwave = self.wave_ang - np.roll(self.wave_ang,1)
@@ -823,9 +805,11 @@ class sps():
         return mags
 
     def mags_code_units(self, sP, band, gfm_sftime, gfm_metallicity, masses_code, retFullSize=False):
-        """ Do unit conversions (and wind particle filtering) on inputs, and return mags() results. 
+        """ Do unit conversions (and wind particle filtering) on inputs, and return mags() results.
+
         If retFullSize is True, return same size as inputs with wind set to nan, otherwise filter 
-        out wind/nan values and compress return size. """
+        out wind/nan values and compress return size.
+        """
         wStars = np.where( gfm_sftime > 0.0 )
 
         if len(wStars[0]) == 0:
@@ -854,10 +838,13 @@ class sps():
         return stellarMags
 
     def calcStellarLuminosities(self, sP, band, indRange=None, rotMatrix=None, rotCenter=None):
-        """ Compute (linear) luminosities in the given band, using either snapshot-stored values or 
-        on the fly sps calculation, optionally restricted to indRange. Note that wind is here 
-        returned as NaN luminosity, assuming it is filtered out elsewhere, e.g. in gridBox(). 
-        Return are linear luminosities in units of [Lsun/Hz]. """
+        """ Compute luminosities in the given band, using  snapshot-stored values or on-the-fly calculations.
+
+        Note that wind is returned as NaN luminosity, assuming it is filtered out elsewhere, e.g. in gridBox().
+
+        Return:
+          ndarray: linear luminosities in units of [Lsun/Hz].
+        """
         assert isinstance(band, str)
 
         if 'snap_' in band:
@@ -919,7 +906,8 @@ class sps():
 
             pxSize = 0.1 # physical kpc, should match to image pxScale for vis
 
-            N_H, Z_g = self.resolved_dust_mapping(pos, hsml, mass_nh, quant_z, pos_stars, rotCenter, rotMatrix=rotMatrix, pxSize=pxSize)
+            N_H, Z_g = self.resolved_dust_mapping(pos, hsml, mass_nh, quant_z, pos_stars, rotCenter, 
+                                                  rotMatrix=rotMatrix, pxSize=pxSize)
 
             # compute stellar magnitudes, reshape back into full PT4 size
             bands = [band.replace('_dustC','')]
@@ -953,24 +941,27 @@ class sps():
 
         ww = np.isfinite(mags)
         lums[ww] = self.sP.units.absMagToLuminosity(mags[ww])
-        
+
         return lums
 
-    def dust_tau_model_mags(self, bands, N_H, Z_g, ages_logGyr, metals_log, masses_msun, 
+    def dust_tau_model_mags(self, bands, N_H, Z_g, ages_logGyr, metals_log, masses_msun,
                             ret_indiv=False, ret_full_spectrum=False, output_wave=None, rel_vel=None):
-        """ For a set of stars characterized by their (age,Z,M) values as well as (N_H,Z_g) 
-        calculated from the resolved gas distribution, do the Model (C) attenuation on the 
-        full spectra, sum together, and convolve the resulting total L(lambda) with the  
-        transmission function of multiple bands, returning a dict of magnitudes, one for 
+        """ Spatially resolved dust attenuation on stellar spectra.
+
+        For a set of stars characterized by their (age,Z,M) values as well as (N_H,Z_g)
+        calculated from the resolved gas distribution, do the Model (C) attenuation on the
+        full spectra, sum together, and convolve the resulting total L(lambda) with the
+        transmission function of multiple bands, returning a dict of magnitudes, one for
         each band. If ret_indiv==True, then the individual magnitudes for every member star are
-        instead returned separately. If ret_full_spectrum==True, the full aggregate spectrum, 
-        summed over all member stars, as a function of wavelength, is instead returned. 
-        If output_wave is not None, then this output spectrum is interpolated to the requested 
+        instead returned separately. If ret_full_spectrum==True, the full aggregate spectrum,
+        summed over all member stars, as a function of wavelength, is instead returned.
+        If output_wave is not None, then this output spectrum is interpolated to the requested
         wavelength grid (in Angstroms, should be rest or observed frame depending on self.redshifted).
         If rel_vel is not None, then add LoS peculiar velocity shifts (physical km/s) of each star.
-        Note: Will return apparent magnitudes if self.sP.redshift > 0, or absolute magnitudes if 
-        self.sP.redshift == 0. Will return redshifted (and attenuated) spectra if self.redshifted 
-        and self.sP.redshift is nonzero, otherwise rest-frame spectra. """
+        Note: Will return apparent magnitudes if self.sP.redshift > 0, or absolute magnitudes if
+        self.sP.redshift == 0. Will return redshifted (and attenuated) spectra if self.redshifted
+        and self.sP.redshift is nonzero, otherwise rest-frame spectra.
+        """
         assert N_H.size == Z_g.size == ages_logGyr.size == metals_log.size == masses_msun.size
         assert N_H.ndim == Z_g.ndim == ages_logGyr.ndim == metals_log.ndim == masses_msun.ndim == 1
         if rel_vel is not None: assert ret_full_spectrum
@@ -1083,12 +1074,14 @@ class sps():
 
         return r
 
-    def resolved_dust_mapping(self, pos_in, hsml, mass_nh, quant_z, pos_stars_in, 
+    def resolved_dust_mapping(self, pos_in, hsml, mass_nh, quant_z, pos_stars_in,
                               projCen, projVec=None, rotMatrix=None, pxSize=1.0):
         """ Compute line of sight quantities per star for a resolved dust attenuation calculation.
-        Gas (pos,hsml,mass_nh,quant_z) and stars (pos_stars) are used for the gridding of the gas 
-        and the target (star) list. projVec is a [3]-vector, and the particles are rotated about 
-        projCen [3] such that it aligns with the projection direction. pxSize is in physical kpc. """
+
+        Gas (pos,hsml,mass_nh,quant_z) and stars (pos_stars) are used for the gridding of the gas
+        and the target (star) list. projVec is a [3]-vector, and the particles are rotated about
+        projCen [3] such that it aligns with the projection direction. pxSize is in physical kpc.
+        """
         assert projCen.size == 3
         assert projVec is not None or rotMatrix is not None
 
@@ -1103,10 +1096,10 @@ class sps():
             assert rotMatrix.size == 9
 
         pos, _ = rotateCoordinateArray(self.sP, pos_in, rotMatrix, projCen, shiftBack=True)
-        pos_stars, extentStars = rotateCoordinateArray(self.sP, pos_stars_in, rotMatrix, 
+        pos_stars, extentStars = rotateCoordinateArray(self.sP, pos_stars_in, rotMatrix,
                                                        projCen, shiftBack=True)
 
-        # configure projection grid, note we use the symmetric covering extentStars around the 
+        # configure projection grid, note we use the symmetric covering extentStars around the
         # original projCen, although we could decrease the grid size by re-centering.
         #extentStars = np.array([ extentStars[1], extentStars[0] ]) # permute for T (no)
         extentStars += pxSize*2.0
@@ -1122,7 +1115,7 @@ class sps():
         if pos_in.shape[0] < 1e2 and pos_stars_in.shape[0] < 1e2:
             nThreads = 1
 
-        # efficiency cut: neutral hydrogen mass in a cell less than 1e-6 times the target cell mass, 
+        # efficiency cut: neutral hydrogen mass in a cell less than 1e-6 times the target cell mass,
         # and in large (h > 2.5 * softening) cells, clip to zero to avoid sph deposition calculation
         massThreshold = 1e-6 * self.sP.targetGasMass
         sizeThreshold = 2.5 * self.sP.gravSoft
@@ -1131,9 +1124,9 @@ class sps():
         mass_nh[ww] = 0.0
 
         # get (N_H,Z_g) along line of sight to each star
-        N_H, Z_g = sphMap( pos=pos, hsml=hsml, mass=mass_nh, quant=quant_z, axes=axes, ndims=3, 
-                           boxSizeSim=self.sP.boxSize, boxSizeImg=boxSizeImg, boxCen=projCen, 
-                           nPixels=nPixels, colDens=False, multi=True, nThreads=nThreads, posTarget=pos_stars )
+        N_H, Z_g = sphMap(pos=pos, hsml=hsml, mass=mass_nh, quant=quant_z, axes=axes, ndims=3,
+                          boxSizeSim=self.sP.boxSize, boxSizeImg=boxSizeImg, boxCen=projCen,
+                          nPixels=nPixels, colDens=False, multi=True, nThreads=nThreads, posTarget=pos_stars)
 
         # normalize out mass weights of metallicity
         w = np.where(N_H > 0.0)
@@ -1224,7 +1217,7 @@ def debug_dust_plots():
         atten = np.ones( tau_lambda.size, dtype='float32' )
         w = np.where(tau_lambda >= 1e-5)
         atten[w] = (1 - np.exp(-tau_lambda[w])) / tau_lambda[w]
-        
+
         if pop.lambda_nm[band].size > 1: # _conv models
             atten = np.interp( pop.wave, pop.lambda_nm[band], atten )
 
@@ -1370,43 +1363,6 @@ def debug_dust_plots():
 
         fig.savefig('debug_%s_%s.pdf' % (dust,band))
         plt.close(fig)
-
-def debug_plot_spectra():
-    """ Check mock spectra. """
-    import matplotlib.pyplot as plt
-    from ..util import simParams
-    from ..plot.config import figsize, linestyles, colors
-
-    sP = simParams(res=270,run='tng',redshift=0.8)
-    acFields = ['Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_p07c_cf00dust_res_conv_z',
-                'Subhalo_LEGA-C_SlitSpectra_NoVel_Em_p07c_cf00dust_res_conv_z']
-
-    subInds = [10,12,100,110,120]
-
-    # load
-    data = {}
-
-    for acField in acFields:
-        ac = sP.auxCat(acField)
-        data[acField] = ac[acField]
-
-    # plot
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
-    ax.set_xlabel('$\lambda$ [ Angstroms, obs-frame ]')
-    ax.set_ylabel('$f_\lambda$ [ 10$^{-19}$ erg/cm$^2$/s/Ang ]')
-    #ax.set_xlim([8000 / (1+sP.redshift),9000 / (1+sP.redshift)])
-    #ax.set_xlim([8000,9000])
-
-    for i, subInd in subInds:
-        for j, acField in enumerate(acFields):
-            label = 'Em' if '_Em_' in acField else 'NoEm'
-            label += ' [%d, %d]' % (subInd,ac['subhaloIDs'][subInd])
-            ax.plot(ac['wavelength'], data[acField][subInd,:], color=colors[i], ls=linestyles[j], marker='o', markersize=1.5, label=label)
-
-    ax.legend()
-    fig.savefig('debug_spec_obs.pdf')
-    plt.close(fig)
 
 def debug_check_rawspec():
     """ Check spectral tables. """

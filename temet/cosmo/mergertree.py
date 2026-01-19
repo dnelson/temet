@@ -35,7 +35,7 @@ def loadMDB(sP, id, fields=None, treeName=treeName_default, fieldNamesOnly=False
         tree = il.sublink.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMDB=True, treeName=treeName)
     if treeName in ['LHaloTree']:
         tree = il.lhalotree.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMDB=True)
-    
+
     if tree is not None:
         tree['Redshift'] = sP.snapNumToRedshift(tree['SnapNum'])
 
@@ -43,6 +43,7 @@ def loadMDB(sP, id, fields=None, treeName=treeName_default, fieldNamesOnly=False
 
 def loadMPBs(sP, ids, fields=None, treeName=treeName_default):
     """ Load multiple MPBs at once (e.g. all of them), optimized for speed, with a full tree load (high mem).
+
     Basically a rewrite of illustris_python/sublink.py under specific conditions (hopefully temporary).
 
     Args:
@@ -51,7 +52,7 @@ def loadMPBs(sP, ids, fields=None, treeName=treeName_default):
       fields (list[str]): list of field names to load, or None for all (not recommended).
       treeName (str): which merger tree to use? 'SubLink' or 'SubLink_gal'.
 
-    Returns: 
+    Returns:
       dict: Dictionary of MPBs where keys are subhalo IDs, and the contents of each dict value is another 
       dictionary of identical stucture to the return of loadMPB().
     """
@@ -61,7 +62,7 @@ def loadMPBs(sP, ids, fields=None, treeName=treeName_default):
     # make sure fields is not a single element
     if isinstance(fields, str):
         fields = [fields]
-        
+
     fieldsLoad = fields + ['MainLeafProgenitorID']    
 
     # find full tree data sizes and attributes
@@ -135,14 +136,14 @@ def loadMPBs(sP, ids, fields=None, treeName=treeName_default):
         rowStart = RowNum
         rowEnd   = RowNum + (MainLeafProgenitorID - SubhaloID)
         nRows    = rowEnd - rowStart + 1
-    
+
         # init dict
         result[id] = {'count':nRows}
-     
+
         # loop over each requested field and copy, no error checking
         for field in fields:
             result[id][field] = fulltree[field][RowNum:RowNum+nRows]
-           
+
     return result
 
 def loadTreeFieldnames(sP, treeName=treeName_default):
@@ -160,8 +161,10 @@ def loadTreeFieldnames(sP, treeName=treeName_default):
 
 def insertMPBGhost(mpb, snap):
     """ Insert a ghost entry into a MPB dict by interpolating over neighboring snapshot information.
+
     Appropriate if e.g. a group catalog if corrupt but snapshot files are ok. Could also be used to 
-    selectively wipe out outlier points in the MPB. """
+    selectively wipe out outlier points in the MPB.
+    """
     indAfter = np.where(mpb['SnapNum'] == snap - 1)[0]
     assert len(indAfter) > 0
 
@@ -185,9 +188,11 @@ def insertMPBGhost(mpb, snap):
     return mpb
 
 def mpbPositionComplete(sP, id, extraFields=None):
-    """ Load a particular MPB of subhalo id, and return it along with a filled version of SubhaloPos 
-    which interpolates for any skipped intermediate snapshots as well as back beyond the end of the 
-    tree to the beginning of the simulation. The return indexed by snapshot number. """
+    """ Load a MPB that includes a complete SubhaloPos at all snapshots.
+
+    The filled version of SubhaloPos interpolates for any skipped intermediate snapshots as well as back
+    beyond the end of the tree to the beginning of the simulation. The return indexed by snapshot number.
+    """
     if extraFields is None: extraFields = []
 
     fields = ['SubfindID','SnapNum','SubhaloPos']
@@ -247,10 +252,11 @@ def mpbPositionComplete(sP, id, extraFields=None):
 
 @cache
 def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=False):
-    """ Return particular quantit(ies) from a MPB. 
-    A simplified version of e.g. simSubhaloQuantity(). Can be generalized in the future. 
+    """ Return particular quantit(ies) from a MPB.
+
+    A simplified version of e.g. simSubhaloQuantity(). Can be generalized in the future.
     Returned units should be consistent with simSubhaloQuantity() of the same quantity name.
-    
+
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
       subhaloInd (int): subhalo index.
@@ -266,7 +272,7 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
 
     r = {}
 
-    # fill any missing snapshots with ghost entries? (e.g. actual trees can skip a snapshot when 
+    # fill any missing snapshots with ghost entries? (e.g. actual trees can skip a snapshot when
     # locating a descendant but we may need a continuous position for all snapshots)
     if add_ghosts:
         for snap in np.arange(mpb['SnapNum'].min(), mpb['SnapNum'].max()):
@@ -298,13 +304,13 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
         if prop in ['rhalo_200','rhalo','r200','r200c','rvir','r_vir','rvirial']:
             vals = mpb['Group_R_Crit200']
             #vals *= mpb_a # comoving -> physical
-            # todo: the following inconsistency wrt the units of simSubhaloQuantity() 
+            # todo: the following inconsistency wrt the units of simSubhaloQuantity()
             # is for its historical use in tracer_Mc and renderSingleHaloFrames()
             print(f'NOTE: [{sim}] quantMPB [{prop}] in code (comoving) units!')
 
         if prop in ['t_vir']:
             vals = sim.units.codeMassToVirTemp(mpb['Group_M_Crit200'])
-        
+
         if prop in ['s_vir']:
             vals = sim.units.codeMassToVirEnt(mpb['Group_M_Crit200'])
 
@@ -419,7 +425,7 @@ def _helper_plot_tree(SnapNum,SubhaloID,DescendantID,FirstProgenitorID):
     snapnum_max = np.max(SnapNum)
 
     max_progenitors = np.zeros(nrows, dtype=np.float32)
-    
+
     # iterate over snapshots
     for snapnum in range(snapnum_min, snapnum_max):
         # iterate over subhalos from current snapshot
@@ -469,17 +475,27 @@ def _helper_plot_tree(SnapNum,SubhaloID,DescendantID,FirstProgenitorID):
     return xc, yc, lines
 
 def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, ctName='inferno', output_fmt='png'):
-    """ Visualize a full merger tree of a given subhalo. saveFilename can either be a string, BytesIO buffer, or None. 
-    If a buffer, output_fmt should specify the required format (e.g. 'pdf', 'png', 'jpg'). If None, then the plot 
-    is rendered herein and the final image array (uint8) is returned, for e.g. image manipulation procedures. """
-    from ..plot.config import figsize
-    from ..util.helper import loadColorTable, logZeroNaN
+    """ Visualize a full merger tree of a given subhalo.
+
+    Args:
+        sP (:py:class:`~util.simParams`): simulation instance.
+        subhaloID (int): subhalo ID at sP.snap to plot the tree for.
+        saveFilename (str or BytesIO or None): filename or buffer to save the plot to, or None to return image array.
+          If a buffer, output_fmt should specify the required format (e.g. 'pdf', 'png', 'jpg'). If None, then the
+          plot is rendered herein and the final image array (uint8) is returned, for e.g. image manipulation purposes.
+        treeName (str): which merger tree to use? 'SubLink' or 'SubLink_gal'.
+        dpi (int): resolution of the output image.
+        ctName (str): colortable name for the color quantity.
+        output_fmt (str): output format when saveFilename is a buffer (e.g. 'pdf', 'png', 'jpg').
+    """
     import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.collections import LineCollection
+    from matplotlib.colorbar import ColorbarBase
     from matplotlib.colors import Normalize
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-    from matplotlib.colorbar import ColorbarBase
-    from matplotlib.collections import LineCollection
-    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+    from ..util.helper import loadColorTable, logZeroNaN
 
     alpha = 0.7 # markers
     color = '#000000' # lines
@@ -552,7 +568,7 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
     xc, yc, lines = _helper_plot_tree(tree['SnapNum'],tree['SubhaloID'],tree['DescendantID'],tree['FirstProgenitorID'])
 
     # start plot
-    fig = plt.figure(figsize=(figsize[0]*1.0,figsize[1]*1.0), dpi=dpi) # 1400x1000 px
+    fig = plt.figure(figsize=(14.0, 10.0), dpi=dpi) # 1400x1000 px
     #fig = plt.figure(figsize=(19.2,10.8)) # 1920x1080 px
     ax = fig.add_subplot(111)
     ax.set_xlim([-0.02,1.02])
@@ -561,9 +577,9 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
     snapnum_ticks  = sP.redshiftToSnapNum(redshift_ticks)
 
     marker0pad = int(np.log10(nrows) * sP.numSnaps / 100.0) # pretty hacky
-    ymin_snap = np.clip(snapnum_ticks[-1]-4, 0, np.inf) # sets TNG at 0, but sets e.g. Illustris just past z=10 (many snaps away from 0)
+    ymin_snap = np.clip(snapnum_ticks[-1]-4, 0, np.inf) # 0 for TNG, but z~10 for e.g. Illustris (many snaps from 0)
     ymax_snap = np.clip(sP.snap+marker0pad, snapnum_ticks[3], np.inf) # scale y-axis, but start at z=2 at earliest
-    ax.set_ylim([ymin_snap, ymax_snap]) 
+    ax.set_ylim([ymin_snap, ymax_snap])
 
     ax.get_xaxis().set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -590,12 +606,13 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
         vmax = cminmax[1]
     norm = Normalize(vmin=vmin, vmax=vmax)
 
-    w_minsize = np.where(markersize >= minMarkerSize)
+    # points for markers below the minimum size
+    w = np.where(markersize >= minMarkerSize)
 
     with np.errstate(invalid='ignore'):
         colors = cmap(norm(tree['colorField']))
 
-    ax.scatter(xc[w_minsize], yc[w_minsize], s=markersize[w_minsize]**2, marker='o', color=colors[w_minsize], alpha=alpha)
+    ax.scatter(xc[w], yc[w], s=markersize[w]**2, marker='o', color=colors[w], alpha=alpha)
 
     # add connecting lines
     lc = LineCollection(lines, color=color, lw=lw, alpha=alpha2)
@@ -620,7 +637,8 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
         width, height = fig.get_size_inches() * fig.get_dpi()
         # canvas.tostring_rgb() removed in matplotlib >=3.10
         #image = np.fromstring(canvas.tostring_rgb(), dtype='uint8').reshape(int(height), int(width), 3)
-        image = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8).reshape(int(height), int(width), 4)[:,:,:3] # drop alpha channel
+        image = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8)
+        image = image.reshape(int(height), int(width), 4)[:,:,:3] # drop alpha channel
         plt.close(fig)
 
         return image

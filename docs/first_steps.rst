@@ -98,8 +98,7 @@ include individual subhalos as colored points, coloring based on gas fraction::
 
     sim = temet.sim(run='tng100-1', redshift=0.0)
 
-    temet.plot.subhalos.median(sim, 'Z_gas', 'mstar_30pkpc', 
-      xlim=[8.0, 11.5], scatterColor='fgas2')
+    temet.plot.subhalos.median(sim, 'Z_gas', 'mstar_30pkpc', xlim=[8.0, 11.5], scatterColor='fgas2')
 
 This produces the following figure, which highlights how lower mass galaxies have high gas fractions of 
 nearly unity, i.e. :math:`M_{\rm gas} \gg M_\star`, and that gas fraction slowly decreasing with stellar 

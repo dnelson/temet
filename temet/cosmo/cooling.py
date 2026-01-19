@@ -2,23 +2,26 @@
 Analysis and plotting related to Grackle-based cooling functions/tables.
 """
 from os.path import isfile
+
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-import h5py
 
 from ..plot.config import *
-from ..util.units import units
 from ..util.helper import xypairs_to_np
+from ..util.units import units
 
 def grackle_cooling(densities, metallicity, uvb='fg20_shielded', redshift=0.0, ssm=0, PE=False, plot=False):
-    """ This will initialize a single cell at a given temperature,
-    iterate the cooling solver for a fixed time, and output the
-    temperature vs. time. """
+    """ Run a single-cell cooling model (vs time) with Grackle.
+
+    This will initialize a single cell at a given temperature, iterate the cooling solver for a fixed time, 
+    and output the temperature vs. time.
+    """
     from pygrackle import FluidContainer, chemistry_data, evolve_constant_density
-    from pygrackle.utilities.physical_constants import mass_hydrogen_cgs, sec_per_Myr, cm_per_mpc
+    from pygrackle.utilities.physical_constants import cm_per_mpc, mass_hydrogen_cgs, sec_per_Myr
 
     tiny_number = 1e-20
-    
+
     # Set initial values
     #redshift = 0.0
     #density     = 0.1 # linear 1/cm^3
@@ -51,7 +54,7 @@ def grackle_cooling(densities, metallicity, uvb='fg20_shielded', redshift=0.0, s
     elif uvb == 'fg20_unshielded':
         # new MCST tables
         grackle_data_file = bytearray(basepath + "arepo1_setups/grid_cooling_UVB=FG20_unshielded.hdf5", 'utf-8')
-    
+
     #print(grackle_data_file)
     my_chemistry.grackle_data_file = grackle_data_file
 
@@ -135,7 +138,7 @@ def grackle_cooling(densities, metallicity, uvb='fg20_shielded', redshift=0.0, s
 
     # let gas cool at constant density
     data = evolve_constant_density(fc, final_time=final_time, safety_factor=safety_factor)
-    
+
     # plot
     if plot:
         fig, (ax,ax2) = plt.subplots(nrows=2)
@@ -164,7 +167,7 @@ def grackle_cooling(densities, metallicity, uvb='fg20_shielded', redshift=0.0, s
         handles = [plt.Line2D( (0,1), (0,0), color='black', lw=0) for _ in range(len(labels))]
         #ax.add_artist(ax.legend(handles, labels, loc='lower left', handlelength=0))
         ax2.add_artist(ax2.legend(handles, labels, loc='upper left', handlelength=0))
-        
+
         #fig.savefig(f'cooling_cell_dens{np.log10(density):.1f}_Z{np.log10(metallicity):.1f}.pdf')
         fig.savefig(f'cooling_cell.pdf')
         plt.close(fig)
@@ -219,7 +222,7 @@ def _add_temp_curves(ax):
                 5.46e+1, 6.88e+1
                 2.18e+2, 4.34e+1
                 6.03e+2, 3.40e+1"""
-    
+
     Tn, T = xypairs_to_np(wolfire03_T)
     ax.plot(np.log10(Tn), np.log10(T), color='#000', ls='-.', lw=lw, label='Wolfire+03') # (Z$_{\\rm sun}$)
 
@@ -538,7 +541,7 @@ def grackle_equil_vs_Zz():
 
     # loop over metallicities and redshifts
     for i, redshift in enumerate(redshifts):
-    
+
         ax1.set_prop_cycle(None)
         ax2.set_prop_cycle(None)
 

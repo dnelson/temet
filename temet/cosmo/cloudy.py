@@ -1,18 +1,18 @@
 """
 Use previously computed CLOUDY tables of photo-ionization models to derive ionic abundances and emissivities.
 """
-import numpy as np
-import h5py
-import time
 import threading
+
+import h5py
+import numpy as np
 from scipy.ndimage import map_coordinates
 
-from ..util.helper import closest, iterable, pSplitRange
 from ..cosmo.cloudyGrid import basePath, getEmissionLines
+from ..util.helper import closest, iterable, pSplitRange
 
 class cloudyIon():
     """ Use pre-computed Cloudy table to derive ionic abundances for simulation gas cells. """
-    
+
     # basic atomic information and helpers:
     #   number    = atomic number (#p = #e = numIonizationStates-1)
     #   solar     = solar abundance [n/nH] (Grevesse+ 2010, Hazy c13 Table 7.4)
@@ -201,11 +201,12 @@ class cloudyIon():
 
     def _metallicityOH12ToMassRatio(self, metal, element):
         """ Convert metallicity from number density ratio to mass ratio (unused).
-            Metallicity traditionally defined as a number density of oxygen relative to hydrogen, and is 
-            given as 12 + log(O/H). To convert to the mass density of oxygen relative to hydrogen (equal to 
-            total oxygen mass divided by total hydrogen mass):
-              log(Z_gas) = 12 + log(O/H) - 12 - log( (M_O / M_H)/(X*M_H + Y*M_He) )
-                         = log(O/H) - log( 16.0*1.0079 / (0.75*1.0079 + 0.25*4.0) )
+
+        Metallicity traditionally defined as a number density of oxygen relative to hydrogen, and is 
+        given as 12 + log(O/H). To convert to the mass density of oxygen relative to hydrogen (equal to 
+        total oxygen mass divided by total hydrogen mass):
+          log(Z_gas) = 12 + log(O/H) - 12 - log( (M_O / M_H)/(X*M_H + Y*M_He) )
+                     = log(O/H) - log( 16.0*1.0079 / (0.75*1.0079 + 0.25*4.0) )
         """
         assert 0 # to finish
         M_X  = self.atomicMass(element)
@@ -214,7 +215,7 @@ class cloudyIon():
 
         # for element XX, Z_gas = (nXX/nH) / ( (M_XX/M_H)/(X*M_H + Y*M_He) )
         factor = (M_X/M_H) / (self.sP.units.hydrogen_massfrac * M_H + self.sP.units.helium_massfrac * M_He)
-        
+
         return metal / factor
 
     def _solarMetalAbundanceMassRatio(self, element):
@@ -316,8 +317,7 @@ class cloudyIon():
         return '%s %s' % (elName, self.numToRoman(ionNum))
 
     def slice(self, element, ionNum, redshift=None, dens=None, metal=None, temp=None):
-        """ Return a 1D slice of the table specified by a value in all other dimensions (only one 
-        input can remain None).
+        """ Return a 1D slice of the table (only one input can remain None).
 
         Args:
           element (str): name or symbol.
@@ -358,6 +358,7 @@ class cloudyIon():
 
     def frac(self, element, ionNum, dens, metal, temp, redshift=None, nThreads=16):
         """ Interpolate the ion abundance table, return log(ionization fraction).
+
         Input gas properties can be scalar or np.array(), in which case they must have the same size.
         e.g. ``x = ion.frac('O','VI',-3.0,0.0,6.5)`` or 
         ``x = ion.frac('O',6,dens=-3.0,metal=0.0,temp=6.5,redshift=2.2)``
@@ -392,8 +393,7 @@ class cloudyIon():
 
         # do 3D or 4D interpolation on this ion sub-table at the requested order
         class mapThread(threading.Thread):
-            """ Subclass Thread() to provide local storage which can be retrieved after 
-                this thread terminates and added to the global return. """
+            """ Subclass Thread() to provide local storage. """
             def __init__(self, threadNum, nThreads, ionInstance):
                 super(mapThread, self).__init__()
 
@@ -435,7 +435,7 @@ class cloudyIon():
         # launch each thread, detach, and then wait for each to finish
         for thread in threads:
             thread.start()
-            
+
         for thread in threads:
             thread.join()
 
@@ -446,14 +446,11 @@ class cloudyIon():
         for thread in threads:
             abunds[thread.ind0 : thread.ind1] = thread.result
 
-        #print('Abundance fraction interp took [%.2f] sec (%s points)' % ((time.time()-start_time),dens.size) )
-
         return abunds
 
     def calcGasMetalAbundances(self, sP, element, ionNum, indRange=None, 
                                assumeSolarAbunds=False, assumeSolarMetallicity=False, sfGasTemp='cold', parallel=False):
-        """ Compute abundance mass fraction of the given metal ion for gas particles in the 
-        whole snapshot, optionally restricted to an indRange. 
+        """ Compute abundance mass fraction of the given metal ion for all gas, optionally restricted to an indRange.
 
         Args:
           sP (:py:class:`~util.simParams`): simulation instance.
@@ -496,7 +493,7 @@ class cloudyIon():
             # add contributions from both
             temp = snapSubset('gas', 'temp_sfcold_log', indRange=indRange)
             temp_hot = snapSubset('gas', 'temp_sfhot_log', indRange=indRange)
-        
+
         # interpolate for log(abundance) and convert to linear
         # note: doesn't matter if "ionziation fraction" is mass ratio, mass density ratio, or 
         # number density ratio, so long both the numerator and denominator refer to the same 
@@ -609,8 +606,10 @@ class cloudyEmission():
             self.range[field] = [ self.grid[field].min(), self.grid[field].max() ]
 
     def _resolveLineNames(self, lines, single=False):
-        """ Map line abbreviations to unambiguous (species,ion,wavelength) triplets, leave inputs
-        which are already full and valid unchanged. """
+        """ Map line abbreviations to unambiguous (species,ion,wavelength) triplets.
+
+        Leave inputs which are already full and valid unchanged.
+        """
         emLines, _ = getEmissionLines()
 
         validLines = []
@@ -646,8 +645,7 @@ class cloudyEmission():
         return [wavelengths[ind] for ind in inds]
 
     def slice(self, line, redshift=None, dens=None, metal=None, temp=None):
-        """ Return a 1D slice of the table specified by a value in all other dimensions (only one 
-        input can remain None).
+        """ Return a 1D slice of the table (only one input can remain None).
 
         Args:
           line (str): name of line (species, ion number, and wavelength triplet) (or abbreviation).
@@ -683,6 +681,7 @@ class cloudyEmission():
 
     def emis(self, line, dens, metal, temp, redshift=None):
         """ Interpolate the line emissivity table for gas cell(s) with the given properties.
+
         Input gas properties can be scalar or np.array(), in which case they must have the same size.
 
         Args:
@@ -697,14 +696,13 @@ class cloudyEmission():
         """
         line = self._resolveLineNames(line, single=True)
 
-        if redshift is not None and self.redshiftInterp == False:
+        if redshift is not None and not self.redshiftInterp:
             raise Exception('Redshift input for interpolation, but we have selected nearest hyperslice.')
-        if redshift is None and self.redshiftInterp == True:
+        if redshift is None and self.redshiftInterp:
             raise Exception('We are interpolating in redshift space, but no redshift specified.')
         if line not in self.data:
             raise Exception('Requested line [' + line + '] not in grid.')
 
-        start_time = time.time()
         # convert input interpolant point into fractional 3D/4D array indices
         # Note: we are clamping here at [0,size-1], which means that although we never 
         # extrapolate below (nearest grid edge value is returned), there is no warning given
@@ -726,14 +724,11 @@ class cloudyEmission():
 
         emis = map_coordinates( locData, iND, order=self.order, mode='nearest')
 
-        #print('Emissivity interp took [%.2f] sec (%s points)' % ((time.time()-start_time),dens.size) )
-
         return emis
 
     def calcGasLineLuminosity(self, sP, line, indRange=None, dustDepletion=False, 
                               assumeSolarAbunds=False, assumeSolarMetallicity=False, sfGasTemp='cold'):
-        """ Compute luminosity of line emission in for the given 'line',
-        for gas particles in the whole snapshot, optionally restricted to an indRange.
+        """ Compute luminosity of line emission for a given 'line', for all gas, optionally restricted to an indRange.
 
         Args:
           sP (:py:class:`~util.simParams`): simulation instance.
@@ -741,9 +736,9 @@ class cloudyEmission():
           indRange (2-tuple): if not None, the usual particle/cell-level index range to load.
           dustDepletion (bool): apply a dust-depletion model for a given species.
           assumeSolarAbunds (bool): assume solar abundances (metal ratios), thereby ignoring GFM_Metals field.
-          assumeSolarMetallicity (bool): assume solar metallicity, thereby ignoring GFM_Metallicity field. 
-          sfGasTemp (str): must be 'cold' (i.e. 1000 K), 'hot' (i.e. 5.73e7 K), 'effective' (snapshot value), 
-            or 'both', in which case abundances from both cold and hot phases are combined, each given fractional 
+          assumeSolarMetallicity (bool): assume solar metallicity, thereby ignoring GFM_Metallicity field.
+          sfGasTemp (str): must be 'cold' (i.e. 1000 K), 'hot' (i.e. 5.73e7 K), 'effective' (snapshot value),
+            or 'both', in which case abundances from both cold and hot phases are combined, each given fractional
             densities of the total gas density based on the two-phase model.
 
         Return:
@@ -775,7 +770,7 @@ class cloudyEmission():
             # add contributions from both
             temp = sP.snapshotSubset('gas', 'temp_sfcold_log', indRange=indRange)
             temp_hot = sP.snapshotSubset('gas', 'temp_sfhot_log', indRange=indRange)
-        
+
         # interpolate for log(emissivity) and convert to linear [erg/cm^3/s]
         if sfGasTemp == 'both':
             # contributions from multiple (sub-grid) phases
@@ -822,7 +817,7 @@ class cloudyEmission():
                     fieldName = "metals_" + sym
                     el_mass_fraction = sP.snapshotSubset('gas', fieldName, indRange=indRange)
                     el_mass_fraction[el_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
-                    
+
             elif sP.snapHasField('gas', 'ElementFraction'):
                 # MCST-related models
                 # # note: sP.metals[0] == 'H' and sP.metals[1] == 'He', although these are stored separately for gas
@@ -838,7 +833,7 @@ class cloudyEmission():
             else:
                 print('WARNING: (em) individual abundances not available (mini-snap). Assuming solar abundances.')
                 el_mass_fraction = ion._solarMetalAbundanceMassRatio(element)
-                
+
         # take into account dust-depletion of this species (i.e. remove some from the gas phase)
         if dustDepletion:
             from ..load.data import decia2018
@@ -857,7 +852,7 @@ class cloudyEmission():
                 # (doesn't matter for MgII, as no MgII emissivity at these temperatures)
                 #w = np.where(temp >= 5.0)
                 #gasfrac[w] = 1.0
-                
+
                 el_mass_fraction *= gasfrac
 
         # load volume and finish calculation
@@ -867,5 +862,5 @@ class cloudyEmission():
         el_mass_fraction_rel_solar = el_mass_fraction / ion._solarMetalAbundanceMassRatio(element)
 
         line_lum = emissivity * volume * el_mass_fraction_rel_solar
-        
+
         return line_lum

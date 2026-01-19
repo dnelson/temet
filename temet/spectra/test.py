@@ -1,36 +1,42 @@
 """
 Synthetic absorption spectra generation (testing/non-production).
 """
-import numpy as np
-import h5py
 from os.path import isfile
 
+import h5py
+import numpy as np
+
 from ..spectra.spectrum import create_spectra_from_traced_rays
-from ..spectra.util import create_wavelength_grid, line_params
-from ..util.voronoiRay import trace_ray_through_voronoi_mesh_treebased, \
-                              trace_ray_through_voronoi_mesh_with_connectivity, rayTrace
-from ..util.sphMap import sphGridWholeBox, sphMap
-from ..util.voronoi import loadSingleHaloVPPP, loadGlobalVPPP
-from ..util.treeSearch import buildFullTree
+from ..spectra.util import _equiv_width, create_wavelength_grid, line_params, lines, sP_units_c_km_s
 from ..util import simParams
+from ..util.sphMap import sphGridWholeBox, sphMap
+from ..util.treeSearch import buildFullTree
+from ..util.voronoi import loadGlobalVPPP, loadSingleHaloVPPP
+from ..util.voronoiRay import (
+    rayTrace,
+    trace_ray_through_voronoi_mesh_treebased,
+    trace_ray_through_voronoi_mesh_with_connectivity,
+)
 
 def create_spectrum_from_traced_ray(sP, line, instrument, cell_dens, cell_dx, cell_temp, cell_vellos):
-    """ Given a completed (single) ray traced through a volume, and the properties of all the intersected 
-    cells (dens, dx, temp, vellos), create the final absorption spectrum, depositing a Voigt absorption 
-    profile for each cell. """
+    """ Given a completed (single) ray traced through a volume, compute the final absorption spectrum.
 
+    Use the properties of all the intersected cells (dens, dx, temp, vellos) to deposit Voigt absorption
+    profiles for each cell.
+    """
     # prepare pass through
     rays_off = np.array([0], dtype='int32')
     rays_len = np.array([cell_dens.size], dtype='int32')
     rays_cell_inds = np.arange(cell_dens.size)
 
     return create_spectra_from_traced_rays(sP, line, instrument,
-                                           rays_off, rays_len, cell_dx, rays_cell_inds, 
+                                           rays_off, rays_len, cell_dx, rays_cell_inds,
                                            cell_dens, cell_temp, cell_vellos, nThreads=1)
 
 #@jit(nopython=True, nogil=True, cache=False)
 def deposit_single_line_local(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_eff, debug=False):
     """ Add the absorption profile of a single transition, from a single cell, to a spectrum.
+
     Local method, where master grid is sub-sampled and optical depth is deposited back onto master.
 
     Args:
@@ -48,7 +54,7 @@ def deposit_single_line_local(wave_edges_master, tau_master, f, gamma, wave0, N,
       None.
     """
     from ..spectra.spectrum import _voigt_tau
-    
+
     if N == 0:
         return # empty
 
@@ -97,11 +103,11 @@ def deposit_single_line_local(wave_edges_master, tau_master, f, gamma, wave0, N,
 
         # sanity checks
         if master_startind == -1:
-            if debug: print('WARNING: min edge of local grid hit edge of master!')
+            #if debug: print('WARNING: min edge of local grid hit edge of master!')
             master_startind = 0
 
         if master_finalind == wave_edges_master.size:
-            if debug: print('WARNING: max edge of local grid hit edge of master!')
+            #if debug: print('WARNING: max edge of local grid hit edge of master!')
             master_finalind = wave_edges_master.size - 1
 
         if master_startind == master_finalind:
@@ -111,7 +117,7 @@ def deposit_single_line_local(wave_edges_master, tau_master, f, gamma, wave0, N,
                 n_iter += 1
                 continue
 
-            if debug: print('WARNING: absorber entirely off edge of master spectrum! skipping!')
+            #if debug: print('WARNING: absorber entirely off edge of master spectrum! skipping!')
             return
 
         # how does local grid size compare to master? approximate dwave_master as constant, while in reality it
@@ -120,7 +126,7 @@ def deposit_single_line_local(wave_edges_master, tau_master, f, gamma, wave0, N,
         nloc_per_master = int(np.round(dwave_master / dwave_local))
 
         if nloc_per_master <= 0:
-            if debug: print('WARNING: local grid size actually smaller than master!')
+            #if debug: print('WARNING: local grid size actually smaller than master!')
             dwave_local *= 0.5
             n_iter += 1
             continue
@@ -142,7 +148,8 @@ def deposit_single_line_local(wave_edges_master, tau_master, f, gamma, wave0, N,
         flux = np.exp(-tau)
 
         # iterate and increase wavelength range of local grid if the optical depth at the edges is still large
-        #if debug: print(f'  [iter {n_iter}] master inds [{master_startind} - {master_finalind}], {local_fac = }, {tau[0] = :.3g}, {tau[-1] = :.3g}, {edge_tol = }')
+        #if debug: print(f'  [iter {n_iter}] master inds [{master_startind} - {master_finalind}], {local_fac = },
+        #  {tau[0] = :.3g}, {tau[-1] = :.3g}, {edge_tol = }')
 
         if n_iter > 100:
             break
@@ -167,7 +174,9 @@ def deposit_single_line_local(wave_edges_master, tau_master, f, gamma, wave0, N,
         #tau_bin += tau[local_ind]
         iflux_bin += (1-flux[local_ind])
 
-        #print(f' add to tau_master[{master_ind:2d}] from {local_ind = :2d} with {tau[local_ind] = :.3g} i.e. {wave_mid_local[local_ind]:.4f} [{wave_edges_local[local_ind]:.4f}-{wave_edges_local[local_ind+1]:.4f}] Ang into [{wave_edges_master[master_ind]}-{wave_edges_master[master_ind+1]}] Ang')
+        #print(f' add to tau_master[{master_ind:2d}] from {local_ind = :2d} with {tau[local_ind] = :.3g} i.e.
+        # {wave_mid_local[local_ind]:.4f} [{wave_edges_local[local_ind]:.4f}-{wave_edges_local[local_ind+1]:.4f}]
+        # Ang into [{wave_edges_master[master_ind]}-{wave_edges_master[master_ind+1]}] Ang')
 
         # has local wavelength bin moved into the next master bin? or are we finished with the local grid?
         if wave_mid_local[local_ind] > wave_edges_master[master_ind] or local_ind == wave_mid_local.size-1:
@@ -198,8 +207,9 @@ def deposit_single_line_local(wave_edges_master, tau_master, f, gamma, wave0, N,
             #tau_master[master_ind] += (localEW_to_tau / dwave_master)
 
             # how much total EW? (debugging only)
-            if N > 1e14 and debug:
-                print(f'   updated tau_master[{master_ind:2d}] = {tau_master[master_ind]:.4f}, {local_EW = :.4f}, {localEW_to_tau = }')
+            #if N > 1e14 and debug:
+            #    print(f'   updated tau_master[{master_ind:2d}] = {tau_master[master_ind]:.4f}, {local_EW = :.4f},
+            # {localEW_to_tau = }')
 
             # move to next master bin
             master_ind += 1
@@ -207,7 +217,7 @@ def deposit_single_line_local(wave_edges_master, tau_master, f, gamma, wave0, N,
             iflux_bin = 0.0
 
     if N > 1e14 and debug:
-        # debug check: note if this is not the first deposition, then the local values should be lower than the master values
+        # debug check: if this is not the first deposition, then the local values should be lower than the master values
         wave_mid_master = (wave_edges_master[1:] + wave_edges_master[:-1]) / 2
         EW_local = _equiv_width(tau,wave_mid_local)
         EW_master = _equiv_width(tau_master,wave_mid_master)
@@ -269,20 +279,20 @@ def generate_spectrum_uniform_grid():
             boxSizeImg = halo['Group_R_Crit200'] * np.array([haloSizeRvir,haloSizeRvir,haloSizeRvir])
             boxCen = halo['GroupPos']
 
-            grid_mass = sphMap( pos=pos, hsml=hsml, mass=mass, quant=None, axes=[0,1], 
-                                ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, 
+            grid_mass = sphMap( pos=pos, hsml=hsml, mass=mass, quant=None, axes=[0,1],
+                                ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg,
                                 boxCen=boxCen, nPixels=[nCells, nCells, nCells] )
-            grid_vel  = sphMap( pos=pos, hsml=hsml, mass=mass, quant=vel_los, axes=[0,1], 
-                                ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, 
+            grid_vel  = sphMap( pos=pos, hsml=hsml, mass=mass, quant=vel_los, axes=[0,1],
+                                ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg,
                                 boxCen=boxCen, nPixels=[nCells, nCells, nCells] )
-            grid_temp = sphMap( pos=pos, hsml=hsml, mass=mass, quant=temp, axes=[0,1], 
-                                ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, 
+            grid_temp = sphMap( pos=pos, hsml=hsml, mass=mass, quant=temp, axes=[0,1],
+                                ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg,
                                 boxCen=boxCen, nPixels=[nCells, nCells, nCells] )
 
             pxVol = np.prod(boxSizeImg) / nCells**3 # code units
 
         # unit conversions: mass -> density
-        f, gamma, wave0, ion_amu, ion_mass = _line_params(line)
+        f, gamma, wave0, ion_amu, ion_mass = line_params(line)
 
         grid_dens = sP.units.codeDensToPhys(grid_mass/pxVol, cgs=True, numDens=True) # H atoms/cm^3
         grid_dens /= ion_amu # [ions/cm^3]
@@ -332,17 +342,17 @@ def generate_spectrum_uniform_grid():
         master_dx[i] = dx_Mpc # constant
 
     # create spectrum
-    master_mid, tau_master, _ = create_spectrum_from_traced_ray(sP, line, instrument, 
+    master_mid, tau_master, _ = create_spectrum_from_traced_ray(sP, line, instrument,
                                       master_dens, master_dx, master_temp, master_vellos)
 
     # plot
-    plotName = f"spectrum_box_{sP.simName}_{line}_{nCells}_h{haloID}_{posInds[0]}-{posInds[1]}_z{sP.redshift:.0f}.pdf"
+    #plotName = f"spectrum_box_{sP.simName}_{line}_{nCells}_h{haloID}_{posInds[0]}-{posInds[1]}_z{sP.redshift:.0f}.pdf"
 
 def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1, verify=True):
     """ Generate a single absorption spectrum by ray-tracing through the Voronoi mesh.
 
     Args:
-      use_precomputed_mesh (bool): if True, use pre-computed Voronoi mesh connectivity from VPPP, 
+      use_precomputed_mesh (bool): if True, use pre-computed Voronoi mesh connectivity from VPPP,
         otherwise use tree-based, connectivity-free method.
       compare (bool): if True, run both methods and compare results.
       debug (int): verbosity level for diagnostic outputs: 0 (silent), 1, 2, or 3 (most verbose).
@@ -403,8 +413,8 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
             num_ngb, ngb_inds, offset_ngb = loadGlobalVPPP(sP)
 
         # ray-trace
-        master_dx, master_ind = trace_ray_through_voronoi_mesh_with_connectivity(cell_pos, 
-                                       num_ngb, ngb_inds, offset_ngb, ray_pos, ray_dir, total_dl, 
+        master_dx, master_ind = trace_ray_through_voronoi_mesh_with_connectivity(cell_pos,
+                                       num_ngb, ngb_inds, offset_ngb, ray_pos, ray_dir, total_dl,
                                        sP.boxSize, debug, verify, fof_scope_mesh)
 
         master_dens = cell_dens[master_ind]
@@ -423,8 +433,8 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
             master_dx2 = master_dx.copy()
 
         # ray-trace
-        master_dx, master_ind = trace_ray_through_voronoi_mesh_treebased(cell_pos, 
-                                       NextNode, length, center, sibling, nextnode, ray_pos, ray_dir, total_dl, 
+        master_dx, master_ind = trace_ray_through_voronoi_mesh_treebased(cell_pos,
+                                       NextNode, length, center, sibling, nextnode, ray_pos, ray_dir, total_dl,
                                        sP.boxSize, debug, verify)
 
         master_dens = cell_dens[master_ind]
@@ -441,12 +451,12 @@ def generate_spectrum_voronoi(use_precomputed_mesh=True, compare=False, debug=1,
     master_dx = sP.units.codeLengthToMpc(master_dx)
 
     # create spectrum
-    master_mid, tau_master, _ = create_spectrum_from_traced_ray(sP, line, instrument, 
+    master_mid, tau_master, _ = create_spectrum_from_traced_ray(sP, line, instrument,
                                       master_dens, master_dx, master_temp, master_vellos)
 
     # plot
-    meshStr = 'vppp' if use_precomputed_mesh else 'treebased'
-    plotName = f"spectrum_voronoi_{sP.simName}_{line}_{meshStr}_h{haloID}_z{sP.redshift:.0f}.pdf"
+    #meshStr = 'vppp' if use_precomputed_mesh else 'treebased'
+    #plotName = f"spectrum_voronoi_{sP.simName}_{line}_{meshStr}_h{haloID}_z{sP.redshift:.0f}.pdf"
 
 def generate_spectra_voronoi_halo():
     """ Generate a large grid of (halocentric) absorption spectra by ray-tracing through the Voronoi mesh. """
@@ -477,7 +487,7 @@ def generate_spectra_voronoi_halo():
 
         print(f'Loaded: [{saveFilename}]')
 
-        return master_wave, flux, EWs        
+        return master_wave, flux, EWs
 
     # load halo
     halo = sP.halo(haloID)
@@ -495,7 +505,7 @@ def generate_spectra_voronoi_halo():
 
     # construct [N,3] list of search positions
     ray_pos = np.zeros( (nRaysPerDim**2,3), dtype='float64')
-    
+
     ray_pos[:,0] = xpts.ravel()
     ray_pos[:,1] = ypts.ravel()
     ray_pos[:,2] = cen[2] - size/2
@@ -520,7 +530,7 @@ def generate_spectra_voronoi_halo():
 
     cell_vellos = sP.snapshotSubsetP('gas', velLosField, haloID=haloIDLoad) # code
     cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold', haloID=haloIDLoad) # K
-    
+
     cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
 
     # convert length units, all other units already appropriate
@@ -543,7 +553,7 @@ def generate_spectra_voronoi_halo():
 
         # create spectra
         master_wave, tau_local, EW_local = \
-          create_spectra_from_traced_rays(sP, line, instrument, 
+          create_spectra_from_traced_rays(sP, line, instrument,
                                           rays_off, rays_len, rays_dl, rays_inds,
                                           cell_dens, cell_temp, cell_vellos)
 
@@ -567,42 +577,3 @@ def generate_spectra_voronoi_halo():
     print(f'Saved: [{saveFilename}]')
 
     return master_wave, flux, EWs
-
-
-def benchmark_line():
-    """ Deposit many random lines. """
-    import time
-
-    line = 'MgII 2803'
-    instrument = None
-
-    # parameter ranges
-    n = int(1e4)
-    rng = np.random.default_rng(424242)
-
-    N_vals = rng.uniform(low=10.0, high=16.0, size=n) # log cm^-2
-    b_vals = rng.uniform(low=1.0, high=25.0, size=n) # km/s
-    vel_los = rng.uniform(low=-300, high=300, size=n) # km/s
-    z_cosmo = 0.0
-
-    # create master grid
-    master_mid, master_edges, tau_master = create_wavelength_grid(line=line, instrument=instrument)
-
-    f, gamma, wave0, _, _ = _line_params(line)
-
-    # start timer
-    start_time = time.time()
-
-    # deposit
-    for i in range(n):
-        # effective redshift
-        z_doppler = vel_los[i] / sP_units_c_km_s
-        z_eff = (1+z_doppler)*(1+z_cosmo) - 1 
-
-        if i % (n/10) == 0:
-            print(i, N_vals[i], b_vals[i], vel_los[i], z_eff)
-
-        deposit_single_line_local(master_edges, tau_master, f, gamma, wave0, 10.0**N_vals[i], b_vals[i], z_eff)
-
-    tot_time = time.time() - start_time
-    print('depositions took [%g] sec, i.e. [%g] each' % (tot_time, tot_time/n))

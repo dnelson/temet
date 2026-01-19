@@ -1,28 +1,31 @@
 """
 Galaxy clustering statistics, e.g. two-point correlation functions.
 """
-import numpy as np
-import h5py
-import time
 import glob
-from os.path import isfile, isdir
-from os import mkdir
-from scipy.interpolate import interp1d
+import time
 from collections import OrderedDict
+from os import mkdir
+from os.path import isdir, isfile
+
+import h5py
+import numpy as np
+from scipy.interpolate import interp1d
 
 from ..cosmo.color import loadSimGalColors
-from ..util.tpcf import tpcf, quantReductionInRad
 from ..util.helper import pSplitRange
+from ..util.tpcf import quantReductionInRad, tpcf
 
 def _covar_matrix(x_avg, x_subs):
-    """ Compute covariance matrix from a jackknife set of samplings x_subs. Slightly different 
-    than normal we use x_avg from the input (i.e. the answer computed from the full spatial 
-    sample) instead of the median of the x_subs. """
+    """ Compute covariance matrix from a jackknife set of samplings x_subs.
+
+    Slightly different than normal we use x_avg from the input (i.e. the answer computed from the full spatial 
+    sample) instead of the median of the x_subs.
+    """
     n = x_avg.size
     n_subs = x_subs.shape[1]
 
     covar = np.zeros( (n,n), dtype='float32' )
-    
+
     for j in range(n):
         for k in range(n):
             covar[j,k] = (n_subs-1.0)/n_subs * \
@@ -197,14 +200,15 @@ def twoPointAutoCorrelationPeriodicCube(sP, cenSatSelect='all', minRad=10.0, num
     return rad, xi, xi_err, covar
 
 def twoPointAutoCorrelationParticle(sP, partType, partField, pSplit=None):
-    """ Calculate the [weighted] two-point auto-correlation function in a periodic cube geometry. 
-    Instead of per-subhalo/galaxy, this is a per-particle based calculation. Given the 
-    prohibitive expense, we do this with a Monte Carlo sampling of the first term of the 
+    """ Calculate the [weighted] two-point auto-correlation function in a periodic cube geometry.
+
+    Instead of per-subhalo/galaxy, this is a per-particle based calculation. Given the
+    prohibitive expense, we do this with a Monte Carlo sampling of the first term of the
     particle-particle tpcf, saving intermediate results which are then accumulated as available.
     If pSplit==None and no partial files exist, full/single compute and return.
     If pSplit!=None and the requested partial file exists, concatenate all and return intermediate result.
-    if pSplit!=None and the requested partial file does not exist, then run a partial computation and save."""
-
+    if pSplit!=None and the requested partial file does not exist, then run a partial computation and save.
+    """
     # for oxygen paper: 2.0, 20000, 40
     minRad = 0.1 # ckpc/h
     maxRad = 10000.0 # ckpc/h
@@ -278,19 +282,9 @@ def twoPointAutoCorrelationParticle(sP, partType, partField, pSplit=None):
     rad = 10.0**(np.log10(radialBins) + rrBinSizeLog/2)[:-1]
 
     # load
-    print('start pos', flush=True)
     pos = sP.snapshotSubsetP(partType, 'pos')
-    print('pos done', flush=True)
-    # hack: https://bugs.python.org/issue32759 (fixed only in python 3.8x)
-    import multiprocessing as mp
-    import gc
-    mp.heap.BufferWrapper._heap = mp.heap.Heap()
-    gc.collect()
-    # end hack
-    print('start wt', flush=True)
     weights = sP.snapshotSubsetP(partType, partField)
-    print('wt done', flush=True)
-    
+
     # process weights
     w = np.where(weights < 0.0)
     weights[w] = 0.0 # non-negative
@@ -384,7 +378,7 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
         quants[:,i] = masses[key][inds]
 
     pos_target = np.squeeze(gc['subhalos']['SubhaloPos'][inds,:])
-    
+
     rad_bin_code = np.array([0, sP.units.physicalKpcToCodeLength(rad_pkpc)])
 
     # handle mstar30kpc_min on pos_search if requested
@@ -481,11 +475,13 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
 def conformityRedFrac(sP, radRange=[0.0,20.0], numRadBins=40, isolationRadPKpc=500.0, 
       colorBin=None, cType=None, mstarBin=None, mType=None, jackKnifeNumSub=4, 
       cenSatSelectSec='all', colorSplitSec=None):
-    """ Calculate the conformity signal for -isolated- primaries subject to: {colorBin, cType, 
-    mstarBin, mType}. Specifications for these 4 are the same as for 
-    twoPointAutoCorrelationPeriodicCube(). A series of numRadBins are linearly spaced from 
-    radRange[0] to radRange[1] in physical Mpc. cenSatSelect is applied to the secondary sample, 
-    as are {colorSplitSec,cType} which define the red/blue split for secondaries. """
+    """ Calculate the conformity signal for -isolated- primaries.
+
+    Subject to a sample selection of: {colorBin, cType, mstarBin, mType}. Specifications for these are as in
+    twoPointAutoCorrelationPeriodicCube(). A series of numRadBins are linearly spaced from
+    radRange[0] to radRange[1] in physical Mpc. cenSatSelect is applied to the secondary sample,
+    as are {colorSplitSec,cType} which define the red/blue split for secondaries.
+    """
     assert cenSatSelectSec in ['all','cen','sat']
     assert colorSplitSec is not None and cType is not None
     bands, simColorsModel = cType
@@ -674,47 +670,3 @@ def conformityRedFrac(sP, radRange=[0.0,20.0], numRadBins=40, isolationRadPKpc=5
 
     return r
 
-def lightcone3DtoSkyCoords(pos, vel, sP, velType):
-    """ Transform pos [Nx3] and vel[Nx3] in code units, representing particle or galaxy positions in the 
-    periodic cube, into (ra,dec,redshift). The observer is assumed to be placed at the origin of the cube, 
-    (0,0,0), and the view direction is right now hardcoded. """
-
-    # comoving distance from ..observer, removing little h
-    pos = sP.units.codeLengthToComovingKpc(pos)
-
-    rr = np.sqrt( pos[:,0]**2 + pos[:,1]**2 + pos[:,2]**2 ) # ckpc
-    xy = np.sqrt( pos[:,0]**2 + pos[:,1]**2 ) # ckpc
-
-    # radial velocity (verify with other methods)
-    ct = pos[:,2] / rr
-    st = np.sqrt(1 - ct**2)
-
-    cp = pos[:,0] / xy
-    sp = pos[:,1] / xy
-    vrad = vel[:,0]*st*cp + vel[:,1]*st*sp + vel[:,2]*ct
-
-    # convert to [km/s], unfortunately depends on where these code velocities came from
-    if velType == 'subhalo':
-        vrad = sP.units.subhaloCodeVelocityToKms(vrad)
-    elif velType == 'group':
-        vrad = sP.units.groupCodeVelocityToKms(vrad)
-    elif velType == 'particle':
-        vrad = sP.units.particleCodeVelocityToKms(vrad)
-
-    # redshift: cosmological plus peculiar
-    z_vals = np.arange(0.0, 2.0, 0.001) # redshifts
-    dists  = sP.units.redshiftToComovingDist(z_vals)
-
-    interpolant_dist_to_z = interp1d(dists, z_vals, kind='cubic')
-    redshift_cosmo = interpolant_dist_to_z(rr)
-
-    redshift = redshift_cosmo + (vrad/sP.units.c_km_s) * (1.0 + redshift_cosmo)
-
-    # transform (x,y) -> (theta,phi) -> (ra,dec)
-    theta = np.arccos( pos[:,2]/rr )
-    phi = np.arctan2( pos[:,1], pos[:,0] )
-
-    dec = theta - np.pi/2
-    ra = phi
-
-    return ra, dec, redshift

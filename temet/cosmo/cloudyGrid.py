@@ -1,18 +1,18 @@
 """
 Run grids of CLOUDY photo-ionization models for ion abundances, emissivities, or cooling rates.
 """
-import numpy as np
-import h5py
 import glob
 import subprocess
-
 from functools import partial
-from os.path import isfile, isdir, getsize, expanduser
 from os import mkdir, remove
+from os.path import expanduser, getsize, isdir, isfile
+
+import h5py
+import numpy as np
 
 from ..cosmo import hydrogen
-from ..util.helper import closest, logZeroNaN, rootPath
 from ..util import simParams
+from ..util.helper import closest, logZeroNaN, rootPath
 
 basePath = rootPath + "tables/cloudy/"
 basePathTemp = expanduser("~") + "/data/cloudy_tables/"
@@ -492,8 +492,9 @@ def loadUVBRates(uvb='FG11'):
     return z, gamma_HI, gamma_HeI, gamma_HeII, heat_HI, heat_HeI, heat_HeII
 
 def cloudyUVBInput(gv):
-    """ Generate the cloudy input string for a given UVB, by default with the 
-        self-shielding attenuation (at >= 13.6 eV) using the Rahmati+ (2013) fitting formula.
+    """ Generate the cloudy input string for a given UVB.
+
+    By default, includes self-shielding attenuation (at >= 13.6 eV) using the Rahmati+ (2013) fitting formula.
     """
     # load UVB at this redshift
     uvb = loadUVB(gv['uvb'], redshifts=[gv['redshift']])
@@ -610,10 +611,10 @@ def runCloudySim(gv, temp):
     # skip if this output has already been made
     if isfile(outputFilePath) and getsize(outputFilePath) > 0:
         return
-    
+
     if gv['res'] == 'grackle' and isfile(outputFilePathGrackle) and getsize(outputFilePathGrackle) > 0:
         return
-        
+
     #if isfile(gv['inputFileNameAbs']+'.out') and getsize(gv['inputFileNameAbs']+'.out') > 1e5:
     #    return
 
@@ -650,7 +651,9 @@ def runCloudySim(gv, temp):
 
 def _getRhoTZzGrid(res, uvb):
     """ Get the pre-set spacing of grid points in density, temperature, metallicity, redshift.
-        Density: log total hydrogen number density. Temp: log Kelvin. Z: log solar. """
+
+    Units are: Density: log total hydrogen number density. Temp: log Kelvin. Z: log solar.
+    """
     eps = 0.0001
 
     if res == 'test':
@@ -681,7 +684,7 @@ def _getRhoTZzGrid(res, uvb):
         # metals: primordial and solar runs (difference gives metal contribution only, scaled linearly in grackle)
         densities = np.arange(-10.0, 7.0+eps, 0.5)
         temps     = np.arange(0.0, 9.0+eps,0.05)
-        metals    = np.array([-8.0, 0.0]) 
+        metals    = np.array([-8.0, 0.0])
         # note: 8.02 to bracket rapid changes from z=8 to z=8.02 (in FG20, z=8.02 not present in FG11)
         redshifts = np.array([0.0,0.1,0.2,0.3,0.4,0.6,0.8,1.0,1.2,1.4,1.6,1.8,2.0,2.2,
                               2.5,2.8,3.1,3.5,4.0,4.5,5.0,6.0,7.0,8.0,8.02,9.0,10.0])
@@ -691,9 +694,9 @@ def _getRhoTZzGrid(res, uvb):
         # TEST: just do one point
         #densities = np.array([2.0])
         #temps = np.array([3.0])
-        #metals = np.array([-8.0, 0.0]) 
+        #metals = np.array([-8.0, 0.0])
         #redshifts = np.array([0.0])
-    
+
     densities[np.abs(densities) < eps] = 0.0
     metals[np.abs(metals) < eps] = 0.0
 
@@ -778,15 +781,17 @@ def collectOutputs(res='lg', uvb='FG11'):
     names, abunds = parseCloudyIonFile(basePath,redshifts[0],densities[0],metals[0],temps[2])
 
     for elemNum, element in enumerate(names):
-        # cloudy oddities: H2 stuck on to H as third entry, zero (-30.0) values are omitted 
-        # for high ions for any given element, thus number of columns present in any given 
+        # cloudy oddities: H2 stuck on to H as third entry, zero (-30.0) values are omitted
+        # for high ions for any given element, thus number of columns present in any given
         # output file is variable, but anyways truncate to a reasonable number we care about
         numIons = elemNum + 2
-        if numIons < 3: numIons = 3
-        if numIons > maxNumIons: numIons = maxNumIons
+        if numIons < 3:
+            numIons = 3
+        if numIons > maxNumIons:
+            numIons = maxNumIons
 
         print('%02d %s [%2d ions, keep: %2d]' % (elemNum, element.ljust(10), elemNum+2, numIons) )
-        data[element] = np.zeros( ( numIons, 
+        data[element] = np.zeros( ( numIons,
                                     redshifts.size,
                                     densities.size,
                                     metals.size,
@@ -858,7 +863,7 @@ def collectEmissivityOutputs(res='lg', uvb='FG11'):
 
     names, vals = parseCloudyEmisFile(basePath,redshifts[0],densities[0],metals[0],temps[2])
     names_save, _ = getEmissionLines() #[name.replace(" ","_") for name in names] # element name case
-    assert names == [name for name in names_save] # same lines and ordering as we requested?
+    assert names == list(names_save) # same lines and ordering as we requested?
 
     for line in names_save:
         data[line] = np.zeros( (redshifts.size,densities.size,metals.size,temps.size), dtype='float32' )
@@ -932,9 +937,9 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
                 assert '<MolWgt>' in second_line[-1]
                 mmw = float(second_line[-1].replace('<MolWgt>',''))
                 break
-        
+
         return lambda_cool, lambda_heat, mmw
-    
+
     # allocate
     shape = (densities.size,redshifts.size,temps.size)
     lambda_cool_Z = np.zeros(shape, dtype='float64')
@@ -956,7 +961,7 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
             for k, T in enumerate(temps):
                 # load and parse (for solar metallicity runs)
                 cool, heat, mu = parseCloudyOutputFile(basePath,r,d,metals[1],T)
-                
+
                 lambda_cool_Z[j,i,k] = cool * norm
                 lambda_heat_Z[j,i,k] = heat * norm
                 mmw_Z[j,i,k] = mu
@@ -967,7 +972,7 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
                 lambda_cool_p[j,i,k] = cool * norm
                 lambda_heat_p[j,i,k] = heat * norm
                 mmw_p[j,i,k] = mu
-    
+
     # compute metal contribution alone
     lambda_cool_Z_only = lambda_cool_Z - lambda_cool_p
     lambda_heat_Z_only = lambda_heat_Z - lambda_heat_p
@@ -990,7 +995,7 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
 
     assert mmw_Z.min() > 0.5 and mmw_Z.max() < 2.5 # mu > 1.3 at z~10 for FG20
     assert mmw_p.min() > 0.5 and mmw_p.max() < 2.5
-    
+
     # compute gray cross sections
     uvbs = loadUVB(uvb)
     uvbs_z = np.array([u['redshift'] for u in uvbs])
@@ -1006,7 +1011,7 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
     for ev_range in [[6.0,13.6],[11.2,13.6]]:
         name = f'{ev_range[0]:.1f}-{ev_range[1]:.1f}eV'
         udens[name] = np.zeros(uvbs_z.size, dtype='float32')
-    
+
     for i, u in enumerate(uvbs):
         J_loc = 10.0**u['J_nu'].astype('float64') # linear
 
@@ -1019,7 +1024,8 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
 
         for ev_range in [[6.0,13.6],[11.2,13.6]]:
             name = f'{ev_range[0]:.1f}-{ev_range[1]:.1f}eV'
-            udens[name][i] = np.log10(hydrogen.uvbEnergyDensity(u['freqRyd'], J_loc, eV_min=ev_range[0], eV_max=ev_range[1]))
+            udens_loc = hydrogen.uvbEnergyDensity(u['freqRyd'], J_loc, eV_min=ev_range[0], eV_max=ev_range[1])
+            udens[name][i] = np.log10(udens_loc)
 
     # load UVB photoheating rates, interpolate to spectra redshifts
     uvb_rates = loadUVBRates(uvb=uvb.replace('_unshielded',''))
@@ -1094,5 +1100,5 @@ def collectCoolingOutputs(res='grackle', uvb='FG11'):
         #   @  k31 @     H2I + p --> 2HI          ("Photodissociation of H2 by predissociation")
         for knum in k:
             f[f'UVBRates/Chemistry/k{knum}'] = k[knum]
-            
+
     print('Done.')

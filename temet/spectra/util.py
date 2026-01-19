@@ -326,12 +326,12 @@ def line_params(line):
 
 def _generate_lsf_matrix(wave_mid, lsf_dlambda, dwave):
     """ Helper to generate the discrete LSF across a given wavelength grid.
-    
+
     Args:
       wave_mid (:py:class:`~numpy.ndarray`): instrumental wavelength grid [ang].
       lsf_dlambda (:py:class:`~numpy.ndarray`): the LSF FWHM [ang] at the same wavelengths.
       dwave (:py:class:`~numpy.ndarray`): the bin sizes [ang] of the same wavelength grid.
-    
+
     Return:
       lsf_matrix (array[float]): 2d {wavelength,kernel_size} discrete lsf.
     """
@@ -363,7 +363,7 @@ def _generate_lsf_matrix(wave_mid, lsf_dlambda, dwave):
             ind0 = 0
         if ind1 >= wave_mid.size - 1:
             ind1 = wave_mid.size - 1
-        
+
         xx = wave_mid[ind0:ind1]
 
         # sample Gaussian (centered at wave_mid[i]
@@ -384,12 +384,12 @@ def lsf_matrix(instrument):
 
     Args:
       instrument (str): string specifying the instrumental setup.
-      
+
     Return:
       a 3-tuple composed of
-      
+
       - **lsf_mode** (int): integer flag specifying the type of LSF.
-      - **lsf** (:py:class:`~numpy.ndarray`): 2d array, with dimensions corresponding to 
+      - **lsf** (:py:class:`~numpy.ndarray`): 2d array, with dimensions corresponding to
         wavelength of the instrumental grid, and discrete/pixel kernel size, respectively.
         Each entry is normalized to unity.
       - **lsf_dlambda** (:py:class:`~numpy.ndarray`): 1d array, the LSF FWHM at the same wavelengths.
@@ -409,7 +409,7 @@ def lsf_matrix(instrument):
     if 'R_tab' in inst:
         # tabulated R(lambda)
         lsf_mode = 1
-        
+
         # load from the corresponding LSF data file
         fname = basePath + instrument + '.txt'
         data = np.loadtxt(fname, delimiter=',', comments='#')
@@ -449,7 +449,7 @@ def lsf_matrix(instrument):
     if 'LSF_tab' in inst:
         # tabulated LSF (e.g. COS)
         lsf_mode = 1
-        
+
         # load from the corresponding LSF data file
         fname = basePath + inst['LSF_tab'] + '.txt'
         data = np.loadtxt(fname, delimiter=' ', comments='#')
@@ -495,14 +495,15 @@ def lsf_matrix(instrument):
 
 def create_wavelength_grid(line=None, instrument=None):
     """ Create a wavelength grid (i.e. x-axis of a spectrum) to receieve absorption line depositions.
-    Must specify one, but not both, of either 'line' or 'instrument'. In the first case, 
-    a local spectrum is made around its rest-frame central wavelength. In the second case, 
+
+    Must specify one, but not both, of either 'line' or 'instrument'. In the first case,
+    a local spectrum is made around its rest-frame central wavelength. In the second case,
     a global spectrum is made corresponding to the instrumental properties.
     """
     assert line is not None or instrument is not None
 
     if line is not None:
-        f, gamma, wave0_restframe, _, _ = _line_params(line)
+        f, gamma, wave0_restframe, _, _ = line_params(line)
 
     # master wavelength grid, observed-frame [ang]
     wave_mid = None
@@ -660,7 +661,7 @@ def _v90(tau,wave_mid_ang):
     flux_sum = np.sum(flux)
     if flux_sum == 0:
         return 0.0
-    
+
     inv_flux_total = 1.0 / flux_sum
     flux *= inv_flux_total
 
@@ -747,18 +748,20 @@ def varconvolve(arr, kernel):
 
 @jit(nopython=True, nogil=True)
 def resample_spectrum(master_mid, tau_master, inst_waveedges):
-    """ Resample a high-resolution spectrum defined on the master_mid wavelength (midpoints) grid, 
-    with given optical depths at each wavelength point, onto a lower resolution inst_waveedges 
+    """ Resample an input optical depth spectrum onto a new wavelength grid.
+
+    The input high-resolution spectrum is defined on the master_mid wavelength (midpoints) grid,
+    with given optical depths at each wavelength point, onto a lower resolution inst_waveedges
     wavelength (bin edges) grid, preserving flux i.e. equivalent width.
 
     Args:
       master_mid (array[float]): high-resolution spectrum wavelength grid midpoints.
       tau_master (array[float]): optical depth, defined at each master_mid wavelength point.
-      inst_waveedges (array[float]): low-resolution spectrum wavelength grid bin edges, 
+      inst_waveedges (array[float]): low-resolution spectrum wavelength grid bin edges,
         should have the same units as master_mid.
 
     Return:
-      inst_tau (array[float]): optical depth array at the lower resolution, with total size 
+      inst_tau (array[float]): optical depth array at the lower resolution, with total size
         equal to (inst_waveedges.size - 1).
     """
     flux_smallval = 1.0 - 1e-16
@@ -820,7 +823,7 @@ def _cloudy_linelist():
     path = '/u/dnelson/code/cloudy25/docs/LineLabels.txt'
     with open(path,'r') as f:
         linelist = f.readlines()
-    
+
     for line in lines:
         species, ion_num = lines[line]['ion'].split()
         spec_str = f"{species:2} {roman[ion_num]}"
@@ -841,109 +844,4 @@ def _cloudy_linelist():
         if not found:
             print(s)
 
-    import pdb; pdb.set_trace()
-
-def test_conv():
-    """ Debug check behavior and benchmark variable convolution. """ 
-    import time
-
-    inst = 'SDSS-BOSS'
-    dtype = 'float32'
-
-    # make fake spec
-    wave_mid, _, _ = create_wavelength_grid(instrument=inst)
-    tau = np.zeros(wave_mid.size, dtype=dtype)
-
-    # inject delta function
-    ind_delta = 3000
-    tau[ind_delta:ind_delta+1] = 1.0
-
-    # get kernel
-    lsf_mode, lsf, _ = lsf_matrix(inst)
-    lsf = lsf.astype(dtype)
-
-    # convolve and time
-    start_time = time.time()
-
-    flux = 1 - np.exp(-tau)
-
-    tau_conv = varconvolve(tau, lsf)
-    flux_conv = varconvolve(flux, lsf)
-
-    tau_conv_via_flux = -np.log(1-flux_conv)
-
-    # debug:
-    print(f'Took: [{time.time() - start_time:.1f}] sec')
-
-    print('tau_orig: ', tau[ind_delta-3:ind_delta+4])
-    print('tau_conv: ', tau_conv[ind_delta-3:ind_delta+4])
-    print('tau_convf: ', tau_conv_via_flux[ind_delta-3:ind_delta+4])
-
-    print(f'{tau.sum() = }, {tau_conv.sum() = }')
-    print(f'{flux.sum() = }, {flux_conv.sum() = }')
-    print('EW before = ', _equiv_width(tau, wave_mid))
-    print('EW after = ', _equiv_width(tau_conv, wave_mid))
-    print('EW after via fluxconv = ', _equiv_width(tau_conv_via_flux, wave_mid))
-
-def test_conv_master():
-    """ Debug check convolving on master grid vs inst grid. """ 
-    master = 'master2'
-    inst = 'SDSS-BOSS'
-    dtype = 'float32'
-    tophat_wave = 4000.0 # ang
-    tophat_width = 0.4 # ang
-
-    # make fake spec
-    wave_master, _, _ = create_wavelength_grid(instrument=master)
-    dwave = instruments[master]['dwave']
-    tau_master = np.zeros(wave_master.size, dtype=dtype)
-
-    # inject tophat optical depth
-    _, ind_delta = closest(wave_master, tophat_wave)
-    width_delta = int(tophat_width / dwave)
-
-    tau_master[ind_delta-width_delta:ind_delta+width_delta] = 1.0
-
-    # resample tau_master on to instrument wavelength grid
-    wave_inst, waveedges_inst, _ = create_wavelength_grid(instrument=inst)
-    tau_inst = resample_spectrum(wave_master, tau_master, waveedges_inst)
-
-    _, ind_inst = closest(wave_inst, tophat_wave)
-
-    print('tau_inst: ', tau_inst[ind_inst-3:ind_inst+4])
-
-    # get lsf for inst, and convolve inst
-    lsf_mode, lsf_inst, _ = lsf_matrix(inst)
-
-    flux_inst = 1 - np.exp(-tau_inst)
-    flux_inst_conv = varconvolve(flux_inst, lsf_inst)
-    tau_inst_conv = -np.log(1-flux_inst_conv)
-
-    print('tau_inst_conv: ', tau_inst_conv[ind_inst-3:ind_inst+4])
-    
-    # get lsf for master2, and convolve master2
-    lsf_mode, lsf_master, _ = lsf_matrix(master)
-
-    flux_master = 1 - np.exp(-tau_master)
-    flux_master_conv = varconvolve(flux_master, lsf_master)
-    tau_master_conv = -np.log(1-flux_master_conv)
-
-    print('tau_master_conv: ', tau_master_conv[ind_delta-3:ind_delta+4])
-
-    # then resample back onto inst grid
-    tau_inst_conv2 = resample_spectrum(wave_master, tau_master_conv, waveedges_inst)
-    flux_inst_conv2 = 1 - np.exp(-tau_inst_conv2)
-    
-    print('tau_inst_conv2: ', tau_inst_conv2[ind_inst-3:ind_inst+4])
-
-    print(f'{tau_inst_conv.sum() = } is convolved on inst grid.')
-    print(f'{tau_inst_conv2.sum() = } is convolved on master2 grid, then resampled to inst grid.')
-
-    print(f'{_equiv_width(tau_inst, wave_inst) = }')
-    print(f'{_equiv_width(tau_master, wave_master) = }')
-
-    print(f'{_equiv_width(tau_inst_conv, wave_inst) = }')
-    print(f'{_equiv_width(tau_inst_conv2, wave_inst) = }')
-    print(f'{_equiv_width(tau_master_conv, wave_master) = }')
-
-    print(f'Flux ratio: {flux_inst_conv2[ind_inst-3:ind_inst+4] / flux_inst_conv[ind_inst-3:ind_inst+4]}')
+    # todo: finish

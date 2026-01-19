@@ -1,20 +1,21 @@
 """
 Synthetic absorption spectra: analysis and derived quantities.
 """
-import numpy as np
+from os.path import isfile
+
 import h5py
 import matplotlib.pyplot as plt
-from os.path import isfile
+import numpy as np
 from numba import jit
 
+from ..plot.config import *
+from ..spectra.spectrum import generate_rays_voronoi_fullbox, integrate_along_saved_rays, nRaysPerDim_def, \
+    raysType_def, spectra_filepath
+from ..spectra.util import create_wavelength_grid, lines
 from ..util.helper import closest, contiguousIntSubsets, logZeroMin
 from ..util.units import units
-from ..spectra.spectrum import generate_rays_voronoi_fullbox, integrate_along_saved_rays, \
-                             projAxis_def, nRaysPerDim_def, raysType_def, spectra_filepath
-from ..spectra.util import create_wavelength_grid, lines
-from ..plot.config import *
 
-def load_spectra_subset(sim, ion, instrument, mode, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def, 
+def load_spectra_subset(sim, ion, instrument, mode, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def,
                         solar=False, num=None, inds=None, EW_minmax=None, dv=0.0, coldens=False):
     """ Load a subset of spectra from a given simulation and ion.
 
@@ -24,9 +25,9 @@ def load_spectra_subset(sim, ion, instrument, mode, nRaysPerDim=nRaysPerDim_def,
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
       mode (str): either 'all', 'random', 'evenly', or 'inds'.
       nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
-      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or 
+      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or
         'sample_localized' (distributed around a given set of subhalos).
-      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead
         use the (constant) solar value.
       num (int): how many individual spectra to show.
       inds (list[int]): if mode is 'inds', then the list of specific spectra indices to plot. num is ignored.
@@ -54,7 +55,8 @@ def load_spectra_subset(sim, ion, instrument, mode, nRaysPerDim=nRaysPerDim_def,
     # select
     if EW_minmax is not None:
         inds_all = np.where( (EW>EW_minmax[0]) & (EW<=EW_minmax[1]) )[0]
-        print(f'[{ion}] [{instrument}] Found [{len(inds_all)}] of [{EW.size}] spectra in EW range [{EW_minmax[0]}-{EW_minmax[1]}] Ang.')
+        print(f'[{ion}] [{instrument}] Found [{len(inds_all)}] of [{EW.size}] spectra in EW range ' + \
+              f'[{EW_minmax[0]}-{EW_minmax[1]}] Ang.')
         assert len(inds_all) > 0, 'No spectra found in this EW range.'
     else:
         inds_all = np.arange(EW.size)
@@ -117,7 +119,7 @@ def load_spectra_subset(sim, ion, instrument, mode, nRaysPerDim=nRaysPerDim_def,
         EW = EW[sort_inds]
         if N is not None:
             N = N[sort_inds]
-        
+
     # x-axis in velocity space?
     if dv:
         wave, flux = wave_to_dv(sim, wave, flux, dv)
@@ -125,8 +127,8 @@ def load_spectra_subset(sim, ion, instrument, mode, nRaysPerDim=nRaysPerDim_def,
     return wave, flux, EW, N, lineNames
 
 def wave_to_dv(wave, flux, dv):
-    """ Convert a spectrum as a function of wavelength to velocity space, centering
-    at the tau-weighted mean wavelength.
+    """ Convert a spectrum as a function of wavelength to velocity space, centering at the tau-weighted mean wavelength.
+
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
       wave (np.ndarray): wavelength array [Ang].
@@ -157,7 +159,7 @@ def wave_to_dv(wave, flux, dv):
             wave_dv[i,:] = dlambda / wave_mean * units.c_km_s
 
         return wave_dv, flux.squeeze()
-    
+
     # take local subsets of spectra, adopt common dv axis
 
     # how many wavelength bins in velocity window?
@@ -227,20 +229,21 @@ def wave_to_dv(wave, flux, dv):
 
 def load_absorber_spectra(sim, line, instrument, solar, EW_minmax=None, dwave=0.0, dv=0.0):
     """ Load the (local) spectra for each absorber, from a given simulation and ion.
-    Note that the absorber catalog is available for each line separately, so one must 
-    be specified, and this line is used for the EW_minmax restriction (and returned EW 
-    values). However, the flux is the observable i.e. the full spectrum including all 
+
+    Note that the absorber catalog is available for each line separately, so one must
+    be specified, and this line is used for the EW_minmax restriction (and returned EW
+    values). However, the flux is the observable i.e. the full spectrum including all
     lines of this ion.
 
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
       line (str): transition name e.g. 'Mg II 2796', since each line has its own absorber catalog.
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
-      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead
         use the (constant) solar value.
       EW_minmax (list[float]): minimum and maximum EW to plot [Ang].
       dwave (float): if not zero, then take as a wavelength window (+/-) around each absorber.
-      dv (float): if not zero, then take as a velocity window (+/-), convert 
+      dv (float): if not zero, then take as a velocity window (+/-), convert
         the wavelength axis to velocity, and subset spectra to only this vel range.
     """
     assert dwave == 0 or dv == 0, 'Cannot specify both dwave and dv.'
@@ -265,7 +268,8 @@ def load_absorber_spectra(sim, line, instrument, solar, EW_minmax=None, dwave=0.
     # select on EW
     if EW_minmax is not None:
         inds = np.where( (abs_EW[line]>EW_minmax[0]) & (abs_EW[line]<=EW_minmax[1]) )[0]
-        print(f'[{ion}] Found [{len(inds)}] of [{abs_EW[line].size}] absorbers in EW range [{EW_minmax[0]}-{EW_minmax[1]}] Ang.')
+        print(f'[{ion}] Found [{len(inds)}] of [{abs_EW[line].size}] absorbers in EW range ' + \
+              f'[{EW_minmax[0]}-{EW_minmax[1]}] Ang.')
     else:
         inds = np.arange(abs_EW[line].size)
         print(f'[{ion}] Loaded [{len(inds)}] absorbers, no EW range window.')
@@ -327,15 +331,16 @@ def load_absorber_spectra(sim, line, instrument, solar, EW_minmax=None, dwave=0.
     return wave, flux, abs_EW, abs_N, lineNames
 
 def absorber_catalog(sP, ion, instrument, solar=False):
-    """ Detect and chatacterize absorbers, handling the possibility of one or possibly multiple per sightline, 
-    defined as separated but contiguous regions of absorption. Create an absorber catalog, i.e. counts and 
-    offsets per sightline, and compute their EWs.
+    """ Detect and chatacterize absorbers, handling the possibility of one or possibly multiple per sightline.
+
+    Absorbers are defined as separated but contiguous regions of absorption. Create an absorber catalog, 
+    i.e. counts and offsets per sightline, and compute their EWs.
 
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
       ion (str): space separated species name and ionic number e.g. 'Mg II'.
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
-      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead
         use the (constant) solar value.
     """
     # lines of this ion
@@ -406,7 +411,7 @@ def absorber_catalog(sP, ion, instrument, solar=False):
         ind_spec[line]  = np.zeros(nspec*10, dtype='int32') - 1 # spectrum index of this absorber
         ind_start[line] = np.zeros(nspec*10, dtype='int32') - 1 # starting index in this spectrum
         ind_stop[line]  = np.zeros(nspec*10, dtype='int32') - 1 # ending index in this spectrum
-        
+
         # loop over spectra, find deviations from tau==0, find contiguous regions, compute EW in each
         for i in range(nspec):
             if i % int(nspec/10) == 0: print(' %.1f%%' % (i/nspec*100), flush=True)
@@ -420,7 +425,7 @@ def absorber_catalog(sP, ion, instrument, solar=False):
             ranges = contiguousIntSubsets(local_tau_nonzero_inds)
 
             counts[line][i] = len(ranges)
-            
+
             # loop over each contiguous range
             for i_start,i_stop in ranges:
                 # index range
@@ -562,13 +567,13 @@ def _cell_absorber_map(wave0, abs_counts, abs_offset, abs_ind_spec, abs_ind_star
 
             # sort the individual column density contributions from each cell
             sort_inds = np.argsort(N_abs)[::-1]
-            
+
             # fractional contribution of each cell to the total
             N_abs_frac = N_abs[sort_inds] / N_abs_tot
 
             # cumulative sum, normalized to fraction of the total
             N_abs_cum = np.cumsum(N_abs[sort_inds]) / N_abs_tot
-            
+
             # identify the cells required such that we reach 99% of the total column density
             # and include all cells with fractional contribution above 1e-3
             thresh1 = 0.99
@@ -601,23 +606,31 @@ def _cell_absorber_map(wave0, abs_counts, abs_offset, abs_ind_spec, abs_ind_star
     return spec_index, counts_abs, offset_abs, coldens_abs, colfrac_abs
 
 def cell_to_absorber_map(sP, ion, instrument, solar=False):
-    """ For each absorber, defined as a contiguous set of pixels in a spectrum, identify the 
-    gas cells that contribute to this absorber. Return 'spec_index' is an ordered list of 
-    global gas cell indices, stored with a length (counts_abs) and offset (offset_abs) approach, 
-    where the length and offset are per absorber. Also derived and returned: the column 
-    density per absorber, and the fraction of this (total) column density that is recovered 
+    """ For each absorber, identify the gas cells that contribute to its optical depth.
+
+    Return 'spec_index' is an ordered list of 
+    global gas cell indices, stored with a length (counts_abs) and offset (offset_abs) approach,
+    where the length and offset are per absorber. Also derived and returned: the column
+    density per absorber, and the fraction of this (total) column density that is recovered
     by the cells included here as 'significantly' contributing to the absorber.
 
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
       ion (str): space separated species name and ionic number e.g. 'Mg II'.
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
-      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead
         use the (constant) solar value.
+
+    Returns:
+      ndarray[ind]: spec_index is an ordered list of global gas cell indices, stored with a length (counts_abs)
+        and offset (offset_abs) approach, where the length and offset are per absorber.
+      ndarray[float]: coldens_abs is the column density per absorber
+      ndarray[float]: colfrac_abs is the fraction of the (total) column density that is recovered by the cells
+        included here as 'significantly' contributing to the absorber.
     """
     # lines of this ion
     lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
-    
+
     loadFilename = spectra_filepath(sP, ion, instrument=instrument, solar=solar)
     saveFilename = loadFilename.replace('_combined','_abscellmap')
 
@@ -639,7 +652,7 @@ def cell_to_absorber_map(sP, ion, instrument, solar=False):
     # load absorber catalog
     _, abs_counts, abs_offset, abs_ind_spec, abs_ind_start, abs_ind_stop = \
         absorber_catalog(sP, ion, instrument, solar=solar)
-    
+
     # sample instrumental grid
     _, inst_waveedges, _ = create_wavelength_grid(instrument=instrument)
 
@@ -670,7 +683,7 @@ def cell_to_absorber_map(sP, ion, instrument, solar=False):
 
     # load gas cells
     projAxis = 2 #list(ray_dir).index(1)
-    cell_vellos_glob = sP.snapshotSubsetP('gas', 'vel_'+['x','y','z'][projAxis]) # code    
+    cell_vellos_glob = sP.snapshotSubsetP('gas', 'vel_'+['x','y','z'][projAxis]) # code
     cell_vellos_glob = sP.units.particleCodeVelocityToKms(cell_vellos_glob) # km/s
 
     densField = '%s numdens' % lines[line]['ion']
@@ -684,7 +697,7 @@ def cell_to_absorber_map(sP, ion, instrument, solar=False):
     for i in range(pSplitNum):
         rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
             generate_rays_voronoi_fullbox(sP, pSplit=[i,pSplitNum])
-        
+
         # subset gas cells
         cell_vellos = cell_vellos_glob[cell_inds]
         cell_dens = cell_dens_glob[cell_inds]
@@ -742,6 +755,7 @@ def cell_to_absorber_map(sP, ion, instrument, solar=False):
 
 def calc_statistics_from_saved_rays(sP, ion):
     """ Calculate useful statistics based on already computed and saved rays.
+
     Results depend on ion, independent of actual transition.
     Results depend on the physical properties along each sightline, not on the absorption spectra.
 
@@ -820,7 +834,7 @@ def test_abs_coldens(sim, ion, instrument):
     # load absorber catalog
     _, abs_counts, abs_offset, abs_ind_spec, abs_ind_start, abs_ind_stop = \
         absorber_catalog(sim, ion, instrument)
-    
+
     # load column densities per absorber
     spec_index, counts_abs, offset_abs, coldens_abs, colfrac_abs = cell_to_absorber_map(sim, ion, instrument)
 

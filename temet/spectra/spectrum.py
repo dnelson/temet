@@ -1,19 +1,20 @@
 """
 Synthetic absorption spectra: generation.
 """
-import numpy as np
-import h5py
 import glob
 import threading
-from os.path import isfile, isdir
 from os import mkdir, unlink
+from os.path import isdir, isfile
+
+import h5py
+import numpy as np
 from numba import jit
 
-from ..util.helper import pSplitRange, reportMemory
-from ..util.voronoiRay import rayTrace
 from ..cosmo.cloudy import cloudyIon
-from ..spectra.util import *
-from ..spectra.util import _voigt_tau, _equiv_width, _v90
+from ..spectra.util import _equiv_width, _v90, _voigt_tau, instruments, lines, sP_units_c_km_s, sP_units_mass_proton, \
+    sP_units_boltzmann, create_wavelength_grid, sP_units_Mpc_in_cm, resample_spectrum, varconvolve, lsf_matrix, line_params
+from ..util.helper import pSplitRange
+from ..util.voronoiRay import rayTrace
 
 # default configuration for ray generation
 #projAxis_def = 2
@@ -32,12 +33,12 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
       sP (:py:class:`~util.simParams`): simulation instance.
       projAxis (int): either 0, 1, or 2. only axis-aligned allowed for now.
       nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
-      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or 
+      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or
         'sample_localized' (distributed around a given set of subhalos).
       subhaloIDs (list): if raysType is 'sample_localized' (only), then a list of subhalo IDs.
-      pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
+      pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note
         that we follow a spatial subdivision, so the total job number should be an integer squared.
-      integrateQuant (str): if None, save rays for future use. otherwise, directly perform and save the 
+      integrateQuant (str): if None, save rays for future use. otherwise, directly perform and save the
         integral of the specified gas quantity along each ray.
       search (bool): if True, return existing data only, do not calculate new files.
     """
@@ -51,9 +52,9 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
     if pSplit is not None:
         filename = '%s%s_n%dd%d_%03d-split-%d-%d.hdf5' % \
                (raysType,iqStr,nRaysPerDim,projAxis,sP.snap,pSplit[0],pSplit[1])
-        
+
     path = sP.derivPath + "rays/" + filename
-    
+
     if not isfile(path) and isfile(sP.postPath + 'AbsorptionSightlines/' + filename):
         # check also existing files in permanent, publicly released postprocessing/
         path = sP.postPath + 'AbsorptionSightlines/' + filename
@@ -63,7 +64,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
 
     # ray direction
     ray_dir = np.array([0.0, 0.0, 0.0], dtype='float64')
-    ray_dir[projAxis] = 1.0    
+    ray_dir[projAxis] = 1.0
 
     inds = list(set([0,1,2]) - set([projAxis])) # e.g. [0,1] for projAxis == 2
 
@@ -78,7 +79,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
                 # integral results
                 result = f['result'][()]
                 ray_pos = f['ray_pos'][()]
-        
+
                 # metadata
                 attrs = {}
                 for attr in f.attrs:
@@ -116,7 +117,8 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
     nRaysPerDimOrig = nRaysPerDim
 
     if pSplit is not None and raysType != 'sample_localized':
-        assert np.abs(np.sqrt(pSplit[1]) - np.round(np.sqrt(pSplit[1]))) < 1e-6, 'pSplitSpatial: Total number of jobs should have integer square root, e.g. 9, 16, 25, 64.'
+        nPerDimErr = np.abs(np.sqrt(pSplit[1]) - np.round(np.sqrt(pSplit[1])))
+        assert nPerDimErr< 1e-6, 'pSplitSpatial: Total number of jobs should have integer sqroot, e.g. 9, 16, 25, 64.'
         nPerDim = int(np.sqrt(pSplit[1]))
         extent = sP.boxSize / nPerDim
 
@@ -129,7 +131,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
 
         # number of rays in this spatial subset
         nRaysPerDim = nRaysPerDim/np.sqrt(pSplit[1])
-        assert nRaysPerDim.is_integer(), 'pSplitSpatial: nRaysPerDim is not divisable by square root of total number of jobs.'
+        assert nRaysPerDim.is_integer(), 'pSplitSpatial: nRaysPerDim is not divisable by sqroot(total number of jobs).'
         nRaysPerDim = int(nRaysPerDim)
 
         print(' pSplitSpatial: [%d of %d] ij (%d %d) extent [%g] x [%.1f - %.1f] y [%.1f - %.1f]' % \
@@ -159,7 +161,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
         ypts = rng.uniform(low=ymin, high=ymax, size=nRaysPerDim**2)
 
     if raysType == 'sample_localized' and pSplit is None:
-        # localized (e.g. <= rvir) sightlines around a given sample of subhalos, specified by a list of 
+        # localized (e.g. <= rvir) sightlines around a given sample of subhalos, specified by a list of
         # subhaloIDs, taking nRaysPerDim**2 sightlines around each subhalo
         assert subhaloIDs is not None, 'Error: For [sample_localized], specify subhaloIDs.'
 
@@ -176,7 +178,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
         r200c = sP.halos('Group_R_Crit200')[grnr]
 
         rng = np.random.default_rng(424242 + nRaysPerDim + sP.snap + sP.res)
-    
+
         xpts = np.zeros(numrays, dtype='float32')
         ypts = np.zeros(numrays, dtype='float32')
         zpts = np.zeros(numrays, dtype='float32')
@@ -192,7 +194,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
             offset = i * nRaysPerDim**2
             xpts[offset:offset + nRaysPerDim**2] = randomDistance * np.cos(randomAngle)
             ypts[offset:offset + nRaysPerDim**2] = randomDistance * np.sin(randomAngle)
-    
+
             xpts[offset:offset + nRaysPerDim**2] += SubhaloPos[subhaloID,inds[0]]
             ypts[offset:offset + nRaysPerDim**2] += SubhaloPos[subhaloID,inds[1]]
 
@@ -203,7 +205,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
                 total_dl = total_dl_local*2*r200c_avg # constant
 
     if raysType == 'sample_localized' and pSplit is not None:
-        # localized (e.g. <= rvir) sightlines around a given sample of subhalos, specified by a list of 
+        # localized (e.g. <= rvir) sightlines around a given sample of subhalos, specified by a list of
         # subhaloIDs, taking nRaysPerDim**2 sightlines around each subhalo
         assert subhaloIDs is not None, 'Error: For [sample_localized], specify subhaloIDs.'
         assert pSplit[1] == len(subhaloIDs), 'Error: pSplit size needs to equal subhaloIDs length.'
@@ -240,10 +242,10 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
             total_dl = total_dl_local*2*r200c
 
             print(subhaloID, r200c, total_dl_local, total_dl, zpts[0])
-    
+
     # construct [N,3] list of ray starting locations
     ray_pos = np.zeros((numrays,3), dtype='float64')
-    
+
     ray_pos[:,inds[0]] = xpts.ravel()
     ray_pos[:,inds[1]] = ypts.ravel()
     ray_pos[:,projAxis] = zpts.ravel() if raysType == 'sample_localized' else 0.0
@@ -308,8 +310,8 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
             result *= sP.units.codeLengthToPc(1.0)
 
         # save
-        path = spectra_filepath(sP, ion=integrateQuant, projAxis=projAxis, nRaysPerDim=nRaysPerDimOrig, 
-                                 raysType=raysType, pSplit=pSplit)     
+        path = spectra_filepath(sP, ion=integrateQuant, projAxis=projAxis, nRaysPerDim=nRaysPerDimOrig,
+                                 raysType=raysType, pSplit=pSplit)
         with h5py.File(path, 'w') as f:
             f['result'] = result
             f['ray_pos'] = ray_pos
@@ -352,7 +354,7 @@ def generate_rays_voronoi_fullbox(sP, projAxis=projAxis_def, nRaysPerDim=nRaysPe
 
     return rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl
 
-def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nRaysPerDim=nRaysPerDim_def, 
+def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nRaysPerDim=nRaysPerDim_def,
                                      raysType=raysType_def, subhaloIDs=None, pSplit=None, solar=False):
     """ Generate a large number of spectra, based on already computed and saved rays.
 
@@ -361,11 +363,12 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
       ion (str): space separated species name and ionic number e.g. 'Mg II'.
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
       nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
-      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or 
+      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or
         'sample_localized' (distributed around a given set of subhalos).
-      pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
+      subhaloIDs (ndarray[int]): if raysType is 'sample_localized' (only), then a list of subhalo IDs.
+      pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note
         that we follow a spatial subdivision, so the total job number should be an integer squared.
-      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead
         use the (constant) solar value.
     """
     # adapt idealized grid to span (redshifted) central wavelength (optional, save space)
@@ -373,7 +376,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
         wave_min_ion = np.inf
         wave_max_ion = 0.0
 
-        for line_name, props in lines.items():
+        for _, props in lines.items():
             if props['ion'] == ion:
                 wave_min_ion = min(wave_min_ion, props['wave0'])
                 wave_max_ion = max(wave_max_ion, props['wave0'])
@@ -456,7 +459,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
 
     # load rays
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
-        generate_rays_voronoi_fullbox(sP, nRaysPerDim=nRaysPerDim, raysType=raysType, 
+        generate_rays_voronoi_fullbox(sP, nRaysPerDim=nRaysPerDim, raysType=raysType,
                                       subhaloIDs=subhaloIDs, pSplit=pSplit)
 
     if not all_lines_done:
@@ -466,7 +469,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
 
         cell_vellos = sP.snapshotSubsetP('gas', velLosField, inds=cell_inds) # code
         cell_temp   = sP.snapshotSubsetP('gas', 'temp_sfcold', inds=cell_inds) # K
-        
+
         cell_vellos = sP.units.particleCodeVelocityToKms(cell_vellos) # km/s
 
         # convert length units, all other units already appropriate
@@ -511,12 +514,12 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
 
         # create spectra
         inst_wave, tau_local, EW_local, N_local, v90_local = \
-          create_spectra_from_traced_rays(sP, line, instrument, 
+          create_spectra_from_traced_rays(sP, line, instrument,
                                           rays_off, rays_len, rays_dl, rays_inds,
                                           cell_dens, cell_temp, cell_vellos)
 
         assert np.array_equal(inst_wave,wave_mid)
-        
+
         EWs[line] = EW_local
         N[line] = N_local
         v90[line] = v90_local
@@ -541,7 +544,7 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
         # create flux dataset
         shape = f['tau_%s' % lineNames[0].replace(' ','_')].shape
         chunks = (1000, shape[1]) if shape[1] < 10000 else (100, shape[1])
-        
+
         if 'flux' not in f:
             # create if not already present (may have been started but not finished)
             dset = f.create_dataset('flux', shape=shape, chunks=chunks, compression='gzip')
@@ -579,16 +582,17 @@ def generate_spectra_from_saved_rays(sP, ion='Si II', instrument='4MOST-HRS', nR
 
 def integrate_along_saved_rays(sP, field, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def, subhaloIDs=None, pSplit=None):
     """ Integrate a physical (gas) property along the line of sight, based on already computed and saved rays.
-    The result has units of [pc] * [field] where [field] is the original units of the physical field as loaded, 
+
+    The result has units of [pc] * [field] where [field] is the original units of the physical field as loaded,
     unless field is a number density, in which case the result (column density) is in [cm^-2].
-    
+
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
       field (str): any available gas field.
       nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
-      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or 
+      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or
         'sample_localized' (distributed around a given set of subhalos).
-      pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
+      pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note
         that we follow a spatial subdivision, so the total job number should be an integer squared.
     """
     # save file
@@ -610,7 +614,7 @@ def integrate_along_saved_rays(sP, field, nRaysPerDim=nRaysPerDim_def, raysType=
 
     # load rays
     rays_off, rays_len, rays_dl, rays_inds, cell_inds, ray_pos, ray_dir, total_dl = \
-      generate_rays_voronoi_fullbox(sP, nRaysPerDim=nRaysPerDim, raysType=raysType, 
+      generate_rays_voronoi_fullbox(sP, nRaysPerDim=nRaysPerDim, raysType=raysType,
                                     subhaloIDs=subhaloIDs, pSplit=pSplit)
 
     projAxis = list(ray_dir).index(1)
@@ -651,7 +655,8 @@ def integrate_along_saved_rays(sP, field, nRaysPerDim=nRaysPerDim_def, raysType=
 @jit(nopython=True, nogil=True)
 def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_eff, debug=False):
     """ Add the absorption profile of a single transition, from a single cell, to a spectrum.
-    Global method, where the original master grid is assumed to be very high resolution, such that 
+
+    Global method, where the original master grid is assumed to be very high resolution, such that
     no sub-sampling is necessary (re-sampling onto an instrument grid done later).
 
     Args:
@@ -754,10 +759,10 @@ def deposit_single_line(wave_edges_master, tau_master, f, gamma, wave0, N, b, z_
     return
 
 @jit(nopython=True, nogil=True)
-def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, 
-                                     rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
+def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
+                                     rays_off, rays_len, rays_cell_dl, rays_cell_inds,
                                      cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
-                                     master_mid, master_edges, inst_wavemid, inst_waveedges, 
+                                     master_mid, master_edges, inst_wavemid, inst_waveedges,
                                      lsf_mode, lsf_matrix, ind0, ind1):
     """ JITed helper (see below). """
     n_rays = ind1 - ind0 + 1
@@ -868,11 +873,13 @@ def _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
     return tau_allrays, EW_allrays, N_allrays, v90_allrays
 
 def create_spectra_from_traced_rays(sP, line, instrument,
-                                    rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
+                                    rays_off, rays_len, rays_cell_dl, rays_cell_inds,
                                     cell_dens, cell_temp, cell_vellos, nThreads=60):
-    """ Given many completed rays traced through a volume, in the form of a composite list of 
-    intersected cell pathlengths and indices, extract the physical properties needed (dens, temp, vellos) 
-    and create the final absorption spectrum, depositing a Voigt absorption profile for each cell.
+    """ Generate a fullset of mock absorption spectra given the pre-existing set of rays.
+
+    The rays are a composite list of intersected cell pathlengths and indices. Using these, we extract the physical
+    properties needed (dens, temp, vellos) and create the final absorption spectrum, depositing a Voigt absorption
+    profile for each cell.
 
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
@@ -924,18 +931,17 @@ def create_spectra_from_traced_rays(sP, line, instrument,
         ind0 = 0
         ind1 = n_rays - 1
 
-        tau, EW, N, v90 = _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, 
-                                                   rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
+        tau, EW, N, v90 = _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
+                                                   rays_off, rays_len, rays_cell_dl, rays_cell_inds,
                                                    cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
-                                                   master_mid, master_edges, inst_wavemid, inst_waveedges, 
+                                                   master_mid, master_edges, inst_wavemid, inst_waveedges,
                                                    lsf_mode, lsf, ind0, ind1)
 
         return inst_wavemid, tau, EW, N, v90
 
     # multi-threaded
     class specThread(threading.Thread):
-        """ Subclass Thread() to provide local storage which can be retrieved after 
-            this thread terminates and added to the global return. """
+        """ Subclass Thread() to provide local storage. """
         def __init__(self, threadNum, nThreads):
             super(specThread, self).__init__()
 
@@ -944,10 +950,10 @@ def create_spectra_from_traced_rays(sP, line, instrument,
 
         def run(self):
             # call JIT compiled kernel
-            self.result = _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass, 
-                                                rays_off, rays_len, rays_cell_dl, rays_cell_inds, 
+            self.result = _create_spectra_from_traced_rays(f, gamma, wave0, ion_mass,
+                                                rays_off, rays_len, rays_cell_dl, rays_cell_inds,
                                                 cell_dens, cell_temp, cell_vellos, z_vals, z_lengths,
-                                                master_mid, master_edges, inst_wavemid, inst_waveedges, 
+                                                master_mid, master_edges, inst_wavemid, inst_waveedges,
                                                 lsf_mode, lsf, self.ind0, self.ind1)
 
     # create threads
@@ -956,7 +962,7 @@ def create_spectra_from_traced_rays(sP, line, instrument,
     # launch each thread, detach, and then wait for each to finish
     for thread in threads:
         thread.start()
-        
+
     for thread in threads:
         thread.join()
 
@@ -979,8 +985,10 @@ def create_spectra_from_traced_rays(sP, line, instrument,
 
 @jit(nopython=True, nogil=True)
 def _integrate_quantity_along_traced_rays(rays_off, rays_len, rays_cell_dl, rays_cell_inds, cell_values):
-    """ Integrate a given physical quantity along each sightline. One scalar return per sightline, with 
-    units given by [rays_cell_dl * cell_values].
+    """ Integrate a given physical quantity along each sightline.
+
+    Return:
+      float: the integral of the quantity along each sightline, with units given by [rays_cell_dl * cell_values].
     """
     n_rays = rays_len.size
 
@@ -1016,7 +1024,6 @@ def concat_integrals(sP, field, nRaysPerDim=nRaysPerDim_def, raysType=raysType_d
     assert pSplitNum > 0, 'Error: No split spectra files found.'
 
     # load all for count
-    lines_present = []
     count = 0
 
     for i in range(pSplitNum):
@@ -1033,7 +1040,7 @@ def concat_integrals(sP, field, nRaysPerDim=nRaysPerDim_def, raysType=raysType_d
                 # allocate
                 ray_pos = np.zeros((pSplitNum*n,3), dtype='float32')
                 result = np.zeros(pSplitNum*n, dtype=f['result'].dtype)
-                
+
             else:
                 # all other chunks: sanity checks
                 assert n == f['result'].size # should be constant
@@ -1069,14 +1076,14 @@ def concat_integrals(sP, field, nRaysPerDim=nRaysPerDim_def, raysType=raysType_d
     # remove split files
     if raysType == 'sample_localized':
         return # likely want to keep them (per-halo)
-    
+
     for i in range(pSplitNum):
         filename = spectra_filepath(sP, ion=field, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=[i,pSplitNum])
         unlink(filename)
 
     print('Split files removed.')
 
-def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPerDim_def, 
+def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPerDim_def,
                    raysType=raysType_def, solar=False):
     """ Combine split files for spectra into a single file.
 
@@ -1085,16 +1092,18 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPer
       ion (str): space separated species name and ionic number e.g. 'Mg II'.
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
       nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
-      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or 
+      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or
         'sample_localized' (distributed around a given set of subhalos).
-      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead
         use the (constant) solar value.
     """
     # search for chunks
     lineNames = [k for k,v in lines.items() if lines[k]['ion'] == ion] # all transitions of this ion
 
-    loadFilename = spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit='*', solar=solar)
-    saveFilename = spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=None, solar=solar)
+    loadFilename = spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, \
+                                    pSplit='*', solar=solar)
+    saveFilename = spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, \
+                                    pSplit=None, solar=solar)
 
     pSplitNum = len([f for f in glob.glob(loadFilename) if '_combined' not in f])
     assert pSplitNum > 0, 'Error: No split spectra files found.'
@@ -1104,7 +1113,8 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPer
     count = 0
 
     for i in range(pSplitNum):
-        filename = spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=[i,pSplitNum], solar=solar)
+        filename = spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, \
+                                    pSplit=[i,pSplitNum], solar=solar)
 
         with h5py.File(filename,'r') as f:
             # first file: load number of spectra per chunk file, master wavelength grid, and other metadata
@@ -1129,7 +1139,7 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPer
                         lines_present.append(line)
                     else:
                         print('Skipping [%s], not present.' % line)
-                
+
             else:
                 # all other chunks: sanity checks
                 assert n_spec == f['flux'].shape[0] # should be constant
@@ -1200,7 +1210,8 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPer
 
             # load and write by split chunk
             for i in range(pSplitNum):
-                filename = spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=[i,pSplitNum], solar=solar)
+                filename = spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, \
+                                            raysType=raysType, pSplit=[i,pSplitNum], solar=solar)
                 print(i, end=' ', flush=True)
 
                 with h5py.File(filename,'r',rdcc_nbytes=0) as f_read:
@@ -1214,9 +1225,10 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPer
     # remove split files
     if raysType == 'sample_localized':
         return # likely want to keep them (per-halo)
-    
+
     for i in range(pSplitNum):
-        filename = spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, pSplit=[i,pSplitNum], solar=solar)
+        filename = spectra_filepath(sP, ion, instrument=instrument, nRaysPerDim=nRaysPerDim, raysType=raysType, \
+                                    pSplit=[i,pSplitNum], solar=solar)
         unlink(filename)
 
     print('Split files removed.')
@@ -1224,18 +1236,18 @@ def concat_spectra(sP, ion='Fe II', instrument='4MOST-HRS', nRaysPerDim=nRaysPer
 def spectra_filepath(sim, ion, projAxis=projAxis_def, nRaysPerDim=nRaysPerDim_def, raysType=raysType_def,
                       instrument=None, pSplit=None, solar=False):
     """ Return the path to a file of saved spectra.
-    
+
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
       ion (str): space separated species name and ionic number e.g. 'Mg II'.
       projAxis (int): either 0, 1, or 2. only axis-aligned allowed for now.
       nRaysPerDim (int): number of rays per linear dimension (total is this value squared).
-      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or 
+      raysType (str): either 'voronoi_fullbox' (equally spaced), 'voronoi_rndfullbox' (random), or
         'sample_localized' (distributed around a given set of subhalos).
       instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
-      pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note 
+      pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total]. Note
         that we follow a spatial subdivision, so the total job number should be an integer squared.
-      solar (bool): if True, do not use simulation-tracked metal abundances, but instead 
+      solar (bool): if True, do not use simulation-tracked metal abundances, but instead
         use the (constant) solar value.
     """
     ionStr = ion.replace(' ','')

@@ -22,18 +22,17 @@ from ..plot import subhalos
 from ..projects.outflows_analysis import loadRadialMassFluxes
 from ..projects.outflows_vis import subboxOutflowTimeEvoPanels, galaxyMosaic_topN, singleHaloDemonstrationImage
 
-labels = {'rad'     : 'Radius [ pkpc ]',
-          'vrad'    : 'Radial Velocity [ km/s ]',
-          'vcut'    : 'Minimum Outflow Velocity Cut [ km/s ]',
-          'temp'    : 'Gas Temperature [ log K ]',
-          'temp_sfcold' : 'Gas Temperature (eEOS=$10^3$K) [ log K ]',
-          'z_solar' : 'Gas Metallicity [ log Z$_{\\rm sun}$ ]',
-          'numdens' : 'Gas Density [ log cm$^{-3}$ ]',
-          'theta'   : 'Galactocentric Angle [ 0, $\pm\pi$ = major axis ]'}
+labels = {'rad'     : r'Radius [ pkpc ]',
+          'vrad'    : r'Radial Velocity [ km/s ]',
+          'vcut'    : r'Minimum Outflow Velocity Cut [ km/s ]',
+          'temp'    : r'Gas Temperature [ log K ]',
+          'temp_sfcold' : r'Gas Temperature (eEOS=$10^3$K) [ log K ]',
+          'z_solar' : r'Gas Metallicity [ log Z$_{\rm sun}$ ]',
+          'numdens' : r'Gas Density [ log cm$^{-3}$ ]',
+          'theta'   : r'Galactocentric Angle [ 0, $\pm\pi$ = major axis ]'}
 
 def explore_vrad_halos(sP, haloIDs):
     """ Exploration: a variety of plots looking at halo-centric gas/wind radial velocities, for individual halos. """
-
     # general config
     nBins = 200
     vrad_lim = [-1000.0, 2000.0]
@@ -94,12 +93,12 @@ def sample_comparison_z2_sins_ao(sP):
     # plot setup
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
-    
+
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
 
-    ax.set_ylabel('Star Formation Rate [ log M$_{\\rm sun}$ / yr ]')
-    ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 2r$_{1/2}$ ]')
+    ax.set_ylabel(r'Star Formation Rate [ log M$_{\rm sun}$ / yr ]')
+    ax.set_xlabel(r'Stellar Mass [ log M$_{\rm sun}$ ] [ < 2r$_{1/2}$ ]')
 
     # load simulation points
     sfrField = 'SubhaloSFR' if fullSubhaloSFR else 'SubhaloSFRinRad'
@@ -168,7 +167,7 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
 
     if xQuant == 'mstar_30pkpc':
         xlim = [7.5, 11.25]
-        xlabel = 'Stellar Mass [ log M$_{\\rm sun}$ ]'
+        xlabel = r'Stellar Mass [ log M$_{\rm sun}$ ]'
 
     if config is not None and 'xlim' in config: xlim = config['xlim']
 
@@ -179,19 +178,18 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
         pStr2 = 'w' # 'wind'
         ylim = [-1.15, 1.65] # mass loadings default
         if massField != 'Masses':
-            pStr1 = '_{\\rm %s}' % massField
+            pStr1 = r'_{\rm %s}' % massField
             pStr2 = massField
             ylim = [-10.5, -2.0]
             saveBase += massField
-        ylabel = 'Mass Loading $\eta%s = \dot{M}_{\\rm %s} / \dot{M}_\star$ [ log ]' % (pStr1,pStr2)
-
+        ylabel = r'Mass Loading $\eta%s = \dot{M}_{\rm %s} / \dot{M}_\star$ [ log ]' % (pStr1,pStr2)
     else:
         saveBase = 'outflowRate'
         pStr = '%s ' % ptType if ptType != 'total' else ''
         if massField != 'Masses': pStr = '%s ' % massField
-        ylabel = '%sOutflow Rate [ log M$_{\\rm sun}$ / yr ]' % pStr
+        ylabel = r'%sOutflow Rate [ log M$_{\rm sun}$ / yr ]' % pStr
         ylim = [-2.8, 2.5] # outflow rates default
-    
+
     ptStr = '_%s' % ptType
     binSize = 0.2 # in M*
     markersize = 0.0 # 4.0, or 0.0 to disable
@@ -204,7 +202,7 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
         # plot setup
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
-        
+
         if ylimLoc is None: ylimLoc = ylim
 
         ax.set_xlim(xlim)
@@ -278,20 +276,23 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
 
                 if len(vcutIndsPlot) == 1:
                     label = 'r = %s' % radMidPoint
-                    labelFixed = 'v$_{\\rm rad}$ > %3d km/s' % vcut_vals[vcut_ind]
-                    if v200norm: labelFixed = 'v$_{\\rm rad}$ > %.1f v$_{\\rm 200}$' % vcut_vals[vcut_ind]
+                    labelFixed = r'v$_{\rm rad}$ > %3d km/s' % vcut_vals[vcut_ind]
+                    if v200norm:
+                        labelFixed = r'v$_{\rm rad}$ > %.1f v$_{\rm 200}$' % vcut_vals[vcut_ind]
                 if len(radIndsPlot) == 1:
-                    label = 'v$_{\\rm rad}$ > %3d km/s' % vcut_vals[vcut_ind]
-                    if v200norm: label = 'v$_{\\rm rad}$ > %.1f v$_{\\rm 200}$' % vcut_vals[vcut_ind]
+                    label = r'v$_{\rm rad}$ > %3d km/s' % vcut_vals[vcut_ind]
+                    if v200norm:
+                        label = r'v$_{\rm rad}$ > %.1f v$_{\rm 200}$' % vcut_vals[vcut_ind]
                     labelFixed = 'r = %s' % radMidPoint
                 if len(vcutIndsPlot) > 1 and len(radIndsPlot) > 1:
                     label = 'r = %s' % radMidPoint # primary label radius, by color
                     if not v200norm:
-                        labels_sec.append( 'v$_{\\rm rad}$ > %3d km/s' % vcut_vals[vcut_ind] ) # second legend: vcut by ls
+                        labels_sec.append(r'v$_{\rm rad}$ > %3d km/s' % vcut_vals[vcut_ind]) # second legend: vcut by ls
                     else:
-                        labels_sec.append( 'v$_{\\rm rad}$ > %.1fv$_{\\rm 200}$' % vcut_vals[vcut_ind] )
-                    if j > 0: label = ''
-                
+                        labels_sec.append(r'v$_{\rm rad}$ > %.1fv$_{\rm 200}$' % vcut_vals[vcut_ind])
+                    if j > 0:
+                        label = ''
+
                 if len(vcutIndsPlot) > 1 and len(radIndsPlot) > 1:
                     # one color per v_rad, if cycling over both
                     if i == 0:
@@ -368,7 +369,8 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
             f.write(out)
 
         # special plotting behavior (including observational data sets)
-        from ..load.data import heckman15, fiore17, fluetsch18, chisholm15, davies18, genzel14, leung17, rupke05, rupke17, bordoloi16
+        from ..load.data import heckman15, fiore17, fluetsch18, chisholm15, davies18, genzel14, leung17, \
+            rupke05, rupke17, bordoloi16
 
         color = '#555555'
         labels = []
@@ -567,19 +569,18 @@ def gasOutflowRatesVsRedshift(sP, ptType, eta=False, config=None, massField='Mas
         pStr2 = 'w' # 'wind'
         ylim = [-1.15, 1.65] # mass loadings default
         if massField != 'Masses':
-            pStr1 = '_{\\rm %s}' % massField
+            pStr1 = r'_{\rm %s}' % massField
             pStr2 = massField
             ylim = [-10.5, -2.0]
             saveBase += massField
-        ylabel = 'Mass Loading $\eta%s = \dot{M}_{\\rm %s} / \dot{M}_\star$ [ log ]' % (pStr1,pStr2)
-
+        ylabel = r'Mass Loading $\eta%s = \dot{M}_{\rm %s} / \dot{M}_\star$ [ log ]' % (pStr1,pStr2)
     else:
         saveBase = 'outflowRateVsRedshift'
         pStr = '%s ' % ptType if ptType != 'total' else ''
         if massField != 'Masses': pStr = '%s ' % massField
-        ylabel = '%sOutflow Rate [ log M$_{\\rm sun}$ / yr ]' % pStr
+        ylabel = r'%sOutflow Rate [ log M$_{\rm sun}$ / yr ]' % pStr
         ylim = [-2.8, 2.5] # outflow rates default
-    
+
     ptStr = '_%s' % ptType
     malpha = 0.2
     percs = [16,84]
@@ -589,7 +590,7 @@ def gasOutflowRatesVsRedshift(sP, ptType, eta=False, config=None, massField='Mas
         # plot setup
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
-        
+
         if ylimLoc is None: ylimLoc = ylim
 
         ax.set_xlim(xlim)
@@ -652,7 +653,7 @@ def gasOutflowRatesVsRedshift(sP, ptType, eta=False, config=None, massField='Mas
 
                     cmap = loadColorTable('viridis', numColors=None)
                     c = cmap(float(binInd) / len(bins))
-                    
+
                     if not skipZeroVals:
                         # take log after running mean/median, instead of before, allows skipZeros=False to have an impact
                         ym = logZeroNaN(ym)
@@ -668,7 +669,7 @@ def gasOutflowRatesVsRedshift(sP, ptType, eta=False, config=None, massField='Mas
                         pm = savgol_filter(pm,sKn,sKo,axis=1)
 
                     lsInd = i if len(vcutIndsPlot) < 4 else j
-                    label = '$M_\star / \\rm{M}_\odot = 10^{%.1f}$' % np.mean(bin_edges)
+                    label = r'$M_\star / \rm{M}_\odot = 10^{%.1f}$' % np.mean(bin_edges)
                     l, = ax.plot(xm, ym, '-', ls=linestyles[i], lw=lw, alpha=1.0, color=c, label=label)
 
                     if binInd == 5:
@@ -699,7 +700,7 @@ def gasOutflowRatesVsRedshift(sP, ptType, eta=False, config=None, massField='Mas
             else:
                 radMidPoint = 'all'
 
-            labelFixed = 'r = %s, v$_{\\rm rad}$ > %3d km/s' % (radMidPoint,vcut_vals[vcut_ind])
+            labelFixed = r'r = %s, v$_{\rm rad}$ > %3d km/s' % (radMidPoint,vcut_vals[vcut_ind])
             line = plt.Line2D( (0,1), (0,0), color='white', marker='', lw=0.0)
             legend2 = ax.legend([line], [labelFixed], loc=loc2, handlelength=-0.5, **legParams)
             ax.add_artist(legend2)
@@ -813,7 +814,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
         ylabel = ylabel.replace('km/s','log km/s')
         ylim = [1.4, 3.2]
     if v200norm:
-        ylabel = ylabel.replace('km/s', 'v$_{\\rm 200}$')
+        ylabel = ylabel.replace('km/s', r'v$_{\rm 200}$')
 
     # plot config (x): values not hard-coded here set automatically by simSubhaloQuantity() below
     xlim = None
@@ -821,7 +822,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
 
     if xQuant == 'mstar_30pkpc':
         xlim = [7.5, 11.0]
-        xlabel = 'Stellar Mass [ log M$_{\\rm sun}$ ]'
+        xlabel = r'Stellar Mass [ log M$_{\rm sun}$ ]'
     if 'etaM' in xQuant:
         xlim = [0.0, 2.7] # explore
 
@@ -838,7 +839,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
         # plot setup
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
-        
+
         if ylimLoc is None: ylimLoc = ylim
 
         ax.set_xlim(xlim)
@@ -859,7 +860,8 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
             minVelTextY = 370.0 if not ylog else 2.58
             ax.fill_between(xlim, [0,0], [minVel,minVel], color='#cccccc', alpha=0.05)
             ax.plot(xlim, [minVel,minVel], '-', lw=lw, color='#cccccc', alpha=0.5)
-            ax.text(xlim[0] + (xlim[1]-xlim[0])*0.04, minVelTextY, 'TNG v$_{\\rm wind,min}$ = 350 km/s', color='black', alpha=0.6)
+            label = r'TNG v$_{\rm wind,min}$ = 350 km/s'
+            ax.text(xlim[0] + (xlim[1]-xlim[0])*0.04, minVelTextY, label, color='black', alpha=0.6)
 
         if addModelTNG:
             # loop over multiple-redshifts if requested
@@ -975,13 +977,13 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
 
                     if len(percIndsPlot) == 1:
                         label = 'r = %s' % radMidPoint
-                        labelFixed = 'v$_{\\rm out,%d}$' % percs[perc_ind]
+                        labelFixed = r'v$_{\rm out,%d}$' % percs[perc_ind]
                     if len(radIndsPlot) == 1:
-                        label = 'v$_{\\rm out,%d}$' % percs[perc_ind]
+                        label = r'v$_{\rm out,%d}$' % percs[perc_ind]
                         labelFixed = 'r = %s' % radMidPoint
                     if len(percIndsPlot) > 1 and (len(radIndsPlot) > 1 or len(redshifts) > 1):
                         label = 'r = %s' % radMidPoint # primary label radius, by color
-                        labels_sec.append( 'v$_{\\rm out,%d}$' % percs[perc_ind] ) # second legend: vcut by ls
+                        labels_sec.append(r'v$_{\rm out,%d}$' % percs[perc_ind]) # second legend: vcut by ls
                         if j > 0: label = ''
                     if len(redshifts) == 1:
                         if labelFixed is None or 'mstar' not in xQuant:
@@ -1068,7 +1070,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
 
             #txt_pos = [1.12,1.9] # M* min = 7.5
             txt_pos = [1.01,1.99] # M* min = 9.0
-            ax.text(txt_pos[0], txt_pos[1], '$\eta_{\\rm M} \propto v_{\\rm out}^{-1}$', color='#555555', rotation=-40.0)
+            ax.text(txt_pos[0], txt_pos[1], r'$\eta_{\rm M} \propto v_{\rm out}^{-1}$', color='#555555', rotation=-40.0)
 
             xx = np.array([0.3, 2.06])
             yy = 1000 * (10.0**xx)**(-0.5) # 'energy driven'
@@ -1077,7 +1079,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
 
             #txt_pos = [1.2,2.30] # M* min = 7.5
             txt_pos = [1.15,2.5] # M* min = 9.0
-            ax.text(txt_pos[0], txt_pos[1], '$\eta_{\\rm M} \propto v_{\\rm out}^{-2}$', color='#555555', rotation=-26.0)
+            ax.text(txt_pos[0], txt_pos[1], r'$\eta_{\rm M} \propto v_{\rm out}^{-2}$', color='#555555', rotation=-26.0)
 
             # obs data: v_out vs etaM
             for i, obs in enumerate([fiore17(), heckman15(), fluetsch18(), chisholm15(), genzel14(), bordoloi16(), leung17(), rupke05()]):
@@ -1132,7 +1134,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
 
                 l, = ax.plot(xm, ym, ':', lw=lw, alpha=0.3, color='#000000')
                 #ax.fill_between(xm[:], pm[0,:], pm[-1,:], color=l.get_color(), interpolate=True, alpha=0.03)
-                ax.text(xm[6],ym[6]*1.02,'$v_{\\rm esc,10 kpc}$', color='#000000', alpha=0.3, fontsize=18.0, va='bottom', rotation=15.0)
+                ax.text(xm[6],ym[6]*1.02,r'$v_{\rm esc,10 kpc}$', color='#000000', alpha=0.3, fontsize=18.0, va='bottom', rotation=15.0)
 
                 # second line: delta potential relative to rvir
                 pot_10pkpc = sP.auxCat('Subhalo_Potential_10pkpc_Gas')['Subhalo_Potential_10pkpc_Gas'][sub_ids]
@@ -1148,7 +1150,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                     pm = savgol_filter(pm,sKn+2,sKo,axis=1)
 
                 l, = ax.plot(xm, ym, '--', lw=lw, alpha=0.3, color='#000000')
-                ax.text(xm[14],ym[14]*1.10,'$\Delta v_{\\rm esc,10 kpc-rvir}$', color='#000000', alpha=0.3, fontsize=18.0, va='bottom', rotation=56.0)
+                ax.text(xm[14],ym[14]*1.10,r'$\Delta v_{\rm esc,10 kpc-rvir}$', color='#000000', alpha=0.3, fontsize=18.0, va='bottom', rotation=56.0)
 
         if 'mstar' in xQuant:
             pass
@@ -1351,11 +1353,11 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
         # plot setup
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
-        
+
         ax.set_xlim(limits[quant])
         ax.set_ylim(ylim)
 
-        ylabel = '%s Outflow Rate [ log M$_{\\rm sun}$ / yr ]' % ptType
+        ylabel = r'%s Outflow Rate [ log M$_{\rm sun}$ / yr ]' % ptType
         if inflow: ylabel = ylabel.replace("Outflow","Inflow")
         ax.set_xlabel(labels[quant])
         ax.set_ylabel(ylabel)
@@ -1428,11 +1430,11 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
 
                 labelFixed = 'r = %3d kpc' % radMidPoint
                 if vcut_ind is not None:
-                    labelFixed += ', v$_{\\rm rad}$ > %3d km/s' % vcut_vals[vcut_ind]
+                    labelFixed += r', v$_{\rm rad}$ > %3d km/s' % vcut_vals[vcut_ind]
                 if len(redshifts) == 1:
-                    labelFixed += ', z = %.1f' % sP.redshift
+                    labelFixed += r', z = %.1f' % sP.redshift
 
-                label = 'M$^\star$ = %.1f' % mStarMidPoint if j == 0 else '' # label M* only once
+                label = r'M$^\star$ = %.1f' % mStarMidPoint if j == 0 else '' # label M* only once
 
                 #yy = savgol_filter(yy,sKn,sKo)
                 if pm.ndim > 1:
@@ -1576,27 +1578,27 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
     cStr = '_contour' if contours is not None else ''
 
     if eta:
-        cbarlabel = '%s Mass Loading $\eta = \dot{M}_{\\rm w} / \dot{M}_\star$ [ log ]' % ptType
-        cbarlabel2 = '%s Mass Loading (Inflow) [ log ]' % ptType
+        cbarlabel = r'%s Mass Loading $\eta = \dot{M}_{\rm w} / \dot{M}_\star$ [ log ]' % ptType
+        cbarlabel2 = r'%s Mass Loading (Inflow) [ log ]' % ptType
         saveBase = 'massLoading2D'
-        contourlabel = 'log $\eta$'
+        contourlabel = r'log $\eta$'
     else:
-        cbarlabel = '%s Outflow Rate [ log M$_{\\rm sun}$ / yr ]' % ptType
-        cbarlabel2 = '%s Inflow Rate [ log M$_{\\rm sun}$ / yr ]' % ptType
+        cbarlabel = r'%s Outflow Rate [ log M$_{\rm sun}$ / yr ]' % ptType
+        cbarlabel2 = r'%s Inflow Rate [ log M$_{\rm sun}$ / yr ]' % ptType
         saveBase = 'outflowRate2D'
-        contourlabel = 'log $\dot{M}_{\\rm out}$'
+        contourlabel = r'log $\dot{M}_{\rm out}$'
     if rawMass:
         assert not eta and not rawDens
-        cbarlabel = '%s Mass [ log M$_{\\rm sun}$ ]' % ptType
-        cbarlabel2 = '%s Mass [ log ]' % ptType
+        cbarlabel = r'%s Mass [ log M$_{\rm sun}$ ]' % ptType
+        cbarlabel2 = r'%s Mass [ log ]' % ptType
         saveBase = 'mass2D'
-        contourlabel = 'log $M_{\\rm %s}$' % ptType
+        contourlabel = r'log $M_{\rm %s}$' % ptType
     if rawDens:
         assert not eta and not rawMass
-        cbarlabel = '%s $\delta \\rho / <\\rho>$ [ log ]' % ptType
-        cbarlabel2 = '%s $\delta \\rho / <\\rho>$ [ log ]' % ptType
+        cbarlabel = r'%s $\delta \rho / <\rho>$ [ log ]' % ptType
+        cbarlabel2 = r'%s $\delta \rho / <\rho>$ [ log ]' % ptType
         saveBase = 'densityRelative2D'
-        contourlabel = 'log $\delta \\rho / <\\rho>$'
+        contourlabel = r'log $\delta \rho / <\rho>$'
 
     if len(clims) == 1: clims = [clims[0]] * len(mStarBins) # one for each
     assert yAxis != 'rad' # keep on x-axis if wanted
@@ -1678,7 +1680,7 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
                 ax.set_xlabel(labels[xAxis])
                 ax.set_ylabel(labels[yAxis])
                 if v200norm:
-                    ax.set_ylabel(labels[yAxis].replace('km/s','v$_{\\rm 200}$'))
+                    ax.set_ylabel(labels[yAxis].replace('km/s',r'v$_{\rm 200}$'))
 
                 # local data
                 w = np.where( (mstar > mStarBin[0]) & (mstar <= mStarBin[1]) )
@@ -1768,19 +1770,21 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
 
                 if len(mStarBins) == 1 and len(redshifts) > 1:
                     label1 = 'z = %.1f' % redshift
-                
-                if j > 0: label1 = '' # only label on first redshift
+
+                if j > 0:
+                    label1 = '' # only label on first redshift
 
                 if vcut_ind[i] is not None and np.isfinite(vcut_vals[vcut_ind[i]]):
-                    label2 = 'v$_{\\rm rad}$ > %3d km/s' % vcut_vals[vcut_ind[i]]
-                    if v200norm: label2 = 'v$_{\\rm rad}$ > %.1f v$_{\\rm 200}$' % vcut_vals[vcut_ind[i]]
+                    label2 = r'v$_{\rm rad}$ > %3d km/s' % vcut_vals[vcut_ind[i]]
+                    if v200norm: label2 = r'v$_{\rm rad}$ > %.1f v$_{\rm 200}$' % vcut_vals[vcut_ind[i]]
                 if rad_ind[i] is not None:
                     radMidPoint = 0.5*(binConfig['rad'][rad_ind[i]] + binConfig['rad'][rad_ind[i]+1])
-                    label2 = 'r = %3d kpc' % radMidPoint
+                    label2 = r'r = %3d kpc' % radMidPoint
                 if vcut_ind[i] is not None and rad_ind[i] is not None:
                     radMidPoint = 0.5*(binConfig['rad'][rad_ind[i]] + binConfig['rad'][rad_ind[i]+1])
-                    label2 = 'r = %3d kpc, v$_{\\rm rad}$ > %3d km/s' % (radMidPoint,vcut_vals[vcut_ind[i]])
-                    if v200norm: label2 = 'r = %3d kpc, v$_{\\rm rad}$ > %.1f v$_{\\rm 200}$' % (radMidPoint,vcut_vals[vcut_ind[i]])
+                    label2 = r'r = %3d kpc, v$_{\rm rad}$ > %3d km/s' % (radMidPoint,vcut_vals[vcut_ind[i]])
+                    if v200norm:
+                        label2 = r'r = %3d kpc, v$_{\rm rad}$ > %.1f v$_{\rm 200}$' % (radMidPoint,vcut_vals[vcut_ind[i]])
 
                 # plot: positive and negative components separately
                 norm = Normalize(vmin=clims[i][0], vmax=clims[i][1])
@@ -1798,8 +1802,8 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
                     im_neg = plt.imshow(h2d_neg.T, cmap=cmap_neg, norm=norm, **imOpts)
                     im_pos = plt.imshow(h2d_pos.T, cmap=cmap_pos, norm=norm, **imOpts)
 
-                    ax.set_facecolor(cmap_pos(0.0)) # set background color inside plot axes to lowest value instead of white, to prevent boundary artifacts
-
+                    # set background color inside plot to lowest value instead of white, to prevent boundary artifacts
+                    ax.set_facecolor(cmap_pos(0.0))
                 else:
                     # 2D contour: first resample, increasing resolution
                     XX = np.linspace(xlim[0], xlim[1], mdot_2d.shape[1])
@@ -1835,7 +1839,7 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
                         grid_z_out = griddata(grid_xy, grid_z, grid_out, method='cubic').reshape(nn,nn)
 
                         if yAxis == 'vrad':
-                            # in this case, vrad crosses the zero boundary separating inflow/outflow, do not smooth across
+                            # vrad crosses the zero boundary separating inflow/outflow, do not smooth across
                             min_pos_ind = np.where(YY_out > 0.0)[0].min()
                             grid_z_out[:,min_pos_ind:] = sgolay2d(grid_z_out[:,min_pos_ind:],sKn*3,sKo)
                         else:
@@ -2130,7 +2134,7 @@ def _haloSizeScalesHelper(ax, sP, field, xaxis, massBins, i, k, avg_rvir_code, a
         rVirFac = 10 if 'log' in xaxis else 5
         xrvir = [avg_rvir_code/rVirFac, avg_rvir_code/rVirFac]
         if 'log_' in xaxis: xrvir = np.log10(xrvir)
-        textStr = 'R$_{\\rm vir}$/%d' % rVirFac
+        textStr = r'R$_{\rm vir}$/%d' % rVirFac
 
         if 1: #i == 0 or i == len(sPs)-1: # only at first/last redshift, since largely overlapping
             ax.plot(xrvir, y1, lw=lw*1.5, ls=linestyles[i], color=c, alpha=0.1)
@@ -2168,37 +2172,37 @@ def stackedRadialProfiles(sPs, field, cenSatSelect='cen', projDim='3D', xaxis='l
 
     if xaxis == 'log_rvir':
         ax.set_xlim([-2.5, 0.0])
-        ax.set_xlabel('%s / Virial Radius [ log ]' % radStr)
+        ax.set_xlabel(r'%s / Virial Radius [ log ]' % radStr)
     elif xaxis == 'rvir':
         ax.set_xlim([0.0, 1.0])
-        ax.set_xlabel('%s / Virial Radius' % radStr)
+        ax.set_xlabel(r'%s / Virial Radius' % radStr)
     elif xaxis == 'log_rhalf':
         ax.set_xlim([-0.5, 1.0])
-        ax.set_xlabel('%s / Stellar Half-mass Radius [ log ]' % radStr)
+        ax.set_xlabel(r'%s / Stellar Half-mass Radius [ log ]' % radStr)
     elif xaxis == 'rhalf':
         ax.set_xlim([0, 10])
-        ax.set_xlabel('%s / Stellar Half-mass Radius' % radStr)
+        ax.set_xlabel(r'%s / Stellar Half-mass Radius' % radStr)
     elif xaxis == 'log_pkpc':
         ax.set_xlim([-0.5, 2.0])
-        ax.set_xlabel('%s [ log pkpc ]' % radStr)
+        ax.set_xlabel(r'%s [ log pkpc ]' % radStr)
     elif xaxis == 'pkpc':
         ax.set_xlim([0, 100])
-        ax.set_xlabel('%s [ pkpc ]' % radStr)
+        ax.set_xlabel(r'%s [ pkpc ]' % radStr)
     elif xaxis == 'log_re':
         ax.set_xlim([-0.5, 1.0])
-        ax.set_xlabel('%s / Stellar R$_{\\rm e}$ (JWST f115w) [ log ]' % radStr)
+        ax.set_xlabel(r'%s / Stellar R$_{\rm e}$ (JWST f115w) [ log ]' % radStr)
     elif xaxis == 're':
         ax.set_xlim([0, 10])
-        ax.set_xlabel('%s / Stellar R$_{\\rm e}$ (JWST f115w)' % radStr)
+        ax.set_xlabel(r'%s / Stellar R$_{\rm e}$ (JWST f115w)' % radStr)
 
-    ylabels_3d = {'SFR'                   : '$\dot{\\rho}_\star$ [ log M$_{\\rm sun}$ yr$^{-1}$ kpc$^{-3}$ ]',
-                  'Gas_Mass'              : '$\\rho_{\\rm gas}$ [ log M$_{\\rm sun}$ kpc$^{-3}$ ]',
-                  'Stars_Mass'            : '$\\rho_{\\rm stars}$ [ log M$_{\\rm sun}$ kpc$^{-3}$ ]',
-                  'Gas_Fraction'          : 'f$_{\\rm gas}$ = $\\rho_{\\rm gas}$ / $\\rho_{\\rm b}$',
-                  'Gas_Metal_Mass'        : '$\\rho_{\\rm metals}$ [ log M$_{\\rm sun}$ kpc$^{-3}$ ]',
-                  'Gas_Metallicity'       : 'Gas Metallicity (unweighted) [ log Z$_{\\rm sun}$ ]',
-                  'Gas_Metallicity_sfrWt' : 'Gas Metallicity (SFR weighted) [ log Z$_{\\rm sun}$ ]',
-                  'Gas_Bmag'              : 'Gas Magnetic Field Strength [ log Gauss ]'}
+    ylabels_3d = {'SFR'                   : r'$\dot{\rho}_\star$ [ log M$_{\rm sun}$ yr$^{-1}$ kpc$^{-3}$ ]',
+                  'Gas_Mass'              : r'$\rho_{\rm gas}$ [ log M$_{\rm sun}$ kpc$^{-3}$ ]',
+                  'Stars_Mass'            : r'$\rho_{\rm stars}$ [ log M$_{\rm sun}$ kpc$^{-3}$ ]',
+                  'Gas_Fraction'          : r'f$_{\rm gas}$ = $\rho_{\rm gas}$ / $\rho_{\rm b}$',
+                  'Gas_Metal_Mass'        : r'$\rho_{\rm metals}$ [ log M$_{\rm sun}$ kpc$^{-3}$ ]',
+                  'Gas_Metallicity'       : r'Gas Metallicity (unweighted) [ log Z$_{\rm sun}$ ]',
+                  'Gas_Metallicity_sfrWt' : r'Gas Metallicity (SFR weighted) [ log Z$_{\rm sun}$ ]',
+                  'Gas_Bmag'              : r'Gas Magnetic Field Strength [ log Gauss ]'}
     ylims_3d   = {'SFR'                   : [-10.0, 0.0],
                   'Gas_Mass'              : [0.0, 9.0],
                   'Stars_Mass'            : [0.0, 11.0],
@@ -2208,17 +2212,17 @@ def stackedRadialProfiles(sPs, field, cenSatSelect='cen', projDim='3D', xaxis='l
                   'Gas_Metallicity_sfrWt' : [-1.5, 1.0],
                   'Gas_Bmag'              : [-9.0, -4.0]}
 
-    ylabels_2d = {'SFR'                   : '$\dot{\Sigma}_\star$ [ log M$_{\\rm sun}$ yr$^{-1}$ kpc$^{-2}$ ]',
-                  'Gas_Mass'              : '$\Sigma_{\\rm gas}$ [ log M$_{\\rm sun}$ kpc$^{-2}$ ]',
-                  'Stars_Mass'            : '$\Sigma_{\\rm stars}$ [ log M$_{\\rm sun}$ kpc$^{-2}$ ]',
-                  'Gas_Fraction'          : 'f$_{\\rm gas}$ = $\Sigma_{\\rm gas}$ / $\Sigma_{\\rm b}$',
-                  'Gas_Metal_Mass'        : '$\Sigma_{\\rm metals}$ [ log M$_{\\rm sun}$ kpc$^{-2}$ ]',
+    ylabels_2d = {'SFR'                   : r'$\dot{\Sigma}_\star$ [ log M$_{\rm sun}$ yr$^{-1}$ kpc$^{-2}$ ]',
+                  'Gas_Mass'              : r'$\Sigma_{\rm gas}$ [ log M$_{\rm sun}$ kpc$^{-2}$ ]',
+                  'Stars_Mass'            : r'$\Sigma_{\rm stars}$ [ log M$_{\rm sun}$ kpc$^{-2}$ ]',
+                  'Gas_Fraction'          : r'f$_{\rm gas}$ = $\Sigma_{\rm gas}$ / $\Sigma_{\rm b}$',
+                  'Gas_Metal_Mass'        : r'$\Sigma_{\rm metals}$ [ log M$_{\rm sun}$ kpc$^{-2}$ ]',
                   'Gas_Metallicity'       : ylabels_3d['Gas_Metallicity'],
                   'Gas_Metallicity_sfrWt' : ylabels_3d['Gas_Metallicity_sfrWt'],
                   'Gas_Bmag'              : ylabels_3d['Gas_Bmag'],
-                  'Gas_LOSVel_sfrWt'      : 'Gas Velocity v$_{\\rm LOS}$ (SFR weighted) [ km/s ]',
-                  'Gas_LOSVelSigma'       : 'Gas Velocity Dispersion $\sigma_{\\rm LOS,1D}$ [ km/s ]',
-                  'Gas_LOSVelSigma_sfrWt' : 'Gas Velocity Dispersion $\sigma_{\\rm LOS,1D,SFRw}$ [ km/s ]'}
+                  'Gas_LOSVel_sfrWt'      : r'Gas Velocity v$_{\rm LOS}$ (SFR weighted) [ km/s ]',
+                  'Gas_LOSVelSigma'       : r'Gas Velocity Dispersion $\sigma_{\rm LOS,1D}$ [ km/s ]',
+                  'Gas_LOSVelSigma_sfrWt' : r'Gas Velocity Dispersion $\sigma_{\rm LOS,1D,SFRw}$ [ km/s ]'}
     ylims_2d   = {'SFR'                   : [-6.0, 0.0],
                   'Gas_Mass'              : [3.0, 9.0],
                   'Stars_Mass'            : [3.0, 11.0],
@@ -2474,9 +2478,9 @@ def stackedRadialProfiles(sPs, field, cenSatSelect='cen', projDim='3D', xaxis='l
 
             # plot totsum and/or median line
             if haloMassBins is not None:
-                label = '$M_{\\rm halo}$ = %.1f' % (0.5*(massBin[0]+massBin[1])) if (i == 0) else ''
+                label = r'$M_{\rm halo}$ = %.1f' % (0.5*(massBin[0]+massBin[1])) if (i == 0) else ''
             else:
-                label = 'M$^\star$ = %.1f' % (0.5*(massBin[0]+massBin[1])) if (i == 0) else ''
+                label = r'M$^\star$ = %.1f' % (0.5*(massBin[0]+massBin[1])) if (i == 0) else ''
 
             ax.plot(rr, yy_med, lw=lw, color=c, linestyle=linestyles[i], label=label)
             #ax.plot(rr, yy_mean, lw=lw, color=c, linestyle=':', alpha=0.5)
@@ -2628,7 +2632,7 @@ def paperPlots(sPs=None):
         ylim = [0,800]
         config = {'percInds':[2,4], 'radInds':[1], 'ylim':ylim, 'stat':'mean', 'skipZeros':False, 'markersize':4.0, 'loc2':'upper left', 'addModelTNG':True}
         gasOutflowVelocityVsQuant(TNG50, xQuant='mstar_30pkpc', config=config)
-        
+
         # outflow velocity as a function of M* at one redshift, variations in (radius,v_perc) values
         #config = {'percInds':[3,1], 'radInds':[1,2,4], 'ylim':ylim, 'xlim':[8.5,11.0], 'stat':'mean', 'skipZeros':False, 'loc2':'upper left', 'addModelTNG':True}
         #TNG50_z05 = simParams(run='tng50-1',redshift=0.5)
@@ -2666,7 +2670,7 @@ def paperPlots(sPs=None):
         def _f_post(ax):
             """ Custom behavior. """
             if 0:
-                # escape velocity curve, direct from enclosed mass profile                
+                # escape velocity curve, direct from enclosed mass profile
                 ptTypes = ['stars','gas','dm']
                 haloLen = sP.groupCatSingle(haloID=haloIDs[0])['GroupLenType']
                 totSize = np.sum( [haloLen[sP.ptNum(ptType)] for ptType in ptTypes] )
@@ -2705,7 +2709,7 @@ def paperPlots(sPs=None):
 
             if xlog: rad_code = np.log10(rad_code)
             ax.plot(rad_code[1:], vesc[1:], '-', lw=lw, color='#000000', alpha=0.5)
-            #ax.text(rad_code[-17], vesc[-17]*1.02, '$v_{\\rm esc}(r)$', color='#000000', alpha=0.5, fontsize=18.0, va='bottom', rotation=-4.0)
+            #ax.text(rad_code[-17], vesc[-17]*1.02, r'$v_{\rm esc}(r)$', color='#000000', alpha=0.5, fontsize=18.0, va='bottom', rotation=-4.0)
 
         snapshot.phaseSpace2d(sP, partType='gas', xQuant='rad_kpc', xlim=[0.0,2.0], haloIDs=[haloID],
             yQuant=yQuant, ylim=ylim, nBins=nBins, normColMax=normColMax, clim=clim, median=False, f_post=f_post)
@@ -2775,7 +2779,7 @@ def paperPlots(sPs=None):
         sQuant  = 'mstar2_log'
         sRange  = [[9.4,9.6],[10.4,10.8]]
         xlim    = [-1.0, 0.5]
-        yRel    = [0.65,1.25,False,'$v_{\\rm out}$ / $v_{\\rm out,median}$'] # [cMin,cMax,cLog] #None
+        yRel    = [0.65,1.25,False,r'$v_{\rm out}$ / $v_{\rm out,median}$'] # [cMin,cMax,cLog] #None
         sizefac = 0.4
         css     = 'cen'
         yQuant  = cQuant #'vout_50_20kpc'
@@ -2795,7 +2799,7 @@ def paperPlots(sPs=None):
         yQuant = 'delta_sfms'
 
         cQuant = 'vout_90_10kpc'
-        cFrac  = [300, np.inf, False, 'Fraction w/ Fast Outflows ($v_{\\rm out}$ > 300 km/s)']
+        cFrac  = [300, np.inf, False, r'Fraction w/ Fast Outflows ($v_{\rm out}$ > 300 km/s)']
 
         params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'cFrac':cFrac, 'nBins':nBins}
 
@@ -2817,19 +2821,19 @@ def paperPlots(sPs=None):
         config = {'percInds':percInds, 'radInds':radInds, 'ylim':[1.4,3.7], 'stat':stat, 'skipZeros':False,  # 0.9,3.6
                   'binSize':binSize, 'loc1':None, 'loc2':'lower right', 'loc3':'upper left', 'leg3white':True, 'leg3ncol':3, 
                   'markersize':0.0, 'percs':percs, 'minMstar':minMstar,
-                  'ylabel':'Outflow Velocity $v_{\\rm out}$ [ log km/s ]', 'xlabel':'Mass Loading $\eta_{\\rm M}$ [ log ]'}
+                  'ylabel':r'Outflow Velocity $v_{\rm out}$ [ log km/s ]', 'xlabel':r'Mass Loading $\eta_{\rm M}$ [ log ]'}
         gasOutflowVelocityVsQuant(TNG50_z1, xQuant='etaM_100myr_10kpc_0kms', ylog=True, config=config)
 
         # vout vs. SFR
         config = {'percInds':percInds, 'radInds':radInds, 'xlim': [-1.5, 2.6], 'ylim':[1.45,3.65], 'stat':stat, 'skipZeros':False, 
                   'binSize':binSize, 'loc1':None, 'loc2':'lower right', 'leg3ncol':2, 'markersize':0.0, 'percs':percs, 'minMstar':minMstar,
-                  'ylabel':'Outflow Velocity $v_{\\rm out}$ [ log km/s ]', 'xlabel':'Star Formation Rate [ log M$_{\\rm sun}$ yr$^{-1}$ ]'}
+                  'ylabel':r'Outflow Velocity $v_{\rm out}$ [ log km/s ]', 'xlabel':r'Star Formation Rate [ log M$_{\rm sun}$ yr$^{-1}$ ]'}
         gasOutflowVelocityVsQuant(TNG50_z1, xQuant='sfr_30pkpc_100myr', ylog=True, config=config)
 
         # vout vs. Lbol
         config = {'percInds':percInds, 'radInds':radInds, 'ylim':[1.35,3.65], 'xlim':[40.0,47.5], 'stat':stat, 'skipZeros':False, 
                   'binSize':binSize, 'loc1':None, 'loc2':'lower right', 'leg3ncol':2, 'markersize':0.0, 'percs':percs, 'minMstar':minMstar,
-                  'ylabel':'Outflow Velocity $v_{\\rm out}$ [ log km/s ]'}
+                  'ylabel':r'Outflow Velocity $v_{\rm out}$ [ log km/s ]'}
         gasOutflowVelocityVsQuant(TNG50_z1, xQuant='BH_BolLum', ylog=True, config=config)
 
         # fig 15: observational comparisons, many panels of etaM vs. galaxy/BH properties
@@ -2840,7 +2844,7 @@ def paperPlots(sPs=None):
         config = {'vcutInds':vcutInds, 'radInds':radInds, 'stat':stat, 'xlim':[-1.0, 2.6], 'ylim':[-1.1, 2.6], 'skipZeros':False, 
                   'binSize':binSize, 'loc1':'upper right', 'loc2':None, 'leg3white':True, 
                   'markersize':0.0, 'percs':percs, 'minMstar':minMstar,
-                  'xlabel':'Star Formation Rate [ log M$_{\\rm sun}$ yr$^{-1}$ ]'}
+                  'xlabel':r'Star Formation Rate [ log M$_{\rm sun}$ yr$^{-1}$ ]'}
         gasOutflowRatesVsQuant(TNG50_z1, ptType='total', xQuant='sfr_30pkpc_100myr', eta=True,config=config)
 
         # etaM vs. Lbol
@@ -3041,7 +3045,7 @@ def paperPlots(sPs=None):
         cRel   = None #[0.7,1.3,False] # [cMin,cMax,cLog] #None
 
         #cQuant = 'vout_75_all'
-        #cFrac  = [250, np.inf, False, 'Fast Outflow Fraction ($v_{\\rm out}$ > 250 km/s)'] #[200, np.inf, False]
+        #cFrac  = [250, np.inf, False, r'Fast Outflow Fraction ($v_{\rm out}$ > 250 km/s)'] #[200, np.inf, False]
 
         cQuant = 'delta_sfms' #'etaM_100myr_10kpc_0kms'
         cFrac  = [20.0, np.inf, False, None]

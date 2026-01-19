@@ -1,12 +1,11 @@
-"""
-Modeling of the UVB and hydrogen states following Rahmati. Credit to Simeon Bird for many ideas herein.
-Also full box or halo based analysis of hydrogen/metal content.
-"""
+""" The UVB and hydrogen states, including self-shielding and HI/H2 fractions (following Rahmati and Simeon Bird). """
 import numpy as np
+
 from ..util.helper import closest
 
 def photoCrossSec(freq, ion='H I'):
     """ Find photoionisation cross-section (for a given ion) in cm^2 as a function of frequency.
+
     This is zero for energies less than nuthr (13.6 eV = 1 Ryd, for HI), and then falls off like E^-3.
     From Verner+ (1996), the Opacity Project, values are from Table 1 of astro-ph/9601009.
 
@@ -73,6 +72,7 @@ def photoCrossSec(freq, ion='H I'):
 
 def photoCrossSecGray(freq, J_nu, ion):
     """ Compute a gray i.e. frequency/spectrum-averaged cross section.
+
     Args:
       freq (ndarray[float]): frequency i.e. energy [Rydberg].
       J_nu (ndarray[float]): uvb intensity [linear erg/s/cm^2/Hz/sr].
@@ -109,8 +109,7 @@ def photoCrossSecGray(freq, J_nu, ion):
     return sigma_gray
 
 def photoRate(freq, J_nu, ion):
-    """ Compute the photoionization rate of (H, HeI, HeII), or the photochemical rates of 
-     other relevant interactions, given the UVB intensity (spectrum).
+    """ Compute the photoionization rate of (H, HeI, HeII), and relevant photochemical rates, given the UVB (spectrum).
 
     Args:
       freq (ndarray[float]): frequency i.e. energy [Rydberg].
@@ -208,7 +207,7 @@ def photoRate(freq, J_nu, ion):
     if 1:
         # see Abel+96 Eqn. 7
         # integral of (4*pi*sigma*J_nu / h / nu) dv from nu_thresh to +inf
-        
+
         dfreq_hz = np.diff(freq_hz)
         dfreq_hz = np.hstack((dfreq_hz,0))
 
@@ -233,6 +232,7 @@ def photoRate(freq, J_nu, ion):
 
 def uvbEnergyDensity(freq, J_nu, eV_min=6.0, eV_max=13.6):
     """ Compute the energy density of the UVB between eV_min and eV_max.
+
     Args:
       freq (ndarray[float]): frequency i.e. energy [Rydberg].
       J_nu (ndarray[float]): uvb intensity [linear erg/s/cm^2/Hz/sr].
@@ -261,26 +261,36 @@ def uvbEnergyDensity(freq, J_nu, eV_min=6.0, eV_max=13.6):
     return energy_dens
 
 def uvbPhotoionAtten(log_hDens, log_temp, redshift):
-    """ Compute the reduction in the photoionisation rate at an energy of 13.6 eV at a given 
-    density [log cm^-3] and temperature [log K], using the Rahmati+ (2012) fitting formula.
+    r""" Compute the reduction in the photoionisation rate at an energy of 13.6 eV at a given density and temp.
+
+    Uses the Rahmati+ (2012) fitting formula
     Note the Rahmati formula is based on the FG09 UVB; if you use a different UVB,
     the self-shielding critical density will change somewhat.
 
     For z < 5 the UVB is probably known well enough that not much will change, but for z > 5
     the UVB is highly uncertain; any conclusions about cold gas absorbers at these redshifts
-    need to marginalise over the UVB amplitude here. 
+    need to marginalise over the UVB amplitude here.
 
-    At energies above 13.6eV the HI cross-section reduces like :math:`\\nu^{-3}`.
-    Account for this by noting that self-shielding happens when tau=1, i.e 
-    :math:`\\tau = n*\\sigma*L = 1`. Thus a lower cross-section requires higher densities.
-    Assume then that HI self-shielding is really a function of tau, and thus at a frequency :math:`\\nu`,
+    At energies above 13.6eV the HI cross-section reduces like :math:`\nu^{-3}`.
+    Account for this by noting that self-shielding happens when tau=1, i.e
+    :math:`\tau = n*\sigma*L = 1`. Thus a lower cross-section requires higher densities.
+    Assume then that HI self-shielding is really a function of tau, and thus at a frequency :math:`\nu`,
     the self-shielding factor can be computed by working out the optical depth for the
-    equivalent density at 13.6 eV. ie, for :math:`\\Gamma(n, T)`, account for frequency dependence with:
+    equivalent density at 13.6 eV. ie, for :math:`\Gamma(n, T)`, account for frequency dependence with:
 
-    :math:`\\Gamma( n / (\\sigma(13.6) / \\sigma(\\nu) ), T)`.
+    :math:`\Gamma( n / (\sigma(13.6) / \sigma(\nu) ), T)`.
 
-    So that a lower x-section leads to a lower effective density. Note Rydberg ~ 1/wavelength, 
+    So that a lower x-section leads to a lower effective density. Note Rydberg ~ 1/wavelength,
     and 1 Rydberg is the energy of a photon at the Lyman limit, ie, with wavelength 911.8 Angstrom.
+
+    Args:
+        log_hDens (ndarray[float]): log hydrogen number density [cm^-3].
+        log_temp (ndarray[float]): log temperature [K].
+        redshift (float): redshift.
+
+    Returns:
+        photUVBratio (ndarray[float]): ratio of attenuated to unattenuated photoionisation rate.
+        gamma_UVB_z (float): unattenuated photoionisation rate at this redshift [1/s].
     """
     import scipy.interpolate.interpolate as spi
 
@@ -314,7 +324,7 @@ def neutral_fraction(nH, sP, temp=1e4, redshift=None):
     # recombination rate from Rahmati+ (2012) Eqn. A3, also Hui & Gnedin (1997). [cm^3 / s] """
     lamb    = 315614.0/temp
     alpha_A = 1.269e-13*lamb**1.503 / (1+(lamb/0.522)**0.47)**1.923 
-    
+
     # photoionization rate
     if redshift is None:
         redshift = sP.redshift
@@ -331,22 +341,26 @@ def neutral_fraction(nH, sP, temp=1e4, redshift=None):
     return (B - np.sqrt(B**2-4*A*alpha_A))/(2*A)
 
 def get_H2_frac(nH):
-    """ Get the molecular fraction for neutral gas from the ISM pressure: only meaningful when nH > 0.1.
+    """ Get the molecular fraction for neutral gas from the ISM pressure.
+
+    Note: only meaningful when nH > 0.1.
     From Bird+ (2014) Eqn 4, e.g. the pressure-based model of Blitz & Rosolowsky (2006).
 
     Args:
-      nHI (ndarray[float]): neutral hydrogen number density [cm^-3].
+      nH (ndarray[float]): neutral hydrogen number density [cm^-3].
     """
     fH2 = 1.0 / ( 1.0 + (35.0*(0.1/nH)**(5.0/3.0))**0.92 )
     return fH2 # Sigma_H2 / Sigma_H
 
 def neutralHydrogenFraction(gas, sP, atomicOnly=True, molecularModel=None):
-    """ Get the total neutral hydrogen fraction, by default for the atomic component only. Note that 
-    given the SH03 model, none of the hot phase is going to be neutral hydrogen, so in fact we 
-    should remove the hot phase mass from the gas cell mass. But this is subdominant and should 
-    be less than 10%. If molecularModel is not None, then return instead the H2 fraction itself, 
-    using molecularModel as a string for the particular H2 formulation. Note that in all cases these 
-    are ratios relative to the total hydrogen mass of the gas cell. """
+    """ Get the total neutral hydrogen fraction, by default for the atomic component only.
+
+    Note that given the SH03 model, none of the hot phase is going to be neutral hydrogen, so in fact we
+    should remove the hot phase mass from the gas cell mass. But this is subdominant and should
+    be less than 10%. If molecularModel is not None, then return instead the H2 fraction itself,
+    using molecularModel as a string for the particular H2 formulation. Note that in all cases these
+    are ratios relative to the total hydrogen mass of the gas cell.
+    """
     if molecularModel is not None: assert not atomicOnly
 
     # fraction of total hydrogen mass which is neutral, as reported by the code, which is already 
@@ -390,11 +404,25 @@ def neutralHydrogenFraction(gas, sP, atomicOnly=True, molecularModel=None):
 
     return frac_nH0
 
-def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=False, 
+def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=False,
                  atomic=False, molecular=False, indRange=None):
-    """ Calculate the (total, total neutral, atomic, or molecular) hydrogen mass per cell. Here we 
-    use the calculations of Rahmati+ (2012) for the neutral fractions as a function of 
-    density. Return still in code units, e.g. [10^10 Msun/h].
+    """ Calculate the (total, total neutral, atomic, or molecular) hydrogen mass per cell.
+
+    We use the calculations of Rahmati+ (2012) for the neutral fractions as a function ofdensity.
+
+    Args:
+      gas (dict): gas fields (if None, will be loaded from snapshot).
+      sP (:py:class:`~util.simParams`): simulation instance.
+      total (bool): return total hydrogen mass.
+      totalNeutral (bool): return total neutral hydrogen mass (HI + H2).
+      totalNeutralSnap (bool): return total neutral hydrogen mass based on snapshot field.
+      atomic (bool): return atomic hydrogen mass only (HI).
+      molecular (bool or str): if True, return molecular hydrogen mass only (H2) using default model.
+                               If str, use specified model (e.g. 'BL06').
+      indRange (tuple): index range to load gas cells from snapshot if gas is None.
+
+    Return:
+      ndarray[float]: hydrogen mass in the specified state for each gas cell [code units e.g. 10^10 Msun/h].
     """
     reqFields = ['Masses']
     if totalNeutral or atomic or molecular:
@@ -407,7 +435,7 @@ def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=Fals
     # load here?
     if gas is None:
         gas = sP.snapshotSubset('gas', list(reqFields), indRange=indRange)
-        
+
     if not all( [f in gas for f in reqFields] ):
         raise Exception('Need [' + ','.join(reqFields) + '] fields for gas cells.')
     if sum( [total,totalNeutral,totalNeutralSnap,atomic,molecular] ) != 1:
@@ -432,21 +460,22 @@ def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=Fals
         mass_fraction = neutralHydrogenFraction(gas, sP, atomicOnly=True)
     if molecular:
         mass_fraction = neutralHydrogenFraction(gas, sP, atomicOnly=False, molecularModel=molecular)
-    
+
     return massH * mass_fraction
 
 def calculateCDDF(N_GridVals, binMin, binMax, binSize, sP, depthFrac=1.0):
-    """ Calculate the CDDF (column density distribution function) f(N) given an input array of 
-    HI or metal column densities values [cm^-2], from a grid of sightlines covering an entire box.
+    """ Calculate the CDDF (column density distribution function) f(N) given a set of column densities.
+
+    For example, HI or metal column densities [cm^-2], from a grid of sightlines covering an entire box.
 
     Args:
       N_GridVals: column density values in [log cm^-2].
       binMin (float): column densities in [log cm^-2].
       binMax (float): column densities in [log cm^-2].
       binSize (float): in [log cm^-2].
+      sP (:py:class:`~util.simParams`): simulation instance.
       depthFrac (float): is the fraction of sP.boxSize over which the projection was done (for dX).
     """
-
     # Delta_X(z): absorption distance per sightline (Bird+ 2014 Eqn. 10) (Nagamine+ 2003 Eqn. 9) 
     dX = sP.units.H0_h1_s/sP.units.c_cgs * (1+sP.redshift)**2
     dX *= sP.boxSize * depthFrac * sP.units.UnitLength_in_cm # [dimensionless]
