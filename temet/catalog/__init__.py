@@ -4,6 +4,7 @@ within a particular auxCat request."""
 from . import box
 from . import common
 from . import group
+from . import maps
 from . import profile
 from . import subhalo
 from . import temporal

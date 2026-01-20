@@ -1,29 +1,31 @@
 """
 Oxygen (OVI, OVII and OVIII) TNG paper.
+
 http://arxiv.org/abs/1712.00016
 """
-import numpy as np
-import h5py
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
-from matplotlib import ticker
-from matplotlib.colors import Normalize, colorConverter
-from scipy.signal import savgol_filter
-from scipy.stats import gaussian_kde
-from scipy.interpolate import interp1d
 from functools import partial
 
-from ..util import simParams
-from ..load.data import werk2013, johnson2015, berg2019, chen2018zahedy2019
-from ..plot.config import *
-from ..util.helper import running_median, logZeroNaN, loadColorTable, closest, reducedChiSq
-from ..util.match import match
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib import ticker
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.colors import Normalize, colorConverter
+from scipy.interpolate import interp1d
+from scipy.signal import savgol_filter
+from scipy.stats import gaussian_kde
+
 from ..cosmo.cloudy import cloudyIon
-from ..plot.quantities import quantList
-from ..plot import subhalos, snapshot
-from ..plot.cloudy import ionAbundFracs2DHistos
 from ..cosmo.util import cenSatSubhaloIndices
-from ..obs.galaxySample import obsMatchedSample, addIonColumnPerSystem, ionCoveringFractions
+from ..load.data import berg2019, chen2018zahedy2019, johnson2015, werk2013
+from ..obs.galaxySample import addIonColumnPerSystem, ionCoveringFractions, obsMatchedSample
+from ..plot import snapshot, subhalos
+from ..plot.cloudy import ionAbundFracs2DHistos
+from ..plot.config import figsize, linestyles, sKn, sKo, lw
+from ..plot.quantities import quantList
+from ..util import simParams
+from ..util.helper import closest, loadColorTable, logZeroNaN, reducedChiSq, running_median
+from ..util.match import match
 
 def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=False):
     """ CDDF (column density distribution function) of O VI in the whole box at z~0.
@@ -40,9 +42,8 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=
         speciesList = ['nOVII_solarz_depth125']#,'nOVII_10_solarz_depth125']
 
     # plot setup
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
-    
+    fig, ax = plt.subplots()
+
     ax.set_xlim([12.5, 15.5])
     ax.set_xlabel('N$_{\\rm OVI}$ [ log cm$^{-2}$ ]')
 
@@ -175,7 +176,7 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
     heightFac = 1.0 if ('main' in saveName or len(redshifts) > 1) else 0.95
     fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac*heightFac])
     ax = fig.add_subplot(111)
-    
+
     ax.set_xlim([12.5, 16.0])
     ax.set_xlabel('N$_{\\rm oxygen}$ [ log cm$^{-2}$ ]')
     if len(ions) == 1: ax.set_xlabel('N$_{\\rm %s}$ [ log cm$^{-2}$ ]' % ions[0])
@@ -477,7 +478,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
                 yy = sP.units.codeMassToLogMsun(ac[fieldName])
 
             if ion == 'AllGas': yy -= 2.0 # offset!
-            
+
             # calculate median and smooth
             xm, ym, sm, pm = running_median(xx,yy,binSize=binSize,binSizeLg=binSize*2,
                                             skipZeros=True,percs=[10,25,75,90], minNumPerBin=3)
@@ -657,12 +658,12 @@ def _resolutionLineHelper(ax, sPs, radRelToVirRad=False, rvirs=None, corrMaxBox=
 
 
 def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelect='cen', projDim='3D',
-                          radRelToVirRad=False, radRelToR500=False, massDensity=False, massDensityMsun=False, 
+                          radRelToVirRad=False, radRelToR500=False, massDensity=False, massDensityMsun=False,
                           haloMassBins=None, stellarMassBins=None, xlim=[0.0, 3.0],
                           combine2Halo=False, fieldTypes=None, emFlux=False, median=False):
-    """ Plot average/stacked radial number/mass density profiles for a series of halo or 
-    stellar mass bins. One or more ions, one or more runs, at a given redshift. Specify one of 
-    haloMassBins or stellarMassBins.
+    """ Plot stacked radial number/mass density profiles for a series of halo or stellar mass bins.
+
+    One or more ions, one or more runs, at a given redshift. Specify one of haloMassBins or stellarMassBins.
 
     Args:
       radRelToVirRad (bool): plot in [r/rvir] instead of [pkpc].
@@ -686,20 +687,19 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
     radNames = ['total','self (1-halo)','other (2-halo)','diffuse']
 
     # plot setup
-    #lw = 3.0
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
-    
+
     radStr = 'Radius' if '3D' in projDim else 'Impact Parameter'
     if radRelToVirRad:
         ax.set_xlim([-2.0, 2.0])
-        ax.set_xlabel('%s / Virial Radius [ log ]' % radStr)
+        ax.set_xlabel(r'%s / Virial Radius [ log ]' % radStr)
     elif radRelToR500:
         ax.set_xlim([-2.0, 1.0])
-        ax.set_xlabel('%s / r$_{\\rm 500}$ [ log ]' % radStr) 
+        ax.set_xlabel(r'%s / r$_{\rm 500}$ [ log ]' % radStr)
     else:
         ax.set_xlim(xlim) # 4.0 for oxygen paper
-        ax.set_xlabel('%s [ log pkpc ]' % radStr)
+        ax.set_xlabel(r'%s [ log pkpc ]' % radStr)
 
     speciesStr = ions[0] if len(ions) == 1 else 'oxygen'
 
@@ -707,31 +707,31 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
         assert '2D' in projDim
         ax.set_ylim([-6.5, 3]) # [-9.5,2]
         ax.set_xlim([1.0,2.8])
-        ax.set_ylabel('%s Emission [phot s$^{-1}$ cm$^{-2}$ ster$^{-1}$]' % speciesStr)
+        ax.set_ylabel(r'%s Emission [phot s$^{-1}$ cm$^{-2}$ ster$^{-1}$]' % speciesStr)
     else:
         if '3D' in projDim:
             # 3D mass/number density
             if massDensity:
                 ax.set_ylim([-37.0,-30.0])
-                ax.set_ylabel('Mass Density $\\rho_{\\rm %s}$ [ log g cm$^{-3}$ ]' % speciesStr)
+                ax.set_ylabel(r'Mass Density $\rho_{\rm %s}$ [ log g cm$^{-3}$ ]' % speciesStr)
             elif massDensityMsun:
                 ax.set_ylim([-3.0,0.0])
-                ax.set_ylabel('Mass Density $\\Sigma_{\\rm %s}$ [ log M$_{\odot}$ kpc$^{-3}$ ]' % speciesStr)
+                ax.set_ylabel(r'Mass Density $\Sigma_{\rm %s}$ [ log M$_{\odot}$ kpc$^{-3}$ ]' % speciesStr)
             else:
                 #ax.set_ylim([-14.0, -6.0])
                 ax.set_ylim([-13.0, -4.0])
-                ax.set_ylabel('Number Density $n_{\\rm %s}$ [ log cm$^{-3}$ ]' % speciesStr)
+                ax.set_ylabel(r'Number Density $n_{\rm %s}$ [ log cm$^{-3}$ ]' % speciesStr)
         else:
             # 2D mass/column density
             if massDensity:
                 ax.set_ylim([-12.0,-6.0])
-                ax.set_ylabel('Column Mass Density $\\rho_{\\rm %s}$ [ log g cm$^{-2}$ ]' % speciesStr)
+                ax.set_ylabel(r'Column Mass Density $\rho_{\rm %s}$ [ log g cm$^{-2}$ ]' % speciesStr)
             elif massDensityMsun:
                 ax.set_ylim([-4.0,6.0])
-                ax.set_ylabel('Surface Mass Density $\\Sigma_{\\rm %s}$ [ log M$_{\odot}$ kpc$^{-2}$ ]' % speciesStr)
+                ax.set_ylabel(r'Surface Mass Density $\Sigma_{\rm %s}$ [ log M$_{\odot}$ kpc$^{-2}$ ]' % speciesStr)
             else:
                 ax.set_ylim([11.0, 18.2]) # [11.0,16.0]
-                ax.set_ylabel('Column Number Density $N_{\\rm %s}$ [ log cm$^{-2}$ ]' % speciesStr)
+                ax.set_ylabel(r'Column Number Density $N_{\rm %s}$ [ log cm$^{-2}$ ]' % speciesStr)
 
     # init
     ionData = cloudyIon(None)
@@ -892,9 +892,9 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                           % (0.5*(massBin[0]+massBin[1])) if (i == 0 and radType == 0) else ''
 
                         if median:
-                            l, = ax.plot(rr, yp[1,:], lw=lw, color=c, linestyle=linestyle, label=label)
+                            l, = ax.plot(rr, yp[1,:], color=c, linestyle=linestyle, label=label)
                         else:
-                            l, = ax.plot(rr, yy_mean, lw=lw, color=c, linestyle=linestyle, label=label)
+                            l, = ax.plot(rr, yy_mean, color=c, linestyle=linestyle, label=label)
 
                         txt_loc = {}
                         txt_loc['bin'] = massBin
@@ -1000,9 +1000,8 @@ def ionTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0, c
                              'O':'metalmass_O','Z':'metalmass','gas':'mass','bhmass':'BH_Mass'}
 
     # plot setup
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
-    
+    fig, ax = plt.subplots()
+
     ax.set_xlim([0.0, 4.0])
     ax.set_xlabel('Radius [ log pkpc ]')
 
@@ -1320,9 +1319,7 @@ def obsColumnsDataPlot(sP, saveName, radRelToVirRad=False, config='COS-Halos'):
 
     for iter in [0,1]:
         # plot setup
-        fig = plt.figure(figsize=figsize)
-
-        ax = fig.add_subplot(111)
+        fig, ax = plt.subplots()
 
         if iter == 0:
             # x axis = impact parameter
@@ -1341,7 +1338,7 @@ def obsColumnsDataPlot(sP, saveName, radRelToVirRad=False, config='COS-Halos'):
             ax.set_xlabel(yval_label)
 
         ax.set_ylim(collim)
-        ax.set_ylabel('Column Density $N_{\\rm %s}$ [ log cm$^{-2}$ ]' % species)
+        ax.set_ylabel(r'Column Density $N_{\rm %s}$ [ log cm$^{-2}$ ]' % species)
 
         # plot obs
         for limitType in [2,1,0]: # upper, lower, exact
@@ -1413,10 +1410,7 @@ def obsColumnsDataPlot(sP, saveName, radRelToVirRad=False, config='COS-Halos'):
         plt.close(fig)
 
 def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
-    """ Plot COS-Halos N_OVI data, and our mock COS-Halos galaxy sample analysis. Here to the 
-    right of the plots we add stacked offset 1d KDEs of each realization vs observed point. """
-
-    lw = 2.5
+    """ Plot COS-Halos N_OVI data, and our mock COS-Halos galaxy sample analysis, with stacked offset 1d KDEs. """
     cbarTextSize = 13
     nKDE1D = 100
     kdeHeightFac = 4.0 # multiplicative horizontal size beyond individual bounds
@@ -1518,7 +1512,7 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
     for iter in [0,1]:
         # plot setup
         fig = plt.figure(figsize=[figsize[0]*2.0, figsize[1]])
-        
+
         ax = fig.add_axes(rect_mainpanel)
 
         if iter == 0:
@@ -1580,7 +1574,7 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
             if iter == 1:
                 x_vals = yvals[w]
                 c_vals = logM[w]
-                
+
                 if clipObsColorsToExtrema:
                     c_vals[c_vals <= logM.mean()] = colorMinMax[0]
                     c_vals[c_vals > logM.mean()] = colorMinMax[1]
@@ -1594,7 +1588,7 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
             if iter == 1:
                 # x-axis values could also be limits: replicate markers into list and adjust
                 ww = np.where(yvals_limit[w])
-                x_off = 0.14               
+                x_off = 0.14
 
                 if len(ww[0]):
                     s = ax.scatter(x_vals[ww]-x_off, y_vals[ww], s=50, marker='<', c=c_vals[ww], alpha=1.0, 
@@ -1602,7 +1596,7 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
 
                     norm = Normalize(vmin=colorMinMax[0], vmax=colorMinMax[1], clip=False)
                     for i in ww[0]:
-                        ax.plot( [x_vals[i],x_vals[i]-x_off], [y_vals[i],y_vals[i]], '-', 
+                        ax.plot( [x_vals[i],x_vals[i]-x_off], [y_vals[i],y_vals[i]], '-',
                                  color=cmap(norm(c_vals[i])) )
                 #for i in ww[0]:
                 #    print(x_vals[i],y_vals[i])
@@ -1622,8 +1616,8 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
 
         y_vals = sim_sample['column'].ravel()
 
-        s = ax.scatter(x_vals, y_vals, s=10, marker='s', c=c_vals, label=sP.simName, alpha=simSquaresAlpha, 
-                       edgecolors='none', cmap=cmap, vmin=colorMinMax[0], vmax=colorMinMax[1], 
+        s = ax.scatter(x_vals, y_vals, s=10, marker='s', c=c_vals, label=sP.simName, alpha=simSquaresAlpha,
+                       edgecolors='none', cmap=cmap, vmin=colorMinMax[0], vmax=colorMinMax[1],
                        rasterized=True) # rasterize the small squares into a single image
 
         # right panel: sort by order along x-axis of main panel
@@ -1688,7 +1682,7 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
                 if col_err[sort_ind] > 0.0:
                     obs_xerr = [xx[i], xx[i]] + kde_y[kde_ind_obs]
                     obs_yerr = [col_logN[sort_ind]-col_err[sort_ind], col_logN[sort_ind]+col_err[sort_ind]]
-                    ax_right.plot( obs_xerr, obs_yerr, '-', color=l.get_color(), lw=lw, alpha=1.0 )
+                    ax_right.plot( obs_xerr, obs_yerr, '-', color=l.get_color(), alpha=1.0 )
 
                 # calculate and print a quantitative probability number
                 z1 = kde.integrate_box_1d(-np.inf, col_logN[sort_ind])
@@ -1947,7 +1941,7 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
     heightFac = 1.0 if ('main' in saveName or len(sPs) == 1) else 0.95
     fig = plt.figure(figsize=[figsize[0], figsize[1]*heightFac])
     ax = fig.add_subplot(111)
-    
+
     if config in ['COS-Halos','SimHalos_115-125']:
         ax.set_xlim([0.0, 400.0])
         ax.set_xlabel('Impact Parameter [ pkpc ]')
@@ -2250,12 +2244,12 @@ def paperPlots():
         hideBelow = True
         smoothSigma = 1.0
 
-        snapshot.phaseSpace2d(sP, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, 
+        snapshot.phaseSpace2d(sP, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors,
                          clim=massFracMinMax, xlim=xMinMax, ylim=yMinMax, 
-                         contours=contours, smoothSigma=smoothSigma, hideBelow=True)
+                         contours=contours, smoothSigma=smoothSigma, hideBelow=hideBelow)
 
     # figure 4, CDDF of OVI at z~0 compared to observations
-    if 0:
+    if 1:
         moment = 0
         simRedshift = 0.2
         boxDepth10 = True # use 10 Mpc/h projection depth
@@ -2274,16 +2268,16 @@ def paperPlots():
         redshifts = [0,1,2,4]
 
         saveName = 'cddf_%s_zevo-%s_moment%d_%s.pdf' % \
-            ('-'.join(ions), '-'.join(['%d'%z for z in redshifts]), moment, 
+            ('-'.join(ions), '-'.join(['%d'%z for z in redshifts]), moment,
              '_'.join([sP.simName for sP in sPs]))
-        cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=ions, redshifts=redshifts, 
+        cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=ions, redshifts=redshifts,
                               boxDepth10=boxDepth10, colorOff=2)
 
         for i, ion in enumerate(ions):
             saveName = 'cddf_%s_zevo-%s_moment%d_%s%s.pdf' % \
                 (ion, '-'.join(['%d'%z for z in redshifts]), moment, 
                  '_'.join([sP.simName for sP in sPs]),'_10Mpch' if boxDepth10 else '')
-            cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=[ion], redshifts=redshifts, 
+            cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=[ion], redshifts=redshifts,
                                   boxDepth10=boxDepth10, colorOff=i+2)
 
     # figure 6, CDDF at z=0 with physics variants (L25n512)

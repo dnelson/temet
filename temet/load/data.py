@@ -370,7 +370,7 @@ def mcconnellMa2013():
 
     # Columns: galName, dist, MBH [Msun], MBH lower (68%), MBH upper (68%), method, sigma [km/s]
     #          sigma lower, sigma upper, log(LV/Lsun), error in log(LV/Lsun), log(L3.6/Lsun),
-    #          error in log(L3.6/Lsun), Mbulge [Msun], radius of influence [arcsec], morphology, 
+    #          error in log(L3.6/Lsun), Mbulge [Msun], radius of influence [arcsec], morphology,
     #          profile, reff (V), reff (I), reff (3.6)
     data = np.genfromtxt(path, dtype=None, encoding=None) # array of 20 lists
 
@@ -385,9 +385,9 @@ def mcconnellMa2013():
     with np.errstate(divide='ignore'):
         M_bulge = np.log10([d[13] for d in data])
 
-    r['pts'] = { 'galName'    : galName, 
+    r['pts'] = { 'galName'    : galName,
                  'M_BH'       : M_BH,
-                 'M_BH_up'    : M_BH_up - M_BH, 
+                 'M_BH_up'    : M_BH_up - M_BH,
                  'M_BH_down'  : M_BH - M_BH_down,
                  'sigma'      : sigma,
                  'sigma_up'   : sigma_up - sigma,
@@ -411,12 +411,12 @@ def mcconnellMa2013():
     errorDown = np.zeros(log_M_BH.size)
 
     # below characteristic mass
-    errorUp[:w]   = alpha+alpha_err + (beta-beta_err) * np.log10(M_bulge[:w]/M_0) 
-    errorDown[:w] = alpha-alpha_err + (beta+beta_err) * np.log10(M_bulge[:w]/M_0) 
+    errorUp[:w]   = alpha+alpha_err + (beta-beta_err) * np.log10(M_bulge[:w]/M_0)
+    errorDown[:w] = alpha-alpha_err + (beta+beta_err) * np.log10(M_bulge[:w]/M_0)
 
     # above characteristic mass
-    errorUp[w:]   = alpha+alpha_err + (beta+beta_err) * np.log10(M_bulge[w:]/M_0) 
-    errorDown[w:] = alpha-alpha_err + (beta-beta_err) * np.log10(M_bulge[w:]/M_0) 
+    errorUp[w:]   = alpha+alpha_err + (beta+beta_err) * np.log10(M_bulge[w:]/M_0)
+    errorDown[w:] = alpha-alpha_err + (beta-beta_err) * np.log10(M_bulge[w:]/M_0)
 
     r['M_bulge']   = np.log10(M_bulge)
     r['M_BH']      = log_M_BH

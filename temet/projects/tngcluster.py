@@ -1,5 +1,6 @@
 """
 TNG-Cluster: introduction paper.
+
 https://arxiv.org/abs/2311.06338
 """
 import warnings
@@ -15,10 +16,10 @@ from scipy.signal import savgol_filter
 
 from ..cosmo.zooms import contamination_mindist
 from ..plot import subhalos
-from ..plot.config import *
+from ..plot.config import figsize, lw, markers, sKn, sKo
 from ..plot.cosmoMisc import simClustersComparison
 from ..util import simParams
-from ..util.helper import dist_theta_grid, loadColorTable, logZeroNaN, running_median
+from ..util.helper import loadColorTable, logZeroNaN, running_median
 from ..util.match import match
 
 def vis_fullbox_virtual(sP, conf=0):
@@ -57,14 +58,14 @@ def vis_fullbox_virtual(sP, conf=0):
 
     if conf in [4,5]:
         method = 'sphMap' # is global
-        
+
         if conf == 4:
             panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.8,7.2]}]
             numBufferLevels = 3 # 2 or 3, free parameter
         if conf == 5:
             panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.2,7.6]}]
             numBufferLevels = 4
-            
+
         maxGasCellMass = sP.targetGasMass
         if numBufferLevels >= 1:
             # first buffer level is 27x mass (TODO CHECK STILL?), then 8x mass for each subsequent level
@@ -221,14 +222,17 @@ def vis_gallery(sP, conf=0, num=20):
                 f['grid'].attrs[key] = ret[1][key]
 
 def mass_function(secondaries=False):
-    """ Plot halo mass function from the parent box (TNG300) and the zoom sample. 
-    If secondaries == True, then also include non-targeted halos with no/little contamination. """
+    """ Plot halo mass function from the parent box (TNG300) and the zoom sample.
+
+    Args:
+      secondaries (bool): if True, then also include non-targeted halos with no/little contamination.
+    """
     from ..cosmo.zooms import _halo_ids_run
-    
+
     mass_range = [14.0, 15.5]
     binSize = 0.1
     redshift = 0.0
-    
+
     sP_tng300 = simParams(res=2500,run='tng',redshift=redshift)
     sP_tngc = simParams(res=2048, run='tng_dm', redshift=redshift) # TNG-Cluster-Dark!
 
@@ -236,15 +240,14 @@ def mass_function(secondaries=False):
     halo_inds = _halo_ids_run(onlyDone=True)
 
     # start figure
-    fig = plt.figure(figsize=figsize)
+    fig, ax = plt.subplots()
 
     nBins = int((mass_range[1]-mass_range[0])/binSize)
 
-    ax = fig.add_subplot(1,1,1)
     ax.set_xlim(mass_range)
     ax.set_xticks(np.arange(mass_range[0],mass_range[1],0.1))
-    ax.set_xlabel('Halo Mass M$_{\\rm 200c}$ [ log M$_{\\rm sun}$ ]')
-    ax.set_ylabel('Number of Halos [%.1f dex$^{-1}$]' % binSize)
+    ax.set_xlabel(r'Halo Mass M$_{\rm 200c}$ [ log M$_{\rm sun}$ ]')
+    ax.set_ylabel(r'Number of Halos [%.1f dex$^{-1}$]' % binSize)
     ax.set_yscale('log')
     ax.yaxis.set_ticks_position('both')
 
@@ -277,8 +280,8 @@ def mass_function(secondaries=False):
         pri_target = sP.halos('GroupPrimaryZoomTarget') # exclude targeted halos
 
         # zero contamination
-        contam_frac = sP.halos('GroupContaminationFracByMass')
-        w = np.where((masses > ax.get_xlim()[0]) & (contam_frac == 0) & (pri_target == 0))
+        f_contam = sP.halos('GroupContaminationFracByMass')
+        w = np.where((masses > ax.get_xlim()[0]) & (f_contam == 0) & (pri_target == 0))
 
         yy, xx = np.histogram(masses[w], bins=nBins, range=mass_range)
 
@@ -287,7 +290,7 @@ def mass_function(secondaries=False):
 
         # small contamination
         contam_thresh = 1e-2
-        w = np.where((masses > ax.get_xlim()[0]) & (contam_frac < contam_thresh) & (contam_frac != 0) & (pri_target == 0))
+        w = np.where((masses > ax.get_xlim()[0]) & (f_contam < contam_thresh) & (f_contam != 0) & (pri_target == 0))
 
         yy, xx = np.histogram(masses[w], bins=nBins, range=mass_range)
 
@@ -306,12 +309,12 @@ def mass_function(secondaries=False):
     # plot histogram of contamination fraction
     if secondaries:
         bad_val = -6.0
-        w = np.where(contam_frac == 0)
-        contam_frac = logZeroNaN(contam_frac)
-        contam_frac[w] = bad_val
+        w = np.where(f_contam == 0)
+        f_contam = logZeroNaN(f_contam)
+        f_contam[w] = bad_val
 
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.hist(contam_frac, bins=100, range=[-7.0, 0.0])
+        fig, ax = plt.subplots()
+        ax.hist(f_contam, bins=100, range=[-7.0, 0.0])
         ax.text(bad_val+0.1, 1e7, 'Zero', ha='left', va='bottom')
         ax.set_xlabel('Contamination Fraction [by mass]')
         ax.set_ylabel('Number of Halos')
@@ -425,7 +428,7 @@ def sample_halomasses_vs_redshift(sPs):
             alpha_loc = np.clip(alpha_loc, 0.2, 0.9)
 
             c = None if j == 0 else l.get_color()
-            l, = ax.plot(z, m500_loc, lw=lw, c=c, alpha=alpha_loc, zorder=zorder, label=label)
+            l, = ax.plot(z, m500_loc, c=c, alpha=alpha_loc, zorder=zorder, label=label)
             #ax.plot(z[-1], m500_loc[-1], 'o', c=color, alpha=alpha_loc, zorder=zorder, ms=4)
 
     # first legend
@@ -441,13 +444,13 @@ def sample_halomasses_vs_redshift(sPs):
     p11 = piffaretti11rosat()
     a21 = arnaud21chexmate()
 
-    d1 = ax.scatter(r17['z'], r17['m500'], s=msize+8, c='#000000', marker='s', alpha=alpha, label=r17['label'], zorder=0)
-    d2 = ax.scatter(pc19['z'], pc19['m500'], s=msize+8, c='#222222', marker='*', alpha=alpha, label=pc19['label'], zorder=0)
-    d3 = ax.scatter(h21['z'], h21['m500'], s=msize-9, c='#222222', marker='p', alpha=alpha-0.1, label=h21['label'], zorder=0)
-    d4 = ax.scatter(a18['z'], a18['m500'], s=msize+8, c='#222222', marker='D', alpha=alpha, label=a18['label'], zorder=0)
-    d5 = ax.scatter(b20['z'], b20['m500'], s=msize+8, c='#222222', marker='X', alpha=alpha, label=b20['label'], zorder=0)
-    d6 = ax.scatter(p11['z'], p11['m500'], s=msize-4, c='#222222', marker='h', alpha=alpha-0.1, label=p11['label'], zorder=0)
-    d7 = ax.scatter(a21['z'], a21['m500'], s=msize+10, c='#222222', marker='x', alpha=alpha, label=a21['label'], zorder=0)
+    ax.scatter(r17['z'], r17['m500'], s=msize+8, c='#000000', marker='s', alpha=alpha, label=r17['label'], zorder=0)
+    ax.scatter(pc19['z'], pc19['m500'], s=msize+8, c='#222222', marker='*', alpha=alpha, label=pc19['label'], zorder=0)
+    ax.scatter(h21['z'], h21['m500'], s=msize-9, c='#222222', marker='p', alpha=alpha-0.1, label=h21['label'], zorder=0)
+    ax.scatter(a18['z'], a18['m500'], s=msize+8, c='#222222', marker='D', alpha=alpha, label=a18['label'], zorder=0)
+    ax.scatter(b20['z'], b20['m500'], s=msize+8, c='#222222', marker='X', alpha=alpha, label=b20['label'], zorder=0)
+    ax.scatter(p11['z'], p11['m500'], s=msize-4, c='#222222', marker='h', alpha=alpha-0.1, label=p11['label'], zorder=0)
+    ax.scatter(a21['z'], a21['m500'], s=msize+10, c='#222222', marker='x', alpha=alpha, label=a21['label'], zorder=0)
 
     # add first legend
     handles, labels = ax.get_legend_handles_labels()
@@ -468,9 +471,9 @@ def sample_halomasses_vs_redshift(sPs):
         color = '#ffffff' if name not in ['Bullet','El Gordo'] else '#000000'
         zoff = 0.01 if name != 'El Gordo' else -0.01
         ha = 'left' if name != 'El Gordo' else 'right'
-        d4 = ax.errorbar(redshift, m500[0], yerr=yerr, color=color, marker='H')
+        ax.errorbar(redshift, m500[0], yerr=yerr, color=color, marker='H')
         t = ax.text(redshift+zoff, m500[0], name, fontsize=14, va='center', ha=ha, color='#ffffff')
-        t.set_bbox(dict(facecolor='#000000', alpha=0.2 if color == '#ffffff' else 0.4, linewidth=0))
+        t.set_bbox({'facecolor': '#000000', 'alpha': 0.2 if color == '#ffffff' else 0.4, 'linewidth': 0})
 
     # plot coma cluster (Okabe+2014 Table 8, g+ profile)
     coma_z = 0.0231
@@ -514,10 +517,10 @@ def sample_halomasses_vs_redshift(sPs):
 
     erosita_minhalo = np.log10(sP.units.m200_to_m500(np.array(erosita_minhalo) * 1e14)) # log msun
 
-    l, = ax.plot(erosita_z, erosita_minhalo, '-', lw=lw, alpha=alpha, color='#ffffff')
-    #ax.arrow(erosita_z[6], erosita_minhalo[6]+0.02, 0.0, 0.1, lw=lw, head_length=0.008, color=l.get_color())
+    l, = ax.plot(erosita_z, erosita_minhalo, '-', alpha=alpha, color='#ffffff')
+    #ax.arrow(erosita_z[6], erosita_minhalo[6]+0.02, 0.0, 0.1, head_length=0.008, color=l.get_color())
     t = ax.text(erosita_z[8]-0.04, 14.22, 'eROSITA All-Sky Complete', color=l.get_color(), fontsize=14, rotation=21)
-    t.set_bbox(dict(facecolor='#000000', alpha=0.3, linewidth=0))
+    t.set_bbox({'facecolor': '#000000', 'alpha': 0.3, 'linewidth': 0})
 
     fig.savefig('sample_halomass_vs_redshift.pdf')
     plt.close(fig)
@@ -553,8 +556,8 @@ def bfield_strength_vs_halomass(sPs, redshifts):
         bmax = np.log10(3.0) # uG
         mass_range = sPs[0].units.m500_to_m200(np.array([5e14, 9e14])) # msun
 
-        ax.fill_between(np.log10(mass_range), y1=[bmin,bmin], y2=[bmax,bmax], edgecolor='#cccccc', 
-            facecolor='#cccccc', alpha=0.7,lw=lw, label=r'Di Gennaro+20 ($z \sim 0.8$)', zorder=-1)
+        ax.fill_between(np.log10(mass_range), y1=[bmin,bmin], y2=[bmax,bmax], edgecolor='#cccccc',
+            facecolor='#cccccc', alpha=0.7, label=r'Di Gennaro+20 ($z \sim 0.8$)', zorder=-1)
 
         # Boehringer+2016 (https://arxiv.org/abs/1610.02887)
         # -- about ~90 measurements have mean r/r500 = 0.32, median r/r500 = 0.25
@@ -562,8 +565,8 @@ def bfield_strength_vs_halomass(sPs, redshifts):
         bmax = np.log10(6.0) # uG
         mass_range = [2e14,4e14] # m200 msun
 
-        ax.fill_between(np.log10(mass_range), y1=[bmin,bmin], y2=[bmax,bmax], edgecolor='#eeeeee', 
-            facecolor='#eeeeee', lw=lw, label=r'B$\rm\"{o}$hringer+16 ($z \sim 0.1$)', zorder=-1)
+        ax.fill_between(np.log10(mass_range), y1=[bmin,bmin], y2=[bmax,bmax], edgecolor='#eeeeee',
+            facecolor='#eeeeee', label=r'B$\rm\"{o}$hringer+16 ($z \sim 0.1$)', zorder=-1)
 
     def _draw_data2(ax):
         """ Draw additional data constraints on figure, individual halos. """
@@ -593,9 +596,9 @@ def bfield_strength_vs_halomass(sPs, redshifts):
         legend2 = ax.legend(handles, [sP.simName for sP in sPs], borderpad=0.4, loc='upper right')
         ax.add_artist(legend2)
 
-    subhalos.median(sPs_in, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    subhalos.median(sPs_in, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect,
                     xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac,
                     f_pre=_draw_data, f_post=_draw_data2, legendLoc='lower right', labelSims=False, pdf=None)
 
 def stellar_mass_vs_halomass(sPs, conf=0):
@@ -627,19 +630,19 @@ def stellar_mass_vs_halomass(sPs, conf=0):
 
             w = np.where(b13['m500c'] < 14.8) # for visual clarity
             l1 = ax.plot(b13['m500c'][w], b13['mstar_mid'][w], '--', lw=lw*1.2, color='#bbbbbb')
-            #ax.fill_between(b13['m500c'], b13['mstar_low'], b13['mstar_high'], color='#bbbbbb', interpolate=True, alpha=0.3)
+            #ax.fill_between(b13['m500c'], b13['mstar_low'], b13['mstar_high'], color='#bbbbbb', alpha=0.3)
 
             w = np.where(m13['m500c'] < 14.7) # for visual clarity
             l2 = ax.plot(m13['m500c'][w], m13['mstar_mid'][w], '-.', lw=lw*1.2, color='#bbbbbb')
-            #ax.fill_between(m13['m500c'], m13['mstar_low'], m13['mstar_high'], color='#bbbbbb', interpolate=True, alpha=0.3)
+            #ax.fill_between(m13['m500c'], m13['mstar_low'], m13['mstar_high'], color='#bbbbbb', alpha=0.3)
 
             w = np.where(k14['m500c'] < 14.9) # for visual clarity
             l3 = ax.plot(k14['m500c'][w], k14['mstar_mid'][w], lw=lw*1.2, color='#888888')
 
             # UniverseMachine
             l4 = ax.plot(b19['m500c'], b19['mstar_mid'], lw=lw*1.2, color='#333333')
-            #ax.fill_between(b19['m500c'], b19['mstar_low'], b19['mstar_high'], color='#333333', interpolate=True, alpha=0.3)
-            ax.fill_between(b19['m500c'], b19['mstar_mid']-0.15, b19['mstar_mid']+0.15, color='#333333', interpolate=True, alpha=0.3)
+            #ax.fill_between(b19['m500c'], b19['mstar_low'], b19['mstar_high'], color='#333333', alpha=0.3)
+            ax.fill_between(b19['m500c'], b19['mstar_mid']-0.15, b19['mstar_mid']+0.15, color='#333333', alpha=0.3)
 
             # direct points from Fig 10 (centrals only, good, but z=0.1?, not good)
             #b19_mhalo = sPs[0].units.m200_to_m500(np.array([7.94e14, 6e13, 4e12]))
@@ -661,17 +664,17 @@ def stellar_mass_vs_halomass(sPs, conf=0):
 
             # Kravtsov+ 2018 (Table 1 for M500crit + Table 4 for M*<30kpc) - removed first point (in legend)
             k18_label = 'Kravtsov+ (2018)'
-            m500c = np.log10(np.array([10.30, 7.00, 5.34, 2.35, 1.86, 1.34, 0.46, 0.47]) * 1e14) # 15.60, 
-            mstar_30pkpc = np.log10(np.array([10.44, 7.12, 3.85, 3.67, 4.35, 4.71, 4.59, 6.76]) * 1e11) # 5.18, 
+            m500c = np.log10(np.array([10.30, 7.00, 5.34, 2.35, 1.86, 1.34, 0.46, 0.47]) * 1e14) # 15.60,
+            mstar_30pkpc = np.log10(np.array([10.44, 7.12, 3.85, 3.67, 4.35, 4.71, 4.59, 6.76]) * 1e11) # 5.18,
 
-            l6 = ax.scatter(m500c, mstar_30pkpc, s=markersize+20, c='#222222', marker='D', alpha=1.0)
+            l6 = ax.scatter(m500c, mstar_30pkpc, s=markersize+20, c='#222222', marker='D')
 
             # Akino+ 2022 (HSC-XXL) - Fig 4, only complete above M500>14.0
             a22_label = 'Akino+ (2022)'
-            a22_mhalo = [6.878e+14, 5.817e+14, 6.028e+14, 4.833e+14, 3.916e+14, 3.673e+14, 2.535e+14, 2.675e+14, 
-                        2.684e+14, 1.677e+14, 1.459e+14, 1.507e+14, 1.794e+14, 1.671e+14, 1.731e+14, 1.961e+14, 
-                        1.695e+14, 1.750e+14, 1.545e+14, 1.306e+14, 1.051e+14, 1.491e+14, 2.517e+14, 2.781e+14, 
-                        2.732e+14, 2.198e+14, 2.077e+14, 2.344e+14, 1.927e+14, 1.256e+14, 1.161e+14, 8.890e+13, 
+            a22_mhalo = [6.878e+14, 5.817e+14, 6.028e+14, 4.833e+14, 3.916e+14, 3.673e+14, 2.535e+14, 2.675e+14,
+                        2.684e+14, 1.677e+14, 1.459e+14, 1.507e+14, 1.794e+14, 1.671e+14, 1.731e+14, 1.961e+14,
+                        1.695e+14, 1.750e+14, 1.545e+14, 1.306e+14, 1.051e+14, 1.491e+14, 2.517e+14, 2.781e+14,
+                        2.732e+14, 2.198e+14, 2.077e+14, 2.344e+14, 1.927e+14, 1.256e+14, 1.161e+14, 8.890e+13,
                         8.488e+13, 1.011e+14, 1.121e+14, 1.221e+14, 7.654e+13, 7.308e+13, 7.334e+13, 6.614e+13]
 
             a22_mstar = [1.356e+12, 9.435e+11, 5.955e+11, 6.704e+11, 8.469e+11, 1.100e+12, 9.272e+11, 8.588e+11,
@@ -679,27 +682,34 @@ def stellar_mass_vs_halomass(sPs, conf=0):
                         4.489e+11, 3.542e+11, 3.212e+11, 3.604e+11, 3.157e+11, 2.482e+11, 3.960e+11, 3.201e+11,
                         2.975e+11, 2.456e+11, 9.884e+10, 1.451e+11, 1.721e+11, 1.627e+11, 1.965e+11, 4.814e+11,
                         5.439e+11, 5.439e+11, 5.852e+11, 1.135e+12, 8.150e+11, 6.543e+11, 5.126e+11, 5.252e+11]
-            
-            l7 = ax.scatter(np.log10(a22_mhalo), np.log10(a22_mstar), s=markersize+20, c='#333333', marker='o', alpha=1.0)
+
+            a22_mhalo = np.log10(a22_mhalo)
+            a22_mstar = np.log10(a22_mstar)
+            l7 = ax.scatter(a22_mhalo, a22_mstar, s=markersize+20, c='#333333', marker='o')
 
             # Dimaio+ 2020
             d20_label = 'DeMaio+ (2020)'
-            d20_m500_lowz = [1.089e+14, 2.601e+14, 1.138e+14, 1.093e+14, 1.668e+14, 2.772e+14, 
+            d20_m500_lowz = [1.089e+14, 2.601e+14, 1.138e+14, 1.093e+14, 1.668e+14, 2.772e+14,
                         2.731e+14, 3.978e+14, 4.115e+14, 2.606e+14, 3.724e+14, 5.930e+14]
 
             d20_mstar_lowz = [6.173e+11, 6.270e+11, 7.662e+11, 8.417e+11, 9.541e+11, 8.261e+11,
                         8.906e+11, 9.046e+11, 9.661e+11, 9.798e+11, 1.160e+12, 1.021e+12]
 
-            d20_m500_midz = [3.804e+14, 2.085e+14, 2.042e+14, 2.299e+14, 2.754e+14, 2.629e+14, 3.149e+14, 3.669e+14, 
-                        3.399e+14, 2.256e+14, 6.096e+14, 7.058e+14, 9.383e+14, 5.447e+14, 3.600e+14, 7.950e+13, 
+            d20_m500_midz = [3.804e+14, 2.085e+14, 2.042e+14, 2.299e+14, 2.754e+14, 2.629e+14, 3.149e+14, 3.669e+14,
+                        3.399e+14, 2.256e+14, 6.096e+14, 7.058e+14, 9.383e+14, 5.447e+14, 3.600e+14, 7.950e+13,
                         6.006e+13, 6.539e+13, 4.940e+13, 3.307e+13, 3.321e+13, 3.630e+13]
 
-            d20_mstar_midz = [7.107e+11, 8.617e+11, 8.822e+11, 8.976e+11, 1.037e+12, 1.118e+12, 1.162e+12, 1.257e+12, 
+            d20_mstar_midz = [7.107e+11, 8.617e+11, 8.822e+11, 8.976e+11, 1.037e+12, 1.118e+12, 1.162e+12, 1.257e+12,
                         1.299e+12, 1.498e+12, 1.928e+12, 1.816e+12, 1.186e+12, 1.070e+12, 9.526e+11, 6.770e+11,
                         6.739e+11, 5.463e+11, 3.716e+11, 3.474e+11, 5.753e+11, 6.369e+11]
-            
-            l8 = ax.scatter(np.log10(d20_m500_lowz), np.log10(d20_mstar_lowz), s=markersize+15, c='#333333', marker='s', alpha=1.0)
-            ax.scatter(np.log10(d20_m500_midz), np.log10(d20_mstar_midz), s=markersize+15, c='#333333', marker='s', alpha=1.0)
+
+            d20_m500_lowz = np.log10(d20_m500_lowz)
+            d20_mstar_lowz = np.log10(d20_mstar_lowz)
+            d20_m500_midz = np.log10(d20_m500_midz)
+            d20_mstar_midz = np.log10(d20_mstar_midz)
+
+            l8 = ax.scatter(d20_m500_lowz, d20_mstar_lowz, s=markersize+15, c='#333333', marker='s')
+            ax.scatter(d20_m500_midz, d20_mstar_midz, s=markersize+15, c='#333333', marker='s')
 
             # second legend
             handles = [l1[0],l2[0],l3[0],l4[0],l5[0],l6,l7,l8]
@@ -710,7 +720,7 @@ def stellar_mass_vs_halomass(sPs, conf=0):
 
     if conf == 1:
         yQuant = 'mstar_r500'
-        ylabel = 'Total Halo Stellar Mass [ log M$_{\\rm sun}$ ]' # BCG+ICL+SAT (e.g. fof-scope <r500c)
+        ylabel = r'Total Halo Stellar Mass [ log M$_{\rm sun}$ ]' # BCG+ICL+SAT (e.g. fof-scope <r500c)
         ylim = [11.75, 13.4]
         scatterColor = None
 
@@ -721,7 +731,7 @@ def stellar_mass_vs_halomass(sPs, conf=0):
             mstar_r500c = np.log10([1.47e12,1.45e12,2.28e12,2.80e12,2.42e12,4.36e12,6.58e12,1.01e13,1.33e13])
             #mstar_sats  = np.log10([7.97e11,3.89e11,1.45e12,1.78e12,1.83e12,3.27e12,4.39e12,6.61e12,1.07e13])
 
-            l1 = ax.scatter(m500c, mstar_r500c, s=markersize+20, c='#000000', marker='s', alpha=1.0)
+            l1 = ax.scatter(m500c, mstar_r500c, s=markersize+20, c='#000000', marker='s')
 
             # Gonzalez+13 (Figure 7, mstar is <r500c, and msats is satellites within r500c)
             g13_label = 'Gonzalez+ (2013)'
@@ -729,21 +739,21 @@ def stellar_mass_vs_halomass(sPs, conf=0):
             mstar = [2.82e12,3.21e12,4.18e12,3.06e12,4.99e12,6.07e12,7.53e12,7.04e12,5.95e12,5.95e12,5.56e12,5.50e12]
             #msats = [1.96e12,1.75e12,1.55e12,1.51e12,2.65e12,4.60e12,4.61e12,4.94e12,3.48e12,3.56e12,3.65e12,3.87e12]
 
-            l2 = ax.scatter(np.log10(m500c), np.log10(mstar), s=markersize+20, c='#000000', marker='D', alpha=1.0)
+            l2 = ax.scatter(np.log10(m500c), np.log10(mstar), s=markersize+20, c='#000000', marker='D')
 
             # Leauthaud+12 (obtained from Kravtsov+18 Fig 7)
             l12_label = 'Leauthaud+ (2012)'
             m500c = [3e13, 4.26e14]
             mstar_r500c = [5.8e11, 5.6e12]
 
-            l3 = ax.plot(np.log10(m500c), np.log10(mstar_r500c), '-', color='#000000', alpha=1.0)
+            l3 = ax.plot(np.log10(m500c), np.log10(mstar_r500c), '-', color='#000000')
 
             # Akino+ (2022) HSC-XXL (Fig 3) - only complete above M500>14.0
             a22_label = 'Akino+ (2022)'
-            a22_m500 = [4.831e+14, 6.901e+14, 5.815e+14, 6.070e+14, 4.028e+14, 3.334e+14, 2.701e+14, 2.740e+14, 
-                        2.663e+14, 2.205e+14, 2.533e+14, 2.524e+14, 3.928e+14, 3.671e+14, 1.516e+14, 1.675e+14, 
-                        1.687e+14, 1.468e+14, 1.220e+14, 1.057e+14, 1.124e+14, 1.259e+14, 1.013e+14, 1.160e+14, 
-                        1.549e+14, 1.495e+14, 1.736e+14, 1.805e+14, 1.960e+14, 1.705e+14, 2.082e+14, 2.359e+14, 
+            a22_m500 = [4.831e+14, 6.901e+14, 5.815e+14, 6.070e+14, 4.028e+14, 3.334e+14, 2.701e+14, 2.740e+14,
+                        2.663e+14, 2.205e+14, 2.533e+14, 2.524e+14, 3.928e+14, 3.671e+14, 1.516e+14, 1.675e+14,
+                        1.687e+14, 1.468e+14, 1.220e+14, 1.057e+14, 1.124e+14, 1.259e+14, 1.013e+14, 1.160e+14,
+                        1.549e+14, 1.495e+14, 1.736e+14, 1.805e+14, 1.960e+14, 1.705e+14, 2.082e+14, 2.359e+14,
                         2.780e+14, 1.939e+14, 1.761e+14, 1.310e+14, 8.911e+13, 8.538e+13, 8.297e+13]
 
             a22_mstar = [1.099e+13, 6.380e+12, 6.447e+12, 3.408e+12, 3.349e+12, 2.746e+12, 3.157e+12, 3.591e+12,
@@ -751,13 +761,13 @@ def stellar_mass_vs_halomass(sPs, conf=0):
                         4.099e+12, 3.904e+12, 4.395e+12, 3.361e+12, 2.356e+12, 2.389e+12, 1.932e+12, 1.802e+12,
                         2.236e+12, 2.708e+12, 2.699e+12, 2.873e+12, 1.972e+12, 1.771e+12, 1.600e+12, 1.407e+12,
                         1.524e+12, 1.039e+12, 1.254e+12, 1.076e+12, 2.028e+12, 2.267e+12, 2.824e+12]
-            
-            l4 = ax.scatter(np.log10(a22_m500), np.log10(a22_mstar), s=markersize+20, c='#333333', marker='o', alpha=1.0)
+
+            l4 = ax.scatter(np.log10(a22_m500), np.log10(a22_mstar), s=markersize+20, c='#333333', marker='o')
 
             # Chiu+18
             c18 = chiu18()
 
-            l5 = ax.errorbar(c18['M500'], c18['M_star'], xerr=c18['M500_err'], yerr=c18['M_star_err'], 
+            l5 = ax.errorbar(c18['M500'], c18['M_star'], xerr=c18['M500_err'], yerr=c18['M_star_err'],
                              color='#000000', fmt='s', alpha=0.4)
 
             # Bahe+17 (Hydrangea sims, Fig 4 left) (arXiv:1703.10610)
@@ -767,7 +777,7 @@ def stellar_mass_vs_halomass(sPs, conf=0):
             mstar = [12.02,12.14,12.21,12.25,12.32,12.29,12.47,12.53,12.49,12.60,12.66,12.69,12.71,12.76,
                      12.81,13.00,12.97,12.99,13.05,13.08,13.17,13.23] # 12.38,
 
-            l6 = ax.scatter(m500c, mstar, s=markersize+20, c='#000000', marker='*', alpha=1.0)
+            l6 = ax.scatter(m500c, mstar, s=markersize+20, c='#000000', marker='*')
 
             # second legend
             handles = [l1,l2,l3[0],l4,l5,l6]
@@ -776,9 +786,9 @@ def stellar_mass_vs_halomass(sPs, conf=0):
             legend = ax.legend(handles, labels, loc='lower right')
             ax.add_artist(legend)
 
-    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect,
                     xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac,
                     f_post=_draw_data, ylabel=ylabel, legendLoc='upper left', pdf=None)
 
 def gas_fraction_vs_halomass(sPs):
@@ -808,14 +818,14 @@ def gas_fraction_vs_halomass(sPs):
 
         l1 = ax.errorbar(g09['m500'], g09['fGas500'], yerr=g09['fGas500Err'],
                          color='#555555', alpha=0.9, fmt=markers[1])
-        l2 = ax.errorbar(l15['m500'], l15['fgas500'], yerr=l15['fgas500_err'], 
+        l2 = ax.errorbar(l15['m500'], l15['fgas500'], yerr=l15['fgas500_err'],
                          xerr=[l15['m500_err1'],l15['m500_err2']],
                          color='#555555', alpha=0.9, marker=markers[2], linestyle='')
         l3 = ax.errorbar(l20['m500'], l20['fgas500'], xerr=[l20['m500_err1'],l20['m500_err2']],
                          yerr=l20['fgas500_err'], color='#888888', alpha=1.0, zorder=-2,
                          marker=markers[3], linestyle='')
         l4 = ax.errorbar(g13['m500'], g13['fgas'], xerr=g13['m500_err'],
-                         yerr=g13['fgas_err'], color='#333333', alpha=1.0, 
+                         yerr=g13['fgas_err'], color='#333333', alpha=1.0,
                          marker=markers[5], linestyle='')
 
         # Tanimura+2020 (https://arxiv.org/abs/2007.02952) (xerr assumed)
@@ -835,23 +845,24 @@ def gas_fraction_vs_halomass(sPs):
         #ax.fill_between(np.log10(m500), fgas_lower, fgas_upper, color='#333', alpha=0.1)
 
         # FLAMINGO sim
-        xx = np.log10([1.11e+13, 1.95e+13, 3.15e+13, 5.48e+13, 8.95e+13, 1.41e+14, 2.38e+14, 4.57e+14, 9.37e+14, 1.40e+15, 1.81e+15])
+        xx = np.log10([1.11e+13, 1.95e+13, 3.15e+13, 5.48e+13, 8.95e+13, 1.41e+14, 2.38e+14, 4.57e+14, 9.37e+14,
+                       1.40e+15, 1.81e+15])
         yy = [0.0252, 0.0366, 0.0512, 0.0702, 0.0866, 0.0988, 0.109, 0.118, 0.125, 0.126, 0.130]
-        
-        ax.plot(xx, yy, '-', color='#332288', lw=lw, alpha=0.8)
+
+        ax.plot(xx, yy, '-', color='#332288', alpha=0.8)
         ax.text(xx[6]-0.022, yy[6]-0.017, 'FLAMINGO', color='#332288', alpha=0.8, fontsize=14, ha='right', rotation=15)
 
         # MTNG sim
         xx = np.log10([1.14e+13, 2.21e+13, 4.01e+13, 7.22e+13, 1.01e+14, 1.47e+14, 2.20e+14, 3.42e+14, 5.32e+14])
         yy = [0.0444, 0.0624, 0.0843, 0.106, 0.116, 0.124, 0.131, 0.134, 0.138]
-        
-        ax.plot(xx, yy, '-', color='#3fa716', lw=lw, alpha=0.8)
+
+        ax.plot(xx, yy, '-', color='#3fa716', alpha=0.8)
         ax.text(xx[5]+0.05, yy[5]-0.013, 'MTNG', color='#3fa716', alpha=0.8, fontsize=14, ha='center', rotation=15)
 
         # TNG-Cluster fit line (sent to Elena Rasia)
-        #bin_cen = [14.03, 14.08, 14.16, 14.22, 14.30, 14.36, 14.43, 14.50, 14.57, 14.63, 14.70, 
+        #bin_cen = [14.03, 14.08, 14.16, 14.22, 14.30, 14.36, 14.43, 14.50, 14.57, 14.63, 14.70,
         #           14.76, 14.82, 14.90, 14.97, 15.04, 15.10, 15.18]
-        #median_f500 = [0.124, 0.127, 0.130, 0.132, 0.134, 0.135, 0.138, 0.139, 0.140, 0.140, 0.140, 
+        #median_f500 = [0.124, 0.127, 0.130, 0.132, 0.134, 0.135, 0.138, 0.139, 0.140, 0.140, 0.140,
         #               0.140, 0.140, 0.141, 0.141, 0.142, 0.143, 0.145]
         #ax.plot(bin_cen, median_f500, '-', color='#130268', lw=lw*2, alpha=0.8)
 
@@ -874,9 +885,9 @@ def gas_fraction_vs_halomass(sPs):
         legend = ax.legend(handles, labels, loc='lower right')
         ax.add_artist(legend)
 
-    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect,
                     xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac,
                     f_post=_draw_data, legendLoc='upper left', pdf=None)
 
 def sfr_vs_halomass(sPs):
@@ -899,7 +910,6 @@ def sfr_vs_halomass(sPs):
     def _draw_data(ax):
         # observational points
 
-
         # 'quenched' indicators i.e. threshold line
         mhalo = sPs[0].subhalos(xQuant)
         mstar = sPs[0].subhalos('mstar_30pkpc_log')
@@ -910,13 +920,13 @@ def sfr_vs_halomass(sPs):
         xx, yy, _ = running_median(mhalo, mstar, binSize=0.1) # determine mstar/mhalo relation
 
         xx_mhalo = xlim #np.linspace(xlim[0], xlim[1], 10) # mhalo
-        f_interp = interp1d(xx, yy, kind='linear', fill_value='extrapolate') # interpolate mstar to requested mhalo values
+        f_interp = interp1d(xx, yy, kind='linear', fill_value='extrapolate') # interpolate mstar to mhalo values
         xx_mstar = f_interp(xx_mhalo)
 
         ssfr_thresh = 1e-11 # 1/yr
         sfr = np.log10(10.0**xx_mstar * ssfr_thresh) # log(1/yr)
         label = 'Quiescent\n(sSFR < %g yr$^{-1}$)' % ssfr_thresh
-        ax.plot(xx_mhalo, sfr, '-', lw=lw, color='#000', alpha=0.5)
+        ax.plot(xx_mhalo, sfr, '-', color='#000', alpha=0.5)
         ax.fill_between(xx_mhalo, ylim[0], sfr, color='#000', alpha=0.1)
         ax.text(xlim[1]-0.05, ylim[0]+2.0, label, color='#000', alpha=0.5, fontsize=20, ha='right')
 
@@ -928,11 +938,11 @@ def sfr_vs_halomass(sPs):
 
         w_cc = np.where(cc_flag == 0)
 
-        ax.plot(xx[w_cc], yy[w_cc], lw=0, marker='x', ms=8, mfc='none', markeredgecolor='#000', markeredgewidth=1, alpha=0.5)
+        ax.plot(xx[w_cc], yy[w_cc], lw=0, marker='x', ms=8, mfc='none', mec='#000', mew=1, alpha=0.5)
 
-    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect,
                     xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac,
                     f_pre=_draw_data, f_post=_draw_cc, legendLoc='upper left', pdf=None)
 
 def mhi_vs_halomass(sPs):
@@ -958,11 +968,12 @@ def mhi_vs_halomass(sPs):
         # observational points
         o18 = obuljen2019()
 
-        color = '#222222'
         #l1, = ax.plot(o18['Mhalo'], o18['mHI'], color=color)
-        #ax.fill_between(o18['Mhalo'], savgol_filter(o18['mHI_low'],sKn,sKo), savgol_filter(o18['mHI_high'],sKn,sKo), color=color, alpha=0.2)
+        #o18_down = savgol_filter(o18['mHI_low'],sKn,sKo)
+        #o18_up = savgol_filter(o18['mHI_high'],sKn,sKo)
+        #ax.fill_between(o18['Mhalo'], o18_down, o18_up, color='#222222', alpha=0.2)
 
-        l1 = ax.errorbar(o18['pts_M_halo'], o18['pts_MHI'], yerr=[o18['pts_MHI_errdown'],o18['pts_MHI_errup']], 
+        l1 = ax.errorbar(o18['pts_M_halo'], o18['pts_MHI'], yerr=[o18['pts_MHI_errdown'],o18['pts_MHI_errup']],
                     fmt='D', ms=10, zorder=2, color='#000000', alpha=1.0)
 
         # TODO: cold gas mass (https://arxiv.org/abs/2305.12750 Fig 8)
@@ -977,329 +988,14 @@ def mhi_vs_halomass(sPs):
         legend = ax.legend(handles, labels, loc='lower right')
         ax.add_artist(legend)
 
-    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect,
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                             f_pre=_draw_data, legendLoc='upper left', pdf=None)                
-
-def generateProjections(sP, partType='gas', partField='coldens_msunkpc2', conf=0, saveImages=False):
-    """ Generate projections for a given configuration, save results into a single postprocessing file. """
-    from ..vis.halo import renderSingleHalo
-
-    axes_set   = [[0,1],[0,2],[1,2]]
-    nPixels    = 2000
-    depthType  = 'rVirial' # r200c
-
-    if conf == 0:
-        sizeType  = 'rVirial' # r200c
-        size      = 4.0 # +/- 2 rvir in extent
-        depth     = 2.0 # +/- 1 rvir in depth
-        confStr   = '2r200_d=r200'
-    if conf == 1:
-        sizeType  = 'r500'
-        size      = 1.0 # +/- 0.5 r500 in extent
-        depth     = 2.0 # +/- 1 rvir in depth
-        confStr   = '0.5r500_d=r200'
-    if conf == 2:
-        sizeType  = 'r500'
-        size      = 1.0 # +/- 0.5 r500 in extent
-        depth     = 6.0 # +/- 3 rvir in depth
-        confStr   = '0.5r500_d=3r200'
-    if conf == 3:
-        sizeType  = 'r500'
-        depthType = 'r500'
-        size      = 2.0 # +/- r500 in extent
-        depth     = 2.0 # +/- r500 in depth
-        confStr   = 'r500_d=r500'
-
-    method = 'sphMap_globalZoomOrig' # all particles of original zoom run only
-
-    # TNG300: all halos with M200c > 14.0, TNG-Cluster: all primary zoom targets
-    subhaloIDs = sP.cenSatSubhaloIndices(cenSatSelect='cen')
-    m200c = sP.subhalos('mhalo_200_log')[subhaloIDs]
-
-    if sP.simName == 'TNG-Cluster':
-        # for z>0, also include main progenitors of z==0 GroupPrimaryZoomTargets
-        if sP.redshift > 0:
-            subhaloIDs = list(subhaloIDs)
-            sP_z0 = sP.copy()
-            sP_z0.setRedshift(0.0)
-
-            # load GroupPrimaryZoomTargets at z=0, and their SubLink MPBs
-            subhaloIDs_z0 = sP_z0.cenSatSubhaloIndices(cenSatSelect='cen')
-            mpbs = sP_z0.loadMPBs(subhaloIDs_z0, fields=['SnapNum','SubfindID'])
-
-            # record any progenitors which are not HaloID==0 at this snap, in the original zooms
-            subhaloIDs_add = []
-            for subhaloID_z0 in subhaloIDs_z0:
-                mpb_loc = mpbs[subhaloID_z0]
-                w = np.where(mpb_loc['SnapNum'] == sP.snap)[0]
-                if len(w) == 0:
-                    print('NO PROG, SKIP!', subhaloID_z0)
-                    continue
-                subhaloID_cand = mpb_loc['SubfindID'][w][0]
-                if subhaloID_cand not in subhaloIDs:
-                    print('ADD: ', subhaloID_z0, subhaloID_cand)
-                    subhaloIDs.append(subhaloID_cand)
-            subhaloIDs = np.array(subhaloIDs, dtype='int32')
-    else:
-        # include low-mass progenitors at high redshift
-        w = np.where(m200c > 14.0)[0]
-        subhaloIDs = subhaloIDs[w]
-
-    haloIDs = sP.subhalos('SubhaloGrNr')[subhaloIDs]
-
-    r200c = sP.subhalos('r200')[subhaloIDs]
-    r500c = sP.subhalos('r500')[subhaloIDs]
-
-    # render images?
-    if saveImages:
-        # plot config
-        class plotConfig:
-            plotStyle  = 'open' # open, edged
-            rasterPx   = [800,800]
-            colorbars  = True
-            fontsize   = 14
-
-        labelHalo = 'mhalo,haloidorig'
-        labelSim = True
-        labelZ = True
-        labelScale = True
-        if partField == 'Mg II': valMinMax = [8.0, 15.0]
-
-        # loop over all halos
-        for subhaloInd, haloID in zip(subhaloIDs, haloIDs):
-            # loop over all projection directions
-            for axes in axes_set:
-                # render and stamp
-                panels = [{}]
-
-                projAxis = ['x','y','z'][3-np.sum(axes)]
-                saveStr = '%s-%s_%s_%s' % (partType,partField,confStr,projAxis)
-                labelCustom = [confStr.replace('_',' ') + r' ($\hat{%s}$)' % projAxis]
-                plotConfig.saveFilename = '%s.%d.%08d.%s.png' % (sP.simName,sP.snap,subhaloInd,saveStr)
-                
-                renderSingleHalo(panels, plotConfig, locals()) #, skipExisting=False)
-
-        print('Done.')
-        return
-
-    # save projections (instead of rendering images): start save file
-    if ' ' in partField:
-        partField = 'coldens_' + partField.replace(' ','')
-        
-    savePath = sP.postPath + 'projections/'
-    saveFilename = savePath + '%s-%s__%s.%d.hdf5' % (partType, partField, confStr, sP.snap)
-
-    with h5py.File(saveFilename,'a') as f:
-        f.attrs['axes_set'] = axes_set
-        f.attrs['nPixels'] = nPixels
-        f.attrs['size'] = size
-        f.attrs['sizeType'] = sizeType
-        f.attrs['method'] = method
-        f.attrs['partType'] = partType
-        f.attrs['partField'] = partField
-        f.attrs['simName'] = sP.simName
-        f.attrs['snap'] = sP.snap
-        f.attrs['depth'] = depth
-        f.attrs['depthType'] = depthType
-
-        if 'HaloIDs' not in f:
-            f['HaloIDs'] = haloIDs
-            f['SubhaloIDs'] = subhaloIDs
-            f['r200c'] = r200c
-            f['r500c'] = r500c
-
-            dist, theta = dist_theta_grid(size, nPixels)
-
-            f['grid_dist'] = dist
-            f['grid_angle'] = theta
-
-    # loop over all halos
-    for i, haloID in enumerate(haloIDs):
-        # check for existence
-        subhaloInd = subhaloIDs[i]
-        gName = f'Halo_{haloID}'
-
-        print(f'[{i:03d} of {len(haloIDs):03d}] Halo ID = {haloID}')
-
-        with h5py.File(saveFilename,'r') as f:
-            if gName in f:
-                print(' skip')
-                continue
-
-        # loop over all orientations
-        grids = np.zeros((nPixels,nPixels,len(axes_set)), dtype='float32')
-
-        for j, axes in enumerate(axes_set):
-            # render and stamp
-            panels = [{}]
-            plotConfig = lambda: None
-            
-            grid_loc, config = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-            grids[:,:,j] = grid_loc
-
-        # save
-        with h5py.File(saveFilename,'a') as f:
-            f.create_dataset(gName, data=grids)
-
-            f.attrs['name'] = config['label']
-
-            f[gName].attrs['minmax_guess'] = config['vMM_guess']
-            f[gName].attrs['box_center'] = config['boxCenter'] # code
-            f[gName].attrs['box_size'] = config['boxSizeImg'] # code, multiply by grid_dist to have px dists in code units for this halo
-    
-    print('Done.')
-
-def _find_peak(grid, method='center_of_light'):
-    """ Find peak location in a 2D grid using different methods. Return is in pixel coordinates. """
-    x = np.arange(grid.shape[0])
-    y = np.arange(grid.shape[1])
-
-    grid_norm = grid / grid.max()
-
-    xx, yy = np.meshgrid(x, y, indexing='xy')
-
-    if method == 'max_pixel':
-        # single maximum valued pixel
-        ind = np.argmax(grid)
-        xy_cen = np.unravel_index(ind, grid.shape)[::-1]
-
-    if method == 'center_of_light':
-        # center of light
-        xy_cen = np.average(xx, weights=grid_norm), np.average(yy, weights=grid_norm)
-
-    if method == 'shrinking_circle':
-        # iterative/shrinking circle
-        npx = grid.shape[0] * grid.shape[1]
-        rad = grid.shape[0] / 2
-        xy_cen = np.array([grid.shape[0]/2, grid.shape[1]/2], dtype='float32')
-        iter_count = 0
-
-        circ_cens = []
-        circ_rads = []
-
-        while npx > 100 and iter_count < 500:
-            dx = xx - xy_cen[0]
-            dy = yy - xy_cen[1]
-            rr = np.sqrt(dx**2 + dy**2)
-
-            ind = np.where(rr < rad)
-            npx = len(ind[0])
-
-            xy_cen = np.average(xx[ind], weights=grid_norm[ind]), np.average(yy[ind], weights=grid_norm[ind])
-            rad *= 0.95
-
-            iter_count += 1
-
-            #print(iter_count, npx, xy_cen, rad)
-            circ_cens.append(xy_cen)
-            circ_rads.append(rad)
-
-        return xy_cen, circ_cens, circ_rads
-
-    return xy_cen
-
-def summarize_projection_2d(sim, pSplit=None, quantity='sz_yparam', projConf='2r200_d=r200', 
-                            op='sum', aperture='r500'):
-    """ Calculate summary statistic(s) from existing projections in 2D, e.g. Y_{r500,2D} for SZ. """
-    # config
-    assert pSplit is None
-    assert op in ['sum','peak_offset']
-
-    path = sim.postPath + 'projections/'
-    filename = 'gas-%s_%03d_%s.hdf5' % (quantity,sim.snap,projConf)
-
-    # load list of halos
-    with h5py.File(path + filename,'r') as f:
-        haloIDs = f['HaloIDs'][()]
-        subhaloIDs = f['SubhaloIDs'][()]
-        nproj = f['Halo_%d' % haloIDs[0]].shape[2]
-        name = f.attrs['name']
-
-    # allocate
-    rr = np.zeros((len(haloIDs), nproj), dtype='float32')
-
-    # load distance grid
-    with h5py.File(path + filename,'r') as f:
-        dist = f['grid_dist'][()]
-
-    # loop over all halos
-    for haloInd, haloID in enumerate(haloIDs):
-        # status
-        if haloInd % 10 == 0: print(' %4.1f%%' % (float(haloInd+1)*100.0/len(haloIDs)))
-
-        # load three projections
-        with h5py.File(path + filename,'r') as f:
-            proj = f['Halo_%d' % haloID][()]
-            box_size = f['Halo_%d' % haloID].attrs['box_size']
-
-        # halo-dependent unit conversions
-        assert box_size[0] == box_size[1] and proj.shape[0] == proj.shape[1]
-        dists_code_loc = dist * (box_size[0]/2)
-
-        pxSize_code = box_size[0] / proj.shape[0]
-        pxSize_Kpc = sim.units.codeLengthToKpc(pxSize_code)
-        pxArea_Kpc = pxSize_Kpc**2
-
-        if op == 'sum':
-            # halo-specific aperture [code units]
-            if aperture == 'r500':
-                aperture_rad = sim.halo(haloID)['Group_R_Crit500']
-            if aperture == 'r200':
-                aperture_rad = sim.halo(haloID)['Group_R_Crit200']
-
-            assert aperture_rad < box_size[0] / 2.0 + 1e-6
-
-            # select spatial region
-            w_px_spatial = np.where(dists_code_loc < aperture_rad)
-
-        # loop over each projection direction
-        for i in range(nproj):
-            # linear map [e.g. dimensionless for SZY, erg/s/kpc^2 for LX]
-            proj_loc = 10.0**(proj[:,:,i]).astype('float64')
-
-            if op == 'sum':
-                # integrate within aperture
-                quant_sum = np.nansum(proj_loc[w_px_spatial])
-                
-                # multiply by total area in [pKpc^2]
-                # e.g. for SZ, this is [dimensionless] -> [pKpc^2]
-                # e.g. for LX, this is [erg/s/kpc^2] -> [erg/s]
-                quant_sum *= pxArea_Kpc
-
-                rr[haloInd,i] = np.log10(quant_sum)
-
-            if op == 'peak_offset':
-                # mark galaxy position (SubhaloPos at center by definition)
-                xy_cen0 = proj.shape[0] / 2.0, proj.shape[1] / 2.0
-
-                xy_cen2, _, _ = _find_peak(proj_loc, method='shrinking_circle')
-                offsets_px = np.sqrt((xy_cen0[0]-xy_cen2[0])**2 + (xy_cen0[1]-xy_cen2[1])**2)
-                offsets_code = offsets_px * pxSize_code
-
-                rr[haloInd,i] = offsets_code
-
-    # return quantities for save, as expected by load.auxCat()
-    if op == 'sum':
-        units = name.split('[')[-1].split(']')[0] + ' pkpc^2'
-        desc = 'Sum of [%s] in 2D projection (%s) [%s].' % (quantity,projConf,units)
-    if op == 'peak_offset':
-        units = 'code_length'
-        desc = 'Spatial offset of peak [%s] in 2D projection (%s) [%s].' % (quantity,projConf,units)
-
-    select = 'TNG-Cluster primary zoom targets only.'
-
-    attrs = {'Description' : desc.encode('ascii'),
-             'Selection'   : select.encode('ascii'),
-             'ptType'      : 'gas'.encode('ascii'),
-             'subhaloIDs'  : subhaloIDs}
-
-    return rr, attrs
+                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac,
+                             f_pre=_draw_data, legendLoc='upper left', pdf=None)
 
 def szy_vs_halomass(sPs):
     """ Plot SZ y-parameter vs halo mass. """
-    from ..load.data import hilton21act, planck13xx, bleem15spt, nagarajan19
+    from ..load.data import bleem15spt, hilton21act, nagarajan19, planck13xx
 
     xQuant = 'mhalo_500_log'
     cenSatSelect = 'cen'
@@ -1354,7 +1050,7 @@ def szy_vs_halomass(sPs):
         Y500 *= 3600 # arcsec^2
         Y500 *= sPs[0].units.arcsecToAngSizeKpcAtRedshift(1.0, 0.15)**2 / 1e6 # convert to pMpc^2
 
-        ax2.plot(np.log10(M500), np.log10(Y500), '--', lw=lw, color='#000000', alpha=0.7, label='Hill+ (2018) CB')
+        ax2.plot(np.log10(M500), np.log10(Y500), '--', color='#000000', alpha=0.7, label='Hill+ (2018) CB')
 
         # self-similar slope
         M500 = np.array([1.5e14, 5e14])
@@ -1375,9 +1071,9 @@ def szy_vs_halomass(sPs):
 
         xerr = np.vstack((n19['M500_errdown'],n19['M500_errup']))
         yerr = np.vstack((n19['Y_errup'],n19['Y_errdown']))
-        ax2.errorbar(n19['M500'], n19['Y'], xerr=xerr, yerr=yerr, fmt='D', zorder=-2, 
+        ax2.errorbar(n19['M500'], n19['Y'], xerr=xerr, yerr=yerr, fmt='D', zorder=-2,
                      color='#555555', ms=6, alpha=0.7, label=n19['label'])
-        
+
         # Adam+2023 XXL Survey - Fig 8 right panel (NIKA2 points, direct NFW mass modeling, also from other authors)
         a22_label     = 'Adam+ (2023)'
         a23_m500      = np.log10([1.16e+14, 1.96e+14, 2.47e+14, 3.79e+14, 5.79e+14, 6.12e+14, 7.45e+14, 1.24e+15])
@@ -1389,9 +1085,9 @@ def szy_vs_halomass(sPs):
 
         xerr = np.vstack((a23_m500_err1 - a23_m500,a23_m500 - a23_m500_err2))
         yerr = np.vstack((a23_y500_err1 - a23_y500,a23_y500 - a23_y500_err2))
-        ax2.errorbar(a23_m500, a23_y500, xerr=xerr, yerr=yerr, fmt='s', zorder=-2, 
+        ax2.errorbar(a23_m500, a23_y500, xerr=xerr, yerr=yerr, fmt='s', zorder=-2,
                      color='#444444', ms=10, alpha=0.7, label=a22_label)
-        
+
         # Planck+16 as compiled in McCarthy+17 (for <5r500)!
         #m17_xx = [14.18, 14.26, 14.36, 14.45, 14.56, 14.64, 14.75, 14.85, 14.94]
         #m17_yy = [-4.87, -4.66, -4.48, -4.39, -4.17, -4.06, -3.89, -3.73, -3.56]
@@ -1401,9 +1097,9 @@ def szy_vs_halomass(sPs):
         # second legend
         ax2.legend(loc='lower right')
 
-    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect,
                     xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
-                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac,
                     f_pre=_draw_data_pre, f_post=_draw_data, legendLoc='upper left', pdf=None)
 
 def XrayLum_vs_halomass(sPs):
@@ -1446,9 +1142,9 @@ def XrayLum_vs_halomass(sPs):
         legend2 = ax.legend(handles, labels, borderpad=0.4, loc='lower right')
         ax.add_artist(legend2)
 
-    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect,
                     xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
-                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac,
                     f_post=_draw_data, legendLoc='upper left', pdf=None)
 
 def smbh_mass_vs_veldisp(sPs):
@@ -1479,7 +1175,7 @@ def smbh_mass_vs_veldisp(sPs):
 
         log_mbh = alpha + beta * np.log10(10.0**xx / sigma0)
 
-        l1 = ax.plot(xx, log_mbh, '--', lw=lw, color='#000000', alpha=0.7)
+        l1 = ax.plot(xx, log_mbh, '--', color='#000000', alpha=0.7)
 
         # McConnell+ (2013) - Table 2 - Early-type
         sigma0 = 200.0
@@ -1488,14 +1184,15 @@ def smbh_mass_vs_veldisp(sPs):
 
         log_mbh = alpha + beta * np.log10(10.0**xx / sigma0)
 
-        l2 = ax.plot(xx, log_mbh, '-', lw=lw, color='#000000', alpha=0.7)
+        l2 = ax.plot(xx, log_mbh, '-', color='#000000', alpha=0.7)
 
         # McConnell+ (2013) individual points
         m13 = mcconnellMa2013()
 
         xerr = [m13['pts']['sigma_down'],m13['pts']['sigma_up']]
         yerr = [m13['pts']['M_BH_down'],m13['pts']['M_BH_up']]
-        l2b = ax.errorbar(m13['pts']['sigma'], m13['pts']['M_BH'], xerr=xerr, yerr=yerr, color='#000', alpha=0.5, fmt='D')
+        l2b = ax.errorbar(m13['pts']['sigma'], m13['pts']['M_BH'], xerr=xerr, yerr=yerr, 
+                          color='#000', alpha=0.5, fmt='D')
 
         # Bogdan+ (2018) individual points
         b18 = bogdan2018()
@@ -1514,8 +1211,8 @@ def smbh_mass_vs_veldisp(sPs):
         log_mbh = alpha + beta * np.log10(10.0**xx / sigma0)
 
         # assume: totally uncorrelated uncertainties
-        log_mbh_up = (alpha + alpha_err) + (beta + beta_err) * np.log10(10.0**xx / sigma0)
-        log_mbh_down = (alpha - alpha_err) + (beta - beta_err) * np.log10(10.0**xx / sigma0)
+        #log_mbh_up = (alpha + alpha_err) + (beta + beta_err) * np.log10(10.0**xx / sigma0)
+        #log_mbh_down = (alpha - alpha_err) + (beta - beta_err) * np.log10(10.0**xx / sigma0)
 
         # randomly sample on parameter uncertainties and compute 1sigma of resulting values
         rng = np.random.default_rng(424242)
@@ -1527,7 +1224,7 @@ def smbh_mass_vs_veldisp(sPs):
         log_mbh_up2 = [log_mbh[0] + log_mbh_std0, log_mbh[1] + log_mbh_std1]
         log_mbh_down2 = [log_mbh[0] - log_mbh_std0, log_mbh[1] - log_mbh_std1]
 
-        l4 = ax.plot(xx, log_mbh, ':', lw=lw, color='#666666', alpha=0.7)
+        l4 = ax.plot(xx, log_mbh, ':', color='#666666', alpha=0.7)
         #ax.fill_between(xx, y1=log_mbh+alpha_err, y2=log_mbh-alpha_err, color='#000000', alpha=0.4)
         #ax.fill_between(xx, y1=log_mbh_down, y2=log_mbh_up, color='#000000', alpha=0.2)
         ax.fill_between(xx, y1=log_mbh_down2, y2=log_mbh_up2, color='#666666', alpha=0.2)
@@ -1538,9 +1235,9 @@ def smbh_mass_vs_veldisp(sPs):
         legend = ax.legend(handles, labels, loc='lower right')
         ax.add_artist(legend)
 
-    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect,
                     xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
-                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac,
                     f_pre=_draw_data, legendLoc='upper left', pdf=None)
 
 def smbh_mass_vs_halomass(sPs):
@@ -1568,8 +1265,8 @@ def smbh_mass_vs_halomass(sPs):
         yerr = [b18['mbh_errdown'], b18['mbh_errup']]
         l1 = ax.errorbar(b18['m500'], b18['mbh'], xerr=xerr, yerr=yerr, color='#000', fmt='D')
 
-        # Gaspari+19, Figure 8
-        g19_m500      = np.log10([7.52e+14, 2.03e+14, 1.05e14, 1.02e+14, 1.05e14]) # two 9.44e13 values -> 1.05e14 for visual clarity
+        # Gaspari+19, Figure 8 (two 9.44e13 values -> 1.05e14 for visual clarity)
+        g19_m500      = np.log10([7.52e+14, 2.03e+14, 1.05e14, 1.02e+14, 1.05e14])
         g19_m500_low  = np.log10([5.59e+14, 1.55e+14, 7.14e+13, 7.74e+13, 7.18e+13])
         g19_m500_high = np.log10([1.01e+15, 2.64e+14, 1.25e+14, 1.32e+14, 1.25e+14])
         g19_mbh       = np.log10([2.09e+10, 9.01e+9,  6.33e+9,  7.16e+9,  2.50e+9])
@@ -1617,17 +1314,21 @@ def smbh_mass_vs_halomass(sPs):
         legend = ax.legend(handles, labels, loc='lower right')
         ax.add_artist(legend)
 
-    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect,
                     xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
-                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                    scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac,
                     f_pre=_draw_data, legendLoc='upper left', pdf=None)
 
 def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
-    """ Plot radial profiles for various quantities. 
-    quant can be one of: ['Metallicity', 'Temp', 'ne', 'Entropy'].
-    If weight == '', then mass-weighted. Otherwise '_XrayWt' is available. """
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    """ Plot radial profiles for various quantities.
+
+    Args:
+      sim (:py:class:`~util.simParams`): simulation instance.
+      quant (str): quantity to plot, one of: ['Metallicity', 'Temp', 'ne', 'Entropy'].
+      weight (str): if '' then mass-weighted. Otherwise '_XrayWt' is available.
+    """
     from matplotlib.legend_handler import HandlerTuple
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
 
     # load
     acField = 'Subhalo_RadProfile3D_Global_Gas_%s%s' % (quant,weight)
@@ -1637,8 +1338,8 @@ def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
     attrs = ac[acField + '_attrs']
     subhaloIDs = ac['subhaloIDs']
 
-    assert attrs['radRvirUnits'] == True # otherwise generalize
-    assert attrs['radBinsLog'] == True # otherwise generalize
+    assert attrs['radRvirUnits'] # otherwise generalize
+    assert attrs['radBinsLog'] # otherwise generalize
 
     rad_bin_edges = attrs['rad_bin_edges']
     rad_bin_cen = (rad_bin_edges[1:] + rad_bin_edges[:-1]) / 2
@@ -1650,7 +1351,7 @@ def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
 
     clabel = r'Halo Mass M$_{\rm 200c}$ [ log M$_\odot$ ]'
     color_minmax = [14.4, 15.4]
-    
+
     # compute mass binned profiles
     mass_bins = [[14.4,14.6], [14.6,14.8], [14.8,15.0], [15.0,15.2], [15.2,15.4]]
 
@@ -1671,7 +1372,7 @@ def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
     ylabel, _, ylog = sim.simParticleQuantity(attrs['ptType'], attrs['ptProperty'])
     if quant == 'Metallicity':
         ylabel = ylabel.replace('log ','')
-             
+
     ylims = {'Metallicity' : [0.04, 1.12],
              'Temp'        : [7.1, 8.2],
              'ne'          : [-3.6, -0.5],
@@ -1697,7 +1398,7 @@ def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
     ax = fig.add_subplot(111)
     ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
-    ax.set_xlabel('Radius [R$_{\\rm 200c}$]')
+    ax.set_xlabel(r'Radius [R$_{\rm 200c}$]')
     ax.set_ylabel(ylabel)
 
     ax.set_xlim(xlim)
@@ -1721,7 +1422,7 @@ def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
         #        ls = '-'
         #        alpha = 1.0
         #        lw = 1.0
-    
+
         ax.plot(rad_bin_cen, data[i,:], ls=ls, color=color, lw=lw, alpha=alpha, zorder=0)
 
     for i, mass_bin in enumerate(mass_bins):
@@ -1755,8 +1456,10 @@ def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
         r_r200 = np.array(r_r500) * r500_to_r200
 
         # plot
-        p1 = ax.errorbar(r_r200, data_obs_rel, yerr=data_err_rel, fmt='o', color='#000000', ms=10, alpha=0.8, label='Lovisari+19 (rel)')
-        p2 = ax.errorbar(r_r200, data_obs_dis, yerr=data_err_dis, fmt='s', color='#000000', ms=10, alpha=0.8, label='Lovisari+19 (dis)')
+        p1 = ax.errorbar(r_r200, data_obs_rel, yerr=data_err_rel, fmt='o', color='#000000',
+                         ms=10, alpha=0.8, label='Lovisari+19 (rel)')
+        p2 = ax.errorbar(r_r200, data_obs_dis, yerr=data_err_dis, fmt='s', color='#000000',
+                         ms=10, alpha=0.8, label='Lovisari+19 (dis)')
 
         # Leccardi+08 (from Lovisari+19 Fig 6)
         xx = [0.032,0.098,0.180,0.240,0.345,0.450,0.623] # r500c
@@ -1779,7 +1482,8 @@ def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
         xx = [0.5, 2.0] # arbitrary, 'near r180c' e.g. see Mernier+17 Fig 13
         y_upper = 0.366 * (Z_solar_A09/sim.units.Z_solar)
 
-        p4 = ax.fill_between(xx, [0.0,0.0], [y_upper,y_upper], facecolor='#999', alpha=0.2, lw=2, edgecolor='#000', ls='--', label='Molendi+16')
+        p4 = ax.fill_between(xx, [0.0,0.0], [y_upper,y_upper], facecolor='#999', alpha=0.2, lw=2,
+                             edgecolor='#000', ls='--', label='Molendi+16')
         #ax.plot([xx[0],xx[0]], [0.0,y_upper], '--', color='#000', alpha=0.4)
         #ax.plot(xx, [y_upper,y_upper], '--', color='#000', alpha=0.4)
 
@@ -1797,14 +1501,15 @@ def cluster_radial_profiles(sim, quant='Metallicity', weight=''):
 
         #ax.errorbar(r_r200, Z_mean, yerr=Z_mean_err, fmt='H', color='#000000', ms=10, alpha=0.8, label='Ghizzardi+21')
         p5, = ax.plot(r_r200, Z_mean, '-', color='#000', alpha=1.0, label='Ghizzardi+21')
-        p6 = ax.fill_between(r_r200, Z_mean-Z_mean_err, Z_mean+Z_mean_err, color=(0,0,0,0.2), lw=3, edgecolor=(0,0,0,1.0), ls=':', label='Ghizzardi+21')
+        p6 = ax.fill_between(r_r200, Z_mean-Z_mean_err, Z_mean+Z_mean_err, color=(0,0,0,0.2), lw=3,
+                             edgecolor=(0,0,0,1.0), ls=':', label='Ghizzardi+21')
 
         ax.legend([(p1,p2),p3,p4,(p5,p6)], ['Lovisari+19',p3.get_label(),p4.get_label(),p6.get_label()],
                   handler_map={tuple: HandlerTuple(ndivide=None)}, loc='upper right')
 
     # finish plot
     cax = make_axes_locatable(ax).append_axes('right', size='3%' if quant=='Metallicity' else '4%', pad=0.2)
-    cb = plt.colorbar(cmap, label=clabel, cax=cax)
+    plt.colorbar(cmap, label=clabel, cax=cax)
 
     fig.savefig('rad_profiles_%s_%s%s_%d.pdf' % (sim.name, quant, weight, sim.snap))
     plt.close(fig)
@@ -1821,11 +1526,11 @@ def galaxy_number_profile(sim, criterion='Mr_lt205_2D'):
         attrs = ac[acField + '_attrs']
         subhaloIDs = ac['subhaloIDs']
 
-        rad_bin_edges = attrs['rad_bin_edges']
+        #rad_bin_edges = attrs['rad_bin_edges']
         rad_bins_mpc = attrs['rad_bins_pkpc'] / 1000
 
         m200 = sim.subhalos('m200c_log')[subhaloIDs]
-        
+
         # compute mass binned profiles
         mass_bins = [[14.4,14.6], [14.6,14.8], [14.8,15.0], [15.0,15.2], [15.2,15.4]]
 
@@ -1898,32 +1603,33 @@ def galaxy_number_profile(sim, criterion='Mr_lt205_2D'):
     for i, mass_bin in enumerate(mass_bins):
         color = cmap.to_rgba(np.mean(mass_bin))
         label = '%.1f < M < %.1f' % (mass_bin[0], mass_bin[1])
-        ax.plot(rad_bins_mpc, savgol_filter(data_mean1[i,:], sKn, sKo), '-', color=color, lw=lw, alpha=1.0, label=label)
+        ax.plot(rad_bins_mpc, savgol_filter(data_mean1[i,:], sKn, sKo), '-', color=color, alpha=1.0, label=label)
 
-        ax.plot(rad_bins_mpc, savgol_filter(data_mean2[i,:], sKn, sKo), '--', color=color, lw=lw, alpha=0.4)
-        ax.plot(rad_bins_mpc, savgol_filter(data_mean3[i,:], sKn, sKo), '--', color=color, lw=lw, alpha=0.4)
-        ax.plot(rad_bins_mpc, savgol_filter(data_mean4[i,:], sKn, sKo), '--', color=color, lw=lw, alpha=0.4)
-        ax.plot(rad_bins_mpc, savgol_filter(data_mean5[i,:], sKn, sKo), ':', color=color, lw=lw, alpha=1.0)
+        ax.plot(rad_bins_mpc, savgol_filter(data_mean2[i,:], sKn, sKo), '--', color=color, alpha=0.4)
+        ax.plot(rad_bins_mpc, savgol_filter(data_mean3[i,:], sKn, sKo), '--', color=color, alpha=0.4)
+        ax.plot(rad_bins_mpc, savgol_filter(data_mean4[i,:], sKn, sKo), '--', color=color, alpha=0.4)
+        ax.plot(rad_bins_mpc, savgol_filter(data_mean5[i,:], sKn, sKo), ':', color=color, alpha=1.0)
 
-    ax.text(0.12, 0.5, r'$M_\star > 10^{11.5} \,\rm{M}_\odot$', ha='center', va='center', color='#000', alpha=0.7, fontsize=13)
-    ax.text(0.12, 7.5, r'$M_\star > 10^{10.5} \,\rm{M}_\odot$', ha='center', va='center', color='#000', alpha=0.7, fontsize=13)
-    ax.text(0.12, 370, r'$M_\star > 10^{9.0} \,\rm{M}_\odot$', ha='center', va='center', color='#000', alpha=0.7, fontsize=13)
+    opts = {'ha':'center', 'va':'center', 'color':'#000', 'alpha':0.7, 'fontsize':13}
+    ax.text(0.12, 0.5, r'$M_\star > 10^{11.5} \,\rm{M}_\odot$', **opts)
+    ax.text(0.12, 7.5, r'$M_\star > 10^{10.5} \,\rm{M}_\odot$', **opts)
+    ax.text(0.12, 370, r'$M_\star > 10^{9.0} \,\rm{M}_\odot$', **opts)
 
     # obs data - Budzynski+12 (Figure 5, SDSS)
     ax.fill_between([0.01,0.03], y1=[ylim[0],ylim[0]], y2=[ylim[1],ylim[1]], color='#444', alpha=0.2)
     ax.text(0.018, 2.0, 'BCG\nObscuration', ha='center', va='center', alpha=0.6, fontsize=12)
 
     xx = np.array([0.041,0.055,0.073,0.100,0.138,0.191,0.258,0.353,0.476,0.610,0.896,1.221,1.688,2.256,3.103,4.247])
-    y1 = np.array([109.31,106.75,84.19,70.46,56.91,49.06,39.16,29.10,24.21,17.90,11.19,5.83,3.18,1.98,1.09,0.75]) # 14.7-15.0
-    y2 = np.array([89.87,79.34,62.95,50.24,38.92,29.98,22.95,18.21,14.11,10.55,6.60,3.40,1.98,1.20,0.80,0.55]) # 14.4-14.7
+    y1 = np.array([109.31,106.75,84.19,70.46,56.91,49.06,39.16,29.10,24.21,17.90,11.19,5.83,3.18,1.98,1.09,0.75])
+    y2 = np.array([89.87,79.34,62.95,50.24,38.92,29.98,22.95,18.21,14.11,10.55,6.60,3.40,1.98,1.20,0.80,0.55])
     y3 = np.array([68.00,55.90,42.30,31.81,24.79,18.10,14.10,10.55,7.98,6.22,3.85,2.11,1.21,0.78,0.54,0.36])
 
     yerr = np.array([0.23,0.23,0.24,0.24,0.24,0.23,0.22,0.22,0.23,0.24,0.27,0.28,0.29,0.30,0.31,0.31]) # relative
-    y1_err = (yerr - 0.2) * (y1/0.2)
-    y2_err = (yerr - 0.2) * (y2/0.2)
+    y1_err = (yerr - 0.2) * (y1/0.2) # y1 for 14.7-15.0
+    y2_err = (yerr - 0.2) * (y2/0.2) # y2 for 14.4-14.7
     y3_err = (yerr - 0.2) * (y3/0.2)
 
-    p1 = ax.errorbar(xx, y1, yerr=y1_err, marker='o', ls='--', color='#000000', ms=6, alpha=0.8) # marker->fmt to remove line
+    p1 = ax.errorbar(xx, y1, yerr=y1_err, marker='o', ls='--', color='#000000', ms=6, alpha=0.8)
     ax.errorbar(xx, y2, yerr=y2_err, marker='o', ls='--', color='#000000', ms=6, alpha=0.8)
     ax.errorbar(xx, y3, yerr=y3_err, marker='o', ls='--', color='#000000', ms=6, alpha=0.8)
     #p1 = ax.fill_between(xx, y1=y1-y1_err, y2=y1+y1_err, color='#000', alpha=0.4)
@@ -1943,7 +1649,7 @@ def galaxy_number_profile(sim, criterion='Mr_lt205_2D'):
     # obs data - van der Burg+15 (Figure 4)
     r200_avg = 1.7 # Mpc
 
-    xx = np.array([0.0151, 0.0184, 0.022, 0.027, 0.033, 0.039, 0.048, 0.058, 0.07, 0.085, 0.103, 0.125, 0.151, 0.183, 
+    xx = np.array([0.0151, 0.0184, 0.022, 0.027, 0.033, 0.039, 0.048, 0.058, 0.07, 0.085, 0.103, 0.125, 0.151, 0.183,
                    0.221, 0.268, 0.325, 0.393, 0.478, 0.578, 0.700, 0.848, 1.03, 1.24, 1.51, 1.82])
     yy1 = [np.nan, np.nan, 973, 1200, 1060, 834, 789, 629, 614, 483, 446, 406, 361, 308, 264, 205, 177,
            148, 122, 95.0, 76.3, 62.1, 45.9, 31.1, 22.0, 16.2]
@@ -1981,13 +1687,14 @@ def galaxy_number_profile(sim, criterion='Mr_lt205_2D'):
     plt.close(fig)
 
 def halo_properties_table(sim):
-    """ Write out a table of primary target halo properties (in several formats). 
+    """ Write out a table of primary target halo properties (in several formats).
+
     To then overwrite publicly available data: 
-    rsync -tr --progress TNG-Cluster_Catalog.* freyator:/var/www/html/files/ 
+    rsync -tr --progress TNG-Cluster_Catalog.* freyator:/var/www/html/files/
     """
-    import zarr
     import pyarrow
     import pyarrow.parquet
+    import zarr
     from astropy.table import Table
 
     cc_str = {0 : 'CC', 1 : 'WCC', 2 : 'NCC'}
@@ -2023,12 +1730,12 @@ def halo_properties_table(sim):
             halos[k][haloID] = np.sum(mstar_mask[w])
 
     # auxcats
-    acs = ['Subhalo_Bmag_uG_10kpc_hot_massWt','Subhalo_ne_10kpc_hot_massWt','Subhalo_temp_10kpc_hot_massWt']
+    acFields = ['Subhalo_Bmag_uG_10kpc_hot_massWt','Subhalo_ne_10kpc_hot_massWt','Subhalo_temp_10kpc_hot_massWt']
 
-    for ac in acs:
-        data = sim.auxCat(ac)
+    for acField in acFields:
+        data = sim.auxCat(acField)
         #assert np.array_equal(data['subhaloIDs'],subhaloIDs) # else take subset
-        subhalos[ac] = data[ac]
+        subhalos[acField] = data[acField]
 
     # custom files
     assert sim.snap == 99 and sim.simName == 'TNG-Cluster'
@@ -2051,10 +1758,10 @@ def halo_properties_table(sim):
                      'TNG-Cluster Halo ID (in the group catalog)',
                      '%8d'],
             'mhalo_200c':[subhalos['mhalo_200_log'], # [3]
-                          'Halo mass within r200c [log M$_\\odot$]',
+                          r'Halo mass within r200c [log M$_\odot$]',
                           '%5.2f'],
             'mhalo_500c':[subhalos['mhalo_500_log'], # [4]
-                          'Halo mass within r500c [log M$_\\odot$]',
+                          r'Halo mass within r500c [log M$_\odot$]',
                           '%5.2f'],
             'r200c':[subhalos['r200'] / 1000, # [5]
                         'Halo radius r200c [Mpc]',
@@ -2063,22 +1770,22 @@ def halo_properties_table(sim):
                         'Halo radius r500c [Mpc]',
                         '%5.3f'],
             'mstar_30kpc':[subhalos['mstar_30kpc_log'], # [7]
-                           'Stellar mass within 30 kpc [log(M$_\\star$ / M$_\\odot$]',
+                           r'Stellar mass within 30 kpc [log(M$_\star$ / M$_\odot$]',
                            '%5.2f'],
             'mstar_100kpc':[subhalos['mstar_100kpc_log'], # [8]
-                            'Stellar mass within 100 kpc [log(M$_\\star$ / M$_\\odot$]',
+                            r'Stellar mass within 100 kpc [log(M$_\star$ / M$_\odot$]',
                             '%5.2f'],
             'mhi_halo':[subhalos['mhi_halo_log'], # [9]
-                        'Neutral HI mass within the (FoF) halo [log M$_\\odot$]',
+                        r'Neutral HI mass within the (FoF) halo [log M$_\odot$]',
                         '%5.2f'],
             'mass_smbh':[subhalos['mass_smbh_log'], # [10]
-                         'Mass of central SMBH [log M$_\\odot$]',
+                         r'Mass of central SMBH [log M$_\odot$]',
                          '%5.2f'],
             'fgas_r500':[subhalos['fgas_r500'], # [11]
                          'Gas fraction within r500c [unitless]',
                          '%5.3f'],
             'sfr_30pkpc':[subhalos['sfr_30pkpc_log'], # [12]
-                          'Star formation rate within 30 pkpc (nan indicates an upper limit of -3.0) [log M$_\\odot$ / yr]',
+                          r'Star formation rate within 30 pkpc (nan indicates an upper limit of -3.0) [log M$_\odot$ / yr]',
                           '%5.2f'],
             'xray_05_2kev':[subhalos['xray_05_2kev_r500_halo_log'], # [13]
                                'X-ray luminosity 0.5-2 keV soft-band, within r500c in 3D [log erg/s]',
@@ -2111,26 +1818,26 @@ def halo_properties_table(sim):
                              'Number of satellite galaxies with log(M*) (30pkpc) > 11.0 Msun [unitless]',
                              '%3d'],
             'coolcore_flag':[subhalos['coolcore_flag'].astype('int32'), # [23]
-                             'Cool core status, based on central cooling time (0=CC, 1=WCC, or 2=NCC) {Source: Lehle+2024}',
-                             '%3s'],
+              'Cool core status, based on central cooling time (0=CC, 1=WCC, or 2=NCC) {Source: Lehle+2024}',
+              '%3s'],
             'coolcore_tcool':[subhalos['coolcore_tcool'], # [24]
-                              'Central cooling time, computed within a 3D aperture of 0.012*r500c {Source: Lehle+2024} [Gyr]',
-                              '%5.2f'],
+              'Central cooling time, within a 3D aperture of 0.012*r500c {Source: Lehle+2024} [Gyr]',
+              '%5.2f'],
             'coolcore_entropy':[subhalos['coolcore_entropy'], # [25]
-                                'Central entropy, computed within a 3D aperture of 0.012*r500c {Source: Lehle+2024} [keV cm$^2$]',
-                                '%6.2f'],
+              'Central entropy, within a 3D aperture of 0.012*r500c {Source: Lehle+2024} [keV cm$^2$]',
+              '%6.2f'],
             'coolcore_ne':[np.log10(subhalos['coolcore_ne']), # [26]
-                           'Central electron density, computed within a 3D aperture of 0.012*r500c {Source: Lehle+2024} [log cm$^{-3}$]',
-                            '%6.2f'],
+              'Central electron density, within a 3D aperture of 0.012*r500c {Source: Lehle+2024} [log cm$^{-3}$]',
+              '%6.2f'],
             'coolcore_ne_slope':[subhalos['coolcore_ne_slope'], # [27]
-                                 'Central electron density slope (alpha), computed at 0.04*r500c {Source: Lehle+2024} [unitless]',
-                                 '%5.2f'],
+              'Central electron density slope (alpha), at 0.04*r500c {Source: Lehle+2024} [unitless]',
+              '%5.2f'],
             'coolcore_C_phys':[subhalos['coolcore_c_phys'], # [28]
-                                'X-ray concentration parameter C_phys, computed for 40kpc versus 400kpc. {Source: Lehle+2024} [unitless]',
-                                '%4.2f'],
+              'X-ray concentration parameter C_phys, at 40kpc versus 400kpc. {Source: Lehle+2024} [unitless]',
+              '%4.2f'],
             'coolcore_C_scaled':[subhalos['coolcore_c_scaled'], # [29]
-                                'X-ray concentration parameter C_scaled, computed for 0.15*r500c versus r500c. {Source: Lehle+2024} [unitless]',
-                                '%4.2f'],
+              'X-ray concentration parameter C_scaled, at 0.15*r500c versus r500c. {Source: Lehle+2024} [unitless]',
+              '%4.2f'],
             'perseus_like_flag':[halos['perseus_like_flag'], # [30]
                                  'Perseus-like flag (0=no, 1=yes) {Source: Truong+2024} [unitless]',
                                  '%1d'],
@@ -2158,9 +1865,10 @@ def halo_properties_table(sim):
     filename = 'TNG-Cluster_Catalog.txt'
 
     f = open(filename,'w')
-    f.write('# TNG-Cluster Catalog (see: https://www.tng-project.org/data/cluster/ and http://arxiv.org/abs/2311.06338)\n')
-    f.write('# Note: this table is dynamic, and new columns are frequently added. Requests for additions are welcome.\n')
-    f.write('# If you use quantities from this table, please also cite the relevant paper, when indicated for a column.\n')
+    f.write('# TNG-Cluster Catalog')
+    f.write(' (see: https://www.tng-project.org/data/cluster/ and http://arxiv.org/abs/2311.06338)\n')
+    f.write('# Note: this table is dynamic, and new columns are frequently added. Requests for additions welcome.\n')
+    f.write('# If you use quantities in this table, please also cite the relevant paper, when indicated in a column.\n')
     f.write(f'# [{len(haloIDs)}] halos, all properties at [z=0] unless specified otherwise.\n')
     f.write('#\n')
     f.write('# columns: \n')
@@ -2184,8 +1892,8 @@ def halo_properties_table(sim):
     f = h5py.File(filename,'w')
     header = f.create_group('Header')
     header.attrs['Description'] = 'TNG-Cluster Catalog (see: https://www.tng-project.org/data/cluster/ and http://arxiv.org/abs/2311.06338)'
-    header.attrs['Note1'] = 'This table is dynamic, and new columns are frequently added. Requests for additions are welcome.'
-    header.attrs['Note2'] = 'If you use quantities from this table, please also cite the relevant paper, when indicated for a column.'
+    header.attrs['Note1'] = 'This table is dynamic, and new columns are frequently added. Requests for additions welcome.'
+    header.attrs['Note2'] = 'If you use quantities in this table, please also cite the relevant paper, when indicated in a column.'
     header.attrs['Note3'] = f'[{len(haloIDs)}] halos, all properties at [z=0] unless specified otherwise.'
 
     for key in fields:
@@ -2258,6 +1966,11 @@ def paperPlots():
 
     sPs = [TNG300, TNG_C]
 
+    # generate projections (done by hand)
+    #from ..catalog.maps import projections
+    #for sP in sPs:
+    #   projections(sP, partType='gas', partField='coldens_msunkpc2', conf=0, cenSatSelect='cen', m200_min=14.0)
+
     # figure 1 - mass function
     if 0:
         mass_function()
@@ -2309,7 +2022,8 @@ def paperPlots():
     if 0:
         from ..plot.driversObs import haloXrayLum
         sPs_loc = [sP.copy() for sP in sPs]
-        for sP in sPs_loc: sP.setRedshift(0.3) # median of data at high-mass end
+        for sP in sPs_loc:
+            sP.setRedshift(0.3) # median of data at high-mass end
         haloXrayLum(sPs_loc, xlim=[11.4,12.7], ylim=[41.6,45.7])
 
     # figure 12 - radial profiles
@@ -2362,6 +2076,7 @@ def paperPlots():
     # satellite property profiles (radial color trends?)
 
 # add auxcats
+from ..catalog.maps import summarize_projection_2d
 from ..load.auxcat import fieldComputeFunctionMapping as ac
 
 ac['Subhalo_XrayLum_0.5-2.0kev_R500c_2D_d=r200'] = \

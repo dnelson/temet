@@ -1021,7 +1021,7 @@ def tngVariantsLatexOrWikiTable(variants='all', fmt='wiki'):
                     (run,name,desc,runstat,change,val_fiducial,val_changed,notes))
             if fmt == 'latex':
                 ref = 'W17' if 'BH' in name else 'P17' # needs to be corrected for other cases
-                change = change.replace("_",r"\_").replace("#","\#")
+                change = change.replace("_",r"\_").replace("#",r"\#")
                 print(r'     %d & %s & %s & %s & %s & %s \\' % \
                     (count,name,change,val_fiducial,val_changed,ref))
 

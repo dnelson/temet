@@ -22,15 +22,15 @@ from ..plot.quantities import simSubhaloQuantity, bandMagRange
 from ..plot import subhalos
 from ..plot.config import figsize, lw, linestyles, pStyle, sKn, sKo, cssLabels, binSize
 
-def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel], 
-                   simRedshift=0.0, splitCenSat=False, cenOnly=False, stellarMassBins=None, 
+def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel],
+                   simRedshift=0.0, splitCenSat=False, cenOnly=False, stellarMassBins=None,
                    addPetro=False, minDMFrac=None):
-    """ PDF of galaxy colors (by default: (u-i)), with no dust corrections. (Vog 14b Fig 13) """
+    """ PDF of galaxy colors (by default: (u-i)), with no dust corrections (Vog 14b Fig 13). """
     if cenOnly: assert splitCenSat is False
     allOnly = True if (splitCenSat is False and cenOnly is False) else False
     assert not isinstance(simColorsModels,str) # should be iterable
     assert len(sPs) == 1 or len(simColorsModels) == 1
-    
+
     # config
     if stellarMassBins is None:
         # default, 2 cols 3 rows
@@ -73,7 +73,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
 
         ax.set_xlim(mag_range)
         xlabel = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
-        ylabel = 'PDF' 
+        ylabel = 'PDF'
         Mlabel = '%.1f < M$_{\\rm \star}$ < %.1f'
 
         ax.set_xlabel(xlabel)
@@ -116,7 +116,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
             # load fullbox stellar masses
             gc = sP.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])
             gc_masses = sP.units.codeMassToLogMsun( gc[:,sP.ptNum('stars')] )
-            
+
             # galaxy selection
             w_cen, w_all, w_sat = sP.cenSatSubhaloIndices()
 
@@ -155,7 +155,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                 # request a single random color per subhalo (for "_res" models), and/or for simple models
                 # without multiple projections even saved
                 gc_colors, _ = loadSimGalColors(sP, simColorsModel, bands=bands)
-            
+
             assert gc_colors.size == gc_masses.size
             assert w_all.size == gc_masses.size
 

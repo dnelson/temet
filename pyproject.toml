@@ -104,6 +104,7 @@ ignore = [
     "D200", # One-line docstring should fit on one line
     "D210", # No whitespaces allowed surrounding docstring text
     "D212", # Multi-line docstring summary should start at the first line
+    "E741", # Ambiguous variable name
 ]
 
 [tool.ruff.lint.isort]
