@@ -1,20 +1,22 @@
 """
 Analysis and plotting related to Grackle-based cooling functions/tables.
 """
+
 from os.path import isfile
 
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ..plot.config import *
+from ..plot.config import figsize, linestyles, lw
 from ..util.helper import xypairs_to_np
 from ..util.units import units
 
-def grackle_cooling(densities, metallicity, uvb='fg20_shielded', redshift=0.0, ssm=0, PE=False, plot=False):
-    """ Run a single-cell cooling model (vs time) with Grackle.
 
-    This will initialize a single cell at a given temperature, iterate the cooling solver for a fixed time, 
+def grackle_cooling(densities, metallicity, uvb="fg20_shielded", redshift=0.0, ssm=0, PE=False, plot=False):
+    """Run a single-cell cooling model (vs time) with Grackle.
+
+    This will initialize a single cell at a given temperature, iterate the cooling solver for a fixed time,
     and output the temperature vs. time.
     """
     from pygrackle import FluidContainer, chemistry_data, evolve_constant_density
@@ -23,81 +25,83 @@ def grackle_cooling(densities, metallicity, uvb='fg20_shielded', redshift=0.0, s
     tiny_number = 1e-20
 
     # Set initial values
-    #redshift = 0.0
-    #density     = 0.1 # linear 1/cm^3
-    #metallicity = 1.0 # linear solar
-    initial_temperature = 1.e6 # K
-    final_time          = 100.0 # Myr
+    # redshift = 0.0
+    # density     = 0.1 # linear 1/cm^3
+    # metallicity = 1.0 # linear solar
+    initial_temperature = 1.0e6  # K
+    final_time = 100.0  # Myr
 
     # Set solver parameters
     my_chemistry = chemistry_data()
     my_chemistry.use_grackle = 1
     my_chemistry.with_radiative_cooling = 1
-    my_chemistry.primordial_chemistry = 1 # MCST value = 1
+    my_chemistry.primordial_chemistry = 1  # MCST value = 1
     my_chemistry.metal_cooling = 1
     my_chemistry.UVbackground = 1
-    my_chemistry.self_shielding_method = ssm # MCST value = 3, but this leads to long-term cooling -> 0 K behavior (!)
+    my_chemistry.self_shielding_method = ssm  # MCST value = 3, but this leads to long-term cooling -> 0 K behavior (!)
     my_chemistry.H2_self_shielding = 0
 
     # set UV background
-    basepath = '/u/dnelson/sims.structures/'
-    if uvb == 'hm12_unshielded':
+    basepath = "/u/dnelson/sims.structures/"
+    if uvb == "hm12_unshielded":
         # old GRACKLE tables
-        assert my_chemistry.self_shielding_method == 0, 'Cannot use grackle self-shielding with unshielded HM12 table.'
-        grackle_data_file = bytearray(basepath + "grackle/grackle_data_files/input/CloudyData_UVB=HM2012.h5", 'utf-8')
-    elif uvb == 'hm12_shielded':
+        assert my_chemistry.self_shielding_method == 0, "Cannot use grackle self-shielding with unshielded HM12 table."
+        grackle_data_file = bytearray(basepath + "grackle/grackle_data_files/input/CloudyData_UVB=HM2012.h5", "utf-8")
+    elif uvb == "hm12_shielded":
         # old GRACKLE tables
-        grackle_data_file = bytearray(basepath + "grackle/grackle_data_files/input/CloudyData_UVB=HM2012_shielded.h5", 'utf-8')
-    elif uvb == 'fg20_shielded':
+        grackle_data_file = bytearray(
+            basepath + "grackle/grackle_data_files/input/CloudyData_UVB=HM2012_shielded.h5", "utf-8"
+        )
+    elif uvb == "fg20_shielded":
         # new MCST tables
-        grackle_data_file = bytearray(basepath + "arepo1_setups/grid_cooling_UVB=FG20.hdf5", 'utf-8')
-    elif uvb == 'fg20_unshielded':
+        grackle_data_file = bytearray(basepath + "arepo1_setups/grid_cooling_UVB=FG20.hdf5", "utf-8")
+    elif uvb == "fg20_unshielded":
         # new MCST tables
-        grackle_data_file = bytearray(basepath + "arepo1_setups/grid_cooling_UVB=FG20_unshielded.hdf5", 'utf-8')
+        grackle_data_file = bytearray(basepath + "arepo1_setups/grid_cooling_UVB=FG20_unshielded.hdf5", "utf-8")
 
-    #print(grackle_data_file)
+    # print(grackle_data_file)
     my_chemistry.grackle_data_file = grackle_data_file
 
-    #my_chemistry.photoelectric_heating # yes if GRACKLE_PHOTOELECTRIC
+    # my_chemistry.photoelectric_heating # yes if GRACKLE_PHOTOELECTRIC
 
     if PE:
-        #my_chemistry.use_volumetric_heating_rate = 1 # yes for PE_MCS
+        # my_chemistry.use_volumetric_heating_rate = 1 # yes for PE_MCS
         my_chemistry.photoelectric_heating = 1
 
         # volumetric_heating_rate = calculate_pe_heating_rate(sph_idx);
         # #define HABING_UNIT 5.29e-14 /*in erg cm^-3*/ // energy density of the average ISRF UV field
 
-        u_draine = 8.93e-14 # Draine (1978) has u = 8.93e-14 # erg/cm^3 between 6-13.6 eV (G=1.68)
-        G_0 = u_draine / 5.29e-14 # G0 = u_{6-13.6eV} / 5.29e-14 erg/cm^3
+        u_draine = 8.93e-14  # Draine (1978) has u = 8.93e-14 # erg/cm^3 between 6-13.6 eV (G=1.68)
+        G_0 = u_draine / 5.29e-14  # G0 = u_{6-13.6eV} / 5.29e-14 erg/cm^3
 
-        G_0 *= 10.0 # i.e. chi_0 of Kim+23
+        G_0 *= 10.0  # i.e. chi_0 of Kim+23
 
-        D = 0.001 # todo: replace with DGR() function
-        n = 10.0 # cm^-3 # todo: inconsistent with densities array!
-        rho = n * units.mass_proton # g/cm^3
-        temp = 1e2 # K
-        cs = np.sqrt(units.gamma * units.boltzmann * temp / units.mass_proton) # cm/s
-        lambda_jeans = cs / (units.Gravity * rho)**0.5 # cm
+        D = 0.001  # todo: replace with DGR() function
+        n = 10.0  # cm^-3 # todo: inconsistent with densities array!
+        rho = n * units.mass_proton  # g/cm^3
+        temp = 1e2  # K
+        cs = np.sqrt(units.gamma * units.boltzmann * temp / units.mass_proton)  # cm/s
+        lambda_jeans = cs / (units.Gravity * rho) ** 0.5  # cm
         G_eff = G_0 * np.exp(-1.33e-21 * D * n * lambda_jeans)
 
         eps = np.min([0.041, 8.71e-3 * n**0.235])
 
-        gamma_pe = 1.3e-24 * eps * D * G_eff * n # erg s^-1 cm^-3
+        gamma_pe = 1.3e-24 * eps * D * G_eff * n  # erg s^-1 cm^-3
 
         print(G_0, G_eff, gamma_pe)
 
         my_chemistry.photoelectric_heating_rate = gamma_pe
 
     # Set units
-    my_chemistry.comoving_coordinates = 0 # proper units
+    my_chemistry.comoving_coordinates = 0  # proper units
     my_chemistry.a_units = 1.0
     my_chemistry.a_value = 1 / (1 + redshift) / my_chemistry.a_units
-    my_chemistry.density_units = mass_hydrogen_cgs # rho = 1.0 is 1.67e-24 g
-    my_chemistry.length_units = cm_per_mpc         # 1 Mpc in cm
-    my_chemistry.time_units = sec_per_Myr          # 1 Myr in s
+    my_chemistry.density_units = mass_hydrogen_cgs  # rho = 1.0 is 1.67e-24 g
+    my_chemistry.length_units = cm_per_mpc  # 1 Mpc in cm
+    my_chemistry.time_units = sec_per_Myr  # 1 Myr in s
     my_chemistry.set_velocity_units()
 
-    rval = my_chemistry.initialize()
+    my_chemistry.initialize()
 
     # Set up array of 1-zone models
     fc = FluidContainer(my_chemistry, len(densities))
@@ -141,52 +145,56 @@ def grackle_cooling(densities, metallicity, uvb='fg20_shielded', redshift=0.0, s
 
     # plot
     if plot:
-        fig, (ax,ax2) = plt.subplots(nrows=2)
+        fig, (ax, ax2) = plt.subplots(nrows=2)
 
         ax.set_xlabel("Time [Myr]")
         ax.set_ylabel("T [K]")
         ax2.set_ylabel("$\\mu$")
 
         # time
-        xx = data['time'].to('Myr')
-        xx[0] += (xx[1] - xx[0])/10 # avoid t=0 disappearing in log
+        xx = data["time"].to("Myr")
+        xx[0] += (xx[1] - xx[0]) / 10  # avoid t=0 disappearing in log
 
         # densities
         for i, dens in enumerate(densities):
-            label = 'n = %.1f [log cm$^{-3}$]' % np.log10(dens)
-            ax.loglog(xx, data["temperature"][:,i], label=label)
-            ax2.semilogx(xx, data["mu"][:,i])
+            label = "n = %.1f [log cm$^{-3}$]" % np.log10(dens)
+            ax.loglog(xx, data["temperature"][:, i], label=label)
+            ax2.semilogx(xx, data["mu"][:, i])
 
-        ax.legend(loc='upper right')
+        ax.legend(loc="upper right")
 
-        labels = [r'Z = %.1f [log Z$_\odot]$' % np.log10(metallicity),
-                   'z = %s' % redshift,
-                  '(UVB = %s)' % uvb,
-                  '(self_shielding_method = %d)' % ssm]
-        if PE: labels.append('(w/ PE heating)')
-        handles = [plt.Line2D( (0,1), (0,0), color='black', lw=0) for _ in range(len(labels))]
-        #ax.add_artist(ax.legend(handles, labels, loc='lower left', handlelength=0))
-        ax2.add_artist(ax2.legend(handles, labels, loc='upper left', handlelength=0))
+        labels = [
+            r"Z = %.1f [log Z$_\odot]$" % np.log10(metallicity),
+            "z = %s" % redshift,
+            "(UVB = %s)" % uvb,
+            "(self_shielding_method = %d)" % ssm,
+        ]
+        if PE:
+            labels.append("(w/ PE heating)")
+        handles = [plt.Line2D((0, 1), (0, 0), color="black", lw=0) for _ in range(len(labels))]
+        # ax.add_artist(ax.legend(handles, labels, loc='lower left', handlelength=0))
+        ax2.add_artist(ax2.legend(handles, labels, loc="upper left", handlelength=0))
 
-        #fig.savefig(f'cooling_cell_dens{np.log10(density):.1f}_Z{np.log10(metallicity):.1f}.pdf')
-        fig.savefig(f'cooling_cell.pdf')
+        # fig.savefig(f'cooling_cell_dens{np.log10(density):.1f}_Z{np.log10(metallicity):.1f}.pdf')
+        fig.savefig("cooling_cell.pdf")
         plt.close(fig)
 
     # look at final value, check convergence
     for i, dens in enumerate(densities):
-        dT = np.abs(data['temperature'][-1,i] - data['temperature'][-2,i]) / data['temperature'][-1,i]
-        dP = np.abs(data['pressure'][-1,i] - data['pressure'][-2,i]) / data['pressure'][-1,i]
+        dT = np.abs(data["temperature"][-1, i] - data["temperature"][-2, i]) / data["temperature"][-1, i]
+        dP = np.abs(data["pressure"][-1, i] - data["pressure"][-2, i]) / data["pressure"][-1, i]
 
         if dT > 1e-2 or dP > 1e-2:
-            print(f'Warning: [i={i} dens={dens}] not converged: dT={dT:.2e}, dP={dP:.2e}')
+            print(f"Warning: [i={i} dens={dens}] not converged: dT={dT:.2e}, dP={dP:.2e}")
 
-    T_final = data['temperature'][-1,:].value # K
-    P_final = data['pressure'][-1,:].value # dyn/cm^2
+    T_final = data["temperature"][-1, :].value  # K
+    P_final = data["pressure"][-1, :].value  # dyn/cm^2
 
     return (T_final, P_final)
 
+
 def _add_temp_curves(ax):
-    """ Overplot literature reference relations for T(n). """
+    """Overplot literature reference relations for T(n)."""
     # T(n) at Z=Zsun
     kim23_T = """9.41e-3, 1.01e+4
                 6.99e-1, 6.69e+3
@@ -198,7 +206,7 @@ def _add_temp_curves(ax):
                 6.54e+2, 3.67e+1"""
 
     Tn, T = xypairs_to_np(kim23_T)
-    ax.plot(np.log10(Tn), np.log10(T), color='#000', ls='-', lw=lw, label='Kim+23') # (Z$_{\\rm sun}$)
+    ax.plot(np.log10(Tn), np.log10(T), color="#000", ls="-", label="Kim+23")  # (Z$_{\\rm sun}$)
 
     smith17_T = """2.71e-2, 9.49e+3
                  1.08e-1, 6.97e+3
@@ -211,7 +219,7 @@ def _add_temp_curves(ax):
                  5.71e+2, 7.98e+1"""
 
     Tn, T = xypairs_to_np(smith17_T)
-    ax.plot(np.log10(Tn), np.log10(T), color='#000', ls='--', lw=lw, label='Smith+17') # (Z$_{\\rm sun}$)
+    ax.plot(np.log10(Tn), np.log10(T), color="#000", ls="--", label="Smith+17")  # (Z$_{\\rm sun}$)
 
     wolfire03_T = """1.81e-2, 9.28e+3
                 4.50e-1, 7.12e+3
@@ -224,7 +232,7 @@ def _add_temp_curves(ax):
                 6.03e+2, 3.40e+1"""
 
     Tn, T = xypairs_to_np(wolfire03_T)
-    ax.plot(np.log10(Tn), np.log10(T), color='#000', ls='-.', lw=lw, label='Wolfire+03') # (Z$_{\\rm sun}$)
+    ax.plot(np.log10(Tn), np.log10(T), color="#000", ls="-.", label="Wolfire+03")  # (Z$_{\\rm sun}$)
 
     bialy19_T = """1.75e-2, 1.03e+4
                 1.20e+0, 7.62e+3
@@ -236,7 +244,7 @@ def _add_temp_curves(ax):
                 9.02e+2, 3.28e+1"""
 
     Tn, T = xypairs_to_np(bialy19_T)
-    ax.plot(np.log10(Tn), np.log10(T), color='#000', ls=':', lw=lw, label='Bialy+19') # (Z$_{\\rm sun}$)
+    ax.plot(np.log10(Tn), np.log10(T), color="#000", ls=":", label="Bialy+19")  # (Z$_{\\rm sun}$)
 
     # T(n) at Z=0.1Zsun
     smith17_T = """2.06e-2, 1.08e+4
@@ -249,7 +257,7 @@ def _add_temp_curves(ax):
                 4.03e+2, 2.20e+2"""
 
     Tn, T = xypairs_to_np(smith17_T)
-    ax.plot(np.log10(Tn), np.log10(T), color='#888', ls='--', lw=lw, label='Smith+17') # (0.1Z$_{\\rm sun}$)
+    ax.plot(np.log10(Tn), np.log10(T), color="#888", ls="--", label="Smith+17")  # (0.1Z$_{\\rm sun}$)
 
     bialy19_T = """2.47e-2, 1.02e+4
                 8.53e-2, 9.35e+3
@@ -261,7 +269,7 @@ def _add_temp_curves(ax):
                 3.77e+2, 4.53e+1"""
 
     Tn, T = xypairs_to_np(bialy19_T)
-    ax.plot(np.log10(Tn), np.log10(T), color='#888', ls=':', lw=lw, label='Bialy+19') # (0.1Z$_{\\rm sun}$)
+    ax.plot(np.log10(Tn), np.log10(T), color="#888", ls=":", label="Bialy+19")  # (0.1Z$_{\\rm sun}$)
 
     kim23_T = """2.31e-2, 9.21e+3
             9.51e-2, 8.52e+3
@@ -275,7 +283,7 @@ def _add_temp_curves(ax):
             7.14e+2, 3.47e+1"""
 
     Tn, T = xypairs_to_np(kim23_T)
-    ax.plot(np.log10(Tn), np.log10(T), color='#888', ls='-', lw=lw, label='Kim+23') # (0.1Z$_{\\rm sun}$)
+    ax.plot(np.log10(Tn), np.log10(T), color="#888", ls="-", label="Kim+23")  # (0.1Z$_{\\rm sun}$)
 
     # including UVB (Kim+23 Fig 19)
     kim23_T = """1.04e-2, 8.41e3,
@@ -289,7 +297,7 @@ def _add_temp_curves(ax):
                 4.06e+2, 3.10e+1"""
 
     Tn, T = xypairs_to_np(kim23_T)
-    ax.plot(np.log10(Tn), np.log10(T), color='#000', ls=(0, (1, 1)), lw=lw, label='Kim+23 (PI+PE)')
+    ax.plot(np.log10(Tn), np.log10(T), color="#000", ls=(0, (1, 1)), label="Kim+23 (PI+PE)")
 
     kim23_T = """3.57e-2, 9.31e+3
                 1.00e+0, 8.38e+3
@@ -300,10 +308,11 @@ def _add_temp_curves(ax):
                 4.99e+2, 3.55e+1"""
 
     Tn, T = xypairs_to_np(kim23_T)
-    ax.plot(np.log10(Tn), np.log10(T), color='#000', ls=(0, (5, 5)), lw=lw, label='Kim+23 (PI only)')
+    ax.plot(np.log10(Tn), np.log10(T), color="#000", ls=(0, (5, 5)), label="Kim+23 (PI only)")
+
 
 def _add_pres_curves(ax):
-    """ Overplot literature reference relations for P(n). """
+    """Overplot literature reference relations for P(n)."""
     # P(n) at Z=Zsun
     smith17_P = """2.69e-2, 2.55e+2
                 5.77e-1, 2.40e+3
@@ -319,7 +328,7 @@ def _add_pres_curves(ax):
                 2.96e+2, 2.94e+4"""
 
     Pn, P = xypairs_to_np(smith17_P)
-    ax.plot(np.log10(Pn), np.log10(P), color='#000', ls='--', lw=lw) # , label='Smith+17 (Z$_{\\rm sun}$)'
+    ax.plot(np.log10(Pn), np.log10(P), color="#000", ls="--")  # , label='Smith+17 (Z$_{\\rm sun}$)'
 
     wolfire03_P = """1.04e-2, 1.25e+2
                     9.81e-2, 8.63e+2
@@ -335,7 +344,7 @@ def _add_pres_curves(ax):
                     9.65e+2, 3.55e+4"""
 
     Pn, P = xypairs_to_np(wolfire03_P)
-    ax.plot(np.log10(Pn), np.log10(P), color='#000', ls='-.', lw=lw) # , label='Wolfire+03 (Z$_{\\rm sun}$)'
+    ax.plot(np.log10(Pn), np.log10(P), color="#000", ls="-.")  # , label='Wolfire+03 (Z$_{\\rm sun}$)'
 
     kim23_P = """2.10e-2, 2.63e+2
             4.24e-2, 5.06e+2
@@ -352,7 +361,7 @@ def _add_pres_curves(ax):
             4.46e+2, 2.02e+4"""
 
     Pn, P = xypairs_to_np(kim23_P)
-    ax.plot(np.log10(Pn), np.log10(P), color='#000', ls='-', lw=lw) # , label='Kim+23 (Z$_{\\rm sun}$)'
+    ax.plot(np.log10(Pn), np.log10(P), color="#000", ls="-")  # , label='Kim+23 (Z$_{\\rm sun}$)'
 
     bialy19_P = """1.04e-2, 1.25e+2
                 6.78e-2, 6.50e+2
@@ -363,7 +372,7 @@ def _add_pres_curves(ax):
                 9.65e+2, 3.10e+4"""
 
     Pn, P = xypairs_to_np(bialy19_P)
-    ax.plot(np.log10(Pn), np.log10(P), color='#000', ls=':', lw=lw) # , label='Bialy+19 (Z$_{\\rm sun}$)'
+    ax.plot(np.log10(Pn), np.log10(P), color="#000", ls=":")  # , label='Bialy+19 (Z$_{\\rm sun}$)'
 
     smith17_P = """1.88e-2, 2.02e+2
                 9.20e+0, 4.54e+4
@@ -373,7 +382,7 @@ def _add_pres_curves(ax):
                 7.33e+2, 1.28e+5"""
 
     Pn, P = xypairs_to_np(smith17_P)
-    ax.plot(np.log10(Pn), np.log10(P), color='#888', ls='--', lw=lw) # , label='Smith+17 (0.1Z$_{\\rm sun}$)'
+    ax.plot(np.log10(Pn), np.log10(P), color="#888", ls="--")  # , label='Smith+17 (0.1Z$_{\\rm sun}$)'
 
     bialy19_P = """2.29e-2, 2.18e+2
                 9.09e-1, 6.77e+3
@@ -385,7 +394,7 @@ def _add_pres_curves(ax):
                 6.14e+2, 2.21e+4"""
 
     Pn, P = xypairs_to_np(bialy19_P)
-    ax.plot(np.log10(Pn), np.log10(P), color='#888', ls=':', lw=lw) # , label='Bialy+19 (0.1Z$_{\\rm sun}$)'
+    ax.plot(np.log10(Pn), np.log10(P), color="#888", ls=":")  # , label='Bialy+19 (0.1Z$_{\\rm sun}$)'
 
     kim23_P = """2.21e-2, 2.68e+2
                 1.81e+0, 1.52e+4
@@ -396,7 +405,7 @@ def _add_pres_curves(ax):
                 7.21e+2, 2.91e+4"""
 
     Pn, P = xypairs_to_np(kim23_P)
-    ax.plot(np.log10(Pn), np.log10(P), color='#888', ls='-', lw=lw) # , label='Kim+23 (0.1Z$_{\\rm sun}$)'
+    ax.plot(np.log10(Pn), np.log10(P), color="#888", ls="-")  # , label='Kim+23 (0.1Z$_{\\rm sun}$)'
 
     # including UVB (Kim+23 Fig 19)
     kim23_P = """1.00e-2, 1.05e+2
@@ -409,7 +418,7 @@ def _add_pres_curves(ax):
                 9.82e+2, 3.32e+4"""
 
     Pn, P = xypairs_to_np(kim23_P)
-    ax.plot(np.log10(Pn), np.log10(P), color='#000', ls=(0, (1, 1)), lw=lw) # , label='Kim+23 (PI+PE)'
+    ax.plot(np.log10(Pn), np.log10(P), color="#000", ls=(0, (1, 1)))  # , label='Kim+23 (PI+PE)'
 
     kim23_P = """9.82e-3, 2.10e+2
             2.79e+0, 2.84e+4
@@ -421,20 +430,21 @@ def _add_pres_curves(ax):
             1.00e+3, 3.88e+4"""
 
     Pn, P = xypairs_to_np(kim23_P)
-    ax.plot(np.log10(Pn), np.log10(P), color='#000', ls=(0, (5, 5)), lw=lw) #, label='Kim+23 (PI only)'
+    ax.plot(np.log10(Pn), np.log10(P), color="#000", ls=(0, (5, 5)))  # , label='Kim+23 (PI only)'
+
 
 def _load_equil_curves(metallicity, redshift, ssm):
-    """ Helper. Load and/or compute equilibrium temperature and pressure vs. density curves. """
-    savefile = f'cache/equil_vs_dens_Z{np.log10(metallicity):.0f}_z{redshift:.0f}_ssm{ssm}.hdf5'
+    """Helper. Load and/or compute equilibrium temperature and pressure vs. density curves."""
+    savefile = f"cache/equil_vs_dens_Z{np.log10(metallicity):.0f}_z{redshift:.0f}_ssm{ssm}.hdf5"
 
-    densities = np.linspace(-3.0, 3.0, 40) # log(1/cm^3)
+    densities = np.linspace(-3.0, 3.0, 40)  # log(1/cm^3)
 
     if metallicity == 1.0:
-        densities = np.linspace(-3.0, 2.0, 20) # log(1/cm^3)
+        densities = np.linspace(-3.0, 2.0, 20)  # log(1/cm^3)
 
-    uvbs = ['hm12_shielded','hm12_unshielded','fg20_shielded','fg20_unshielded']
+    uvbs = ["hm12_shielded", "hm12_unshielded", "fg20_shielded", "fg20_unshielded"]
     if ssm > 0:
-        uvbs = ['hm12_shielded','fg20_unshielded','fg20_shielded']
+        uvbs = ["hm12_shielded", "fg20_unshielded", "fg20_shielded"]
 
     if not isfile(savefile):
         temp = {}
@@ -447,50 +457,51 @@ def _load_equil_curves(metallicity, redshift, ssm):
         print(metallicity, uvb, temp[uvb].min(), temp[uvb].max())
 
         # save
-        with h5py.File(savefile,'w') as f:
+        with h5py.File(savefile, "w") as f:
             for uvb in uvbs:
-                f['T_'+uvb] = temp[uvb]
-                f['P_'+uvb] = pres[uvb]
-            f['densities'] = densities
-            f['metallicity'] = np.array(metallicity)
-        print(f'Saved: [{savefile}].')
+                f["T_" + uvb] = temp[uvb]
+                f["P_" + uvb] = pres[uvb]
+            f["densities"] = densities
+            f["metallicity"] = np.array(metallicity)
+        print(f"Saved: [{savefile}].")
     else:
-        with h5py.File(savefile,'r') as f:
+        with h5py.File(savefile, "r") as f:
             temp = {}
             pres = {}
             for key in f:
-                if key.startswith('T_'):
+                if key.startswith("T_"):
                     temp[key[2:]] = f[key][()]
-                if key.startswith('P_'):
+                if key.startswith("P_"):
                     pres[key[2:]] = f[key][()]
-            densities = f['densities'][()]
-            metallicity = f['metallicity'][()]
-        print(f'Loaded: [{savefile}].')
+            densities = f["densities"][()]
+            metallicity = f["metallicity"][()]
+        print(f"Loaded: [{savefile}].")
 
     return temp, pres, densities, uvbs
 
+
 def grackle_equil(ssm=3):
-    """ Plot equilibrium temperature curve as a function of density (varying UVBs/SSMs), at fixed Z and z. """
+    """Plot equilibrium temperature curve as a function of density (varying UVBs/SSMs), at fixed Z and z."""
     # https://arxiv.org/pdf/2411.07282 (Fig 1)
     # "Photochemistry and Heating/Cooling of the Multiphase Interstellar Medium with UV
     #  Radiative Transfer for Magnetohydrodynamic Simulations" (Fig 17, 19)
-    metallicity = 0.1 # linear solar
+    metallicity = 0.1  # linear solar
     redshift = 6.0
 
-    #ssm = 1 # grackle.self_shielding_method (MCST value = 3)
+    # ssm = 1 # grackle.self_shielding_method (MCST value = 3)
 
     # load
     temp, pres, densities, uvbs = _load_equil_curves(metallicity, redshift, ssm)
 
     # plot
-    fig, (ax1,ax2) = plt.subplots(figsize=(figsize[0]*1.4,figsize[1]*0.9),ncols=2)
-    ax1.set_xlabel('Density [log cm$^{-3}$]')
-    ax1.set_ylabel('Temperature [log K]')
-    ax1.set_ylim([0.5,5.0])
+    fig, (ax1, ax2) = plt.subplots(figsize=(figsize[0] * 1.4, figsize[1] * 0.9), ncols=2)
+    ax1.set_xlabel(r"Density [log cm$^{-3}$]")
+    ax1.set_ylabel(r"Temperature [log K]")
+    ax1.set_ylim([0.5, 5.0])
 
-    ax2.set_xlabel('Density [log cm$^{-3}$]')
-    ax2.set_ylabel('P / k$_{\\rm B}$ [log K cm$^{-3}$]')
-    ax2.set_ylim([1.0,5.5])
+    ax2.set_xlabel(r"Density [log cm$^{-3}$]")
+    ax2.set_ylabel(r"P / k$_{\rm B}$ [log K cm$^{-3}$]")
+    ax2.set_ylim([1.0, 5.5])
 
     _add_temp_curves(ax1)
     _add_pres_curves(ax2)
@@ -498,42 +509,45 @@ def grackle_equil(ssm=3):
     # plot our results, as a function of UVB
     for uvb in uvbs:
         T = np.log10(temp[uvb])
-        P = np.log10(pres[uvb] / units.boltzmann) # dyn/cm^2 / (dyn*cm/K) = K/cm^3
+        P = np.log10(pres[uvb] / units.boltzmann)  # dyn/cm^2 / (dyn*cm/K) = K/cm^3
 
-        ax1.plot(densities, T, ls='-', lw=lw+1)
-        ax2.plot(densities, P, ls='-', lw=lw+1, label=uvb)
+        ax1.plot(densities, T, ls="-", lw=lw + 1)
+        ax2.plot(densities, P, ls="-", lw=lw + 1, label=uvb)
 
-    ax2.legend(loc='upper left')
+    ax2.legend(loc="upper left")
 
-    labels = [r'Z = %.1f [log Z$_\odot]$' % np.log10(metallicity),
-                'z = %s' % redshift,
-                'self_shielding_method = %d' % ssm]
-    handles = [plt.Line2D( (0,1), (0,0), color='black', lw=0) for _ in range(len(labels))]
-    ax1.add_artist(ax1.legend(handles, labels, loc='upper right', handlelength=0))
+    labels = [
+        r"Z = %.1f [log Z$_\odot]$" % np.log10(metallicity),
+        "z = %s" % redshift,
+        "self_shielding_method = %d" % ssm,
+    ]
+    handles = [plt.Line2D((0, 1), (0, 0), color="black", lw=0) for _ in range(len(labels))]
+    ax1.add_artist(ax1.legend(handles, labels, loc="upper right", handlelength=0))
 
-    ax1.legend(loc='lower left')
+    ax1.legend(loc="lower left")
 
-    fig.savefig(f'equil_vs_dens_Z{np.log10(metallicity):.0f}_z{redshift:.0f}_ssm{ssm}.pdf')
+    fig.savefig(f"equil_vs_dens_Z{np.log10(metallicity):.0f}_z{redshift:.0f}_ssm{ssm}.pdf")
     plt.close(fig)
 
-def grackle_equil_vs_Zz():
-    """ Plot equilibrium temperature curve as a function of density (varying Z, z) at fixed UVB/SSM. """
-    redshifts = [0.0, 6.0]
-    metallicities = [1.0, 0.1, 0.001] # linear solar
 
-    ssm = 3 # grackle.self_shielding_method (MCST value = 3)
-    uvb = 'fg20_unshielded'
+def grackle_equil_vs_Zz():
+    """Plot equilibrium temperature curve as a function of density (varying Z, z) at fixed UVB/SSM."""
+    redshifts = [0.0, 6.0]
+    metallicities = [1.0, 0.1, 0.001]  # linear solar
+
+    ssm = 3  # grackle.self_shielding_method (MCST value = 3)
+    uvb = "fg20_unshielded"
 
     # plot
-    fig, (ax1,ax2) = plt.subplots(figsize=(figsize[0]*0.75,figsize[1]*1.5),nrows=2)
-    ax1.set_xlabel('Density [log cm$^{-3}$]')
-    ax1.set_ylabel('Temperature [log K]')
-    ax1.set_ylim([0.4,4.1])
+    fig, (ax1, ax2) = plt.subplots(figsize=(figsize[0] * 0.75, figsize[1] * 1.5), nrows=2)
+    ax1.set_xlabel(r"Density [log cm$^{-3}$]")
+    ax1.set_ylabel(r"Temperature [log K]")
+    ax1.set_ylim([0.4, 4.1])
     ax1.set_xlim([-3.0, 3.0])
 
-    ax2.set_xlabel('Density [log cm$^{-3}$]')
-    ax2.set_ylabel('P / k$_{\\rm B}$ [log K cm$^{-3}$]')
-    ax2.set_ylim([0.7,5.5])
+    ax2.set_xlabel(r"Density [log cm$^{-3}$]")
+    ax2.set_ylabel(r"P / k$_{\rm B}$ [log K cm$^{-3}$]")
+    ax2.set_ylim([0.7, 5.5])
     ax2.set_xlim([-3.0, 3.0])
 
     _add_temp_curves(ax1)
@@ -541,27 +555,26 @@ def grackle_equil_vs_Zz():
 
     # loop over metallicities and redshifts
     for i, redshift in enumerate(redshifts):
-
         ax1.set_prop_cycle(None)
         ax2.set_prop_cycle(None)
 
-        for j, metallicity in enumerate(metallicities):
+        for _j, metallicity in enumerate(metallicities):
             temp, pres, densities, _ = _load_equil_curves(metallicity, redshift, ssm)
 
             T = np.log10(temp[uvb])
-            P = np.log10(pres[uvb] / units.boltzmann) # dyn/cm^2 / (dyn*cm/K) = K/cm^3
+            P = np.log10(pres[uvb] / units.boltzmann)  # dyn/cm^2 / (dyn*cm/K) = K/cm^3
 
-            label = r'log(Z/Z$_{\rm sun}$) = %.0f' % (np.log10(metallicity)) if i == 0 else ''
-            ls = linestyles[i*2]
-            ax1.plot(densities, T, ls=ls, lw=lw+1)
-            ax2.plot(densities, P, ls=ls, lw=lw+1, label=label)
+            label = r"log(Z/Z$_{\rm sun}$) = %.0f" % (np.log10(metallicity)) if i == 0 else ""
+            ls = linestyles[i * 2]
+            ax1.plot(densities, T, ls=ls, lw=lw + 1)
+            ax2.plot(densities, P, ls=ls, lw=lw + 1, label=label)
 
     handles, labels = ax2.get_legend_handles_labels()
-    handles += [plt.Line2D( (0,1), (0,0), color='black', lw=lw, ls=linestyles[i*2]) for i in range(len(redshifts))]
-    labels += ['z = %s' % z for z in redshifts]
+    handles += [plt.Line2D([0], [0], color="black", ls=linestyles[i * 2]) for i in range(len(redshifts))]
+    labels += ["z = %s" % z for z in redshifts]
 
-    ax2.legend(handles, labels, loc='upper left')
-    ax1.legend(loc='lower left')
+    ax2.legend(handles, labels, loc="upper left")
+    ax1.legend(loc="lower left")
 
-    fig.savefig(f'equil_vs_dens_{uvb}_ssm{ssm}.pdf')
+    fig.savefig(f"equil_vs_dens_{uvb}_ssm{ssm}.pdf")
     plt.close(fig)
