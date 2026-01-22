@@ -120,3 +120,4 @@ convention = "google"
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D103"] # Missing docstring in function
 "__init__.py" = ["F401"] # imported but unused
+"temet/load/*_fields*.py" = ["D205","D209"] # allow simple multi-line docstrings for field descriptions

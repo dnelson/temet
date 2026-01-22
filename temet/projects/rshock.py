@@ -967,7 +967,7 @@ def paperPlots():
 
 
 # add auxcats
-from ..load.auxcat import fieldComputeFunctionMapping as ac
+from ..load.auxcat_fields import def_fields as ac
 
 
 ac["Subhalo_VirShockRad_Temp_400rad_16ns"] = partial(

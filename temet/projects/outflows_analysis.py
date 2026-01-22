@@ -1999,7 +1999,7 @@ def run():
 
 
 # add auxcats
-from ..load.auxcat import fieldComputeFunctionMapping as ac  # noqa: I001
+from ..load.auxcat_fields import def_fields as ac  # noqa: I001
 
 ac["Subhalo_RadialMassFlux_SubfindWithFuzz_Gas"] = partial(instantaneousMassFluxes, ptType="gas", scope="subhalo_wfuzz")
 ac["Subhalo_RadialMassFlux_SubfindWithFuzz_Wind"] = partial(

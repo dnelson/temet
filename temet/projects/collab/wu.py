@@ -7,7 +7,7 @@ from functools import partial
 import matplotlib.pyplot as plt
 
 from ...catalog.subhalo import subhaloStellarPhot
-from ...load.auxcat import fieldComputeFunctionMapping as ac
+from ...load.auxcat_fields import def_fields as ac
 from ...plot.config import colors, linestyles
 from ...util import simParams
 

@@ -2,14 +2,16 @@
 Definitions of custom snapshot fields.
 """
 
-import h5py
-import numpy as np
 from functools import partial
 from getpass import getuser
-from os.path import isfile, getsize
+from os.path import getsize, isfile
 
-from .snapshot import snap_field, _haloOrSubhaloIndRange
-from ..util.helper import numPartToChunkLoadSize, pSplitRange, closest
+import h5py
+import numpy as np
+
+from ..util.helper import closest, numPartToChunkLoadSize, pSplitRange
+from .snapshot import _haloOrSubhaloIndRange, snap_field
+
 
 # -------------------- general/all particle types -------------------------------------------------
 
@@ -616,7 +618,7 @@ cellsize_ckpc.log = True
 def hsml(sim, partType, field, args):
     """Smoothing length i.e. characteristic size, possibly for visualization purposes."""
     assert args["inds"] is None  # otherwise generalize
-    from ..vis.render import getHsmlForPartType, defaultHsmlFac
+    from ..vis.render import defaultHsmlFac, getHsmlForPartType
 
     indRange = args["indRange"]
     if args["haloID"] is not None or args["subhaloID"] is not None:
@@ -647,7 +649,7 @@ def f_b(sim, partType, field, args):
 
     # DM
     if sim.snapHasField(partType, "SubfindDMDensity"):
-        SubfindDMDensity = sim.snapshotSubset(partType, "SubfindDMDensity", **args)
+        dens_dm = sim.snapshotSubset(partType, "SubfindDMDensity", **args)
     else:
         # derive if not stored
         dm_pos = sim.snapshotSubset("dm", "pos")  # global load and tree
@@ -712,7 +714,7 @@ pressure_mag.log = True
 
 @snap_field(aliases=["pres_ratio"])
 def pressure_ratio(sim, partType, field, args):
-    """Ratio of gas magnetic to thermal pressure (:math:`\\beta^{-1}`)."""
+    r"""Ratio of gas magnetic to thermal pressure (:math:`\beta^{-1}`)."""
     P_gas = sim.snapshotSubset(partType, "p_gas", **args)
     P_mag = sim.snapshotSubset(partType, "p_magnetic", **args)
 
@@ -728,7 +730,7 @@ pressure_ratio.log = True
 
 @snap_field
 def beta(sim, partType, field, args):
-    """Ratio of gas thermal to magnetic pressure (plasma :math:`\\beta`)."""
+    r"""Ratio of gas thermal to magnetic pressure (plasma :math:`\beta`)."""
     P_gas = sim.snapshotSubset(partType, "p_gas", **args)
     P_mag = sim.snapshotSubset(partType, "p_magnetic", **args)
 
@@ -1421,7 +1423,7 @@ def mass_h_popping(sim, partType, field, args):
         indRange = _haloOrSubhaloIndRange(sim, partType, haloID=args["haloID"], subhaloID=args["subhaloID"])
 
     path = sim.postPath + "hydrogen/gas_%03d.hdf5" % sim.snap
-    model = field.split("_")[1].upper()  # BR, GK, or KMT
+    # model = field.split("_")[1].upper()  # BR, GK, or KMT
 
     if not isfile(path):
         print("Warning: [%s] from [%s] does not exist, empty return." % (field, path))
@@ -1543,7 +1545,7 @@ numdens_h_diemer.log = True
 
 def _cloudy_load(sim, partType, field, args):
     """Helper caching loader, for all of the following CLOUDY-based fields."""
-    from ..cosmo.cloudy import cloudyIon, cloudyEmission
+    from ..cosmo.cloudy import cloudyEmission, cloudyIon
 
     if "flux" in field or "lum" in field:
         lineName, prop = field.rsplit(" ", 1)
@@ -1642,7 +1644,7 @@ def _cloudy_load(sim, partType, field, args):
             with h5py.File(cacheFile, "w") as f:
                 f.attrs["nChunksDone"] = 0
                 f.attrs["nChunksTotal"] = nChunks
-                dset = f.create_dataset("field", (indRangeAll[1],), dtype="float32")
+                f.create_dataset("field", (indRangeAll[1],), dtype="float32")
 
             if prop in ["mass", "frac", "numdens"]:
                 ion = cloudyIon(sim, el=element, redshiftInterp=True)
@@ -1682,7 +1684,8 @@ def _cloudy_load(sim, partType, field, args):
                     values /= 1e30  # 10^30 erg/s unit system to avoid overflow
 
                 elif prop == "lum2phase":
-                    # for star-forming gas, include contributions from both the cold and hot phases, with their respective mass fractions
+                    # for star-forming gas, include contributions from both the cold and hot phases,
+                    # with their respective mass fractions
                     values = emis.calcGasLineLuminosity(
                         sim, lineName, indRange=indRangeLocal, dustDepletion=dustDepletion, sfGasTemp="both"
                     )
@@ -2050,8 +2053,7 @@ sn_ia_agb_ratio_metals.log = True
 
 @snap_field(multi=True)
 def numratio_(sim, partType, field, args):
-    """Metal abundance number density ratio e.g. 'numratio_Si_H', relative to solar, e.g.
-    [Si/H] = log(n_Si/n_H)_cell - log(n_Si/n_H)_solar"""
+    """Metal abundance number density ratio e.g. 'numratio_Si_H', relative to solar, i.e. [Si/H]."""
     from ..cosmo.cloudy import cloudyIon
 
     el1, el2, _ = field.split("_")
@@ -2328,7 +2330,6 @@ def pos_rel(sim, partType, field, args):
     if args["subhaloID"] is not None:
         sub = sim.subhalo(args["subhaloID"])
         halo = sim.halo(sub["SubhaloGrNr"])
-        haloID = sub["SubhaloGrNr"]
         haloPos = sub["SubhaloPos"]
 
     if sim.refPos is not None:
@@ -2446,7 +2447,7 @@ def rad(sim, partType, field, args):
     return rr
 
 
-def rad_label(sim, pt, f):
+def _rad_label(sim, pt, f):
     if "_rvir" in f:
         return r"[pt] Radial Distance / $\rm{R_{vir}}$"
     if "_r500" in f:
@@ -2454,7 +2455,7 @@ def rad_label(sim, pt, f):
     return "[pt] Radial Distance"
 
 
-def rad_units(sim, pt, f):
+def _rad_units(sim, pt, f):
     if "_rvir" in f:
         return ""
     if "_r500" in f:
@@ -2462,8 +2463,8 @@ def rad_units(sim, pt, f):
     return "code_length"
 
 
-rad.label = rad_label
-rad.units = rad_units
+rad.label = _rad_label
+rad.units = _rad_units
 rad.limits = lambda sim, pt, f: [-2.5, 3.0] if ("_rvir" in f or "_r500" in f) else [0, 5.0]
 rad.limits_halo = lambda sim, pt, f: [-2.5, 0.5] if ("_rvir" in f or "_r500" in f) else [0, 3.0]
 rad.log = True
@@ -2659,7 +2660,7 @@ def menc(sim, partType, field, args):
 
     # sort and cumulative sum
     inds = np.argsort(rad)
-    radtype = rad[np.where(mask == 1)]
+    # radtype = rad[np.where(mask == 1)]
     indstype = np.argsort(rad[np.where(mask == 1)])
     mass = mass[inds]
     mask = mask[inds]
@@ -2747,8 +2748,9 @@ menc_vesc.log = True
 def delta_rho(sim, partType, field, args):
     """Ratio of density to local mean density, delta_rho/<rho>, based on a spherically symmetric,
     halo-centric mass density profile. This is a special case of the below."""
-    from ..util.helper import logZeroNaN
     from scipy.stats import binned_statistic
+
+    from ..util.helper import logZeroNaN
 
     mass = sim.snapshotSubset(partType, "mass", **args)
     rad = sim.snapshotSubset(partType, "rad", **args)
@@ -2782,9 +2784,10 @@ delta_rho.log = True
 def delta_(sim, partType, field, args):
     """Ratio of any particle/cell property to its local average, based on a spherically symmetric,
     halo-centric radial profile."""
-    from ..util.helper import logZeroNaN
-    from scipy.stats import binned_statistic
     from scipy.interpolate import interp1d
+    from scipy.stats import binned_statistic
+
+    from ..util.helper import logZeroNaN
 
     propName = field.split("_")[1]
 
@@ -2816,8 +2819,7 @@ def delta_(sim, partType, field, args):
 
     avg_prop[avg_prop == 0] = np.min(avg_prop[avg_prop > 0])  # clip to nonzero as we divide
 
-    w = np.where(avg_prop < 0)
-    if len(np.where(avg_prop < 0)[0]):
+    if np.count_nonzero(avg_prop < 0):
         print("WARNING: avg_prop has negative entries, unexpected.")
 
     ratio = (prop / avg_prop).astype("float32")

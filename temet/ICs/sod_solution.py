@@ -1,32 +1,33 @@
 """
 Analytic/exact solutions to 1D shocktube problems.
+
 Originally from https://gitlab.com/fantaz/Riemann_exact/blob/master/sod.py with modifications.
 """
+
 import numpy as np
 import scipy
 import scipy.optimize
 
+
 def shock_tube_function(p4, p1, p5, rho1, rho5, gamma):
-    """
-    Shock tube equation
-    """
-    z = (p4 / p5 - 1.)
+    """Shock tube equation."""
+    z = p4 / p5 - 1.0
     c1 = np.sqrt(gamma * p1 / rho1)
     c5 = np.sqrt(gamma * p5 / rho5)
 
-    gm1 = gamma - 1.
-    gp1 = gamma + 1.
-    g2 = 2. * gamma
+    gm1 = gamma - 1.0
+    gp1 = gamma + 1.0
+    g2 = 2.0 * gamma
 
-    fact = gm1 / g2 * (c5 / c1) * z / np.sqrt(1. + gp1 / g2 * z)
-    fact = (1. - fact) ** (g2 / gm1)
+    fact = gm1 / g2 * (c5 / c1) * z / np.sqrt(1.0 + gp1 / g2 * z)
+    fact = (1.0 - fact) ** (g2 / gm1)
 
     return p1 * fact - p4
 
 
 def calculate_regions(pl, ul, rhol, pr, ur, rhor, gamma=1.4):
-    """
-    Compute regions
+    """Compute regions.
+
     :rtype : tuple
     :return: returns p, rho and u for regions 1,3,4,5 as well as the shock speed
     """
@@ -51,18 +52,18 @@ def calculate_regions(pl, ul, rhol, pr, ur, rhor, gamma=1.4):
     p4 = scipy.optimize.fsolve(shock_tube_function, p1, (p1, p5, rho1, rho5, gamma))[0]
 
     # compute post-shock density and velocity
-    z = (p4 / p5 - 1.)
+    z = p4 / p5 - 1.0
     c5 = np.sqrt(gamma * p5 / rho5)
 
-    gm1 = gamma - 1.
-    gp1 = gamma + 1.
+    gm1 = gamma - 1.0
+    gp1 = gamma + 1.0
     gmfac1 = 0.5 * gm1 / gamma
     gmfac2 = 0.5 * gp1 / gamma
 
-    fact = np.sqrt(1. + gmfac2 * z)
+    fact = np.sqrt(1.0 + gmfac2 * z)
 
     u4 = c5 * z / (gamma * fact)
-    rho4 = rho5 * (1. + gmfac2 * z) / (1. + gmfac1 * z)
+    rho4 = rho5 * (1.0 + gmfac2 * z) / (1.0 + gmfac1 * z)
 
     # shock speed
     w = c5 * fact
@@ -70,14 +71,15 @@ def calculate_regions(pl, ul, rhol, pr, ur, rhor, gamma=1.4):
     # compute values at foot of rarefaction
     p3 = p4
     u3 = u4
-    rho3 = rho1 * (p3 / p1)**(1. / gamma)
+    rho3 = rho1 * (p3 / p1) ** (1.0 / gamma)
     return (p1, rho1, u1), (p3, rho3, u3), (p4, rho4, u4), (p5, rho5, u5), w
 
 
 def calc_positions(pl, pr, region1, region3, w, xi, t, gamma):
-    """
-    :return: tuple of positions in the following order ->
-            Head of Rarefaction: xhd,  Foot of Rarefaction: xft,
+    """Calculation positions of waves.
+
+    Return:
+      tuple (float,4): Head of Rarefaction: xhd,  Foot of Rarefaction: xft,
             Contact Discontinuity: xcd, Shock: xsh
     """
     p1, rho1 = region1[:2]  # don't need velocity
@@ -100,22 +102,27 @@ def calc_positions(pl, pr, region1, region3, w, xi, t, gamma):
 
 
 def region_states(pl, pr, region1, region3, region4, region5):
-    """
-    :return: dictionary (region no.: p, rho, u), except for rarefaction region
-      where the value is a string.
+    """Region states.
+
+    Return:
+      dict: for each of the five regions, provide (p,rho, u), except for rarefaction region where the value is a string.
     """
     if pl > pr:
-        return {'Region 1': region1,
-                'Region 2': 'RAREFACTION',
-                'Region 3': region3,
-                'Region 4': region4,
-                'Region 5': region5}
+        return {
+            "Region 1": region1,
+            "Region 2": "RAREFACTION",
+            "Region 3": region3,
+            "Region 4": region4,
+            "Region 5": region5,
+        }
     else:
-        return {'Region 1': region5,
-                'Region 2': region4,
-                'Region 3': region3,
-                'Region 4': 'RAREFACTION',
-                'Region 5': region1}
+        return {
+            "Region 1": region5,
+            "Region 2": region4,
+            "Region 3": region3,
+            "Region 4": "RAREFACTION",
+            "Region 5": region1,
+        }
 
 
 def create_arrays(pl, pr, xl, xr, positions, state1, state3, state4, state5, npts, gamma, t, xi, x_arr=None):
@@ -127,11 +134,11 @@ def create_arrays(pl, pr, xl, xr, positions, state1, state3, state4, state5, npt
     p3, rho3, u3 = state3
     p4, rho4, u4 = state4
     p5, rho5, u5 = state5
-    gm1 = gamma - 1.
-    gp1 = gamma + 1.
+    gm1 = gamma - 1.0
+    gp1 = gamma + 1.0
 
     if x_arr is None:
-        dx = (xr-xl)/(npts-1)
+        dx = (xr - xl) / (npts - 1)
         x_arr = np.arange(xl, xr, dx)
     else:
         npts = x_arr.size
@@ -140,7 +147,7 @@ def create_arrays(pl, pr, xl, xr, positions, state1, state3, state4, state5, npt
     p = np.zeros(npts, dtype=float)
     u = np.zeros(npts, dtype=float)
     c1 = np.sqrt(gamma * p1 / rho1)
-    
+
     if pl > pr:
         for i, x in enumerate(x_arr):
             if x < xhd:
@@ -148,10 +155,10 @@ def create_arrays(pl, pr, xl, xr, positions, state1, state3, state4, state5, npt
                 p[i] = p1
                 u[i] = u1
             elif x < xft:
-                u[i] = 2. / gp1 * (c1 + (x - xi) / t)
-                fact = 1. - 0.5 * gm1 * u[i] / c1
-                rho[i] = rho1 * fact ** (2. / gm1)
-                p[i] = p1 * fact ** (2. * gamma / gm1)
+                u[i] = 2.0 / gp1 * (c1 + (x - xi) / t)
+                fact = 1.0 - 0.5 * gm1 * u[i] / c1
+                rho[i] = rho1 * fact ** (2.0 / gm1)
+                p[i] = p1 * fact ** (2.0 * gamma / gm1)
             elif x < xcd:
                 rho[i] = rho3
                 p[i] = p3
@@ -179,10 +186,10 @@ def create_arrays(pl, pr, xl, xr, positions, state1, state3, state4, state5, npt
                 p[i] = p3
                 u[i] = -u3
             elif x < xhd:
-                u[i] = -2. / gp1 * (c1 + (xi - x) / t)
-                fact = 1. + 0.5 * gm1 * u[i] / c1
-                rho[i] = rho1 * fact ** (2. / gm1)
-                p[i] = p1 * fact ** (2. * gamma / gm1)
+                u[i] = -2.0 / gp1 * (c1 + (xi - x) / t)
+                fact = 1.0 + 0.5 * gm1 * u[i] / c1
+                rho[i] = rho1 * fact ** (2.0 / gm1)
+                p[i] = p1 * fact ** (2.0 * gamma / gm1)
             else:
                 rho[i] = rho1
                 p[i] = p1
@@ -195,50 +202,49 @@ def solve(left_state, right_state, geometry, t, gamma=1.4, npts=500, x_arr=None)
     """
     Solves the Sod shock tube problem (i.e. riemann problem) of discontinuity across an interface.
 
-    :rtype : tuple
-    :param left_state: tuple (pl, rhol, ul)
-    :param right_state: tuple (pr, rhor, ur)
-    :param geometry: tuple (xl, xr, xi): xl - left boundary, xr - right boundary, xi - initial discontinuity
-    :param t: time for which the states have to be calculated
-    :param gamma: ideal gas constant, default is air: 1.4
-    :param npts: number of points for array of pressure, density and velocity
-    :param x_arr: if not None, then compute solution exactly at these points
-    :return: tuple of: dicts of positions,
-    constant pressure, density and velocity states in distinct regions,
-    arrays of pressure, density and velocity in domain bounded by xl, xr
-    """
+    Args:
+      left_state (tuple): pl, rhol, ul
+      right_state (tuple): pr, rhor, ur
+      geometry (tuple): (xl, xr, xi): xl - left boundary, xr - right boundary, xi - initial discontinuity
+      t (float): time for which the states have to be calculated
+      gamma (float): ideal gas constant, default is air: 1.4
+      npts (int): number of points for array of pressure, density and velocity
+      x_arr (array or None): if not None, then compute solution exactly at these points
 
+    Return:
+      tuple: three dicts of positions,
+        constant pressure, density and velocity states in distinct regions,
+        arrays of pressure, density and velocity in domain bounded by xl, xr
+    """
     pl, rhol, ul = left_state
     pr, rhor, ur = right_state
     xl, xr, xi = geometry
 
     # basic checking
     if xl >= xr:
-        print('xl has to be less than xr!')
+        print("xl has to be less than xr!")
         exit()
     if xi >= xr or xi <= xl:
-        print('xi has in between xl and xr!')
+        print("xi has in between xl and xr!")
         exit()
 
     # calculate regions
-    region1, region3, region4, region5, w = \
-        calculate_regions(pl, ul, rhol, pr, ur, rhor, gamma)
+    region1, region3, region4, region5, w = calculate_regions(pl, ul, rhol, pr, ur, rhor, gamma)
 
     regions = region_states(pl, pr, region1, region3, region4, region5)
 
     # calculate positions
     x_positions = calc_positions(pl, pr, region1, region3, w, xi, t, gamma)
 
-    pos_description = ('Head of Rarefaction', 'Foot of Rarefaction',
-                       'Contact Discontinuity', 'Shock')
+    pos_description = ("Head of Rarefaction", "Foot of Rarefaction", "Contact Discontinuity", "Shock")
     positions = dict(zip(pos_description, x_positions))
 
     # create arrays
-    x, p, rho, u = create_arrays(pl, pr, xl, xr, x_positions,
-                                 region1, region3, region4, region5,
-                                 npts, gamma, t, xi, x_arr=x_arr)
+    x, p, rho, u = create_arrays(
+        pl, pr, xl, xr, x_positions, region1, region3, region4, region5, npts, gamma, t, xi, x_arr=x_arr
+    )
 
-    val_names = ('x', 'p', 'rho', 'u')
+    val_names = ("x", "p", "rho", "u")
     val_dict = dict(zip(val_names, (x, p, rho, u)))
 
     return positions, regions, val_dict

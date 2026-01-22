@@ -2409,7 +2409,7 @@ def paperPlots():
 
 # add auxcats
 from ..catalog.maps import summarize_projection_2d
-from ..load.auxcat import fieldComputeFunctionMapping as ac
+from ..load.auxcat_fields import def_fields as ac
 
 
 ac["Subhalo_XrayLum_0.5-2.0kev_R500c_2D_d=r200"] = partial(
