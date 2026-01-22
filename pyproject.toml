@@ -89,7 +89,7 @@ markers = ["requires_data: requires access to (original) data files.", "slow: te
 [tool.ruff]
 #target-version = "py311"
 line-length = 120
-select = [
+lint.select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
     "F",  # pyflakes
@@ -99,19 +99,24 @@ select = [
     "UP", # pyupgrade
     "D",  # docstrings
 ]
-ignore = [
+lint.ignore = [
     "UP031", # Use format specifiers instead of percent format
+    "B905", # `zip()` without an explicit `strict=` parameter
     "D200", # One-line docstring should fit on one line
     "D210", # No whitespaces allowed surrounding docstring text
     "D212", # Multi-line docstring summary should start at the first line
+    "E402", # Module level import not at top of file (for auxCat additions)
     "E741", # Ambiguous variable name
 ]
+format.skip-magic-trailing-comma = true
 
 [tool.ruff.lint.isort]
-lines-after-imports = 1
+lines-after-imports = 2
+split-on-trailing-comma = false
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D103"] # Missing docstring in function
+"__init__.py" = ["F401"] # imported but unused

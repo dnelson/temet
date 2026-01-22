@@ -114,6 +114,7 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      'millennium-1':['millennium',1],
                      'millennium-2':['millennium',2]}
 
+
 class simParams:
     # paths and names
     simPath     = ''    #: path (root) containing 'output' directory with simulation snapshots and group catalogs
@@ -1298,7 +1299,7 @@ class simParams:
             self.simNameAlt = self.simName
 
         if not path.isdir(self.simPath) and not path.isdir(self.derivPath):
-            raise Exception("simParams: it appears [%s] does not exist." % self.arepoPath)
+            raise SimNotFoundException("simParams: it appears [%s] does not exist." % self.arepoPath)
 
         # if data.files/ doesn't exist but postprocessing does (e.g. dev runs), use postprocessing/ for all
         if not path.isdir(self.derivPath):

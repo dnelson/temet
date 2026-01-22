@@ -114,8 +114,9 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False, lo
             r['redshifts'][w_nan] = np.nan # do not select non-existent snapshot
 
             zFound, w = closest(r['redshifts'], redshift)
+            zErr = np.abs(zFound - redshift)
 
-            if np.abs(zFound-redshift) > 0.1 and zFound > redshift:
+            if zErr > 0.1 and zFound > redshift:
                 # try to recompute in case we have a partial save from a previously in progress run
                 # and more snapshots exist than previously existed
                 maxSnapPrev = np.where(np.isfinite(r['redshifts']))[0].max()
@@ -124,7 +125,7 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False, lo
                 if not recalculate and nextSnapExists is not None:
                     return redshiftToSnapNum(redshifts=redshifts, times=times, sP=sP, recalculate=True)
                 else:
-                    print("Warning! [%s] Snapshot selected with redshift error = %g" % (sP.simName,np.abs(zFound-redshift)))
+                    print("Warning! [%s] Snapshot selected with redshift error = %g" % (sP.simName,np.zErr))
 
             snaps[i] = w
 
@@ -136,7 +137,8 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False, lo
 def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=False,
                   reqTr=False, reqFluidQuants=False):
     """ Return a list of all snapshot numbers which exist. """
-    if reqFluidQuants: assert reqTr
+    if reqFluidQuants:
+        assert reqTr
 
     if minRedshift is None:
         minRedshift = 0.0 # filter out -1 values indicating missing snaps
@@ -159,7 +161,8 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=
         ww2 = np.where(dloga < 0.8 * 0.5 * dloga_target)[0]
 
         #assert len(ww2) == 0 # number of timesteps even one jump lower
-        if len(ww2) > 0: print(' WARNING: %d snaps even one timestep below target' % len(ww2))
+        if len(ww2) > 0:
+            print(' WARNING: %d snaps even one timestep below target' % len(ww2))
 
         # detect contiguous snapshot subsets in this list of integers
         ranges = contiguousIntSubsets(ww)
@@ -174,8 +177,12 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=
         ranges2 = contiguousIntSubsets(ww_const)
 
         for i, loc_range in enumerate(ranges2):
-            if i == 0: continue
-            if loc_range[1] - loc_range[0] > 50: continue # skip large contiguous ranges
+            if i == 0:
+                continue
+
+            if loc_range[1] - loc_range[0] > 50:
+                continue # skip large contiguous ranges
+
             cur_dloga = np.mean(dloga[loc_range[0]:loc_range[1]])
             prev_dloga = np.mean(dloga[ranges2[i-1][0]:ranges2[i-1][1]])
             next_dloga = np.mean(dloga[ranges2[i+1][0]:ranges2[i+1][1]])
@@ -183,41 +190,19 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=
             if cur_dloga < prev_dloga and cur_dloga > next_dloga:
                 # monotonic, ok
                 continue
-            #print(i, loc_range, redshifts[loc_range[0]], redshifts[loc_range[1]], cur_dloga, prev_dloga, next_dloga)
-            #ranges_global.append([])
 
         # custom modifications by sim (independent of sbNum)
         ranges_global = []
         if sP.run == 'tng' and sP.res == 2500:
             ranges_global.append((1092,1099))
             ranges_global.append((1177,1180))
-            if ranges[-1] == (68,274): ranges.pop() # allow z<0.1 to switch to dloga_target/2
-
-        if 0:
-            # debug plot
-            import matplotlib.pyplot as plt
-            fig = plt.figure(figsize=(8,6))
-            ax = fig.add_subplot(111)
-            ax.plot(redshifts, dloga, 'o-', label='original')
-            ax.set_xlabel('Redshift')
-            ax.set_ylabel('dloga')
-            ax.set_xlim([6,0.0])
-            ax.plot(ax.get_xlim(), [dloga_target,dloga_target], '--', color='black', alpha=0.5, label='target')
-            redshifts_loc = redshifts.copy()
-            for range_start, range_stop in ranges:
-                snap_inds = ww[range_start : range_stop : 2]
-                redshifts_loc[snap_inds] = np.nan
-            for range_start, range_stop in ranges_global:
-                redshifts_loc[range_start:range_stop:2] = np.nan
-            ax.plot(redshifts_loc, dloga, 's-', ms=4, label='corrected')
-            ax.legend(loc='upper right')
-            fig.savefig('dloga_vs_redshift.pdf')
-            plt.close(fig)
+            if ranges[-1] == (68,274):
+                ranges.pop() # allow z<0.1 to switch to dloga_target/2
 
         # override every other snapshot in these ranges with a redshift of -1 so it is filtered out below
         for range_start, range_stop in ranges:
-            # the first entry here corresponds to the first subbox snapshot whose delta time since the 
-            # previous is half of our target, so start removing here so that the dt across this gap 
+            # the first entry here corresponds to the first subbox snapshot whose delta time since the
+            # previous is half of our target, so start removing here so that the dt across this gap
             # becomes constant
             snap_inds = ww[range_start : range_stop : 2]
             redshifts[snap_inds] = -1.0
@@ -238,7 +223,8 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=
 
         for snap in snaps:
             fileName = sP.snapPath(snap, subbox=sP.subbox, checkExists=True)
-            if fileName is None: continue
+            if fileName is None:
+                continue
 
             with h5py.File(fileName,'r') as f:
                 if reqFluidQuants:
@@ -262,7 +248,10 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=
 
             for snap in snaps:
                 fileName = sP.snapPath(snap, subbox=sP.subbox, checkExists=True)
-                if fileName is None: continue
+
+                if fileName is None:
+                    continue
+
                 with h5py.File(fileName,'r') as f:
                     # handle different criterion/simulation types
                     if 'TNG' in sP.simName:
@@ -368,8 +357,8 @@ def snapNumToAgeFlat(sP, snap=None):
 def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, method='LHaloTree'):
     """ Given a set of subhaloInds_from_search in sP_from, find matched subhalos in sP_to.
 
-    Can implement many methods. For now, uses external (pre-generated) postprocessing/SubhaloMatching/ 
-    for TNG_method runs, or postprocessing/SubhaloMatchingToDark/ for Illustris/TNG to DMO runs, or 
+    Can implement many methods. For now, uses external (pre-generated) postprocessing/SubhaloMatching/
+    for TNG_method runs, or postprocessing/SubhaloMatchingToDark/ for Illustris/TNG to DMO runs, or
     postprocessing/SubhaloMatchingToIllustris/ for TNG->Illustris runs.
     Return is an int32 array of the same size as input, where -1 indicates no match.
     """
@@ -463,7 +452,7 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
             with h5py.File(matchFileName,'r') as f:
                 inds_tng = f['SubhaloIndexFrom'][()]
                 inds_illustris = f['SubhaloIndexTo'][()]
-                score = f['Score'][()]
+                #score = f['Score'][()]
 
             match_inds_source, match_inds_search = match(inds_tng, subhaloInds_from_search)
             r[match_inds_search] = inds_illustris[match_inds_source]
@@ -535,8 +524,8 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
         subhaloInds_from = subhaloInds_from[w]
         subhaloInds_to = subhaloInds_to[w]
 
-    # if we requested a DMO->Physics match, we have instead loaded [the only thing available] the 
-    # Physics->DMO SubhaloMatchingToDark information. so, swap the 'from' and 'to' subhaloInds 
+    # if we requested a DMO->Physics match, we have instead loaded [the only thing available] the
+    # Physics->DMO SubhaloMatchingToDark information. so, swap the 'from' and 'to' subhaloInds
     # such that subhaloInds_from_search is matched against the DMO and the return is for the Physics
     if swapMatchDirection:
         subhaloInds_from, subhaloInds_to = subhaloInds_to, subhaloInds_from
@@ -558,18 +547,22 @@ def correctPeriodicDistVecs(vecs, sP):
     vecs[ np.where(vecs <= -sP.boxSize*0.5) ] += sP.boxSize
 
 def correctPeriodicPosVecs(vecs, sP):
-    """ Enforce periodic B.C. for positions (add boxSize to any negative points, subtract boxSize from any 
-        points outside box).
+    """ Enforce periodic boundary conditions for positions.
+
+    To do so, add boxSize to any negative points, subtract boxSize from any points outside box.
     """
     vecs[ np.where(vecs < 0.0) ]         += sP.boxSize
     vecs[ np.where(vecs >= sP.boxSize) ] -= sP.boxSize
 
 def correctPeriodicPosBoxWrap(vecs, sP):
-    """ For an array of positions [N,3], determine if they span a periodic boundary (e.g. half are near 
-    x=0 and half are near x=BoxSize). If so, wrap the high coordinate value points by a BoxSize, making 
-    them negative. Suitable for plotting particle positions in global coordinates. Return indices of 
-    shifted coordinates so they can be shifted back, in the form of dict with an entry for each 
-    shifted dimension and key equal to the dimensional index. """
+    """ Determine if an array of positions spans a periodic boundary and, if so, wrap them (for plotting).
+
+    For an array of positions [N,3], determine if they span a periodic boundary (e.g. half are near
+    x=0 and half are near x=BoxSize). If so, wrap the high coordinate value points by a BoxSize, making
+    them negative. Suitable for plotting particle positions in global coordinates. Return indices of
+    shifted coordinates so they can be shifted back, in the form of dict with an entry for each
+    shifted dimension and key equal to the dimensional index.
+    """
     r = {}
 
     for i in range(3):
@@ -789,7 +782,7 @@ def inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName, debug=False, flagFuz
         if len(ww):
             val[ww] = -1
 
-    if debug:        
+    if debug:
         # for all inds we identified in subhalos, verify parents directly
         for i in range(len(indsType)):
             if val[i] < 0:
@@ -858,8 +851,10 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubha
       dict: with an entry for each partType, whose value is a 2-tuple of the particle index range bounding the
         members of the parent groups of this list of subhalo IDs. Indices are inclusive as in snapshotSubset().
     """
-    if strictSubhalos: assert not groups
-    if groups: assert not strictSubhalos # mutually exclusive
+    if strictSubhalos:
+        assert not groups
+    if groups:
+        assert not strictSubhalos # mutually exclusive
 
     first_sub = subhaloIDs[0]
     last_sub = subhaloIDs[-1]
@@ -999,9 +994,11 @@ def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
         return w2
 
 def subboxSubhaloCat(sP, sbNum):
-    """ Generate/return the SubboxSubhaloList catalog giving the intersection of fullbox subhalos 
-    with the subbox volumes across time, using the merger trees, and some interpolated properties 
-    of relevant subhalos at each subbox snapshot. """
+    """ Generate the SubboxSubhaloList catalog giving the intersection of fullbox subhalos with subboxes vs time.
+
+    Use the merger trees from the fullbox and interpolate positions to subbox times.
+    Determine interpolate properties of relevant subhalos at each subbox snapshot
+    """
     minEdgeDistRedshifts = [100.0, 6.0, 4.0, 3.0, 2.0, 1.0, 0.0]
 
     def _inSubbox(pos):
@@ -1041,8 +1038,8 @@ def subboxSubhaloCat(sP, sbNum):
     subboxSize = np.array(sP.subboxSize[sbNum])
 
     subboxHalfSize = subboxSize/2
-    subboxMin = subboxCen - subboxSize/2
-    subboxMax = subboxCen + subboxSize/2
+    #subboxMin = subboxCen - subboxSize/2
+    #subboxMax = subboxCen + subboxSize/2
 
     sP_sub = simParams(res=sP.res, run=sP.run, variant='subbox%d' % sbNum)
 
@@ -1051,13 +1048,16 @@ def subboxSubhaloCat(sP, sbNum):
     subboxTimes = snapNumToRedshift(sP_sub, time=True, all=True)
 
     minEdgeIndices = []
+
     for redshift in minEdgeDistRedshifts:
         # pre-search for indices of each redshift range within which we record minimum edge distances
         inds_local = np.where(1/subboxTimes-1 <= redshift)[0]
+
         if len(inds_local) == 0:
             assert redshift == 0.0 # i.e. no subbox saved exactly at z=0, use last one
             assert 1/subboxTimes[-1]-1 < 0.01
             inds_local = np.array([subboxTimes.size-1])
+
         minEdgeIndices.append( inds_local )
 
     # locate the fullbox snapshot according to each subbox time for convenience, and vice versa (-1 indicates no match)
@@ -1088,7 +1088,8 @@ def subboxSubhaloCat(sP, sbNum):
 
     print('Determining which of [%d] MPBs intersect subbox...' % ids.size)
     for i, subhaloID in enumerate(ids):
-        if i % int(ids.size/10.0) == 0: print(' %d%%' % np.ceil(float(i)/ids.size*100))
+        if i % int(ids.size/10.0) == 0:
+            print(' %d%%' % np.ceil(float(i)/ids.size*100))
         if subhaloID not in mpbs:
             continue
 
@@ -1119,7 +1120,8 @@ def subboxSubhaloCat(sP, sbNum):
 
     print('\n[%d] subhalos intersect subbox, interpolating positions to subbox times...' % r['SubhaloIDs'].size)
     for i, subhaloID in enumerate(r['SubhaloIDs']):
-        if i % int(r['SubhaloIDs'].size/10.0) == 0: print(' %d%%' % np.ceil(float(i)/r['SubhaloIDs'].size*100))
+        if i % int(r['SubhaloIDs'].size/10.0) == 0:
+            print(' %d%%' % np.ceil(float(i)/r['SubhaloIDs'].size*100))
         # create position interpolant
         mpb = mpbs[subhaloID]
         times = snapTimes[mpb['SnapNum']]
@@ -1153,7 +1155,8 @@ def subboxSubhaloCat(sP, sbNum):
         mbID = np.zeros( subboxTimes.size, dtype=mpb['SubhaloIDMostbound'].dtype )
         mbID[ r['SubboxSnapNum'][mpb['SnapNum']] ] = mpb['SubhaloIDMostbound']
         for j in range(mbID.size-2, -1, -1):
-            if mbID[j] == 0: mbID[j] = mbID[j+1]
+            if mbID[j] == 0:
+                mbID[j] = mbID[j+1]
 
         # store
         r['SubhaloPos'][i,:,:] = pos
@@ -1165,7 +1168,7 @@ def subboxSubhaloCat(sP, sbNum):
         w = np.where(flags)[0]
 
         for j in range(r['minEdgeDistRedshifts'].size): # negative = outside, positive = inside
-            r['SubhaloMinEdgeDist'][i,j] = min_axis_dists[ minEdgeIndices[j] ].min() 
+            r['SubhaloMinEdgeDist'][i,j] = min_axis_dists[ minEdgeIndices[j] ].min()
 
         if len(w) == 0:
             # mpb['SubhaloPos'] is inside, but pos is not: should be rare (and require SnapNumMapApprox.sum()>0)
@@ -1179,13 +1182,16 @@ def subboxSubhaloCat(sP, sbNum):
     with h5py.File(filePath,'w') as f:
         for key in r:
             f[key] = r[key]
+
     print('Saved intermediate: [%s]' % filePath)
 
     return r
 
 def subboxSubhaloCatExtend(sP, sbNum, redo=False):
-    """ Extend the SubboxSubhaloList catalog with particle-level interpolated properties (i.e. M* < 30pkpc) of 
-    the relevant subhalos at each subbox snapshot. Separated into second step since this is a heavy calculation, restartable. """
+    """ Extend the SubboxSubhaloList catalog with custom (interpolated) properties.
+
+    For example, 30 pkpc stellar masses. Separated into second step since this is a heavy calculation, restartable.
+    """
     fileBase = sP.postPath + '/SubboxSubhaloList/'
     filePath = fileBase + 'subbox%d_%d.hdf5' % (sbNum, sP.snap)
 
@@ -1222,9 +1228,10 @@ def subboxSubhaloCatExtend(sP, sbNum, redo=False):
     for sbSnapNum in range(nSubSnaps):
         # load
         sP_sub.setSnap(sbSnapNum)
+        z_sub = 1/r['SubboxScaleFac'][sbSnapNum]-1
 
         apertures_sq = [sP_sub.units.physicalKpcToCodeLength(30.0)**2, 30.0**2, 50.0**2] # 30 pkpc, 30 ckpc/h, 50 ckpc/h
-        print(' [%4d] z = %.2f (30pkpc rad_code = %.2f)' % (sbSnapNum,1/r['SubboxScaleFac'][sbSnapNum]-1,np.sqrt(apertures_sq[0])), flush=True)
+        print(' [%4d] z = %.2f (30pkpc rad_code = %.2f)' % (sbSnapNum,z_sub,np.sqrt(apertures_sq[0])), flush=True)
 
         if r['done'][sbSnapNum]:
             print(' skip, already done.')
@@ -1256,23 +1263,32 @@ def subboxSubhaloCatExtend(sP, sbNum, redo=False):
 
             for i, aperture_sq in enumerate(apertures_sq):
                 # successive queries for each aperture search: mass sum
-                hsml = np.sqrt(apertures_sq[i])
-                result = calcQuantReduction(pos, x['Masses'], hsml, op='sum', boxSizeSim=0, posSearch=posSearch, tree=tree)
+                hsml = np.sqrt(aperture_sq)
+                result = calcQuantReduction(pos, x['Masses'], hsml, op='sum', boxSizeSim=0,
+                                            posSearch=posSearch, tree=tree)
 
                 # save results
                 saveStr = ptType.capitalize() if ptType != 'bh' else 'BH'
                 r['Subhalo%s_Mass' % saveStr][:,i,sbSnapNum] = result
 
                 if ptType == 'gas':
-                    result1 = calcQuantReduction(pos, x['StarFormationRate'], hsml, op='sum', boxSizeSim=0, posSearch=posSearch, tree=tree)
+                    result1 = calcQuantReduction(pos, x['StarFormationRate'], hsml, op='sum', boxSizeSim=0,
+                                                 posSearch=posSearch, tree=tree)
                     r['SubhaloGas_SFR'][:,i,sbSnapNum] = result1
+
                 if ptType == 'bh':
-                    result1 = calcQuantReduction(pos, x['BH_CumEgyInjection_QM'], hsml, op='max', boxSizeSim=0, posSearch=posSearch, tree=tree)
-                    result2 = calcQuantReduction(pos, x['BH_CumEgyInjection_RM'], hsml, op='max', boxSizeSim=0, posSearch=posSearch, tree=tree)
-                    result3 = calcQuantReduction(pos, x['BH_Mass'], hsml, op='max', boxSizeSim=0, posSearch=posSearch, tree=tree)
-                    result4 = calcQuantReduction(pos, x['BH_Mass'], hsml, op='count', boxSizeSim=0, posSearch=posSearch, tree=tree)
-                    result5 = calcQuantReduction(pos, x['BH_Mdot'], hsml, op='max', boxSizeSim=0, posSearch=posSearch, tree=tree)
-                    result6 = calcQuantReduction(pos, x['BH_MdotEddington'], hsml, op='max', boxSizeSim=0, posSearch=posSearch, tree=tree)
+                    result1 = calcQuantReduction(pos, x['BH_CumEgyInjection_QM'], hsml, op='max', boxSizeSim=0,
+                                                 posSearch=posSearch, tree=tree)
+                    result2 = calcQuantReduction(pos, x['BH_CumEgyInjection_RM'], hsml, op='max', boxSizeSim=0,
+                                                 posSearch=posSearch, tree=tree)
+                    result3 = calcQuantReduction(pos, x['BH_Mass'], hsml, op='max', boxSizeSim=0,
+                                                 posSearch=posSearch, tree=tree)
+                    result4 = calcQuantReduction(pos, x['BH_Mass'], hsml, op='count', boxSizeSim=0,
+                                                 posSearch=posSearch, tree=tree)
+                    result5 = calcQuantReduction(pos, x['BH_Mdot'], hsml, op='max', boxSizeSim=0,
+                                                 posSearch=posSearch, tree=tree)
+                    result6 = calcQuantReduction(pos, x['BH_MdotEddington'], hsml, op='max', boxSizeSim=0,
+                                                 posSearch=posSearch, tree=tree)
 
                     r['SubhaloBH_CumEgyInjection_QM'][:,i,sbSnapNum] = result1
                     r['SubhaloBH_CumEgyInjection_RM'][:,i,sbSnapNum] = result2
@@ -1293,14 +1309,21 @@ def subboxSubhaloCatExtend(sP, sbNum, redo=False):
 
     print('Done: [%s]' % filePath)
 
-def subsampleRandomSubhalos(sP, maxPointsPerDex, mstarMinMax, mstar=None, cenOnly=False):
-    """ Sub-select subhalos, returning indices, such that we have at least N per 0.1 dex bin of 
-    stellar mass. """
+def subsampleRandomSubhalos(sP, maxPerDex, mstarMinMax, mstar=None, cenOnly=False):
+    """ Sub-sample subhalos IDs randomly, uniformly across some quantity (can be generalized) such as stellar mass.
+
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      maxPerDex (int): maximum number of subhalos to select per dex in the quantity.
+      mstarMinMax (2-tuple): minimum and maximum values of the quantity to consider (e.g. stellar mass).
+      mstar (ndarray): optional pre-loaded array of the quantity values for all subhalos..
+      cenOnly (bool): if True, only consider central subhalos when mstar is not provided.
+    """
     rng = np.random.default_rng(424242)
     binsize = 0.1 # dex
-    numPerBin = np.max([1,int(maxPointsPerDex*binsize)])
+    numPerBin = np.max([1,int(maxPerDex*binsize)])
 
-    if maxPointsPerDex < 10:
+    if maxPerDex < 10:
         print('Note: subsampleRandomSubhalos() returning at least %d per %.1f dex bin.' % (numPerBin,binsize))
 
     if mstar is None:

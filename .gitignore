@@ -22,7 +22,6 @@ temet.egg-info
 temet/util/*.so
 .DS_Store
 ._.DS_Store
-.vscode
 wandb/
 cache/
 dist/
