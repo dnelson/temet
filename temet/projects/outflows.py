@@ -17,7 +17,7 @@ from scipy.interpolate import griddata, interp1d
 from scipy.signal import savgol_filter
 
 from ..plot import snapshot, subhalos
-from ..plot.config import figsize, figsize_sm, linestyles, lw, markers, sKn, sKo
+from ..plot.config import colors, figsize, figsize_sm, linestyles, lw, markers, sKn, sKo
 from ..projects.outflows_analysis import loadRadialMassFluxes
 from ..projects.outflows_vis import galaxyMosaic_topN, singleHaloDemonstrationImage, subboxOutflowTimeEvoPanels
 from ..util import simParams
@@ -892,7 +892,6 @@ def gasOutflowVel(
             ax.set_ylabel(config["ylabel"])
 
         labels_sec = []
-        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
         color_ind = 0
 
         # TNG minimum velocity band
@@ -1468,7 +1467,6 @@ def gasOutflowRatesStacked(sP_in, quant, mStarBins, redshifts=(None,), config=No
 
         # loop over redshifts
         txt = []
-        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
         for j, redshift in enumerate(redshifts):
             # get local data
@@ -2543,8 +2541,6 @@ def stackedRadialProfiles(
         yy = ac[fieldName]
 
         # loop over mass bins
-        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-
         for k, massBin in enumerate(massBins):
             txt_mb = {}
 

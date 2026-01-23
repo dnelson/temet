@@ -1,11 +1,13 @@
 """
 * Common ML/pytorch functionality.
 """
+
 import numpy as np
 import torch
 
+
 def train_model(dataloader, model, loss_fn, optimizer, batch_size, epoch_num, writer=None, verbose=True):
-    """ Train model for one epoch. """
+    """Train model for one epoch."""
     # Set the model to training mode - important for batch normalization and dropout layers
     model.train()
 
@@ -26,7 +28,7 @@ def train_model(dataloader, model, loss_fn, optimizer, batch_size, epoch_num, wr
         optimizer.step()
 
         # print progress
-        fac = np.max([1,int(len(dataloader) / 5)])
+        fac = np.max([1, int(len(dataloader) / 5)])
         if batch_num % fac == 0:
             loss = loss.item()
             current_sample = batch_num * batch_size + len(inputs)
@@ -34,16 +36,18 @@ def train_model(dataloader, model, loss_fn, optimizer, batch_size, epoch_num, wr
             s = f" loss: {loss:>7f}  [{current_sample:>5d}/{tot_samples:>5d}]"
 
             if writer is not None:
-                current_sample += epoch_num * len(dataloader) * batch_size # 'global [int] step value'
-                s += f' global {current_sample = }'
-                writer.add_scalars('loss', {'train': loss}, current_sample)
+                current_sample += epoch_num * len(dataloader) * batch_size  # 'global [int] step value'
+                s += f" global {current_sample = }"
+                writer.add_scalars("loss", {"train": loss}, current_sample)
 
-            if verbose: print(s)
+            if verbose:
+                print(s)
 
     return loss
 
+
 def test_model(dataloader, model, loss_fn, current_sample, acc_tol=None, writer=None, verbose=True):
-    """ Test model and compute statistics. """
+    """Test model and compute statistics."""
     # Set the model to evaluation mode - important for batch normalization and dropout layers
     model.eval()
 
@@ -60,12 +64,12 @@ def test_model(dataloader, model, loss_fn, current_sample, acc_tol=None, writer=
             test_loss += loss_fn(pred, labels).item()
 
             # 'correct' number of predictions
-            if str(acc_tol) == 'exact':
+            if str(acc_tol) == "exact":
                 # exact match
-                w_loc = (pred == labels)
-            elif str(acc_tol) == 'exact_onehot':
+                w_loc = pred == labels
+            elif str(acc_tol) == "exact_onehot":
                 # exact match for one-hot encoded labels
-                w_loc = pred.argmax(dim=1) == labels.argmax(dim=1)    
+                w_loc = pred.argmax(dim=1) == labels.argmax(dim=1)
             else:
                 # within |acc_tol| in the original (untransformed) space and units
                 pred_untransformed = dataloader.dataset.target_invtransform(pred).squeeze()
@@ -77,12 +81,13 @@ def test_model(dataloader, model, loss_fn, current_sample, acc_tol=None, writer=
     test_loss /= num_batches
     correct /= size
 
-    s = f" test: accuracy [{(100*correct):>0.1f}%], avg loss [{test_loss:>8f}]"
+    s = f" test: accuracy [{(100 * correct):>0.1f}%], avg loss [{test_loss:>8f}]"
 
     if writer is not None:
-        s += f' global {current_sample = }'
-        writer.add_scalars('loss', {'test': test_loss}, current_sample)
+        s += f" global {current_sample = }"
+        writer.add_scalars("loss", {"test": test_loss}, current_sample)
 
-    if verbose: print(s)
+    if verbose:
+        print(s)
 
     return test_loss

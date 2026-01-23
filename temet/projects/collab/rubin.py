@@ -10,7 +10,7 @@ import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from ...cosmo.util import subsampleRandomSubhalos
-from ...plot.config import figsize, linestyles, lw, markers
+from ...plot.config import colors, figsize, linestyles, lw, markers
 from ...util import simParams
 from ...util.helper import dist_theta_grid, logZeroNaN, running_median
 from ...vis.halo import renderSingleHalo
@@ -308,8 +308,6 @@ def hubbleMCT_emissionTrendsVsSim():
     ax2.set_ylabel(r"CIII 977 SB [ log erg/s/cm$^2$/arcsec$^2$ ]")
     ax2.set_xlim([9.0, 11.0])
     ax2.set_ylim([-22.5, -17.5])
-
-    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
     for i, simname in enumerate(sims):
         for j, distBin in enumerate(distBins):

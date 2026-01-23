@@ -17,7 +17,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 
 from ..plot import subhalos
-from ..plot.config import linestyles, lw, sKn, sKo
+from ..plot.config import colors, linestyles, lw, sKn, sKo
 from ..util import simParams
 from ..util.helper import last_nonzero, loadColorTable, logZeroNaN, running_median
 from ..util.treeSearch import buildFullTree, calcHsml, calcParticleIndices, calcQuantReduction
@@ -625,8 +625,6 @@ def plotRshockVsMass(sPs, quants=("Temp_400rad_16ns",), vsHaloMass=True, kpc=Fal
     allNsideSame = p3.count(p3[0]) == len(p3)
 
     # loop over each fullbox run
-    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-
     for i, sP in enumerate(sPs):
         # load halo/stellar masses, rshock auxcat
         gc = sP.subhalos([massField, "rhalo_200"])

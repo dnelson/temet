@@ -22,7 +22,7 @@ from ..load.data import berg2019, chen2018zahedy2019, johnson2015, werk2013
 from ..obs.galaxySample import addIonColumnPerSystem, ionCoveringFractions, obsMatchedSample
 from ..plot import snapshot, subhalos
 from ..plot.cloudy import ionAbundFracs2DHistos
-from ..plot.config import figsize, linestyles, lw, sKn, sKo
+from ..plot.config import colors, figsize, linestyles, lw, sKn, sKo
 from ..plot.quantities import quantList
 from ..util import simParams
 from ..util.helper import closest, loadColorTable, logZeroNaN, reducedChiSq, running_median
@@ -2270,9 +2270,7 @@ def coveringFractionVsDist(sPs, saveName, ions, colDensThresholds, config="COS-H
         ax.set_ylim([-0.1, 1.04])
 
     # overplot obs
-    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-    if len(galaxySets) == 1:
-        colors = ["black"]
+    colors_loc = ['black'] if len(galaxySets) == 1 else colors
 
     opts = {"fmt": "o", "ms": 11, "lw": 1.6, "capthick": 1.6}
 
@@ -2296,7 +2294,7 @@ def coveringFractionVsDist(sPs, saveName, ions, colDensThresholds, config="COS-H
                 if i > 0:
                     label = ""
 
-                ax.errorbar(x, y / 100.0, xerr=xerr, yerr=yerr, color=colors[j], label=label, **opts)
+                ax.errorbar(x, y / 100.0, xerr=xerr, yerr=yerr, color=colors_loc[j], label=label, **opts)
 
     if config in ["eCGM", "eCGMfull"]:
         for j, gs in enumerate(galaxySets):
@@ -2318,7 +2316,7 @@ def coveringFractionVsDist(sPs, saveName, ions, colDensThresholds, config="COS-H
                 if i > 0:
                     label = ""
 
-                ax.errorbar(x, y, xerr=xerr, yerr=yerr, color=colors[j], label=label, **opts)
+                ax.errorbar(x, y, xerr=xerr, yerr=yerr, color=colors_loc[j], label=label, **opts)
 
     # loop over each column density threshold (different colors)
     for _j, thresh in enumerate(colDensThresholds):

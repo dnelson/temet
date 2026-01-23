@@ -1,33 +1,36 @@
 """
 * Explorations: regression on stellar mass to halo mass (SMHM) relation.
 """
-import numpy as np
-import h5py
-import matplotlib.pyplot as plt
+
 from os.path import isfile
 
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 from torch import nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import SubsetRandomSampler
-from torch.utils.data.dataloader import default_collate
 
+from ..ML.common import test_model, train_model
 from ..util import simParams
-from ..plot.config import *
 
-from ..ML.common import train_model, test_model
 
 class SMHMDataset(Dataset):
-    """ A custom dataset for the stellar mass to halo mass (SMHM) relation.
-    Stores samples (M_star) and their corresponding labels (M_halo). """
+    """A custom dataset for the stellar mass to halo mass (SMHM) relation.
+
+    Stores samples (M_star) and their corresponding labels (M_halo).
+    """
+
     def __init__(self, simname, redshift, secondary_params=None):
+        """Initialize the dataset."""
         self.sim = simParams(simname, redshift=redshift)
         self.secondary_params = [] if secondary_params is None else secondary_params
 
         # load data
-        mstar = self.sim.subhalos('mstar2_log')
-        mhalo = self.sim.subhalos('mhalo_log')
-        cen_flag = self.sim.subhalos('cen_flag')
+        mstar = self.sim.subhalos("mstar2_log")
+        mhalo = self.sim.subhalos("mhalo_log")
+        cen_flag = self.sim.subhalos("cen_flag")
 
         # select well-resolved subset
         mstar_min = 9.0
@@ -51,35 +54,36 @@ class SMHMDataset(Dataset):
             for param in secondary_params:
                 # load field and take the same subset
                 vals = self.sim.subhalos(param)[w]
-                
+
                 # TODO: handle nans: convert to low values
                 vals[np.isnan(vals)] = np.nanmin(vals) * 0.01
 
                 mm = [np.min(vals), np.max(vals)]
                 self.p_data[param] = torch.from_numpy(vals)
                 self.p_minmax[param] = mm
-                self.p_transforms[param] = lambda x: (x - mm[0]) / (mm[1] - mm[0])
+                self.p_transforms[param] = lambda x, mm: (x - mm[0]) / (mm[1] - mm[0])
 
         # establish transformations: normalize to ~[0,1] (going outside this range is ok)
         def transform_mstar(x):
             return (x - mstar_min) / (mstar_max - mstar_min)
-        
+
         def target_transform(x):
             return (x - mhalo_min) / (mhalo_max - mhalo_min)
-        
+
         def target_invtransform(x):
             return x * (mhalo_max - mhalo_min) + mhalo_min
-        
+
         self.transform = transform_mstar
         self.target_transform = target_transform
         self.target_invtransform = target_invtransform
 
     def __len__(self):
+        """Return number of data samples."""
         return len(self.samples)
 
     def __getitem__(self, i):
-        """ Return a single sample at index i."""
-        vals = torch.zeros(len(self.secondary_params)+1, dtype=self.samples.dtype)
+        """Return a single sample at index i."""
+        vals = torch.zeros(len(self.secondary_params) + 1, dtype=self.samples.dtype)
         vals[0] = self.samples[i]
         label = self.labels[i]
 
@@ -89,23 +93,25 @@ class SMHMDataset(Dataset):
             label = self.target_transform(label)
 
         for j, param in enumerate(self.secondary_params):
-            vals[j+1] = self.p_transforms[param](self.p_data[param][i])
-        #if vals.ndim == 0:
-        #    # if our values are single scalars, then val.shape = torch.Size([]), but this 
+            vals[j + 1] = self.p_transforms[param](self.p_data[param][i], self.p_minmax[param])
+        # if vals.ndim == 0:
+        #    # if our values are single scalars, then val.shape = torch.Size([]), but this
         #    # causes problems in the batched dataloader, so add a dimension for the batchsize
         #    vals = vals.unsqueeze(-1)
 
         # labels are also single scalars
         label = label.unsqueeze(-1)
 
-        # note: return can be anything, e.g. a more complex dict: 
+        # note: return can be anything, e.g. a more complex dict:
         # we unpack it as needed when iterating over the batches in a dataloader
         return vals, label
 
+
 class mlp_network(nn.Module):
-    """ Simple NN to play with the mstar->mhalo problem. """
+    """Simple NN to play with the mstar->mhalo problem."""
+
     def __init__(self, hidden_size, num_inputs):
-        """ hidden_size (int): number of neurons in the hidden layer(s). """
+        """hidden_size (int): number of neurons in the hidden layer(s)."""
         super().__init__()
         self.hidden_size = hidden_size
         self.num_inputs = num_inputs
@@ -113,49 +119,51 @@ class mlp_network(nn.Module):
         # define layers
         # Sequential = ordered container of modules (data passed through each module in order)
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(self.num_inputs, self.hidden_size), # input/first layer, w*x + b
-            nn.ReLU(), 
-            nn.Linear(self.hidden_size, self.hidden_size), # hidden layer, fully connected
+            nn.Linear(self.num_inputs, self.hidden_size),  # input/first layer, w*x + b
             nn.ReLU(),
-            nn.Linear(self.hidden_size, 1), # output layer
+            nn.Linear(self.hidden_size, self.hidden_size),  # hidden layer, fully connected
+            nn.ReLU(),
+            nn.Linear(self.hidden_size, 1),  # output layer
         )
 
     def forward(self, x):
+        """Forward pass."""
         L = self.linear_relu_stack(x)
         return L
 
+
 def train(hidden_size=8, verbose=True):
-    """ Train the SMHM MLP NN. """
+    """Train the SMHM MLP NN."""
     torch.manual_seed(424242)
     rng = np.random.default_rng(424242)
 
     # config
-    sim = 'TNG100-1'
+    sim = "TNG100-1"
     redshift = 0.0
 
     # model hyperparameters
-    secondary_params = ['ssfr_log'] # ['mhalo_200_log'] # mgas2_log
-    #hidden_size = 8 # number of fully connected neurons in hidden layer(s)
+    secondary_params = ["ssfr_log"]  # ['mhalo_200_log'] # mgas2_log
+    # hidden_size = 8 # number of fully connected neurons in hidden layer(s)
 
     # learning parameters
-    test_fraction = 0.2 # fraction of data to reserve for testing
-    batch_size = 64 # number of data samples propagated through the network before params are updated
-    learning_rate = 1e-3 # i.e. prefactor on grads for gradient descent
-    acc_tol = 0.05 # acceptable tolerance for reporting the prediction accuracy (untransformed space, i.e. log msun)
-    epochs = 15 # number of times to iterate over the dataset
+    test_fraction = 0.2  # fraction of data to reserve for testing
+    batch_size = 64  # number of data samples propagated through the network before params are updated
+    learning_rate = 1e-3  # i.e. prefactor on grads for gradient descent
+    acc_tol = 0.05  # acceptable tolerance for reporting the prediction accuracy (untransformed space, i.e. log msun)
+    epochs = 15  # number of times to iterate over the dataset
 
-    p_str = '_' + '-'.join(secondary_params) if len(secondary_params) else ''
-    modelFilename = 'smhm_mlp_model_%d%s.pth' % (hidden_size, p_str)
+    p_str = "_" + "-".join(secondary_params) if len(secondary_params) else ""
+    modelFilename = "smhm_mlp_model_%d%s.pth" % (hidden_size, p_str)
 
     # check gpu
     if verbose:
-        print(f'GPU is available: {torch.cuda.is_available()} [# devices = {torch.cuda.device_count()}]')
+        print(f"GPU is available: {torch.cuda.is_available()} [# devices = {torch.cuda.device_count()}]")
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # load data
     data = SMHMDataset(sim, redshift, secondary_params)
-    
+
     # create indices for training/test subsets
     n = len(data)
     inds = list(range(n))
@@ -163,33 +171,35 @@ def train(hidden_size=8, verbose=True):
 
     # shuffle and split
     rng.shuffle(inds)
-    
+
     train_indices, test_indices = inds[split:], inds[:split]
 
     # create data samplers and loaders
     train_sampler = SubsetRandomSampler(train_indices)
     test_sampler = SubsetRandomSampler(test_indices)
 
-    train_dataloader = DataLoader(data, sampler=train_sampler, batch_size=batch_size,
-                                  shuffle=False, drop_last=False, pin_memory=False)
-    test_dataloader = DataLoader(data, sampler=test_sampler, batch_size=batch_size,
-                                 shuffle=False, drop_last=False, pin_memory=False)
+    train_dataloader = DataLoader(
+        data, sampler=train_sampler, batch_size=batch_size, shuffle=False, drop_last=False, pin_memory=False
+    )
+    test_dataloader = DataLoader(
+        data, sampler=test_sampler, batch_size=batch_size, shuffle=False, drop_last=False, pin_memory=False
+    )
 
     if verbose:
-        print(f'Total training samples [{len(train_sampler)}]. ', end='')
-        print(f'For [{batch_size = }], number of training batches [{len(train_dataloader)}].')
+        print(f"Total training samples [{len(train_sampler)}]. ", end="")
+        print(f"For [{batch_size = }], number of training batches [{len(train_dataloader)}].")
 
     # define model
-    model = mlp_network(hidden_size=hidden_size, num_inputs=len(secondary_params)+1)
+    model = mlp_network(hidden_size=hidden_size, num_inputs=len(secondary_params) + 1)
 
     # load to continue training?
     if 0 and isfile(modelFilename):
         # load pickled model class, as well as the model weights
         model = torch.load(modelFilename)
-        print(f'Loaded: [{modelFilename}].')
+        print(f"Loaded: [{modelFilename}].")
 
     # define loss function
-    loss_f = nn.MSELoss() # mean square error
+    loss_f = nn.MSELoss()  # mean square error
 
     # define optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -198,81 +208,81 @@ def train(hidden_size=8, verbose=True):
     test_loss_best = np.inf
 
     for i in range(epochs):
-        if verbose: print(f'\nEpoch: [{i}]')
+        train_loss = train_model(train_dataloader, model, loss_f, optimizer, batch_size, i, verbose=verbose)
 
-        train_loss = train_model(train_dataloader, model, loss_f, optimizer, batch_size, i, 
-                                  verbose=verbose)
-        
-        n = (i+1)*len(train_sampler)
-        test_loss = test_model(test_dataloader, model, loss_f, current_sample=n, acc_tol=acc_tol,
-                                verbose=verbose)
+        if verbose:
+            print(f"\nEpoch: [{i}] Train Loss: [{train_loss:.6f}]")
+
+        n = (i + 1) * len(train_sampler)
+        test_loss = test_model(test_dataloader, model, loss_f, current_sample=n, acc_tol=acc_tol, verbose=verbose)
 
         # periodically save trained model (should put epoch number into filename)
         if test_loss < test_loss_best:
             torch.save(model, modelFilename)
-            #print(f' new best loss, saved: [[modelFilename]].')
+            # print(f' new best loss, saved: [[modelFilename]].')
 
         test_loss_best = np.min([test_loss, test_loss_best])
 
     if verbose:
-        print(f'Done. [{test_loss_best = }]')
+        print(f"Done. [{test_loss_best = }]")
 
     return test_loss_best
 
-def loss_vs_hidden_size():
-    """ Explore the effect of the hidden layer size on the loss. """
 
+def loss_vs_hidden_size():
+    """Explore the effect of the hidden layer size on the loss."""
     # config
     hidden_sizes = [2, 4, 8, 16, 32, 64, 128, 256, 512]
-    cacheFilename = 'smhm_mlp_loss.hdf5'
+    cacheFilename = "smhm_mlp_loss.hdf5"
 
     if isfile(cacheFilename):
         # load from cache
-        with h5py.File(cacheFilename, 'r') as f:
-            hidden_sizes = f['hidden_sizes'][()]
-            loss = f['loss'][()]
-        print(f'Loaded [{cacheFilename}].')
+        with h5py.File(cacheFilename, "r") as f:
+            hidden_sizes = f["hidden_sizes"][()]
+            loss = f["loss"][()]
+        print(f"Loaded [{cacheFilename}].")
     else:
         # allocate
-        loss = np.zeros(len(hidden_sizes), dtype='float32')
+        loss = np.zeros(len(hidden_sizes), dtype="float32")
 
         # loop over each hidden_size parameter
         for i, hidden_size in enumerate(hidden_sizes):
             # train network
             loss[i] = train(hidden_size=hidden_size, verbose=False)
 
-            print(f'Hidden size: [{hidden_size}] with best {loss[i] = }.')
+            print(f"Hidden size: [{hidden_size}] with best {loss[i] = }.")
 
         # save to cache
-        with h5py.File('smhm_mlp_loss.hdf5', 'w') as f:
-            f['hidden_sizes'] = hidden_sizes
-            f['loss'] = loss
-    
+        with h5py.File("smhm_mlp_loss.hdf5", "w") as f:
+            f["hidden_sizes"] = hidden_sizes
+            f["loss"] = loss
+
     # plot
     fig, ax = plt.subplots()
 
-    ax.set_xscale('log')
-    ax.set_yscale('log')
-    ax.set_xlabel('Hidden Layer Size')
-    ax.set_ylabel('Test Loss')
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("Hidden Layer Size")
+    ax.set_ylabel("Test Loss")
 
-    ax.plot(hidden_sizes, loss, lw=lw, marker='o', linestyle='-')
+    ax.plot(hidden_sizes, loss, marker="o", linestyle="-")
 
-    fig.savefig('smhm_mlp_loss_vs_hidden_size.pdf')
+    fig.savefig("smhm_mlp_loss_vs_hidden_size.pdf")
     plt.close(fig)
 
+
 def plot_mstar_mhalo():
-    """ Plot the mstar->mhalo relation, ground truth vs trained model predictions. """
+    """Plot the mstar->mhalo relation, ground truth vs trained model predictions."""
     # config
-    sim = 'TNG100-1'
+    sim = "TNG100-1"
     redshift = 0.0
-    
+
     mstar_min = 9.0
     mstar_max = 12.5
 
     # model config
     hidden_sizes = [8, 16, 32, 64]
-    secondary_params = ['ssfr_log'] # ['mhalo_200_log']
+    secondary_params = ["ssfr_log"]  # ['mhalo_200_log']
 
     # load data
     data = SMHMDataset(sim, redshift, secondary_params)
@@ -280,23 +290,23 @@ def plot_mstar_mhalo():
     # plot
     fig, ax = plt.subplots()
 
-    ax.set_ylabel(r'M$_{\star}$ [ log M$_{\rm sun}$ ]')
-    ax.set_xlabel(r'M$_{\rm halo}$ [ log M$_{\rm sun}$ ]')
+    ax.set_ylabel(r"M$_{\star}$ [ log M$_{\rm sun}$ ]")
+    ax.set_xlabel(r"M$_{\rm halo}$ [ log M$_{\rm sun}$ ]")
 
-    ax.plot(data.labels, data.samples, 'o', linestyle='None', ms=5, alpha=0.3, label=sim)
+    ax.plot(data.labels, data.samples, "o", linestyle="None", ms=5, alpha=0.3, label=sim)
 
     # load model
     for hidden_size in hidden_sizes:
-        p_str = '_' + '-'.join(secondary_params) if len(secondary_params) else ''
-        modelFilename = 'smhm_mlp_model_%d%s.pth' % (hidden_size, p_str)
+        p_str = "_" + "-".join(secondary_params) if len(secondary_params) else ""
+        modelFilename = "smhm_mlp_model_%d%s.pth" % (hidden_size, p_str)
         print(modelFilename)
         model = torch.load(modelFilename)
 
-        model.eval() # evaluation mode
+        model.eval()  # evaluation mode
 
         if not len(secondary_params):
             # sample model: if mstar is the only input, then just evenly sample its range
-            xx = np.linspace(mstar_min, mstar_max, 100, dtype='float32')
+            xx = np.linspace(mstar_min, mstar_max, 100, dtype="float32")
             vals = data.transform(torch.from_numpy(xx))
             X = vals.unsqueeze(-1)
         else:
@@ -311,12 +321,12 @@ def plot_mstar_mhalo():
             xx = xx[inds]
 
             # model(X) evaluation where X.shape = [num_pts, num_fields_per_pt]
-            vals = torch.zeros((len(inds),len(secondary_params)+1), dtype=data.samples.dtype)
-            vals[:,0] = data.transform(xx)
+            vals = torch.zeros((len(inds), len(secondary_params) + 1), dtype=data.samples.dtype)
+            vals[:, 0] = data.transform(xx)
 
             for i, param in enumerate(data.secondary_params):
-                vals[:,i+1] = data.p_transforms[param](data.p_data[param][inds])
-            
+                vals[:, i + 1] = data.p_transforms[param](data.p_data[param][inds], data.p_minmax[param])
+
             X = vals
 
         with torch.no_grad():
@@ -324,26 +334,27 @@ def plot_mstar_mhalo():
 
         # plot
         if not len(secondary_params):
-            ax.plot(Y, xx, lw=lw, label='MLP[%d]' % hidden_size)
+            ax.plot(Y, xx, label="MLP[%d]" % hidden_size)
         else:
-            ax.plot(Y, xx, 'o', lw=0, ms=7, label='MLP[%d]' % hidden_size)
+            ax.plot(Y, xx, "o", lw=0, ms=7, label="MLP[%d]" % hidden_size)
 
-    ax.legend(loc='upper left')
-    fig.savefig('smhm_mstar_mhalo%s.png' % p_str)
+    ax.legend(loc="upper left")
+    fig.savefig("smhm_mstar_mhalo%s.png" % p_str)
     plt.close(fig)
 
+
 def plot_mhalo_error_distribution():
-    """ Plot a histogram of (ground truth - trained model prediction) i.e. error on mhalo. """
+    """Plot a histogram of (ground truth - trained model prediction) i.e. error on mhalo."""
     # config
-    sim = 'TNG100-1'
+    sim = "TNG100-1"
     redshift = 0.0
 
     nbins = 100
-    hist_minmax = [-1.5, 1.5] # log msun
+    hist_minmax = [-1.5, 1.5]  # log msun
 
     # model config
     hidden_sizes = [8, 16, 32, 64]
-    secondary_params = ['ssfr_log'] # ['mhalo_200_log'] #
+    secondary_params = ["ssfr_log"]  # ['mhalo_200_log'] #
 
     err_hist = []
 
@@ -352,21 +363,21 @@ def plot_mhalo_error_distribution():
 
     # load model and evaluate on all data
     for hidden_size in hidden_sizes:
-        p_str = '_' + '-'.join(secondary_params) if len(secondary_params) else ''
-        modelFilename = 'smhm_mlp_model_%d%s.pth' % (hidden_size, p_str)
+        p_str = "_" + "-".join(secondary_params) if len(secondary_params) else ""
+        modelFilename = "smhm_mlp_model_%d%s.pth" % (hidden_size, p_str)
         print(modelFilename)
         model = torch.load(modelFilename)
 
-        model.eval() # evaluation mode
+        model.eval()  # evaluation mode
 
         xx = data.samples
 
         # model(X) evaluation where X.shape = [num_pts, num_fields_per_pt]
-        vals = torch.zeros((len(xx),len(secondary_params)+1), dtype=data.samples.dtype)
-        vals[:,0] = data.transform(xx)
+        vals = torch.zeros((len(xx), len(secondary_params) + 1), dtype=data.samples.dtype)
+        vals[:, 0] = data.transform(xx)
 
         for i, param in enumerate(data.secondary_params):
-            vals[:,i+1] = data.p_transforms[param](data.p_data[param])
+            vals[:, i + 1] = data.p_transforms[param](data.p_data[param], data.p_minmax[param])
 
         if not len(secondary_params):
             vals = vals.unsqueeze(-1)
@@ -385,47 +396,48 @@ def plot_mhalo_error_distribution():
     # plot
     fig, ax = plt.subplots()
 
-    ax.set_ylabel(r'PDF')
-    ax.set_xlabel(r'$\Delta$ M$_{\rm halo}$ [ log M$_{\rm sun}$ ]')
-    ax.set_yscale('log')
+    ax.set_ylabel(r"PDF")
+    ax.set_xlabel(r"$\Delta$ M$_{\rm halo}$ [ log M$_{\rm sun}$ ]")
+    ax.set_yscale("log")
 
     for i, hidden_size in enumerate(hidden_sizes):
-        ax.plot(bin_cen, err_hist[i], lw=lw, label='MLP[%d]' % hidden_size)
+        ax.plot(bin_cen, err_hist[i], label="MLP[%d]" % hidden_size)
 
-    ax.legend(loc='upper left')
-    fig.savefig('smhm_mhalo_err_dist%s.pdf' % p_str)
+    ax.legend(loc="upper left")
+    fig.savefig("smhm_mhalo_err_dist%s.pdf" % p_str)
     plt.close(fig)
 
+
 def plot_true_vs_predicted_mhalo(hidden_size=8):
-    """ Scatterplot of true vs predicted labels, versus the one-to-one (perfect) relation. """
+    """Scatterplot of true vs predicted labels, versus the one-to-one (perfect) relation."""
     # config
-    sim = 'TNG100-1'
+    sim = "TNG100-1"
     redshift = 0.0
 
     lim = [10.0, 15.0]
 
     # model config
-    secondary_params = ['ssfr_log'] # ['mhalo_200_log']
+    secondary_params = ["ssfr_log"]  # ['mhalo_200_log']
 
     # load data
     data = SMHMDataset(sim, redshift, secondary_params)
 
     # load model and evaluate on all data
-    p_str = '_' + '-'.join(secondary_params) if len(secondary_params) else ''
-    modelFilename = 'smhm_mlp_model_%d%s.pth' % (hidden_size, p_str)
+    p_str = "_" + "-".join(secondary_params) if len(secondary_params) else ""
+    modelFilename = "smhm_mlp_model_%d%s.pth" % (hidden_size, p_str)
     print(modelFilename)
     model = torch.load(modelFilename)
 
-    model.eval() # evaluation mode
+    model.eval()  # evaluation mode
 
     xx = data.samples
 
     # model(X) evaluation where X.shape = [num_pts, num_fields_per_pt]
-    vals = torch.zeros((len(xx),len(secondary_params)+1), dtype=data.samples.dtype)
-    vals[:,0] = data.transform(xx)
+    vals = torch.zeros((len(xx), len(secondary_params) + 1), dtype=data.samples.dtype)
+    vals[:, 0] = data.transform(xx)
 
     for i, param in enumerate(data.secondary_params):
-        vals[:,i+1] = data.p_transforms[param](data.p_data[param])
+        vals[:, i + 1] = data.p_transforms[param](data.p_data[param], data.p_minmax[param])
 
     if not len(secondary_params):
         vals = vals.unsqueeze(-1)
@@ -435,16 +447,16 @@ def plot_true_vs_predicted_mhalo(hidden_size=8):
         Y = data.target_invtransform(model(vals))
 
     # plot
-    fig, ax = plt.subplots(figsize=(figsize[1],figsize[1]))
+    fig, ax = plt.subplots(figsize=(11, 11))
 
-    ax.set_ylabel(r'M$_{\rm halo,predicted}$ [ log M$_{\rm sun}$ ]')
-    ax.set_xlabel(r'M$_{\rm halo,true}$ [ log M$_{\rm sun}$ ]')
+    ax.set_ylabel(r"M$_{\rm halo,predicted}$ [ log M$_{\rm sun}$ ]")
+    ax.set_xlabel(r"M$_{\rm halo,true}$ [ log M$_{\rm sun}$ ]")
     ax.set_ylim(lim)
     ax.set_xlim(lim)
 
-    ax.plot(data.labels, Y, 'o', ls='None', ms=4, alpha=0.5, label='MLP[%d]' % hidden_size)
-    ax.plot(lim, lim, '-', lw=lw, color='black', alpha=0.7, label='1-to-1')
+    ax.plot(data.labels, Y, "o", ls="None", ms=4, alpha=0.5, label="MLP[%d]" % hidden_size)
+    ax.plot(lim, lim, "-", color="black", alpha=0.7, label="1-to-1")
 
-    ax.legend(loc='upper left')
-    fig.savefig('smhm_mhalo_true_vs_predicted_%d%s.pdf' % (hidden_size,p_str))
+    ax.legend(loc="upper left")
+    fig.savefig("smhm_mhalo_true_vs_predicted_%d%s.pdf" % (hidden_size, p_str))
     plt.close(fig)

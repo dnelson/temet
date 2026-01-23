@@ -17,7 +17,7 @@ from scipy.signal import savgol_filter
 
 from ..cosmo.zooms import contamination_mindist
 from ..plot import subhalos
-from ..plot.config import figsize, lw, markers, sKn, sKo
+from ..plot.config import colors, figsize, lw, markers, sKn, sKo
 from ..plot.cosmoMisc import simClustersComparison
 from ..util import simParams
 from ..util.helper import loadColorTable, logZeroNaN, running_median
@@ -354,8 +354,6 @@ def sample_halomasses_vs_redshift(sPs):
 
     ax.set_xlim(zrange)
     ax.set_ylim([13.97, 15.5])
-
-    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
     # load simulations and plot
     for i, sP in enumerate(sPs):

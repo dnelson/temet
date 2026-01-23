@@ -16,7 +16,7 @@ from matplotlib.ticker import ScalarFormatter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from ..cosmo.cloudy import cloudyIon
-from ..plot.config import figsize, linestyles, markers, percs
+from ..plot.config import colors, figsize, linestyles, markers, percs
 from ..spectra.plot import (
     EW_distribution,
     EW_vs_coldens,
@@ -324,8 +324,6 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None, SNR=None):
     gs = fig.add_gridspec(2, len(zooms))
     ax_top = fig.add_subplot(gs[0, :])
     ax_zooms = [fig.add_subplot(gs[1, i]) for i in range(len(zooms))]
-
-    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
     # top panel: strong absorbers, down to saturation
     ax_top.set_ylim([-0.03, 1.05])
@@ -1110,8 +1108,6 @@ def ion_redshift_coverage(sim, single=False, all=True, lowz=False):
     ax.get_xaxis().set_major_formatter(ScalarFormatter())
 
     # loop over ions
-    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-
     for i, ion in enumerate(ions):
         lines_loc = []
         wave0_loc = []

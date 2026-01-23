@@ -1774,8 +1774,6 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
     if not split_z:
         z_bins = [[5.5, 15.0]]
 
-    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-
     for field in ["Density", "Temperature", "Metallicity"]:
         # plot
         fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))

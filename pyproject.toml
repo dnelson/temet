@@ -121,3 +121,4 @@ convention = "google"
 "tests/*" = ["D103"] # Missing docstring in function
 "__init__.py" = ["F401"] # imported but unused
 "temet/load/*_fields*.py" = ["D205","D209"] # allow simple multi-line docstrings for field descriptions
+"temet/plot/quantities.py" = ["E501"] # Line too long (can be removed after quantDescriptions merged with docstrings)

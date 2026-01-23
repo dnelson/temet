@@ -19,7 +19,7 @@ from scipy.stats import gaussian_kde
 
 from ..cosmo.color import calcSDSSColors, loadSimGalColors
 from ..plot import subhalos
-from ..plot.config import binSize, cssLabels, figsize, linestyles, lw, pStyle, sKn, sKo
+from ..plot.config import binSize, colors, cssLabels, figsize, linestyles, lw, pStyle, sKn, sKo
 from ..plot.quantities import bandMagRange, simSubhaloQuantity
 from ..projects.color_analysis import (
     calcColorEvoTracks,
@@ -2126,7 +2126,6 @@ def colorTransitionTimescale(sPs, bands=("g", "r"), simColorsModel=defSimColorMo
 
         # plot
         binSize = (fieldMinMax[xAxis][1] - fieldMinMax[xAxis][0]) / nBins
-        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
         for i, sP in enumerate(sPs):
             for j, cenSatSelect in enumerate(plotCSS):

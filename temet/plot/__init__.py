@@ -1,20 +1,14 @@
-""" Plotting routines. """
-from . import clustering
-from . import cosmoMisc
-from . import drivers
-from . import driversObs
-from . import driversSizes
-from . import meta
-from . import perf
-from . import quantities
-from . import snapshot
-from . import subhalos
-from .config import *
+"""Plotting routines."""
 
 import pathlib
+
 import matplotlib
 import matplotlib.pyplot as plt
-matplotlib.use('Agg')
+
+from . import clustering, cosmoMisc, drivers, driversObs, driversSizes, meta, perf, quantities, snapshot, subhalos
+
+
+matplotlib.use("Agg")
 
 style_path = pathlib.Path(__file__).parent.resolve()
-plt.style.use(str(style_path / 'mpl.style'))
+plt.style.use(str(style_path / "mpl.style"))

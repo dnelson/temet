@@ -19,7 +19,7 @@ from scipy.stats import binned_statistic, binned_statistic_2d
 from ..cosmo.util import subboxSubhaloCat
 from ..load.data import berg2019, chen2018zahedy2019, werk2013
 from ..plot import snapshot, subhalos
-from ..plot.config import figsize, figsize_sm, linestyles, percs, sKn, sKo
+from ..plot.config import colors, figsize, figsize_sm, linestyles, percs, sKn, sKo
 from ..projects.oxygen import (
     ionTwoPointCorrelation,
     obsColumnsDataPlotExtended,
@@ -66,7 +66,6 @@ def radialResolutionProfiles(
     ax.set_ylabel(r"Gas Resolution $r_{\rm cell}$ [ log kpc ]")
 
     # init
-    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     rvirs = []
 
     if haloMassBins is not None:
