@@ -1,18 +1,20 @@
-""" Test and benchmark cosmo.lightcone and util.boxRemap. """
+"""Test and benchmark cosmo.lightcone and util.boxRemap."""
+
 import numpy as np
 import pytest
 
 from temet.util import simParams as sim
 from temet.util.boxRemap import remapPositions
 
+
 @pytest.mark.requires_data
 def test_boxremap():
     # load some sim data
-    sP = sim(res=128, run='tng', redshift=0.0, variant='0000')
-    pos = sP.snapshotSubset('gas','pos')
+    sP = sim(res=128, run="tng", redshift=0.0, variant="0000")
+    pos = sP.snapshotSubset("gas", "pos")
 
     # two configurations
-    for i in [0,1]:
+    for i in [0, 1]:
         # configs
         if i == 0:
             nPixels = [2000, 2000]

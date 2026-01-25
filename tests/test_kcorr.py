@@ -1,17 +1,19 @@
-""" Test and benchmark cosmo.kCorr. """
+"""Test and benchmark cosmo.kCorr."""
+
 import numpy as np
 import pytest
 
 from temet.cosmo.kCorr import kCorrections
 
+
 def test_benchmark_kcorr(benchmark):
-    """ Benchmark. """
+    """Benchmark."""
     rng = np.random.default_rng(424242)
-    filter_name = 'u'
-    color_name = 'ui'
+    filter_name = "u"
+    color_name = "ui"
 
     N = 100000
-    redshifts    = rng.uniform(0.0, 0.1, size=N)
+    redshifts = rng.uniform(0.0, 0.1, size=N)
     color_values = rng.uniform(0.5, 2.5, size=N)
 
     # closure for compute kernel: loop over requested path lengths

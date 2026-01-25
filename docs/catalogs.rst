@@ -239,19 +239,19 @@ Current Catalog Definitions
 ---------------------------
 
 The code base currently has the following catalog definitions, as listed in the 
-``fieldComputeFunctionMapping`` dictionary of :py:mod:`load.auxcat`.
+``def_fields`` dictionary of :py:mod:`load.auxcat_fields`.
 
 .. exec::
 
-    from temet.load.auxcat import fieldComputeFunctionMapping
+    from temet.load.auxcat_fields import def_fields
 
     print('.. csv-table::')
     print('    :header: "Catalog Name", "Generator Function", "Arguments"')
     print('    :widths: 10, 30, 60')
     print('')
 
-    for key in fieldComputeFunctionMapping.keys():
-        func = fieldComputeFunctionMapping[key] # partial
+    for key in def_fields.keys():
+        func = def_fields[key] # partial
         func_name = ":py:func:`~%s.%s`" % (func.func.__module__, func.func.__name__)
         func_args = ', '.join(['``%s`` = %s' % (k,v) for k,v in func.keywords.items()])
         print('    "%s", "%s", "%s"' % (key,func_name,func_args))
