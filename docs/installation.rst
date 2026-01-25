@@ -45,7 +45,7 @@ Or, if you would like to install the most up-to-date version directly from the r
 
 .. code-block:: bash
 
-    pip install git+ssh://git@github.com/dnelson86/temet.git
+    pip install git+ssh://git@github.com/dnelson/temet.git
 
 If you plan on editing, making changes, and adding functionality to this package (**recommended choice**), then first 
 clone the repository, then install the package in 'editable' mode. This means that the files in this directory are not copied 
@@ -53,7 +53,7 @@ anywhere, but are used as is. Any changes you make are reflected (i.e. immediate
 
 .. code-block:: bash
 
-    git clone git@github.com:dnelson86/temet.git
+    git clone git@github.com:dnelson/temet.git
     pip install -e temet
 
 

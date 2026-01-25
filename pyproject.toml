@@ -79,8 +79,8 @@ docs = [
 ]
 
 [project.urls]
-"Homepage" = "https://www.github.com/dnelson86/temet/"
-"Bug Tracker" = "https://www.github.com/dnelson86/temet/issues"
+"Homepage" = "https://www.github.com/dnelson/temet/"
+"Bug Tracker" = "https://www.github.com/dnelson/temet/issues"
 "Documentation" = "https://temet.tng-project.org/"
 
 [tool.pytest]
