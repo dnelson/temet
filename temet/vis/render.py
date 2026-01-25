@@ -2,40 +2,41 @@
 Visualizations: render actual image.
 """
 
-import numpy as np
 import hashlib
-import h5py
 from getpass import getuser
-from os.path import isfile, isdir
 from os import mkdir
+from os.path import isdir, isfile
 
+import h5py
+import numpy as np
 from scipy.ndimage import gaussian_filter
 
-from ..util.sphMap import sphMap
-from ..util.treeSearch import calcHsml
-from ..util.voronoiRay import rayTrace
-from ..util.helper import logZeroMin, pSplitRange
-from ..util.match import match
-from ..util.boxRemap import remapPositions
-from ..util.rotation import rotateCoordinateArray, perspectiveProjection
 from ..cosmo.cloudy import cloudyEmission
 from ..cosmo.stellarPop import sps
 from ..spectra.spectrum import create_spectra_from_traced_rays
-
+from ..util.boxRemap import remapPositions
+from ..util.helper import logZeroMin, pSplitRange
+from ..util.match import match
+from ..util.rotation import perspectiveProjection, rotateCoordinateArray
+from ..util.sphMap import sphMap
+from ..util.treeSearch import calcHsml
+from ..util.voronoiRay import rayTrace
 from ..vis.quantities import (
-    volDensityFields,
     colDensityFields,
-    totSumFields,
-    velLOSFieldNames,
-    velCompFieldNames,
-    haloCentricFields,
     gridOutputProcess,
+    haloCentricFields,
+    totSumFields,
+    velCompFieldNames,
+    velLOSFieldNames,
+    volDensityFields,
 )
 
 
 def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, alsoSFRgasForStars=False, pSplit=None):
-    """Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given
-    type, for the full snapshot, optionally restricted to an input indRange."""
+    """Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given type.
+
+    By default for the full snapshot, optionally restricted to an input indRange.
+    """
     _, sbStr, _ = sP.subboxVals()
     irStr = "" if indRange is None else ".%d-%d" % (indRange[0], indRange[1])
     shStr = "" if useSnapHsml is False else ".sv"
@@ -186,7 +187,6 @@ def defaultHsmlFac(partType):
 
 def clipStellarHSMLs(hsml, sP, pxScale, nPixels, indRange, method=2):
     """Clip input stellar HSMLs/sizes to minimum/maximum values. Work in progress."""
-
     # use a minimum/maximum size for stars in outskirts
     if method == 0:
         # constant based on numerical resolution
@@ -253,7 +253,7 @@ def _stellar_3bands(partField):
     assert len(bands) == 3
 
     bandsStr = ", ".join(bands)
-    if all([band.startswith("jwst_") for band in bands]):
+    if all(band.startswith("jwst_") for band in bands):
         bandsStr = "JWST %s" % ", ".join([band.replace("jwst_", "") for band in bands])
     label = "Stellar Composite [%s]" % bandsStr
 
@@ -293,95 +293,47 @@ def stellar3BandCompositeImage(
     fieldPrefix = "stellarBandObsFrame-" if "ObsFrame" in partField else "stellarBand-"
 
     # print('Generating stellar composite with %s [%s %s %s]' % (fieldPrefix,bands[0],bands[1],bands[2]))
-
-    band0_grid_mag, _, _ = gridBox(
-        sP,
-        method,
-        "stars",
-        fieldPrefix + bands[0],
-        nPixels,
-        axes,
-        projType,
-        projParams,
-        boxCenter,
-        boxSizeImg,
-        hsmlFac,
-        rotMatrix,
-        rotCenter,
-        remapRatio,
-        forceRecalculate,
-        smoothFWHM,
-        snapHsmlForStars,
-        alsoSFRgasForStars,
-        excludeSubhaloFlag,
-        skipCellIndices,
-        ptRestrictions,
-        weightField,
-        randomNoise,
-    )
-    band1_grid_mag, _, _ = gridBox(
-        sP,
-        method,
-        "stars",
-        fieldPrefix + bands[1],
-        nPixels,
-        axes,
-        projType,
-        projParams,
-        boxCenter,
-        boxSizeImg,
-        hsmlFac,
-        rotMatrix,
-        rotCenter,
-        remapRatio,
-        forceRecalculate,
-        smoothFWHM,
-        snapHsmlForStars,
-        alsoSFRgasForStars,
-        excludeSubhaloFlag,
-        skipCellIndices,
-        ptRestrictions,
-        weightField,
-        randomNoise,
-    )
-    band2_grid_mag, _, _ = gridBox(
-        sP,
-        method,
-        "stars",
-        fieldPrefix + bands[2],
-        nPixels,
-        axes,
-        projType,
-        projParams,
-        boxCenter,
-        boxSizeImg,
-        hsmlFac,
-        rotMatrix,
-        rotCenter,
-        remapRatio,
-        forceRecalculate,
-        smoothFWHM,
-        snapHsmlForStars,
-        alsoSFRgasForStars,
-        excludeSubhaloFlag,
-        skipCellIndices,
-        ptRestrictions,
-        weightField,
-        randomNoise,
-    )
+    band_grids = []  # in mags
+    for i in range(3):
+        grid_loc, _, _ = gridBox(
+            sP,
+            method,
+            "stars",
+            fieldPrefix + bands[i],
+            nPixels,
+            axes,
+            projType,
+            projParams,
+            boxCenter,
+            boxSizeImg,
+            hsmlFac,
+            rotMatrix,
+            rotCenter,
+            remapRatio,
+            forceRecalculate,
+            smoothFWHM,
+            snapHsmlForStars,
+            alsoSFRgasForStars,
+            excludeSubhaloFlag,
+            skipCellIndices,
+            ptRestrictions,
+            weightField,
+            randomNoise,
+        )
+        band_grids.append(grid_loc)
 
     # convert magnitudes to linear luminosities
-    ww = np.where(band0_grid_mag < 99)  # these left at zero
-    band0_grid = band0_grid_mag.copy() * 0.0
-    band0_grid[ww] = np.power(10.0, -0.4 * band0_grid_mag[ww])
+    ww = np.where(band_grids[0] < 99)  # these left at zero
+    band0_grid = band_grids[0].copy() * 0.0
+    band0_grid[ww] = np.power(10.0, -0.4 * band_grids[0][ww])
 
-    ww = np.where(band1_grid_mag < 99)
-    band1_grid = band1_grid_mag.copy() * 0.0
-    band1_grid[ww] = np.power(10.0, -0.4 * band1_grid_mag[ww])
+    ww = np.where(band_grids[1] < 99)
+    band1_grid = band_grids[1].copy() * 0.0
+    band1_grid[ww] = np.power(10.0, -0.4 * band_grids[1][ww])
 
-    ww = np.where(band2_grid_mag < 99)
-    band2_grid = band2_grid_mag.copy() * 0.0
-    band2_grid[ww] = np.power(10.0, -0.4 * band2_grid_mag[ww])
+    ww = np.where(band_grids[2] < 99)
+    band2_grid = band_grids[2].copy() * 0.0
+    band2_grid[ww] = np.power(10.0, -0.4 * band_grids[2][ww])
 
     grid_master = np.zeros((nPixels[1], nPixels[0], 3), dtype="float32")
     grid_master_u = np.zeros((nPixels[1], nPixels[0], 3), dtype="uint8")
@@ -442,9 +394,9 @@ def stellar3BandCompositeImage(
         scale_min = 0.1  # 1e5 # units of linear luminosity
 
         # make RGB array using arcsinh scaling following Lupton (1e7 shift to avoid truncation issues)
-        band0_grid = sP.units.absMagToLuminosity(band0_grid_mag) * fac["g"] * 1e7
-        band1_grid = sP.units.absMagToLuminosity(band1_grid_mag) * fac["r"] * 1e7
-        band2_grid = sP.units.absMagToLuminosity(band2_grid_mag) * fac["i"] * 1e7
+        band0_grid = sP.units.absMagToLuminosity(band_grids[0]) * fac["g"] * 1e7
+        band1_grid = sP.units.absMagToLuminosity(band_grids[1]) * fac["r"] * 1e7
+        band2_grid = sP.units.absMagToLuminosity(band_grids[2]) * fac["i"] * 1e7
 
         if "ObsFrame" in partField:  # scaling is sensitive to this value (i.e. mean flux), needs some generalization
             band0_grid *= 1e15
@@ -466,7 +418,7 @@ def stellar3BandCompositeImage(
             for i in range(3):
                 grid_master[w[0], w[1], i] /= maxval[w]
 
-            minval = np.min(grid_master, axis=2)
+            # minval = np.min(grid_master, axis=2)
 
             w = np.where((maxval < 0.0) | (inten < 0.0))
             for i in range(3):
@@ -562,7 +514,8 @@ def stellar3BandCompositeImage(
             grid_master[:, :, i] = grid_stretch
             grid_master_u[:, :, i] = grid_stretch * np.uint8(255)
 
-            # print(' grid: ',i,grid_stretch.min(),grid_stretch.max(),grid_master_u[:,:,i].min(),grid_master_u[:,:,i].max())
+            # print(' grid: ',i,grid_stretch.min(),grid_stretch.max(),\
+            #       grid_master_u[:,:,i].min(),grid_master_u[:,:,i].max())
 
         # saturation adjust
         if 0:
@@ -572,7 +525,7 @@ def stellar3BandCompositeImage(
             B = grid_master_u[:, :, 2]
             P = np.sqrt(R * R * 0.299 + G * G * 0.587 + B * B * 0.144)  # standard luminance weights
 
-            ww = np.where((B > 150))
+            ww = np.where(B > 150)
             # grid_master_u[:,:,0] = np.uint8(np.clip( P + (R-P)*satVal, 0, 255 ))
             # grid_master_u[:,:,1] = np.uint8(np.clip( P + (G-P)*satVal, 0, 255 ))
             B[ww] = np.uint8(np.clip(P[ww] + (B[ww] - P[ww]) * satVal, 0, 255))
@@ -958,31 +911,10 @@ def gridBox(
     # generate a 3-band composite stellar image from 3 bands
     if "stellarComp" in partField or "stellarCompObsFrame" in partField:
         autoLimits = True if "autoLimits" not in kwargs else kwargs["autoLimits"]
-        return stellar3BandCompositeImage(
-            sP,
-            partField,
-            method,
-            nPixels,
-            axes,
-            projType,
-            projParams,
-            boxCenter,
-            boxSizeImg,
-            hsmlFac,
-            rotMatrix,
-            rotCenter,
-            remapRatio,
-            forceRecalculate,
-            smoothFWHM,
-            snapHsmlForStars,
-            alsoSFRgasForStars,
-            excludeSubhaloFlag,
-            skipCellIndices,
-            ptRestrictions,
-            weightField,
-            randomNoise,
-            autoLimits,
-        )
+        return stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, projParams, boxCenter,
+            boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate,
+            smoothFWHM, snapHsmlForStars, alsoSFRgasForStars, excludeSubhaloFlag,
+            skipCellIndices, ptRestrictions, weightField, randomNoise, autoLimits)  # fmt: skip
 
     # map
     if not forceRecalculate and isfile(saveFilename):
@@ -1049,24 +981,9 @@ def gridBox(
             partFieldRef = partField.replace("sigma", "")  # e.g. 'velsigma_los' -> 'vel_los'
             projParamsLoc = dict(projParams)
             projParamsLoc["noclip"] = True
-            refGrid, _, _ = gridBox(
-                sP,
-                method,
-                partType,
-                partFieldRef,
-                nPixels,
-                axes,
-                projType,
-                projParamsLoc,
-                boxCenter,
-                boxSizeImg,
-                hsmlFac,
-                rotMatrix,
-                rotCenter,
-                remapRatio,
-                smoothFWHM=smoothFWHM,
-                ptRestrictions=ptRestrictions,
-            )
+            refGrid, _, _ = gridBox(sP, method, partType, partFieldRef, nPixels, axes, projType, projParamsLoc,
+                                    boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio,
+                                    smoothFWHM=smoothFWHM, ptRestrictions=ptRestrictions)  # fmt: skip
 
         # allocate
         grid_dens = np.zeros(nPixels[::-1], dtype="float32")
@@ -1228,7 +1145,7 @@ def gridBox(
                     projParams["b"] = -halfHeight
                 else:
                     tangent = (projParams["t"] - projParams["b"]) / projParams["n"]
-                    fov = np.rad2deg(np.arctan(tangent) * 2.0)
+                    # fov = np.rad2deg(np.arctan(tangent) * 2.0)
                     # print('fov: %.1f' % fov)
 
                 # shift pos to boxCenter
@@ -1509,8 +1426,9 @@ def gridBox(
 
                 # special behavior
                 # def _weighted_std(values, weights):
-                #    """ Return weighted standard deviation. Would enable e.g. velsigma_los with sfr/X-ray weights, except that user
-                #        functions in binned_statistic_2d() cannot accept any arguments beyond the list of values in a bin.
+                #    """ Return weighted standard deviation.
+                #        Would enable e.g. velsigma_los with sfr/X-ray weights, except that user functions in
+                #        binned_statistic_2d() cannot accept any arguments beyond the list of values in a bin.
                 #        So we cannot do a weighted f(), without rewriting the internals therein. """
                 #    avg = np.average(values, weights=weights)
                 #    delta = values - avg
@@ -1531,7 +1449,7 @@ def gridBox(
                     assert refGrid is None  # not supported except for this one field
 
             elif method in ["voronoi_slice", "voronoi_slice_subhalo"]:
-                # Voronoi mesh slice, fof-scope or subhalo-scope, using tree nearest neighbor search as answer (no gradients)
+                # Voronoi mesh slice, fof-scope or subhalo-scope, using tree nearest neighbor search (no gradients)
                 # note: only for a specified non-mass quantity, in which case the map gives the direct value of the
                 # nearest gas cell (no weighting relevant)
                 assert axes == [0, 1]  # otherwise check everything
@@ -1543,18 +1461,13 @@ def gridBox(
                 # define (x,y) pixel centers
                 pxSize = [boxSizeImg[0] / nPixels[0], boxSizeImg[1] / nPixels[1]]
 
-                xpts = (
-                    np.linspace(
-                        boxCenter[0] - boxSizeImg[0] / 2, boxCenter[0] + boxSizeImg[0] / 2 - pxSize[0], nPixels[0]
-                    )
-                    + pxSize[0] / 2
-                )
-                ypts = (
-                    np.linspace(
-                        boxCenter[1] - boxSizeImg[1] / 2, boxCenter[1] + boxSizeImg[1] / 2 - pxSize[1], nPixels[1]
-                    )
-                    + pxSize[1] / 2
-                )
+                x0 = boxCenter[0] - boxSizeImg[0] / 2
+                x1 = boxCenter[0] + boxSizeImg[0] / 2 - pxSize[0]
+                xpts = np.linspace(x0, x1, nPixels[0]) + pxSize[0] / 2
+
+                y0 = boxCenter[1] - boxSizeImg[1] / 2
+                y1 = boxCenter[1] + boxSizeImg[1] / 2 - pxSize[1]
+                ypts = np.linspace(y0, y1, nPixels[1]) + pxSize[1] / 2
 
                 # explode into nPixels[0]*nPixels[1] arrays
                 xpts, ypts = np.meshgrid(xpts, ypts, indexing="ij")
@@ -1588,18 +1501,13 @@ def gridBox(
                 # define (x,y) pixel centers
                 pxSize = [boxSizeImg[0] / nPixels[0], boxSizeImg[1] / nPixels[1]]
 
-                xpts = (
-                    np.linspace(
-                        boxCenter[0] - boxSizeImg[0] / 2, boxCenter[0] + boxSizeImg[0] / 2 - pxSize[0], nPixels[0]
-                    )
-                    + pxSize[0] / 2
-                )
-                ypts = (
-                    np.linspace(
-                        boxCenter[1] - boxSizeImg[1] / 2, boxCenter[1] + boxSizeImg[1] / 2 - pxSize[1], nPixels[1]
-                    )
-                    + pxSize[1] / 2
-                )
+                x0 = boxCenter[0] - boxSizeImg[0] / 2
+                x1 = boxCenter[0] + boxSizeImg[0] / 2 - pxSize[0]
+                xpts = np.linspace(x0, x1, nPixels[0]) + pxSize[0] / 2
+
+                y0 = boxCenter[1] - boxSizeImg[1] / 2
+                y1 = boxCenter[1] + boxSizeImg[1] / 2 - pxSize[1]
+                ypts = np.linspace(y0, y1, nPixels[1]) + pxSize[1] / 2
 
                 # explode into nPixels[0]*nPixels[1] arrays
                 xpts, ypts = np.meshgrid(xpts, ypts, indexing="ij")
@@ -1802,72 +1710,27 @@ def gridBox(
     # clip the line of sight to zero (or nan) where log(n_HI)<19.0 cm^(-2)
     if 0 and partField in velLOSFieldNames:
         print("Clipping LOS velocity, visible at log(n_HI) > 19.0 only.")
-        grid_nHI, _, _ = gridBox(
-            sP,
-            method,
-            "gas",
-            "HI_segmented",
-            nPixels,
-            axes,
-            projType,
-            projParams,
-            boxCenter,
-            boxSizeImg,
-            hsmlFac,
-            rotMatrix,
-            rotCenter,
-            remapRatio,
-            smoothFWHM=smoothFWHM,
-            ptRestrictions=ptRestrictions,
-        )
+        grid_nHI, _, _ = gridBox(sP, method, "gas", "HI_segmented", nPixels, axes, projType, projParams,
+            boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio,
+            smoothFWHM=smoothFWHM, ptRestrictions=ptRestrictions)  # fmt: skip
 
         grid_master[grid_nHI < 19.0] = np.nan
 
     if 0 and partField in velLOSFieldNames:
         if "noclip" not in projParams:
             print("Clipping LOS velocity, visible at SFR surface density > 0.01 msun/yr/kpc^2 only.")
-            grid_sfrsd, _, _ = gridBox(
-                sP,
-                method,
-                "gas",
-                "sfr_msunyrkpc2",
-                nPixels,
-                axes,
-                projType,
-                projParams,
-                boxCenter,
-                boxSizeImg,
-                hsmlFac,
-                rotMatrix,
-                rotCenter,
-                remapRatio,
-                smoothFWHM=smoothFWHM,
-                ptRestrictions=ptRestrictions,
-            )
+            grid_sfrsd, _, _ = gridBox(sP, method, "gas", "sfr_msunyrkpc2", nPixels, axes, projType, projParams,
+                boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio,
+                smoothFWHM=smoothFWHM, ptRestrictions=ptRestrictions)  # fmt: skip
 
             grid_master[grid_sfrsd < -3.0] = np.nan
 
     # temporary: similar, truncate stellar_age projection at a stellar column density of
     # ~log(3.2) [msun/kpc^2] equal to the bottom of the color scale for the illustris/tng sb0 box renders
     if partField == "stellar_age":
-        grid_stellarColDens, _, _ = gridBox(
-            sP,
-            method,
-            "stars",
-            "coldens_msunkpc2",
-            nPixels,
-            axes,
-            projType,
-            projParams,
-            boxCenter,
-            boxSizeImg,
-            hsmlFac,
-            rotMatrix,
-            rotCenter,
-            remapRatio,
-            smoothFWHM=smoothFWHM,
-            ptRestrictions=ptRestrictions,
-        )
+        grid_stellarColDens, _, _ = gridBox(sP, method, "stars", "coldens_msunkpc2", nPixels, axes, projType,
+            projParams, boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio,
+            smoothFWHM=smoothFWHM, ptRestrictions=ptRestrictions)  # fmt: skip
 
         w = np.where(grid_stellarColDens < 3.0)
         grid_master[w] = 0.0  # black
@@ -1875,24 +1738,9 @@ def gridBox(
     # temporary: similar, fractional total mass sum of a sub-component relative to the full, request
     # the 'full' mass grid of this particle type now and normalize
     if " fracmass" in partField:
-        grid_totmass, _, data_grid_totmass = gridBox(
-            sP,
-            method,
-            partType,
-            "mass",
-            nPixels,
-            axes,
-            projType,
-            projParams,
-            boxCenter,
-            boxSizeImg,
-            hsmlFac,
-            rotMatrix,
-            rotCenter,
-            remapRatio,
-            smoothFWHM=smoothFWHM,
-            ptRestrictions=ptRestrictions,
-        )
+        grid_totmass, _, data_grid_totmass = gridBox(sP, method, partType, "mass", nPixels, axes, projType, projParams,
+            boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio,
+            smoothFWHM=smoothFWHM, ptRestrictions=ptRestrictions)  # fmt: skip
 
         grid_master = logZeroMin(10.0**grid_master / 10.0**grid_totmass)
         data_grid = logZeroMin(10.0**data_grid / 10.0**data_grid_totmass)
@@ -1905,42 +1753,12 @@ def gridBox(
     if 0 and partField == "coldens" and partType == "gas":
         print("NOTE: Converting gas coldens map to baryon fraction map!")
 
-        grid_stars, _, data_grid_stars = gridBox(
-            sP,
-            method,
-            "stars",
-            "coldens",
-            nPixels,
-            axes,
-            projType,
-            projParams,
-            boxCenter,
-            boxSizeImg,
-            hsmlFac,
-            rotMatrix,
-            rotCenter,
-            remapRatio,
-            smoothFWHM=smoothFWHM,
-            ptRestrictions=ptRestrictions,
-        )
-        grid_dm, _, data_grid_dm = gridBox(
-            sP,
-            method,
-            "dm",
-            "coldens",
-            nPixels,
-            axes,
-            projType,
-            projParams,
-            boxCenter,
-            boxSizeImg,
-            hsmlFac,
-            rotMatrix,
-            rotCenter,
-            remapRatio,
-            smoothFWHM=smoothFWHM,
-            ptRestrictions=ptRestrictions,
-        )
+        grid_stars, _, data_grid_stars = gridBox(sP, method, "stars", "coldens", nPixels, axes, projType, projParams,
+            boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio,
+            smoothFWHM=smoothFWHM, ptRestrictions=ptRestrictions)  # fmt: skip
+        grid_dm, _, data_grid_dm = gridBox(sP, method, "dm", "coldens", nPixels, axes, projType, projParams,
+            boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio,
+            smoothFWHM=smoothFWHM, ptRestrictions=ptRestrictions)  # fmt: skip
 
         grid_gas = 10.0**grid_master
         grid_stars = 10.0**grid_stars
@@ -1972,39 +1790,11 @@ def gridBox(
         field_x = field_name + "_" + ["x", "y", "z"][axes[0]]
         field_y = field_name + "_" + ["x", "y", "z"][axes[1]]
 
-        vel_field[:, :, 1], _, _ = gridBox(
-            sP,
-            method,
-            field_pt,
-            field_x,
-            nPixels,
-            axes,
-            projType,
-            projParams,
-            boxCenter,
-            boxSizeImgLoc,
-            hsmlFac,
-            rotMatrix,
-            rotCenter,
-            remapRatio,
-        )
+        vel_field[:, :, 1], _, _ = gridBox(sP, method, field_pt, field_x, nPixels, axes, projType, projParams,
+            boxCenter, boxSizeImgLoc, hsmlFac, rotMatrix, rotCenter, remapRatio)  # fmt: skip
 
-        vel_field[:, :, 0], _, _ = gridBox(
-            sP,
-            method,
-            field_pt,
-            field_y,
-            nPixels,
-            axes,
-            projType,
-            projParams,
-            boxCenter,
-            boxSizeImgLoc,
-            hsmlFac,
-            rotMatrix,
-            rotCenter,
-            remapRatio,
-        )
+        vel_field[:, :, 0], _, _ = gridBox(sP, method, field_pt, field_y, nPixels, axes, projType, projParams,
+            boxCenter, boxSizeImgLoc, hsmlFac, rotMatrix, rotCenter, remapRatio)  # fmt: skip
 
         # smoothing kernel
         from scipy.stats import norm

@@ -7,7 +7,7 @@ import numpy as np
 from ..cosmo.kCorr import coeff, kCorrections
 
 
-# dictionary of band name -> SubhaloStellarPhotometrics[:,i] index i (currently same for all sims, otherwise move into sP)
+# mapping of band name -> SubhaloStellarPhotometrics[:,i] index i (currently same for all sims, otherwise move into sP)
 gfmBands = {"U": 0, "B": 1, "V": 2, "K": 3, "g": 4, "r": 5, "i": 6, "z": 7}
 
 vegaMagCorrections = {"V": 0.02, "U": 0.79, "B": -0.09}

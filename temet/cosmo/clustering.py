@@ -10,7 +10,6 @@ from os.path import isdir, isfile
 
 import h5py
 import numpy as np
-from scipy.interpolate import interp1d
 
 from ..cosmo.color import loadSimGalColors
 from ..util.helper import pSplitRange

@@ -1,18 +1,21 @@
 """
 Helper function to efficiently match elements between two arrays.
 """
+
 import time
 
 import numpy as np
 from numba import jit
+
 
 try:
     from ..util.parallelSort import argsort as p_argsort
 except ImportError:
     from numpy import argsort as p_argsort  # fallback
 
+
 def match(ar1, ar2, firstSorted=False, parallel=True, debug=False):
-    """ Calculate the common elements between two arrays and their respective indices.
+    """Calculate the common elements between two arrays and their respective indices.
 
     Returns index arrays i1,i2 of the matching elements between ar1 and ar2.While the elements of ar1
     must be unique, the elements of ar2 need not be. For every matched element of ar2, the return i1
@@ -23,9 +26,9 @@ def match(ar1, ar2, firstSorted=False, parallel=True, debug=False):
     bisection search for each element of ar2, therefore O(N_ar1*log(N_ar1) + N_ar2*log(N_ar1)) ~=
     O(N_ar1*log(N_ar1)) complexity so long as N_ar2 << N_ar1.
     """
-    if not isinstance(ar1,np.ndarray):
+    if not isinstance(ar1, np.ndarray):
         ar1 = np.array(ar1)
-    if not isinstance(ar2,np.ndarray):
+    if not isinstance(ar2, np.ndarray):
         ar2 = np.array(ar2)
     assert ar1.ndim == ar2.ndim == 1
 
@@ -50,22 +53,23 @@ def match(ar1, ar2, firstSorted=False, parallel=True, debug=False):
         ar1_sorted_index = np.searchsorted(ar1, ar2)
         ar1_inds = np.take(np.arange(ar1.size), ar1_sorted_index, mode="clip")
 
-    mask = (ar1[ar1_inds] == ar2)
+    mask = ar1[ar1_inds] == ar2
     ar2_inds = np.where(mask)[0]
     ar1_inds = ar1_inds[ar2_inds]
 
     if not len(ar1_inds):
-        return None,None
+        return None, None
 
     if debug:
-        if not np.array_equal(ar1[ar1_inds],ar2[ar2_inds]):
-            raise Exception('match fail')
-        print(' match: '+str(round(time.time()-start,2))+' sec')
+        if not np.array_equal(ar1[ar1_inds], ar2[ar2_inds]):
+            raise Exception("match fail")
+        print(" match: " + str(round(time.time() - start, 2)) + " sec")
 
     return ar1_inds, ar2_inds
 
+
 def match1(ar1, ar2, uniq=False, debug=False):
-    """ Calculate the common elements between two arrays and their respective indices (unused version 1).
+    """Calculate the common elements between two arrays and their respective indices (unused version 1).
 
     My version of numpy.in1d with invert=False. Return is a ndarray of indices into ar1,
     corresponding to elements which exist in ar2. Meant to be used e.g. as ar1=all IDs in
@@ -81,9 +85,9 @@ def match1(ar1, ar2, uniq=False, debug=False):
 
     # tuning: special case for small B arrays (significantly faster than the full sort)
     if len(ar2) < 10 * len(ar1) ** 0.145:
-        mask = np.zeros(len(ar1), dtype='bool')
+        mask = np.zeros(len(ar1), dtype="bool")
         for a in ar2:
-            mask |= (ar1 == a)
+            mask |= ar1 == a
         return mask
 
     # otherwise use sorting of the concatenated array: here we use a stable 'mergesort',
@@ -97,30 +101,39 @@ def match1(ar1, ar2, uniq=False, debug=False):
     ar = np.concatenate((ar1, ar2))
 
     start_sort = time.time()
-    order = ar.argsort(kind='mergesort')
+    order = ar.argsort(kind="mergesort")
     end_sort = time.time()
 
     # construct the output index list
     ar = ar[order]
-    bool_ar = (ar[1:] == ar[:-1])
+    bool_ar = ar[1:] == ar[:-1]
 
     ret = np.empty(ar.shape, dtype=bool)
     ret[order] = bool_ar
 
     if uniq:
-        inds = ret[:len(ar1)].nonzero()[0]
+        inds = ret[: len(ar1)].nonzero()[0]
     else:
         inds = ret[rev_idx].nonzero()[0]
 
     if debug:
-        print(' match1: '+str(round(time.time()-start,2))+' sec '+\
-              '[sort: '+str(round(end_sort-start_sort,2))+' sec] '+\
-              '[uniq: '+str(round(end_uniq-start_uniq,2))+' sec]')
+        print(
+            " match1: "
+            + str(round(time.time() - start, 2))
+            + " sec "
+            + "[sort: "
+            + str(round(end_sort - start_sort, 2))
+            + " sec] "
+            + "[uniq: "
+            + str(round(end_uniq - start_uniq, 2))
+            + " sec]"
+        )
 
     return inds
 
+
 def match2(ar1, ar2, debug=False):
-    """ Calculate the common elements between two arrays and their respective indices (unused version 2).
+    """Calculate the common elements between two arrays and their respective indices (unused version 2).
 
     My alternative version of numpy.in1d with invert=False, which is more similar to calcMatch().
     Return is two ndarrays. The first is indices into ar1, the second is indices into ar2, such
@@ -138,27 +151,27 @@ def match2(ar1, ar2, debug=False):
     # make concatenated list of ar1,ar2 and a combined list of indices, and a flag for which array
     # each index belongs to (0=ar1, 1=ar2)
     c = np.concatenate((ar1, ar2))
-    ind = np.concatenate(( np.arange(ar1.size), np.arange(ar2.size) ))
-    vec = np.concatenate(( np.zeros(ar1.size, dtype='int16'), np.zeros(ar2.size, dtype='int16')+1 ))
+    ind = np.concatenate((np.arange(ar1.size), np.arange(ar2.size)))
+    vec = np.concatenate((np.zeros(ar1.size, dtype="int16"), np.zeros(ar2.size, dtype="int16") + 1))
 
     # sort combined list
-    order = c.argsort(kind='mergesort')
+    order = c.argsort(kind="mergesort")
 
-    c   = c[order]
+    c = c[order]
     ind = ind[order]
     vec = vec[order]
 
     # find duplicates in sorted combined list
-    firstdup = np.where( (c == np.roll(c,-1)) & (vec != np.roll(vec,-1)) )[0]
+    firstdup = np.where((c == np.roll(c, -1)) & (vec != np.roll(vec, -1)))[0]
 
     if firstdup.size == 0:
-        return None,None
+        return None, None
 
-    dup = np.zeros( firstdup.size*2, dtype='uint64' )
-    even = np.arange( firstdup.size, dtype='uint64' )*2
+    dup = np.zeros(firstdup.size * 2, dtype="uint64")
+    even = np.arange(firstdup.size, dtype="uint64") * 2
 
     dup[even] = firstdup
-    dup[even+1] = firstdup+1
+    dup[even + 1] = firstdup + 1
 
     ind = ind[dup]
     vec = vec[dup]
@@ -167,15 +180,16 @@ def match2(ar1, ar2, debug=False):
     inds2 = ind[np.where(vec == 1)]
 
     if debug:
-        if not np.array_equal(ar1[inds1],ar2[inds2]):
-            raise Exception('match2 fail')
-        print(' match2: '+str(round(time.time()-start,2))+' sec')
+        if not np.array_equal(ar1[inds1], ar2[inds2]):
+            raise Exception("match2 fail")
+        print(" match2: " + str(round(time.time() - start, 2)) + " sec")
 
     return inds1, inds2
 
+
 @jit(nopython=True, nogil=True, cache=True)
 def _match_jit(ar1, ar2, firstSorted=False):
-    """ Test. """
+    """Test."""
     assert ar1.ndim == ar2.ndim == 1
 
     if not firstSorted:
@@ -184,7 +198,7 @@ def _match_jit(ar1, ar2, firstSorted=False):
         ar1_sorted = ar1[index]
         ar1_sorted_index = np.searchsorted(ar1_sorted, ar2)
 
-        for i in range(ar1_sorted_index.size): # mode="clip"
+        for i in range(ar1_sorted_index.size):  # mode="clip"
             if ar1_sorted_index[i] >= index.size:
                 ar1_sorted_index[i] = index.size
 
@@ -193,17 +207,17 @@ def _match_jit(ar1, ar2, firstSorted=False):
         # if we can assume ar1 is already sorted, then proceed directly
         ar1_sorted_index = np.searchsorted(ar1, ar2)
 
-        for i in range(ar1_sorted_index.size): # mode="clip"
+        for i in range(ar1_sorted_index.size):  # mode="clip"
             if ar1_sorted_index[i] >= index.size:
                 ar1_sorted_index[i] = index.size
 
         ar1_inds = np.take(np.arange(ar1.size), ar1_sorted_index)
 
-    mask = (ar1[ar1_inds] == ar2)
+    mask = ar1[ar1_inds] == ar2
     ar2_inds = np.where(mask)[0]
     ar1_inds = ar1_inds[ar2_inds]
 
     if not len(ar1_inds):
-        return None,None
+        return None, None
 
     return ar1_inds, ar2_inds

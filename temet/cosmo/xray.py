@@ -2,7 +2,6 @@
 Generate x-ray emissivity tables using AtomDB/XSPEC and apply these to gas cells.
 """
 
-import time
 from os.path import expanduser
 
 import astropy.io.fits as pyfits

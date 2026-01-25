@@ -2,22 +2,23 @@
 Visualizations for individual halos/subhalos from ..cosmological runs.
 """
 
-import numpy as np
-from datetime import datetime
-from os.path import isfile
 from copy import deepcopy
+from datetime import datetime
 from getpass import getuser
+from os.path import isfile
 
-from ..vis.common import renderMultiPanel, savePathDefault
-from ..vis.render import gridBox, defaultHsmlFac
+import numpy as np
+
+from ..util import simParams
 from ..util.rotation import (
     meanAngMomVector,
-    rotationMatrixFromVec,
     momentOfInertiaTensor,
     rotationMatricesFromInertiaTensor,
     rotationMatrixFromAngleDirection,
+    rotationMatrixFromVec,
 )
-from ..util import simParams
+from ..vis.common import renderMultiPanel, savePathDefault
+from ..vis.render import defaultHsmlFac, gridBox
 
 
 def haloImgSpecs(
@@ -243,12 +244,12 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
     valMinMax   = None          # if not None (auto), then stretch colortable between 2-tuple [min,max] field values
     rVirFracs   = [1.0]         # draw circles at these fractions of a virial radius
     fracsType   = 'rVirial'     # if not rVirial, draw circles at fractions of another quant, same as sizeType
-    method      = 'sphMap'      # sphMap, sphMap_subhalo, sphMap_global, sphMap_{min/max}IP, histo, voronoi_slice/proj[_subhalo]
+    method      = 'sphMap'      # sphMap[_subhalo,_global], sphMap_{min/max}IP, histo, voronoi_slice/proj[_subhalo]
     nPixels     = [1920,1920]   # [1400,1400] number of pixels for each dimension of images when projecting
     cenShift    = [0,0,0]       # [x,y,z] coordinates to shift default box center location by
     size        = 3.0           # side-length specification of imaging box around halo/galaxy center
     depthFac    = 1.0           # projection depth, relative to size (1.0=same depth as width and height)
-    sizeType    = 'rVirial'     # size multiplies [rVirial,r500,rHalfMass,rHalfMassStars] or in [codeUnits,kpc,arcsec,arcmin,deg]
+    sizeType    = 'rVirial'     # size units [rVirial,r500,rHalfMass,rHalfMassStars,codeUnits,kpc,arcsec,arcmin,deg]
     depth       = None          # if None, depth is taken as size*depthFac, otherwise depth is provided here
     depthType   = 'rVirial'     # as sizeType except for depth, if depth is not None
     #hsmlFac     = 2.5          # multiplier on smoothing lengths for sphMap
@@ -262,8 +263,8 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
     vecColorPF  = None          # partField to use for vector field vis coloring (if None, =partField)
     vecColorbar = False         # add additional colorbar for the vector field coloring
     vecColormap = 'afmhot'      # default colormap to use when showing quivers or streamlines
-    labelZ      = False         # label redshift inside (upper right corner) of panel (True or 'tage')
-    labelScale  = False         # label spatial scale with scalebar (upper left of panel) (True, 'physical', 'lightyears')
+    labelZ      = False         # label redshift inside (upper right corner) of panel {True, tage}
+    labelScale  = False         # label spatial scale with scalebar (upper left of panel) {True, physical, lightyears}
     labelSim    = False         # label simulation name (lower right corner) of panel
     labelHalo   = False         # label halo total mass and stellar mass
     labelCustom = False         # custom label string to include
@@ -382,8 +383,7 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
 
 
 def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
-    """Render view(s) of a single halo in one plot, and repeat this frame across all snapshots
-    using the smoothed MPB properties."""
+    """Render view(s) of a single halo, repeating across all snapshots using the smoothed MPB properties."""
     panels = deepcopy(panels_in)
 
     # defaults (all panel fields that can be specified)
@@ -398,12 +398,12 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
     valMinMax   = None            # if not None (auto), then stretch colortable between 2-tuple [min,max] field values
     rVirFracs   = [0.15,0.5,1.0]  # draw circles at these fractions of a virial radius
     fracsType   = 'rVirial'       # if not rVirial, draw circles at fractions of another quant, same as sizeType
-    method      = 'sphMap'        # sphMap, sphMap_subhalo, sphMap_global, sphMap_{min/max}IP, histo, voronoi_slice/proj[_subhalo]
+    method      = 'sphMap'        # sphMap[_subhalo,_global], sphMap_{min/max}IP, histo, voronoi_slice/proj[_subhalo]
     nPixels     = [1400,1400]     # number of pixels for each dimension of images when projecting
     cenShift    = [0,0,0]         # [x,y,z] coordinates to shift default box center location by
     size        = 3.0             # side-length specification of imaging box around halo/galaxy center
     depthFac    = 1.0             # projection depth, relative to size (1.0=same depth as width and height)
-    sizeType    = 'rVirial'       # size multiplies [rVirial,r500,rHalfMass,rHalfMassStars] or in [codeUnits,kpc,arcsec,arcmin,deg]
+    sizeType    = 'rVirial'       # size units [rVirial,r500,rHalfMass,rHalfMassStars,codeUnits,kpc,arcsec,arcmin,deg]
     depth       = None            # if None, depth is taken as size*depthFac, otherwise depth is provided here
     depthType   = 'rVirial'       # as sizeType except for depth, if depth is not None
     #hsmlFac     = 2.5            # multiplier on smoothing lengths for sphMap
@@ -548,12 +548,19 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
 
 
 def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=None, selType="linear"):
-    """Select one or more subhalo indices from an input set of massBins (log Mhalo) and a requested
-    number of halos per bin. In addition, either (i) an index haloNum which should iterate from 0 to the
-    total number of halos requested across all bins, in which case the return is a single subhalo ID
-    as appropriate for a multi-quantity single system comparison figure, or (ii) an index massBinInd
-    which should iterate from 0 to the number of bins, in which case all subhalo IDs in that bin
-    are returned (limited to numPerBin), as appropriate for a multi-system single-quantity figure."""
+    """Select subhalos IDs from a set of halo mass bins, using different sampling methods.
+
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      massBins (list[tuple,2]): list of [min,max] 2-tuples of halo mass bins [log Msun].
+      numPerBin (int): requested number of halos per bin.
+      haloNum (int or None): an index haloNum which should iterate from 0 to the total number of halos requested
+        across all bins, in which case each return is a single subhalo ID, as appropriate for a multi-quantity single
+        system comparison figure. Specify either haloNum or massBinInd, not both.
+      massBinInd (int or None): an index ranging from 0 to the number of bins, in which case all subhalo IDs in that
+        bin are returned (limited to numPerBin), as appropriate for a multi-system single-quantity figure.
+      selType (str): selection type within mass bin, one of "linear", "even", "random".
+    """
     assert selType in ["linear", "even", "random"]
     from ..util.helper import evenlySample
 
@@ -569,11 +576,10 @@ def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=Non
 
     # choose mass bin
     if haloNum is not None:
-        myMassBinInd = int(np.floor(float(haloNum) / numPerBin))
-    else:
-        myMassBinInd = massBinInd
+        assert massBinInd is None, "Specify either haloNum or massBinInd, not both."
+        massBinInd = int(np.floor(float(haloNum) / numPerBin))
 
-    massBin = massBins[myMassBinInd]
+    massBin = massBins[massBinInd]
 
     with np.errstate(invalid="ignore"):
         wMassBinAll = np.where((haloMasses >= massBin[0]) & (haloMasses < massBin[1]))[0]
@@ -589,7 +595,7 @@ def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=Non
         wMassBin = sorted(np.random.choice(wMassBinAll, size=num, replace=False))
 
     if haloNum is not None:
-        haloInd = haloNum - myMassBinInd * numPerBin
+        haloInd = haloNum - massBinInd * numPerBin
 
         # job past requested range, tell to skip
         if haloInd >= len(wMassBin):
@@ -604,12 +610,18 @@ def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=Non
         # return full set in this mass bin
         shIDs = gc["GroupFirstSub"][wMassBin]
 
-    return shIDs, myMassBinInd
+    return shIDs, massBinInd
 
 
 def selectHalosFromMassBins(sP, massBins, numPerBin, selType="linear"):
-    """Select one or more FoF-halo indices from an input set of massBins (log Mhalo) and a
-    requested number of halos per bin."""
+    """Select one or more halo IDs from a set of halo mass bins, using different sampling methods.
+
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      massBins (list[tuple,2]): list of [min,max] 2-tuples of halo mass bins [log Msun].
+      numPerBin (int): requested number of halos per bin.
+      selType (str): selection type within mass bin, one of "linear", "even", "random".
+    """
     assert selType in ["linear", "even", "random"]
     from ..util.helper import evenlySample
 

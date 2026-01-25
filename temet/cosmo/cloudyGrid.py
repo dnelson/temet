@@ -52,11 +52,11 @@ lineList = """
 #15164   He 1 5875.64A      He-like, 6 11,   2^3P_2 -   3^3D
 #21954   C  5 40.2678A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance" (leftmost of triplet)
 #21989   C  5 41.4721A      He-like, 1 2,   1^1S -   2^3S, forbidden? (rightmost of triplet)
-#23516   N  6 29.5343A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "forbidden" "NVI(f)" (leftmost of 'Kalpha' triplet)
-#24998   O  7 21.8070A      He-like, 1 5,   1^1S -   2^3P_1, in Bertone+ (2010) "intercombination" "OVII(i)" (middle of triplet)
+#23516   N  6 29.5343A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "NVI(f)" (leftmost of 'Kalpha' triplet)
+#24998   O  7 21.8070A      He-like, 1 5,   1^1S -   2^3P_1, in Bertone+ (2010) "OVII(i)" (middle of triplet)
 #25003   O  7 21.8044A      He-like, 1 6,   1^1S -   2^3P_2, doublet? or effectively would be blend
-#25008   O  7 21.6020A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance" "OVII(r)" (leftmost of triplet)
-#25043   O  7 22.1012A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "forbidden" "OVII(f)" (rightmost of triplet)
+#25008   O  7 21.6020A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "OVII(r)" (leftmost of triplet)
+#25043   O  7 22.1012A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "OVII(f)" (rightmost of triplet)
 #26912   Ne 9 13.6987A      He-like, 1 2,   1^1S -   2^3S
 #26867   Ne 9 13.5529A      He-like, 1 5,   1^1S -   2^3P_1
 #26872   Ne 9 13.5500A      He-like, 1 6,   1^1S -   2^3P_2

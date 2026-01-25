@@ -2,19 +2,19 @@
 Temporary stuff.
 """
 
-import numpy as np
-import h5py
 import glob
 import time
-from os import path, rename
-import matplotlib.pyplot as plt
+from os import path
 
-import temet.cosmo
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+from illustris_python.util import partTypeNum
+from matplotlib.backends.backend_pdf import PdfPages
+
 from .plot.config import figsize
 from .util import simParams
 from .util.match import match
-from illustris_python.util import partTypeNum
-from matplotlib.backends.backend_pdf import PdfPages
 
 
 def check_spec():
@@ -151,7 +151,6 @@ def plot_wofz():
 
 def daniela_accretion_angles():
     """Combine three auxCat's and compute final angle."""
-    basePath = "/u/dnelson/sims.TNG/TNG50-1/data.files/auxCat/"
     sim = simParams(run="tng50-1", redshift=2.0)
     files = ["Subhalo_CGM_Inflow_Mean%s_%03d.hdf5" % (xyz, sim.snap) for xyz in ["X", "Y", "Z"]]
 
@@ -453,10 +452,10 @@ def marc_sigma1():
     )
 
 
-def exportBoxGrids(sP, partType="dm", partField="mass", nCells=[64, 128, 256, 512]):
+def exportBoxGrids(sP, partType="dm", partField="mass", nCells=(64, 128, 256, 512)):
     """Export 3D uniform Cartesian grids, of different resolutions."""
-    from .util.sphMap import sphGridWholeBox
     from .util.helper import logZeroSafe
+    from .util.sphMap import sphGridWholeBox
 
     # config
     label, limits, takeLog = sP.simParticleQuantity(partType, partField)
@@ -498,7 +497,7 @@ def bh_lum_agnrad_check():
     subID = sP.halo(haloID)["GroupFirstSub"]
 
     # find BH
-    bh_subIDs = sP.bhs("subhalo_id", subhaloID=subID)
+    # bh_subIDs = sP.bhs("subhalo_id", subhaloID=subID)
 
     bh_lum = sP.bhs("bh_bollum_basic_obscured", subhaloID=subID)  # erg/s
 
@@ -615,13 +614,13 @@ def minify_gergo_hydrogen_files():
 
         # open input file and rewrite
         with h5py.File(basePath + "gas_%03d.hdf5" % i, "r") as fIn:
-            header = fOut.create_group("Header")
+            fOut.create_group("Header")
             for attr in fIn["Header"].attrs:
                 fOut["Header"].attrs[attr] = fIn["Header"].attrs[attr]
 
             for field in fields:
                 print(i, field)
-                dset = fOut.create_dataset(field, data=fIn[field][()], compression="gzip")
+                fOut.create_dataset(field, data=fIn[field][()], compression="gzip")
                 # fOut[field] = fIn[field][()]
 
         fOut.close()
@@ -681,6 +680,7 @@ def half_Kband_radii():
 
 
 def copy_eagle_config_param_attrs(snap=28):
+    """Copy snapshot metadata from original EAGLE snaps into rewritten snaps."""
     loadPath = "/virgo/simulations/EagleDM/L0100N1504/DMONLY/data/"
     savePath = "/virgo/simulations/Illustris/Eagle-L68n1504DM/output/"
 
@@ -814,7 +814,6 @@ def eagle_fix_group_sfr(snap=28):
     haloIDsTodo = np.arange(nGroupsTot, dtype="int32")
     print(nGroupsTot)
 
-    pt = "gas"
     ptNum = 0
 
     # load/allocate
@@ -1026,7 +1025,7 @@ def compare_subhalos_all_quantities(snap=28):
         ax.set_ylabel("log N")
 
         # loop over runs
-        for i, sP in enumerate(sPs):
+        for _i, sP in enumerate(sPs):
             # load
             if field in fields_sub:
                 vals = sP.subhalos(field)
@@ -1058,7 +1057,7 @@ def compare_subhalos_all_quantities(snap=28):
         data = []
         labels = []
 
-        for i, sP in enumerate(sPs):
+        for sP in sPs:
             if field in fields_sub:
                 vals = sP.subhalos(field)
             else:
@@ -1077,14 +1076,14 @@ def compare_subhalos_all_quantities(snap=28):
             ax.set_xlabel(field + " [Type=%d] [log]" % pt)
             ax.set_ylabel("log N")
 
-            for i, sP in enumerate(sPs):
-                vals = np.squeeze(data[i][:, pt])
+            for data_loc, label in zip(data, labels):
+                vals = np.squeeze(data_loc[:, pt])
                 w = np.where(vals == 0)
                 print(field, pt, " number of zeros: ", len(w[0]), " of ", vals.size)
                 vals = np.log10(vals)
                 vals = vals[np.isfinite(vals)]
 
-                ax.hist(vals, bins=nBins, alpha=0.6, label=labels[i])
+                ax.hist(vals, bins=nBins, alpha=0.6, label=label)
 
             # finish plot
             ax.legend(loc="best")
@@ -1218,7 +1217,7 @@ def parse_rur_out():
 
     path = "/u/dnelson/sims.TNG/L35n2160TNG/output/txt-files/rur.out"
 
-    with open(path, "r") as f:
+    with open(path) as f:
         lines = f.readlines()
 
     tot_joule = 0
@@ -1261,51 +1260,9 @@ def parse_rur_out():
     print("total MWH: %g (across %d jobs, %d of them >1 hour)" % (tot_kwh / 1e3, count, count_big))
     print("from [%s] to [%s]" % (earliest_date, latest_date))
 
-    import pdb
-
-    pdb.set_trace()
-
-
-def carlo_dump():
-    sP = simParams(run="tng100-1", redshift=0.0)
-
-    fields = [
-        "id",
-        "mhalo_200_parent_log",
-        "mstar_30pkpc_log",
-        "SubhaloPos",
-        "central_flag",
-        "mags_C_u",
-        "mags_C_g",
-        "mags_C_r",
-        "mags_C_i",
-        "rhalo_200_parent",
-    ]
-
-    # load
-    data = sP.subhalos(fields)
-
-    # restrict to M* > 10^9 Msun
-    w = np.where(data["mstar_30pkpc_log"] > 9.0)
-
-    for key in data:
-        data[key] = data[key][w]
-
-    # flatten SubhaloPos
-    for i in range(3):
-        data["pos_%d" % i] = data["SubhaloPos"][:, i]
-    del data["SubhaloPos"]
-
-    # save
-    array = np.vstack([data[key] for key in data]).T
-    header = "id mhalo[logmsun] mstar[logmsun] central_flag u[mag] g[mag] r[mag] i[mag] rhalo[logpkpc] pos_x[ckpc] pos_y[ckpc] pos_z[ckpc]"
-    fmt = ["%.3f" if data[el][0].dtype == np.float32 else "%d" for el in data.keys()]
-
-    np.savetxt("save_%s_z=%.1f.txt" % (sP.simName, sP.redshift), array, fmt=fmt, header=header)
-
 
 def loadspeed_test():
-    # test nvme cache
+    """Test NVMe cache on freyator."""
     sP = simParams(run="tng300-1", redshift=0.0)
 
     fields = [
@@ -1337,6 +1294,7 @@ def loadspeed_test():
 
 
 def francesca_voversigma():
+    """Create plot of V/sigma from H-alpha kinematics data for Francesca."""
     # load
     sP = simParams(run="tng50-1", redshift=4.0)
     file = sP.postPath + "SlitKinematics/Subhalo_Halpha_BinnedSlitKinematics_%03d.hdf5" % sP.snap
@@ -1379,22 +1337,6 @@ def francesca_voversigma():
     print("voversigma values above seven: ", len(w[0]), w[0], v[w], sigma[w], (v / sigma)[w], mstar[w])
 
 
-def integrate():
-    # bounds and function
-    num_pts = 1000
-    x0 = 0.0
-    x1 = 7.0
-
-    x = np.linspace(x0, x1, num_pts)
-    y = np.sin(x)
-
-    # trap rule: integral of y(x)dx from x0 to x1
-    dx = (x1 - x0) / num_pts
-
-    integral = dx * (np.sum(y[1:-1]) + 0.5 * (y[0] + y[-1]))
-    print(integral)
-
-
 def plot_dist256():
     """Plot distance to 256th gas cell (i.e. BH accretion radius) vs M*."""
     from .util.helper import running_median
@@ -1427,10 +1369,11 @@ def plot_dist256():
 
 def check_load_memusage():
     """Check memory usage with snapshotSubset()."""
-    import multiprocessing as mp
-    from .util.helper import pSplitRange, reportMemory
     import gc
+    import multiprocessing as mp
     import tracemalloc
+
+    from .util.helper import pSplitRange, reportMemory
 
     pSplitNum = 10
     ptTypes = [0, 1, 4, 5]
@@ -1518,7 +1461,7 @@ def check_groupcat_snap_rewrite(GrNr=0):
     sP = simParams(res=2160, run="tng", snap=69)  # 69-99
     # sP = simParams(res=128,run='tng',snap=4,variant='0000')
 
-    final_save_file = sP.derivPath + "fof0_save_%s_%d.hdf5" % (sP.simName, sP.snap)
+    # final_save_file = sP.derivPath + "fof0_save_%s_%d.hdf5" % (sP.simName, sP.snap)
 
     fof = sP.groupCatSingle(haloID=GrNr)
     h = sP.snapshotHeader()
@@ -1583,90 +1526,12 @@ def check_groupcat_snap_rewrite(GrNr=0):
         print("bh mass ", bh_mass, sub["SubhaloMassType"][sP.ptNum("bh")])
         print("bh mdot ", bh_mdot, sub["SubhaloBHMdot"])
         print("cm      ", cm, sub["SubhaloCM"], end="\n\n")
-        # import pdb; pdb.set_trace()
 
 
-def convert_vicente_infinite_images():
-    """Resize, extract images only."""
-    import subprocess
-
-    files = glob.glob("*.png")
-
-    for file in files:
-        print(file)
-
-        # resize crop and rename
-        cmd = "mogrify -resize 900x %s" % file
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
-
-        # cmd = "mogrify -crop 296x295+3+24 %s" % file
-        # result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
-
-    print("Done.")
-
-
-def convert_annalisa_infinite_images():
-    """Convert PDF -> JPG, combine, and resize."""
-    import subprocess
-
-    files = glob.glob("left/*.pdf")
-
-    for file in files:
-        name = file.split("/")[1]
-        name_out = name.replace("pdf", "jpg")
-        final_out = name_out.replace("TNG50", "TNG50-1").replace("_", ".")
-
-        assert path.isfile("left/%s" % name)
-        assert path.isfile("right/%s" % name)
-
-        # convert to jpeg
-        cmd = "convert -density 150 -antialias left/%s -quality 95 left/%s" % (name, name_out)
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
-
-        cmd = "convert -density 150 -antialias right/%s -quality 95 right/%s" % (name, name_out)
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
-
-        # montage
-        cmd = "convert left/%s right/%s +append %s" % (name_out, name_out, name_out)
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
-
-        # resize crop and rename
-        cmd = "mogrify -resize 1800x %s" % name_out
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
-
-        cmd = "mogrify -crop 1800x320+0+18 %s" % name_out
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
-
-        rename(name_out, final_out)
-        print(final_out)
-
-    print("Done.")
-
-
-def convert_annalisa_infinite_images2():
-    """Combine gas and stars vertically."""
-    import subprocess
-
-    files = glob.glob("pillepich19stars/*.jpg")  # stars is a subset of gas
-
-    for file in files:
-        name = file.split("/")[1]
-
-        assert path.isfile("pillepich19gas/%s" % name)
-        assert path.isfile("pillepich19stars/%s" % name)
-
-        # vertical stack
-        cmd = "convert pillepich19gas/%s pillepich19stars/%s -append %s" % (name, name, name)
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
-        print(name)
-
-    print("Done.")
-
-
-def try_hsc_gri_composite():
+def hsc_gri_composite():
     """Try to recreate HSC composite image based on (g,r,i) bands."""
-    from astropy.io import fits
     import skimage.io
+    from astropy.io import fits
 
     # load
     files = [
@@ -1721,8 +1586,6 @@ def try_hsc_gri_composite():
     for i in range(3):
         grid_master[w[0], w[1], i] /= maxval[w]
 
-    minval = np.min(grid_master, axis=2)
-
     w = np.where((maxval < 0.0) | (inten < 0.0))
     for i in range(3):
         grid_master[w[0], w[1], i] = 0.0
@@ -1746,9 +1609,8 @@ def check_tracer_tmax_vs_curtemp():
     haloID = 0
 
     # load
-    tmax = sP.snapshotSubset(
-        "tracer", "FluidQuantities"
-    )  #'tracer_maxtemp') # change to 'FluidQuantities' for h2_L11_12_FP (only tmax stored)
+    #'tracer_maxtemp') # change to 'FluidQuantities' for h2_L11_12_FP (only tmax stored)
+    tmax = sP.snapshotSubset("tracer", "FluidQuantities")
     par_id = sP.snapshotSubset("tracer", "ParentID")
     tr_id = sP.snapshotSubset("tracer", "TracerID")
 
@@ -1836,10 +1698,6 @@ def check_tracer_tmax_vs_curtemp():
     diffs = tr_par_temp_prev[w] - tmax_prev[w]
     print("minmax delta_T(log): ", diffs.min(), diffs.max())
 
-    import pdb
-
-    pdb.set_trace()
-
 
 def check_tracer_tmax_vs_curtemp2():
     """Followup, single tracer."""
@@ -1873,15 +1731,11 @@ def check_tracer_tmax_vs_curtemp2():
 
         print("gas temp: ", temp, " sfr: ", sfr, " id:", gas_ids[gas_ind])
 
-    import pdb
-
-    pdb.set_trace()
-
 
 def check_colors_benedikt():
     """Test my colors vs snapshot."""
-    from scipy.stats import binned_statistic_2d
     from mpl_toolkits.axes_grid1 import make_axes_locatable
+    from scipy.stats import binned_statistic_2d
 
     sP = simParams(res=1820, run="tng", redshift=0.0)
 
@@ -1890,7 +1744,7 @@ def check_colors_benedikt():
 
     acKey = "Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1_rad30pkpc"
     ac = sP.auxCat(acKey)
-    bands = ac[acKey + "_attrs"]["bands"]
+    # bands = ac[acKey + "_attrs"]["bands"]
     mag_g_dust = ac[acKey][:, 1]  # g-band
     print(mag_g_dust.shape)
     mag_g_dust = mag_g_dust[:, 0]  # pick 1 projection at random
@@ -1931,6 +1785,7 @@ def check_colors_benedikt():
 
 
 def guinevere_mw_sample():
+    """Examine Milky Way sample for Guinevere's paper."""
     # get subhaloIDs
     sP_tng = simParams(res=1820, run="tng", redshift=0.0)
     sP_ill = simParams(res=1820, run="illustris", redshift=0.0)
@@ -1971,8 +1826,7 @@ def guinevere_mw_sample():
     pdf = PdfPages("sample_check_25Mpc.pdf")
 
     for i in [0, 1]:
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(1, 1, 1)
+        fig, ax = plt.subplots()
         ax.set_xlabel(r"log $M_{\rm gas} / M_\star$ [ Illustris ]")
         ax.set_ylabel(r"log $M_{\rm gas} / M_\star$ [ TNG ]")
 
@@ -1988,53 +1842,14 @@ def guinevere_mw_sample():
             wsat = wsat_ill
             label = "ILL"
 
-        ax.plot(
-            fgas_ill[wcen], fgas_tng[wcen], "o", markersize=msize, color="blue", alpha=0.7, label="Cen in %s" % label
-        )
-        ax.plot(
-            fgas_ill[wsat], fgas_tng[wsat], "o", markersize=msize, color="red", alpha=0.7, label="Sat in %s" % label
-        )
+        ax.plot(fgas_ill[wcen], fgas_tng[wcen], "o", ms=msize, color="blue", alpha=0.7, label="Cen in %s" % label)
+        ax.plot(fgas_ill[wsat], fgas_tng[wsat], "o", ms=msize, color="red", alpha=0.7, label="Sat in %s" % label)
 
         ax.legend(loc="upper left")
         pdf.savefig()
         plt.close(fig)
 
     pdf.close()
-
-
-def check_reza_vrel():
-    # sub_id = 24462
-    # r_in = 0.086578019
-    # r_out = 0.14138131
-    # v_shell = [ -80.0085907 , -465.78796387, 81.7454834 ]
-
-    r_in = 0.013103109 * 0.96
-    r_out = 0.022275893
-
-    sP = simParams(res=2160, run="millennium", snap=58)
-    gc = sP.groupCat(fieldsSubhalos=["SubhaloPos", "SubhaloVel"])
-
-    # sub_pos = gc['SubhaloPos'][sub_id,:]
-    sub_pos = np.array([7.49061203, 12.36560631, 6.19869804])
-
-    print(sub_pos)
-    pos = sP.snapshotSubsetP("dm", "pos")
-    dists = sP.periodicDists(sub_pos, pos)
-
-    w = np.where((dists >= r_in) & (dists < r_out))
-
-    print(len(w[0]))
-
-    pos = None
-    vel = sP.snapshotSubset("dm", "vel", inds=w[0])
-    for i in range(3):
-        print(vel[:, i].sum() / len(w[0]))
-
-    ids = sP.snapshotSubset("dm", "ids", inds=w[0])
-
-    import pdb
-
-    pdb.set_trace()
 
 
 def vis_cholla_snapshot():
@@ -2081,9 +1896,10 @@ def vis_cholla_snapshot():
     }
 
     # start plot
-    from .util.helper import loadColorTable
     from matplotlib.colors import Normalize
     from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    from .util.helper import loadColorTable
 
     for field in data:
         print("plotting: [%s]" % field)
@@ -2118,7 +1934,7 @@ def vis_cholla_snapshot():
 
 
 def new_mw_fgas_sample():
-    """Sample of Guinevere."""
+    """Create new Milky Way sample of Guinevere."""
     from .cosmo.util import crossMatchSubhalosBetweenRuns
 
     sP_illustris = simParams(res=1820, run="illustris", redshift=0.0)
@@ -2132,9 +1948,7 @@ def new_mw_fgas_sample():
     mstar = sP_tng.groupCat(fieldsSubhalos=["mstar_30pkpc"])  # [msun]
     # fgas  = sP_tng.groupCat(fieldsSubhalos=['fgas_2rhalf']) # m_gas/m_b within 2rhalfstars
     fgas, _, _, _ = sP_tng.simSubhaloQuantity("fgas2")
-    is_central = sP_tng.groupCat(fieldsSubhalos=["central_flag"])
 
-    # inds_tng = np.where( (mhalo >= 6e11) & (mhalo < 2e12) & (mstar >= 5e10) & (mstar < 1e11) & (fgas >= 0.01) & (is_central == 1))[0]
     inds_tng = np.where((mhalo >= 6e11) & (mhalo < 2e12) & (mstar >= 5e10) & (mstar < 1e11) & (fgas >= 0.01))[0]
 
     inds_ill_pos = crossMatchSubhalosBetweenRuns(sP_tng, sP_illustris, inds_tng, method="Positional")
@@ -2170,7 +1984,7 @@ def new_mw_fgas_sample():
 
 def bh_details_check():
     """Check gaps in TNG100-1 blackhole_details.hdf5."""
-    with open("out.txt", "r") as f:
+    with open("out.txt") as f:
         lines = f.read()
 
     lines = lines.split("\n")
@@ -2189,14 +2003,12 @@ def bh_details_check():
     scalefac = scalefac[inds]
     mdot = mdot[inds]
 
-    hh, bins = np.histogram(scalefac, bins=400)
+    hh, _ = np.histogram(scalefac, bins=400)
     ww = np.where(hh <= 3)
     print("near-empty bins: ", redshift[ww])
 
     if 1:
-        fig = plt.figure(figsize=(18, 10))
-        ax = fig.add_subplot(111)
-
+        fig, ax = plt.subplots(figsize=(18, 10))
         ax.set_xlabel("Redshift")
         ax.set_ylabel("Mdot [msun/yr]")
         ax.set_yscale("log")
@@ -2206,8 +2018,7 @@ def bh_details_check():
         plt.close(fig)
 
     if 1:
-        fig = plt.figure(figsize=(18, 10))
-        ax = fig.add_subplot(111)
+        fig, ax = plt.subplots(figsize=(18, 10))
 
         ax.set_xlabel("Redshift")
         ax.set_ylabel("Mdot [msun/yr]")
@@ -2267,13 +2078,9 @@ def bh_mdot_subbox_test():
 
         print(snap, w, mdot_actual, medd[w], mass[w], mass2[w], dt_yr, mass_prev, mass_prev / mass[w])
 
-    import pdb
-
-    pdb.set_trace()
-
 
 def check_millennium():
-    # create re-write of Millennium simulation files
+    """Check re-write of Millennium simulation files."""
     basePath = "/u/dnelson/sims.millennium/Millennium1/output/"
     snap = 63
 
@@ -2490,8 +2297,9 @@ def illustris_api_check():
     #    print('done')
 
     # test4 (Task 10)
-    import matplotlib.image as mpimg
     from io import BytesIO
+
+    import matplotlib.image as mpimg
 
     ids = [41092, 338375, 257378, 110568, 260067]
     sub_count = 1
@@ -2713,30 +2521,6 @@ def lagrangeMatching():
         )
 
 
-def miscGasStats():
-    """Print out some misc gas stats used in the appendix table of the TNG color flagship paper."""
-    sP = simParams(res=2160, run="tng", snap=90)
-    print(sP.simName)
-
-    gas_dens = sP.snapshotSubsetP("gas", "dens")
-    gas_sfr = sP.snapshotSubsetP("gas", "sfr")
-
-    gas_dens = sP.units.codeDensToPhys(gas_dens, cgs=True, numDens=True)
-    w_sf = np.where(gas_sfr > 0.0)
-
-    print("mean sfring gas H dens [1/cm^3]: ", gas_dens[w_sf].mean() * 0.7)
-    print("max gas H dens [1/cm^3]: ", gas_dens.max() * 0.7)
-
-    gas_dens = None
-
-    gas_rcell = sP.snapshotSubsetP("gas", "cellsize_kpc")
-
-    print("median gas cell radius [pkpc]: ", np.median(gas_rcell))
-    print("mean sfring gas cell radius [pc]: ", gas_rcell[w_sf].mean() * 1000)
-    print("median sfring gas cell radius [pc]: ", np.median(gas_rcell[w_sf]) * 1000)
-    print("minimum gas cell radius [pc]: ", gas_rcell.min() * 1000)
-
-
 def checkSublinkIntermediateFiles():
     """Check _first* and _second* descendant links."""
     sP = simParams(res=2500, run="tng")
@@ -2778,58 +2562,6 @@ def checkSublinkIntermediateFiles():
                     print(" FAIL _second_%03d.hdf5 points to nonexistent sub" % i)
         else:
             print("  skip second missing")
-
-    import pdb
-
-    pdb.set_trace()
-
-
-def testOffsets():
-    basePath = "/n/home07/dnelson/sims.TNG/L75n455TNG/output/"
-    snapNum = 99
-    sP = simParams(res=455, run="tng", redshift=0.0)
-
-    import illustris_python as il
-
-    massBin = [0.8e12, 1.2e12]
-    shFields = ["SubhaloMass", "SubhaloPos", "SubhaloLenType", "SubhaloGrNr"]
-    hFields = ["GroupMass", "GroupPos", "GroupLenType", "GroupFirstSub"]
-
-    subhalos = il.groupcat.loadSubhalos(basePath, snapNum, fields=shFields)
-    halos = il.groupcat.loadHalos(basePath, snapNum, fields=hFields)
-    header = il.groupcat.loadHeader(basePath, snapNum)
-
-    halomass = subhalos["SubhaloMass"] * header["HubbleParam"] * 1e10  # NOTE WRONG
-
-    ww = np.where((halomass > massBin[0]) & (halomass < massBin[1]))[0]
-
-    for id in ww:
-        if 1:
-            # subhalo
-            dm = il.snapshot.loadSubhalo(basePath, snapNum, id, "dm", ["Coordinates"])
-            stars = il.snapshot.loadSubhalo(basePath, snapNum, id, "stars", ["Coordinates"])
-
-            dists = sP.periodicDists(subhalos["SubhaloPos"][id, :], dm)
-            print("[%d] dm mindist: %g maxdist: %g" % (id, dists.min(), dists.max()))
-            assert dists.min() <= 2.0
-
-            dists = sP.periodicDists(subhalos["SubhaloPos"][id, :], stars)
-            print("[%d] st mindist: %g maxdist: %g" % (id, dists.min(), dists.max()))
-            assert dists.min() <= 2.0
-
-        if 0:
-            # halo
-            haloID = subhalos["SubhaloGrNr"][id]
-
-            dm = il.snapshot.loadHalo(basePath, snapNum, haloID, "dm", ["Coordinates"])
-            # stars = il.snapshot.loadHalo(basePath,snapNum,haloID,'stars',['Coordinates'])
-
-            dists = sP.periodicDists(halos["GroupPos"][haloID, :], dm)
-            print("mindist: %g maxdist: %g" % (dists.min(), dists.max()))
-            assert dists.min() <= 1.0
-
-        # for i in range(3):
-        #    print('coord [%d]' % i, dm[:,i].min(), dm[:,i].max() )
 
     import pdb
 
@@ -2915,85 +2647,6 @@ def domeTestData():
         _writeFile(fileName, gcNew, shFields)
 
 
-def publicScriptsUpdate():
-    """Test updates to public scripts for TNG changes."""
-    import illustris_python as il
-
-    basePaths = ["sims.illustris/L75n910FP/output/", "sims.TNG/L75n910TNG/output/"]
-
-    snapNum = 99
-
-    for basePath in basePaths:
-        print(basePath)
-
-        print(" groups")
-        subhalos = il.groupcat.loadSubhalos(basePath, snapNum, fields=["SubhaloMass", "SubhaloSFRinRad"])
-        GroupFirstSub = il.groupcat.loadHalos(basePath, snapNum, fields=["GroupFirstSub"])
-        ss1 = il.groupcat.loadSingle(basePath, snapNum, haloID=123)
-        ss2 = il.groupcat.loadSingle(basePath, snapNum, subhaloID=1234)
-        hh = il.groupcat.loadHeader(basePath, snapNum)
-
-        print(" snap")
-        gas_mass = il.snapshot.loadSubset(basePath, snapNum, "gas", fields=["Masses"])
-        dm_ids1 = il.snapshot.loadHalo(basePath, snapNum, 123, "dm", fields=["ParticleIDs"])
-        assert dm_ids1.size == ss1["GroupLenType"][1]
-        dm_ids2 = il.snapshot.loadSubhalo(basePath, snapNum, 1234, "dm", fields=["ParticleIDs"])
-        assert dm_ids2.size == ss2["SubhaloLenType"][1]
-
-        print(" trees")
-        tree1 = il.sublink.loadTree(basePath, snapNum, 1234, fields=["SubhaloMassType"], onlyMPB=True)
-        tree2 = il.lhalotree.loadTree(basePath, snapNum, 1234, fields=["SubhaloMassType"], onlyMPB=True)
-        assert tree1[0, :].sum() == ss2["SubhaloMassType"].sum()
-        assert tree2[0, :].sum() == ss2["SubhaloMassType"].sum()
-
-
-def richardCutout():
-    """test"""
-    import requests
-
-    def get(path, params=None):
-        # make HTTP GET request to path
-        headers = {"api-key": "109e327dfdd77de692d65c833f0a9483"}
-        r = requests.get(path, params=params, headers=headers)
-
-        print(r.url)
-
-        # raise exception if response code is not HTTP SUCCESS (200)
-        r.raise_for_status()
-
-        try:
-            if r.headers["content-type"] == "application/json":
-                return r.json()  # parse json responses automatically
-        except:
-            pass
-
-        if "content-disposition" in r.headers:
-            filename = r.headers["content-disposition"].split("filename=")[1]
-            with open(filename, "wb") as f:
-                f.write(r.content)
-            print("Saved: %s" % filename)
-            return filename  # return the filename string
-
-        return r
-
-    def construct_url(subhaloid, snapid):
-        return (
-            "http://www.illustris-project.org/api/Illustris-1/snapshots/"
-            + str(snapid)
-            + "/subhalos/"
-            + str(subhaloid)
-            + "/"
-        )
-
-    # go
-    subhaloid = 364375
-    snapid = 116
-
-    sub_prog_url = construct_url(subhaloid, snapid)
-    cutout_request = {"stars": "ParticleIDs"}
-    cutout = get(sub_prog_url + "cutout.hdf5", cutout_request)
-
-
 def checkIllustrisMetalRatioVsSolar():
     """Check corrupted GFM_Metals content vs solar expectation."""
     from .cosmo.cloudy import cloudyIon
@@ -3025,11 +2678,10 @@ def checkIllustrisMetalRatioVsSolar():
     metal_3b = np.log10(metal_3b)
 
     # plot metal mass fractions
-    fig = plt.figure(figsize=(14, 7))
-    ax = fig.add_subplot(111)
+    fig, ax = plt.subplots(figsize=(14, 7))
 
     ax.set_xlabel("log metal_mass_fraction")
-    ax.set_ylabel("N$_{\\rm tr}$")
+    ax.set_ylabel(r"N$_{\rm tr}$")
     ax.set_yscale("log")
 
     plt.hist(metal_mass_fraction_1, nBins, facecolor="red", alpha=0.8)
@@ -3040,11 +2692,10 @@ def checkIllustrisMetalRatioVsSolar():
     plt.close(fig)
 
     # plot metal ion mass fractions
-    fig = plt.figure(figsize=(14, 7))
-    ax = fig.add_subplot(111)
+    fig, ax = plt.subplots(figsize=(14, 7))
 
     ax.set_xlabel("log metal_mass_fraction_in_ion")
-    ax.set_ylabel("N$_{\\rm tr}$")
+    ax.set_ylabel(r"N$_{\rm tr}$")
     ax.set_yscale("log")
 
     plt.hist(metal_1b, nBins, facecolor="red", alpha=0.8)
@@ -3057,7 +2708,6 @@ def checkIllustrisMetalRatioVsSolar():
 
 def checkTracerLoad():
     """Check new code to load tracers from snapshots."""
-
     # basePath = '/n/home07/dnelson/dev.prime/realizations/L25n32_trTest/output/'
     basePath = "/n/home07/dnelson/sims.zooms/128_20Mpc_h0_L9/output/"
 
@@ -3085,7 +2735,7 @@ def checkTracerLoad():
     sP_new.snap = 99  # 5 # new version of snap4 moved to fake snap5
 
     # load group catalogs
-    gc_old = sP_old.groupCat(fieldsSubhalos=fieldsSubs, fieldsHalos=fieldsGroups)
+    # gc_old = sP_old.groupCat(fieldsSubhalos=fieldsSubs, fieldsHalos=fieldsGroups)
     gc_new = sP_new.groupCat(fieldsSubhalos=fieldsSubs, fieldsHalos=fieldsGroups)
 
     # load snapshots
@@ -3147,7 +2797,7 @@ def checkTracerLoad():
             gc_new_off["subhalos"][tName][shCount] = gc_new_off["halos"][tName][k]
 
             shCount += 1
-            for m in np.arange(1, gc_new["halos"]["GroupNsubs"][k]):
+            for _m in np.arange(1, gc_new["halos"]["GroupNsubs"][k]):
                 gc_new_off["subhalos"][tName][shCount] = (
                     gc_new_off["subhalos"][tName][shCount - 1] + gc_new["subhalos"]["SubhaloLenType"][shCount - 1, tNum]
                 )
@@ -3205,30 +2855,8 @@ def checkTracerLoad():
         assert gc_new_totTr == gc_new_count
 
 
-def checkLastStarTimeIllustris():
-    """Plot histogram of LST."""
-    sP = simParams(res=1820, run="illustris", redshift=0.0)
-
-    x = sP.snapshotSubsetP("tracer", "tracer_laststartime")
-
-    fig = plt.figure(figsize=(14, 7))
-    ax = fig.add_subplot(111)
-
-    ax.set_xlabel("Tracer_LastStarTime [Illustris-1 z=0]")
-    ax.set_ylabel("N$_{\\rm tr}$")
-    ax.set_yscale("log")
-
-    hRange = [x.min() - 0.1, x.max() + 0.1]
-    nBins = 400
-    plt.hist(x, nBins, range=hRange, facecolor="red", alpha=0.8)
-
-    fig.savefig("tracer_laststartime.pdf")
-    plt.close(fig)
-
-
 def enrichChecks():
     """Check GFM_WINDS_DISCRETE_ENRICHMENT comparison runs."""
-
     # config
     # sP1 = simParams(res=256, run='L12.5n256_discrete_dm0.0', redshift=0.0)
     ##sP2 = simParams(res=256, run='L12.5n256_discrete_dm0.0001', redshift=0.0)
@@ -3366,198 +2994,8 @@ def enrichChecks():
     pdf.close()
 
 
-def ipIOTest():
-    """Check outputs after all changes for IllustrisPrime."""
-    sP = simParams(res=128, run="realizations/iotest_L25n256", snap=7)
-
-    pdf = PdfPages("ipIOTest_snap" + str(sP.snap) + ".pdf")
-
-    for partType in ["gas", "dm", "tracerMC", "stars", "bhs"]:
-        # get field names
-        with h5py.File(sP.snapPath(sP.snap)) as f:
-            gName = "PartType" + str(partTypeNum(partType))
-
-            fields = []
-            if gName in f:
-                fields = f[gName].keys()
-
-        for field in fields:
-            # load
-            x = sP.snapshotSubset(partType, field)
-
-            print("%s : %s (%g %g)" % (partType, field, x.min(), x.max()))
-
-            # plot
-            fig = plt.figure(figsize=(16, 9))
-            ax = fig.add_subplot(111)
-
-            ax.set_xlabel(partType + " : " + field)
-            ax.set_ylabel("Histogram")
-
-            plt.hist(x, 50)
-
-            pdf.savefig()
-            plt.close(fig)
-
-            # multi-dim? plot indiv
-            if x.ndim > 1:
-                for i in range(x.shape[1]):
-                    print("%s : %s [%d] (%g %g)" % (partType, field, i, x[:, i].min(), x[:, i].max()))
-
-                    # plot
-                    fig = plt.figure(figsize=(16, 9))
-                    ax = fig.add_subplot(111)
-
-                    ax.set_xlabel(partType + " : " + field + " [" + str(i) + "]")
-                    ax.set_ylabel("Histogram")
-
-                    plt.hist(x[:, i], 50)
-
-                    pdf.savefig()
-                    plt.close(fig)
-
-    pdf.close()
-
-
-def checkWindPartType():
-    fileBase = "/n/home07/dnelson/dev.prime/winds_save_on/output/"
-    snapMax = 5
-
-    # check particle counts in snapshots
-    for i in range(snapMax + 1):
-        print(i)
-
-        sP1 = simParams(run="winds_save_on", res=128, snap=i)
-        sP2 = simParams(run="winds_save_off", res=128, snap=i)
-
-        h1 = sP1.snapshotHeader()
-        h2 = sP2.snapshotHeader()
-
-        if h1["NumPart"][2] + h1["NumPart"][4] != h2["NumPart"][4]:
-            raise Exception("count mismatch")
-
-        # load group and subhalo LenTypes and compare
-        gc1 = sP1.groupCat(fieldsHalos=["GroupLenType"], fieldsSubhalos=["SubhaloLenType"])
-        gc2 = sP2.groupCat(fieldsHalos=["GroupLenType"], fieldsSubhalos=["SubhaloLenType"])
-
-        gc1_halos_len24 = gc1["halos"][:, 2] + gc1["halos"][:, 4]
-
-        if np.max(gc1_halos_len24 - gc2["halos"][:, 4]) > 0:
-            raise Exception("error")
-        else:
-            print(" Global counts ok.")
-
-        # global id match
-        ids1_wind_g = sP1.snapshotSubset(2, fields="ids")
-        ids2_pt4_g = sP2.snapshotSubset(4, fields="ids")
-        sft2_pt4_g = sP2.snapshotSubset(4, fields="sftime")
-
-        w = np.where(sft2_pt4_g <= 0.0)
-
-        if not np.array_equal(ids1_wind_g, ids2_pt4_g[w]):
-            raise Exception("fail")
-        else:
-            print(" Global ID match ok.")
-
-        continue
-
-        # halo by halo, load wind and star IDs and compare
-        gch1 = sP1.groupCatHeader()
-        gch2 = sP2.groupCatHeader()
-        print(" Total groups/subhalos: " + str(gch1["Ngroups_Total"]) + " " + str(gch1["Nsubgroups_Total"]))
-
-        for j in [4]:  # gch1['Ngroups_Total']):
-            if j % 100 == 0:
-                print(j)
-
-            ids1_wind = sP1.snapshotSubset(2, fields="ids", haloID=j)
-            # ids1_star = sP1.snapshotSubset(4, fields='ids', haloID=j)
-            ids2_pt4 = sP2.snapshotSubset(4, fields="ids", haloID=j)
-            sft2_pt4 = sP2.snapshotSubset(4, fields="sftime", haloID=j)
-
-            w = np.where(sft2_pt4 <= 0.0)
-            if not np.array_equal(ids1_wind, ids2_pt4[w]):
-                print(len(ids1_wind))
-                print(len(w[0]))
-                g1 = sP1.groupCatSingle(haloID=j)
-                g2 = sP2.groupCatSingle(haloID=j)
-                print(gc1["halos"][j, :])
-                print(gc2["halos"][j, :])
-                raise Exception("fail")
-
-        # TODO: check HaloWindMass or similar derivative quantity
-
-        # for j in gch1['Nsubgroups_Total']):
-        #    if j % 100 == 0:
-        #        print j
-
-        #    ids1_wind = sP1.snapshotSubset(2, fields='ids', subhaloID=j)
-        #    #ids1_star = sP1.snapshotSubset(4, fields='ids', subhaloID=j)
-        #    ids2_pt4  = sP2.snapshotSubset(4, fields='ids', subhaloID=j)
-        #    sft2_pt4  = sP2.snapshotSubset(4, fields='sftime', subhaloID=j)
-
-        #    w = np.where(sft2_pt4 <= 0.0)
-        #    if not np.array_equal(ids1_wind,ids2_pt4[w]):
-        #        raise Exception("fail")
-
-    # pdb.set_trace()
-
-
-def compGalpropSubhaloStellarMetallicity():
-    import matplotlib as mpl
-    import illustris_python.groupcat as gc
-
-    simName = "L75n1820FP"
-    snapNum = 135
-
-    basePath = "/n/ghernquist/Illustris/Runs/" + simName + "/"
-
-    # load galprop
-    gpPath = basePath + "postprocessing/galprop/galprop_" + str(snapNum) + ".hdf5"
-    with h5py.File(gpPath, "r") as f:
-        stellar_metallicity_inrad = f["stellar_metallicity_inrad"][:]
-
-    # load groupcat
-    subhalos = gc.loadSubhalos(basePath + "output/", snapNum, fields=["SubhaloStarMetallicity"])
-
-    # plot
-    plt.figure()
-
-    x = np.array(stellar_metallicity_inrad, dtype="float32")
-    y = subhalos["SubhaloStarMetallicity"]
-
-    print(len(x), len(y))
-    wx = np.where(x < 0.0)
-    wy = np.where(y < 0.0)
-    print("num negative: ", len(wx[0]), len(wy[0]))
-    wx = np.where(x == 0.0)
-    wy = np.where(y == 0.0)
-    print("num zero: ", len(wx[0]), len(wy[0]))
-
-    # x[wx] = 1e-20
-    # y[wy] = 1e-20
-
-    print(np.min(x), np.max(x))
-    print(np.min(y), np.max(y))
-    # pdb.set_trace()
-
-    plt.plot(x, y, ".", alpha=0.1, markeredgecolor="none")
-    plt.title("SubhaloStellarMetallicity [" + simName + " snap=" + str(snapNum) + "]")
-    plt.xlabel("galProp re-computed")
-    plt.ylabel("groupcat")
-
-    xrange = [10 ** (-5), 10**0]
-    plt.xlim(xrange)
-    plt.ylim(xrange)
-
-    plt.gca().set_yscale("log")
-    plt.gca().set_xscale("log")
-
-    plt.savefig("compGalpropSHStarZ_" + simName + "_" + str(snapNum) + ".pdf")
-    plt.close()
-
-
 def checkMusic():
+    """Check MUSIC initial conditions splitting."""
     import illustris_python as il
 
     basePath = "/n/home07/dnelson/sims.zooms2/ICs/fullbox/output/"
