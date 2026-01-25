@@ -1,9 +1,7 @@
 temet
 =====
 
-[![Tests](https://github.com/dnelson/temet/actions/workflows/run_tests.yml/badge.svg)](https://github.com/dnelson/temet/actions/workflows/run_tests.yml)
-
-[![ruff](https://github.com/dnelson/temet/actions/workflows/ruff.yml/badge.svg)](https://github.com/dnelson/temet/actions/workflows/ruff.yml)
+[![tests](https://github.com/dnelson/temet/actions/workflows/run_tests.yml/badge.svg)](https://github.com/dnelson/temet/actions/workflows/run_tests.yml) [![ruff](https://github.com/dnelson/temet/actions/workflows/ruff.yml/badge.svg)](https://github.com/dnelson/temet/actions/workflows/ruff.yml)
 
 A python toolkit for the preparation, analysis, and visualization of astrophysical numerical simulations. Specifically, hydrodynamical simulations run with the [AREPO](https://wwwmpa.mpa-garching.mpg.de/~volker/arepo/) moving mesh code, as well as codes producing similarly structured outputs including [GADGET-4](https://wwwmpa.mpa-garching.mpg.de/gadget4/), [GIZMO](http://www.tapir.caltech.edu/~phopkins/Site/GIZMO.html) and [SWIFT](http://swift.dur.ac.uk/).
 

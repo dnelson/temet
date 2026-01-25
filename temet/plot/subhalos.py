@@ -104,7 +104,6 @@ def histogram2d(
     filterFlag=False,
     medianLine=True,
     sizeFac=1.0,
-    fig_subplot=(None, None),
     pStyle="white",
     ctName=None,
     saveFilename=None,
@@ -257,13 +256,8 @@ def histogram2d(
         cStatistic = cStatistic.split("_nan")[0]
 
     # start plot
-    if fig_subplot[0] is None:
-        fig = plt.figure(figsize=(figsize[0] * sizeFac, figsize[1] * sizeFac), facecolor=color1)
-        ax = fig.add_subplot(111, facecolor=color1)
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1], facecolor=color1)
+    fig = plt.figure(figsize=(figsize[0] * sizeFac, figsize[1] * sizeFac), facecolor=color1)
+    ax = fig.add_subplot(111, facecolor=color1)
 
     setAxisColors(ax, color2)
 
@@ -570,28 +564,21 @@ def histogram2d(
     setColorbarColors(cb, color2)
 
     # finish plot and save
-    finishFlag = False
-    if fig_subplot[0] is not None:  # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]:
-            finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        if pdf is not None:
-            pdf.savefig(facecolor=fig.get_facecolor())
-        else:
-            # note: saveFilename could be an in-memory buffer
-            if saveFilename is None:
-                saveFilename = "histo2d_%s_%s_%s_%s_%s_%s.pdf" % (
-                    yQuant,
-                    xQuant,
-                    cQuant,
-                    cStatistic,
-                    cenSatSelect,
-                    minCount,
-                )
-            fig.savefig(saveFilename, format=output_fmt, facecolor=fig.get_facecolor())
-        plt.close(fig)
+    if pdf is not None:
+        pdf.savefig(facecolor=fig.get_facecolor())
+    else:
+        # note: saveFilename could be an in-memory buffer
+        if saveFilename is None:
+            saveFilename = "histo2d_%s_%s_%s_%s_%s_%s.pdf" % (
+                yQuant,
+                xQuant,
+                cQuant,
+                cStatistic,
+                cenSatSelect,
+                minCount,
+            )
+        fig.savefig(saveFilename, format=output_fmt, facecolor=fig.get_facecolor())
+    plt.close(fig)
 
     return True
 
@@ -608,7 +595,6 @@ def slice(
     ylim=None,
     filterFlag=False,
     sizefac=None,
-    fig_subplot=(None, None),
     pdf=None,
 ):
     """Make a 1D 'slice' showing the dependence of one quantity on another, for subhalos selected by a range in a third.
@@ -646,18 +632,11 @@ def slice(
         sizefac = 0.8 if nCols > 4 else 1.0  # enlarge text for big panel grids
 
     # start plot
-    if fig_subplot[0] is None:
-        fig = plt.figure(figsize=[figsize[0] * nCols * sizefac, figsize[1] * nRows * sizefac])
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
+    fig = plt.figure(figsize=[figsize[0] * nCols * sizefac, figsize[1] * nRows * sizefac])
 
     # loop over each yQuantity (panel)
     for i, yQuant in enumerate(yQuants):
-        if fig_subplot[0] is None:
-            ax = fig.add_subplot(nRows, nCols, i + 1)
-        else:
-            ax = fig.add_subplot(fig_subplot[1])
+        ax = fig.add_subplot(nRows, nCols, i + 1)
 
         for sP in sPs:
             # loop over each run and add to the same plot
@@ -776,18 +755,11 @@ def slice(
             ax.legend(handles + handlesO, labels + labelsO, loc="best")
 
     # finish plot and save
-    finishFlag = False
-    if fig_subplot[0] is not None:  # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]:
-            finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        if pdf is not None:
-            pdf.savefig()
-        else:
-            fig.savefig("slice1d_%s_%s_%s_%s.pdf" % ("-".join(yQuants), xQuant, sQuant, cenSatSelect))
-        plt.close(fig)
+    if pdf is not None:
+        pdf.savefig()
+    else:
+        fig.savefig("slice1d_%s_%s_%s_%s.pdf" % ("-".join(yQuants), xQuant, sQuant, cenSatSelect))
+    plt.close(fig)
 
 
 def median(
@@ -827,7 +799,6 @@ def median(
     cbarticks=None,
     filterFlag=False,
     colorbarInside=False,
-    fig_subplot=(None, None),
     pdf=None,
 ):
     """Plot the running median (optionally with scatter points) of some quantity vs another for all subhalos.
@@ -882,7 +853,6 @@ def median(
       cbarticks (list[float]): if not None, override automatic colorbar tick values.
       filterFlag (bool): if True, exclude SubhaloFlag==0 (non-cosmological) objects.
       colorbarInside (bool): place colorbar (assuming scatterColor is used) inside the panel.
-      fig_subplot: to be removed.
 
     Returns:
       None. PDF figure is saved in current directory, or added to ``pdf`` if input.
@@ -909,18 +879,11 @@ def median(
         sizefac = 0.8
 
     # start plot
-    if fig_subplot[0] is None:
-        fig = plt.figure(figsize=[figsize[0] * nCols * sizefac, figsize[1] * nRows * sizefac])
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
+    fig = plt.figure(figsize=[figsize[0] * nCols * sizefac, figsize[1] * nRows * sizefac])
 
     # loop over each yQuantity (panel)
     for i, yQuant in enumerate(yQuants):
-        if fig_subplot[0] is None:
-            ax = fig.add_subplot(nRows, nCols, i + 1)
-        else:
-            ax = fig.add_subplot(fig_subplot[1])
+        ax = fig.add_subplot(nRows, nCols, i + 1)
 
         if f_pre is not None:
             f_pre(ax)
@@ -1336,19 +1299,12 @@ def median(
             cb.ax.set_ylabel(clabel, size=newsize)  # default: 24.192 (14 * x-large)
 
     # finish plot and save
-    finishFlag = False
-    if fig_subplot[0] is not None:  # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]:
-            finishFlag = True
+    if pdf is not None:
+        pdf.savefig()
+    else:
+        simNames = "-".join(sorted({sP.simName for sP in sPs}))
+        colorStr = "_c=%s" % scatterColor if scatterColor is not None else ""
+        yQuantsStr = "-".join(list(yQuants))
+        fig.savefig("medianQuants_%s_%s_%s%s_%s.pdf" % (simNames, yQuantsStr, xQuant, colorStr, cenSatSelect))
 
-    if fig_subplot[0] is None or finishFlag:
-        if pdf is not None:
-            pdf.savefig()
-        else:
-            simNames = "-".join(sorted({sP.simName for sP in sPs}))
-            colorStr = "_c=%s" % scatterColor if scatterColor is not None else ""
-            fig.savefig(
-                "medianQuants_%s_%s_%s%s_%s.pdf" % (simNames, "-".join(list(yQuants)), xQuant, colorStr, cenSatSelect)
-            )
-        plt.close(fig)
+    plt.close(fig)

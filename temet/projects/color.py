@@ -792,15 +792,7 @@ def viewingAngleVariation():
 
 
 def colorFluxArrows2DEvo(
-    sP,
-    pdf,
-    bands,
-    toRedshift,
-    cenSatSelect="cen",
-    minCount=None,
-    simColorsModel=defSimColorModel,
-    arrowMethod="arrow",
-    fig_subplot=(None, None),
+    sP, pdf, bands, toRedshift, cenSatSelect="cen", minCount=None, simColorsModel=defSimColorModel, arrowMethod="arrow"
 ):
     """Plot 'flux' arrows in the (color,Mstar) plane showing the median evolution of all galaxies in each bin."""
     assert cenSatSelect in ["all", "cen", "sat"]
@@ -902,13 +894,8 @@ def colorFluxArrows2DEvo(
     sim_xvals_to = sim_xvals_to[wFiniteColor]
 
     # start plot
-    if fig_subplot[0] is None:
-        fig = plt.figure(figsize=figsize, facecolor=color1)
-        ax = fig.add_subplot(111, facecolor=color1)
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1], facecolor=color1)
+    fig = plt.figure(figsize=figsize, facecolor=color1)
+    ax = fig.add_subplot(111, facecolor=color1)
 
     setAxisColors(ax, color2)
 
@@ -1131,22 +1118,15 @@ def colorFluxArrows2DEvo(
         )
 
     # finish plot and save
-    finishFlag = False
-    if fig_subplot[0] is not None:  # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]:
-            finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        if pdf is not None:
-            pdf.savefig(facecolor=fig.get_facecolor())
-        else:
-            fig.savefig(
-                "arrows2d_z=%.1f_%s_%s_%s_%s_%s.pdf"
-                % (toRedshift, "-".join(bands), simColorsModel, xQuant, cenSatSelect, minCount),
-                facecolor=fig.get_facecolor(),
-            )
-        plt.close(fig)
+    if pdf is not None:
+        pdf.savefig(facecolor=fig.get_facecolor())
+    else:
+        fig.savefig(
+            "arrows2d_z=%.1f_%s_%s_%s_%s_%s_%s.pdf"
+            % (toRedshift, "-".join(bands), simColorsModel, xQuant, cenSatSelect, minCount, arrowMethod),
+            facecolor=fig.get_facecolor(),
+        )
+    plt.close(fig)
 
 
 def _get_red_blue_2params(params, method, iterNum):
@@ -2495,19 +2475,15 @@ def paperPlots():
     # figure 6, grid of L205_cen 2d color histos vs. several properties (2x3)
     if 0:
         sP = L205
-        figsize_loc = [figsize[0] * 2 * 0.7, figsize[1] * 3 * 0.7]
         yQuant = "color_C_gr"
         params = {"cenSatSelect": "cen", "cStatistic": "median_nan"}
 
-        pdf = PdfPages("figure6_%s.pdf" % sP.simName)
-        fig = plt.figure(figsize=figsize_loc)
-        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="ssfr", fig_subplot=[fig, 321], pdf=pdf, **params)
-        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="Z_gas", fig_subplot=[fig, 322], pdf=pdf, **params)
-        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="fgas2", fig_subplot=[fig, 323], pdf=pdf, **params)
-        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="stellarage", fig_subplot=[fig, 324], pdf=pdf, **params)
-        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="bmag_2rhalf_masswt", fig_subplot=[fig, 325], pdf=pdf, **params)
-        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="pratio_halo_masswt", fig_subplot=[fig, 326], pdf=pdf, **params)
-        pdf.close()
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="ssfr", **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="Z_gas", **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="fgas2", **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="stellarage", **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="bmag_2rhalf_masswt", **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="pratio_halo_masswt", **params)
 
     # figure 7: slice through 2d histo (one property)
     if 0:
@@ -2518,12 +2494,7 @@ def paperPlots():
         css = "cen"
         quant = "pratio_halo_masswt"
 
-        pdf = PdfPages(
-            "figure7_%s_slice_%s_%s-%.1f-%.1f_%s.pdf"
-            % ("_".join([sP.simName for sP in sPs]), xQuant, sQuant, sRange[0], sRange[1], css)
-        )
-        slice(sPs, xQuant=xQuant, yQuants=[quant], sQuant=sQuant, sRange=sRange, cenSatSelect=css, pdf=pdf)
-        pdf.close()
+        slice(sPs, xQuant=xQuant, yQuants=[quant], sQuant=sQuant, sRange=sRange, cenSatSelect=css)
 
     # figure 8: BH cumegy vs mstar, model line on top (eddington transition to low-state?)
     if 0:
@@ -2585,67 +2556,19 @@ def paperPlots():
 
                     ax2.plot(xm_bh, ym_bh, linestyle=linestyle, lw=lw, color=color2)
 
-        pdf = PdfPages(
-            "figure8_medianTrend_%s_%s-%s_%s.pdf" % ("_".join([sP.simName for sP in sPs]), xQuant, yQuant, css)
-        )
-        subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css, f_post=_add_theory_line, pdf=pdf)
-        pdf.close()
+        subhalos.median(sPs, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css, f_post=_add_theory_line)
 
     # figure 9: flux arrows in color-mass plane (9c unused)
     if 0:
         sP = L205
-        dust = dust_C
-        css = "cen"
-        minCount = 1
-        toRedshift = 0.3
 
-        arrowMethod = "arrow"
-        pdf = PdfPages(
-            "figure9a_%s_toz-%.1f_%s_%s_min-%d_%s.pdf" % (sP.simName, toRedshift, css, dust, minCount, arrowMethod)
-        )
-        colorFluxArrows2DEvo(
-            sP,
-            pdf,
-            bands=bands,
-            toRedshift=toRedshift,
-            cenSatSelect=css,
-            minCount=minCount,
-            simColorsModel=dust,
-            arrowMethod=arrowMethod,
-        )
-        pdf.close()
+        opts = {"bands": bands, "simColorsModel": dust_C, "cenSatSelect": "cen", "minCount": 1, "toRedshift": 0.3}
 
-        arrowMethod = "stream"
-        pdf = PdfPages(
-            "figure9b_%s_toz-%.1f_%s_%s_min-%d_%s.pdf" % (sP.simName, toRedshift, css, dust, minCount, arrowMethod)
-        )
-        colorFluxArrows2DEvo(
-            sP,
-            pdf,
-            bands=bands,
-            toRedshift=toRedshift,
-            cenSatSelect=css,
-            minCount=minCount,
-            simColorsModel=dust,
-            arrowMethod="stream",
-        )
-        pdf.close()
+        colorFluxArrows2DEvo(sP, arrowMethod="arrow", **opts)
 
-        arrowMethod = "stream_mass"
-        pdf = PdfPages(
-            "figure9c_%s_toz-%.1f_%s_%s_min-%d_%s.pdf" % (sP.simName, toRedshift, css, dust, minCount, arrowMethod)
-        )
-        colorFluxArrows2DEvo(
-            sP,
-            pdf,
-            bands=bands,
-            toRedshift=toRedshift,
-            cenSatSelect=css,
-            minCount=minCount,
-            simColorsModel=dust,
-            arrowMethod=arrowMethod,
-        )
-        pdf.close()
+        colorFluxArrows2DEvo(sP, arrowMethod="stream", **opts)
+
+        colorFluxArrows2DEvo(sP, arrowMethod="stream_mass", **opts)
 
     # figure 10: timescale histogram for color transition
     # figure 11: distribution of initial M* when entering red sequence (crossing color cut) (Q1)
@@ -2697,35 +2620,24 @@ def paperPlots():
 
     # appendix figure X, 2d density histos (3x1 in a row) all_L75, cen_L75, cen_L205
     if 0:
-        figsize_loc = [figsize[0] * 3 * 0.7, figsize[1] * 1 * 0.75]
-
-        pdf = PdfPages("appendix4.pdf")
-        fig = plt.figure(figsize=figsize_loc)
-        subhalos.histogram2d(L75, bands, cenSatSelect="all", cQuant=None, fig_subplot=[fig, 131], pdf=pdf)
-        subhalos.histogram2d(L75, bands, cenSatSelect="cen", cQuant=None, fig_subplot=[fig, 132], pdf=pdf)
-        subhalos.histogram2d(L205, bands, cenSatSelect="cen", cQuant=None, fig_subplot=[fig, 133], pdf=pdf)
-        pdf.close()
+        subhalos.histogram2d(L75, bands, cenSatSelect="all", cQuant=None)
+        subhalos.histogram2d(L75, bands, cenSatSelect="cen", cQuant=None)
+        subhalos.histogram2d(L205, bands, cenSatSelect="cen", cQuant=None)
 
     # supplemental figures:
     # ---------------------
     if 0:
         # 6 other properties, 2d histos
         sP = L205
-        figsize_loc = [figsize[0] * 2 * 0.7, figsize[1] * 3 * 0.7]
         yQuant = "color_C_gr"
         params = {"cenSatSelect": "cen", "cStatistic": "median_nan"}
 
-        pdf = PdfPages("supp1_%s.pdf" % sP.simName)
-        fig = plt.figure(figsize=figsize_loc)
-        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="surfdens1_stars", fig_subplot=[fig, 321], pdf=pdf, **params)
-        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="Z_stars", fig_subplot=[fig, 322], pdf=pdf, **params)
-        subhalos.histogram2d(
-            sP, yQuant=yQuant, cQuant="Krot_oriented_stars2", fig_subplot=[fig, 323], pdf=pdf, **params
-        )
-        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="Krot_oriented_gas2", fig_subplot=[fig, 324], pdf=pdf, **params)
-        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="xray_r500", fig_subplot=[fig, 325], pdf=pdf, **params)
-        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="size_stars", fig_subplot=[fig, 326], pdf=pdf, **params)
-        pdf.close()
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="surfdens1_stars", **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="Z_stars", **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="Krot_oriented_stars2", **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="Krot_oriented_gas2", **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="xray_r500", **params)
+        subhalos.histogram2d(sP, yQuant=yQuant, cQuant="size_stars", **params)
 
     if 0:
         # slices of other properties, pratio components
@@ -2751,21 +2663,12 @@ def paperPlots():
         ]
 
         for quant in quants:
-            pdf = PdfPages(
-                "supp2_%s_slice_%s_%s_%s-%.1f-%.1f_%s.pdf"
-                % ("_".join([sP.simName for sP in sPs]), quant, xQuant, sQuant, sRange[0], sRange[1], css)
-            )
-            slice(sPs, xQuant=xQuant, yQuants=[quant], sQuant=sQuant, sRange=sRange, cenSatSelect=css, pdf=pdf)
-            pdf.close()
+            slice(sPs, xQuant=xQuant, yQuants=[quant], sQuant=sQuant, sRange=sRange, cenSatSelect=css)
 
     if 0:
         # star formation main sequence
         sP = L205
-        figsize_loc = [figsize[0] * 1 * 0.8, figsize[1] * 2 * 0.7]
         params = {"cenSatSelect": "cen", "cStatistic": "median_nan"}
 
-        pdf = PdfPages("supp3_%s.pdf" % sP.simName)
-        fig = plt.figure(figsize=figsize_loc)
-        subhalos.histogram2d(sP, yQuant="ssfr", cQuant=None, fig_subplot=[fig, 211], pdf=pdf, **params)
-        subhalos.histogram2d(sP, yQuant="ssfr", cQuant="color_C_gr", fig_subplot=[fig, 212], pdf=pdf, **params)
-        pdf.close()
+        subhalos.histogram2d(sP, yQuant="ssfr", cQuant=None, **params)
+        subhalos.histogram2d(sP, yQuant="ssfr", cQuant="color_C_gr", **params)

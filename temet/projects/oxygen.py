@@ -2270,7 +2270,7 @@ def coveringFractionVsDist(sPs, saveName, ions, colDensThresholds, config="COS-H
         ax.set_ylim([-0.1, 1.04])
 
     # overplot obs
-    colors_loc = ['black'] if len(galaxySets) == 1 else colors
+    colors_loc = ["black"] if len(galaxySets) == 1 else colors
 
     opts = {"fmt": "o", "ms": 11, "lw": 1.6, "capthick": 1.6}
 
@@ -2753,7 +2753,6 @@ def paperPlots():
     # figure 18, 19, 20: 2d histos
     if 0:
         sP = TNG300
-        figsize_loc = [figsize[0] * 2 * 0.7, figsize[1] * 3 * 0.7]
         xQuants = ["mstar_30pkpc_log", "mhalo_200_log"]
         cQuant = "mass_ovi"
 
@@ -2773,18 +2772,15 @@ def paperPlots():
         for i, xQuant in enumerate(xQuants):
             yQuants3[-1] = xQuants[1 - i]  # include the other
 
-            for j, yQuants in enumerate(yQuantSets):
+            for yQuants in yQuantSets:
                 params = {"cenSatSelect": "cen", "cStatistic": "median_nan", "cQuant": cQuant, "xQuant": xQuant}
 
-                pdf = PdfPages("histo2d_x=%s_set-%d_%sb.pdf" % (xQuant, j, sP.simName))
-                fig = plt.figure(figsize=figsize_loc)
-                subhalos.histogram2d(sP, yQuant=yQuants[0], fig_subplot=[fig, 321], pdf=pdf, **params)
-                subhalos.histogram2d(sP, yQuant=yQuants[1], fig_subplot=[fig, 322], pdf=pdf, **params)
-                subhalos.histogram2d(sP, yQuant=yQuants[2], fig_subplot=[fig, 323], pdf=pdf, **params)
-                subhalos.histogram2d(sP, yQuant=yQuants[3], fig_subplot=[fig, 324], pdf=pdf, **params)
-                subhalos.histogram2d(sP, yQuant=yQuants[4], fig_subplot=[fig, 325], pdf=pdf, **params)
-                subhalos.histogram2d(sP, yQuant=yQuants[5], fig_subplot=[fig, 326], pdf=pdf, **params)
-                pdf.close()
+                subhalos.histogram2d(sP, yQuant=yQuants[0], **params)
+                subhalos.histogram2d(sP, yQuant=yQuants[1], **params)
+                subhalos.histogram2d(sP, yQuant=yQuants[2], **params)
+                subhalos.histogram2d(sP, yQuant=yQuants[3], **params)
+                subhalos.histogram2d(sP, yQuant=yQuants[4], **params)
+                subhalos.histogram2d(sP, yQuant=yQuants[5], **params)
 
     # ------------ appendix ---------------
 

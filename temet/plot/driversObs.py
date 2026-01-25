@@ -22,16 +22,7 @@ from ..util.helper import iterable, logZeroNaN, running_histogram, running_media
 from .subhalos import addRedshiftAgeAxes
 
 
-def stellarMassHaloMass(
-    sPs,
-    pdf,
-    ylog=False,
-    allMassTypes=False,
-    use30kpc=False,
-    simRedshift=0.0,
-    dataRedshift=0.0,
-    fig_subplot=(None, None),
-):
+def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False, simRedshift=0.0, dataRedshift=0.0):
     """Stellar mass vs. halo mass relation."""
     from ..load.data import behrooziSMHM, kravtsovSMHM, mosterSMHM
 
@@ -43,12 +34,7 @@ def stellarMassHaloMass(
         yrange[1] = 0.25
 
     # plot setup
-    if fig_subplot[0] is None:
-        fig, ax = plt.subplots()
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1])
+    fig, ax = plt.subplots()
 
     ax.set_xlim(xrange)
     ax.set_ylim(yrange)
@@ -185,40 +171,8 @@ def stellarMassHaloMass(
     ax.legend(sExtra, lExtra, loc="upper left")
 
     # finish figure
-    finishFlag = False
-    if fig_subplot[0] is not None:  # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]:
-            finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        pdf.savefig()
-        plt.close(fig)
-
-
-def stellarMassHaloMassMultiPanel(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False, redshifts=(0, 1, 2, 3)):
-    """Stellar mass vs. halo mass relation, multiple redshifts."""
-    nRows = np.floor(np.sqrt(len(redshifts)))
-    nCols = np.ceil(len(redshifts) / nRows)
-
-    sizefac_loc = 0.9
-    figsize_loc = [figsize[0] * nCols * sizefac_loc, figsize[1] * nRows * sizefac_loc]
-
-    fig = plt.figure(figsize=figsize_loc)
-
-    for i, redshift in enumerate(redshifts):
-        # append each panel to existing figure, which is automatically saved into pdf at the end
-        ind = int(nRows * 100 + nCols * 10 + (i + 1))
-        stellarMassHaloMass(
-            sPs,
-            pdf,
-            ylog=ylog,
-            allMassTypes=allMassTypes,
-            use30kpc=use30kpc,
-            simRedshift=redshift,
-            dataRedshift=redshift,
-            fig_subplot=[fig, ind],
-        )
+    pdf.savefig()
+    plt.close(fig)
 
 
 def sfrAvgVsRedshift(sPs, pdf):
@@ -656,7 +610,6 @@ def stellarMassFunction(
     s850fluxes=False,
     simRedshift=0.0,
     dataRedshift=0.0,
-    fig_subplot=(None, None),
 ):
     """Stellar mass function (number density of galaxies) at redshift zero, or above."""
     from ..load.data import (
@@ -674,12 +627,7 @@ def stellarMassFunction(
     mts = ["SubhaloMassInRadType", "SubhaloMassInHalfRadType", "SubhaloMassType"]
 
     # plot setup
-    if fig_subplot[0] is None:
-        fig, ax = plt.subplots()
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1])
+    fig, ax = plt.subplots()
 
     # ax.set_ylim([5e-6,2e-1])
     ax.set_ylim([1e-5, 3e-1])
@@ -871,57 +819,16 @@ def stellarMassFunction(
     ax.legend(handles + sExtra, labels + lExtra, loc="lower left")
 
     # finish figure
-    finishFlag = False
-    if fig_subplot[0] is not None:  # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]:
-            finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        pdf.savefig()
-        plt.close(fig)
+    pdf.savefig()
+    plt.close(fig)
 
 
-def stellarMassFunctionMultiPanel(
-    sPs, pdf, highMassEnd=False, centralsOnly=False, use30kpc=False, use30H=False, useP10=False, redshifts=(0, 1, 2, 3)
-):
-    """Stellar mass functions, multiple redshifts."""
-    nRows = np.floor(np.sqrt(len(redshifts)))
-    nCols = np.ceil(len(redshifts) / nRows)
-
-    sizefac_loc = 0.9
-    figsize_loc = [figsize[0] * nCols * sizefac_loc, figsize[1] * nRows * sizefac_loc]
-
-    fig = plt.figure(figsize=figsize_loc)
-
-    for i, redshift in enumerate(redshifts):
-        # append each panel to existing figure, which is automatically saved into pdf at the end
-        ind = int(nRows * 100 + nCols * 10 + (i + 1))
-        stellarMassFunction(
-            sPs,
-            pdf,
-            highMassEnd=highMassEnd,
-            centralsOnly=centralsOnly,
-            use30kpc=use30kpc,
-            use30H=use30H,
-            useP10=useP10,
-            simRedshift=redshift,
-            dataRedshift=redshift,
-            fig_subplot=[fig, ind],
-        )
-
-
-def HIMassFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=(None, None)):
+def HIMassFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
     """HI mass function (number density of HI masses) at redshift zero."""
     acFields = ["Subhalo_Mass_100pkpc_HI", "Subhalo_Mass_30pkpc_HI", "Subhalo_Mass_HI"]
 
     # plot setup
-    if fig_subplot[0] is None:
-        fig, ax = plt.subplots()
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1])
+    fig, ax = plt.subplots()
 
     ax.set_ylim([1e-6, 4e-1])
     ax.set_xlim([6.5, 11.0])
@@ -990,30 +897,18 @@ def HIMassFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=(No
     ax.legend(handles + sExtra, labels + lExtra, loc="lower left")
 
     # finish figure
-    finishFlag = False
-    if fig_subplot[0] is not None:  # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]:
-            finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        pdf.savefig()
-        plt.close(fig)
+    pdf.savefig()
+    plt.close(fig)
 
 
-def HIMassFraction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=(None, None)):
+def HIMassFraction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
     """HI mass fraction (M_HI/M*) vs M* at redshift zero."""
     from ..load.data import catinella2018
 
     acFields = ["Subhalo_Mass_100pkpc_HI", "Subhalo_Mass_30pkpc_HI", "Subhalo_Mass_HI"]
 
     # plot setup
-    if fig_subplot[0] is None:
-        fig, ax = plt.subplots()
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1])
+    fig, ax = plt.subplots()
 
     ax.set_ylim([-3.0, 1.0])
     ax.set_xlim([8.5, 12.0])
@@ -1120,18 +1015,11 @@ def HIMassFraction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=(No
     ax.legend(handles + sExtra, labels + lExtra, loc="lower left")
 
     # finish figure
-    finishFlag = False
-    if fig_subplot[0] is not None:  # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]:
-            finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        pdf.savefig()
-        plt.close(fig)
+    pdf.savefig()
+    plt.close(fig)
 
 
-def HIvsHaloMass(sPs, pdf, simRedshift=0.0, fig_subplot=(None, None)):
+def HIvsHaloMass(sPs, pdf, simRedshift=0.0):
     """HI mass (M_HI) vs M_halo at redshift zero."""
     from ..load.data import obuljen2019
     # todo: https://arxiv.org/abs/2502.00110
@@ -1139,12 +1027,7 @@ def HIvsHaloMass(sPs, pdf, simRedshift=0.0, fig_subplot=(None, None)):
     acFields = ["Subhalo_Mass_FoF_HI", "Subhalo_Mass_HI"]
 
     # plot setup
-    if fig_subplot[0] is None:
-        fig, ax = plt.subplots()
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1])
+    fig, ax = plt.subplots()
 
     ax.set_ylim([6.0, 11.5])
     ax.set_xlim([9.5, 14.0])
@@ -1214,18 +1097,11 @@ def HIvsHaloMass(sPs, pdf, simRedshift=0.0, fig_subplot=(None, None)):
     ax.legend(handles + sExtra, labels + lExtra, loc="upper left")
 
     # finish figure
-    finishFlag = False
-    if fig_subplot[0] is not None:  # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]:
-            finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        pdf.savefig()
-        plt.close(fig)
+    pdf.savefig()
+    plt.close(fig)
 
 
-def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_subplot=(None, None)):
+def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False):
     """Stellar mass-metallicity relation at z=0."""
     from ..load.data import gallazzi2005, kirby2013, loadSDSSFits, woo2008
 
@@ -1240,12 +1116,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
     minNumStars = 1  # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
 
     # plot setup
-    if fig_subplot[0] is None:
-        fig, ax = plt.subplots()
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1])
+    fig, ax = plt.subplots()
 
     ax.set_xlim([8.0, 12.5])
     ax.set_ylim([-1.5, 1.0])
@@ -1419,15 +1290,8 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
     ax.legend(handles + sExtra, labels + lExtra, loc="upper left")
 
     # finish figure
-    finishFlag = False
-    if fig_subplot[0] is not None:  # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]:
-            finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        pdf.savefig()
-        plt.close(fig)
+    pdf.savefig()
+    plt.close(fig)
 
 
 def massMetallicityGas(sPs, pdf, simRedshift=0.0):
@@ -2037,7 +1901,7 @@ def velocityFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
     plt.close(fig)
 
 
-def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=False, fig_subplot=(None, None)):
+def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=False):
     """Luminosity or mass weighted stellar ages, as a function of Mstar (Vog 14b Fig 25)."""
     from ..load.data import bernardi10, gallazzi2005, loadSDSSFits
 
@@ -2051,12 +1915,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
     minNumStars = 1  # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
 
     # plot setup
-    if fig_subplot[0] is None:
-        fig, ax = plt.subplots()
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1])
+    fig, ax = plt.subplots()
 
     ax.set_xlim([8.0, 12.5])
     ax.set_ylim([0, 14])
@@ -2196,15 +2055,8 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
     ax.legend(handles + sExtra, labels + lExtra, loc="lower right")
 
     # finish figure
-    finishFlag = False
-    if fig_subplot[0] is not None:  # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]:
-            finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        pdf.savefig()
-        plt.close(fig)
+    pdf.savefig()
+    plt.close(fig)
 
 
 def haloXrayLum(sPs, pdf=None, xlim=(10, 12), ylim=(38, 45), bolometric=False):
@@ -2370,8 +2222,9 @@ def plots():
     stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=zZero)
     stellarMassHaloMass(sPs, pdf, ylog=True, use30kpc=True, simRedshift=zZero)
 
-    stellarMassHaloMassMultiPanel(sPs, pdf, ylog=False, use30kpc=True, redshifts=[1, 2, 3, 4])  # 1,2,3,6
-    stellarMassHaloMassMultiPanel(sPs, pdf, ylog=True, use30kpc=True, redshifts=[1, 2, 3, 4])  # 1,2,3,6
+    for redshift in [1, 2, 3, 4]:  # 6
+        stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=redshift)
+        stellarMassHaloMass(sPs, pdf, ylog=True, use30kpc=True, simRedshift=redshift)
 
     sfrAvgVsRedshift(sPs, pdf)
     sfrdVsRedshift(sPs, pdf, xlog=True)
@@ -2387,7 +2240,9 @@ def plots():
     )
     stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)
     stellarMassFunction(sPs, pdf, highMassEnd=True, simRedshift=zZero)
-    stellarMassFunctionMultiPanel(sPs, pdf, use30kpc=True, highMassEnd=False, redshifts=[3, 4])
+
+    for redshift in [1, 2, 3, 4]:
+        stellarMassFunction(sPs, pdf, use30kpc=True, highMassEnd=False, simRedshift=redshift)
 
     massMetallicityStars(sPs, pdf, simRedshift=zZero)
     massMetallicityGas(sPs, pdf, simRedshift=zZero)

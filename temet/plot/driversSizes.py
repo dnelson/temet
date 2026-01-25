@@ -26,7 +26,6 @@ def galaxySizes(
     markersize=12.0,
     xlim=None,
     ylim=None,
-    fig_subplot=(None, None),
     pdf=None,
 ):
     """Galaxy sizes (half mass radii) vs stellar mass or halo mass, compared to data.
@@ -42,20 +41,14 @@ def galaxySizes(
       markersize (float): if ``scatterPoints`` then override the default marker size.
       xlim (2-tuple): plot x-limits.
       ylim (2-tuple): plot y-limits.
-      fig_subplot (2-tuple): to remove.
       pdf (PdfPages or None): if None, an actual PDF file is written to disk with the figure.
         If not None, then the figure is added to this existing pdf collection.
     """
     from ..load.data import baldry2012SizeMass, lange2016SizeMass, shen2003SizeMass
 
     # plot setup
-    if fig_subplot[0] is None:
-        fig = plt.figure(figsize=(figsize[0] * sizefac, figsize[1] * sizefac))
-        ax = fig.add_subplot(111)
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1])
+    fig = plt.figure(figsize=(figsize[0] * sizefac, figsize[1] * sizefac))
+    ax = fig.add_subplot(111)
 
     ax.set_ylim([0.3, 1e2] if ylim is None else ylim)
 
@@ -293,26 +286,23 @@ def galaxySizes(
     ax.legend(loc="lower right")
 
     # finish figure
-    finishFlag = False
-    if fig_subplot[0] is not None:  # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]:
-            finishFlag = True
+    if pdf is not None:
+        pdf.savefig(facecolor=fig.get_facecolor())
+    else:
+        saveFilename = "sizes_%s_z%.1f_halomass=%s_halflight=%s.pdf" % (
+            "-".join([str(sim) for sim in sPs]),
+            simRedshift,
+            vsHaloMass,
+            "-".join([str(s) for s in addHalfLightRad]) if addHalfLightRad is not None else "None",
+        )
+        fig.savefig(saveFilename, facecolor=fig.get_facecolor())
+    plt.close(fig)
 
-    if fig_subplot[0] is None or finishFlag:
-        pdf.savefig()
-        plt.close(fig)
 
-
-def galaxyHISizeMass(sPs, pdf, simRedshift=0.0, fig_subplot=(None, None)):
+def galaxyHISizeMass(sPs, pdf, simRedshift=0.0):
     """Galaxy HI size-mass relation, at redshift zero."""
     # plot setup
-    if fig_subplot[0] is None:
-        fig, ax = plt.subplots()
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1])
+    fig, ax = plt.subplots()
 
     cenSatSelect = "cen"
     ylabel = r"D$_{\rm HI}$ [ log kpc ]"
@@ -377,15 +367,12 @@ def galaxyHISizeMass(sPs, pdf, simRedshift=0.0, fig_subplot=(None, None)):
     ax.legend(handles, labels, loc="lower right")
 
     # finish figure
-    finishFlag = False
-    if fig_subplot[0] is not None:  # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]:
-            finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        pdf.savefig()
-        plt.close(fig)
+    if pdf is not None:
+        pdf.savefig(facecolor=fig.get_facecolor())
+    else:
+        saveFilename = "sizes_HI_%s_z%.1f.pdf" % ("-".join([str(sim) for sim in sPs]), simRedshift)
+        fig.savefig(saveFilename, facecolor=fig.get_facecolor())
+    plt.close(fig)
 
 
 def sizeModelsRatios():

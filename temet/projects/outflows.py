@@ -3053,10 +3053,7 @@ def paperPlots(sPs=None):
             "cRel": cRel,
         }
 
-        pdf = PdfPages("histo2d_x=%s_y=%s_c=%s_%s_%d.pdf" % (xQuant, yQuant, cQuant, sP.simName, sP.snap))
-        fig = plt.figure(figsize=figsize_sm)
-        subhalos.histogram2d(sP, yQuant=yQuant, fig_subplot=[fig, 111], pdf=pdf, **params)
-        pdf.close()
+        subhalos.histogram2d(sP, yQuant=yQuant, **params)
 
         # inset: trend of relative vout with delta_MS for two M* slices
         xQuant = "delta_sfms"
@@ -3096,10 +3093,7 @@ def paperPlots(sPs=None):
 
         params = {"cenSatSelect": "cen", "cStatistic": "median_nan", "cQuant": cQuant, "cFrac": cFrac, "nBins": nBins}
 
-        pdf = PdfPages("histofrac2d_x=%s_y=%s_c=%s_%s_%d.pdf" % (xQuant, yQuant, cQuant, sP.simName, sP.snap))
-        fig = plt.figure(figsize=figsize_sm)
-        subhalos.histogram2d(sP, xQuant=xQuant, yQuant=yQuant, fig_subplot=[fig, 111], pdf=pdf, **params)
-        pdf.close()
+        subhalos.histogram2d(sP, xQuant=xQuant, yQuant=yQuant, **params)
 
     if 0:
         # fig 15: observational comparisons, many panels of outflow velocity vs. galaxy/BH properties
@@ -3480,15 +3474,11 @@ def paperPlots(sPs=None):
         }
 
         for xQuant in xQuants:
-            pdf = PdfPages("histo2d_x=%s_y=%s_c=%s_%s_%d.pdf" % (xQuant, yQuant, cQuant, sP.simName, sP.snap))
-            fig = plt.figure(figsize=figsize_sm)
-            subhalos.histogram2d(sP, xQuant=xQuant, yQuant=yQuant, fig_subplot=[fig, 111], pdf=pdf, **params)
-            pdf.close()
+            subhalos.histogram2d(sP, xQuant=xQuant, yQuant=yQuant, **params)
 
     # exploration: 2d histos of everything vs M*, color on e.g. eta/vout
     if 0:
         sP = simParams(res=2160, run="tng", redshift=1.0)
-        figsize_loc = [figsize[0] * 2 * 0.7, figsize[1] * 3 * 0.7]
         xQuants = ["mstar_30pkpc_log", "mhalo_200_log"]
         nBins = 50
 
@@ -3501,7 +3491,7 @@ def paperPlots(sPs=None):
 
             for cQuant in cQuants:
                 # for each (x) quant, make a number of 6-panel figures, different y-axis (same coloring) for every panel
-                for j, yQuants in enumerate([quants2]):  # quantSets):
+                for yQuants in [quants2]:  # quantSets):
                     params = {
                         "cenSatSelect": "cen",
                         "cStatistic": "median_nan",
@@ -3511,23 +3501,16 @@ def paperPlots(sPs=None):
                         "nBins": nBins,
                     }
 
-                    pdf = PdfPages(
-                        "histo2d_x=%s_c=%s_set-%d_%s_%d%s.pdf"
-                        % (xQuant, cQuant, j, sP.simName, sP.snap, "_rel" if cRel is not None else "")
-                    )
-                    fig = plt.figure(figsize=figsize_loc)
-                    subhalos.histogram2d(sP, yQuant=yQuants[0], fig_subplot=[fig, 321], pdf=pdf, **params)
-                    subhalos.histogram2d(sP, yQuant=yQuants[1], fig_subplot=[fig, 322], pdf=pdf, **params)
-                    subhalos.histogram2d(sP, yQuant=yQuants[2], fig_subplot=[fig, 323], pdf=pdf, **params)
-                    subhalos.histogram2d(sP, yQuant=yQuants[3], fig_subplot=[fig, 324], pdf=pdf, **params)
-                    subhalos.histogram2d(sP, yQuant=yQuants[4], fig_subplot=[fig, 325], pdf=pdf, **params)
-                    subhalos.histogram2d(sP, yQuant=yQuants[5], fig_subplot=[fig, 326], pdf=pdf, **params)
-                    pdf.close()
+                    subhalos.histogram2d(sP, yQuant=yQuants[0], **params)
+                    subhalos.histogram2d(sP, yQuant=yQuants[1], **params)
+                    subhalos.histogram2d(sP, yQuant=yQuants[2], **params)
+                    subhalos.histogram2d(sP, yQuant=yQuants[3], **params)
+                    subhalos.histogram2d(sP, yQuant=yQuants[4], **params)
+                    subhalos.histogram2d(sP, yQuant=yQuants[5], **params)
 
     # exploration: 2d histos of new quantities (vout,eta,BH_BolLum,etc) vs M*, colored by everything else
     if 0:
         sP = simParams(res=2160, run="tng", redshift=1.0)
-        figsize_loc = [figsize[0] * 2 * 0.7, figsize[1] * 3 * 0.7]
         xQuants = ["mstar_30pkpc_log", "mhalo_200_log"]
         nBins = 50
 
@@ -3550,18 +3533,12 @@ def paperPlots(sPs=None):
                         "nBins": nBins,
                     }
 
-                    pdf = PdfPages(
-                        "histo2d_x=%s_y=%s_set-%d_%s_%d%s.pdf"
-                        % (xQuant, yQuant, j, sP.simName, sP.snap, "_rel" if cRel is not None else "")
-                    )
-                    fig = plt.figure(figsize=figsize_loc)
-                    subhalos.histogram2d(sP, cQuant=cQuants[0], fig_subplot=[fig, 321], pdf=pdf, **params)
-                    subhalos.histogram2d(sP, cQuant=cQuants[1], fig_subplot=[fig, 322], pdf=pdf, **params)
-                    subhalos.histogram2d(sP, cQuant=cQuants[2], fig_subplot=[fig, 323], pdf=pdf, **params)
-                    subhalos.histogram2d(sP, cQuant=cQuants[3], fig_subplot=[fig, 324], pdf=pdf, **params)
-                    subhalos.histogram2d(sP, cQuant=cQuants[4], fig_subplot=[fig, 325], pdf=pdf, **params)
-                    subhalos.histogram2d(sP, cQuant=cQuants[5], fig_subplot=[fig, 326], pdf=pdf, **params)
-                    pdf.close()
+                    subhalos.histogram2d(sP, cQuant=cQuants[0], **params)
+                    subhalos.histogram2d(sP, cQuant=cQuants[1], **params)
+                    subhalos.histogram2d(sP, cQuant=cQuants[2], **params)
+                    subhalos.histogram2d(sP, cQuant=cQuants[3], **params)
+                    subhalos.histogram2d(sP, cQuant=cQuants[4], **params)
+                    subhalos.histogram2d(sP, cQuant=cQuants[5], **params)
 
     # exploration: outlier check (for Fig 14 discussion/text)
     if 0:
@@ -3580,9 +3557,4 @@ def paperPlots(sPs=None):
         for yQuant in yQuants:
             for xQuant in xQuants:
                 for cQuant in cQuants:
-                    pdf = PdfPages("histo2d_x=%s_y=%s_c=%s_%s_%d.pdf" % (xQuant, yQuant, cQuant, sP.simName, sP.snap))
-                    fig = plt.figure(figsize=figsize_sm)
-                    subhalos.histogram2d(
-                        sP, xQuant=xQuant, yQuant=yQuant, cQuant=cQuant, fig_subplot=[fig, 111], pdf=pdf, **params
-                    )
-                    pdf.close()
+                    subhalos.histogram2d(sP, xQuant=xQuant, yQuant=yQuant, cQuant=cQuant, **params)

@@ -897,10 +897,7 @@ def paperPlots():
             "cRel": cRel,
         }
 
-        pdf = PdfPages("histo2d_x=%s_y=%s_c=%s_%s_%d.pdf" % (xQuant, yQuant, cQuant, sP.simName, sP.snap))
-        fig = plt.figure()
-        subhalos.histogram2d(sP, yQuant=yQuant, fig_subplot=[fig, 111], pdf=pdf, **params)
-        pdf.close()
+        subhalos.histogram2d(sP, yQuant=yQuant, **params)
 
     # figure X: explore 5rvir vs 10rvir max radius
     if 0:
