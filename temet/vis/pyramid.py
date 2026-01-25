@@ -11,8 +11,12 @@ import matplotlib.colors as colors
 import numpy as np
 import scipy.ndimage
 
-from ..util.png import Reader as pngReader
-from ..util.png import Writer as pngWriter
+
+try:
+    from png import Reader as pngReader
+    from png import Writer as pngWriter
+except ImportError:
+    print("png module not found! Please install pypng (pip install git+https://gitlab.com/drj11/pypng).")
 
 
 def rebin(a, shape):
