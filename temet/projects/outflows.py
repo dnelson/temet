@@ -6,6 +6,7 @@ https://arxiv.org/abs/1902.05554
 
 import warnings
 from functools import partial
+from os.path import expanduser, isfile
 
 import h5py
 import matplotlib.pyplot as plt
@@ -17,6 +18,8 @@ from scipy.interpolate import griddata, interp1d
 from scipy.signal import savgol_filter
 
 from ..catalog.gasflows import radialMassFluxes
+from ..cosmo.mergertree import loadMPBs
+from ..cosmo.time_evo import halosTimeEvoFullbox, halosTimeEvoSubbox, subhalo_subbox_overlap
 from ..plot import snapshot, subhalos
 from ..plot.config import colors, figsize, linestyles, lw, markers, sKn, sKo
 from ..projects.outflows_vis import galaxyMosaic_topN, singleHaloDemonstrationImage, subboxOutflowTimeEvoPanels
@@ -2752,7 +2755,450 @@ def stackedRadialProfiles(
     plt.close(fig)
 
 
+def fit_vout():
+    """For text discussion and fit equations relating to outflow velocities."""
+    import pickle
+
+    import matplotlib.pyplot as plt
+    from scipy.optimize import leastsq
+
+    from ..plot.config import figsize, lw
+    from ..util import simParams
+
+    # load
+    filename = "vout_75"
+    with open("%s_TNG50-1.pickle" % filename, "rb") as f:
+        data_z = pickle.load(f)
+
+    # gather data of vout(M*,z)
+    nskip = 2  # exclude last N datapoints from each vout(M*) line, due to poor statistics
+    tot_len = np.sum([dset["xm"].size - nskip for dset in data_z])
+
+    mstar = np.zeros(tot_len, dtype="float32")
+    vout = np.zeros(tot_len, dtype="float32")
+    redshift = np.zeros(tot_len, dtype="float32")
+
+    offset = 0
+
+    for dset in data_z:
+        count = dset["xm"].size - nskip
+        mstar[offset : offset + count] = dset["xm"][:-nskip]
+        vout[offset : offset + count] = dset["ym"][:-nskip]
+        redshift[offset : offset + count] = dset["redshift"]  # constant
+        offset += count
+
+    if 0:
+        # least-squares fit
+        def _error_function(params, mstar, z, vout):
+            """Define error function to minimize."""
+            (a, b, c, d, e, f) = params  # v = a + (M*/b)^c + (1+z)^d
+            # vout_fit = a * (1+z)**e + (mstar/b)**(c) * (1+z)**d
+            # vout_fit = a * (1+z)**e + (mstar/9)**(c) * (1+z)**d
+            vout_fit = a * (1 + f * z**2) + b * (1 + z * c) * mstar + (mstar / d) ** e
+            # vout_fit = a*np.sqrt(1+z) + b*(1+z) * (mstar/10) + c*(1+z) * (mstar/10)**2
+            # vout_fit = np.log10(vout_fit)
+            return vout_fit - vout
+
+        params_init = [100.0, 8.0, 1.0, 1.0, 1.0, 1.0]
+        # args = (mstar,redshift,np.log10(vout))
+        args = (mstar, redshift, vout)
+
+        params_best, params_cov, info, errmsg, retcode = leastsq(
+            _error_function, params_init, args=args, full_output=True
+        )
+
+        print("params best:", params_best)
+
+        # (A) vs. redshift plot
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_xlim([0.8 + 1, 6.2 + 1])
+        ax.set_ylim([0, 1200])
+        # ax.set_ylim([1,3]) # log
+        ax.set_xlabel("(1+z)")
+        ax.set_ylabel(filename + " [km/s]")
+
+        for mass_ind in [3, 6, 10, 14, 15, 16, 17]:
+            # make (x,y) datapoints
+            xx = [1 + dset["redshift"] for dset in data_z]
+            yy = []
+            for dset in data_z:
+                if mass_ind < dset["ym"].size:
+                    yy.append(dset["ym"][mass_ind])
+                else:
+                    yy.append(np.nan)
+
+            w = np.where(np.isfinite(yy))
+            xx = np.array(xx)[w]
+            yy = np.array(yy)[w]
+
+            # plot
+            x_mstar = data_z[0]["xm"][mass_ind]  # log msun
+            label = r"M$_\star$ = %.2f" % x_mstar
+            (l,) = ax.plot(xx, yy, "-", lw=lw, label=label)  # np.log10(yy)
+
+            # plot fit
+            x_redshift = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], 50)
+            vout_fit = _error_function(params_best, x_mstar, x_redshift, 0.0)
+            ax.plot(1 + x_redshift, vout_fit, ":", lw=lw - 1, alpha=1.0, color=l.get_color())
+
+        ax.legend()
+        fig.savefig("%s_vs_redshift.pdf" % filename)
+        plt.close(fig)
+
+        # (B) vs M* plot
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_xlim([7.0, 12.0])
+        ax.set_ylim([0, 1200])
+        ax.set_xlabel("Stellar Mass [ log Msun ]")
+        ax.set_ylabel(filename + " [km/s]")
+
+        for dset in data_z:
+            # plot
+            x_mstar = dset["xm"]  # log msun
+            y_vout = dset["ym"]
+
+            (l,) = ax.plot(x_mstar, y_vout, "-", lw=lw, label="z = %.1f" % dset["redshift"])
+
+            # plot fit
+            x_mstar = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], 50)
+            vout_fit = _error_function(params_best, x_mstar, dset["redshift"], 0.0)
+            ax.plot(x_mstar, vout_fit, ":", lw=lw - 1, alpha=1.0, color=l.get_color())
+
+        ax.legend()
+        fig.savefig("%s_vs_mstar.pdf" % filename)
+        plt.close(fig)
+
+    # -----------------------------------------------------------------------------------------------------
+
+    param_z_degree = 1
+
+    def _error_function_loc(params, mstar, vout):
+        """Define error function to minimize. Form of vout(M*) at one redshift."""
+        (a, b, c) = params
+        vout_fit = a + b * (mstar / 10) ** c
+        return vout_fit - vout
+
+    def _error_function_loc2(params, mstar, z, vout):
+        """Define error function to minimize. Same but with polynomial dependence of (1+z) on every parameter."""
+        (a_coeffs, b_coeffs, c_coeffs) = params.reshape(3, param_z_degree + 1)
+        a = np.poly1d(a_coeffs)(1 + z)
+        b = np.poly1d(b_coeffs)(1 + z)
+        c = np.poly1d(c_coeffs)(1 + z)
+        vout_fit = a + b * (mstar / 10) ** c
+        return vout_fit - vout
+
+    # plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlim([7.0, 12.0])
+    ax.set_ylim([0, 1200])
+    ax.set_xlabel("Stellar Mass [ log Msun ]")
+    ax.set_ylabel(filename + " [km/s]")
+
+    params_z = []
+
+    # let's fit just each redshift alone
+    redshift_targets = np.array([1.0, 2.0, 3.0, 4.0, 6.0])
+    scalefac = 1 / (1 + redshift_targets)
+    H_z_H0 = np.zeros(scalefac.size, dtype="float64")  # if float32, fails mysteriously in fitting
+    for i, z in enumerate(redshift_targets):
+        sP = simParams(res=1820, run="tng", redshift=z)
+        H_z_H0[i] = sP.units.H_z
+    H_z_H0 /= simParams(res=1820, run="tng", redshift=0.0).units.H_z
+
+    for redshift_target in redshift_targets:
+        w = np.where(redshift == redshift_target)
+
+        mstar_loc = mstar[w]
+        vout_loc = vout[w]
+
+        params_init = [100.0, 10.0, 1.0]
+        args = (mstar_loc, vout_loc)
+
+        params_best, _, _, _, _ = leastsq(_error_function_loc, params_init, args=args, full_output=True)
+        params_z.append(params_best)
+
+        print("best fit at [z=%.1f]" % redshift_target, params_best)
+
+        # plot data and fit
+        (l,) = ax.plot(mstar_loc, vout_loc, "-", lw=lw, label="z = %.1f" % redshift_target)
+
+        x_mstar = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], 50)
+        vout_fit = _error_function_loc(params_best, x_mstar, 0.0)
+        ax.plot(x_mstar, vout_fit, ":", lw=lw - 1, alpha=1.0, color=l.get_color())
+
+    ax.legend()
+    fig.savefig("%s_vs_mstar_z_indiv.pdf" % filename)
+    plt.close(fig)
+
+    if 1:
+        # what is the scaling of vout with (1+z), a, and H(z)?
+        def _error_function_plaw(params, xx, vout):
+            """Define error function to minimize."""
+            (a, b) = params
+            vout_fit = a * (xx) ** b
+            return vout_fit - vout
+
+        for x_mstar in [8.0, 8.5, 9.0, 9.5, 10.0, 10.5, 11.0]:
+            vout_fit = np.zeros(len(redshift_targets))
+
+            for i in range(len(redshift_targets)):
+                vout_fit[i] = _error_function_loc(params_z[i], x_mstar, 0.0)
+
+            for iterNum in [0, 2]:
+                fig = plt.figure(figsize=figsize)
+                ax = fig.add_subplot(111)
+
+                ax.set_ylim([100, 400])
+                ax.set_ylabel("fit vout")
+
+                if iterNum == 0:
+                    ax.set_xlim([1.5, 7.5])
+                    ax.set_xlabel("(1 + Redshift)")
+                    xx = 1 + np.array(redshift_targets)
+                if iterNum == 1:
+                    ax.set_xlim([0.0, 0.6])
+                    ax.set_xlabel("Scale factor")
+                    xx = scalefac
+                if iterNum == 2:
+                    ax.set_xlim([0.0, 14.0])
+                    ax.set_xlabel("H(z) / H0")
+                    xx = H_z_H0
+
+                yy = vout_fit
+                ax.plot(xx, yy, "-", marker="o", lw=lw)
+
+                # fit line
+                line_fit = np.polyfit(xx, yy, deg=1)
+                ax.plot(xx, np.poly1d(line_fit)(xx), ":", lw=lw, marker="s")
+
+                # fit powerlaw
+                params_init = [100.0, 1.0]
+                args = (xx, yy)
+
+                params_best, _, _, _, _ = leastsq(_error_function_plaw, params_init, args=args, full_output=True)
+                print(x_mstar, iterNum, " exponent = %.2f" % params_best[1])
+                ax.plot(xx, _error_function_plaw(params_best, xx, 0.0), ":", lw=lw, marker="d")
+
+                # finish
+                fig.savefig("%s_vs_time_%d.pdf" % (filename, iterNum))
+                plt.close(fig)
+
+    # plot each parameter vs. redshift
+    line_fits = []
+
+    for i in range(len(params_z[0])):
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_xlim([1.5, 7.5])
+        # ax.set_ylim([0,1200])
+        ax.set_xlabel("(1 + Redshift)")
+        ax.set_ylabel("parameter [%d]" % i)
+
+        xx = 1 + np.array(redshift_targets)
+        yy = [pset[i] for pset in params_z]
+
+        ax.plot(xx, yy, "-", marker="o", lw=lw)
+
+        line_fit = np.polyfit(xx, yy, deg=param_z_degree)
+        print(" param [%d] line: " % i, line_fit)
+        ax.plot(xx, np.poly1d(line_fit)(xx), ":", lw=lw, marker="s")
+        line_fits.append(line_fit)
+
+        fig.savefig("%s_param_%d_vs_z.pdf" % (filename, i))
+        plt.close(fig)
+
+    # -----------------------------------------------------------------------------------------------------
+
+    # re-fit with the given (1+z) dependence allowed for every parameter
+    params_init = line_fits
+    args = (mstar, vout, redshift)
+
+    if 0:
+        print("LOADING ACTUAL GALAXIES TEST")
+        mstar_z = []
+        vout_z = []
+        z_z = []
+
+        for redshift in [1.0, 2.0, 4.0, 6.0]:
+            sP = simParams(res=2160, run="tng", redshift=redshift)
+            # load mstar and count
+            xvals = sP.groupCat(fieldsSubhalos=["mstar_30pkpc_log"])
+
+            acField = "Subhalo_OutflowVelocity_SubfindWithFuzz"
+            ac = sP.auxCat(acField)
+
+            mstar = xvals[ac["subhaloIDs"]]
+            radInd = 1  # 10kpc
+            percInd = 3  # 90, percs = [25,50,75,90,95,99]
+            vout = ac[acField][:, radInd, percInd]
+
+            w = np.where(mstar >= 9.0)
+            mstar_z.append(mstar[w])
+            vout_z.append(vout[w])
+            z = np.ones(len(w[0])) + redshift
+            z_z.append(z)
+
+        # condense
+        mstar2 = np.hstack(mstar_z)
+        vout2 = np.hstack(vout_z)
+        redshift2 = np.hstack(z_z)
+
+        args = (mstar2, vout2, redshift2)
+
+    params_best, _, _, _, _ = leastsq(_error_function_loc2, params_init, args=args, full_output=True)
+
+    (a_coeffs, b_coeffs, c_coeffs) = params_best.reshape(3, param_z_degree + 1)
+    print(filename, "best z-evo fit: ", params_best)
+    print(
+        "%s = [%.1f + %.1f(1+z)] + [%.1f + %.1f(1+z)] * (log Mstar/10)^{%.1f + %.1f(1+z)}"
+        % (filename, a_coeffs[0], a_coeffs[1], b_coeffs[0], b_coeffs[1], c_coeffs[0], c_coeffs[1])
+    )
+
+    # plot
+    fig, ax = plt.subplots()
+
+    ax.set_xlim([7.0, 12.0])
+    ax.set_ylim([0, 1200])
+    ax.set_xlabel("Stellar Mass [ log Msun ]")
+    ax.set_ylabel(filename + " [km/s]")
+
+    for redshift_target in redshift_targets:
+        w = np.where(redshift == redshift_target)
+
+        mstar_loc = mstar[w]
+        vout_loc = vout[w]
+
+        # plot data and fit
+        (l,) = ax.plot(mstar_loc, vout_loc, "-", lw=lw, label="z = %.1f" % redshift_target)
+
+        x_mstar = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], 50)
+        vout_fit = _error_function_loc2(params_best, x_mstar, redshift_target, 0.0)
+        ax.plot(x_mstar, vout_fit, ":", lw=lw - 1, alpha=1.0, color=l.get_color())
+
+    ax.legend()
+    fig.savefig("%s_vs_mstar_z_result.pdf" % filename)
+    plt.close(fig)
+
+
+def halo_selection(sP, minM200=11.5):
+    """Make a quick halo selection above some mass limit.
+
+    Sorted based on energy injection in the low BH state between this snapshot and the previous.
+    """
+    snap = sP.snap
+    tage = sP.tage
+
+    r = {}
+
+    # quick caching
+    saveFilename = expanduser("~") + "/temp_haloselect_%d_%.1f.hdf5" % (sP.snap, minM200)
+    if isfile(saveFilename):
+        with h5py.File(saveFilename, "r") as f:
+            for key in f:
+                r[key] = f[key][()]
+        return r
+
+    # halo selection: all centrals above 10^12 Mhalo
+    m200 = sP.groupCat(fieldsSubhalos=["mhalo_200_log"])
+    with np.errstate(invalid="ignore"):
+        w = np.where(m200 >= minM200)
+    subInds = w[0]
+
+    print("Halo selection [%d] objects (m200 >= %.1f)." % (len(subInds), minM200))
+
+    # load mergertree for mapping the subhalos between adjacent snapshots
+    mpbs = loadMPBs(sP, subInds, fields=["SnapNum", "SubfindID"])
+
+    prevInds = np.zeros(subInds.size, dtype="int32") - 1
+
+    for i in range(subInds.size):
+        if subInds[i] not in mpbs:
+            continue
+        mpb = mpbs[subInds[i]]
+        w = np.where(mpb["SnapNum"] == sP.snap - 1)
+        if len(w[0]) == 0:
+            continue  # skipped sP.snap-1 in the MPB
+        prevInds[i] = mpb["SubfindID"][w]
+
+    # restrict to valid matches
+    w = np.where(prevInds >= 0)
+    print("Using [%d] of [%d] snapshot adjacent matches through the MPBs." % (len(w[0]), prevInds.size))
+
+    prevInds = prevInds[w]
+    subInds = subInds[w]
+
+    # compute a delta(BH_CumEgyInjection_RM) between this snapshot and the last
+    bh_egyLow_cur = sP.subhalos("BH_CumEgy_low")
+
+    sP.setSnap(snap - 1)
+    bh_egyLow_prev = sP.subhalos("BH_CumEgy_low")  # erg
+
+    dt_myr = (tage - sP.tage) * 1000
+    sP.setSnap(snap)
+
+    bh_dedt_low = (bh_egyLow_cur[subInds] - bh_egyLow_prev[prevInds]) / dt_myr  # erg/myr
+
+    w = np.where(bh_dedt_low < 0.0)
+    bh_dedt_low[w] = 0.0  # bad MPB track? CumEgy counter should be monotonically increasing
+
+    # sort halo sample based on recent BH energy injection in low-state
+    sort_inds = np.argsort(bh_dedt_low)[::-1]  # highest to lowest
+
+    r["subInds"] = subInds[sort_inds]
+    r["m200"] = m200[r["subInds"]]
+    r["bh_dedt_low"] = bh_dedt_low
+
+    # get fof halo IDs
+    haloInds = sP.groupCat(fieldsSubhalos=["SubhaloGrNr"])
+    r["haloInds"] = haloInds[r["subInds"]]
+
+    # save cache
+    with h5py.File(saveFilename, "w") as f:
+        for key in r:
+            f[key] = r[key]
+    print("Saved [%s]." % saveFilename)
+
+    return r
+
+
 # -------------------------------------------------------------------------------------------------
+
+
+def run():
+    """Perform all the (possibly expensive) analysis for the paper."""
+    redshift = 0.73  # last snapshot, 58
+
+    TNG50 = simParams(res=2160, run="tng", redshift=redshift)
+    TNG50_3 = simParams(res=540, run="tng", redshift=redshift)
+
+    if 0:
+        # print out subbox intersections with selection
+        sel = halo_selection(TNG50, minM200=12.0)
+        for sbNum in [0, 1, 2]:
+            _ = subhalo_subbox_overlap(TNG50, sbNum, sel["subInds"], verbose=True)
+
+    if 0:
+        # subbox: save data through time
+        sel = halo_selection(TNG50, minM200=12.0)
+        # halosTimeEvoSubbox(TNG50, sbNum=0, sel=sel, selInds=[0,1,2,3], minM200=11.5)
+        halosTimeEvoSubbox(TNG50, sbNum=2, sel=sel, selInds=[0])
+
+    if 0:
+        # fullbox: save data through time, first 20 halos of 12.0 selection all at once
+        sel = halo_selection(TNG50, minM200=12.0)
+        halosTimeEvoFullbox(TNG50, haloInds=sel["haloInds"][0:20])
+
+    if 0:
+        # TNG50_3 test
+        sel = halo_selection(TNG50_3, minM200=12.0)
+        halosTimeEvoFullbox(TNG50_3, haloInds=sel["haloInds"][0:20])
 
 
 def paperPlots(sPs=None):

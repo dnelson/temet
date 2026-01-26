@@ -494,7 +494,7 @@ def subbox_movie_tng_galaxyevo_frame(
     If frameNum is not None, then use this for save filename instead of sbSnapNum.
     If rotSeqFrameNum is not None, then proceed to render rotation squence (at fixed time iff sbSnapNum is kept fixed).
     """
-    from ..projects.outflows_analysis import selection_subbox_overlap
+    from ..projects.outflows_analysis import subhalo_subbox_overlap
 
     if 0:
         # helper to make subhalo selection
@@ -502,9 +502,8 @@ def subbox_movie_tng_galaxyevo_frame(
         sbNum = 2
         gc = sP.groupCat(fieldsSubhalos=["mstar_30pkpc_log", "is_central", "SubhaloGrNr"])
         w = np.where(gc["mstar_30pkpc_log"] >= 10.2)  # & (gc['is_central']) )
-        sel = {"subInds": w[0], "haloInds": gc["SubhaloGrNr"][w], "m200": np.zeros(w[0].size)}
-
-        subbox_overlap = selection_subbox_overlap(sP, sbNum, sel, verbose=True)
+        subInds = w[0]
+        subbox_overlap = subhalo_subbox_overlap(sP, sbNum, subInds, verbose=True)
         assert 0  # todo: finish
 
     # set selection subhaloID at sP.snap

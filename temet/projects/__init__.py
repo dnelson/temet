@@ -13,7 +13,6 @@ from . import (
     mg2emission,
     mockspec,
     outflows,
-    outflows_analysis,
     outflows_vis,
     oxygen,
     rshock,

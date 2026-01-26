@@ -15,13 +15,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.interpolate import interp1d
 
 from ..cosmo.mergertree import mpbPositionComplete
+from ..cosmo.time_evo import halosTimeEvoFullbox, halosTimeEvoSubbox, subhalo_subbox_overlap
 from ..plot.config import linestyles
-from ..projects.outflows_analysis import (
-    halo_selection,
-    halosTimeEvoFullbox,
-    halosTimeEvoSubbox,
-    selection_subbox_overlap,
-)
+from ..projects.outflows_analysis import halo_selection
 from ..util import simParams
 from ..util.helper import closest, getWhiteBlackColors, loadColorTable, logZeroNaN, setAxisColors, setColorbarColors
 from ..util.rotation import rotationMatrixFromAngleDirection
@@ -205,7 +201,7 @@ def _renderSingleImage(snap, sP, subhaloPos):
 def preRenderSubboxImages(sP, sbNum, selInd, minM200=11.5):
     """Pre-render a number of images for selInd in sP(sbNum), through all snapshots."""
     sel = halo_selection(sP, minM200=minM200)
-    _, _, minSBsnap, maxSBsnap, subhaloPos, _, _ = selection_subbox_overlap(sP, sbNum, sel)
+    _, _, minSBsnap, maxSBsnap, subhaloPos, _, _ = subhalo_subbox_overlap(sP, sbNum, sel["subInds"])
 
     sP_sub = simParams(res=sP.res, run=sP.run, variant="subbox%d" % sbNum)
 
@@ -678,7 +674,7 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
 def visHaloTimeEvoSubbox(sP, sbNum, selInd, minM200=11.5, extended=False, pStyle="black"):
     """Visualize halo time evolution as a series of complex multi-panel images, for subbox-based tracking."""
     sel = halo_selection(sP, minM200=minM200)
-    _, subboxInds, _, _, subhaloPos, subboxScaleFac, _ = selection_subbox_overlap(sP, sbNum, sel)
+    _, subboxInds, _, _, subhaloPos, subboxScaleFac, _ = subhalo_subbox_overlap(sP, sbNum, sel["subInds"])
 
     # slice out information for only the selected halo
     subhaloPos = np.squeeze(subhaloPos[selInd, :, :])
