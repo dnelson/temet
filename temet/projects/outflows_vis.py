@@ -18,7 +18,6 @@ from ..cosmo.mergertree import mpbPositionComplete
 from ..cosmo.time_evo import halosTimeEvoFullbox, halosTimeEvoSubbox, subhalo_subbox_overlap
 from ..plot.config import linestyles
 from ..plot.util import getWhiteBlackColors, loadColorTable, setAxisColors, setColorbarColors
-from ..projects.outflows import halo_selection
 from ..util import simParams
 from ..util.helper import closest, logZeroNaN
 from ..util.rotation import rotationMatrixFromAngleDirection
@@ -201,6 +200,8 @@ def _renderSingleImage(snap, sP, subhaloPos):
 
 def preRenderSubboxImages(sP, sbNum, selInd, minM200=11.5):
     """Pre-render a number of images for selInd in sP(sbNum), through all snapshots."""
+    from .outflows import halo_selection
+
     sel = halo_selection(sP, minM200=minM200)
     _, _, minSBsnap, maxSBsnap, subhaloPos, _, _ = subhalo_subbox_overlap(sP, sbNum, sel["subInds"])
 
@@ -674,6 +675,8 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
 
 def visHaloTimeEvoSubbox(sP, sbNum, selInd, minM200=11.5, extended=False, pStyle="black"):
     """Visualize halo time evolution as a series of complex multi-panel images, for subbox-based tracking."""
+    from .outflows import halo_selection
+
     sel = halo_selection(sP, minM200=minM200)
     _, subboxInds, _, _, subhaloPos, subboxScaleFac, _ = subhalo_subbox_overlap(sP, sbNum, sel["subInds"])
 
@@ -1025,6 +1028,8 @@ def run():
 
     if 0:
         # fullbox: vis image sequence
+        from .outflows import halo_selection
+
         sel = halo_selection(TNG50, minM200=12.0)
         # preRenderFullboxImages(TNG50, haloInds=sel['haloInds'][0:20])
         visHaloTimeEvoFullbox(TNG50, haloInd=sel["haloInds"][0], extended=True)

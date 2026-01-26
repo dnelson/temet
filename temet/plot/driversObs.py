@@ -1,5 +1,5 @@
 """
-Run summary plots comparing one or more cosmological simulations to observational constraints.
+Summary plots comparing one or more cosmological simulations to observational constraints.
 
 Includes the usual comparisons such as stellar to halo mass ratio (SMHM), the stellar mass function (SMF), and so on.
 """

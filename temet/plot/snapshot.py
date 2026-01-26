@@ -1336,7 +1336,7 @@ def profile(
     sfreq0=False,
     scope="fof",
 ):
-    """Radial profile of some quantityradius from halos.
+    """Radial profile of some quantity vs. radius from a halo, one per simulation (i.e. for zooms).
 
     subhaloIDs (or haloIDs) is an ID list with one entry per sPs entry.
     If haloIDs is not None, then use these FoF IDs as inputs instead of Subfind IDs.

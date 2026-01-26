@@ -71,6 +71,7 @@ dev = [
     "emcee",
     "healpy",
     "psutil",
+    "pygrackle",
 ]
 docs = [
     "sphinx",

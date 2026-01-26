@@ -1,5 +1,5 @@
 """
-Galaxy sizes, half mass and half light radii.
+Plots of galaxy sizes, half mass and half light radii.
 """
 
 from collections import OrderedDict
