@@ -198,7 +198,7 @@ def subhaloRadialProfile(
         )
     else:
         assert pSplit is None  # otherwise check, don't think we actually subdivide the work
-        indRange_scoped = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
+        indRange_scoped = sP.subhaloIDsToBoundingPartIndices(subhaloIDsTodo)
 
     nChunks = 1  # chunk load disabled by default
 

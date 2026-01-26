@@ -1,6 +1,7 @@
 """
 Helper functions related to cosmo box simulations.
 """
+
 from os import mkdir
 from os.path import isdir, isfile
 
@@ -426,7 +427,7 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
         with h5py.File(matchFileName, "r") as f:
             inds_tng = f["SubhaloIndexFrom"][()]
             inds_illustris = f["SubhaloIndexTo"][()]
-            #score = f["Score"][()]
+            # score = f["Score"][()]
 
         r = np.zeros(len(subhaloInds_from_search), dtype="int32") - 1
 
@@ -862,7 +863,7 @@ def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName, GroupLenType=None, Snap
     return val
 
 
-def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubhalos=False):
+def subhaloIDsToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubhalos=False):
     """For a list of subhalo IDs, identfy the particle index that bounds all their members.
 
     Args:

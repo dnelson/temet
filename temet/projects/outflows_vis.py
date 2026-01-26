@@ -18,8 +18,8 @@ from ..cosmo.mergertree import mpbPositionComplete
 from ..plot.config import linestyles
 from ..projects.outflows_analysis import (
     halo_selection,
-    haloTimeEvoDataFullbox,
-    haloTimeEvoDataSubbox,
+    halosTimeEvoFullbox,
+    halosTimeEvoSubbox,
     selection_subbox_overlap,
 )
 from ..util import simParams
@@ -539,7 +539,6 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
         "vrel": "Halo-Rel Velocity Mag [km/s]",
         "numdens": "Gas Density [log cm$^{-3}$]",
         "temp": "Gas Temperature [log K]",
-        "templinear": "Gas Temperature [log K]",
         "massfrac": "Relative Mass Fraction [log]",
         "massfracnorm": "Conditional Mass Fraction [log]",
         "count": "PDF",
@@ -595,7 +594,7 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
             _histo2d_helper(gs, i=0, pt="gas", xaxis="radlog", yaxis="vrad", color="massfracnorm", clim=lim2)
 
             # upper center: histo2d [radlog,vrad] mean temperature
-            _histo2d_helper(gs, i=1, pt="gas", xaxis="radlog", yaxis="vrad", color="templinear", clim=lim4)
+            _histo2d_helper(gs, i=1, pt="gas", xaxis="radlog", yaxis="vrad", color="temp", clim=lim4)
 
             # upper right: [rad,vrelmag] mass frac
             _histo2d_helper(gs, i=2, pt="gas", xaxis="rad", yaxis="vrel", color="massfracnorm", clim=lim2)
@@ -621,7 +620,7 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
             _histo2d_helper(gs, i=0, pt="gas", xaxis="radlog", yaxis="vrad", color="massfracnorm", clim=lim2)
 
             # upper col1: histo2d [rad,vrad] mean temperature
-            _histo2d_helper(gs, i=1, pt="gas", xaxis="radlog", yaxis="vrad", color="templinear", clim=lim4)
+            _histo2d_helper(gs, i=1, pt="gas", xaxis="radlog", yaxis="vrad", color="temp", clim=lim4)
 
             # upper col2: histo2d [rad,vrelmag] mass frac
             _histo2d_helper(gs, i=2, pt="gas", xaxis="rad", yaxis="vrel", color="massfracnorm", clim=lim2)
@@ -638,7 +637,7 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
             _histo2d_helper(gs, i=5, pt="gas", xaxis="numdens", yaxis="temp", color="massfrac", clim=[-4.0, -0.5])
 
             # center col1: 2dhisto [rad,vrad] temp
-            _histo2d_helper(gs, i=6, pt="gas", xaxis="rad", yaxis="vrad", color="templinear", clim=lim4)
+            _histo2d_helper(gs, i=6, pt="gas", xaxis="rad", yaxis="vrad", color="temp", clim=lim4)
 
             # center col2: 2dhisto [rad,vrad] mass frac (stars)
             _histo2d_helper(gs, i=7, pt="stars", xaxis="rad", yaxis="vrad", color="massfracnorm", clim=lim2)
@@ -685,7 +684,7 @@ def visHaloTimeEvoSubbox(sP, sbNum, selInd, minM200=11.5, extended=False, pStyle
     subhaloPos = np.squeeze(subhaloPos[selInd, :, :])
 
     # load data and call render
-    data = haloTimeEvoDataSubbox(sP, sbNum, selInd, minM200=minM200)
+    data = halosTimeEvoSubbox(sP, sbNum, selInd, minM200=minM200)
     sP_sub = simParams(res=sP.res, run=sP.run, variant="subbox%d" % sbNum)
 
     haloInd = "sb%dh%d" % (sbNum, subboxInds[selInd])
@@ -699,7 +698,7 @@ def visHaloTimeEvoFullbox(sP, haloInd, extended=False, pStyle="white"):
     snaps, snapTimes, haloPos = mpbPositionComplete(sP, halo["GroupFirstSub"])
 
     # load data and call render
-    data = haloTimeEvoDataFullbox(sP, [haloInd])
+    data = halosTimeEvoFullbox(sP, [haloInd])
 
     visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=extended, pStyle=pStyle)
 

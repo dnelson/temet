@@ -14,7 +14,7 @@ temet = ["temet/plot/mpl.style", "temet/util/*.cpp"]
 
 [project]
 name = "temet"
-version = "0.9"
+version = "0.9.0"
 authors = [
     { name="Dylan Nelson", email="dnelson@uni-heidelberg.de" },
 ]

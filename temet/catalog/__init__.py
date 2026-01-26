@@ -4,4 +4,4 @@ The functions here are rarely called directly. Instead they are typically invoke
 within a particular auxCat request.
 """
 
-from . import box, common, group, maps, profile, subhalo, temporal
+from . import box, common, gasflows, group, maps, profile, subhalo, temporal

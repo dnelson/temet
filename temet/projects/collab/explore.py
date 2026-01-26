@@ -320,8 +320,8 @@ def smitaXMMproposal():
 
 def nachoAngularQuenchingDens():
     """Variation of CGM gas density with azimuthal angle (for Martin Navarro+20)."""
+    from ...catalog.gasflows import radialMassFluxes
     from ...projects.outflows import gasOutflowRates2DStackedInMstar
-    from ...projects.outflows_analysis import loadRadialMassFluxes
 
     sP = simParams(run="tng100-1", redshift=0.0)
     # mStarBins = [[9.8,10.2],[10.4,10.6],[10.9,11.1],[11.3,11.7]] # exploration
@@ -362,7 +362,7 @@ def nachoAngularQuenchingDens():
     )
 
     # 1d plot and txt file output
-    mdot, mstar, subids, binConfig, numBins, vcut_vals = loadRadialMassFluxes(
+    mdot, mstar, subids, binConfig, numBins, vcut_vals = radialMassFluxes(
         sP, scope="SubfindWithFuzz", ptType="Gas", thirdQuant="theta", fourthQuant=None, v200norm=False, rawMass=True
     )
 

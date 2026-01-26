@@ -251,7 +251,7 @@ class simParams:
             periodicPairwiseDists,
             redshiftToSnapNum,
             snapNumToRedshift,
-            subhaloIDListToBoundingPartIndices,
+            subhaloIDsToBoundingPartIndices,
             validSnapList,
         )
         from ..load.auxcat import auxCat
@@ -345,7 +345,7 @@ class simParams:
         self.groupCatOffsetListIntoSnap = partial(groupCatOffsetListIntoSnap, self)
         self.haloOrSubhaloSubset = partial(haloOrSubhaloSubset, self)
 
-        self.subhaloIDListToBoundingPartIndices = partial(subhaloIDListToBoundingPartIndices, self)
+        self.subhaloIDsToBoundingPartIndices = partial(subhaloIDsToBoundingPartIndices, self)
         self.inverseMapPartIndicesToSubhaloIDs = partial(inverseMapPartIndicesToSubhaloIDs, self)
         self.inverseMapPartIndicesToHaloIDs = partial(inverseMapPartIndicesToHaloIDs, self)
 

@@ -272,7 +272,7 @@ def pSplitBounds(
     nSubsSelection = subhaloIDsTodo.size
 
     # if no task parallelism (pSplit), set default particle load ranges
-    indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
+    indRange = sP.subhaloIDsToBoundingPartIndices(subhaloIDsTodo)
 
     invSubs = [0, 0]
 
@@ -293,7 +293,7 @@ def pSplitBounds(
 
             inds_todo = np.where(orig_halo_id == cur_halo_id)[0]
             subhaloIDsTodo = subhaloIDsTodo[inds_todo]
-            indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
+            indRange = sP.subhaloIDsToBoundingPartIndices(subhaloIDsTodo)
 
         elif equalSubSplit:
             # do contiguous subhalo ID division and reduce global haloSubset load
@@ -301,7 +301,7 @@ def pSplitBounds(
             # that early tasks take all the large halos and all the particles, very imbalanced
             subhaloIDsTodo = pSplitArr(subhaloIDsTodo, pSplit[1], pSplit[0])
 
-            indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
+            indRange = sP.subhaloIDsToBoundingPartIndices(subhaloIDsTodo)
         else:
             # subdivide the global cell/particle set, then map this back into a division of
             # subhalo IDs which will be better work-load balanced among tasks
@@ -321,7 +321,7 @@ def pSplitBounds(
 
             invSubIDs = np.arange(invSubs[0], invSubs[1])
             subhaloIDsTodo = np.intersect1d(subhaloIDsTodo, invSubIDs)
-            indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
+            indRange = sP.subhaloIDsToBoundingPartIndices(subhaloIDsTodo)
 
     if indivStarMags:
         # make subhalo-strict bounding index range and compute number of PT4 particles we will do
@@ -331,12 +331,12 @@ def pSplitBounds(
             # avoid any gaps for full PT4 coverage
             subhaloIDsTodo_extended = np.arange(invSubs[0] - 1, invSubs[1])
 
-            indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo_extended, strictSubhalos=True)
+            indRange = sP.subhaloIDsToBoundingPartIndices(subhaloIDsTodo_extended, strictSubhalos=True)
 
             lastPrevSub = sP.groupCatSingle(subhaloID=invSubs[0] - 1)
             indRange["stars"][0] += lastPrevSub["SubhaloLenType"][sP.ptNum("stars")]
         else:
-            indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo, strictSubhalos=True)
+            indRange = sP.subhaloIDsToBoundingPartIndices(subhaloIDsTodo, strictSubhalos=True)
 
     return subhaloIDsTodo, indRange, nSubsSelection
 

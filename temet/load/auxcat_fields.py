@@ -7,6 +7,7 @@ from functools import partial
 import numpy as np
 
 from ..catalog.box import wholeBoxCDDF, wholeBoxColDensGrid
+from ..catalog.gasflows import instantaneousMassFluxes, massLoadingsSN, outflowVelocities
 from ..catalog.group import fofRadialSumType
 from ..catalog.profile import subhaloRadialProfile
 from ..catalog.subhalo import subhaloCatNeighborQuant, subhaloRadialReduction, subhaloStellarPhot
@@ -2021,6 +2022,105 @@ def_fields = {
         minStellarMass=7.0,
     ),
 }
+
+
+# --- catalog/gasflows.py ---
+
+def_fields["Subhalo_RadialMassFlux_SubfindWithFuzz_Gas"] = partial(
+    instantaneousMassFluxes, ptType="gas", scope="subhalo_wfuzz"
+)
+def_fields["Subhalo_RadialMassFlux_SubfindWithFuzz_Wind"] = partial(
+    instantaneousMassFluxes, ptType="wind", scope="subhalo_wfuzz"
+)
+def_fields["Subhalo_RadialMassFlux_Global_Gas"] = partial(instantaneousMassFluxes, ptType="gas", scope="global")
+def_fields["Subhalo_RadialMassFlux_Global_Wind"] = partial(instantaneousMassFluxes, ptType="wind", scope="global")
+
+def_fields["Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_MgII"] = partial(
+    instantaneousMassFluxes, ptType="gas", scope="subhalo_wfuzz", massField="Mg II mass"
+)
+def_fields["Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_SiII"] = partial(
+    instantaneousMassFluxes, ptType="gas", scope="subhalo_wfuzz", massField="Si II mass"
+)
+def_fields["Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_NaI"] = partial(
+    instantaneousMassFluxes, ptType="gas", scope="subhalo_wfuzz", massField="Na I mass"
+)
+
+def_fields["Subhalo_RadialMass2DProj_SubfindWithFuzz_Gas"] = partial(
+    instantaneousMassFluxes, ptType="gas", scope="subhalo_wfuzz", rawMass=True, fluxMass=False, proj2D=True
+)
+def_fields["Subhalo_RadialMass2DProj_SubfindWithFuzz_Wind"] = partial(
+    instantaneousMassFluxes, ptType="wind", scope="subhalo_wfuzz", rawMass=True, fluxMass=False, proj2D=True
+)
+def_fields["Subhalo_RadialMass2DProj_SubfindWithFuzz_Gas_SiII"] = partial(
+    instantaneousMassFluxes,
+    ptType="gas",
+    scope="subhalo_wfuzz",
+    rawMass=True,
+    fluxMass=False,
+    proj2D=True,
+    massField="Si II mass",
+)
+def_fields["Subhalo_RadialMass_SubfindWithFuzz_Gas"] = partial(
+    instantaneousMassFluxes, ptType="gas", scope="subhalo_wfuzz", rawMass=True, fluxMass=False
+)
+def_fields["Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr"] = partial(
+    massLoadingsSN, sfr_timescale=100, outflowMethod="instantaneous"
+)
+def_fields["Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-50myr"] = partial(
+    massLoadingsSN, sfr_timescale=50, outflowMethod="instantaneous"
+)
+def_fields["Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-10myr"] = partial(
+    massLoadingsSN, sfr_timescale=10, outflowMethod="instantaneous"
+)
+
+def_fields["Subhalo_MassLoadingSN_MgII_SubfindWithFuzz_SFR-100myr"] = partial(
+    massLoadingsSN, sfr_timescale=100, outflowMethod="instantaneous", massField="MgII"
+)
+def_fields["Subhalo_MassLoadingSN_MgII_SubfindWithFuzz_SFR-50myr"] = partial(
+    massLoadingsSN, sfr_timescale=50, outflowMethod="instantaneous", massField="MgII"
+)
+def_fields["Subhalo_MassLoadingSN_MgII_SubfindWithFuzz_SFR-10myr"] = partial(
+    massLoadingsSN, sfr_timescale=10, outflowMethod="instantaneous", massField="MgII"
+)
+
+def_fields["Subhalo_RadialEnergyFlux_SubfindWithFuzz_Gas"] = partial(
+    instantaneousMassFluxes, ptType="gas", scope="subhalo_wfuzz", fluxKE=True, fluxMass=False
+)
+def_fields["Subhalo_RadialEnergyFlux_SubfindWithFuzz_Wind"] = partial(
+    instantaneousMassFluxes, ptType="wind", scope="subhalo_wfuzz", fluxKE=True, fluxMass=False
+)
+def_fields["Subhalo_RadialMomentumFlux_SubfindWithFuzz_Gas"] = partial(
+    instantaneousMassFluxes, ptType="gas", scope="subhalo_wfuzz", fluxP=True, fluxMass=False
+)
+def_fields["Subhalo_RadialMomentumFlux_SubfindWithFuzz_Wind"] = partial(
+    instantaneousMassFluxes, ptType="wind", scope="subhalo_wfuzz", fluxP=True, fluxMass=False
+)
+def_fields["Subhalo_EnergyLoadingSN_SubfindWithFuzz"] = partial(
+    massLoadingsSN, outflowMethod="instantaneous", fluxKE=True
+)
+def_fields["Subhalo_MomentumLoadingSN_SubfindWithFuzz"] = partial(
+    massLoadingsSN, outflowMethod="instantaneous", fluxP=True
+)
+def_fields["Subhalo_OutflowVelocity_SubfindWithFuzz"] = partial(outflowVelocities)
+def_fields["Subhalo_OutflowVelocity_MgII_SubfindWithFuzz"] = partial(outflowVelocities, massField="MgII")
+def_fields["Subhalo_OutflowVelocity_SiII_SubfindWithFuzz"] = partial(outflowVelocities, massField="SiII")
+def_fields["Subhalo_OutflowVelocity_NaI_SubfindWithFuzz"] = partial(outflowVelocities, massField="NaI")
+def_fields["Subhalo_OutflowVelocity2DProj_SubfindWithFuzz"] = partial(outflowVelocities, proj2D=True)
+def_fields["Subhalo_OutflowVelocity2DProj_SiII_SubfindWithFuzz"] = partial(
+    outflowVelocities, proj2D=True, massField="SiII"
+)
+
+def_fields["Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_v200norm"] = partial(
+    instantaneousMassFluxes, ptType="gas", scope="subhalo_wfuzz", v200norm=True
+)
+def_fields["Subhalo_RadialMassFlux_SubfindWithFuzz_Wind_v200norm"] = partial(
+    instantaneousMassFluxes, ptType="wind", scope="subhalo_wfuzz", v200norm=True
+)
+def_fields["Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr_v200norm"] = partial(
+    massLoadingsSN, sfr_timescale=100, outflowMethod="instantaneous", v200norm=True
+)
+def_fields["Subhalo_OutflowVelocity_SubfindWithFuzz_v200norm"] = partial(outflowVelocities, v200norm=True)
+
 
 # this list contains the names of auxCatalogs which are computed manually (e.g. require more work than
 # a single generative function), but are then saved in the same format and so can be loaded normally

@@ -63,7 +63,7 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method="B", ptType="all"):
     haloIDsTodo = np.arange(nGroupsTot, dtype="int32")
 
     # if no task parallelism (pSplit), set default particle load ranges
-    indRange = sP.subhaloIDListToBoundingPartIndices(haloIDsTodo, groups=True)
+    indRange = sP.subhaloIDsToBoundingPartIndices(haloIDsTodo, groups=True)
 
     if pSplit is not None:
         ptSplit = ptType if ptType != "all" else "gas"
@@ -80,7 +80,7 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method="B", ptType="all"):
             assert invGroups[1] != -1
 
         haloIDsTodo = np.arange(invGroups[0], invGroups[1])
-        indRange = sP.subhaloIDListToBoundingPartIndices(haloIDsTodo, groups=True)
+        indRange = sP.subhaloIDsToBoundingPartIndices(haloIDsTodo, groups=True)
 
     nHalosDo = len(haloIDsTodo)
 

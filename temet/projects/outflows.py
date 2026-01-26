@@ -16,9 +16,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.interpolate import griddata, interp1d
 from scipy.signal import savgol_filter
 
+from ..catalog.gasflows import radialMassFluxes
 from ..plot import snapshot, subhalos
 from ..plot.config import colors, figsize, linestyles, lw, markers, sKn, sKo
-from ..projects.outflows_analysis import loadRadialMassFluxes
 from ..projects.outflows_vis import galaxyMosaic_topN, singleHaloDemonstrationImage, subboxOutflowTimeEvoPanels
 from ..util import simParams
 from ..util.helper import evenlySample, loadColorTable, logZeroNaN, nUnique, running_median, sgolay2d
@@ -422,12 +422,12 @@ def gasOutflowRates(sP, ptType, xQuant="mstar_30pkpc", eta=False, config=None, m
 
     # load outflow rates
     mdot = {}
-    mdot["Gas"], mstar_30pkpc_log, sub_ids, binConfig, numBins, vcut_vals = loadRadialMassFluxes(
+    mdot["Gas"], mstar_30pkpc_log, sub_ids, binConfig, numBins, vcut_vals = radialMassFluxes(
         sP, scope, "Gas", massField=massField, v200norm=v200norm
     )
 
     if massField == "Masses":
-        mdot["Wind"], _, sub_ids, binConfig, numBins, vcut_vals = loadRadialMassFluxes(
+        mdot["Wind"], _, sub_ids, binConfig, numBins, vcut_vals = radialMassFluxes(
             sP, scope, "Wind", massField=massField, v200norm=v200norm
         )
         mdot["total"] = mdot["Gas"] + mdot["Wind"]
@@ -739,12 +739,12 @@ def gasOutflowRatesVsRedshift(sP, ptType, eta=False, config=None, massField="Mas
     for redshift in redshifts:
         sP_loc = simParams(res=sP.res, run=sP.run, redshift=redshift)
         mdot = {}
-        mdot["Gas"], mstar_30pkpc_log, sub_ids, binConfig, numBins, vcut_vals = loadRadialMassFluxes(
+        mdot["Gas"], mstar_30pkpc_log, sub_ids, binConfig, numBins, vcut_vals = radialMassFluxes(
             sP_loc, scope, "Gas", massField=massField, v200norm=v200norm
         )
 
         if massField == "Masses":
-            mdot["Wind"], _, sub_ids, binConfig, numBins, vcut_vals = loadRadialMassFluxes(
+            mdot["Wind"], _, sub_ids, binConfig, numBins, vcut_vals = radialMassFluxes(
                 sP_loc, scope, "Wind", massField=massField, v200norm=v200norm
             )
             mdot["total"] = mdot["Gas"] + mdot["Wind"]
@@ -1304,9 +1304,7 @@ def gasOutflowVel(
         if redshift is not None:
             sP.setRedshift(redshift)
 
-        mdot, mstar_30pkpc_log, sub_ids, binConfig, numBins, _ = loadRadialMassFluxes(
-            sP, scope, "Gas", massField=massField
-        )
+        mdot, mstar_30pkpc_log, sub_ids, binConfig, numBins, _ = radialMassFluxes(sP, scope, "Gas", massField=massField)
         mdot = mdot[:, :, mdotThreshVcutInd]
 
         projStr = "2DProj" if proj2D else ""
@@ -1633,7 +1631,7 @@ def gasOutflowRatesStacked(sP_in, quant, mStarBins, redshifts=(None,), config=No
     for redshift in redshifts:
         if redshift is not None:
             sP.setRedshift(redshift)
-        data.append(loadRadialMassFluxes(sP, scope, ptType, thirdQuant=quant, inflow=inflow))
+        data.append(radialMassFluxes(sP, scope, ptType, thirdQuant=quant, inflow=inflow))
 
     if config is not None:
         saveName = "outflowRate_%s_%s_mstar_%s_%s_%s.pdf" % (ptType, quant, sP.simName, zStr, config["stat"])
@@ -2126,7 +2124,7 @@ def gasOutflowRates2DStacked(
             thirdQuant = yAxis
             fourthQuant = None
 
-            mdot, mstar, subids, binConfig, numBins, vcut_vals = loadRadialMassFluxes(
+            mdot, mstar, subids, binConfig, numBins, vcut_vals = radialMassFluxes(
                 sP,
                 scope,
                 ptType,
@@ -2137,7 +2135,7 @@ def gasOutflowRates2DStacked(
             )
         else:
             # default behavior
-            mdot, mstar, subids, binConfig, numBins, vcut_vals = loadRadialMassFluxes(
+            mdot, mstar, subids, binConfig, numBins, vcut_vals = radialMassFluxes(
                 sP,
                 scope,
                 ptType,
