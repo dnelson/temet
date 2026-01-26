@@ -32,7 +32,7 @@ from ..projects.oxygen import (
 from ..tracer import evolution as tracerEvo
 from ..tracer.montecarlo import globalAllTracersTimeEvo
 from ..util import simParams
-from ..util.helper import logZeroNaN, periodicDistsN, running_median
+from ..util.helper import logZeroNaN, running_median, shrinking_center
 from ..util.match import match
 from ..util.voronoi import voronoiThresholdSegmentation
 from ..vis.box import renderBox
@@ -997,39 +997,6 @@ def lrgHaloVisResolution(sP, haloIDs, sPs_other):
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 
-def _shrinking_center(sP, xyz, frac_stop=0.1, drop_frac_per_iter=0.05):
-    """Shrinking center algorithm: iteratively search for a center position given a [N,3] coordinate set."""
-    # starting state
-    mask = np.zeros(xyz.shape[0], dtype="int16") + 1
-
-    # config
-    max_iter = 100
-    num_stop = int(xyz.shape[0] * frac_stop)  # until the inner 10% are left
-
-    for _i in range(max_iter):
-        # which points remain
-        w = np.where(mask)[0]
-        num_left = len(w)
-
-        # compute center and distances
-        cen = np.mean(xyz[w], axis=0)
-        dists = periodicDistsN(cen, xyz[w], sP.boxSize)
-
-        # sort
-        sort_inds = np.argsort(dists)
-
-        # exclude 5% most distant
-        ind = int(sort_inds.size * (1 - drop_frac_per_iter))
-
-        if ind == 0 or ind == sort_inds.size or num_left <= num_stop:
-            break
-
-        exclude_inds = w[sort_inds[ind:]]
-        mask[exclude_inds] = 0
-
-    return cen
-
-
 def cloudEvoVis(sP, haloID, clumpID, sbNum, sizeParam=False):
     """Visualize a series of time-evolution frames tracking a single cloud."""
     # vis conifg
@@ -1087,7 +1054,7 @@ def cloudEvoVis(sP, haloID, clumpID, sbNum, sizeParam=False):
 
         # center: shrinking sphere on a subset of tracers, determined as those which were still
         # within a threshold distance at the previous snapshot
-        boxCenter = _shrinking_center(sP, data["pos"][i, nearInds, :])  # track center with shrinking sphere
+        boxCenter = shrinking_center(data["pos"][i, nearInds, :], sP.boxSize)  # track center with shrinking sphere
 
         dists = sP.periodicDists(boxCenter, data["pos"][i, :, :])
         nearInds = np.where(dists <= data["size_halfmassrad"][0] * 3)[0]
@@ -1207,7 +1174,7 @@ def cloudEvoVisFigure(sP, haloID, clumpID, sbNum, constSize=False):
         # decide frame center position and size
         loc_snap = data["snaps"][i]
 
-        boxCenter_loc = _shrinking_center(sP, data["pos"][i, :, :])  # track center with shrinking sphere
+        boxCenter_loc = shrinking_center(data["pos"][i, :, :], sP.boxSize)  # track center with shrinking sphere
         extent_loc = [
             boxCenter_loc[0] - 0.5 * boxSizeImg[0],
             boxCenter_loc[0] + 0.5 * boxSizeImg[0],
@@ -2082,7 +2049,7 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None, posOnly=False):
         # shrinking center, relative coordinates
         xx = data["pos_rel"][i, :, axes[0]]
         yy = data["pos_rel"][i, :, axes[1]]
-        cen = _shrinking_center(sP, data["pos_rel"][i, :, :])
+        cen = shrinking_center(data["pos_rel"][i, :, :], sP.boxSize)
 
         xx -= cen[axes[0]]
         yy -= cen[axes[1]]

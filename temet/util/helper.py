@@ -188,33 +188,6 @@ def tail(fileName, nLines):
     return lines
 
 
-def dist_theta_grid(size, nPixels):
-    """Compute impact parameter and angle for every pixel of a map.
-
-    Args:
-      size (float): physical size of the map [pkpc].
-      nPixels (int or 2-tuple): number of pixels along each axis.
-    """
-    # pixel size: [pkpc] if size in [pkpc], else units of size
-    if isinstance(nPixels, int):
-        nPixels = [nPixels, nPixels]
-
-    pxSize = size / nPixels[0]
-
-    xx, yy = np.mgrid[0 : nPixels[0], 0 : nPixels[1]]
-    xx = xx.astype("float64") - nPixels[0] / 2 + 0.5
-    yy = yy.astype("float64") - nPixels[1] / 2 + 0.5
-    dist = np.sqrt(xx**2 + yy**2) * pxSize
-
-    theta = np.rad2deg(np.arctan2(xx, yy))  # 0 and +/- 180 is major axis, while +/- 90 is minor axis
-    theta = np.abs(theta)  # 0 -> 90 -> 180 is major -> minor -> major
-
-    w = np.where(theta >= 90.0)
-    theta[w] = 180.0 - theta[w]  # 0 is major, 90 is minor
-
-    return dist, theta
-
-
 # --- decorators ---
 
 
@@ -292,7 +265,7 @@ def cache(_func=None, *, overwrite=False):
         return decorator_cache(_func)
 
 
-# --- general algorithms ---
+# --- running median ---
 
 
 def running_median(
@@ -558,6 +531,69 @@ def running_histogram(X, nBins=100, binSize=None, normFac=None, skipZeros=False)
         running_h /= normFac
 
     return np.array(bin_centers), np.array(running_h)
+
+
+# --- general algorithms ---
+
+
+def dist_theta_grid(size, nPixels):
+    """Compute impact parameter and angle for every pixel of a map.
+
+    Args:
+      size (float): physical size of the map [pkpc].
+      nPixels (int or 2-tuple): number of pixels along each axis.
+    """
+    # pixel size: [pkpc] if size in [pkpc], else units of size
+    if isinstance(nPixels, int):
+        nPixels = [nPixels, nPixels]
+
+    pxSize = size / nPixels[0]
+
+    xx, yy = np.mgrid[0 : nPixels[0], 0 : nPixels[1]]
+    xx = xx.astype("float64") - nPixels[0] / 2 + 0.5
+    yy = yy.astype("float64") - nPixels[1] / 2 + 0.5
+    dist = np.sqrt(xx**2 + yy**2) * pxSize
+
+    theta = np.rad2deg(np.arctan2(xx, yy))  # 0 and +/- 180 is major axis, while +/- 90 is minor axis
+    theta = np.abs(theta)  # 0 -> 90 -> 180 is major -> minor -> major
+
+    w = np.where(theta >= 90.0)
+    theta[w] = 180.0 - theta[w]  # 0 is major, 90 is minor
+
+    return dist, theta
+
+
+def shrinking_center(xyz, boxSize, frac_stop=0.1, drop_frac_per_iter=0.05):
+    """Shrinking center algorithm: iteratively search for a center position given a [N,3] coordinate set."""
+    # starting state
+    mask = np.zeros(xyz.shape[0], dtype="int16") + 1
+
+    # config
+    max_iter = 100
+    num_stop = int(xyz.shape[0] * frac_stop)  # until the inner 10% are left
+
+    for _i in range(max_iter):
+        # which points remain
+        w = np.where(mask)[0]
+        num_left = len(w)
+
+        # compute center and distances
+        cen = np.mean(xyz[w], axis=0)
+        dists = periodicDistsN(cen, xyz[w], boxSize)
+
+        # sort
+        sort_inds = np.argsort(dists)
+
+        # exclude 5% most distant
+        ind = int(sort_inds.size * (1 - drop_frac_per_iter))
+
+        if ind == 0 or ind == sort_inds.size or num_left <= num_stop:
+            break
+
+        exclude_inds = w[sort_inds[ind:]]
+        mask[exclude_inds] = 0
+
+    return cen
 
 
 def replicateVar(childCounts, subsetInds=None):
