@@ -13,13 +13,13 @@ from matplotlib.colors import to_rgb
 from matplotlib.ticker import ScalarFormatter
 from scipy.signal import savgol_filter
 
-from ..load.simtxt import blackhole_details_mergers, sf_sn_details
-from ..plot import snapshot
-from ..plot.config import colors, figsize, linestyles, lw, markers, sKn, sKo
-from ..plot.cosmoMisc import simHighZComparison
-from ..plot.subhalos import addUniverseAgeAxis
-from ..plot.util import colored_line
-from ..projects.mcst_vis import (
+from temet.load.simtxt import blackhole_details_mergers, sf_sn_details
+from temet.plot import snapshot
+from temet.plot.config import colors, figsize, linestyles, lw, markers, sKn, sKo
+from temet.plot.cosmoMisc import simHighZComparison
+from temet.plot.subhalos import addUniverseAgeAxis
+from temet.plot.util import colored_line
+from temet.projects.mcst_vis import (
     vis_gallery_galaxy,
     vis_highres_region,
     vis_movie_mpbsm,
@@ -27,8 +27,8 @@ from ..projects.mcst_vis import (
     vis_single_galaxy,
     vis_single_halo,
 )
-from ..util import simParams
-from ..util.helper import cache, closest, logZeroNaN, running_median
+from temet.util import simParams
+from temet.util.helper import cache, closest, logZeroNaN, running_median
 
 
 def _get_existing_sims(variants, res, hInds, redshift, all=False, single=False):
@@ -673,7 +673,7 @@ def quantVsRedshift(
 
 def smhm_relation(sims):
     """Diagnostic plot of stellar mass vs halo mass including empirical constraints."""
-    from ..load.data import behrooziUM
+    from temet.load.data import behrooziUM
 
     xQuant = "mhalo_200_log"
     yQuant = "mstar2_log"
@@ -699,7 +699,7 @@ def smhm_relation(sims):
 
 def sfr_vs_mstar(sims: list[simParams], yQuant: str) -> None:
     """Diagnostic plot of SFR vs Mstar including observational data."""
-    from ..load.data import curti23, nakajima23
+    from temet.load.data import curti23, nakajima23
 
     xQuant = "mstar2_log"
     ylim = [-3.5, 2.0]  # log sfr
@@ -774,7 +774,7 @@ def sfr_vs_mstar(sims: list[simParams], yQuant: str) -> None:
 
 def mbh_vs_mhalo(sims: list[simParams]) -> None:
     """SMBH mass versus halo mass."""
-    from ..load.data import zhang21
+    from temet.load.data import zhang21
 
     xQuant = "mhalo_200_log"
     yQuant = "mass_smbh"  # largest BH_Mass in each subhalo
@@ -1093,7 +1093,7 @@ def phase_diagram(sim):
 
     # MCS model: star formation threshold
     def _f_post(ax):
-        from ..util.units import units
+        from temet.util.units import units
 
         xx = ax.get_xlim()
         dens = 10.0 ** np.array(xx)  # 1/cm^3
@@ -2014,7 +2014,7 @@ def paperPlots(a=False):
 
     # fig 1: equilibrium curves of new grackle tables
     if 0:
-        from ..cosmo.cooling import grackle_equil
+        from temet.cosmo.cooling import grackle_equil
 
         grackle_equil()
 
@@ -2295,7 +2295,7 @@ def paperPlots(a=False):
 
     # diagnostic: CPU times
     if 0 or a:
-        from ..plot.perf import plotCpuTimes
+        from temet.plot.perf import plotCpuTimes
 
         plotCpuTimes(sims, xlim=[0.0, 0.25])
 

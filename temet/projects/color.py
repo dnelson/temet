@@ -17,20 +17,20 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.stats import gaussian_kde
 
-from ..cosmo.color import calcSDSSColors, loadSimGalColors
-from ..plot import subhalos
-from ..plot.config import binSize, colors, cssLabels, figsize, linestyles, lw, pStyle, sKn, sKo
-from ..plot.quantities import bandMagRange, simSubhaloQuantity
-from ..plot.util import getWhiteBlackColors, loadColorTable, setAxisColors
-from ..projects.color_analysis import (
+from temet.cosmo.color import calcSDSSColors, loadSimGalColors
+from temet.plot import subhalos
+from temet.plot.config import binSize, colors, cssLabels, figsize, linestyles, lw, pStyle, sKn, sKo
+from temet.plot.quantities import bandMagRange, simSubhaloQuantity
+from temet.plot.util import getWhiteBlackColors, loadColorTable, setAxisColors
+from temet.projects.color_analysis import (
     calcColorEvoTracks,
     characterizeColorMassPlane,
     colorTransitionTimes,
     defSimColorModel,
 )
-from ..util import simParams
-from ..util.helper import closest, kde_2d, leastsq_fit, logZeroNaN, running_median
-from ..util.match import match
+from temet.util import simParams
+from temet.util.helper import closest, kde_2d, leastsq_fit, logZeroNaN, running_median
+from temet.util.match import match
 
 
 def galaxyColorPDF(
@@ -159,7 +159,7 @@ def galaxyColorPDF(
                 gc_colors = np.reshape(gc_colors, gc_colors.shape[0] * gc_colors.shape[1])
 
                 # replicate stellar masses
-                from re import findall  # could replace with actual Nside return from ..loadSimGalColors()
+                from re import findall  # could replace with actual Nside return from loadSimGalColors()
 
                 Nside = np.int32(findall(r"ns\d+", simColorsModel)[0][2:])
                 assert Nside == 1
@@ -2430,7 +2430,7 @@ def paperPlots():
 
     # figure 3, stellar ages and metallicities vs mstar (2x1 in a row)
     if 1:
-        from ..plot.driversObs import massMetallicityStars, stellarAges
+        from temet.plot.driversObs import massMetallicityStars, stellarAges
 
         sPs = [L75, L205]  # L75FP
         simRedshift = 0.1
@@ -2452,7 +2452,7 @@ def paperPlots():
 
     # figure 5: fullbox demonstratrion projections
     if 0:
-        from ..vis.boxDrivers import TNG_colorFlagshipBoxImage
+        from temet.vis.boxDrivers import TNG_colorFlagshipBoxImage
 
         # render each fullbox image used in the composite
         for part in [0, 1, 2, 3, 4]:
@@ -2567,7 +2567,7 @@ def paperPlots():
 
     # figures 14-15: stellar image stamps of galaxies (red/blue samples)
     if 0:
-        from ..vis.haloDrivers import tngFlagship_galaxyStellarRedBlue
+        from temet.vis.haloDrivers import tngFlagship_galaxyStellarRedBlue
 
         tngFlagship_galaxyStellarRedBlue(evo=False, redSample=1)
         tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=1)

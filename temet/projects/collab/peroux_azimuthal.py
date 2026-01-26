@@ -12,11 +12,11 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ...plot.config import figsize, lw
-from ...plot.util import sampleColorTable
-from ...util import simParams
-from ...util.helper import dist_theta_grid, logZeroNaN, running_median
-from ...vis.halo import renderSingleHalo
+from temet.plot.config import figsize, lw
+from temet.plot.util import sampleColorTable
+from temet.util import simParams
+from temet.util.helper import dist_theta_grid, logZeroNaN, running_median
+from temet.vis.halo import renderSingleHalo
 
 
 def singleHaloImage(sP, subhaloInd=440839, conf=0):
@@ -649,15 +649,15 @@ def paperPlots():
 
     if 0:
         # figure 2: TNG50 lines for massflow rate vs angle
-        from ...projects.outflows import gasOutflowRatesStacked
+        from temet.plot.gasflows import outflowRatesStacked
 
         mStarBins = [[10.3, 10.7]]  # [ [9.4,9.6],[10.3,10.7] ]
 
         config = {"radInd": 7, "vcutInd": 0, "stat": "mean", "ylim": [-15, 15], "skipZeros": False, "sterNorm": True}
-        gasOutflowRatesStacked(TNG50, quant="theta", mStarBins=mStarBins, config=config)
+        outflowRatesStacked(TNG50, quant="theta", mStarBins=mStarBins, config=config)
 
         config = {"radInd": 7, "vcutInd": 5, "stat": "mean", "ylim": [-15, 15], "skipZeros": False, "sterNorm": True}
-        gasOutflowRatesStacked(TNG50, quant="theta", mStarBins=mStarBins, config=config, inflow=True)
+        outflowRatesStacked(TNG50, quant="theta", mStarBins=mStarBins, config=config, inflow=True)
 
     if 0:
         # fig 3: metallicity vs rad/massflowrate

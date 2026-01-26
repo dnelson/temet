@@ -14,16 +14,16 @@ from matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.interpolate import interp1d
 
-from ..cosmo.mergertree import mpbPositionComplete
-from ..cosmo.time_evo import halosTimeEvoFullbox, halosTimeEvoSubbox, subhalo_subbox_overlap
-from ..plot.config import linestyles
-from ..plot.util import getWhiteBlackColors, loadColorTable, setAxisColors, setColorbarColors
-from ..util import simParams
-from ..util.helper import closest, logZeroNaN
-from ..util.rotation import rotationMatrixFromAngleDirection
-from ..vis.box import renderBox
-from ..vis.halo import renderSingleHalo
-from ..vis.render import gridBox
+from temet.cosmo.mergertree import mpbPositionComplete
+from temet.cosmo.time_evo import halosTimeEvoFullbox, halosTimeEvoSubbox, subhalo_subbox_overlap
+from temet.plot.config import linestyles
+from temet.plot.util import getWhiteBlackColors, loadColorTable, setAxisColors, setColorbarColors
+from temet.util import simParams
+from temet.util.helper import closest, logZeroNaN
+from temet.util.rotation import rotationMatrixFromAngleDirection
+from temet.vis.box import renderBox
+from temet.vis.halo import renderSingleHalo
+from temet.vis.render import gridBox
 
 
 def galaxyMosaic_topN(numHalosInd, panelNum=1, hIDsPlot=None, redshift=2.0, rotation="face-on"):

@@ -10,15 +10,15 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 
-from ...cosmo.cloudy import cloudyIon
-from ...obs.galaxySample import addIonColumnPerSystem, ionCoveringFractions
-from ...plot import snapshot
-from ...plot.config import colors, figsize, linestyles, lw, sKn, sKo
-from ...util import simParams
-from ...util.helper import logZeroNaN, running_median
-from ...util.match import match
-from ...vis.box import renderBox
-from ...vis.halo import renderSingleHalo
+from temet.cosmo.cloudy import cloudyIon
+from temet.obs.galaxySample import addIonColumnPerSystem, ionCoveringFractions
+from temet.plot import snapshot
+from temet.plot.config import colors, figsize, linestyles, lw, sKn, sKo
+from temet.util import simParams
+from temet.util.helper import logZeroNaN, running_median
+from temet.util.match import match
+from temet.vis.box import renderBox
+from temet.vis.halo import renderSingleHalo
 
 
 def check_box(snap):

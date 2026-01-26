@@ -14,11 +14,12 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 
-from ..plot.config import figsize, figsize_sm, linestyles, lw, percs, sKn, sKo
-from ..plot.util import loadColorTable
-from ..util import simParams
-from ..util.helper import dist_theta_grid, logZeroNaN, running_median
-from ..vis.box import renderBox
+from temet.plot.config import figsize, figsize_sm, linestyles, lw, percs, sKn, sKo
+from temet.plot.util import loadColorTable
+from temet.util import simParams
+from temet.util.helper import dist_theta_grid, logZeroNaN, running_median
+from temet.vis.box import renderBox
+from temet.vis.halo import renderSingleHalo
 
 
 def lemIGM():
@@ -903,7 +904,7 @@ def galaxyLum(sim, haloID, b, aperture_kpc=10.0):
 
 def _get_subhalo_sample(sim, mstar_minmax=(10.0, 11.0), verbose=False):
     """Define the main sample for ILTIS processing."""
-    from ..cosmo.util import subsampleRandomSubhalos
+    from temet.cosmo.util import subsampleRandomSubhalos
 
     # load
     mstar = sim.subhalos("mstar_30pkpc_log")
@@ -1504,6 +1505,41 @@ def enhancementTrendVsMass(sim, haloIDs, b):
     plt.close(fig)
 
 
+def singleHaloImageO7(sP, subhaloInd):
+    """OVII optical depth projection."""
+    method = "sphMap"  # note: fof-scope
+    axes = [0, 1]
+    labelZ = True
+    labelScale = "physical"
+    labelSim = False
+    labelHalo = True
+    relCoords = True
+    size = 100
+    sizeType = "kpc"
+    rotation = "edge-on"
+
+    panels = []
+
+    # equirectangular - O7 optical depth map
+    panels.append({"partType": "gas", "partField": "tau0_OVIIr", "valMinMax": [-0.5, 1.5]})
+
+    sP.createCloudyCache = False
+    projType = "equirectangular"  #'mollweide'
+    projParams = {"fov": 360.0}
+    nPixels = [1200, 600]
+    axesUnits = "rad_pi"
+
+    class plotConfig:
+        plotStyle = "edged"
+        rasterPx = nPixels
+        colorbars = True
+        fontsize = 16
+        saveFilename = "%s_%d_%d_%s.pdf" % (sP.simName, sP.snap, subhaloInd, "-".join([p["partField"] for p in panels]))
+
+    # render
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+
 def paperPlots():
     """Generate all plots of the paper."""
     # config
@@ -1600,9 +1636,7 @@ def paperPlots():
 
     if 0:
         # fig X: optical depth maps
-        from ..projects.mg2emission import singleHaloImageMGII
-
-        singleHaloImageMGII(sim, sim.halo(haloID_demo)["GroupFirstSub"], conf=11)
+        singleHaloImageO7(sim, sim.halo(haloID_demo)["GroupFirstSub"])
 
     if 0:
         # (possibilities for additional content)

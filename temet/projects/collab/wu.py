@@ -6,10 +6,10 @@ from functools import partial
 
 import matplotlib.pyplot as plt
 
-from ...catalog.subhalo import subhaloStellarPhot
-from ...load.auxcat_fields import def_fields as ac
-from ...plot.config import colors, linestyles
-from ...util import simParams
+from temet.catalog.subhalo import subhaloStellarPhot
+from temet.load.auxcat_fields import def_fields as ac
+from temet.plot.config import colors, linestyles
+from temet.util import simParams
 
 
 # add auxcats

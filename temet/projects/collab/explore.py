@@ -9,13 +9,13 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d
 
-from ...plot import subhalos
-from ...plot.config import figsize, lw
-from ...plot.util import loadColorTable
-from ...util import simParams
-from ...util.helper import closest, running_median
-from ...vis.box import renderBox
-from ...vis.halo import renderSingleHalo
+from temet.plot import subhalos
+from temet.plot.config import figsize, lw
+from temet.plot.util import loadColorTable
+from temet.util import simParams
+from temet.util.helper import closest, running_median
+from temet.vis.box import renderBox
+from temet.vis.halo import renderSingleHalo
 
 
 def amyDIGzProfiles():
@@ -225,7 +225,7 @@ def martinSubboxProj3DGrid():
 
 def auroraVoyage2050WhitePaper():
     """Create plots for Aurora's ESA Voyage 2050 white paper."""
-    from ...projects.oxygen import stackedRadialProfiles
+    from temet.projects.oxygen import stackedRadialProfiles
 
     redshift = 0.1
 
@@ -321,8 +321,8 @@ def smitaXMMproposal():
 
 def nachoAngularQuenchingDens():
     """Variation of CGM gas density with azimuthal angle (for Martin Navarro+20)."""
-    from ...catalog.gasflows import radialMassFluxes
-    from ...projects.outflows import gasOutflowRates2DStackedInMstar
+    from temet.catalog.gasflows import radialMassFluxes
+    from temet.plot.gasflows import outflowRates2DStackedInMstar
 
     sP = simParams(run="tng100-1", redshift=0.0)
     # mStarBins = [[9.8,10.2],[10.4,10.6],[10.9,11.1],[11.3,11.7]] # exploration
@@ -350,7 +350,7 @@ def nachoAngularQuenchingDens():
         # clims  = [[-0.1,0.1],[-0.1,0.1],[-0.1,0.1],[-0.1,0.1]]
         config = {"stat": "mean", "skipZeros": False, "vcutInd": [0, 0, 0, 0]}  # only 0 is all mass (no vcut)
 
-    gasOutflowRates2DStackedInMstar(
+    outflowRates2DStackedInMstar(
         sP,
         xAxis="rad",
         yAxis="theta",
@@ -436,7 +436,7 @@ def nachoAngularQuenchingImage():
 
 def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, hot=False, higal=False):
     """Compute Omega_Q(z) for various components (Q). Rob Yates paper 2021."""
-    from ...cosmo.hydrogen import neutral_fraction
+    from temet.cosmo.hydrogen import neutral_fraction
 
     sP = simParams(run="eagle")
 
@@ -650,7 +650,7 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, hot=F
 
 def abhijeetMgIISurfDens():
     """Test for Anand+ (2022)."""
-    from ...projects.oxygen import stackedRadialProfiles
+    from temet.projects.oxygen import stackedRadialProfiles
 
     sPs = [simParams(run="tng100-1", redshift=0.5)]
 
@@ -837,7 +837,7 @@ def arjenMasses5kpc():
 
 def yenting_vis_sample(redshift=1.0):
     """For the raw TNG-Cluster halos (not in the virtual box), render views of RIZ stars and SFR, to identify rings."""
-    from ...cosmo.zooms import _halo_ids_run
+    from temet.cosmo.zooms import _halo_ids_run
 
     zoomHaloInds = _halo_ids_run(onlyDone=False)[1:]  # skip first
 
@@ -1230,7 +1230,7 @@ def depletionVsDynamicalTimescale():
 
 def sanch_ovi_groups():
     """Mock OVI absorption spectra around TNG50-1 z=0.1 groups for Sanch Borthakur."""
-    from ...spectra.spectrum import generate_rays_voronoi_fullbox, integrate_along_saved_rays
+    from temet.spectra.spectrum import generate_rays_voronoi_fullbox, integrate_along_saved_rays
 
     sim = simParams(run="tng50-1", redshift=0.1)
 

@@ -16,12 +16,12 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
 
-from ..cosmo.util import subboxSubhaloCat
-from ..load.data import berg2019, chen2018zahedy2019, werk2013
-from ..plot import snapshot, subhalos
-from ..plot.config import colors, figsize, figsize_sm, linestyles, percs, sKn, sKo
-from ..plot.util import loadColorTable
-from ..projects.oxygen import (
+from temet.cosmo.util import subboxSubhaloCat
+from temet.load.data import berg2019, chen2018zahedy2019, werk2013
+from temet.plot import snapshot, subhalos
+from temet.plot.config import colors, figsize, figsize_sm, linestyles, percs, sKn, sKo
+from temet.plot.util import loadColorTable
+from temet.projects.oxygen import (
     ionTwoPointCorrelation,
     obsColumnsDataPlotExtended,
     obsColumnsLambdaVsR,
@@ -29,14 +29,14 @@ from ..projects.oxygen import (
     stackedRadialProfiles,
     totalIonMassVsHaloMass,
 )
-from ..tracer import evolution as tracerEvo
-from ..tracer.montecarlo import globalAllTracersTimeEvo
-from ..util import simParams
-from ..util.helper import logZeroNaN, running_median, shrinking_center
-from ..util.match import match
-from ..util.voronoi import voronoiThresholdSegmentation
-from ..vis.box import renderBox
-from ..vis.halo import renderSingleHalo
+from temet.tracer import evolution as tracerEvo
+from temet.tracer.montecarlo import globalAllTracersTimeEvo
+from temet.util import simParams
+from temet.util.helper import logZeroNaN, running_median, shrinking_center
+from temet.util.match import match
+from temet.util.voronoi import voronoiThresholdSegmentation
+from temet.vis.box import renderBox
+from temet.vis.halo import renderSingleHalo
 
 
 def radialResolutionProfiles(
@@ -951,7 +951,7 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
 def lrgHaloVisResolution(sP, haloIDs, sPs_other):
     """Visualization: one halo, for four different resolution runs."""
     # cross match
-    from ..cosmo.util import crossMatchSubhalosBetweenRuns
+    from temet.cosmo.util import crossMatchSubhalosBetweenRuns
 
     subIDs = [sP.halos("GroupFirstSub")[haloIDs]]
 
@@ -2076,7 +2076,7 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None, posOnly=False):
 
 def clumpPropertiesVsHaloMass(sPs):
     """Run segmentation on a flat mass-selection of halos, plot clump properties / abundance vs halo mass."""
-    from ..vis.halo import selectHalosFromMassBins
+    from temet.vis.halo import selectHalosFromMassBins
 
     # limits tailored to resolution convergence (showing all runs)
     lims = {
@@ -2971,6 +2971,6 @@ def paperPlots():
         ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthreshs, sPs2=sPs2, radRelToVirRad=False, fullDepth=True)
 
         # helper: curve of growth for MgII
-        from ..plot.cloudy import curveOfGrowth
+        from temet.plot.cloudy import curveOfGrowth
 
         curveOfGrowth(lineName="MgII2803")

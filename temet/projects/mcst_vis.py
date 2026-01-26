@@ -9,8 +9,8 @@ from os.path import isfile
 import h5py
 import numpy as np
 
-from ..vis.box import renderBox
-from ..vis.halo import renderSingleHalo, renderSingleHaloFrames
+from temet.vis.box import renderBox
+from temet.vis.halo import renderSingleHalo, renderSingleHaloFrames
 
 
 def vis_single_galaxy(sP, haloID=0, noSats=False):

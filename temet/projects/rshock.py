@@ -15,13 +15,13 @@ from matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 
-from ..plot import subhalos
-from ..plot.config import colors, linestyles, lw, sKn, sKo
-from ..plot.util import loadColorTable
-from ..util import simParams
-from ..util.helper import last_nonzero, logZeroNaN, reportMemory, running_median
-from ..util.treeSearch import buildFullTree, calcHsml, calcParticleIndices, calcQuantReduction
-from ..vis.halo import renderSingleHalo
+from temet.plot import subhalos
+from temet.plot.config import colors, linestyles, lw, sKn, sKo
+from temet.plot.util import loadColorTable
+from temet.util import simParams
+from temet.util.helper import last_nonzero, logZeroNaN, reportMemory, running_median
+from temet.util.treeSearch import buildFullTree, calcHsml, calcParticleIndices, calcQuantReduction
+from temet.vis.halo import renderSingleHalo
 
 
 def plotHealpixShells(rad, data, label, rads=None, clim=None, ctName="viridis", saveFilename="plot.pdf"):
@@ -960,7 +960,7 @@ def paperPlots():
 
 
 # add auxcats
-from ..load.auxcat_fields import def_fields as ac
+from temet.load.auxcat_fields import def_fields as ac
 
 
 ac["Subhalo_VirShockRad_Temp_400rad_16ns"] = partial(

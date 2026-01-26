@@ -9,11 +9,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from ...cosmo.util import subsampleRandomSubhalos
-from ...plot.config import colors, figsize, linestyles, lw, markers
-from ...util import simParams
-from ...util.helper import dist_theta_grid, logZeroNaN, running_median
-from ...vis.halo import renderSingleHalo
+from temet.cosmo.util import subsampleRandomSubhalos
+from temet.plot.config import colors, figsize, linestyles, lw, markers
+from temet.util import simParams
+from temet.util.helper import dist_theta_grid, logZeroNaN, running_median
+from temet.vis.halo import renderSingleHalo
 
 
 def hubbleMCT_gibleVis(conf=1):

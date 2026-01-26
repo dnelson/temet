@@ -15,9 +15,9 @@ from matplotlib.patches import ConnectionPatch
 from matplotlib.ticker import ScalarFormatter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from ..cosmo.cloudy import cloudyIon
-from ..plot.config import colors, figsize, linestyles, markers, percs
-from ..spectra.plot import (
+from temet.cosmo.cloudy import cloudyIon
+from temet.plot.config import colors, figsize, linestyles, markers, percs
+from temet.spectra.plot import (
     EW_distribution,
     EW_vs_coldens,
     dNdz_evolution,
@@ -25,12 +25,12 @@ from ..spectra.plot import (
     spectra_gallery_indiv,
     spectrum_plot_single,
 )
-from ..spectra.spectrum import spectra_filepath
-from ..spectra.util import instruments, lines
-from ..util import simParams
-from ..util.helper import closest, running_median
-from ..vis.box import renderBox
-from ..vis.halo import renderSingleHalo
+from temet.spectra.spectrum import spectra_filepath
+from temet.spectra.util import instruments, lines
+from temet.util import simParams
+from temet.util.helper import closest, running_median
+from temet.vis.box import renderBox
+from temet.vis.halo import renderSingleHalo
 
 
 def metalAbundancesVsSolar(sim, ion="Mg II"):
@@ -186,7 +186,7 @@ def lightconeSpectra(sim, instrument, ion, solar=False, add_lines=None):
 
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
-      instrument (str): specify observational instrument (from ..spectra.spectrum.instruments).
+      instrument (str): specify observational instrument (in temet.spectra.spectrum.instruments).
       ion (str): space-separated name of ion e.g. 'Mg II'.
       solar (bool): if True, then adopt solar abundance ratio for the given species, instead of snap value.
       add_lines (list[str] or None): if not None, then a list of lines to include. otherwise, include all for this ion.
@@ -278,7 +278,7 @@ def plotLightconeSpectrum(sim, instrument, ion, add_lines=None, SNR=None):
 
     Args:
       sim (:py:class:`~util.simParams`): simulation instance.
-      instrument (str): specify observational instrument (from ..spectra.spectrum.instruments).
+      instrument (str): specify observational instrument (in temet.spectra.spectrum.instruments).
       ion (str): space-separated name of ion e.g. 'Mg II'.
       add_lines (list[str] or None): if not None, then a list of lines to include. otherwise, include all for this ion.
       SNR (float): if not None, then add noise to achieve this signal to noise ratio.

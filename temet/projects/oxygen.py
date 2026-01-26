@@ -15,19 +15,19 @@ from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d, gaussian_kde
 
-from ..cosmo.cloudy import cloudyIon
-from ..cosmo.clustering import twoPointAutoCorrelationParticle
-from ..cosmo.util import cenSatSubhaloIndices
-from ..load.data import berg2019, chen2018zahedy2019, johnson2015, werk2013
-from ..obs.galaxySample import addIonColumnPerSystem, ionCoveringFractions, obsMatchedSample
-from ..plot import snapshot, subhalos
-from ..plot.cloudy import ionAbundFracs2DHistos
-from ..plot.config import colors, figsize, linestyles, lw, sKn, sKo
-from ..plot.quantities import quantList
-from ..plot.util import add_resolution_lines, loadColorTable
-from ..util import simParams
-from ..util.helper import closest, logZeroNaN, reducedChiSq, running_median
-from ..util.match import match
+from temet.cosmo.cloudy import cloudyIon
+from temet.cosmo.clustering import twoPointAutoCorrelationParticle
+from temet.cosmo.util import cenSatSubhaloIndices
+from temet.load.data import berg2019, chen2018zahedy2019, johnson2015, werk2013
+from temet.obs.galaxySample import addIonColumnPerSystem, ionCoveringFractions, obsMatchedSample
+from temet.plot import snapshot, subhalos
+from temet.plot.cloudy import ionAbundFracs2DHistos
+from temet.plot.config import colors, figsize, linestyles, lw, sKn, sKo
+from temet.plot.quantities import quantList
+from temet.plot.util import add_resolution_lines, loadColorTable
+from temet.util import simParams
+from temet.util.helper import closest, logZeroNaN, reducedChiSq, running_median
+from temet.util.match import match
 
 
 def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=False):
@@ -35,7 +35,7 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=
 
     (Schaye Fig 17) (Suresh+ 2016 Fig 11).
     """
-    from ..load.data import danforth2008, danforth2016, thomChen2008, tripp2008
+    from temet.load.data import danforth2008, danforth2016, thomChen2008, tripp2008
 
     # config
     lw = 3.5
@@ -209,7 +209,7 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=
 
 def cddfRedshiftEvolution(sPs, saveName, ions, redshifts, moment=0, boxDepth10=False, colorOff=0):
     """Redshift evolution of the OVI CDDF."""
-    from ..load.data import danforth2016, muzahid2011
+    from temet.load.data import danforth2016, muzahid2011
 
     # plot setup
     lw = 3.0
@@ -1013,7 +1013,6 @@ def stackedRadialProfiles(
                             # show percentile scatter only for first run
                             wf = np.where(np.isfinite(yp[0, :]) & np.isfinite(yp[-1, :]))[0]
                             ax.fill_between(rr[wf], yp[-1, wf], yp[0, wf], color=c, interpolate=True, alpha=0.2)
-                            # import pdb; pdb.set_trace()
 
                     txt.append(txt_mb)
 
@@ -2402,7 +2401,7 @@ def paperPlots():
 
     # figure 1, 2: full box composite image components, and full box OVI/OVIII ratio
     if 0:
-        from ..vis.boxDrivers import TNG_oxygenPaperImages
+        from temet.vis.boxDrivers import TNG_oxygenPaperImages
 
         for part in [3]:  # [0,1,2,3]:
             TNG_oxygenPaperImages(part=part)
@@ -2651,7 +2650,7 @@ def paperPlots():
 
     # figure 15, 16: OVI red/blue image samples
     if 0:
-        from ..vis.haloDrivers import tngFlagship_galaxyStellarRedBlue
+        from temet.vis.haloDrivers import tngFlagship_galaxyStellarRedBlue
 
         tngFlagship_galaxyStellarRedBlue(evo=False, redSample=1, conf=1)
         tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=1, conf=1)
@@ -2834,7 +2833,7 @@ def paperPlots():
 
     # exploration: cloudy ionization table
     if 0:
-        from ..cosmo.cloudy import plotIonAbundances
+        from temet.cosmo.cloudy import plotIonAbundances
 
         plotIonAbundances(elements=["Oxygen"])
 

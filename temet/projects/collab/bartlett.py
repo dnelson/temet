@@ -10,12 +10,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from ...cosmo.util import subsampleRandomSubhalos
-from ...plot import subhalos
-from ...plot.config import figsize, markers
-from ...util import simParams
-from ...util.helper import dist_theta_grid, logZeroNaN
-from ...vis.halo import renderSingleHalo
+from temet.cosmo.util import subsampleRandomSubhalos
+from temet.plot import subhalos
+from temet.plot.config import figsize, markers
+from temet.util import simParams
+from temet.util.helper import dist_theta_grid, logZeroNaN
+from temet.vis.halo import renderSingleHalo
 
 
 def magicCGMEmissionMaps(vis_indiv=False):

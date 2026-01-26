@@ -14,20 +14,20 @@ from matplotlib.backends.backend_pdf import PdfPages
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 
-from ..cosmo.mergertree import loadMPBs
-from ..cosmo.time_evo import halosTimeEvoFullbox, halosTimeEvoSubbox, subhalo_subbox_overlap
-from ..plot import gasflows, snapshot, subhalos
-from ..plot.config import linestyles, lw, markers, sKn, sKo
-from ..plot.util import add_halo_size_scales, add_resolution_lines
-from ..projects.outflows_vis import galaxyMosaic_topN, singleHaloDemonstrationImage, subboxOutflowTimeEvoPanels
-from ..util import simParams
-from ..util.helper import closest, evenlySample, logZeroNaN, nUnique, running_median
-from ..util.match import match
+from temet.cosmo.mergertree import loadMPBs
+from temet.cosmo.time_evo import halosTimeEvoFullbox, halosTimeEvoSubbox, subhalo_subbox_overlap
+from temet.plot import gasflows, snapshot, subhalos
+from temet.plot.config import linestyles, lw, markers, sKn, sKo
+from temet.plot.util import add_halo_size_scales, add_resolution_lines
+from temet.projects.outflows_vis import galaxyMosaic_topN, singleHaloDemonstrationImage, subboxOutflowTimeEvoPanels
+from temet.util import simParams
+from temet.util.helper import closest, evenlySample, logZeroNaN, nUnique, running_median
+from temet.util.match import match
 
 
 def sample_comparison_z2_sins_ao(sP):
     """Compare available galaxies vs. the SINS-AO sample of ~35 systems."""
-    from ..load.data import foersterSchreiber2018
+    from temet.load.data import foersterSchreiber2018
 
     # config
     xlim = [9.0, 12.0]
@@ -513,9 +513,6 @@ def fit_vout():
     import matplotlib.pyplot as plt
     from scipy.optimize import leastsq
 
-    from ..plot.config import figsize, lw
-    from ..util import simParams
-
     # load
     filename = "vout_75"
     with open("%s_TNG50-1.pickle" % filename, "rb") as f:
@@ -561,8 +558,7 @@ def fit_vout():
         print("params best:", params_best)
 
         # (A) vs. redshift plot
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
+        fig, ax = plt.subplots()
 
         ax.set_xlim([0.8 + 1, 6.2 + 1])
         ax.set_ylim([0, 1200])
@@ -599,8 +595,7 @@ def fit_vout():
         plt.close(fig)
 
         # (B) vs M* plot
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
+        fig, ax = plt.subplots()
 
         ax.set_xlim([7.0, 12.0])
         ax.set_ylim([0, 1200])
@@ -643,8 +638,7 @@ def fit_vout():
         return vout_fit - vout
 
     # plot
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
+    fig, ax = plt.subplots()
 
     ax.set_xlim([7.0, 12.0])
     ax.set_ylim([0, 1200])
@@ -702,8 +696,7 @@ def fit_vout():
                 vout_fit[i] = _error_function_loc(params_z[i], x_mstar, 0.0)
 
             for iterNum in [0, 2]:
-                fig = plt.figure(figsize=figsize)
-                ax = fig.add_subplot(111)
+                fig, ax = plt.subplots()
 
                 ax.set_ylim([100, 400])
                 ax.set_ylabel("fit vout")
@@ -744,8 +737,7 @@ def fit_vout():
     line_fits = []
 
     for i in range(len(params_z[0])):
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
+        fig, ax = plt.subplots()
 
         ax.set_xlim([1.5, 7.5])
         # ax.set_ylim([0,1200])
@@ -924,7 +916,7 @@ def halo_selection(sP, minM200=11.5):
 
 def outflowVel_obs_data(ax, p):
     """Passed to outflowVel() to add observational data to plot."""
-    from ..load.data import (
+    from temet.load.data import (
         bordoloi14,
         bordoloi16,
         chen10,
@@ -1182,7 +1174,7 @@ def outflowRates_post(ax, p):
         f.write(out)
 
     # plot observational data
-    from ..load.data import (
+    from temet.load.data import (
         bordoloi16,
         chisholm15,
         davies18,
@@ -1316,7 +1308,7 @@ def paperPlots(sPs=None):
 
     if 0:
         # fig 1: resolution/volume metadata of TNG50 vs other sims
-        from ..plot.cosmoMisc import simResolutionVolumeComparison
+        from temet.plot.cosmoMisc import simResolutionVolumeComparison
 
         simResolutionVolumeComparison()
 
@@ -1361,7 +1353,7 @@ def paperPlots(sPs=None):
 
         # new panel: mass loading vs. redshift in M* bins
         # config = {'vcutInds':[0], 'radInds':[1], 'stat':'mean', 'ylim':[-0.5,2.5]}
-        # gasOutflowRatesVsRedshift(TNG50, ptType='total', eta=False, config=config)
+        # gasflows.outflowRatesVsRedshift(TNG50, ptType='total', eta=False, config=config)
 
     if 0:
         # fig 5 (v200norm appendix)

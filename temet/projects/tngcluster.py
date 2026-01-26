@@ -15,20 +15,20 @@ from matplotlib.colors import Normalize
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 
-from ..cosmo.zooms import contamination_mindist
-from ..plot import subhalos
-from ..plot.config import colors, figsize, lw, markers, sKn, sKo
-from ..plot.cosmoMisc import simClustersComparison
-from ..plot.util import loadColorTable
-from ..util import simParams
-from ..util.helper import logZeroNaN, running_median
-from ..util.match import match
+from temet.cosmo.zooms import _halo_ids_run, contamination_mindist
+from temet.plot import subhalos
+from temet.plot.config import colors, figsize, lw, markers, sKn, sKo
+from temet.plot.cosmoMisc import simClustersComparison
+from temet.plot.util import loadColorTable
+from temet.util import simParams
+from temet.util.helper import logZeroNaN, running_median
+from temet.util.match import match
+from temet.vis.box import renderBox
+from temet.vis.halo import renderSingleHalo
 
 
 def vis_fullbox_virtual(sP, conf=0):
     """Visualize the entire virtual reconstructed box."""
-    from ..vis.box import renderBox
-
     axes = [0, 1]  # x,y
     labelZ = True
     labelScale = True
@@ -98,8 +98,6 @@ def vis_fullbox_virtual(sP, conf=0):
 
 def vis_gallery(sP, conf=0, num=20):
     """Visualize a single halo in multiple fields, or a gallery of multiple halos."""
-    from ..vis.halo import renderSingleHalo
-
     rVirFracs = [1.0]
     axes = [0, 1]  # x,y
     labelZ = True if conf == 7 and num == 1 else False
@@ -231,8 +229,6 @@ def mass_function(secondaries=False):
     Args:
       secondaries (bool): if True, then also include non-targeted halos with no/little contamination.
     """
-    from ..cosmo.zooms import _halo_ids_run
-
     mass_range = [14.0, 15.5]
     binSize = 0.1
     redshift = 0.0
@@ -331,7 +327,7 @@ def mass_function(secondaries=False):
 
 def sample_halomasses_vs_redshift(sPs):
     """Compare simulation vs observed cluster samples as a function of (redshift,mass)."""
-    from ..load.data import (
+    from temet.load.data import (
         adami18xxl,
         arnaud21chexmate,
         bleem20spt,
@@ -646,7 +642,7 @@ def bfield_strength_vs_halomass(sPs, redshifts):
 
 def stellar_mass_vs_halomass(sPs, conf=0):
     """Plot various stellar mass quantities vs halo mass."""
-    from ..load.data import behrooziSMHM, behrooziUM, chiu18, kravtsovSMHM, mosterSMHM
+    from temet.load.data import behrooziSMHM, behrooziUM, chiu18, kravtsovSMHM, mosterSMHM
 
     xQuant = "mhalo_500_log"
     cenSatSelect = "cen"
@@ -862,7 +858,7 @@ def stellar_mass_vs_halomass(sPs, conf=0):
 
 def gas_fraction_vs_halomass(sPs):
     """Plot f_gas vs halo mass."""
-    from ..load.data import giodini2009, gonzalez2013, lovisari2015, lovisari2020
+    from temet.load.data import giodini2009, gonzalez2013, lovisari2015, lovisari2020
 
     xQuant = "mhalo_500_log"
     cenSatSelect = "cen"
@@ -987,7 +983,7 @@ def gas_fraction_vs_halomass(sPs):
 
 def sfr_vs_halomass(sPs):
     """Plot star formation rate vs halo mass."""
-    # from ..load.data import giodini2009, lovisari2015
+    # from temet.load.data import giodini2009, lovisari2015
     xQuant = "mhalo_200_log"
     cenSatSelect = "cen"
 
@@ -1057,7 +1053,7 @@ def sfr_vs_halomass(sPs):
 
 def mhi_vs_halomass(sPs):
     """Plot cold gas mass (M_HI) vs halo mass."""
-    from ..load.data import obuljen2019
+    from temet.load.data import obuljen2019
 
     xQuant = "mhalo_200_log"
     cenSatSelect = "cen"
@@ -1127,7 +1123,7 @@ def mhi_vs_halomass(sPs):
 
 def szy_vs_halomass(sPs):
     """Plot SZ y-parameter vs halo mass."""
-    from ..load.data import nagarajan19, planck13xx  # bleem15spt, hilton21act
+    from temet.load.data import nagarajan19, planck13xx  # bleem15spt, hilton21act
 
     xQuant = "mhalo_500_log"
     cenSatSelect = "cen"
@@ -1269,7 +1265,7 @@ def szy_vs_halomass(sPs):
 
 def XrayLum_vs_halomass(sPs):
     """Plot X-ray luminosity vs halo mass."""
-    from ..load.data import bulbul19, lovisari2020, mantz16, pratt09, vikhlinin09
+    from temet.load.data import bulbul19, lovisari2020, mantz16, pratt09, vikhlinin09
 
     xQuant = "mhalo_500_log"
     cenSatSelect = "cen"
@@ -1327,7 +1323,7 @@ def XrayLum_vs_halomass(sPs):
 
 def smbh_mass_vs_veldisp(sPs):
     """Plot SMBH mass versus stellar velocity dispersion."""
-    from ..load.data import bogdan2018, mcconnellMa2013
+    from temet.load.data import bogdan2018, mcconnellMa2013
 
     xQuant = "veldisp1d_10pkpc"  # veldisp1d_4pkpc2d, veldisp1d (1re), veldisp1d_05re
     cenSatSelect = "cen"
@@ -1434,7 +1430,7 @@ def smbh_mass_vs_veldisp(sPs):
 
 def smbh_mass_vs_halomass(sPs):
     """Plot SMBH mass versus halo mass (m500c)."""
-    from ..load.data import bogdan2018
+    from temet.load.data import bogdan2018
 
     xQuant = "m500c"
     cenSatSelect = "cen"
@@ -2295,7 +2291,7 @@ def paperPlots():
     sPs = [TNG300, TNG_C]
 
     # generate projections (done by hand)
-    # from ..catalog.maps import projections
+    # from temet.catalog.maps import projections
     # for sP in sPs:
     #   projections(sP, partType='gas', partField='coldens_msunkpc2', conf=0, cenSatSelect='cen', m200_min=14.0)
 
@@ -2338,7 +2334,7 @@ def paperPlots():
 
     # figure 9 - halo synchrotron power
     if 0:
-        from ..plot.driversObs import haloSynchrotronPower
+        from temet.plot.driversObs import haloSynchrotronPower
 
         haloSynchrotronPower(sPs, xlim=[14.0, 15.3], ylim=[21.5, 28.5])
 
@@ -2349,7 +2345,7 @@ def paperPlots():
 
     # figure 11 - X-ray scaling relations
     if 0:
-        from ..plot.driversObs import haloXrayLum
+        from temet.plot.driversObs import haloXrayLum
 
         sPs_loc = [sP.copy() for sP in sPs]
         for sP in sPs_loc:
@@ -2369,7 +2365,7 @@ def paperPlots():
 
     # figure 13 - black hole mass scaling relation
     if 0:
-        # from ..plot.driversObs import blackholeVsStellarMass
+        # from temet.plot.driversObs import blackholeVsStellarMass
         # pdf = PdfPages('blackhole_masses_vs_mstar_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
         # blackholeVsStellarMass(sPs, pdf, twiceR=True, xlim=[11,13.0], ylim=[7.5,11], sizefac=0.8)
         # pdf.close()
@@ -2407,8 +2403,8 @@ def paperPlots():
 
 
 # add auxcats
-from ..catalog.maps import summarize_projection_2d
-from ..load.auxcat_fields import def_fields as ac
+from temet.catalog.maps import summarize_projection_2d
+from temet.load.auxcat_fields import def_fields as ac
 
 
 ac["Subhalo_XrayLum_0.5-2.0kev_R500c_2D_d=r200"] = partial(

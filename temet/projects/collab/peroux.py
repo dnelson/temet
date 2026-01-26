@@ -7,12 +7,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import savgol_filter
 
-from ...plot import snapshot
-from ...plot.config import sKn, sKo
-from ...util import simParams
-from ...util.helper import logZeroNaN, running_median
-from ...util.rotation import momentOfInertiaTensor, rotationMatricesFromInertiaTensor
-from ...vis.halo import renderSingleHalo
+from temet.plot import snapshot
+from temet.plot.config import sKn, sKo
+from temet.util import simParams
+from temet.util.helper import logZeroNaN, running_median
+from temet.util.rotation import momentOfInertiaTensor, rotationMatricesFromInertiaTensor
+from temet.vis.halo import renderSingleHalo
 
 
 def writeH2CDDFBand():

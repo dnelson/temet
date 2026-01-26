@@ -14,12 +14,12 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.stats import binned_statistic_2d
 
-from ...plot.config import figsize, linestyles, lw, percs
-from ...plot.util import sampleColorTable
-from ...util import simParams
-from ...util.helper import closest, dist_theta_grid, running_median
-from ...vis.box import renderBox
-from ...vis.halo import renderSingleHalo
+from temet.plot.config import figsize, linestyles, lw, percs
+from temet.plot.util import sampleColorTable
+from temet.util import simParams
+from temet.util.helper import closest, dist_theta_grid, running_median
+from temet.vis.box import renderBox
+from temet.vis.halo import renderSingleHalo
 
 
 valMinMaxQuant = {

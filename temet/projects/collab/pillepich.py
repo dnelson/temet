@@ -9,12 +9,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import savgol_filter
 
-from ...cosmo.util import crossMatchSubhalosBetweenRuns
-from ...plot.config import colors, linestyles, sKn, sKo
-from ...util import simParams
-from ...util.helper import running_median
-from ...vis.common import savePathDefault
-from ...vis.halo import renderSingleHalo
+from temet.cosmo.util import crossMatchSubhalosBetweenRuns
+from temet.plot.config import colors, linestyles, sKn, sKo
+from temet.util import simParams
+from temet.util.helper import running_median
+from temet.vis.common import savePathDefault
+from temet.vis.halo import renderSingleHalo
 
 
 def stellarMergerContribution(sP):

@@ -14,13 +14,13 @@ from scipy.ndimage import gaussian_filter
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic
 
-from ..cosmo.util import subsampleRandomSubhalos
-from ..plot import snapshot, subhalos
-from ..plot.config import figsize_sm, linestyles, percs, sKn, sKo
-from ..plot.util import loadColorTable, sampleColorTable
-from ..util import simParams
-from ..util.helper import dist_theta_grid, logZeroNaN, mvbe
-from ..vis.halo import renderSingleHalo
+from temet.cosmo.util import subsampleRandomSubhalos
+from temet.plot import snapshot, subhalos
+from temet.plot.config import figsize_sm, linestyles, percs, sKn, sKo
+from temet.plot.util import loadColorTable, sampleColorTable
+from temet.util import simParams
+from temet.util.helper import dist_theta_grid, logZeroNaN, mvbe
+from temet.vis.halo import renderSingleHalo
 
 
 def singleHaloImageMGII(
@@ -122,17 +122,6 @@ def singleHaloImageMGII(
             smoothFWHM = sP.units.arcsecToAngSizeKpcAtRedshift(0.05)
             nPixels = [300, 300]
             labelCustom = ["Narrow Field Mode", '0.025"/px, PSF=0.05"']
-    if conf == 11:
-        # equirectangular - O7 optical depth map
-        contour = None
-        rVirFracs = False
-        panels.append({"partType": "gas", "partField": "tau0_OVIIr", "valMinMax": [-0.5, 1.5]})
-
-        sP.createCloudyCache = False
-        projType = "equirectangular"  #'mollweide'
-        projParams = {"fov": 360.0}
-        nPixels = [1200, 600]
-        axesUnits = "rad_pi"
 
     class plotConfig:
         plotStyle = "edged"
@@ -568,7 +557,7 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
 
     if sP.redshift == 0.3 and not indiv:
         # Rupke+ 2019 Makani
-        from ..load.data import rupke19
+        from temet.load.data import rupke19
 
         r19 = rupke19()
 

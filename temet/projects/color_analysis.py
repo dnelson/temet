@@ -12,10 +12,10 @@ from os.path import expanduser, isfile
 import h5py
 import numpy as np
 
-from ..cosmo.color import calcSDSSColors, loadSimGalColors
-from ..plot.quantities import bandMagRange
-from ..util import simParams
-from ..util.helper import least_squares_fit, leastsq_fit
+from temet.cosmo.color import calcSDSSColors, loadSimGalColors
+from temet.plot.quantities import bandMagRange
+from temet.util import simParams
+from temet.util.helper import least_squares_fit, leastsq_fit
 
 
 # the dust model used by default for all colors
@@ -323,9 +323,7 @@ def _fitCMPlaneDoubleGaussian(
             N_gal = y_amps * p[pInds["sigma_" + c], :] * n * np.sqrt(2 * np.pi)
 
             print(n.sum(), N_gal.sum())
-            import pdb
-
-            pdb.set_trace()
+            assert 0  # todo: finish
 
             p_sch[i * 3 : (i + 1) * 3], _ = leastsq_fit(_schechter_function, params_guess, args=(m, N_gal))
 
