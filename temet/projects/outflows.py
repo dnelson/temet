@@ -22,6 +22,7 @@ from ..cosmo.mergertree import loadMPBs
 from ..cosmo.time_evo import halosTimeEvoFullbox, halosTimeEvoSubbox, subhalo_subbox_overlap
 from ..plot import snapshot, subhalos
 from ..plot.config import colors, figsize, linestyles, lw, markers, sKn, sKo
+from ..plot.snapshot import _resolutionLineHelper
 from ..projects.outflows_vis import galaxyMosaic_topN, singleHaloDemonstrationImage, subboxOutflowTimeEvoPanels
 from ..util import simParams
 from ..util.helper import evenlySample, loadColorTable, logZeroNaN, nUnique, running_median, sgolay2d
@@ -2357,8 +2358,6 @@ def stackedRadialProfiles(
     pdf=None,
 ):
     """Plot stacked radial profiles for several stellar mass bins and/or runs i.e. at different redshifts."""
-    from ..projects.oxygen import _resolutionLineHelper
-
     assert xaxis in ["log_pkpc", "log_rvir", "log_rhalf", "log_re", "pkpc", "rvir", "rhalf", "re"]
 
     percs = [16, 84]
