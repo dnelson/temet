@@ -18,6 +18,7 @@ from ..plot import snapshot
 from ..plot.config import colors, figsize, linestyles, lw, markers, sKn, sKo
 from ..plot.cosmoMisc import simHighZComparison
 from ..plot.subhalos import addUniverseAgeAxis
+from ..plot.util import colored_line
 from ..projects.mcst_vis import (
     vis_gallery_galaxy,
     vis_highres_region,
@@ -27,7 +28,7 @@ from ..projects.mcst_vis import (
     vis_single_halo,
 )
 from ..util import simParams
-from ..util.helper import cache, closest, colored_line, logZeroNaN, running_median
+from ..util.helper import cache, closest, logZeroNaN, running_median
 
 
 def _get_existing_sims(variants, res, hInds, redshift, all=False, single=False):

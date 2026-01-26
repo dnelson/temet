@@ -13,6 +13,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 
 from ..plot.config import figsize, linestyles, sKn, sKo
+from ..plot.util import getWhiteBlackColors, loadColorTable, sampleColorTable, setAxisColors
 from ..spectra.analysis import absorber_catalog, load_spectra_subset, wave_to_dv
 from ..spectra.spectrum import (
     deposit_single_line,
@@ -31,15 +32,7 @@ from ..spectra.util import (
     resample_spectrum,
     varconvolve,
 )
-from ..util.helper import (
-    closest,
-    getWhiteBlackColors,
-    iterable,
-    loadColorTable,
-    logZeroNaN,
-    sampleColorTable,
-    setAxisColors,
-)
+from ..util.helper import closest, iterable, logZeroNaN
 from ..util.units import units
 
 

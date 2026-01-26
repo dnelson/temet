@@ -10,8 +10,9 @@ import numpy as np
 from scipy.integrate import cumulative_trapezoid
 from scipy.ndimage import map_coordinates
 
+from ..plot.util import contourf, plothist, plotxy, sampleColorTable
 from ..util import simParams
-from ..util.helper import closest, plothist, plotxy, rootPath
+from ..util.helper import closest, rootPath
 
 
 basePath = rootPath + "tables/xray/"
@@ -486,8 +487,6 @@ def plotXrayEmissivities():
     """Plot the x-ray emissivity table trends with (z,band,T,Z)."""
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
-
-    from ..util.helper import contourf, sampleColorTable
 
     # plot config
     emis_range = [-25.7, -21.8]  # log erg cm^3 s^-1

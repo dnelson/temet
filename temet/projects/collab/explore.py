@@ -11,8 +11,9 @@ from scipy.stats import binned_statistic_2d
 
 from ...plot import subhalos
 from ...plot.config import figsize, lw
+from ...plot.util import loadColorTable
 from ...util import simParams
-from ...util.helper import loadColorTable, running_median
+from ...util.helper import closest, running_median
 from ...vis.box import renderBox
 from ...vis.halo import renderSingleHalo
 
@@ -84,7 +85,7 @@ def amyDIGzProfiles():
             xdist = np.abs(yy) * pxSize
 
             # debug plots
-            # from ..util.helper import plot2d
+            # from ..plot.util import plot2d
             # plot2d(grid, label='sb [log erg/s/kpc^2]', filename='test_grid.pdf')
             # plot2d(xdist, label='x distance[pkpc]', filename='test_xdist.pdf')
             # plot2d(zdist, label='z distance[pkpc]', filename='test_zdist.pdf')
@@ -940,9 +941,6 @@ def benedetta_vis_sample():
 
 def erica_tng50_sfrmaps():
     """Render some SFR surface density maps of TNG50 galaxies for Nelson, E.+2021 vs. 3D-HST paper."""
-    from ...util import simParams
-    from ...util.helper import closest
-
     # select halo
     sP = simParams(run="tng50-1", redshift=1.0)
     mstar = sP.subhalos("mstar_30pkpc_log")

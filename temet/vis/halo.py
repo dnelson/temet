@@ -10,6 +10,7 @@ from os.path import isfile
 import numpy as np
 
 from ..util import simParams
+from ..util.helper import evenlySample
 from ..util.rotation import (
     meanAngMomVector,
     momentOfInertiaTensor,
@@ -562,7 +563,6 @@ def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=Non
       selType (str): selection type within mass bin, one of "linear", "even", "random".
     """
     assert selType in ["linear", "even", "random"]
-    from ..util.helper import evenlySample
 
     gc = sP.groupCat(fieldsHalos=["Group_M_Crit200", "GroupFirstSub"])
     haloMasses = sP.units.codeMassToLogMsun(gc["halos"]["Group_M_Crit200"])
@@ -623,7 +623,6 @@ def selectHalosFromMassBins(sP, massBins, numPerBin, selType="linear"):
       selType (str): selection type within mass bin, one of "linear", "even", "random".
     """
     assert selType in ["linear", "even", "random"]
-    from ..util.helper import evenlySample
 
     gc = sP.groupCat(fieldsHalos=["Group_M_Crit200"])
     haloMasses = sP.units.codeMassToLogMsun(gc)

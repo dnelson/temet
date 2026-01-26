@@ -14,20 +14,8 @@ from scipy.stats import binned_statistic_2d
 
 from ..cosmo.util import subsampleRandomSubhalos
 from ..plot.config import figsize, linestyles, sKn, sKo
-from ..util.helper import (
-    binned_stat_2d,
-    getWhiteBlackColors,
-    iterable,
-    kde_2d,
-    loadColorTable,
-    logZeroNaN,
-    lowess,
-    running_median,
-    running_median_sub,
-    sampleColorTable,
-    setAxisColors,
-    setColorbarColors,
-)
+from ..plot.util import getWhiteBlackColors, loadColorTable, sampleColorTable, setAxisColors, setColorbarColors
+from ..util.helper import binned_stat_2d, iterable, kde_2d, logZeroNaN, lowess, running_median, running_median_sub
 
 
 def addRedshiftAxis(ax, sP, zVals=(0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 10.0)):

@@ -4,9 +4,11 @@ Render specific fullbox (movie frame) visualizations.
 
 import numpy as np
 
+from ..cosmo.time_evo import subhalo_subbox_overlap
 from ..cosmo.util import subboxSubhaloCat
+from ..plot.util import setAxisColors
 from ..util import simParams
-from ..util.helper import logZeroNaN, setAxisColors
+from ..util.helper import logZeroNaN
 from ..util.rotation import rotationMatrixFromAngleDirection
 from ..vis.box import renderBox, renderBoxFrames
 from ..vis.common import savePathBase
@@ -494,8 +496,6 @@ def subbox_movie_tng_galaxyevo_frame(
     If frameNum is not None, then use this for save filename instead of sbSnapNum.
     If rotSeqFrameNum is not None, then proceed to render rotation squence (at fixed time iff sbSnapNum is kept fixed).
     """
-    from ..projects.outflows_analysis import subhalo_subbox_overlap
-
     if 0:
         # helper to make subhalo selection
         sP = simParams(res=2160, run="tng", snap=90)

@@ -17,9 +17,10 @@ from scipy.interpolate import interp1d
 from ..cosmo.mergertree import mpbPositionComplete
 from ..cosmo.time_evo import halosTimeEvoFullbox, halosTimeEvoSubbox, subhalo_subbox_overlap
 from ..plot.config import linestyles
-from ..projects.outflows_analysis import halo_selection
+from ..plot.util import getWhiteBlackColors, loadColorTable, setAxisColors, setColorbarColors
+from ..projects.outflows import halo_selection
 from ..util import simParams
-from ..util.helper import closest, getWhiteBlackColors, loadColorTable, logZeroNaN, setAxisColors, setColorbarColors
+from ..util.helper import closest, logZeroNaN
 from ..util.rotation import rotationMatrixFromAngleDirection
 from ..vis.box import renderBox
 from ..vis.halo import renderSingleHalo

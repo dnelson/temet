@@ -17,8 +17,9 @@ from scipy.signal import savgol_filter
 
 from ..plot import subhalos
 from ..plot.config import colors, linestyles, lw, sKn, sKo
+from ..plot.util import loadColorTable
 from ..util import simParams
-from ..util.helper import last_nonzero, loadColorTable, logZeroNaN, running_median
+from ..util.helper import last_nonzero, logZeroNaN, reportMemory, running_median
 from ..util.treeSearch import buildFullTree, calcHsml, calcParticleIndices, calcQuantReduction
 from ..vis.halo import renderSingleHalo
 
@@ -322,8 +323,6 @@ def healpixThresholdedRadius(sP, pSplit=None, ptType="Gas", quant="Temp", radMax
 
 def local_gas_subset(sP, haloID=0, maxRadR200=5.2, useTree=True):
     """Obtain and cache a set of gas cells in the vicinity of a halo. Debugging only, independent of the auxCats."""
-    from ..util.helper import reportMemory
-
     gas_local = {}
 
     # cache

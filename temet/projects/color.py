@@ -21,6 +21,7 @@ from ..cosmo.color import calcSDSSColors, loadSimGalColors
 from ..plot import subhalos
 from ..plot.config import binSize, colors, cssLabels, figsize, linestyles, lw, pStyle, sKn, sKo
 from ..plot.quantities import bandMagRange, simSubhaloQuantity
+from ..plot.util import getWhiteBlackColors, loadColorTable, setAxisColors
 from ..projects.color_analysis import (
     calcColorEvoTracks,
     characterizeColorMassPlane,
@@ -28,16 +29,7 @@ from ..projects.color_analysis import (
     defSimColorModel,
 )
 from ..util import simParams
-from ..util.helper import (
-    closest,
-    getWhiteBlackColors,
-    kde_2d,
-    leastsq_fit,
-    loadColorTable,
-    logZeroNaN,
-    running_median,
-    setAxisColors,
-)
+from ..util.helper import closest, kde_2d, leastsq_fit, logZeroNaN, running_median
 from ..util.match import match
 
 

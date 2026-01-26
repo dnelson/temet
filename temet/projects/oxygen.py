@@ -24,9 +24,9 @@ from ..plot import snapshot, subhalos
 from ..plot.cloudy import ionAbundFracs2DHistos
 from ..plot.config import colors, figsize, linestyles, lw, sKn, sKo
 from ..plot.quantities import quantList
-from ..plot.snapshot import _resolutionLineHelper
+from ..plot.util import add_resolution_lines, loadColorTable
 from ..util import simParams
-from ..util.helper import closest, loadColorTable, logZeroNaN, reducedChiSq, running_median
+from ..util.helper import closest, logZeroNaN, reducedChiSq, running_median
 from ..util.match import match
 
 
@@ -1018,7 +1018,7 @@ def stackedRadialProfiles(
                     txt.append(txt_mb)
 
     # gray resolution band at small radius
-    # _resolutionLineHelper(ax, sPs[0], radRelToVirRad, rvirs=rvirs)
+    # add_resolution_lines(ax, sPs[0], radRelToVirRad, rvirs=rvirs)
 
     # print
     for k in range(len(txt)):  # loop over mass bins (separate file for each)
@@ -1178,7 +1178,7 @@ def ionTwoPointCorrelation(sPs, saveName, ions, redshift=0.0, order=0, colorOff=
                     ax.fill_between(x_plot, yy0, yy1, color=l.get_color(), interpolate=True, alpha=alphaFill)
 
     # gray resolution band at small radius
-    _resolutionLineHelper(ax, sPs[0], corrMaxBox=True)
+    add_resolution_lines(ax, sPs[0], corrMaxBox=True)
 
     # legend
     sExtra = []

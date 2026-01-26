@@ -12,16 +12,8 @@ from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
 
 from ..plot.config import figsize, linestyles, lw, sKn, sKo
-from ..util.helper import (
-    cache,
-    closest,
-    gaussian_filter_nan,
-    iterable,
-    loadColorTable,
-    logZeroNaN,
-    running_median,
-    sampleColorTable,
-)
+from ..plot.util import loadColorTable, sampleColorTable
+from ..util.helper import cache, closest, gaussian_filter_nan, iterable, logZeroNaN, running_median
 from ..util.match import match
 
 
@@ -1042,80 +1034,6 @@ def median(
     plotType = "Median" if np.sum([total, totalCum]) == 0 else ("Total" if total else "TotalCum")
     fig.savefig("particle%s_%s_%s-vs-%s_%s_%s.pdf" % (plotType, partType, xQuant, yQuant, sStr, hStr))
     plt.close(fig)
-
-
-def _resolutionLineHelper(ax, sPs, radRelToVirRad=False, rvirs=None, corrMaxBox=False, labelMaxRad=False):
-    """Helper: add some resolution lines to an x-axis of distance (i.e. radial profiles) at small radius."""
-    if not isinstance(sPs, list):
-        sPs = [sPs]
-
-    yOff = (ax.get_ylim()[1] - ax.get_ylim()[0]) / 40
-    xOff = 0.02
-    textOpts = {"ha": "right", "va": "bottom", "rotation": 90, "color": "#555555", "alpha": 0.2}
-    resLimitText = r"Resolution Limit ($2 \epsilon_{\rm grav}$)"
-
-    yy = np.array(ax.get_ylim())
-    xx = np.array(ax.get_xlim())
-
-    def _get_res_pkpc(sP):
-        """Helper. Return 'resolution' for sP at its redshift."""
-        res_pkpc = sP.units.codeLengthToKpc(2.0 * sP.gravSoft)
-
-        if sP.redshift < 1.0:
-            # Illustris/TNG: comoving at z>=1, then fixed to z=1 values at z<1
-            sP_z1 = sP.copy()
-            sP_z1.setRedshift(1.0)
-            res_pkpc = sP_z1.units.codeLengthToKpc(2.0 * sP.gravSoft)
-
-        return res_pkpc
-
-    # xaxis = pkpc [log]
-    if not radRelToVirRad:
-        # loop over runs, could have different resolutions (or redshifts)
-        for i, sP in enumerate(sPs):
-            # determine 'resolution' in pkpc
-            if labelMaxRad and not corrMaxBox:
-                ax.text(xx[1] - xOff, yy[0] + yOff, "%d Mpc" % (10.0 ** xx[1] / 1000.0), **textOpts)
-
-            xx[1] = np.log10(_get_res_pkpc(sP))  # log [pkpc]
-            ax.fill_between(xx, [yy[0], yy[0]], [yy[1], yy[1]], color="#555555", alpha=0.1)
-            if i == 0:
-                ax.text(xx[1] - xOff, yy[0] + yOff, resLimitText, **textOpts)
-    else:
-        # xaxis = r/rvir [log]
-        if labelMaxRad:
-            minMpc = (10.0 ** xx[1]) * sP.units.codeLengthToKpc(rvirs[0]) / 1000.0
-            maxMpc = (10.0 ** xx[1]) * sP.units.codeLengthToKpc(rvirs[-1]) / 1000.0
-            ax.text(xx[1] - xOff, yy[0] + yOff, "%d Mpc $\\rightarrow$ %d Mpc" % (minMpc, maxMpc), **textOpts)
-
-        for k, rvir in enumerate(rvirs):
-            # can have either 1 rvir for each sP, or 1 rvir for each massbin (only one sP)
-            sP = sPs[k] if len(sPs) > 1 else sPs[0]
-
-            xx[1] = np.log10(_get_res_pkpc(sP) / sP.units.codeLengthToKpc(rvir))
-            ax.fill_between(xx, [yy[0], yy[0]], [yy[1], yy[1]], color="#555555", alpha=0.1 / len(rvirs))
-
-        # write text, find first (leftmost) inside bounds
-        for k in range(len(rvirs) - 1, 0, -1):
-            sP = sPs[k] if len(sPs) > 1 else sPs[0]
-            xx = np.log10(_get_res_pkpc(sP) / sP.units.codeLengthToKpc(rvirs[k]))
-            if xx >= ax.get_xlim()[0] + 4 * xOff:
-                ax.text(xx - xOff, yy[0] + yOff, resLimitText, **textOpts)
-                break
-
-        if corrMaxBox:
-            # show maximum separation scale at which tpcf is trustable (~5 Mpc/h for TNG100, ~20 Mpc/h for TNG300)
-            boxBandPKpc = sP.units.codeLengthToKpc(sP.boxSize / 15.0)  # default
-            if sP.boxSize == 75000.0:
-                boxBandPKpc = sP.units.codeLengthToKpc(5000.0)
-            if sP.boxSize == 205000.0:
-                boxBandPKpc = sP.units.codeLengthToKpc(5000.0 * (50 / 20))
-
-            xx = np.array(ax.get_xlim())
-            xx[0] = np.log10(boxBandPKpc)
-
-            ax.fill_between(xx, [yy[0], yy[0]], [yy[1], yy[1]], color="#333333", alpha=0.05)
-            ax.text(xx[0] - xOff, yy[0] + yOff + 2.0, "Box Size Limit", **textOpts)
 
 
 def profilesStacked1d(

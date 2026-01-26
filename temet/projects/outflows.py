@@ -22,10 +22,10 @@ from ..cosmo.mergertree import loadMPBs
 from ..cosmo.time_evo import halosTimeEvoFullbox, halosTimeEvoSubbox, subhalo_subbox_overlap
 from ..plot import snapshot, subhalos
 from ..plot.config import colors, figsize, linestyles, lw, markers, sKn, sKo
-from ..plot.snapshot import _resolutionLineHelper
+from ..plot.util import add_halo_size_scales, add_resolution_lines, loadColorTable
 from ..projects.outflows_vis import galaxyMosaic_topN, singleHaloDemonstrationImage, subboxOutflowTimeEvoPanels
 from ..util import simParams
-from ..util.helper import evenlySample, loadColorTable, logZeroNaN, nUnique, running_median, sgolay2d
+from ..util.helper import closest, evenlySample, logZeroNaN, nUnique, running_median, sgolay2d
 from ..util.match import match
 
 
@@ -44,7 +44,6 @@ labels = {
 def sample_comparison_z2_sins_ao(sP):
     """Compare available galaxies vs. the SINS-AO sample of ~35 systems."""
     from ..load.data import foersterSchreiber2018
-    from ..util.helper import closest
 
     # config
     xlim = [9.0, 12.0]
@@ -2272,79 +2271,6 @@ def gasOutflowRates2DStacked(
         pdf.close()
 
 
-def _haloSizeScalesHelper(ax, sP, field, xaxis, massBins, i, k, avg_rvir_code, avg_rhalf_code, avg_re_code, c):
-    """Helper to draw lines at given fixed or adaptive sizes, i.e. rvir fractions, in radial profile plots."""
-    textOpts = {"va": "bottom", "ha": "right", "fontsize": 16.0, "alpha": 0.1, "rotation": 90}
-    lim = ax.get_ylim()
-    y1 = np.array([lim[1], lim[1] - (lim[1] - lim[0]) * 0.1]) - (lim[1] - lim[0]) / 40
-    y2 = np.array([lim[0], lim[0] + (lim[1] - lim[0]) * 0.1]) + (lim[1] - lim[0]) / 40
-    xoff = (ax.get_xlim()[1] - ax.get_xlim()[0]) / 150
-
-    if xaxis in ["log_rvir", "rvir", "log_rhalf", "rhalf", "log_re", "re"]:
-        y1[1] -= (lim[1] - lim[0]) * 0.02 * (len(massBins) - k)  # lengthen
-
-        if "re" in xaxis:
-            divisor = avg_re_code
-        if "rvir" in xaxis:
-            divisor = avg_rvir_code
-        if "rhalf" in xaxis:
-            divisor = avg_rhalf_code
-
-        # 50 kpc at the top
-        num_kpc = 20 if "rvir" in xaxis else 10
-        rvir_Npkpc_ratio = sP.units.physicalKpcToCodeLength(num_kpc) / divisor
-        xrvir = [rvir_Npkpc_ratio, rvir_Npkpc_ratio]
-        if "log_" in xaxis:
-            xrvir = np.log10(xrvir)
-
-        ax.plot(xrvir, y1, lw=lw * 1.5, ls=linestyles[i], color=c, alpha=0.1)
-        if k == len(massBins) - 1 and i == 0:
-            ax.text(xrvir[0] - xoff, y1[1], "%d kpc" % num_kpc, color=c, **textOpts)
-
-        # 10 kpc at the bottom
-        num_kpc = 5
-        rvir_Npkpc_ratio = sP.units.physicalKpcToCodeLength(num_kpc) / divisor
-        xrvir = [rvir_Npkpc_ratio, rvir_Npkpc_ratio]
-        if "log_" in xaxis:
-            xrvir = np.log10(xrvir)
-
-        ax.plot(xrvir, y2, lw=lw * 1.5, ls=linestyles[i], color=c, alpha=0.1)
-        if k == 0 and i == 0:
-            ax.text(xrvir[0] - xoff, y2[0], "%d kpc" % num_kpc, color=c, **textOpts)
-
-    elif xaxis in ["log_pkpc", "pkpc"]:
-        y1[1] -= (lim[1] - lim[0]) * 0.02 * k  # lengthen
-
-        # Rvir at the top
-        rVirFac = 10 if "log" in xaxis else 5
-        xrvir = [avg_rvir_code / rVirFac, avg_rvir_code / rVirFac]
-        if "log_" in xaxis:
-            xrvir = np.log10(xrvir)
-        textStr = r"R$_{\rm vir}$/%d" % rVirFac
-
-        if 1:  # i == 0 or i == len(sPs)-1: # only at first/last redshift, since largely overlapping
-            ax.plot(xrvir, y1, lw=lw * 1.5, ls=linestyles[i], color=c, alpha=0.1)
-            if k == 0 and i == 0:
-                ax.text(xrvir[0] - xoff, y1[1], textStr, color=c, **textOpts)
-
-        # Rhalf at the bottom
-        rHalfFac = 2 if "log" in xaxis else 10
-        targetK = len(massBins) - 1  # largest
-        if field == "SFR" and "log" in xaxis:  # special case
-            rHalfFac = 1
-            targetK = 0
-
-        xrvir = [rHalfFac * avg_rhalf_code, rHalfFac * avg_rhalf_code]
-        if "log_" in xaxis:
-            xrvir = np.log10(xrvir)
-        textStr = r"%dr$_{1/2,\star}$" % rHalfFac if rHalfFac != 1 else r"r$_{1/2,\star}$"
-
-        if 1:  # i == 0 or i == len(sPs)-1:
-            ax.plot(xrvir, y2, lw=lw * 1.5, ls=linestyles[i], color=c, alpha=0.1)
-            if k == targetK and i == 0:
-                ax.text(xrvir[0] - xoff, y2[0], textStr, color=c, **textOpts)
-
-
 def stackedRadialProfiles(
     sPs,
     field,
@@ -2695,7 +2621,7 @@ def stackedRadialProfiles(
             txt_mb["yy_1"] = yp[-1, :]
 
             # draw rvir lines (or 100pkpc lines if x-axis is already relative to rvir)
-            _haloSizeScalesHelper(
+            add_halo_size_scales(
                 ax, sP, field, xaxis, massBins, i, k, avg_rvir_code, avg_rhalf_code, avg_re_code, colors[k]
             )
 
@@ -2711,7 +2637,7 @@ def stackedRadialProfiles(
 
     # gray resolution band at small radius
     if xaxis in ["log_rvir", "log_pkpc"]:
-        _resolutionLineHelper(ax, sPs, xaxis == "log_rvir", rvirs=rvirs)
+        add_resolution_lines(ax, sPs, xaxis == "log_rvir", rvirs=rvirs)
 
     # print
     # for k in range(len(txt)): # loop over mass bins (separate file for each)

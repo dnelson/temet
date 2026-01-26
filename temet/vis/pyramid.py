@@ -801,7 +801,7 @@ def combine4All():
 
 def pyramidTNG(fieldName="gassynch"):
     """Combine files for TNG Explorer2D and write out image pyramid files."""
-    from ..util.helper import loadColorTable
+    from ..plot.util import loadColorTable
     from ..vis.boxDrivers import TNG_explorerImageSegments
     from ..vis.render import gridBox
 

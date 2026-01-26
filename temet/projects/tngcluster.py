@@ -19,8 +19,9 @@ from ..cosmo.zooms import contamination_mindist
 from ..plot import subhalos
 from ..plot.config import colors, figsize, lw, markers, sKn, sKo
 from ..plot.cosmoMisc import simClustersComparison
+from ..plot.util import loadColorTable
 from ..util import simParams
-from ..util.helper import loadColorTable, logZeroNaN, running_median
+from ..util.helper import logZeroNaN, running_median
 from ..util.match import match
 
 

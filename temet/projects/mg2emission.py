@@ -17,8 +17,9 @@ from scipy.stats import binned_statistic
 from ..cosmo.util import subsampleRandomSubhalos
 from ..plot import snapshot, subhalos
 from ..plot.config import figsize_sm, linestyles, percs, sKn, sKo
+from ..plot.util import loadColorTable, sampleColorTable
 from ..util import simParams
-from ..util.helper import dist_theta_grid, loadColorTable, logZeroNaN, mvbe, sampleColorTable
+from ..util.helper import dist_theta_grid, logZeroNaN, mvbe
 from ..vis.halo import renderSingleHalo
 
 

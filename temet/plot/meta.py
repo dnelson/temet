@@ -11,12 +11,11 @@ from matplotlib.dates import DateFormatter, DayLocator
 from scipy.signal import savgol_filter
 
 from ..plot.config import figsize, linestyles, lw
+from ..plot.util import getWhiteBlackColors, setAxisColors
 
 
 def plotUsersData():
     """Parse and plot a user data dump from the Illustris[TNG] public data release website."""
-    from ..util.helper import getWhiteBlackColors, setAxisColors
-
     # config
     col_headers = [
         "Date",
@@ -221,8 +220,6 @@ def plotNumPublicationsVsTime():
     from time import mktime
 
     import requests
-
-    from ..util.helper import getWhiteBlackColors, setAxisColors
 
     num_start = 10  # align 'time=0' after this number of publications have appeared
     xlim = [-0.6, 8.0]  # years, [-3.2, 7.0] for num_start=100
@@ -533,7 +530,7 @@ def periodic_slurm_status(machine="vera", nosave=False):
 
     # get data
     jobs = pyslurm.job().get()
-    # topo  = pyslurm.topology().get()
+    topo = None  # pyslurm.topology().get() # throwing error
     stats = pyslurm.statistics().get()
     nodes = pyslurm.node().get()
     parts = None  # pyslurm.partition().get() # throwing error

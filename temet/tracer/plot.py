@@ -15,9 +15,10 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from ..cosmo.util import redshiftToSnapNum, snapNumToRedshift
 from ..plot.config import colors, linestyles
+from ..plot.util import loadColorTable
 from ..tracer import evolution
 from ..util import simParams
-from ..util.helper import closest, loadColorTable, logZeroSafe
+from ..util.helper import closest, logZeroSafe
 
 
 modes = {

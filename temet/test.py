@@ -1899,7 +1899,7 @@ def vis_cholla_snapshot():
     from matplotlib.colors import Normalize
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-    from .util.helper import loadColorTable
+    from .plot.util import loadColorTable
 
     for field in data:
         print("plotting: [%s]" % field)

@@ -5,7 +5,7 @@ import pathlib
 import matplotlib
 import matplotlib.pyplot as plt
 
-from . import clustering, cosmoMisc, drivers, driversObs, driversSizes, meta, perf, quantities, snapshot, subhalos
+from . import clustering, cosmoMisc, drivers, driversObs, driversSizes, meta, perf, quantities, snapshot, subhalos, util
 
 
 matplotlib.use("Agg")

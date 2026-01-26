@@ -12,7 +12,7 @@ from numba import jit
 from scipy.interpolate import interp1d
 from scipy.ndimage import map_coordinates
 
-from ..util.helper import iterable, logZeroMin, rootPath, trapsum
+from ..util.helper import iterable, logZeroMin, logZeroNaN, rootPath, trapsum
 from ..util.rotation import rotateCoordinateArray, rotationMatrixFromVec
 from ..util.sphMap import sphMap
 
@@ -1358,7 +1358,6 @@ def debug_dust_plots():
     import matplotlib.pyplot as plt
 
     from ..util import simParams
-    from ..util.helper import logZeroNaN
 
     sP = simParams(res=1820, run="tng", redshift=0.0)
 

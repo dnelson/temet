@@ -11,8 +11,9 @@ import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.ndimage import gaussian_filter
 
+from ..plot.util import loadColorTable, setAxisColors
 from ..util.boxRemap import remapPositions
-from ..util.helper import loadColorTable, pSplitRange, setAxisColors
+from ..util.helper import pSplitRange
 from ..util.rotation import rotateCoordinateArray
 from ..vis.quantities import gridOutputProcess
 from ..vis.render import defaultHsmlFac, gridBox

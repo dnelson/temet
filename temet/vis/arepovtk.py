@@ -496,8 +496,9 @@ def writeColorTable(ctName="inferno"):
 
 def writeColormapPNGs():
     """Output .png images of colormaps for loading as textures in three.js / Explorer3D volume rendering."""
-    from ..util.helper import validColorTableNames
-    from ..util.png import Writer as pngWriter
+    from png import Writer
+
+    from ..plot.util import validColorTableNames
 
     ctNames = [ctName for ctName in validColorTableNames() if "_r" not in ctName and ctName[-1] != "0"]
     for ctName in ["HI_segmented", "H2_segmented"]:
@@ -515,5 +516,5 @@ def writeColormapPNGs():
             rgb = rgb[:, 0:3]  # discard alpha channel (always unity)
 
         with open(ctName.lower() + ".png", "wb") as img:
-            writer = pngWriter(rgb.shape[0], 1, alpha=False, bitdepth=8)  # 1 is height
+            writer = Writer(rgb.shape[0], 1, alpha=False, bitdepth=8)  # 1 is height
             writer.write(img, np.reshape(rgb, (-1, rgb.shape[0] * 1 * rgb.shape[1])))

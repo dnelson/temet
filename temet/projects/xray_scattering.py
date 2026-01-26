@@ -15,8 +15,9 @@ from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 
 from ..plot.config import figsize, figsize_sm, linestyles, lw, percs, sKn, sKo
+from ..plot.util import loadColorTable
 from ..util import simParams
-from ..util.helper import dist_theta_grid, loadColorTable, logZeroNaN, running_median
+from ..util.helper import dist_theta_grid, logZeroNaN, running_median
 from ..vis.box import renderBox
 
 

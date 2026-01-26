@@ -13,8 +13,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from ...plot.config import figsize, lw
+from ...plot.util import sampleColorTable
 from ...util import simParams
-from ...util.helper import dist_theta_grid, logZeroNaN, running_median, sampleColorTable
+from ...util.helper import dist_theta_grid, logZeroNaN, running_median
 from ...vis.halo import renderSingleHalo
 
 

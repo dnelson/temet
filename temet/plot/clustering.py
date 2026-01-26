@@ -10,7 +10,8 @@ from matplotlib import gridspec
 
 from ..cosmo.clustering import conformityRedFrac, twoPointAutoCorrelationPeriodicCube
 from ..plot.config import colors, cssLabels, figsize, linestyles, lw
-from ..util.helper import logZeroNaN, sampleColorTable, setAxisColors
+from ..plot.util import sampleColorTable, setAxisColors
+from ..util.helper import logZeroNaN
 from ..util.match import match
 
 

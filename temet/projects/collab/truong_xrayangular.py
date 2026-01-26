@@ -15,8 +15,9 @@ from scipy.interpolate import interp1d
 from scipy.stats import binned_statistic_2d
 
 from ...plot.config import figsize, linestyles, lw, percs
+from ...plot.util import sampleColorTable
 from ...util import simParams
-from ...util.helper import closest, dist_theta_grid, running_median, sampleColorTable
+from ...util.helper import closest, dist_theta_grid, running_median
 from ...vis.box import renderBox
 from ...vis.halo import renderSingleHalo
 

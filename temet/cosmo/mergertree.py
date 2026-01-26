@@ -510,7 +510,7 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
     from matplotlib.colors import Normalize
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-    from ..util.helper import loadColorTable, logZeroNaN
+    from ..plot.util import loadColorTable
 
     alpha = 0.7  # markers
     color = "#000000"  # lines

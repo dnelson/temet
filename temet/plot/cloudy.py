@@ -15,8 +15,9 @@ from ..cosmo.cloudy import cloudyIon
 from ..cosmo.cloudyGrid import loadUVB
 from ..cosmo.hydrogen import photoCrossSecGray, photoRate, uvbEnergyDensity
 from ..plot.config import figsize, linestyles
+from ..plot.util import contourf, loadColorTable, sampleColorTable
 from ..util import simParams
-from ..util.helper import closest, contourf, evenlySample, loadColorTable, logZeroNaN, rootPath, sampleColorTable
+from ..util.helper import closest, evenlySample, logZeroNaN, rootPath
 
 
 def plotUVB(uvb="FG11"):

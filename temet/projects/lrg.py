@@ -20,6 +20,7 @@ from ..cosmo.util import subboxSubhaloCat
 from ..load.data import berg2019, chen2018zahedy2019, werk2013
 from ..plot import snapshot, subhalos
 from ..plot.config import colors, figsize, figsize_sm, linestyles, percs, sKn, sKo
+from ..plot.util import loadColorTable
 from ..projects.oxygen import (
     ionTwoPointCorrelation,
     obsColumnsDataPlotExtended,
@@ -31,7 +32,7 @@ from ..projects.oxygen import (
 from ..tracer import evolution as tracerEvo
 from ..tracer.montecarlo import globalAllTracersTimeEvo
 from ..util import simParams
-from ..util.helper import loadColorTable, logZeroNaN, running_median
+from ..util.helper import logZeroNaN, periodicDistsN, running_median
 from ..util.match import match
 from ..util.voronoi import voronoiThresholdSegmentation
 from ..vis.box import renderBox
@@ -998,8 +999,6 @@ def lrgHaloVisResolution(sP, haloIDs, sPs_other):
 
 def _shrinking_center(sP, xyz, frac_stop=0.1, drop_frac_per_iter=0.05):
     """Shrinking center algorithm: iteratively search for a center position given a [N,3] coordinate set."""
-    from ..util.helper import periodicDistsN
-
     # starting state
     mask = np.zeros(xyz.shape[0], dtype="int16") + 1
 

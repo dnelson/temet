@@ -13,7 +13,8 @@ from scipy.interpolate import interp1d
 
 from ..load.simtxt import loadCpuTxt, loadTimebinsTxt
 from ..plot.config import figsize
-from ..util.helper import closest, getWhiteBlackColors, setAxisColors
+from ..plot.util import getWhiteBlackColors, setAxisColors
+from ..util.helper import closest
 
 
 def _redshiftAxisHelper(ax):
