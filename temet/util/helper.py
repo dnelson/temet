@@ -1469,6 +1469,26 @@ def getWhiteBlackColors(pStyle):
     return color1, color2, color3, color4
 
 
+def colorTriplets():
+    """Some useful color triplets, i.e. plotting vs resolution (vis/ColorWheel-Base.png - outer/3rd/6th rings)."""
+    colors = {}
+
+    colors["red"] = ["#94070a", "#ce181e", "#f37b70"]
+    colors["maroon"] = ["#680059", "#8f187c", "#bd7cb5"]
+    colors["purple"] = ["#390a5d", "#512480", "#826aaf"]
+    colors["navy"] = ["#9d1f63", "#1c3687", "#5565af"]
+    colors["blue"] = ["#003d73", "#00599d", "#5e8ac7"]
+    colors["teal"] = ["#006d6f", "#009598", "#59c5c7"]
+    colors["green"] = ["#006c3b", "#009353", "#65c295"]
+    colors["lime"] = ["#407927", "#62a73b", "#add58a"]
+    colors["yellow"] = ["#a09600", "#e3d200", "#fff685"]
+    colors["brown"] = ["#9a6704", "#d99116", "#fdc578"]
+    colors["orange"] = ["#985006", "#d4711a", "#f9a870"]
+    colors["pink"] = ["#95231f", "#cf3834", "#f68e76"]
+
+    return colors
+
+
 def setAxisColors(ax, color2, color1=None):
     """Factor out common axis color commands."""
     if color1 is None:
