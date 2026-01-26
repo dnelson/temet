@@ -2,12 +2,37 @@
 Cosmological simulations - auxiliary catalogs (of radial profiles).
 """
 
+import healpy
 import numpy as np
 
 from ..catalog.common import pSplitBounds, userCustomFields
 from ..util.helper import binned_statistic_weighted, numPartToChunkLoadSize
 from ..util.rotation import momentOfInertiaTensor, rotateCoordinateArray, rotationMatricesFromInertiaTensor
 from ..util.treeSearch import buildFullTree, calcHsml, calcParticleIndices, calcQuantReduction
+
+
+def healpix_shells_points(nRad, Nside, radMin=0.0, radMax=5.0):
+    """Return a set of spherical shell sample points as defined by healpix."""
+    # generate one set sample positions on unit sphere
+    nProj = healpy.nside2npix(Nside)
+    projVecs = np.array(healpy.pix2vec(Nside, range(nProj), nest=True)).T  # [nProj,3]
+
+    # broadcast into nRad shells, radial coordinates in units of rvir
+    samplePoints = np.repeat(projVecs[:, np.newaxis, :], nRad, axis=1)  # [nProj,nRad,3]
+
+    radPts = np.linspace(radMin, radMax, nRad, endpoint=True)
+
+    # shift shells to radial distances
+    pts = samplePoints * radPts[np.newaxis, :, np.newaxis]
+
+    pts = np.reshape(pts, (nProj * nRad, 3))  # [N,3] for tree/search operations
+
+    # bin sizes
+    radBinSize = radPts[1] - radPts[0]  # r/rvir
+    # thetaBinSize = np.sqrt(180**2 / (3*np.pi*Nside**2)) # deg
+    # thetaBinSizeRvir = np.tan(np.deg2rad(thetaBinSize)) # angular spacing @ rvir, in units of rvir
+
+    return pts, nProj, radPts, radBinSize
 
 
 def subhaloRadialProfile(
@@ -85,8 +110,6 @@ def subhaloRadialProfile(
         For scopes `global` and `global_fof`, four profiles are saved: [all, self-halo, other-halo, diffuse],
         otherwise only a single 'all' profile is computed.
     """
-    from ..projects.rshock import healpix_shells_points
-
     assert op in ["sum", "mean", "median", "min", "max", "count", "kernel_mean", np.std]  # todo: or is a lambda
     assert scope in ["global", "global_fof", "global_spatial", "global_tngcluster", "subfind", "fof", "subfind_global"]
 

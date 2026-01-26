@@ -519,7 +519,6 @@ def oneRun_tempcheck():
 
 def compareRuns_RadProfiles():
     """Compare median radial profile of a quantity, differentiating between two runs."""
-    # from ..projects.oxygen import variantsMain as variants
     variants = ["0000", "0010"]
 
     sPs = []

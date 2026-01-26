@@ -677,7 +677,7 @@ def generate_set():
         # haloIDs += [1142, 1289] # z=5.5 grnr[np.where( (mhalo>10.0) & (mhalo<10.01) )[0][0:5]]
         # haloIDs += [167, 347] # z=5.5 grnr[np.where( (mhalo>10.5) & (mhalo<10.51) )[0][0:5]]
 
-        # see temet.projects.mcst.select_ics()
+        # see mcst.select_ics()
         # haloIDs = [844537, 848864, 836397, 857253, 768227] # mhalo = 8.0
         # haloIDs += [219612, 199174, 224856, 311384, 323459] # mhalo = 8.5
         # haloIDs += [73172, 72077, 66262, 73547, 62879] # mhalo = 9.0

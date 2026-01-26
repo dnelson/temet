@@ -215,7 +215,7 @@ def haloMassesVsDMOMatched():
 
 
 def simClustersComparison(masslimit="15"):
-    """Meta plot: place TNG-Cluster into its context of (N_clusters,resolution) for similar projects.
+    """Meta plot: place TNG-Cluster into its context of (N_clusters,resolution) for similar simulations.
 
     Args:
       masslimit (str): '14', '14.5', or '15'
@@ -299,7 +299,7 @@ def simClustersComparison(masslimit="15"):
         {"name": "FLAMINGO L2.8", "N_14": -1, "N_14.5": -1, "N_15": -1, "m_gas": 1.1e9, "Lbox_cMpch": 1900},
     ]
 
-    # set simulation data (for zoom projects)
+    # set simulation data (for zoom simulations)
     zooms = [
         {"name": "TNG-Cluster", "N_14": 356, "N_14.5": 299, "N_15": 92, "m_gas": 1.2e7},
         {"name": "MACSIS", "N_14": 390, "N_14.5": 300, "N_15": 300, "m_gas": 1.1e9},
@@ -1365,7 +1365,7 @@ def compareEOSFiles(doTempNotPres=False):
 
 
 def simHighZComparison():
-    """Meta plot: place MCST into its context of (res,halo mass) similar projects."""
+    """Meta plot: place MCST into its context of (res,halo mass) similar simulations."""
     msize = 10.0  # marker size
     fs1 = 15  # diagonal lines, cost labels, legend
     fs2 = 17  # sim name labels, particle number text
@@ -1484,7 +1484,7 @@ def simHighZComparison():
     k25_mhalo = [9.0, 9.0] + list(rng.uniform(low=8.9, high=9.1, size=23))
     k25_mgas = [4.0e4, 653] + [5.2e3] * 23
 
-    # set simulation data (for zoom projects)
+    # set simulation data (for zoom simulations)
     zooms = [
         {"name": "MCST", "M_halo": mcst_mhalo, "m_gas": mcst_mgas},
         {

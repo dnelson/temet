@@ -15,6 +15,7 @@ from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic
 
 from temet.cosmo.util import subsampleRandomSubhalos
+from temet.load.groupcat import catalog_field
 from temet.plot import snapshot, subhalos
 from temet.plot.config import figsize_sm, linestyles, percs, sKn, sKo
 from temet.plot.util import loadColorTable, sampleColorTable
@@ -1406,3 +1407,68 @@ def paperPlots():
         subhaloID = 465009  # 316152
         singleHaloImageMGII(sP, subhaloID, rotation="face-on", conf=9, cbars=False, font=28)
         # singleHaloImageMGII(sP, subhaloID, rotation='face-on', conf=10, cbars=False, font=28)
+
+
+# --- custom snapshot field registrations ---
+
+
+@catalog_field
+def inclination(sim, field):
+    """Galaxy inclination.
+
+    We have some particular datsets which generate a property, per subhalo,
+    for each of several random/selected inclinations. The return here is the only
+    case in which it is multidimensional, with the first axis corresponding to subhaloID.
+    This can transparently work through e.g. a cen/sat selection, and plotting.
+    NOTE: do not mix inclination* fields with others, as they do not correspond.
+    """
+    subInds, inclinations, _ = gridPropertyVsInclinations(sim, propName="inclination")
+
+    # stamp
+    vals = np.zeros((sim.numSubhalos, inclinations.shape[1]), dtype="float32")
+    vals.fill(np.nan)
+
+    vals[subInds, :] = inclinations
+
+
+inclination.label = r"Inclination"
+inclination.units = r"deg"
+inclination.limits = [0, 90]
+inclination.log = False
+
+
+@catalog_field
+def inclination_mg2_lumsize(sim, field):
+    """Half-light radii of MgII emission from the halo, as a function of inclination."""
+    subInds, inclinations, props = gridPropertyVsInclinations(sim, propName="mg2_lumsize")
+
+    # stamp
+    vals = np.zeros((sim.numSubhalos, inclinations.shape[1]), dtype="float32")
+    vals.fill(np.nan)
+
+    vals[subInds, :] = props
+
+
+inclination_mg2_lumsize.label = r"r$_{\rm 1/2,MgII}$"
+inclination_mg2_lumsize.units = r"kpc"
+inclination_mg2_lumsize.limits = [0, 30]
+inclination_mg2_lumsize.log = False
+
+
+@catalog_field(multi="inclination_mg2_shape_")
+def inclination_mg2_shape_(sim, field):
+    """Axis ratio (shape) of MgII emission from the halo, as a function of inclination."""
+    propName = field.split("inclination_")[1]
+    subInds, inclinations, props = gridPropertyVsInclinations(sim, propName=propName)
+
+    # stamp
+    vals = np.zeros((sim.numSubhalos, inclinations.shape[1]), dtype="float32")
+    vals.fill(np.nan)
+
+    vals[subInds, :] = props
+
+
+inclination_mg2_shape_.label = r"MgII (a/b) Axis Ratio"
+inclination_mg2_shape_.units = r""  # dimensionless
+inclination_mg2_shape_.limits = [0, 1]
+inclination_mg2_shape_.log = False

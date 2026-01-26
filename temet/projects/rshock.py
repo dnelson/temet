@@ -8,13 +8,13 @@ from os import mkdir
 from os.path import isdir, isfile
 
 import h5py
-import healpy
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 
+from temet.catalog.profile import healpix_shells_points
 from temet.plot import subhalos
 from temet.plot.config import colors, linestyles, lw, sKn, sKo
 from temet.plot.util import loadColorTable
@@ -62,30 +62,6 @@ def plotHealpixShells(rad, data, label, rads=None, clim=None, ctName="viridis", 
     # finish
     fig.savefig(saveFilename)
     plt.close(fig)
-
-
-def healpix_shells_points(nRad, Nside, radMin=0.0, radMax=5.0):
-    """Return a set of spherical shell sample points as defined by healpix."""
-    # generate one set sample positions on unit sphere
-    nProj = healpy.nside2npix(Nside)
-    projVecs = np.array(healpy.pix2vec(Nside, range(nProj), nest=True)).T  # [nProj,3]
-
-    # broadcast into nRad shells, radial coordinates in units of rvir
-    samplePoints = np.repeat(projVecs[:, np.newaxis, :], nRad, axis=1)  # [nProj,nRad,3]
-
-    radPts = np.linspace(radMin, radMax, nRad, endpoint=True)
-
-    # shift shells to radial distances
-    pts = samplePoints * radPts[np.newaxis, :, np.newaxis]
-
-    pts = np.reshape(pts, (nProj * nRad, 3))  # [N,3] for tree/search operations
-
-    # bin sizes
-    radBinSize = radPts[1] - radPts[0]  # r/rvir
-    # thetaBinSize = np.sqrt(180**2 / (3*np.pi*Nside**2)) # deg
-    # thetaBinSizeRvir = np.tan(np.deg2rad(thetaBinSize)) # angular spacing @ rvir, in units of rvir
-
-    return pts, nProj, radPts, radBinSize
 
 
 def _thresholded_radius(radPts, h2d, thresh_perc, inequality, saveBase=None):

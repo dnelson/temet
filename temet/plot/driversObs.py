@@ -2177,9 +2177,6 @@ def haloSynchrotronPower(sPs, pdf=None, xlim=(12.5, 15.5), ylim=(19, 26)):
 
 def plots():
     """Plot portfolio of global population comparisons between runs."""
-    from ..projects.color import galaxyColor2DPDFs, galaxyColorPDF  # todo: generalize, move out of projects/
-    from ..projects.oxygen import nOVIcddf  # todo: generalize, move out of projects/
-
     # run config
     sPs = []
 
@@ -2252,25 +2249,18 @@ def plots():
     if 0:
         nHIcddf(sPs, pdf)  # z=3
         nHIcddf(sPs, pdf, moment=1)
-        nOVIcddf(sPs, pdf)  # z=0.2
-        nOVIcddf(sPs, pdf, moment=1)
+        # todo: generalize nOVIcddf(), move out of projects/
+        # nOVIcddf(sPs, pdf)  # z=0.2
+        # nOVIcddf(sPs, pdf, moment=1)
         dlaMetallicityPDF(sPs, pdf)  # z=3
 
-    if 0:
-        cheapDustModel = "p07c_cf00dust_rad30pkpc"  #'p07c_cf00dust_res_conv_ns1_rad30pkpc' is very expensive to run
-        galaxyColorPDF(
-            sPs, pdf, bands=["u", "i"], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel]
-        )
-        galaxyColorPDF(
-            sPs, pdf, bands=["g", "r"], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel]
-        )
-        galaxyColorPDF(
-            sPs, pdf, bands=["r", "i"], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel]
-        )
-        galaxyColorPDF(
-            sPs, pdf, bands=["i", "z"], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel]
-        )
-        galaxyColor2DPDFs(sPs, pdf, simRedshift=zZero, simColorsModel=cheapDustModel)
+    # todo: generalize galaxyColorPDF(), move out of projects/
+    # cheapDustModel = "p07c_cf00dust_rad30pkpc"  #'p07c_cf00dust_res_conv_ns1_rad30pkpc' is very expensive to run
+    # galaxyColorPDF(sPs, pdf, bands=["u", "i"], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
+    # galaxyColorPDF(sPs, pdf, bands=["g", "r"], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
+    # galaxyColorPDF(sPs, pdf, bands=["r", "i"], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
+    # galaxyColorPDF(sPs, pdf, bands=["i", "z"], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
+    # galaxyColor2DPDFs(sPs, pdf, simRedshift=zZero, simColorsModel=cheapDustModel)
 
     velocityFunction(sPs, pdf, centralsOnly=False, simRedshift=zZero)
     stellarAges(sPs, pdf, centralsOnly=False, simRedshift=zZero)
