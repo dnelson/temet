@@ -621,9 +621,6 @@ def phaseSpace2d(
 
     if addHistX:
         # horizontal histogram on the top
-        fig.tight_layout()
-        fig.set_tight_layout(False)
-
         rect = ax.get_position().bounds  # [left,bottom,width,height]
         ax.set_position([rect[0], rect[1], rect[2], rect[3] - height - hpad * 2])
 
@@ -639,10 +636,6 @@ def phaseSpace2d(
 
     if addHistY:
         # vertical histogram on the right
-        if not addHistX:
-            fig.tight_layout()
-        fig.set_tight_layout(False)
-
         rect = ax.get_position().bounds  # [left,bottom,width,height]
         ax.set_position([rect[0], rect[1], rect[2] - width - wpad * 2, rect[3]])
 
@@ -736,7 +729,7 @@ def phaseSpace2d(
         if sP.run in ["structures"]:
             qLabels.append("z = %.1f" % sP.redshift)
 
-        handles = [plt.Line2D((0, 1), (0, 0), lw=0) for i in range(len(qLabels))]
+        handles = [plt.Line2D([0], [0], lw=0) for i in range(len(qLabels))]
         legend = ax.legend(handles, qLabels, borderpad=0.4, loc="upper right")
         ax.add_artist(legend)
 

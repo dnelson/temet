@@ -86,25 +86,25 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
         # if we have only one halo, vary the linestyle by variant or res (for e.g. quant lines vs redshift)
         if len(variants) > 1 and len(res) == 1:
             for i, variant in enumerate(variants):
-                handles.append(plt.Line2D((0, 1), (0, 0), color=colors[i], ls=linestyles[0]))
+                handles.append(plt.Line2D([0], [0], color=colors[i], ls=linestyles[0]))
                 labels.append("h%d_L%d_%s" % (hInds[0], res[0], variant))
         if len(res) > 1 and len(variants) == 1:
             for i, r in enumerate(res):
-                handles.append(plt.Line2D((0, 1), (0, 0), color=colors[i], ls=linestyles[0]))
+                handles.append(plt.Line2D([0], [0], color=colors[i], ls=linestyles[0]))
                 labels.append("h%d_L%d_%s" % (hInds[0], r, variants[0]))
         if len(res) > 1 and len(variants) > 1:
             for i, r in enumerate(res):
-                handles.append(plt.Line2D((0, 1), (0, 0), color=colors[i], ls="-"))
+                handles.append(plt.Line2D([0], [0], color=colors[i], ls="-"))
                 labels.append("h%d_L%d" % (hInds[0], r))
             for i, variant in enumerate(variants):
-                handles.append(plt.Line2D((0, 1), (0, 0), color="black", ls=linestyles[i]))
+                handles.append(plt.Line2D([0], [0], color="black", ls=linestyles[i]))
                 labels.append("%s" % variant)
     else:
         for hInd in hInds:
             # color by hInd
             c = colors[hInds.index(hInd)]
 
-            handles.append(plt.Line2D((0, 1), (0, 0), color=c, ls="-"))
+            handles.append(plt.Line2D([0], [0], color=c, ls="-"))
             labels.append("h%d" % hInd)
 
     legend = ax.legend(handles, labels, loc=locs[0], ncols=np.min([3, len(variants)]))
@@ -123,7 +123,7 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
             marker = markers[variants.index(variant)]
             ms = (r - 10) * 2.5 + 4
 
-            handles.append(plt.Line2D((0, 1), (0, 0), color="black", lw=0, marker=marker, ms=ms))
+            handles.append(plt.Line2D([0], [0], color="black", lw=0, marker=marker, ms=ms))
             labels.append("L%d_%s" % (r, variant))
 
     legend2 = ax.legend(handles, labels, loc=locs[1], ncols=np.min([2, len(variants)]))
@@ -229,13 +229,13 @@ def twoQuantScatterplot(
     if vstng50:
         sim_parent_relation = simParams(run="tng50-1", redshift=sim_parent.redshift)
 
-    parent_xvals, xlabel, xMinMax, xLog = sim_parent_relation.simSubhaloQuantity(xQuant, tight=True)
+    parent_xvals, xlabel, xMinMax, xLog = sim_parent_relation.simSubhaloQuantity(xQuant)
     if xlim is not None:
         xMinMax = xlim
     if xLog:
         parent_xvals = logZeroNaN(parent_xvals)
 
-    parent_yvals, ylabel, yMinMax, yLog = sim_parent_relation.simSubhaloQuantity(yQuant, tight=True)
+    parent_yvals, ylabel, yMinMax, yLog = sim_parent_relation.simSubhaloQuantity(yQuant)
     if ylim is not None:
         yMinMax = ylim
     if yLog:
@@ -274,8 +274,8 @@ def twoQuantScatterplot(
     # individual zoom runs
     for _i, sim in enumerate(sims):
         # load
-        xvals, _, _, _ = sim.simSubhaloQuantity(xQuant, tight=True)
-        yvals, _, _, _ = sim.simSubhaloQuantity(yQuant, tight=True)
+        xvals = sim.subhalos(xQuant)
+        yvals = sim.subhalos(yQuant)
 
         if xLog:
             xvals = logZeroNaN(xvals)
@@ -377,8 +377,8 @@ def twoQuantScatterplot(
     sim_parent_load = sim_parent.copy()
     sim_parent_load.setRedshift(sims[0].redshift)
 
-    xvals, _, _, _ = sim_parent_load.simSubhaloQuantity(xQuant, tight=True)
-    yvals, _, _, _ = sim_parent_load.simSubhaloQuantity(yQuant, tight=True)
+    xvals = sim_parent_load.subhalos(xQuant)
+    yvals = sim_parent_load.subhalos(yQuant)
 
     for i, hInd in enumerate(hInds):
         # zooms at a different redshift than the parent volume?
@@ -509,7 +509,7 @@ def quantVsRedshift(
         return star_zform, np.nan, star_mass
 
     # field metadata
-    _, ylabel, yMinMax, yLog = sims[0].simSubhaloQuantity(quant, tight=True)
+    _, ylabel, yMinMax, yLog = sims[0].simSubhaloQuantity(quant)
     if ylim is not None:
         yMinMax = ylim
     if sfh_lin:
@@ -551,7 +551,7 @@ def quantVsRedshift(
         subhaloIDs = _zoomSubhaloIDsToPlot(sim)
 
         # load
-        vals, _, _, valLog = sim.simSubhaloQuantity(quant, tight=True)
+        vals, _, _, valLog = sim.simSubhaloQuantity(quant)
 
         # loop over each subhalo
         for j, subhaloID in enumerate(subhaloIDs):
@@ -626,7 +626,7 @@ def quantVsRedshift(
                 ax.plot(mpb["z"], vals_track, ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha_loc)
 
     # galaxies from parent box
-    vals, _, _, _ = sim_parent.simSubhaloQuantity(quant, tight=True)
+    vals = sim_parent.subhalos(quant)
     parent_GroupFirstSub = sim_parent.halos("GroupFirstSub")
 
     for i, hInd in enumerate(hInds):
@@ -1175,7 +1175,7 @@ def diagnostic_numhalos_uncontaminated(sims):
     labels = [sim.simName]
 
     for i in range(max_num):
-        handles.append(plt.Line2D((0, 1), (0, 0), marker=markers[0], color=colors[i], lw=0))
+        handles.append(plt.Line2D([0], [0], marker=markers[0], color=colors[i], lw=0))
         labels.append("Halo ID#%d" % i)
 
     ax.legend(handles, labels, loc="upper left")

@@ -451,7 +451,7 @@ def makeColorBars():
     cb1.set_label(outNames[-1])
 
     # save
-    plt.savefig("test.pdf")  # , bbox_inches='tight')
+    plt.savefig("test.pdf")
     plt.close()
 
 

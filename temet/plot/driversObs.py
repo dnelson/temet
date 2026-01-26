@@ -1744,7 +1744,7 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
             ax.plot(xx, yy, lw=lw, linestyle=linestyles[i], color=colors[j], label=label)
 
     # legend
-    # sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=0.0,alpha=0.0,marker='')]
+    # sExtra = [plt.Line2D([0],[0],color='black',lw=0.0,alpha=0.0,marker='')]
     # lExtra = ['[ sims z=%3.1f ]' % simRedshift]
     sExtra = [plt.Line2D([0], [0], color="black", lw=lw, marker="", linestyle=ls) for ls in linestyles]
     lExtra = [str(s.replace("nH2_", "")) for s in speciesList]
@@ -2049,7 +2049,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
 
     sExtra = [plt.Line2D([0], [0], color="black", lw=lw, fmt=linestyles[i]) for i, ageType in enumerate(ageTypes)]
     lExtra = [", ".join(ageType.split("_")[2:]) for ageType in ageTypes]
-    # sExtra += [plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[2])]
+    # sExtra += [plt.Line2D([0], [0], color='black', lw=lw, marker='', linestyle=linestyles[2])]
     # lExtra += ['Guidi+ (2016) Correction']
 
     ax.legend(handles + sExtra, labels + lExtra, loc="lower right")

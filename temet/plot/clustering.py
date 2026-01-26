@@ -338,10 +338,10 @@ def galaxyTwoPointQuantBounds(
         if len(sPs) > 0:
             handles, labels = [], []
             for i, sP in enumerate(sPs):
-                handles.append(plt.Line2D((0, 1), (0, 0), color="black", lw=lw, marker="", linestyle=linestyles[i]))
+                handles.append(plt.Line2D([0], [0], color="black", lw=lw, marker="", linestyle=linestyles[i]))
                 labels.append(sP.simName + " z=%.1f" % sP.redshift)
             if colorBins is not None and len(colorBins) == 1:
-                handles.append(plt.Line2D((0, 1), (0, 0), color="black", lw=0.0, marker=""))
+                handles.append(plt.Line2D([0], [0], color="black", lw=0.0, marker=""))
 
             legend2 = ax.legend(handles, labels, loc="upper right")
             ax.add_artist(legend2)
@@ -455,7 +455,7 @@ def conformityWithRedFrac(sP, cenSatSelectSec="all"):
     legend1 = ax.legend(loc="upper left")
     ax.add_artist(legend1)
 
-    handles = [plt.Line2D((0, 1), (0, 0), color="black", lw=lw, marker="", linestyle=linestyles[i])]
+    handles = [plt.Line2D([0], [0], color="black", lw=lw, marker="", linestyle=linestyles[i])]
     labels = [sP.simName]
     legend2 = ax.legend(handles, labels, loc="upper right")
     ax.add_artist(legend2)

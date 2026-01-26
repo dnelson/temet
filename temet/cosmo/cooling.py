@@ -171,7 +171,7 @@ def grackle_cooling(densities, metallicity, uvb="fg20_shielded", redshift=0.0, s
         ]
         if PE:
             labels.append("(w/ PE heating)")
-        handles = [plt.Line2D((0, 1), (0, 0), color="black", lw=0) for _ in range(len(labels))]
+        handles = [plt.Line2D([0], [0], color="black", lw=0) for _ in range(len(labels))]
         # ax.add_artist(ax.legend(handles, labels, loc='lower left', handlelength=0))
         ax2.add_artist(ax2.legend(handles, labels, loc="upper left", handlelength=0))
 
@@ -521,7 +521,7 @@ def grackle_equil(ssm=3):
         "z = %s" % redshift,
         "self_shielding_method = %d" % ssm,
     ]
-    handles = [plt.Line2D((0, 1), (0, 0), color="black", lw=0) for _ in range(len(labels))]
+    handles = [plt.Line2D([0], [0], color="black", lw=0) for _ in range(len(labels))]
     ax1.add_artist(ax1.legend(handles, labels, loc="upper right", handlelength=0))
 
     ax1.legend(loc="lower left")

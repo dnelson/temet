@@ -80,7 +80,7 @@ def metallicityVsVradProjected(sP, shIDs=(440839,), directCells=False, distBin=N
 
     # start plot
     figsize_loc = (figsize[0] * 2, figsize[1] * 2)  # (figsize[1]*2,figsize[1]*2) # square
-    fig = plt.figure(figsize=figsize_loc, frameon=False, tight_layout=False, facecolor="black")
+    fig = plt.figure(figsize=figsize_loc, frameon=False, facecolor="black")
     ax = fig.add_axes([0, 0, 1, 1], facecolor="black")
     markersize = 3.0
 
@@ -462,7 +462,7 @@ def metallicityVsTheta(
         for i, massBin in enumerate(massBins):
             ls = ls_massbins[i]  # if len(distBins) > 1 else '-'
             c = colors[i] if len(distBins) == 1 else "black"
-            sExtra.append(plt.Line2D((0, 1), (0, 0), color=c, lw=lw, marker="", linestyle=ls))
+            sExtra.append(plt.Line2D([0], [0], color=c, lw=lw, marker="", linestyle=ls))
             lExtra.append("M$_\\star$ = %.1f" % np.mean(massBin))
         legend2 = ax.legend(sExtra, lExtra, ncol=2, loc="best")
         ax.add_artist(legend2)

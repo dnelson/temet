@@ -111,7 +111,7 @@ def galaxyColorPDF(
         ax.set_ylabel(ylabel)
 
         # add stellar mass bin legend
-        sExtra = [plt.Line2D((0, 1), (0, 0), color="black", lw=0.0, marker="", linestyle=linestyles[0])]
+        sExtra = [plt.Line2D([0], [0], color="black", lw=0.0, marker="", ls=linestyles[0])]
         lExtra = [Mlabel % (stellarMassBin[0], stellarMassBin[1])]
 
         legendPos = "upper left"
@@ -347,26 +347,26 @@ def galaxyColorPDF(
         legendPos = "lower left"
 
     handles, labels = axes[iLeg].get_legend_handles_labels()
-    handlesO = [plt.Line2D((0, 1), (0, 0), color=obs_color, lw=3.0, marker="", linestyle="-")]
+    handlesO = [plt.Line2D([0], [0], color=obs_color, lw=3.0, marker="", ls="-")]
     labelsO = ["SDSS z<0.1"]  # DR12 fspsGranWideDust
 
     if addPetro:
         labelsO[0] = "SDSS z<0.1 cModelMag"
-        handlesO.append(plt.Line2D((0, 1), (0, 0), color=petro_color, lw=3.0, marker="", linestyle="-"))
+        handlesO.append(plt.Line2D([0], [0], color=petro_color, lw=3.0, marker="", ls="-"))
         labelsO.append("SDSS z<0.1 Petrosian")
 
     axes[iLeg].legend(handlesO + handles, labelsO + labels, loc=legendPos)
 
     # legend (central/satellite split)
     if splitCenSat:
-        sExtra = [plt.Line2D((0, 1), (0, 0), color="black", lw=3.0, marker="", linestyle=ls) for ls in linestyles]
+        sExtra = [plt.Line2D([0], [0], color="black", lw=3.0, marker="", ls=ls) for ls in linestyles]
         lExtra = ["all galaxies", "centrals", "satellites"]
 
         handles, labels = axes[iLeg + 1].get_legend_handles_labels()
         axes[iLeg + 1].legend(handles + sExtra, labels + lExtra, loc="upper right")
 
     if allOnly and len(stellarMassBins) > 3:
-        sExtra = [plt.Line2D((0, 1), (0, 0), color="black", lw=3.0, marker="", linestyle=ls) for ls in linestyles[0:2]]
+        sExtra = [plt.Line2D([0], [0], color="black", lw=3.0, marker="", ls=ls) for ls in linestyles[0:2]]
         lExtra = ["all galaxies", "centrals only"]
 
         handles, labels = axes[0].get_legend_handles_labels()
@@ -593,7 +593,7 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
                 gc_colors, _ = loadSimGalColors(sP, simColorsModel, colorData=colorData, bands=bands, projs="random")
 
                 # config for this band
-                mag_range = bandMagRange(bands)  # , tight=True)
+                mag_range = bandMagRange(bands)
                 extent = [Mstar_range[0], Mstar_range[1], mag_range[0], mag_range[1]]
 
                 loopInds = range(1)  # total only
@@ -681,7 +681,7 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
                     #               colors=[c], alpha=cAlphas[k], linewidths=3.0, extent=extent)
 
         # legend (simulations) (obs)
-        hExtra = []  # [plt.Line2D( (0,1),(0,0),color=obs_color,lw=3.0,marker='',linestyle='-')]
+        hExtra = []  # [plt.Line2D([0],[0],color=obs_color,lw=3.0,marker='',linestyle='-')]
         lExtra = []  # ['SDSS z<0.1']
 
         handles, labels = axes2[0].get_legend_handles_labels()
@@ -725,7 +725,7 @@ def viewingAngleVariation():
     # start plot
     fig, ax = plt.subplots()
 
-    mag_range = [0.3, 0.85]  # bandMagRange(bands, tight=True)
+    mag_range = [0.3, 0.85]  # bandMagRange(bands)
     markers = ["o", "s", "D"]
     linestyles = [":", "-"]
     binSize = (mag_range[1] - mag_range[0]) / nBins
@@ -776,11 +776,11 @@ def viewingAngleVariation():
     # legend
     handles, labels = ax.get_legend_handles_labels()
     sExtra = [
-        plt.Line2D((0, 1), (0, 0), color="black", marker=markers[0], lw=0.0),
-        plt.Line2D((0, 1), (0, 0), color="black", marker=markers[1], lw=0.0),
-        # plt.Line2D( (0,1), (0,0), color='black', marker=markers[2], lw=0.0),
-        plt.Line2D((0, 1), (0, 0), color="black", linestyle=linestyles[0], lw=2.5),
-        plt.Line2D((0, 1), (0, 0), color="black", linestyle=linestyles[1], lw=2.5),
+        plt.Line2D([0], [0], color="black", marker=markers[0], lw=0.0),
+        plt.Line2D([0], [0], color="black", marker=markers[1], lw=0.0),
+        # plt.Line2D([0], [0], color="black", marker=markers[2], lw=0.0),
+        plt.Line2D([0], [0], color="black", linestyle=linestyles[0], lw=2.5),
+        plt.Line2D([0], [0], color="black", linestyle=linestyles[1], lw=2.5),
     ]
     lExtra = ["Model A", "Model B", "Model C, N$_{\\rm side}$ = 4", "Model C, N$_{\\rm side}$ = 8"]  #'Model D',
 
@@ -810,7 +810,7 @@ def colorFluxArrows2DEvo(
     if arrowMethod in ["stream", "stream_mass"]:
         nBins = 30
 
-    mag_range = bandMagRange(bands, tight=True)
+    mag_range = bandMagRange(bands)
 
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
 
@@ -1281,7 +1281,7 @@ def colorMassPlaneFitSummary(sPs, bands=("g", "r"), simColorsModel=defSimColorMo
                 lw = 2.0
                 lExtra.append("SDSS z<0.1")
 
-            sExtra.append(plt.Line2D((0, 1), (0, 0), color="black", lw=lw, marker=marker, linestyle=ls))
+            sExtra.append(plt.Line2D([0], [0], color="black", lw=lw, marker=marker, linestyle=ls))
 
             params = fits["%s_errors" % method][medianBin, :, :]  # medians
             errors = fits["%s_errors" % method]
@@ -1370,7 +1370,7 @@ def colorMassPlaneFits(sP, bands=("g", "r"), css="all", simColorsModel=defSimCol
 
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
 
-    mag_range = [-0.5, 1.5]  # bandMagRange(bands, tight=False)
+    mag_range = [-0.5, 1.5]  # bandMagRange(bands)
     yMinMax = [0.0, 4.0]  # PDFs
     mMinMax = [9.0, 12.0]  # log Mstar
     # sMinMax = [0.0, (mag_range[1] - mag_range[0]) / 10]  # sigma
@@ -1459,10 +1459,10 @@ def colorMassPlaneFits(sP, bands=("g", "r"), css="all", simColorsModel=defSimCol
             lExtra = []
 
             for j, method in enumerate(methods):
-                sExtra.append(plt.Line2D((0, 1), (0, 0), color="black", marker="", linestyle=linestyles[j]))
+                sExtra.append(plt.Line2D([0], [0], color="black", marker="", linestyle=linestyles[j]))
                 lExtra.append("Method (%s)" % method)
 
-            sExtra.append(plt.Line2D((0, 1), (0, 0), color="white", marker="", linestyle=linestyles[j]))
+            sExtra.append(plt.Line2D([0], [0], color="white", marker="", linestyle=linestyles[j]))
             lExtra.append(mlabel % (mass, mass + fits["binSizeMass"]))
 
             ax.legend(sExtra, lExtra, loc="best", prop={"size": 11})
@@ -2037,7 +2037,7 @@ def colorTransitionTimescale(sPs, bands=("g", "r"), simColorsModel=defSimColorMo
         if len(plotCSS) > 1:
             loc = "upper right"
             for j, css in enumerate(plotCSS):
-                sExtra.append(plt.Line2D((0, 1), (0, 0), color="black", lw=lw, marker="", linestyle=linestyles[j]))
+                sExtra.append(plt.Line2D([0], [0], color="black", lw=lw, marker="", ls=linestyles[j]))
                 if sizeAdjust >= 1.0:
                     lExtra.append(cssLabels[css])  # expanded
                 else:
@@ -2047,19 +2047,13 @@ def colorTransitionTimescale(sPs, bands=("g", "r"), simColorsModel=defSimColorMo
             if fieldName == "M_redini":
                 # figure 11 additions
                 sExtra.append(
-                    plt.Line2D(
-                        (0, 1), (0, 0), color="black", lw=lw, alpha=alpha * alphaFac, marker="", linestyle=linestyles[2]
-                    )
+                    plt.Line2D([0], [0], color="black", lw=lw, alpha=alpha * alphaFac, marker="", ls=linestyles[2])
                 )
                 lExtra.append(r"$M_\star (z=0)$ Cen")
             if fieldName == "dM_redfr":
                 # figure 13 additions
-                sExtra.append(
-                    plt.Line2D((0, 1), (0, 0), color="black", lw=lw, alpha=alpha, marker="", linestyle=linestyles[0])
-                )
-                sExtra.append(
-                    plt.Line2D((0, 1), (0, 0), color="black", lw=lw, alpha=alpha, marker="", linestyle=linestyles[1])
-                )
+                sExtra.append(plt.Line2D([0], [0], color="black", lw=lw, alpha=alpha, marker="", ls=linestyles[0]))
+                sExtra.append(plt.Line2D([0], [0], color="black", lw=lw, alpha=alpha, marker="", ls=linestyles[1]))
                 lExtra.append(r"$M_{\star,z=0} > 10^{10.5} M_{\rm sun}$")
                 lExtra.append(r"$M_{\star,z=0} > 10^{11.0} M_{\rm sun}$")
 
@@ -2240,7 +2234,7 @@ def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pageNum=Non
     tAlpha = 0.9
 
     xMinMax = [9.0, 12.0]
-    mag_range = bandMagRange(bands, tight=True)
+    mag_range = bandMagRange(bands)
 
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
     xlabel = "Galaxy Stellar Mass [ log Msun ]"

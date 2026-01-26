@@ -197,7 +197,7 @@ def plotCpuTimes(sims=None, xlim=(0.0, 1.0)):
                 print(" Predicted total time: %.1f million CPUhs (%s)" % (totPredictedMHs, predictedFinishStr))
                 # pLabels.append( 'Predict: %3.1f MHs (Finish: %s)' % (totPredictedMHs,predictedFinishStr))
                 pLabels.append("Predict: %3.1f MHs" % (totPredictedMHs))
-                pColors.append(plt.Line2D((0, 1), (0, 0), color=l.get_color(), marker="", linestyle=":"))
+                pColors.append(plt.Line2D([0], [0], color=l.get_color(), marker="", linestyle=":"))
 
                 # quick estimate to a specific target redshift
                 if 1:
@@ -230,7 +230,7 @@ def plotCpuTimes(sims=None, xlim=(0.0, 1.0)):
 
             #        #pLabels.append( ' [w/ %s]: %3.1f MHs (%s)' % (sP_p.simName,p_tot,p_str))
             #        pLabels.append( ' [w/ %s]: %3.1f MHs' % (sP_p.simName,p_tot))
-            #        pColors.append( plt.Line2D( (0,1), (0,0), color=l.get_color(), marker='', linestyle=ls[j]) )
+            #        pColors.append( plt.Line2D( [0], [0], color=l.get_color(), marker='', linestyle=ls[j]) )
 
         _redshiftAxisHelper(ax)
 
@@ -238,7 +238,7 @@ def plotCpuTimes(sims=None, xlim=(0.0, 1.0)):
         if len(pLabels) > 0:
             pass
             # pLabels.append( '(Last Updated: %s)' % datetime.now().strftime('%d %B, %Y'))
-            # pColors.append( plt.Line2D( (0,1), (0,0), color='white', marker='', linestyle='-') )
+            # pColors.append( plt.Line2D( [0], [0], color='white', marker='', linestyle='-') )
         else:
             pLabels = []
             pColors = []
@@ -297,7 +297,7 @@ def plotCpuTimes(sims=None, xlim=(0.0, 1.0)):
 
         handles, labels = ax.get_legend_handles_labels()
         pLabels = [sim.simName]
-        pColors = [plt.Line2D((0, 1), (0, 0), color="white", marker="", linestyle="-")]
+        pColors = [plt.Line2D([0], [0], color="white", marker="", linestyle="-")]
         ax.legend(handles + pColors, labels + pLabels, loc="best")  # , prop={'size':13})
 
         pdf.savefig()
@@ -565,12 +565,12 @@ def plotTimebinsFrame(pStyle="white", conf=0, timesteps=None):
         # legend/texts
         handles, labels = ax.get_legend_handles_labels()
         sExtra = [
-            plt.Line2D((0, 1), (0, 0), color=color2, marker="", lw=0.0),
-            plt.Line2D((0, 1), (0, 0), color=color2, marker="", lw=0.0),
+            plt.Line2D([0], [0], color=color2, marker="", lw=0.0),
+            plt.Line2D([0], [0], color=color2, marker="", lw=0.0),
         ]
         lExtra = ["ts # %d" % data["step"][tsNum], "z = %7.3f" % (1 / data["time"][tsNum] - 1)]
         if conf == 1:
-            sExtra.append(plt.Line2D((0, 1), (0, 0), color=color2, marker="", lw=lw, linestyle=":"))
+            sExtra.append(plt.Line2D([0], [0], color=color2, marker="", lw=lw, linestyle=":"))
             lExtra.append("CPU Fraction")
         legend = ax.legend(handles + sExtra, labels + lExtra, loc="upper right")
         for text in legend.get_texts():

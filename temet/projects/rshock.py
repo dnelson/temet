@@ -11,7 +11,6 @@ import h5py
 import healpy
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
@@ -745,17 +744,17 @@ def plotRshockVsMass(sPs, quants=("Temp_400rad_16ns",), vsHaloMass=True, kpc=Fal
 
     if len(percInds) > 1 and len(methodInds) == 1 and len(quants) == 1:
         for i, percInd in enumerate(percInds):
-            sExtra += [plt.Line2D((0, 1), (0, 0), color="black", lw=lw, linestyle=linestyles[i], marker="")]
+            sExtra += [plt.Line2D([0], [0], color="black", lw=lw, linestyle=linestyles[i], marker="")]
             lExtra += ["perc=%s" % ac[acField + "_attrs"]["percs"][percInd]]
 
     if len(methodInds) > 1:
         for i, methodInd in enumerate(methodInds):
-            sExtra += [plt.Line2D((0, 1), (0, 0), color="black", lw=lw, linestyle=linestyles[i], marker="")]
+            sExtra += [plt.Line2D([0], [0], color="black", lw=lw, linestyle=linestyles[i], marker="")]
             lExtra += ["method #%d" % methodInd]
 
     if len(quants) == 1 and len(percInds) == 1 and len(methodInds) == 1:
         if len(sPs) > 1 and sPs[1].redshift == sPs[0].redshift:
-            sExtra += [plt.Line2D((0, 1), (0, 0), color="black", lw=0, linestyle="-", marker="")]
+            sExtra += [plt.Line2D([0], [0], color="black", lw=0, linestyle="-", marker="")]
             lExtra += ["z = %.1f" % sPs[0].redshift]
 
     legend1 = ax.legend(sExtra, lExtra, loc="upper right")

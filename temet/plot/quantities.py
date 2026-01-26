@@ -67,14 +67,14 @@ quantDescriptions = {
 }
 
 
-def bandMagRange(bands, tight=False, sim=None):
+def bandMagRange(bands, sim=None):
     """Hard-code some band dependent magnitude ranges."""
     if bands[0] == "u" and bands[1] == "i":
-        mag_range = [0.5, 4.0]
+        mag_range = [0.5, 4.0]  # [0.5, 3.5]
     if bands[0] == "u" and bands[1] == "r":
         mag_range = [0.5, 3.5]
     if bands[0] == "g" and bands[1] == "r":
-        mag_range = [0.0, 1.0]
+        mag_range = [0.0, 1.0]  # [0.15,0.85]
     if bands[0] == "r" and bands[1] == "i":
         mag_range = [0.0, 0.6]
     if bands[0] == "i" and bands[1] == "z":
@@ -88,21 +88,6 @@ def bandMagRange(bands, tight=False, sim=None):
         mag_range = [-0.4, 1.6]
     if bands[0] == "V" and bands[1] == "B":
         mag_range = [-1.1, 0.5]
-
-    if tight:
-        # alternative set
-        if bands == ["u", "i"]:
-            mag_range = [0.5, 4.0]
-        if bands == ["u", "i"]:
-            mag_range = [0.5, 3.5]
-        if bands == ["g", "r"]:
-            mag_range = [0.15, 0.85]
-        if bands == ["r", "i"]:
-            mag_range = [0.0, 0.6]
-        if bands == ["i", "z"]:
-            mag_range = [0.0, 0.4]
-        if bands == ["i", "z"]:
-            mag_range = [0.0, 0.8]
 
     if sim is not None and sim.redshift is not None:
         if sim.redshift >= 1.0:
@@ -376,13 +361,12 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     return quantList
 
 
-def simSubhaloQuantity(sP, quant, tight=False):
+def simSubhaloQuantity(sP, quant):
     """Load requested quantity, one value per subhalo, and associated metadata.
 
     Args:
       sP (:py:class:`~util.simParams`): simulation instance.
       quant (str): name of the subhalo property to load.
-      tight (bool): if True, use "tight" plotting limits where applicable.
 
     Return:
       tuple(4):
@@ -400,7 +384,7 @@ def simSubhaloQuantity(sP, quant, tight=False):
     log = True  # default
 
     # cached? immediate return
-    cacheKey = "sim_%s_%s" % (quant, tight)
+    cacheKey = f"sim_{quant}"
 
     if cacheKey in sP.data:
         # data already exists in sP cache? return copies rather than views in case data or metadata are modified

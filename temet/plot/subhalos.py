@@ -156,7 +156,7 @@ def histogram2d(
         xMinMax = xlim
 
     # y-axis: load/calculate simulation colors, cached in sP.data
-    sim_yvals, ylabel, yMinMax, yLog = sP.simSubhaloQuantity(yQuant, tight=True)
+    sim_yvals, ylabel, yMinMax, yLog = sP.simSubhaloQuantity(yQuant)
     if yLog is True:
         sim_yvals = logZeroNaN(sim_yvals)
     if ylim is not None:
@@ -179,11 +179,9 @@ def histogram2d(
     else:
         if cStatistic is None:
             cStatistic = "median_nan"  # default if not specified with cQuant
-        sim_cvals, clabel, cMinMax, cLog = sP.simSubhaloQuantity(cQuant, tight=False)
+        sim_cvals, clabel, cMinMax, cLog = sP.simSubhaloQuantity(cQuant)
         if clim is not None:
             cMinMax = clim
-        if yQuant == "color_C_gr":
-            print("Warning: to reproduce TNG colors paper, set tight=True maybe.")
 
     if sim_cvals is None:
         return  # property is not calculated for this run (e.g. expensive auxCat)
@@ -643,7 +641,7 @@ def slice(
             print(" ", yQuant, sP.simName, xQuant, cenSatSelect, sQuant, sRange)
 
             # y-axis: load galaxy properties (in histo2D were the color mappings)
-            sim_yvals, ylabel, yMinMax, yLog = sP.simSubhaloQuantity(yQuant, tight=True)
+            sim_yvals, ylabel, yMinMax, yLog = sP.simSubhaloQuantity(yQuant)
             if ylim is not None:
                 yMinMax = ylim
 
@@ -661,7 +659,7 @@ def slice(
                 continue
 
             # x-axis: load/calculate x-axis quantity (e.g. simulation colors), cached in sP.data
-            sim_xvals, xlabel, xMinMax, xLog = sP.simSubhaloQuantity(xQuant, tight=True)
+            sim_xvals, xlabel, xMinMax, xLog = sP.simSubhaloQuantity(xQuant)
             if xlim is not None:
                 xMinMax = xlim
 
@@ -893,7 +891,7 @@ def median(
             print(" ", yQuant, xQuant, sP.simName, cenSatSelect)
 
             # y-axis: load fullbox galaxy properties
-            sim_yvals, ylabel_def, yMinMax, yLog = sP.simSubhaloQuantity(yQuant, tight=True)
+            sim_yvals, ylabel_def, yMinMax, yLog = sP.simSubhaloQuantity(yQuant)
             if ylim is not None:
                 yMinMax = ylim
             if ylabel is None or i > 0:
@@ -915,7 +913,7 @@ def median(
                 sim_yvals = logZeroNaN(sim_yvals)
 
             # x-axis: load fullbox galaxy properties
-            sim_xvals, xlabel_def, xMinMax, xLog = sP.simSubhaloQuantity(xQuant, tight=True)
+            sim_xvals, xlabel_def, xMinMax, xLog = sP.simSubhaloQuantity(xQuant)
             if xLog:
                 sim_xvals = logZeroNaN(sim_xvals)
             if xlim is not None:
@@ -930,7 +928,7 @@ def median(
 
             # splitting on third quantity? load now
             if sQuant is not None:
-                sim_svals, slabel, _, sLog = sP.simSubhaloQuantity(sQuant, tight=True)
+                sim_svals, slabel, _, sLog = sP.simSubhaloQuantity(sQuant)
                 if sim_svals is None:
                     print("   skip")
                     continue
@@ -940,7 +938,7 @@ def median(
             # coloring points by third quantity? load now
             sim_cvals = np.zeros(sim_xvals.size, dtype="float32")
             if scatterColor is not None:
-                sim_cvals, clabel, cMinMax, cLog = sP.simSubhaloQuantity(scatterColor, tight=True)
+                sim_cvals, clabel, cMinMax, cLog = sP.simSubhaloQuantity(scatterColor)
                 if cLog:
                     sim_cvals = logZeroNaN(sim_cvals)
                 cMinMax = cMinMax if clim is None else clim
@@ -1060,7 +1058,7 @@ def median(
 
                 for k, medianProp in enumerate(extraMedians):
                     # load new (y-axis) quantity, subset as before, and median
-                    sim_mvals, mlabel, mMinMax, mLog = sP.simSubhaloQuantity(medianProp, tight=True)
+                    sim_mvals, mlabel, mMinMax, mLog = sP.simSubhaloQuantity(medianProp)
                     mlabel_orig = mlabel
                     if mLog:
                         sim_mvals = logZeroNaN(sim_mvals)
@@ -1274,8 +1272,6 @@ def median(
     if scatterPoints and scatterColor is not None:
         if colorbarInside:  # can generalize to 'upper left', etc
             # cax = inset_locator.inset_axes(ax, width="40%", height="4%", loc='upper left')
-            fig.tight_layout()  # avoid warning
-            fig.set_tight_layout(False)
 
             # rect = [0.5,0.25,0.4,0.04] # lower right
             rect = [0.15, 0.84, 0.38, 0.04]  # upper left

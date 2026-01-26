@@ -371,8 +371,8 @@ def radialProfiles(sim, haloID, b):
     # finish and save plot
     handles, labels = ax.get_legend_handles_labels()
     handles += [
-        plt.Line2D((0, 1), (0, 0), color="black", marker="", linestyle=":"),
-        plt.Line2D((0, 1), (0, 0), color="black", marker="", linestyle="-"),
+        plt.Line2D([0], [0], color="black", marker="", linestyle=":"),
+        plt.Line2D([0], [0], color="black", marker="", linestyle="-"),
     ]
     labels += ["Intrinsic", "Scattered"]
     ax.legend(handles, labels, fontsize=22, loc="upper right")
@@ -541,8 +541,8 @@ def stackedRadialProfiles(sim, haloIDs, b, addObsThresholds=True):
     # main panel legend
     handles, labels = ax.get_legend_handles_labels()
     handles += [
-        plt.Line2D((0, 1), (0, 0), color="black", marker="", linestyle=":"),
-        plt.Line2D((0, 1), (0, 0), color="black", marker="", linestyle="-"),
+        plt.Line2D([0], [0], color="black", marker="", ls=":"),
+        plt.Line2D([0], [0], color="black", marker="", ls="-"),
     ]
     labels += ["Intrinsic", "Scattered"]
     ax.legend(handles, labels, loc="upper right")

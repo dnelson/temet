@@ -391,7 +391,7 @@ def cddfRedshiftEvolution(sPs, saveName, ions, redshifts, moment=0, boxDepth10=F
 
     if len(redshifts) > 1:
         for i, redshift in enumerate(redshifts):
-            sExtra += [plt.Line2D((0, 1), (0, 0), color="black", lw=lw, linestyle=linestyles[i], marker="")]
+            sExtra += [plt.Line2D([0], [0], color="black", lw=lw, linestyle=linestyles[i], marker="")]
             lExtra += ["z = %3.1f" % redshift]
 
     handles, labels = ax.get_legend_handles_labels()
@@ -1258,7 +1258,7 @@ def ionTwoPointCorrelation(sPs, saveName, ions, redshift=0.0, order=0, colorOff=
 
     if len(sPs) > 1:
         for i, sP in enumerate(sPs):
-            sExtra += [plt.Line2D((0, 1), (0, 0), color="black", lw=lw, linestyle=linestyles[i], marker="")]
+            sExtra += [plt.Line2D([0], [0], color="black", lw=lw, linestyle=linestyles[i], marker="")]
             lExtra += ["%s" % sP.simName]
 
     handles, labels = ax.get_legend_handles_labels()

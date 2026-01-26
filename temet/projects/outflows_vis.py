@@ -521,7 +521,7 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
 
         # legend
         handles, labels = ax.get_legend_handles_labels()
-        sExtra = [plt.Line2D((0, 1), (0, 0), color=color2, marker="", linestyle=ls) for ls in linestyles]
+        sExtra = [plt.Line2D([0], [0], color=color2, marker="", linestyle=ls) for ls in linestyles]
         apertures = ["%dckpc/h" % aperture for aperture in data["apertures"]["scalar"]]
         l = ax.legend(handles + sExtra, labels + apertures, loc="lower right", prop={"size": fontsizeLegend})
         for text in l.get_texts():

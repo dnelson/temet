@@ -17,7 +17,7 @@ from scipy.interpolate import griddata, interp1d
 from scipy.signal import savgol_filter
 
 from ..plot import snapshot, subhalos
-from ..plot.config import colors, figsize, figsize_sm, linestyles, lw, markers, sKn, sKo
+from ..plot.config import colors, figsize, linestyles, lw, markers, sKn, sKo
 from ..projects.outflows_analysis import loadRadialMassFluxes
 from ..projects.outflows_vis import galaxyMosaic_topN, singleHaloDemonstrationImage, subboxOutflowTimeEvoPanels
 from ..util import simParams
@@ -378,7 +378,7 @@ def gasOutflowRates(sP, ptType, xQuant="mstar_30pkpc", eta=False, config=None, m
 
         loc3 = "upper left" if (config is None or "loc3" not in config) else config["loc3"]
         if len(labels):
-            handles = [plt.Line2D((0, 1), (0, 0), color=color, marker=markers[i], ls="") for i in range(len(labels))]
+            handles = [plt.Line2D([0], [0], color=color, marker=markers[i], ls="") for i in range(len(labels))]
             locParams = {} if (config is None or "leg3white" not in config) else legParams
             ncol = 1 if (config is None or "leg3ncol" not in config) else config["leg3ncol"]
             legend3 = ax.legend(handles, labels, ncol=ncol, columnspacing=1.0, fontsize=17.0, loc=loc3, **locParams)
@@ -394,7 +394,7 @@ def gasOutflowRates(sP, ptType, xQuant="mstar_30pkpc", eta=False, config=None, m
 
         if len(vcutIndsPlot) == 1 or len(radIndsPlot) == 1:
             if loc2 is not None:
-                line = plt.Line2D((0, 1), (0, 0), color="white", marker="", lw=0.0)
+                line = plt.Line2D([0], [0], color="white", marker="", lw=0.0)
                 legend2 = ax.legend([line], [labelFixed], loc=loc2, handlelength=-0.5, **legParams)
                 # for text in legend2.get_texts(): text.set_color('white')
                 # frame = legend2.get_frame()
@@ -406,7 +406,7 @@ def gasOutflowRates(sP, ptType, xQuant="mstar_30pkpc", eta=False, config=None, m
                 legend1 = ax.legend(loc=loc1, **locParams)  # vrad > ...
 
         if len(vcutIndsPlot) > 1 and len(radIndsPlot) > 1:
-            lines = [plt.Line2D((0, 1), (0, 0), color=colors[j], marker="", ls="-") for j in range(len(vcutIndsPlot))]
+            lines = [plt.Line2D([0], [0], color=colors[j], marker="", ls="-") for j in range(len(vcutIndsPlot))]
             legend2 = ax.legend(lines, labels_sec, loc="upper right")
             ax.add_artist(legend2)
 
@@ -709,7 +709,7 @@ def gasOutflowRatesVsRedshift(sP, ptType, eta=False, config=None, massField="Mas
                 radMidPoint = "all"
 
             labelFixed = r"r = %s, v$_{\rm rad}$ > %3d km/s" % (radMidPoint, vcut_vals[vcut_ind])
-            line = plt.Line2D((0, 1), (0, 0), color="white", marker="", lw=0.0)
+            line = plt.Line2D([0], [0], color="white", marker="", lw=0.0)
             legend2 = ax.legend([line], [labelFixed], loc=loc2, handlelength=-0.5, **legParams)
             ax.add_artist(legend2)
 
@@ -718,7 +718,7 @@ def gasOutflowRatesVsRedshift(sP, ptType, eta=False, config=None, massField="Mas
                 legend1 = ax.legend(loc=loc1, ncol=2, **locParams)  # vrad > ...
 
         if len(vcutIndsPlot) > 1 and len(radIndsPlot) > 1:
-            lines = [plt.Line2D((0, 1), (0, 0), color=colors[j], marker="", ls="-") for j in range(len(vcutIndsPlot))]
+            lines = [plt.Line2D([0], [0], color=colors[j], marker="", ls="-") for j in range(len(vcutIndsPlot))]
             legend2 = ax.legend(lines, labels_sec, loc="upper right")
             ax.add_artist(legend2)
 
@@ -1606,13 +1606,13 @@ def gasOutflowRatesStacked(sP_in, quant, mStarBins, redshifts=(None,), config=No
             lExtra = []
 
             for j, redshift in enumerate(redshifts):
-                sExtra += [plt.Line2D((0, 1), (0, 0), color="black", linestyle=linestyles[j], marker="")]
+                sExtra += [plt.Line2D([0], [0], color="black", linestyle=linestyles[j], marker="")]
                 lExtra += ["z = %.1f" % redshift]
 
             legend2 = ax.legend(sExtra, lExtra, loc="lower right")
             ax.add_artist(legend2)
 
-        line = plt.Line2D((0, 1), (0, 0), color="white", marker="", lw=0.0)
+        line = plt.Line2D([0], [0], color="white", marker="", lw=0.0)
         loc = "upper left" if (len(redshifts) > 1 or quant == "vrad" or quant == "numdens") else "lower right"
         if quant in ["temp", "temp_sfcold"]:
             loc = "upper right"
@@ -1972,7 +1972,7 @@ def gasOutflowRates2DStacked(
                     # render contour (different linestyles for different contour values)
                     color = cmap_pos(float(i) / len(mStarBins))
                     if j == 0:
-                        lines.append(plt.Line2D((0, 1), (0, 0), color=color, marker="", lw=lw))
+                        lines.append(plt.Line2D([0], [0], color=color, marker="", lw=lw))
                     c_ls = linestyles if len(redshifts) == 1 else linestyles[j]  # linestyle per redshift
                     im_pos = ax.contour(XX_out, YY_out, grid_z_out.T, contours, ls=c_ls, linewidths=lw, colors=[color])
                     # im_neg
@@ -1995,7 +1995,7 @@ def gasOutflowRates2DStacked(
                         labels1.append(label1)
                     continue  # no colorbars, and no 'per panel' legends (add one at the end)
 
-                line = plt.Line2D((0, 1), (0, 0), color="white", marker="", lw=0.0)
+                line = plt.Line2D([0], [0], color="white", marker="", lw=0.0)
                 if label2 is not None:
                     legend2 = ax.legend([line, line], [label1, label2], handlelength=0.0, loc="upper right")
                 else:
@@ -2076,12 +2076,12 @@ def gasOutflowRates2DStacked(
 
             if len(contours) > 1:  # labels for contour levels
                 for i, contour in enumerate(contours):
-                    leg_lines2.append(plt.Line2D((0, 1), (0, 0), color="black", marker="", lw=lw, ls=linestyles[i]))
+                    leg_lines2.append(plt.Line2D([0], [0], color="black", marker="", lw=lw, ls=linestyles[i]))
                     leg_labels2.append("%s = %.1f" % (contourlabel, contour))
 
             if len(redshifts) > 1:  # labels for redshifts
                 for j, redshift in enumerate(redshifts):
-                    leg_lines2.append(plt.Line2D((0, 1), (0, 0), color="black", lw=lw, ls=linestyles[j], marker=""))
+                    leg_lines2.append(plt.Line2D([0], [0], color="black", lw=lw, ls=linestyles[j], marker=""))
                     leg_labels2.append("z = %.1f" % redshift)
 
             legend3 = ax.legend(leg_lines, leg_labels, loc="lower left")
@@ -2094,7 +2094,7 @@ def gasOutflowRates2DStacked(
             if label2 is not None:
                 if len(contours) == 1:
                     label2 += ", %s = %.1f" % (contourlabel, contours[0])  # not enumerated, so show the 1 choice
-                line = plt.Line2D((0, 1), (0, 0), color="white", marker="", lw=lw)
+                line = plt.Line2D([0], [0], color="white", marker="", lw=lw)
                 legend4 = ax.legend([line], [label2], handlelength=0.0, loc="upper left")
                 ax.add_artist(legend4)
 
@@ -3523,7 +3523,7 @@ def paperPlots(sPs=None):
 
             for yQuant in yQuants:
                 # for each (x,y) quant set, make a number of 6-panel figures, different coloring for every panel
-                for j, cQuants in enumerate(quantSets):
+                for cQuants in quantSets:
                     params = {
                         "cenSatSelect": "cen",
                         "cStatistic": "median_nan",

@@ -582,15 +582,13 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
         labels = []
 
         for k, sP in enumerate(sPs):
-            handles += [plt.Line2D((0, 1), (0, 0), color="black", linestyle=linestyles[k], marker="")]
+            handles += [plt.Line2D([0], [0], color="black", linestyle=linestyles[k], marker="")]
             labels += [sP.simName]
 
         legend2 = ax.legend(handles, labels, loc="lower left")
         ax.add_artist(legend2)
 
     if indiv:
-        fig.tight_layout()
-        fig.set_tight_layout(False)
         cax = fig.add_axes([0.5, 0.84, 0.4, 0.04])
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         cb = plt.colorbar(sm, cax=cax, orientation="horizontal")

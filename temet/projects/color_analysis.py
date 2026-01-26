@@ -669,7 +669,7 @@ def characterizeColorMassPlane(
     assert cenSatSelect in ["all", "cen", "sat"]
 
     # global analysis config
-    mag_range = bandMagRange(bands, tight=False)
+    mag_range = bandMagRange(bands)
     xMinMax = [9.0, 12.0]
 
     binSizeMass = 0.15

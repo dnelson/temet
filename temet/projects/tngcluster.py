@@ -618,7 +618,7 @@ def bfield_strength_vs_halomass(sPs, redshifts):
         # |B| = 1.9 +/- 0.3 uG (volume-averaged) (z=0.1) (aperture? mass?)
 
         # second legend
-        handles = [plt.Line2D((0, 1), (0, 0), color="black", lw=0, marker=["o", "s"][i]) for i in range(len(sPs))]
+        handles = [plt.Line2D([0], [0], color="black", lw=0, marker=["o", "s"][i]) for i in range(len(sPs))]
         legend2 = ax.legend(handles, [sP.simName for sP in sPs], borderpad=0.4, loc="upper right")
         ax.add_artist(legend2)
 
@@ -1302,7 +1302,7 @@ def XrayLum_vs_halomass(sPs):
         labels = [p09["label"], v09["label"], m16["label"], b19["label"], l20["label"]]
 
         # second legend
-        handles = [plt.Line2D((0, 1), (0, 0), color="black", lw=0, marker=m) for m in markers]
+        handles = [plt.Line2D([0], [0], color="black", lw=0, marker=m) for m in markers]
         legend2 = ax.legend(handles, labels, borderpad=0.4, loc="lower right")
         ax.add_artist(legend2)
 
@@ -2286,7 +2286,7 @@ def halo_properties_table(sim):
 
 
 def paperPlots():
-    """ Plots for TNG-Cluster intro paper. """
+    """Plots for TNG-Cluster intro paper."""
     # all analysis at z=0 unless changed below
     TNG300 = simParams(run="tng300-1", redshift=0.0)
     TNG_C = simParams(run="tng-cluster", redshift=0.0)

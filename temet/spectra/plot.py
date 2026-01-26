@@ -921,7 +921,6 @@ def spectra_gallery_indiv(
                 # plot
                 axes[i, j].step(wave, flux[i * n + j, :], "-", c=colors[i * n + j], where="mid")
 
-        fig.set_tight_layout(False)
         fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01, wspace=0.05, hspace=0.05)
 
     if style == "2d":
@@ -1424,7 +1423,7 @@ def EW_distribution(
         ax.errorbar(h20z_W, h20z_n, yerr=h20z_n_err, xerr=h20z_W_err, label=h20z_label, **opts)
 
     # simulation legend
-    handles = [plt.Line2D((0, 1), (0, 0), color=color, ls="-") for color in colors]
+    handles = [plt.Line2D([0], [0], color=color, ls="-") for color in colors]
     legend2 = ax.legend(handles, labels, loc="lower left")
     ax.add_artist(legend2)
 
@@ -1710,7 +1709,7 @@ def dNdz_evolution(sim_in, redshifts, line="MgII 2796", instrument="SDSS-BOSS", 
 
     for i, EW_thresh in enumerate(EW_thresholds):
         label = r"EW > %.1f$\,\rm{\AA}$" % EW_thresh
-        handles.append(plt.Line2D((0, 1), (0, 0), color=colors[i], ls="-"))
+        handles.append(plt.Line2D([0], [0], color=colors[i], ls="-"))
         labels.append(label)
 
     legend2 = ax.legend(handles, labels, ncols=1, loc="lower right")
@@ -1720,8 +1719,8 @@ def dNdz_evolution(sim_in, redshifts, line="MgII 2796", instrument="SDSS-BOSS", 
     handles, labels = ax.get_legend_handles_labels()
     lExtra = [z13["label"] + " (variable)", sim.simName]
     hExtra = [
-        plt.Line2D((0, 1), (0, 0), color="#333", lw=0, marker="s", alpha=0.8),
-        plt.Line2D((0, 1), (0, 0), color="#333", alpha=1.0),
+        plt.Line2D([0], [0], color="#333", lw=0, marker="s", alpha=0.8),
+        plt.Line2D([0], [0], color="#333", alpha=1.0),
     ]
     ax.legend(handles + hExtra, labels + lExtra, ncols=1, loc=[0.41, 0.02], handlelength=1.2)
     fig.savefig("dNdz_evolution_%s_%s.pdf" % (sim.simName, line.replace(" ", "-")))
@@ -1783,9 +1782,9 @@ def dNdz_evolution(sim_in, redshifts, line="MgII 2796", instrument="SDSS-BOSS", 
         a25_label = "Anand+ (2025) - DESI"
         a25_z = [1.54, 1.77, 1.86, 1.93, 1.98, 2.03, 2.09, 2.14, 2.20, 2.26, 2.33, 2.41, 2.51, 2.66, 2.88, 3.85]
         a25_dNdX_06A = [ 1.80e-1, 1.72e-1, 1.75e-1, 1.63e-1, 1.59e-1, 1.52e-1, 1.50e-1, 1.47e-1, 1.41e-1, 1.33e-1,
-                        1.25e-1, 1.22e-1, 1.07e-1, 8.47e-2, 7.67e-2, 4.81e-2] # fmt: skip
+                        1.25e-1, 1.22e-1, 1.07e-1, 8.47e-2, 7.67e-2, 4.81e-2]  # fmt: skip
         a25_dNdX_09A = [ 7.79e-2, 7.07e-2, 6.81e-2, 6.68e-2, 6.60e-2, 6.14e-2, 5.72e-2, 5.86e-2, 5.45e-2, 5.34e-2,
-                        4.83e-2, 4.54e-2, 4.12e-2, 3.21e-2, 2.80e-2, 1.71e-2] # fmt: skip
+                        4.83e-2, 4.54e-2, 4.12e-2, 3.21e-2, 2.80e-2, 1.71e-2]  # fmt: skip
 
         label = r"%s ($\rm{W_0 > 0.6 \AA}$)" % (a25_label)
         ax.errorbar(a25_z, a25_dNdX_06A, color=colors[2], marker="o", ls="none", label=label)
@@ -1816,10 +1815,10 @@ def dNdz_evolution(sim_in, redshifts, line="MgII 2796", instrument="SDSS-BOSS", 
             label = r"%s (EW > %.1f$\,\rm{\AA}$)" % (sim.simName, EW_thresh)
             if EW_thresh < 0.1:
                 label = r"%s (EW > %.2f$\,\rm{\AA}$)" % (sim.simName, EW_thresh)
-            handles.append(plt.Line2D((0, 1), (0, 0), color=colors[i], ls="-"))
+            handles.append(plt.Line2D([0], [0], color=colors[i], ls="-"))
             labels.append(label)
     else:
-        handles = [plt.Line2D((0, 1), (0, 0), color="black", ls="-")]
+        handles = [plt.Line2D([0], [0], color="black", ls="-")]
         labels = [sim.simName]
 
     legend2 = ax.legend(handles, labels, loc="upper right")
