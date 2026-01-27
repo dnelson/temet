@@ -128,7 +128,7 @@ def redshiftToSnapNum(redshifts=None, times=None, sP=None, recalculate=False, lo
                 if not recalculate and nextSnapExists is not None:
                     return redshiftToSnapNum(redshifts=redshifts, times=times, sP=sP, recalculate=True)
                 else:
-                    print("Warning! [%s] Snapshot selected with redshift error = %g" % (sP.simName, np.zErr))
+                    print("Warning! [%s] Snapshot selected with redshift error = %g" % (sP.simName, zErr))
 
             snaps[i] = w
 
