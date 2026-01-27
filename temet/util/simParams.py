@@ -1652,6 +1652,11 @@ class simParams:
         return self.subbox is not None
 
     @property
+    def hasMergerTree(self):
+        """Has the default merger tree (SubLink) available?"""
+        return path.exists(self.postPath + "trees/SubLink")
+
+    @property
     def partTypes(self):
         """Return a list of particle type names contained in this simulation, excluding tracers."""
         pt = ["gas", "dm", "stars", "bh"]

@@ -9,9 +9,9 @@ import numpy as np
 from matplotlib.colors import to_rgb
 from scipy.signal import savgol_filter
 
-from temet.plot.config import colors, figsize, linestyles, lw, markers, sKn, sKo
-from temet.util.helper import closest, logZeroNaN, running_median
-from temet.util.simParams import simParams
+from ..plot.config import colors, figsize, linestyles, lw, markers, sKn, sKo
+from ..util.helper import closest, logZeroNaN, running_median
+from ..util.simParams import simParams
 
 
 def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
@@ -229,7 +229,7 @@ def scatter2d(
 
             (l,) = ax.plot(xval, yval, marker=marker, clip_on=clip, label="", **style)
 
-            if tracks:
+            if tracks and sim.hasMergerTree:
                 # various criterion for how far back to go
                 max_z = 10.0
                 dz = 0.2
@@ -302,7 +302,7 @@ def scatter2d(
         print(f"parent {sim_parent_load.simName} h{hInd} {subhaloInd = } {xQuant}={xval:.3f} {yQuant}={yval:.3f}")
 
         # time evolution tracks
-        if tracks and 0:
+        if tracks and 0 and sim.hasMergerTree:
             mpb = sim_parent_load.quantMPB(subhaloInd, quants=[xQuant, yQuant])
             ax.plot(mpb[xQuant], mpb[yQuant], "-", color=l.get_color(), alpha=0.3)
 
