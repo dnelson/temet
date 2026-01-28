@@ -216,7 +216,7 @@ class units:
 
         # derived constants (in code units without little h factors)
         self.H0 = self._sP.HubbleParam * 100 * 1e5 / (self.Mpc_in_cm)
-        self.H0 /= self.UnitVelocity_in_cm_per_s * self.UnitLength_in_cm
+        self.H0 = self.H0 / self.UnitVelocity_in_cm_per_s * self.UnitLength_in_cm
         self.G = self.Gravity / self.UnitLength_in_cm**3.0 * self.UnitMass_in_g * self.UnitTime_in_s**2.0
 
         self.rhoCrit = 3.0 * self.H0**2.0 / (8.0 * np.pi * self.G)  # code, z=0
