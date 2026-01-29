@@ -72,7 +72,8 @@ jobs:
       - name: Retrieve release distributions
         uses: actions/download-artifact@v6
         with:
-          name: release-*
+          #name: release-*
+          pattern: release-*
           merge-multiple: true
           path: dist/
 
