@@ -866,30 +866,17 @@ def addContourOverlay(p, conf, ax):
 
 
 def addCustomColorbars(
-    fig,
-    ax,
-    conf,
-    config,
-    heightFac,
-    barAreaBottom,
-    barAreaTop,
-    color2,
-    rowHeight,
-    colWidth,
-    bottomNorm,
-    leftNorm,
-    hOffset=None,
-    cmap=None,
+    fig, conf, config, heightFac, barAreaBottom, barAreaTop, color2, colWidth, leftNorm, hOffset=None
 ):
     """Add colorbar(s) with custom positioning and labeling, either below or above panels."""
     if not conf.colorbars:
         return
 
     factor = 0.80  # bar length, fraction of column width, 1.0=whole
-    height = 0.04  # colorbar height, fraction of entire figure
+    height = 0.025  # colorbar height, fraction of entire figure
     if hOffset is None:
-        hOffset = 0.4  # padding between image and top of bar (fraction of bar height)
-    tOffset = 0.20  # padding between top of bar and top of text label (fraction of bar height)
+        hOffset = 0.25  # padding between image and top of bar (fraction of bar height)
+    tOffset = 0.15  # padding between top of bar and top of text label (fraction of bar height)
     lOffset = 0.02  # padding between colorbar edges and end label (frac of bar width)
 
     # factor = 0.65 # tng data release paper: tng_fields override
@@ -898,8 +885,8 @@ def addCustomColorbars(
 
     height *= heightFac
 
-    if hasattr(conf, "fontsize") and conf.nCols == 1:
-        height *= (np.clip(conf.fontsize, 9, 32) / 9) ** (1 / 2)
+    # if hasattr(conf, "fontsize"):  # and conf.nCols == 1:
+    #    height *= (np.clip(conf.fontsize, 9, 32) / 9) ** (1 / 2)
 
     if barAreaTop == 0.0:
         # bottom
@@ -1092,9 +1079,12 @@ def renderMultiPanel(panels, conf):
 
     # approximate font-size invariance with changing rasterPx
     conf.nLinear = conf.nCols if conf.nCols > conf.nRows else conf.nRows
-    min_fontsize = 9 if "edged" in conf.plotStyle else 12
+    min_fontsize = 14 if "edged" in conf.plotStyle else 12
+    max_fontsize = 60 if conf.nLinear <= 2 else 40
+    fontsize_exp = 0.8
     if not hasattr(conf, "fontsize"):
-        conf.fontsize = np.clip(int(conf.rasterPx[0] / 100.0 * conf.nLinear * 1.2), min_fontsize, 60)
+        conf.fontsize = (conf.rasterPx[0] / 1000) ** fontsize_exp * 10 * (conf.nCols**fontsize_exp) * 1.2
+        conf.fontsize = int(np.clip(conf.fontsize, min_fontsize, max_fontsize))
 
     if conf.plotStyle in ["open", "open_black"]:
         # start plot
@@ -1266,50 +1256,17 @@ def renderMultiPanel(panels, conf):
             if "mock_redshift" in p:
                 p["sP"].setRedshift(old_redshift)
 
-        if nRows == 1 and nCols == 3:
-            plt.subplots_adjust(top=0.97, bottom=0.06)  # fix degenerate case
+        # if nRows == 1 and nCols == 3:
+        #    plt.subplots_adjust(top=0.97, bottom=0.06)  # fix degenerate case
 
     if conf.plotStyle in ["edged", "edged_black"]:
         # colorbar plot area sizing
         aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf, "rasterPx") else 1.0
-        barAreaHeight = (0.07 / nRows) / aspect / (conf.rasterPx[0] / 1000)
-        if conf.fontsize > min_fontsize:
-            barAreaHeight += 0.003 * (conf.fontsize - min_fontsize)
-        if conf.fontsize == min_fontsize:
-            barAreaHeight += 0.03
-        barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, 0.2)
+        barAreaHeight = 0.007 * conf.fontsize**fontsize_exp / aspect
+        barAreaHeight = np.clip(barAreaHeight, 0.02, 0.12)
 
-        # if nCols >= 2: # disable for subbox_movie_tng300fof0_4x2()
-        #    barAreaHeight += 0.014*nCols
         if not conf.colorbars:
             barAreaHeight = 0.0
-
-        def _heightfac():
-            """Helper. Used later to define height of colorbar."""
-            heightFac = np.clip(1.0 * (nCols / nRows) ** 0.3, 0.35, 2.5)
-            # heightFac /= (conf.rasterPx[0]/850) # todo: does this make sense for vector output?
-
-            # disable for subbox_movie_tng300fof0_4x2():
-            heightFac += 0.02 * (conf.fontsize - 40)  # larger for larger fonts, and vice versa (needs tuning)
-
-            if nRows == 1:
-                heightFac /= aspect  # increase
-            if nRows == 2 and not varRowHeights and barAreaTop == 0.0:
-                heightFac *= 1.3  # increase
-            if nRows == 1 and nCols == 1:  # required for 'Visualize Galaxies and Halo' tool proper sizing
-                heightFac *= 0.7  # decrease
-                if conf.fontsize == min_fontsize:  # small images
-                    heightFac *= 1.6
-            if nRows == 2 and nCols == 1 and varRowHeights:
-                # single edge-on face-on combination
-                heightFac = 0.7
-
-            if nRows == 3:
-                heightFac *= 0.85
-            if nRows >= 4:
-                heightFac *= 0.65
-
-            return heightFac
 
         # check uniqueness of panel (partType,partField,valMinMax)'s
         pPartTypes = set()
@@ -1341,18 +1298,22 @@ def renderMultiPanel(panels, conf):
                     print(f"WARNING: [{k}] has multiple panels with auto cbar minmax. Disabling global colorbar.")
                     oneGlobalColorbar = False
 
+        # height of colorbar is this value times a constant (as a fraction of the figure size)
+        heightFac = 1.0 * conf.nLinear**0.4
+
         if nRows == 2 and not oneGlobalColorbar:
             # two rows, special case, colors on top and bottom, every panel can be different
             barAreaTop = 0.5 * barAreaHeight
             barAreaBottom = 0.5 * barAreaHeight
+            heightFac *= 0.5
         else:
             # colorbars on the bottom of the plot, one per column (columns should be same field/valMinMax)
             barAreaTop = 0.0
             barAreaBottom = barAreaHeight
 
-        if nRows > 2:
-            # should verify that each column contains the same field and valMinMax
+        if nRows == 2 and oneGlobalColorbar:
             barAreaBottom *= 0.7
+            heightFac *= 0.7
 
         # colorbar has its own space, or is on top of the plot?
         barTop = barAreaTop  # used to draw bars
@@ -1383,8 +1344,7 @@ def renderMultiPanel(panels, conf):
         nShortRows = nShortPanels / nCols
 
         # start plot
-        plt.rcParams.update({"figure.autolayout": False})
-        fig = plt.figure(layout=None, facecolor=color1)
+        fig = plt.figure(layout="none", facecolor=color1)
 
         width_in = sizeFac[0] * np.ceil(nCols)
         height_in = sizeFac[1] * np.ceil(nRows)
@@ -1523,63 +1483,20 @@ def renderMultiPanel(panels, conf):
             if oneGlobalColorbar:
                 continue
 
-            heightFac = _heightfac()
-
             if nRows == 2:
                 # both above and below, one per column
-                if conf.colorbarOverlay:
-                    heightFac *= 0.5
+                # if conf.colorbarOverlay:
+                #    heightFac *= 0.7
 
                 if curRow == 0 and (barAreaTop > 0 or conf.colorbarOverlay):
-                    addCustomColorbars(
-                        fig,
-                        ax,
-                        conf,
-                        config,
-                        heightFac * 1.0,
-                        0.0,
-                        barTop,
-                        color2,
-                        rowHeight,
-                        colWidth,
-                        bottomNorm,
-                        leftNorm,
-                        hOffset=-0.4,
-                    )
+                    addCustomColorbars(fig, conf, config, heightFac, 0.0, barTop, color2, colWidth, leftNorm)
 
                 if curRow == nRows - 1 and (barAreaBottom > 0 or conf.colorbarOverlay):
-                    addCustomColorbars(
-                        fig,
-                        ax,
-                        conf,
-                        config,
-                        heightFac * 1.0,
-                        barBottom,
-                        0.0,
-                        color2,
-                        rowHeight,
-                        colWidth,
-                        bottomNorm,
-                        leftNorm,
-                        hOffset=-0.6,
-                    )
+                    addCustomColorbars(fig, conf, config, heightFac, barBottom, 0.0, color2, colWidth, leftNorm)
 
             if nRows == 1 or (nRows > 2 and curRow == nRows - 1):
                 # only below, one per column
-                addCustomColorbars(
-                    fig,
-                    ax,
-                    conf,
-                    config,
-                    heightFac,
-                    barBottom,
-                    barTop,
-                    color2,
-                    rowHeight,
-                    colWidth,
-                    bottomNorm,
-                    leftNorm,
-                )
+                addCustomColorbars(fig, conf, config, heightFac, barBottom, barTop, color2, colWidth, leftNorm)
 
             if "vecColorbar" in p and p["vecColorbar"] and not oneGlobalColorbar:
                 raise Exception("Only support vecColorbar addition with oneGlobalColorbar type configuration.")
@@ -1591,30 +1508,16 @@ def renderMultiPanel(panels, conf):
         if oneGlobalColorbar:
             widthFrac = 0.8
             hOffset = None
-            heightFac = _heightfac()
 
             if "vecColorbar" not in p or not p["vecColorbar"]:
                 # normal
+                leftNorm = 0.5 - widthFrac / 2
                 addCustomColorbars(
-                    fig,
-                    ax,
-                    conf,
-                    config,
-                    heightFac,
-                    barBottom,
-                    barTop,
-                    color2,
-                    rowHeight,
-                    widthFrac,
-                    bottomNorm,
-                    0.5 - widthFrac / 2,
-                    hOffset=hOffset,
+                    fig, conf, config, heightFac, barBottom, barTop, color2, widthFrac, leftNorm, hOffset
                 )
             else:
                 # normal, offset to the left
-                addCustomColorbars(
-                    fig, ax, conf, config, heightFac, barBottom, barTop, color2, rowHeight, widthFrac, bottomNorm, 0.05
-                )
+                addCustomColorbars(fig, conf, config, heightFac, barBottom, barTop, color2, widthFrac, 0.05)
 
                 # colorbar for the vector field visualization, offset to the right
                 _, vConfig, _ = gridOutputProcess(
@@ -1623,9 +1526,7 @@ def renderMultiPanel(panels, conf):
                 vConfig["vecMinMax"] = p["vecMinMax"]
                 vConfig["ctName"] = p["vecColormap"]
 
-                addCustomColorbars(
-                    fig, ax, conf, vConfig, heightFac, barBottom, barTop, color2, rowHeight, widthFrac, bottomNorm, 0.55
-                )
+                addCustomColorbars(fig, conf, vConfig, heightFac, barBottom, barTop, color2, widthFrac, 0.55)
 
     # note: conf.saveFilename may be an in-memory buffer, or an actual filesystem path
     fig.savefig(conf.saveFilename, format=conf.outputFmt, facecolor=fig.get_facecolor(), bbox_inches=0)
