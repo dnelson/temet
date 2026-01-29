@@ -33,7 +33,7 @@ jobs:
       - name: Upload distributions
         uses: actions/upload-artifact@v4
         with:
-          name: release-dists
+          name: release-dists-${{ strategy.job-index }}
           path: dist/
 
   pypi-publish:
@@ -55,7 +55,8 @@ jobs:
       - name: Retrieve release distributions
         uses: actions/download-artifact@v5
         with:
-          name: release-dists
+          name: release-dists-*
+          merge-multiple: true
           path: dist/
 
       - name: Publish release distributions to PyPI
