@@ -660,10 +660,10 @@ class units:
         """Convert velocity field (for cells/particles, not group properties) into km/s."""
         assert self._sP.redshift is not None
 
-        x_phys = np.array(x, dtype="float32") * np.sqrt(self.scalefac)
+        x_phys = x * np.sqrt(self.scalefac)
         x_phys *= 1.0e5 / self.UnitVelocity_in_cm_per_s  # account for non-km/s code units
 
-        return x_phys
+        return x_phys.astype("float32")
 
     def groupCodeVelocityToKms(self, x):
         """Convert velocity vector (for groups, not subhalos nor particles) into km/s."""
@@ -1105,11 +1105,11 @@ class units:
 
         # calculate temperature (K)
         if temp is None:
-            temp = u.astype("float32")
-            temp *= (self.gamma - 1.0) / self.boltzmann * self.UnitEnergy_in_cgs / self.UnitMass_in_g * meanmolwt
+            energy_fac = self.UnitEnergy_in_cgs / self.UnitMass_in_g
+            temp = u * (self.gamma - 1.0) / self.boltzmann * energy_fac * meanmolwt
 
         # Eqn. 6
-        mass_g = mass.astype("float32") * (self.UnitMass_in_g) / self._sP.HubbleParam
+        mass_g = mass.astype("float64") * (self.UnitMass_in_g) / self._sP.HubbleParam
         dens_g_cm3 = self.codeDensToPhys(dens, cgs=True)  # g/cm^3
 
         Lx = 1.2e-24 / (meanmolwt) ** 2.0 * mass_g * dens_g_cm3 * np.sqrt(temp / self.boltzmann_keV)
