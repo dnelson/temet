@@ -13,7 +13,7 @@ This library is primarily serial, but supports parallelism in three key ways:
    that is used by default when requesting data via the shorthand form of e.g. ``sim.gas('pos')``. To handle GIL and 
    HDF5 library issues, the approach is multiple reader (sub)processes that each read hyperslabs of HDF5 datasets 
    into a single, shared memory array. Group catalogs are handled via 
-   ``illustris_python.groupcat`` (see `<http://www.github.com/nelson-group/illustris_python>`__), 
+   ``illustris_python.groupcat`` (see `<http://www.github.com/illustristng/illustris_python>`__), 
    where the approach is multi-process reading and pickled aggregation.
 
 2. Parallel processing of analysis tasks, primarily in the catalog creation routines. The approach is a custom 

@@ -35,7 +35,7 @@ dependencies = [
     #"requests-oathlib",
     "scipy",
     "pybind11",
-    "illustris_python @ git+https://github.com/illustristng/illustris_python@master",
+    "illustris_python",
 ]
 keywords = ["astronomy", "simulation", "cosmology", "astrophysics"]
 classifiers = [
