@@ -55,6 +55,20 @@ with this toolkit.
     source/temet.util
     source/temet.vis
 
+.. caution::
+
+    This documentation is a work in progress. Please report any issues or suggestions.
+
+    For that matter, the entire **temet** library is a work in progress.
+
+    It may not be the polished, well-documented, or fully-featured library you are expecting.
+    Rather than being developed from scratch as a user-facing software package, it is the evolution of 
+    various personal research projects, with functionality slowly generalized and expanded over time.
+    As a result, it will have many rough edges and incomplete features.
+
+    However, it is being actively developed and improved. You are welcome to play with it and see if it may 
+    be useful. Feedback is always welcome!
+
 
 Citation and Acknowledgment
 ===========================
