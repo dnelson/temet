@@ -153,7 +153,7 @@ def loadMPBs(sP, ids, fields=None, treeName=treeName_default):
     return result
 
 
-def loadTreeFieldnames(sP, treeName=treeName_default):
+def treeFieldnames(sP, treeName=treeName_default):
     """Load names of fields available in a mergertree."""
     assert sP.snap is not None, "sP.snap required"
 
@@ -167,7 +167,7 @@ def loadTreeFieldnames(sP, treeName=treeName_default):
     raise Exception("Unrecognized treeName.")
 
 
-def insertMPBGhost(mpb, snap):
+def _insertMPBGhost(mpb, snap):
     """Insert a ghost entry into a MPB dict by interpolating over neighboring snapshot information.
 
     Appropriate if e.g. a group catalog if corrupt but snapshot files are ok. Could also be used to
@@ -210,7 +210,7 @@ def mpbPositionComplete(sP, id, extraFields=None):
     fields = ["SubfindID", "SnapNum", "SubhaloPos"]
 
     # any extra fields to be loaded?
-    treeFileFields = loadTreeFieldnames(sP)
+    treeFileFields = treeFieldnames(sP)
 
     for field in iterable(extraFields):
         if field not in fields and field in treeFileFields:
@@ -235,7 +235,7 @@ def mpbPositionComplete(sP, id, extraFields=None):
     for snap in np.arange(mpb["SnapNum"].min(), mpb["SnapNum"].max()):
         if snap in mpb["SnapNum"]:
             continue
-        mpb = insertMPBGhost(mpb, snap)
+        mpb = _insertMPBGhost(mpb, snap)
         # print(' mpb inserted [%d] ghost' % snap)
 
     # rearrange into ascending snapshot order, and are we already done?
@@ -291,7 +291,7 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
         for snap in np.arange(mpb["SnapNum"].min(), mpb["SnapNum"].max()):
             if snap in mpb["SnapNum"]:
                 continue
-            mpb = insertMPBGhost(mpb, snap=snap)
+            mpb = _insertMPBGhost(mpb, snap=snap)
 
     # add redshift
     mpb_z = sim.snapNumToRedshift(mpb["SnapNum"])

@@ -258,7 +258,7 @@ def coolcore_tcool(sim, field):
     return _coolcore_load(sim, "centralCoolingTime")
 
 
-coolcore_tcool.label = r"Central $t_{\rm cool}"
+coolcore_tcool.label = r"Central $t_{\rm cool}$"
 coolcore_tcool.units = "Gyr"
 coolcore_tcool.limits = [0.0, 10.0]
 coolcore_tcool.log = False
@@ -353,7 +353,7 @@ def peakoffset_xray(sim, field):
 
 
 peakoffset_xray.label = r"$\Delta x_{\rm X-ray}$"
-peakoffset_xray.units = "$\rm{kpc}$"
+peakoffset_xray.units = r"$\rm{kpc}$"
 peakoffset_xray.limits = [-1.5, 2.5]
 peakoffset_xray.log = True
 
@@ -387,7 +387,7 @@ def peakoffset_sz(sim, field):
 
 
 peakoffset_sz.label = r"$\Delta x_{\rm SZ}$"
-peakoffset_sz.units = "$\rm{kpc}$"
+peakoffset_sz.units = r"$\rm{kpc}$"
 peakoffset_sz.limits = [-1.5, 2.5]
 peakoffset_sz.log = True
 
@@ -876,7 +876,7 @@ def tr_angmom_tacc_(sim, field):
     return vals
 
 
-tr_angmom_tacc_.label = r"Tracer Mean j$_{\rm spec}$ at $t_{\\rm acc}$"
+tr_angmom_tacc_.label = r"Tracer Mean j$_{\rm spec}$ at $t_{\rm acc}$"
 tr_angmom_tacc_.units = r"kpc km/s"
 tr_angmom_tacc_.limits = [3.0, 5.0]
 tr_angmom_tacc_.log = False  # auxCat() angmom vals are in log
@@ -893,7 +893,7 @@ def tr_entr_tacc_(sim, field):
     return vals
 
 
-tr_entr_tacc_.label = r"Tracer Mean S$_{\rm gas}$ at $t_{\\rm acc}$"
+tr_entr_tacc_.label = r"Tracer Mean S$_{\rm gas}$ at $t_{\rm acc}$"
 tr_entr_tacc_.units = r"K cm$^2$"
 tr_entr_tacc_.limits = [7.0, 9.0]
 tr_entr_tacc_.log = False  # auxCat() entr vals are in log
@@ -910,7 +910,7 @@ def tr_temp_tacc_(sim, field):
     return vals
 
 
-tr_temp_tacc_.label = r"Tracer Mean T$_{\rm gas}$ at $t_{\\rm acc}$"
+tr_temp_tacc_.label = r"Tracer Mean T$_{\rm gas}$ at $t_{\rm acc}$"
 tr_temp_tacc_.units = r"K"
 tr_temp_tacc_.limits = [4.8, 6.0]
 tr_temp_tacc_.log = False  # auxCat() temp vals are in log

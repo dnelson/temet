@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import SubsetRandomSampler
 
 from ..ML.common import test_model, train_model
-from ..util import simParams
+from ..util.simParams import simParams
 
 
 class SMHMDataset(Dataset):

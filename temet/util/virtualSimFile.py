@@ -7,7 +7,7 @@ from os import getcwd, path
 
 import h5py
 
-from ..util import simParams
+from ..util.simParams import simParams
 
 
 def _addPostprocessingCat(fSim, filepath, baseName, gNames, rootOnly=False):

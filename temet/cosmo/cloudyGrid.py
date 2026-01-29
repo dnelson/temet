@@ -12,8 +12,8 @@ import h5py
 import numpy as np
 
 from ..cosmo import hydrogen
-from ..util import simParams
 from ..util.helper import closest, logZeroNaN, rootPath
+from ..util.simParams import simParams
 
 
 basePath = rootPath + "tables/cloudy/"

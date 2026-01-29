@@ -13,9 +13,9 @@ import numpy as np
 from numba import jit
 
 from ..ICs.utilities import write_ic_file
-from ..util import simParams
 from ..util.helper import pSplitRange
 from ..util.match import match
+from ..util.simParams import simParams
 
 
 @jit(nopython=True, cache=True)

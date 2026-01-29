@@ -2,6 +2,7 @@ Cookbook of Examples
 ====================
 
 .. contents::
+    :local:
 
 Galaxy/Halo Catalog Queries
 ---------------------------
@@ -322,7 +323,7 @@ Plot the relationship between galaxy sizes and galaxy stellar mass (and/or halo 
   ax.set_rasterization_zorder(1)
 
   # draw median line
-
+  # todo: finish
 
   # finish plot
   ax.set_xlabel("Galaxy Stellar Mass [log $M_\odot$]")
@@ -331,3 +332,12 @@ Plot the relationship between galaxy sizes and galaxy stellar mass (and/or halo 
 
   fig.savefig("exercise_1.pdf")
   plt.close(fig)
+
+
+--------
+
+
+Contributed Examples
+--------------------
+
+Made an interesting analysis, plot, or visualization? Share it here!

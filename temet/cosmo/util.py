@@ -11,9 +11,9 @@ from scipy import interpolate
 
 from ..cosmo.mergertree import loadMPBs
 from ..load.snapshot import subboxVals
-from ..util import simParams
 from ..util.helper import closest, contiguousIntSubsets, evenlySample
 from ..util.match import match
+from ..util.simParams import simParams
 from ..util.treeSearch import buildFullTree, calcQuantReduction
 
 

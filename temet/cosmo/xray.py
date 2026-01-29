@@ -11,8 +11,8 @@ from scipy.integrate import cumulative_trapezoid
 from scipy.ndimage import map_coordinates
 
 from ..plot.util import contourf, plothist, plotxy, sampleColorTable
-from ..util import simParams
 from ..util.helper import closest, rootPath
+from ..util.simParams import simParams
 
 
 basePath = rootPath + "tables/xray/"
@@ -669,8 +669,6 @@ def plotXrayEmissivities():
 
 def compare_tables_single_cell():
     """Debugging: compare XSPEC-based and APEC_based tables, for single cell results."""
-    from ..util import simParams
-
     # config
     sP = simParams(run="tng100-1", redshift=0.0)
 

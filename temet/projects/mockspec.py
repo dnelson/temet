@@ -100,7 +100,7 @@ def lightconeSpectraConfig(sim, max_redshift=5.0):
       a 3-tuple composed of
 
       - **snaps** (list[int]): the snapshot numbers which need to be used to cover the sightline.
-      - **num_boxes** (:py:class:`~numpy.ndarray`[int]): the number of times a full-box pathlength
+      - **num_boxes** (ndarray[int]): the number of times a full-box pathlength
         needs to be replicated for each snapshot.
       - **z_init** (list[list[float]]): for each snapshot, a list of redshifts, corresponding to
         where each of the replications should be started.

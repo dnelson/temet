@@ -9,7 +9,7 @@ import numpy as np
 
 from ..spectra.spectrum import create_spectra_from_traced_rays
 from ..spectra.util import _equiv_width, create_wavelength_grid, line_params, lines, sP_units_c_km_s
-from ..util import simParams
+from ..util.simParams import simParams
 from ..util.sphMap import sphGridWholeBox, sphMap
 from ..util.treeSearch import buildFullTree
 from ..util.voronoi import loadGlobalVPPP, loadSingleHaloVPPP

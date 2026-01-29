@@ -2,12 +2,14 @@
 Drivers (i.e. examples) of plots using the generalized functionality.
 """
 
+import glob
+
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 
 from ..plot import snapshot, subhalos
 from ..plot.quantities import quantList
-from ..util import simParams
+from ..util.simParams import simParams
 
 
 # --- subhalos ---
@@ -408,10 +410,6 @@ def plots_tng50_structural(rel=False, sP=None):
 
 def compareRuns_PhaseDiagram():
     """Compare a series of runs in a PDF booklet of phase diagrams."""
-    import glob
-
-    from matplotlib.backends.backend_pdf import PdfPages
-
     # config
     redshift = 0.0
     yQuant = "temp"
@@ -438,8 +436,6 @@ def compareRuns_PhaseDiagram():
 
 def oneRun_PhaseDiagram(redshift=None, snaps=None, hInd=10677, res=13, variant="ST7"):
     """Density temperature phase diagram for a single halo or full box, over multiple snapshots."""
-    from matplotlib.backends.backend_pdf import PdfPages
-
     # config
     sim = simParams(run="structures", hInd=hInd, res=res, variant=variant, redshift=redshift)
 
@@ -488,8 +484,6 @@ def oneRun_PhaseDiagram(redshift=None, snaps=None, hInd=10677, res=13, variant="
 
 def oneRun_tempcheck():
     """Driver."""
-    from matplotlib.backends.backend_pdf import PdfPages
-
     # config
     sP = simParams(run="tng50-1")
     xQuant = "nh"
@@ -662,8 +656,6 @@ def compareRuns_particleQuant():
 
 def coolingPhase():
     """Phase diagram colored by different quantities."""
-    from matplotlib.backends.backend_pdf import PdfPages
-
     # config
     yQuant = "temp"
     xQuant = "numdens"

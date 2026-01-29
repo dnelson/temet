@@ -13,9 +13,9 @@ import h5py
 import numpy as np
 
 from ..cosmo.util import multiRunMatchedSnapList, snapNumToAgeFlat, snapNumToRedshift
-from ..util import simParams
 from ..util.helper import crossmatchHalosByCommonIDs, logZeroMin, nUnique, pSplitRange
 from ..util.match import match
+from ..util.simParams import simParams
 from ..util.sphMap import sphGridWholeBox, sphMap
 
 

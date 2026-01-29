@@ -410,8 +410,8 @@ def bmag(sim, partType, field, args):
 
 bmag.label = "Magnetic Field Strength"
 bmag.units = r"$\rm{Gauss}$"
-bmag.limits = [-15.0, -4.0]
-bmag.limits_halo = [-9.0, -3.0]
+bmag.limits = [-15.0, -3.0]
+bmag.limits_halo = [-9.0, -2.0]
 bmag.log = True
 
 
@@ -1251,7 +1251,7 @@ def xray_lum_apec(sim, partType, field, args):
 
 
 def xray_lum_apec_metadata(sim, pt, f, ret):
-    """Helper to determine 'xray_' field metadata."""
+    """Helper to determine xray_* field metadata."""
     label = "X"
 
     if "05-2kev" in f:
@@ -2351,7 +2351,7 @@ def pos_rel(sim, partType, field, args):
 
 
 pos_rel.label = (
-    lambda sim, pt, f: "Halocentric Position" if "_rvir" not in f else "Halocentric Position / R$_{\\rm vir}$"
+    lambda sim, pt, f: "Halocentric Position" if "_rvir" not in f else r"Halocentric Position / R$_{\rm vir}$"
 )
 pos_rel.units = lambda sim, pt, f: r"$\rm{kpc}$" if "_kpc" in f else "" if "_rvir" in f else "code_length"
 pos_rel.limits = [-1e3, 1e3]

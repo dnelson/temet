@@ -16,8 +16,8 @@ from ..tracer.montecarlo import (
     subhalosTracersTimeEvo,
     subhaloTracersTimeEvo,
 )
-from ..util import simParams
 from ..util.helper import pSplitRange
+from ..util.simParams import simParams
 
 
 # integer flags for accretion modes

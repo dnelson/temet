@@ -16,9 +16,9 @@ from scipy.ndimage import map_coordinates
 
 from ..cosmo.hydrogen import neutral_fraction
 from ..plot.config import figsize
-from ..util import simParams
 from ..util.helper import isUnique, rootPath
 from ..util.match import match
+from ..util.simParams import simParams
 
 
 def convertGadgetICsToHDF5(aip=False):

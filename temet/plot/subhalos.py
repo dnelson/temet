@@ -8,7 +8,6 @@ from getpass import getuser
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize, colorConverter
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d
 
@@ -119,7 +118,7 @@ def histogram2d(
     """
     assert cenSatSelect in ["all", "cen", "sat"]
     assert cStatistic in [None, "mean", "median", "count", "sum", "mean_nan", "median_nan"]  # or any user function
-    assert np.count_nonzero([cRel, cFrac]) <= 1  # at most one
+    assert np.sum([cRel is not None, cFrac is not None]) <= 1  # at most one is not None
 
     # hard-coded config
     if nBins is None:
@@ -410,7 +409,9 @@ def histogram2d(
         cc2d_rgb[nn < minCount] = colorConverter.to_rgba(color1)
 
     # plot
-    plt.imshow(cc2d_rgb, extent=extent, origin="lower", interpolation="nearest", aspect="auto", cmap=cmap, norm=norm)
+    im = plt.imshow(
+        cc2d_rgb, extent=extent, origin="lower", interpolation="nearest", aspect="auto", cmap=cmap, norm=norm
+    )
 
     # method (B) unused
     # reduceMap = {'mean':np.mean, 'median':np.median, 'count':np.size, 'sum':np.sum}
@@ -541,11 +542,10 @@ def histogram2d(
         ax.legend(loc="upper left")
 
     # colorbar
-    cax = make_axes_locatable(ax).append_axes("right", size="4%", pad=0.2)
-    cb = plt.colorbar(cax=cax)
+    cb = fig.colorbar(im, ax=ax, pad=0.02)
     cb.ax.set_ylabel(clabel)
     if len(clabel) > 45:
-        newsize = 23 - (len(clabel) - 45) / 5
+        newsize = 27 - (len(clabel) - 45) / 5
         cb.ax.set_ylabel(clabel, size=newsize)  # default: 24.192 (14 * x-large)
     setColorbarColors(cb, color2)
 
@@ -581,6 +581,7 @@ def slice(
     ylim=None,
     filterFlag=False,
     sizefac=None,
+    saveFilename=None,
     pdf=None,
 ):
     """Make a 1D 'slice' showing the dependence of one quantity on another, for subhalos selected by a range in a third.
@@ -595,8 +596,8 @@ def slice(
     If xlim or ylim are not None, then override the respective axes ranges with these [min,max] bounds.
     If sRange is a list of lists, then overplot multiple different slice ranges.
     If yRel is not None, then should be a 3-tuple of [relMin,relMax,takeLog] or 4-tuple of
-      [relMin,relMax,takeLog,yLabel] in which case the y-axis is not of the physical yQuants themselves,
-      but rather the value of the quantity relative to the median in the slice (e.g. mass).
+    [relMin,relMax,takeLog,yLabel] in which case the y-axis is not of the physical yQuants themselves,
+    but rather the value of the quantity relative to the median in the slice (e.g. mass).
     If filterFlag, exclude SubhaloFlag==0 (non-cosmological) objects.
     """
     assert cenSatSelect in ["all", "cen", "sat"]
@@ -744,7 +745,9 @@ def slice(
     if pdf is not None:
         pdf.savefig()
     else:
-        fig.savefig("slice1d_%s_%s_%s_%s.pdf" % ("-".join(yQuants), xQuant, sQuant, cenSatSelect))
+        if saveFilename is None:
+            saveFilename = "slice1d_%s_%s_%s_%s.pdf" % ("-".join(yQuants), xQuant, sQuant, cenSatSelect)
+        fig.savefig(saveFilename)
     plt.close(fig)
 
 
@@ -785,14 +788,13 @@ def median(
     cbarticks=None,
     filterFlag=False,
     colorbarInside=False,
+    saveFilename=None,
     pdf=None,
 ):
     """Plot the running median (optionally with scatter points) of some quantity vs another for all subhalos.
 
     Args:
       sPs (:py:class:`~util.simParams` or list): simulation instance(s).
-      pdf (PdfPages or None): if None, an actual PDF file is written to disk with the figure.
-        If not None, then the figure is added to this existing pdf collection.
       yQuants (str or list[str]): names of quantities (could be just one) to plot on the y-axis.
         Multiple yQuants results in a grid of panels.
       xQuant (str): name of quantity to plot on the x-axis.
@@ -839,6 +841,9 @@ def median(
       cbarticks (list[float]): if not None, override automatic colorbar tick values.
       filterFlag (bool): if True, exclude SubhaloFlag==0 (non-cosmological) objects.
       colorbarInside (bool): place colorbar (assuming scatterColor is used) inside the panel.
+      saveFilename (str): name (and extension, setting format) of output plot. Automatic if None.
+      pdf (PdfPages or None): if None, an actual PDF file is written to disk with the figure.
+        If not None, then the figure is added to this existing pdf collection.
 
     Returns:
       None. PDF figure is saved in current directory, or added to ``pdf`` if input.
@@ -1267,28 +1272,31 @@ def median(
             orientation = "horizontal"
             # cax.patch.set_facecolor('white') # doesn't work
             # cax.patch.set_alpha(1.0)
-        else:
-            cax = make_axes_locatable(ax).append_axes("right", size="4%", pad=0.2)
-            orientation = "vertical"
 
-        cb = plt.colorbar(sc, cax=cax, orientation=orientation, ticks=cbarticks)
-        cb.set_alpha(1)  # fix stripes
-        cb.draw_all()
+            cb = plt.colorbar(sc, cax=cax, orientation=orientation, ticks=cbarticks)
+        else:
+            orientation = "vertical"
+            cb = fig.colorbar(sc, ax=ax, ticks=cbarticks, pad=0.02)
+
+        # cb.set_alpha(1)  # fix stripes
+        # cb.draw_all()
         if orientation == "vertical":
             cb.ax.set_ylabel(clabel)
         if orientation == "horizontal":
             cb.ax.set_title(clabel)
         if len(clabel) > 45:
-            newsize = 23 - (len(clabel) - 45) / 5
+            newsize = 27 - (len(clabel) - 45) / 5
             cb.ax.set_ylabel(clabel, size=newsize)  # default: 24.192 (14 * x-large)
 
     # finish plot and save
     if pdf is not None:
         pdf.savefig()
     else:
-        simNames = "-".join(sorted({sP.simName for sP in sPs}))
-        colorStr = "_c=%s" % scatterColor if scatterColor is not None else ""
-        yQuantsStr = "-".join(list(yQuants))
-        fig.savefig("medianQuants_%s_%s_%s%s_%s.pdf" % (simNames, yQuantsStr, xQuant, colorStr, cenSatSelect))
+        if saveFilename is None:
+            simNames = "-".join(sorted({sP.simName for sP in sPs}))
+            colorStr = "-%s" % scatterColor if scatterColor is not None else ""
+            yQuantsStr = "-".join(list(yQuants))
+            saveFilename = "median_%s_%s-%s%s_%s.pdf" % (simNames, yQuantsStr, xQuant, colorStr, cenSatSelect)
+        fig.savefig(saveFilename)
 
     plt.close(fig)

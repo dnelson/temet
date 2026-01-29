@@ -4,8 +4,8 @@ Render specific fullbox visualizations.
 
 import numpy as np
 
-from ..util import simParams
 from ..util.rotation import rotationMatrixFromVec
+from ..util.simParams import simParams
 from ..vis.box import renderBox
 from ..vis.common import savePathDefault
 from ..vis.halo import renderSingleHalo

@@ -199,6 +199,10 @@ def sfr_vs_mstar(sims: list[simParams], yQuant: str) -> None:
         yerr = [n23["sfr_err1"][w], n23["sfr_err2"][w]]
         ax.errorbar(n23["mstar"][w], n23["sfr"][w], xerr=xerr, yerr=yerr, fmt="o", color="#555", alpha=0.3, label=label)
 
+        # Asada+26 (z~6) GLIMPSE
+        # https://arxiv.org/abs/2601.20045
+        # TODO
+
         # Popesso+23 model at z=3+ (Eqn. 15)
         a0 = 2.71
         a1 = -0.186
@@ -498,6 +502,9 @@ def gas_mzr(sims):
         # TODO: z=5-6
         # https://arxiv.org/abs/2510.19959
         # https://arxiv.org/abs/2512.03134
+
+        # Asada+26 (z~6) GLIMPSE
+        # https://arxiv.org/abs/2601.20045
 
     subhalos_evo.scatter2d(
         sims,
@@ -1454,14 +1461,14 @@ def paperPlots(a=False):
     """Plots for MCST intro paper. (if a == True, make all figures)."""
     # list of sims to include
     variants = ["ST15"]  # ['ST14','ST15'] #,'ST15c','ST15m','ST15s']
-    res = [14]  # , 15, 16]  # [14,15,16]
+    res = [16]  # , 15, 16]  # [14,15,16]
     # hInds: [1958,5072,15581,23908,31619,73172,219612,311384,844537]
-    hInds = [219612, 311384, 844537]
+    hInds = [219612]  # , 311384, 844537]
     redshift = 5.5
 
     # if (all == False), only dz < 0.1 matches
     # if (single == True), only the highest available res of each halo
-    sims = _get_existing_sims(variants, res, hInds, redshift, all=False, single=False)
+    sims = _get_existing_sims(variants, res, hInds, redshift, all=True, single=False)
 
     # contamination diagnostic printout and SMBH printout (info only)
     if 0:
@@ -1508,7 +1515,7 @@ def paperPlots(a=False):
         grackle_equil()
 
     # fig 2: simulation comparison meta-plot
-    if 0:
+    if 1:
         simHighZComparison()
 
     # fig 3: composite vis (i) parent box dm, (ii) halo-scale gas, (iii) galaxy-scale gas+stars
@@ -1569,7 +1576,7 @@ def paperPlots(a=False):
         #    subhalos_evo.tracks1d(sims_loc, quant, sfh_lin=False, sfh_treebased=False, **opts)
 
     # fig 7a: smhm relation
-    if 1 or a:
+    if 0 or a:
         smhm_relation(sims)
 
     # fig 7b: stellar mass vs redshift evo (using stellar histo)

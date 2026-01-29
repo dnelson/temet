@@ -1597,7 +1597,7 @@ class simParams:
         Allows different simulations to use arbitrary numbers for each type (so far they do not).
         """
         if partType in ["dmlowres", "dmcoarse"]:
-            assert self.isZoom or self.simName == "TNG-Cluster"
+            # assert self.isZoom or self.simName == "TNG-Cluster" # e.g. isPartType() check from non-zoom
             return 2  # sims.zooms, sims.zooms2 ICs configuration
 
         if "PartType" in str(partType):

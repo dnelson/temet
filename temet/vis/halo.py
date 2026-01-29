@@ -3,13 +3,11 @@ Visualizations for individual halos/subhalos from ..cosmological runs.
 """
 
 from copy import deepcopy
-from datetime import datetime
 from getpass import getuser
 from os.path import isfile
 
 import numpy as np
 
-from ..util import simParams
 from ..util.helper import evenlySample
 from ..util.rotation import (
     meanAngMomVector,
@@ -18,7 +16,8 @@ from ..util.rotation import (
     rotationMatrixFromAngleDirection,
     rotationMatrixFromVec,
 )
-from ..vis.common import renderMultiPanel, savePathDefault
+from ..util.simParams import simParams
+from ..vis.common import renderMultiPanel
 from ..vis.render import defaultHsmlFac, gridBox
 
 
@@ -226,7 +225,7 @@ def haloImgSpecs(
     return boxSizeImg, boxCenter, extent, haloVirRad, galHalfMassRad, galHalfMassRadStars, rotMatrix, rotCenter
 
 
-def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, returnData=False):
+def renderSingleHalo(panels_in, plotConfig=None, localVars=None, skipExisting=False, returnData=False):
     """Render view(s) of a single halo in one plot, with a variable number of panels.
 
     Compare any combination of parameters (res, run, redshift, vis field, vis type, vis direction, ...).
@@ -255,7 +254,7 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
     depthType   = 'rVirial'     # as sizeType except for depth, if depth is not None
     #hsmlFac     = 2.5          # multiplier on smoothing lengths for sphMap
     ptRestrictions = None       # dictionary of particle-level restrictions to apply
-    axes        = [1,0]         # e.g. [0,1] is x,y
+    axes        = [0,1]         # e.g. [0,1] is x,y
     axesUnits   = 'code'        # code [ckpc/h], kpc, mpc, deg, arcmin, arcsec
     vecOverlay  = False         # add vector field quiver/streamlines on top? then name of field [bfield,vel]
     vecMethod   = 'E'           # method to use for vector vis: A, B, C, D, E, F (see common.py)
@@ -286,14 +285,31 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
     # defaults (global plot configuration options)
     class plotConfigDefaults:
         plotStyle = "open"  # open, edged, open_black, edged_black
-        rasterPx = [1400, 1400]  # each panel will have this number of pixels if making a raster (png) output
+        rasterPx = [1000, 1000]  # each panel will have this number of pixels if making a raster (png) output
         # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True  # include colorbars
         colorbarOverlay = False  # overlay on top of image
         title = True  # include title (only for open* styles)
         outputFmt = None  # if not None (automatic), then a format string for the matplotlib backend
 
-        saveFilename = savePathDefault + "renderHalo_N%d_%s.pdf" % (len(panels), datetime.now().strftime("%d-%m-%Y"))
+        _sim_str = ""
+        _field_str = ""
+        if all("sP" in p for p in panels) and len(panels) <= 2:
+            _sim_str = "_" + "-".join([p["sP"].simName for p in panels])
+        if all("partType" in p for p in panels) and all("partField" in p for p in panels) and len(panels) <= 2:
+            _field_str = "_" + "_".join(["%s-%s" % (p["partType"], p["partField"]) for p in panels])
+        saveFilename = "renderHalo_N%d%s%s.jpg" % (len(panels), _sim_str, _field_str)
+
+    if plotConfig is None:
+        plotConfig = plotConfigDefaults()
+    if isinstance(plotConfig, dict):
+        # todo: remove this backward compatibility hack (plotConfig should just be a dict in the future)
+        config = plotConfigDefaults()
+        for k, v in plotConfig.items():
+            setattr(config, k, v)
+        plotConfig = config
+    if localVars is None:
+        localVars = {}
 
     # skip if final output render file already exists?
     if skipExisting and hasattr(plotConfig, "saveFilename") and isfile(plotConfig.saveFilename) and not returnData:
@@ -383,7 +399,7 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
     renderMultiPanel(panels, plotConfig)
 
 
-def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
+def renderSingleHaloFrames(panels_in, plotConfig=None, localVars=None, skipExisting=True):
     """Render view(s) of a single halo, repeating across all snapshots using the smoothed MPB properties."""
     panels = deepcopy(panels_in)
 
@@ -409,7 +425,7 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
     depthType   = 'rVirial'       # as sizeType except for depth, if depth is not None
     #hsmlFac     = 2.5            # multiplier on smoothing lengths for sphMap
     ptRestrictions = None         # dictionary of particle-level restrictions to apply
-    axes        = [1,0]           # e.g. [0,1] is x,y
+    axes        = [0,1]           # e.g. [0,1] is x,y
     axesUnits   = 'code'          # code [ckpc/h], mpc, deg, arcmin, arcsec
     vecOverlay  = False           # add vector field quiver/streamlines on top? then name of field [bfield,vel]
     vecMethod   = 'E'             # method to use for vector vis: A, B, C, D, E, F (see common.py)
@@ -437,20 +453,31 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
     # defaults (global plot configuration options)
     class plotConfigDefaults:
         plotStyle = "open"  # open, edged, open_black, edged_black
-        rasterPx = [1200, 1200]  # each panel will have this number of pixels if making a raster (png) output
+        rasterPx = [1000, 1000]  # each panel will have this number of pixels if making a raster (png) output
         # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True  # include colorbars
         colorbarOverlay = False  # overlay on top of image
         title = True  # include title (only for open* styles)
         outputFmt = None  # if not None (automatic), then a format string for the matplotlib backend
 
-        savePath = savePathDefault
+        savePath = ""  # savePathDefault
         saveFileBase = "renderHaloFrame"  # filename base upon which frame numbers are appended
 
         # movie config
         minRedshift = 0.0  # ending redshift of frame sequence (we go forward in time)
         maxRedshift = 100.0  # starting redshift of frame sequence (we go forward in time)
         maxNumSnaps = None  # make at most this many evenly spaced frames, or None for all
+
+    if plotConfig is None:
+        plotConfig = plotConfigDefaults()
+    if isinstance(plotConfig, dict):
+        # todo: remove this backward compatibility hack (plotConfig should just be a dict in the future)
+        config = plotConfigDefaults()
+        for k, v in plotConfig.items():
+            setattr(config, k, v)
+        plotConfig = config
+    if localVars is None:
+        localVars = {}
 
     # add plotConfig defaults
     for var in [v for v in vars(plotConfigDefaults) if not v.startswith("__")]:

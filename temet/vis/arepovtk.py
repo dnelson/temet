@@ -394,7 +394,6 @@ def makeColorBars():
     ]
 
     fig = plt.figure(figsize=(8, 1.5 * (len(fieldNames) + 2)))
-    fig.subplots_adjust(hspace=1.5)
 
     # load actual colortable
     for i, fieldName in enumerate(fieldNames):

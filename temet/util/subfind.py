@@ -13,6 +13,7 @@ import numpy as np
 from numba import jit, prange
 
 from ..util.match import match
+from ..util.simParams import simParams
 from ..util.sphMap import _NEAREST
 
 
@@ -3348,9 +3349,6 @@ def compare_subhalos_all_quantities(snap_start=67):
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
 
-    from ..plot.config import figsize
-    from ..util import simParams
-
     nBins = 50
 
     sPs = []
@@ -3382,8 +3380,7 @@ def compare_subhalos_all_quantities(snap_start=67):
         # start plot
         print(field)
 
-        fig = plt.figure(figsize=[figsize[0], figsize[1]])
-        ax = fig.add_subplot(111)
+        fig, ax = plt.subplots()
 
         ax.set_xlabel(field + " [log]")
         ax.set_ylabel("log N")
@@ -3445,8 +3442,7 @@ def compare_subhalos_all_quantities(snap_start=67):
 
         # separate plot for each type
         for pt in [0, 1, 4, 5]:
-            fig = plt.figure(figsize=[figsize[0], figsize[1]])
-            ax = fig.add_subplot(111)
+            fig, ax = plt.subplots()
 
             ax.set_xlabel(field + " [Type=%d] [log]" % pt)
             ax.set_ylabel("log N")
@@ -3471,7 +3467,6 @@ def compare_subhalos_all_quantities(snap_start=67):
 
 def run_subfind(snap):
     """Main driver."""
-    from ..util import simParams
     # sP = simParams(res=128,run='tng',snap=snap,variant='0000') # note: collective vs. serial algorithm
     # sP = simParams(res=512,run='tng',snap=snap,variant='0000')
 
@@ -3492,8 +3487,6 @@ def run_subfind(snap):
 
 def benchmark():
     """Benchmark."""
-    from ..util import simParams
-
     sP = simParams(res=256, run="tng", snap=4, variant="0000")
     # sP = simParams(res=2160,run='tng',snap=69)
 

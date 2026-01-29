@@ -7,8 +7,8 @@ from os.path import isfile
 import h5py
 import numpy as np
 
-from ..util import simParams
 from ..util.rotation import rotationMatrixFromAngleDirection
+from ..util.simParams import simParams
 from ..vis.common import savePathBase, savePathDefault
 from ..vis.halo import renderSingleHalo, renderSingleHaloFrames
 

@@ -1734,7 +1734,6 @@ def check_tracer_tmax_vs_curtemp2():
 
 def check_colors_benedikt():
     """Test my colors vs snapshot."""
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
     from scipy.stats import binned_statistic_2d
 
     sP = simParams(res=1820, run="tng", redshift=0.0)
@@ -1774,10 +1773,9 @@ def check_colors_benedikt():
     nn = np.log10(nn.T)
 
     extent = [minmax[0], minmax[1], minmax[0], minmax[1]]
-    plt.imshow(nn, extent=extent, origin="lower", interpolation="nearest", aspect="auto", cmap="viridis")
+    im = plt.imshow(nn, extent=extent, origin="lower", interpolation="nearest", aspect="auto", cmap="viridis")
 
-    cax = make_axes_locatable(ax).append_axes("right", size="4%", pad=0.2)
-    cb = plt.colorbar(cax=cax)
+    cb = fig.colorbar(im, ax=ax)
     cb.ax.set_ylabel("log Num gal")
 
     fig.savefig("mag_comp.pdf")
@@ -1897,7 +1895,6 @@ def vis_cholla_snapshot():
 
     # start plot
     from matplotlib.colors import Normalize
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
 
     from .plot.util import loadColorTable
 
@@ -1924,9 +1921,7 @@ def vis_cholla_snapshot():
             aspect=1.0,
         )
 
-        fig.subplots_adjust(right=0.89)
-        cbar_ax = make_axes_locatable(ax).append_axes("right", size="4%", pad=0.15)
-        cb = plt.colorbar(im, cax=cbar_ax)
+        cb = plt.colorbar(im, ax=ax, pad=0)
         cb.ax.set_ylabel(field)
 
         fig.savefig("cholla_%d_%s.pdf" % (num, field))

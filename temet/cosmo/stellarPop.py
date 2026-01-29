@@ -14,6 +14,7 @@ from scipy.ndimage import map_coordinates
 
 from ..util.helper import iterable, logZeroMin, logZeroNaN, rootPath, trapsum
 from ..util.rotation import rotateCoordinateArray, rotationMatrixFromVec
+from ..util.simParams import simParams
 from ..util.sphMap import sphMap
 
 
@@ -1314,8 +1315,6 @@ def debug_check_redshifting(redshift=0.8):
     Check the band magnitudes (from FSPS) and the band magnitudes derived from our convolving our
     spectra with the bandpass filters manually.
     """
-    from ..util import simParams
-
     sP = simParams(res=1820, run="tng", redshift=redshift)
     pop = sps(sP, "padova07", "chabrier", "none", redshifted=True)
 
@@ -1356,8 +1355,6 @@ def debug_check_redshifting(redshift=0.8):
 def debug_dust_plots():
     """Plot intermediate aspects of the resolved dust calculation."""
     import matplotlib.pyplot as plt
-
-    from ..util import simParams
 
     sP = simParams(res=1820, run="tng", redshift=0.0)
 

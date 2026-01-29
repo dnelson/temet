@@ -25,17 +25,17 @@ with this toolkit.
 
     installation
     first_steps
-    features
+    cookbook
 
 .. toctree::
     :titlesonly:
     :caption: Usage
 
+    loading
+    plotting
+    visualization
     quantities
     catalogs
-    visualization
-    plotting
-    cookbook
     advanced
 
 .. toctree::

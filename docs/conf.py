@@ -1,8 +1,8 @@
 """Configuration file for the Sphinx documentation builder.
 
 To build docs:
-    sphinx-apidoc -t docs/_templates/ -o docs/source .
-    rm docs/source/.rst docs/source/temet.rst docs/source/modules.rst docs/source/setup.rst
+    sphinx-apidoc -M -t docs/_templates/ -o docs/source .
+    cd docs/source; rm .rst temet.rst modules.rst tests.rst temet.projects.collab.rst; cd ../..
     sphinx-build -b html docs/ docs/_build/
 """
 
@@ -34,6 +34,8 @@ author = "Dylan Nelson"
 
 version = git_version()
 release = git_version()
+
+html_version = git_version()  # used in manual hack of sphinx_rtd_theme/searchbox.html
 
 # -- custom directive to dynamically generate .rst based on custom parsing ---
 
@@ -84,7 +86,7 @@ templates_path = ["_templates"]  # we use this for apidoc -t templates instead
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "collab/"]
 
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
@@ -113,7 +115,7 @@ intersphinx_mapping = {
 
 html_theme = "sphinx_rtd_theme"
 html_show_sphinx = False
-html_show_copyright = False
+html_show_copyright = True
 html_title = "documentation"
 html_logo = "_static/logo_sm.png"
 
@@ -139,6 +141,8 @@ def math_latex(label):
             state += 1
         else:
             label_math += s
+
+    assert state % 2 == 0, "Unmatched $ in label: %s" % label
 
     return label_math.strip()
 
@@ -168,7 +172,11 @@ def quant_rowtext(custom_fields, custom_fields_aliases, key, cat=False):
 
         for i in range(3):
             try:
-                f_label = f_label("", "", field)  # sim,pt are blank
+                if cat:
+                    f_label = f_label("", field)  # sim is blank
+                else:
+                    f_label = f_label("", "", field)  # sim,pt are blank
+
                 break  # quit on success
             except Exception:
                 if i == 0:
@@ -184,7 +192,10 @@ def quant_rowtext(custom_fields, custom_fields_aliases, key, cat=False):
     f_units = getattr(func, "units", "")
 
     if callable(f_units):
-        f_units = f_units("", "", key)  # sim,pt are blank
+        if cat:
+            f_units = f_units("", key)  # sim is blank
+        else:
+            f_units = f_units("", "", key)  # sim,pt are blank
 
     f_units = math_latex(f_units)
     if f_units == "":

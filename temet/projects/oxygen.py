@@ -1535,9 +1535,7 @@ def obsColumnsDataPlot(sP, saveName, radRelToVirRad=False, config="COS-Halos"):
         ax.legend(loc="upper right")
 
         # colorbar
-        fig.subplots_adjust(right=0.84)
-        cbar_ax = fig.add_axes([0.86, 0.12, 0.03, 0.84])
-        cb = fig.colorbar(s, cax=cbar_ax)
+        cb = fig.colorbar(s, ax=ax, pad=0)
         cb.ax.set_ylabel(c_label)
 
         cb.set_alpha(1)  # fix stripes

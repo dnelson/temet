@@ -31,10 +31,10 @@ from scipy.ndimage import center_of_mass, gaussian_filter, rotate, shift
 from scipy.stats import binned_statistic_2d
 
 from ..plot.util import loadColorTable
-from ..util import simParams
 from ..util.helper import dist_theta_grid, logZeroNaN, running_median
 from ..util.match import match
 from ..util.rotation import rotationMatrixFromAngle
+from ..util.simParams import simParams
 
 
 # config

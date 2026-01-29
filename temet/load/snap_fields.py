@@ -12,7 +12,7 @@ masses = {"label": "Mass", "units": "code_mass", "limits": [-3.0, 0.0], "limits_
 # --- gas ---
 
 density = {
-    "label": "$\\rho_{\\rm gas}$",
+    "label": r"$\rho_{\rm gas}$",
     "units": "code_density",
     "limits": [-12.0, 0.0],
     "limits_halo": [-4.0, 2.0],
@@ -21,7 +21,7 @@ density = {
 
 starformationrate = {
     "label": "Star Formation Rate",
-    "units": "M$_{\\rm sun}$ yr$^{-1}$",
+    "units": r"M$_{\rm sun}$ yr$^{-1}$",
     "limits": [-4.0, 2.0],
     "log": True,
 }

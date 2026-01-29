@@ -6,9 +6,9 @@ from os.path import isfile
 import h5py
 import numpy as np
 
-from ..util import simParams
 from ..util.boxRemap import findCuboidRemapInds, remapPositions
 from ..util.helper import pSplitRange
+from ..util.simParams import simParams
 
 
 def _load(sP, group, field, inds):

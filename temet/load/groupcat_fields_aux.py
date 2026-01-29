@@ -1923,7 +1923,7 @@ def m_bulge_counter_rot(sim, field):
 
 
 m_bulge_counter_rot.label = r"$M_{\rm bulge}$"
-m_bulge_counter_rot.units = r"M_\odot"
+m_bulge_counter_rot.units = r"$M_\odot$"
 m_bulge_counter_rot.limits = [8.0, 10.5]
 m_bulge_counter_rot.log = True
 
@@ -2076,7 +2076,7 @@ def pratio_halo_masswt(sim, field):
     return vals
 
 
-pratio_halo_masswt.label = r"$P$_{\rm B}$/P$_{\rm gas}$ (halo)"
+pratio_halo_masswt.label = r"$P_{\rm B} / P_{\rm gas}$ (halo)"
 pratio_halo_masswt.units = ""  # dimensionless
 pratio_halo_masswt.limits = [-2.0, 1.0]
 pratio_halo_masswt.log = True
@@ -2096,7 +2096,7 @@ def pratio_2rhalf_masswt(sim, field):
     return vals
 
 
-pratio_2rhalf_masswt.label = r"$P$_{\rm B}$/P$_{\rm gas}$ (ISM)"
+pratio_2rhalf_masswt.label = r"$P_{\rm B} / P_{\rm gas}$ (ISM)"
 pratio_2rhalf_masswt.units = ""  # dimensionless
 pratio_2rhalf_masswt.limits = [-2.0, 1.0]
 pratio_2rhalf_masswt.log = True
@@ -2116,7 +2116,7 @@ def bke_ratio_halo_masswt(sim, field):
     return vals
 
 
-bke_ratio_halo_masswt.label = r"u$_{\rm B}$/u$_{\rm KE}$ (halo)"
+bke_ratio_halo_masswt.label = r"$u_{\rm B} / u_{\rm KE}$ (halo)"
 bke_ratio_halo_masswt.units = ""  # dimensionless
 bke_ratio_halo_masswt.limits = [-2.0, 1.0]
 bke_ratio_halo_masswt.log = True
@@ -2136,7 +2136,7 @@ def bke_ratio_2rhalf_masswt(sim, field):
     return vals
 
 
-bke_ratio_2rhalf_masswt.label = r"u$_{\rm B}$/u$_{\rm KE}$ (ISM)"
+bke_ratio_2rhalf_masswt.label = r"$u_{\rm B} / u_{\rm KE}$ (ISM)"
 bke_ratio_2rhalf_masswt.units = ""  # dimensionless
 bke_ratio_2rhalf_masswt.limits = [-2.0, 1.0]
 bke_ratio_2rhalf_masswt.log = True
@@ -2281,7 +2281,7 @@ def bh_dedt(sim, field):
     return vals
 
 
-bh_dedt.label = r"Blackhole $\dot{E}_{\\rm BH}$"
+bh_dedt.label = r"Blackhole $\dot{E}_{\rm BH}$"
 bh_dedt.units = r"erg/s"
 bh_dedt.limits = [42.0, 45.0]
 bh_dedt.log = True
@@ -2345,7 +2345,7 @@ def bh_cummass_low(sim, field):
 
 
 bh_cummass_low.label = r"$\int$ M$_{\rm growth,low}$"
-bh_cummass_low.units = r"M_\odot"
+bh_cummass_low.units = r"$M_\odot$"
 bh_cummass_low.limits = [0.0, 7.0]
 bh_cummass_low.log = True
 
@@ -2361,7 +2361,7 @@ def bh_cummass_high(sim, field):
 
 
 bh_cummass_high.label = r"$\int$ M$_{\rm growth,high}$"
-bh_cummass_high.units = r"M_\odot"
+bh_cummass_high.units = r"$M_\odot$"
 bh_cummass_high.limits = [5.0, 9.0]
 bh_cummass_high.log = True
 
@@ -2461,7 +2461,7 @@ def wind_etam(sim, field):
     return vals
 
 
-wind_etam.label = r"Wind Mass Loading $\eta_{\rm M}"
+wind_etam.label = r"Wind Mass Loading $\eta_{\rm M}$"
 wind_etam.units = r""  # dimensionless
 wind_etam.limits = [-1.0, 2.0]
 wind_etam.log = True
@@ -2616,7 +2616,7 @@ vout_.log = True
 # ---------------------------- auxcat: other ------------------------------------------------------
 
 
-@catalog_field
+@catalog_field(alias="z_form")
 def zform(sim, field):
     """Formation redshift (of the halo), at which the subhalo had half of its current mass."""
     acField = "Subhalo_SubLink_zForm_mm5"
@@ -2655,7 +2655,7 @@ def stellarage(sim, field):
     return vals
 
 
-stellarage.label = r"$\rm{log t$_{age,\star}$}$"
+stellarage.label = r"$\rm{log t_{age,\star}$"
 stellarage.units = r"$\rm{Gyr}$"
 stellarage.limits = [0.0, 1.0]
 stellarage.log = True
@@ -2670,7 +2670,7 @@ def stellarage_4pkpc(sim, field):
     return vals
 
 
-stellarage_4pkpc.label = r"$\rm{log t$_{age,\star}$}$"
+stellarage_4pkpc.label = r"$\rm{log t_{age,\star}$"
 stellarage_4pkpc.units = r"$\rm{Gyr}$"
 stellarage_4pkpc.limits = [0.0, 1.0]
 stellarage_4pkpc.log = True

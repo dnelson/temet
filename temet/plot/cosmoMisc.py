@@ -13,8 +13,8 @@ from scipy.stats import binned_statistic
 
 from ..cosmo.util import snapNumToRedshift
 from ..plot.config import colors, figsize, lw
-from ..util import simParams
 from ..util.helper import running_median
+from ..util.simParams import simParams
 from .subhalos import addRedshiftAxis
 
 
@@ -1375,7 +1375,7 @@ def simHighZComparison():
     # plot setup
     fig = plt.figure(figsize=[figsize[0] * 1.2, figsize[1] * 0.9])
     ax = fig.add_subplot(111)
-    fig.subplots_adjust(right=0.8)
+    # fig.subplots_adjust(right=0.8)
     ax.set_rasterization_zorder(1)  # elements below z=1 are rasterized
 
     ax.set_xlim([1.2e5, 1e0])

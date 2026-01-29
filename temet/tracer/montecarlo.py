@@ -8,7 +8,7 @@ from os.path import expanduser, isdir, isfile
 import h5py
 import numpy as np
 
-from ..cosmo.mergertree import loadTreeFieldnames
+from ..cosmo.mergertree import treeFieldnames
 from ..cosmo.util import inverseMapPartIndicesToHaloIDs, inverseMapPartIndicesToSubhaloIDs
 from ..util.helper import bincount, iterable, nUnique, pSplitRange, reportMemory
 from ..util.match import match, match1
@@ -1341,7 +1341,7 @@ def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=Fals
     mpb["subhalo_ids_evo"] = np.zeros((len(evoSnaps), uniqSubhaloIDs.size), dtype="int32") - 1
 
     # load MPBs of all subhalos
-    treeFileFields = loadTreeFieldnames(sP, treeName=treeName)
+    treeFileFields = treeFieldnames(sP, treeName=treeName)
     fields = ["SnapNum", "SubfindID"]
 
     for field in iterable(extraFields):
@@ -1515,7 +1515,7 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
         # saved inside tracersTimeEvo() one snapshot at a time, can be restarted
         oneSnap = sP.res == 2160 and not sP.isSubbox
         oneSnap = False
-        print('TODO REMOVE')
+        print("TODO REMOVE")
 
         if "tracer_" in field:  # trField
             trVals = tracersTimeEvo(
@@ -1630,7 +1630,7 @@ def checkTracerMeta(sP):
 
 def concat_tracer_parent_cats():
     """Combine individual tracer_parent_indextype, tracer_subhalo_id, etc catalogs into single file."""
-    from ..util import simParams
+    from ..util.simParams import simParams
 
     sim = simParams("tng50-1")
     basePath = "/u/dnelson/sims.TNG/TNG50-1/postprocessing/tracer_tracks/"

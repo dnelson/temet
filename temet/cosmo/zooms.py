@@ -13,8 +13,8 @@ from scipy.signal import savgol_filter
 
 from ..load.simtxt import getCpuTxtLastTimestep
 from ..plot.config import colors, linestyles, lw, sKn, sKo
-from ..util import simParams
 from ..util.helper import logZeroNaN, running_median
+from ..util.simParams import simParams
 from ..vis.box import renderBox
 from ..vis.halo import renderSingleHalo, selectHalosFromMassBins
 

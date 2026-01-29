@@ -27,8 +27,8 @@ from scipy.interpolate import interp1d
 
 from ..load.data import loadSDSSFits
 from ..plot.config import figsize_sm
-from ..util import simParams
 from ..util.helper import curRepoVersion, pSplitRange
+from ..util.simParams import simParams
 
 
 # config (don't change anything...)

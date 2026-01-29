@@ -5,8 +5,8 @@ Render specific halo visualizations.
 import numpy as np
 
 from ..cosmo.util import crossMatchSubhalosBetweenRuns
-from ..util import simParams
 from ..util.helper import pSplit
+from ..util.simParams import simParams
 from ..vis.common import savePathDefault
 from ..vis.halo import renderSingleHalo, selectHalosFromMassBin
 

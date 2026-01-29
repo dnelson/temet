@@ -15,9 +15,9 @@ from scipy.signal import savgol_filter
 from ..catalog.gasflows import radialMassFluxes
 from ..plot.config import colors, figsize, linestyles, lw, sKn, sKo
 from ..plot.util import loadColorTable
-from ..util import simParams
 from ..util.helper import logZeroNaN, running_median, sgolay2d
 from ..util.match import match
+from ..util.simParams import simParams
 
 
 labels = {

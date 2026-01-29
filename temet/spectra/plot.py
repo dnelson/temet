@@ -914,7 +914,7 @@ def spectra_gallery_indiv(
                 # plot
                 axes[i, j].step(wave, flux[i * n + j, :], "-", c=colors[i * n + j], where="mid")
 
-        fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01, wspace=0.05, hspace=0.05)
+        # fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01, wspace=0.05, hspace=0.05)
 
     if style == "2d":
         # plot - single 2d panel, color indicating relative flux

@@ -15,6 +15,7 @@ from ..load.simtxt import loadCpuTxt, loadTimebinsTxt
 from ..plot.config import figsize
 from ..plot.util import getWhiteBlackColors, setAxisColors
 from ..util.helper import closest
+from ..util.simParams import simParams
 
 
 def _redshiftAxisHelper(ax):
@@ -309,8 +310,6 @@ def plotCpuTimes(sims=None, xlim=(0.0, 1.0)):
 
 def plotTimebins():
     """Plot analysis of timebins throughout the course of a run."""
-    from ..util import simParams
-
     # run config and load/parse
     saveBase = expanduser("~") + "/timebins_%s.pdf"
     numPtsAvg = 500  # average time series down to N total points
@@ -451,8 +450,6 @@ def plotTimebins():
 
 def plotTimebinsFrame(pStyle="white", conf=0, timesteps=None):
     """Plot analysis of timebins at one timestep."""
-    from ..util import simParams
-
     # run config and load/parse
     barWidth = 0.4
     lw = 4.5

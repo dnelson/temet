@@ -12,8 +12,8 @@ from scipy.signal import savgol_filter
 
 from ..cosmo.util import cenSatSubhaloIndices
 from ..plot.config import binSize, colors, figsize, linestyles, sKn, sKo
-from ..util import simParams
 from ..util.helper import logZeroNaN, running_median
+from ..util.simParams import simParams
 
 
 def galaxySizes(

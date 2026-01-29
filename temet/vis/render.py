@@ -758,12 +758,15 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
                 quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)
             else:
                 # temporary override, switch to halo specified load (for halo-centric quantities)
-                assert method in ["sphMap", "sphMap_subhalo"]  # must be fof-scope or subhalo-scope
-                haloID = sP.subhalo(sP.subhaloInd)["SubhaloGrNr"]
-                if method == "sphMap":
+                assert sP.subhaloInd is not None and "_global" not in method  # must be fof-scope or subhalo-scope
+                assert sP.haloInd is None or sP.subhaloInd is None  # just one
+
+                if "_subhalo" not in method:
+                    haloID = sP.subhalo(sP.subhaloInd)["SubhaloGrNr"]
                     quant = sP.snapshotSubset(partType, partFieldLoad, haloID=haloID)
-                if method == "sphMap_subhalo":
+                else:
                     quant = sP.snapshotSubset(partType, partFieldLoad, subhaloID=sP.subhaloInd)
+
                 assert quant.size == indRange[1] - indRange[0] + 1
         else:
             quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)

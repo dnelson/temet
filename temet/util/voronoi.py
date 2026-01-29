@@ -644,20 +644,15 @@ def _findCellFaces(i, num_ngb, ngb_inds, offset_ngb, pos):
             denom = (p[0] ** 2 + p[1] ** 2 + p[2] ** 2) * (face_cen[0] ** 2 + face_cen[1] ** 2 + face_cen[2] ** 2)
             angles[tetra_ind] = np.degrees(np.arccos(arg / np.sqrt(denom)))
 
-        import pdb
-
-        pdb.set_trace()
+        assert 0  # todo: finish
 
         # plot face polygon
         # plotFacePolygon(pos[i,:]-face_cen, pos[ind_j,:]-face_cen, tetra_cen[0:n_tetra,:])
-        # import pdb; pdb.set_trace()
-
-    # todo: finish
 
 
 def voronoiSliceWithPlane():
     """Testing."""
-    from ..util import simParams
+    from ..util.simParams import simParams
 
     sP = simParams(run="tng50-1", redshift=0.5)
     haloID = 19

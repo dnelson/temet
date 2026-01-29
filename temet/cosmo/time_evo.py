@@ -13,9 +13,9 @@ import numpy as np
 from scipy.stats import binned_statistic, binned_statistic_2d
 
 from ..cosmo.mergertree import mpbPositionComplete
-from ..util import simParams
 from ..util.helper import iterable, logZeroNaN
 from ..util.match import match
+from ..util.simParams import simParams
 
 
 def subhalo_subbox_overlap(sP, sbNum, subInds, verbose=False):

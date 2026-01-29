@@ -17,8 +17,8 @@ from ..ML.common import test_model, train_model
 from ..plot.config import figsize_sm, percs
 from ..spectra.analysis import load_absorber_spectra, load_spectra_subset
 from ..spectra.util import lines
-from ..util import simParams
 from ..util.helper import running_median
+from ..util.simParams import simParams
 
 
 class MockSpectraDataset(Dataset):

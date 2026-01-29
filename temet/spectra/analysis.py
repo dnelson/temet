@@ -18,6 +18,7 @@ from ..spectra.spectrum import (
 )
 from ..spectra.util import create_wavelength_grid, lines
 from ..util.helper import closest, contiguousIntSubsets, logZeroMin
+from ..util.simParams import simParams
 from ..util.units import units
 
 
@@ -648,7 +649,7 @@ def _cell_absorber_map(
     return spec_index, counts_abs, offset_abs, coldens_abs, colfrac_abs
 
 
-def cell_to_absorber_map(sP, ion, instrument, solar=False):
+def cell_to_absorber_map(sP: simParams, ion: str, instrument: str, solar: bool = False) -> tuple:
     """For each absorber, identify the gas cells that contribute to its optical depth.
 
     Return 'spec_index' is an ordered list of
@@ -658,17 +659,21 @@ def cell_to_absorber_map(sP, ion, instrument, solar=False):
     by the cells included here as 'significantly' contributing to the absorber.
 
     Args:
-      sP (:py:class:`~util.simParams`): simulation instance.
-      ion (str): space separated species name and ionic number e.g. 'Mg II'.
-      instrument (str): specify wavelength range and resolution, must be known in `instruments` dict.
-      solar (bool): if True, do not use simulation-tracked metal abundances, but instead
+      sP: simulation instance.
+      ion: space separated species name and ionic number e.g. 'Mg II'.
+      instrument: specify wavelength range and resolution, must be known in `instruments` dict.
+      solar: if True, do not use simulation-tracked metal abundances, but instead
         use the (constant) solar value.
 
     Returns:
-      ndarray[ind]: spec_index is an ordered list of global gas cell indices, stored with a length (counts_abs)
-        and offset (offset_abs) approach, where the length and offset are per absorber.
-      ndarray[float]: coldens_abs is the column density per absorber
-      ndarray[float]: colfrac_abs is the fraction of the (total) column density that is recovered by the cells
+      tuple of (spec_index, counts_abs, offset_abs, coldens_abs, colfrac_abs):
+
+      - spec_index (ndarray[int]): an ordered list of global gas cell indices, stored with a length (counts_abs)
+          and offset (offset_abs) approach, where the length and offset are per absorber.
+      - counts_abs (ndarray[int]): number of gas cell indices contributing to each absorber.
+      - offset_abs (ndarray[int]): offset into spec_index for each absorber.
+      - coldens_abs (ndarray[float]): column density per absorber.
+      - colfrac_abs (ndarray[float]): fraction of the (total) column density that is recovered by the cells
         included here as 'significantly' contributing to the absorber.
     """
     # lines of this ion

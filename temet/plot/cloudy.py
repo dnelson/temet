@@ -16,8 +16,8 @@ from ..cosmo.cloudyGrid import loadUVB
 from ..cosmo.hydrogen import photoCrossSecGray, photoRate, uvbEnergyDensity
 from ..plot.config import figsize, linestyles
 from ..plot.util import contourf, loadColorTable, sampleColorTable
-from ..util import simParams
 from ..util.helper import closest, evenlySample, logZeroNaN, rootPath
+from ..util.simParams import simParams
 
 
 def plotUVB(uvb="FG11"):
@@ -930,9 +930,7 @@ def ionAbundFracs2DHistos(saveName, element="Oxygen", ionNums=(6, 7, 8), redshif
         ax.text(y[-1] - 0.6, x[0] + 0.3, labelText, va="bottom", ha="right", color="white", fontsize="40")
 
     # colorbar on last panel only
-    fig.subplots_adjust(right=0.93)
-    cbar_ax = fig.add_axes([0.94, 0.131, 0.02, 0.821])
-    cb = fig.colorbar(c, cax=cbar_ax)
+    cb = fig.colorbar(c, ax=ax, pad=0)
     cb.ax.set_ylabel("Abundance Fraction [ log ]")
     cb.set_ticks(np.linspace(abund_range[0], abund_range[1], int(np.abs(abund_range[0])) + 1))
 

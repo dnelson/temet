@@ -806,24 +806,19 @@ def colored_line(x, y, c, ax, **lc_kwargs):
     """
     Plot a line with a color specified along the line by a third value.
 
-    It does this by creating a collection of line segments. Each line segment is
-    made up of two straight lines each connecting the current (x, y) point to the
+    Approach are line segments, each made up of two straight lines connecting the current (x, y) point to the
     midpoints of the lines connecting the current point with its two neighbors.
     This creates a smooth line with no gaps between the line segments.
 
-    Parameters
-    ----------
-    x, y : array-like
-        The horizontal and vertical coordinates of the data points.
-    c : array-like
-        The color values, which should be the same size as x and y.
-    ax : Axes
-        Axis object on which to plot the colored line.
+    Args:
+      x (ndarray[float]): x-coordinates of the points.
+      y (ndarray[float]): y-coordinates of the points.
+      c (ndarray[float]): color values at each point.
+      ax (matplotlib.axes.Axes): axis on which to plot the colored line.
+      **lc_kwargs: additional keyword arguments to pass to LineCollection.
 
     Returns:
-    -------
-    matplotlib.collections.LineCollection
-        The generated line collection representing the colored line.
+      matplotlib.collections.LineCollection: the generated line collection.
     """
     # Default the capstyle to butt so that the line segments smoothly line up
     default_kwargs = {"capstyle": "butt"}

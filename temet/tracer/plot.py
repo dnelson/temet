@@ -17,8 +17,8 @@ from ..cosmo.util import redshiftToSnapNum, snapNumToRedshift
 from ..plot.config import colors, linestyles
 from ..plot.util import loadColorTable
 from ..tracer import evolution
-from ..util import simParams
 from ..util.helper import closest, logZeroSafe
+from ..util.simParams import simParams
 
 
 modes = {

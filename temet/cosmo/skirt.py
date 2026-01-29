@@ -11,9 +11,9 @@ import numpy as np
 from astropy.io import fits
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from ..util import simParams
 from ..util.helper import logZeroMin, logZeroNaN
 from ..util.rotation import momentOfInertiaTensor, rotateCoordinateArray, rotationMatricesFromInertiaTensor
+from ..util.simParams import simParams
 
 
 stars_source_fsps = """

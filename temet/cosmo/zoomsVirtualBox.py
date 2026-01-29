@@ -13,9 +13,9 @@ from numba import jit
 
 from ..cosmo.zooms import _halo_ids_run
 from ..tracer.montecarlo import globalTracerChildren, globalTracerLength
-from ..util import simParams
 from ..util.helper import closest
 from ..util.match import match
+from ..util.simParams import simParams
 
 
 @jit(nopython=True, nogil=True, cache=True)

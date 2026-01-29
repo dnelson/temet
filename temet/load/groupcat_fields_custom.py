@@ -285,7 +285,7 @@ def distance(sim, field):
     return dist
 
 
-distance.label = lambda sim, f: r"Radial Distance" if "_rvir" not in f else r"R / R$_{\\rm vir,host}$"
+distance.label = lambda sim, f: r"Radial Distance" if "_rvir" not in f else r"R / R$_{\rm vir,host}$"
 distance.units = lambda sim, f: "code_length" if "_code" in f else ("" if "_rvir" in f else r"$\rm{kpc}$")
 distance.limits = lambda sim, f: [0.0, 2.0] if "_rvir" in f else [1.0, 3.5]
 distance.log = lambda sim, f: True if "_rvir" not in f else False  # linear for rvir normalized
@@ -873,6 +873,7 @@ def ssfr(sim, field):
     """Galaxy specific star formation rate [1/yr] (sSFR, instantaneous, both SFR and M* within 2rhalfstars)."""
     sfr = sim.subhalos("SubhaloSFRinRad")
     mstar = sim.subhalos("SubhaloMassInRadType")[:, sim.ptNum("stars")]
+    mstar = sim.units.codeMassToMsun(mstar)
 
     # set mstar==0 subhalos to nan
     w = np.where(mstar == 0.0)[0]
@@ -900,18 +901,6 @@ ssfr_gyr.label = r"$\rm{sSFR_{<2r_{\star}}}$"
 ssfr_gyr.units = r"$\rm{Gyr^{-1}}$"
 ssfr_gyr.limits = [-3.0, 1.0]
 ssfr_gyr.log = True
-
-
-@catalog_field
-def ssfr_30pkpc_gyr(sim, field):
-    """Galaxy specific star formation rate [1/Gyr] (sSFR, instantaneous, SFR within 2rhalfstars, M* within 30kpc)."""
-    return sim.subhalos("ssfr") * 1e9
-
-
-ssfr_30pkpc_gyr.label = r"$\rm{sSFR}$"
-ssfr_30pkpc_gyr.units = r"$\rm{Gyr^{-1}}$"
-ssfr_30pkpc_gyr.limits = [-3.0, 1.0]
-ssfr_30pkpc_gyr.log = True
 
 
 @catalog_field
@@ -964,8 +953,8 @@ def z_stars(sim, field):
     return vals
 
 
-z_stars.label = r"$\rm{Z_{\stars} / Z_\odot}$"
-z_stars.units = r""  # dimensionless
+z_stars.label = r"$\rm{Z_{\star}}$"
+z_stars.units = r"$\rm{Z_\odot}$"  # solar
 z_stars.limits = [-2.0, 0.5]
 z_stars.log = True
 
@@ -978,9 +967,9 @@ def z_gas(sim, field):
     return vals
 
 
-z_gas.label = r"$\rm{Z_{gas} / Z_\odot}$"
-z_gas.units = r""  # dimensionless
-z_gas.limits = [-2.0, 0.5]
+z_gas.label = r"$\rm{Z_{gas}}$"
+z_gas.units = r"$\rm{Z_\odot}$"  # solar
+z_gas.limits = [-1.0, 0.4]
 z_gas.log = True
 
 
@@ -992,8 +981,8 @@ def z_gas_sfr(sim, field):
     return vals
 
 
-z_gas_sfr.label = r"$\rm{Z_{gas} / Z_\odot}$"
-z_gas_sfr.units = r""  # dimensionless
+z_gas_sfr.label = r"$\rm{Z_{gas}}}$"
+z_gas_sfr.units = r"$\rm{Z_\odot}$"  # solar
 z_gas_sfr.limits = [-2.0, 0.5]
 z_gas_sfr.log = True
 
@@ -1014,7 +1003,7 @@ def size_stars(sim, field):
 
 size_stars.label = r"r$_{\rm 1/2,\star}$"
 size_stars.units = lambda sim, f: r"$\rm{kpc}$" if "_code" not in f else "code_length"
-size_stars.limits = lambda sim, f: [0.0, 1.8] if sim.redshift < 1 else [-0.4, 1.4]
+size_stars.limits = lambda sim, f: [0.2, 1.6] if sim.redshift < 1 else [-0.4, 1.4]
 size_stars.log = True
 
 
@@ -1188,7 +1177,7 @@ def m_v(sim, field):
     return mags
 
 
-m_v.label = lambda sim, f: r"M$_{\\rm %s}$" % f.split("_")[1].upper()
+m_v.label = lambda sim, f: r"M$_{\rm %s}$" % f.split("_")[1].upper()
 m_v.units = "abs AB mag"
 m_v.limits = [-24, -16]
 m_v.log = False

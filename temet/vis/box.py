@@ -3,18 +3,17 @@ Visualizations for whole (cosmological) boxes.
 """
 
 from copy import deepcopy
-from datetime import datetime
 from os import makedirs
 from os.path import isdir, isfile
 
 import numpy as np
 
 from ..cosmo.util import multiRunMatchedSnapList
-from ..util import simParams
 from ..util.boxRemap import findCuboidRemapInds
 from ..util.helper import iterable, pSplit
 from ..util.rotation import rotationMatrixFromAngleDirection
-from ..vis.common import renderMultiPanel, savePathDefault
+from ..util.simParams import simParams
+from ..vis.common import renderMultiPanel
 from ..vis.render import defaultHsmlFac, gridBox
 
 
@@ -82,7 +81,7 @@ def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, nPixels, boxO
     return boxSizeImg, boxCenter, extent
 
 
-def renderBox(panels_in, plotConfig, localVars, skipExisting=True, retInfo=False, returnData=False):
+def renderBox(panels_in, plotConfig=None, localVars=None, skipExisting=False, retInfo=False, returnData=False):
     """Render views of a full cosmological box (or a zoomed subset), with a variable number of image panels.
 
     These can compare any combination of parameters (res, run, redshift, vis field, vis type, vis direction, ...).
@@ -123,14 +122,31 @@ def renderBox(panels_in, plotConfig, localVars, skipExisting=True, retInfo=False
     # defaults (global plot configuration options)
     class plotConfigDefaults:
         plotStyle = "open"  # open, edged, open_black, edged_black
-        rasterPx = [1400, 1400]  # each panel will have this number of pixels if making a raster (png) output
+        rasterPx = [1000, 1000]  # each panel will have this number of pixels if making a raster (png) output
         # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True  # include colorbars
         colorbarOverlay = False  # overlay on top of image
         title = True  # include title (only for open* styles)
         outputFmt = None  # if not None (automatic), then a format string for the matplotlib backend
 
-        saveFilename = savePathDefault + "renderBox_N%d_%s.pdf" % (len(panels), datetime.now().strftime("%d-%m-%Y"))
+        _sim_str = ""
+        _field_str = ""
+        if all("sP" in p for p in panels) and len(panels) <= 2:
+            _sim_str = "_" + "-".join([p["sP"].simName for p in panels])
+        if all("partType" in p for p in panels) and all("partField" in p for p in panels) and len(panels) <= 2:
+            _field_str = "_" + "_".join(["%s-%s" % (p["partType"], p["partField"]) for p in panels])
+        saveFilename = "renderBox_N%d%s%s.jpg" % (len(panels), _sim_str, _field_str)
+
+    if plotConfig is None:
+        plotConfig = plotConfigDefaults()
+    if isinstance(plotConfig, dict):
+        # todo: remove this backward compatibility hack (plotConfig should just be a dict in the future)
+        config = plotConfigDefaults()
+        for k, v in plotConfig.items():
+            setattr(config, k, v)
+        plotConfig = config
+    if localVars is None:
+        localVars = {}
 
     # add plotConfig defaults
     for var in [v for v in vars(plotConfigDefaults) if not v.startswith("__")]:
@@ -175,6 +191,14 @@ def renderBox(panels_in, plotConfig, localVars, skipExisting=True, retInfo=False
             p["sP"].refPos = rp
             p["sP"].refVel = rv
 
+        # allow modifications of sP to vary e.g. resolution, redshift, variant
+        if "redshift" in p:
+            sP_loc = p["sP"].copy()
+            sP_loc.setRedshift(p["redshift"])
+            if sP_loc.snap != p["sP"].snap:
+                print("Overriding sP snap to match redshift for panel.")
+            p["sP"] = sP_loc
+
         # add imaging config for render of the whole box, if not directly specified
         boxSizeImg_loc, boxCenter_loc, extent_loc = boxImgSpecs(**p)
         if "boxSizeImg" not in p:
@@ -211,7 +235,7 @@ def renderBox(panels_in, plotConfig, localVars, skipExisting=True, retInfo=False
     renderMultiPanel(panels, plotConfig)
 
 
-def renderBoxFrames(panels_in, plotConfig, localVars, curTask=0, numTasks=1, skipExisting=True):
+def renderBoxFrames(panels_in, plotConfig=None, localVars=None, curTask=0, numTasks=1, skipExisting=True):
     """Render views of a cosmological box, with a variable number of panels, for many snapshots to make a movie."""
     panels = deepcopy(panels_in)
 
@@ -249,14 +273,14 @@ def renderBoxFrames(panels_in, plotConfig, localVars, curTask=0, numTasks=1, ski
     # defaults (global plot configuration options)
     class plotConfigDefaults:
         plotStyle = "open"  # open, edged, open_black, edged_black
-        rasterPx = [960, 960]  # each panel will have this number of pixels if making a raster (png) output
+        rasterPx = [1000, 1000]  # each panel will have this number of pixels if making a raster (png) output
         # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True  # include colorbars
         colorbarOverlay = False  # overlay on top of image
         title = True  # include title (only for open* styles)
         outputFmt = None  # if not None (automatic), then a format string for the matplotlib backend
 
-        savePath = savePathDefault
+        savePath = ""  # savePathDefault
         saveFileBase = "renderBoxFrame"  # filename base upon which frame numbers are appended
 
         # movie config
@@ -264,6 +288,17 @@ def renderBoxFrames(panels_in, plotConfig, localVars, curTask=0, numTasks=1, ski
         maxZ = 128.0  # starting redshift of frame sequence (we go forward in time)
         maxNSnaps = None  # make at most this many evenly spaced frames, or None for all
         matchUse = "condense"  # 'expand' or 'condense' to determine matching snaps between runs
+
+    if plotConfig is None:
+        plotConfig = plotConfigDefaults()
+    if isinstance(plotConfig, dict):
+        # todo: remove this backward compatibility hack (plotConfig should just be a dict in the future)
+        config = plotConfigDefaults()
+        for k, v in plotConfig.items():
+            setattr(config, k, v)
+        plotConfig = config
+    if localVars is None:
+        localVars = {}
 
     # add plotConfig defaults
     for var in [v for v in vars(plotConfigDefaults) if not v.startswith("__")]:

@@ -7,9 +7,9 @@ import numpy as np
 from ..cosmo.time_evo import subhalo_subbox_overlap
 from ..cosmo.util import subboxSubhaloCat
 from ..plot.util import setAxisColors
-from ..util import simParams
 from ..util.helper import logZeroNaN
 from ..util.rotation import rotationMatrixFromAngleDirection
+from ..util.simParams import simParams
 from ..vis.box import renderBox, renderBoxFrames
 from ..vis.common import savePathBase
 

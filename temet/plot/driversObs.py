@@ -17,8 +17,8 @@ from ..load.simtxt import sfrTxt
 from ..plot import snapshot, subhalos
 from ..plot.config import binSize, colors, figsize, linestyles, lw, sKn, sKo
 from ..plot.driversSizes import galaxyHISizeMass, galaxySizes
-from ..util import simParams
 from ..util.helper import iterable, logZeroNaN, running_histogram, running_median
+from ..util.simParams import simParams
 from .subhalos import addRedshiftAgeAxes
 
 

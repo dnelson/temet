@@ -11,13 +11,13 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
 
-from ..plot.config import figsize, linestyles, lw, sKn, sKo
+from ..plot.config import colors, figsize, linestyles, lw, sKn, sKo
 from ..plot.util import loadColorTable, sampleColorTable
 from ..util.helper import cache, closest, gaussian_filter_nan, iterable, logZeroNaN, running_median
 from ..util.match import match
 
 
-def histogram1D(
+def histogram1d(
     sPs,
     ptType="gas",
     ptProperty="temp",
@@ -35,6 +35,7 @@ def histogram1D(
     ctProp=None,
     colorbar=False,
     pdf=None,
+    saveFilename=None,
 ):
     """Simple 1D histogram/PDF of some quantity, for the whole box or one or more halos/subhalos.
 
@@ -43,9 +44,9 @@ def histogram1D(
       ptType (str): particle type, e.g. 'gas','dm','stars'.
       ptProperty (str): particle property to histogram, e.g. 'temp','density','metallicity'.
       ptWeight(str or None): if None then uniform weighting, otherwise weight by this quantity.
-      subhaloIDs (list[int] or None): list of subhalo IDs, either one number, or one array, per sP.
-        If specified, haloIDs must be None. If both are None, then histogram all particles/cells in the box.
-      haloIDs (list[int] or None): list of halo IDs, either one number, or one array, per sP.
+      subhaloIDs (list[int] or None): list of subhalo IDs, either one ID, one list of IDs, or a list of lists of IDs,
+        per sP. If specified, haloIDs must be None. If both are None, then histogram all particles/cells in the box.
+      haloIDs (list[int] or None): list of halo IDs, either one ID, one list of IDs, or a list of lists of IDs, per sP.
         If specified, subhaloIDs must be None. If both are None, then histogram all particles/cells in the box.
       ylog (bool): if True, then log-scale the y-axis.
       ylim (2-tuple or None): if None, use automatic limits based on data.
@@ -59,6 +60,7 @@ def histogram1D(
       ctProp(str): use this property to assign colors.
       colorbar (bool): if not False, then use this field (string) to display a colorbar mapping.
       pdf (PdfPages or None): if not None, then save to this multipage PDF object.
+      saveFilename (str or None): if not None, save the figure to this filename. Automatic if None.
     """
     # config
     if ylog:
@@ -99,8 +101,7 @@ def histogram1D(
         xlim = xlim_quant
 
     # start plot
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
+    fig, ax = plt.subplots()
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
@@ -119,6 +120,7 @@ def histogram1D(
                 sP_objIDs = [objIDs[i]]
             yy_save = np.zeros((nBins, len(sP_objIDs)), dtype="float32")
 
+        # color map setup
         if ctName is not None:
             # colors = sampleColorTable(ctName, len(sP_objIDs), bounds=[0.1,0.9])
             if haloIDs is not None:
@@ -128,100 +130,127 @@ def histogram1D(
             cmap = loadColorTable(ctName, fracSubset=[0.2, 0.9])
             cmap = plt.cm.ScalarMappable(norm=Normalize(vmin=cmap_props.min(), vmax=cmap_props.max()), cmap=cmap)
 
-        for j, objID in enumerate(sP_objIDs):
-            # load
-            load_haloID = objID if haloIDs is not None else None
-            load_subID = objID if subhaloIDs is not None else None
+        # histogram config
+        bins = np.linspace(xlim[0], xlim[1], nBins + 1)
+        xx = bins[:-1] + (bins[1] - bins[0]) / 2
 
-            vals = sP.snapshotSubset(ptType, ptProperty, haloID=load_haloID, subhaloID=load_subID)
-            if xlog:
-                vals = np.log10(vals)
+        if isinstance(objIDs[0], (list, np.ndarray)):
+            # multiple sets of objects per sP: stack
+            assert subhaloIDs is None  # otherwise generalize
+            assert qRestrictions is None  # otherwise generalize
 
-            # weights
-            if ptWeight is None:
-                weights = np.zeros(vals.size, dtype="float32") + 1.0
-            else:
-                weights = sP.snapshotSubset(ptType, ptWeight, haloID=load_haloID, subhaloID=load_subID)
+            # loop over each set of IDs
+            for j, ids in enumerate(objIDs):
+                # load and concatenate data values across all these objects
+                vals = _load_all_halos(sP, ptType, ptProperty, ids)
 
-            # arbitrary property restriction(s)?
-            if qRestrictions is not None:
-                mask = np.zeros(vals.size, dtype="int16")
-                for rFieldName, rFieldMin, rFieldMax in qRestrictions:
-                    # load and update mask
-                    r_vals = sP.snapshotSubset(ptType, rFieldName, haloID=load_haloID, subhaloID=load_subID)
+                if xlog:
+                    vals = np.log10(vals)
 
-                    wRestrict = np.where((r_vals < rFieldMin) | (r_vals > rFieldMax))
-                    mask[wRestrict] = 1
-                    print(
-                        "[%d] restrict [%s] eliminated [%d] of [%d] = %.2f%%"
-                        % (objID, rFieldName, len(wRestrict[0]), mask.size, len(wRestrict[0]) / mask.size * 100)
-                    )
+                # histogram
+                if ptWeight is None:
+                    yy, _ = np.histogram(vals, bins=bins, density=True)
+                else:
+                    weights = _load_all_halos(sP, ptType, ptWeight, ids)
+                    yy, _ = np.histogram(vals, bins=bins, weights=weights, density=True)
 
-                # apply mask
-                wRestrict = np.where(mask == 0)
-                vals = vals[wRestrict]
-                weights = weights[wRestrict]
+                if ylog:
+                    yy = logZeroNaN(yy)
 
-            # print(sP.simName,', min: ', np.nanmin(vals), ' max: ', np.nanmax(vals), ' median: ', np.nanmedian(vals))
-            # print(sP.simName, ', 5,10,90,95 percentiles: ',np.nanpercentile(vals, [5,10,90,95]))
+                # plot
+                if xx.size > sKn:
+                    yy = savgol_filter(yy, sKn, sKo)
 
-            # histogram (all equivalent methods)
-            bins = np.linspace(xlim[0], xlim[1], nBins + 1)
-            xx = bins[:-1] + (bins[1] - bins[0]) / 2
-            # binsize = bins[1] - bins[0]
+                label = "%s [%d]" % (sP.simName, j)
+                color = colors[j]
+                if ctName is not None:
+                    color = cmap.to_rgba(cmap_props[j])  # color = colors[j]
 
-            # yy4 = np.zeros( nBins, dtype='float32' )
-            # for j in range(nBins):
-            #    w = np.where( (vals >= bins[j]) & (vals < bins[j+1]) )
-            #    yy4[j] = np.sum(weights[w])
-            # yy4 /= (np.sum(weights)*binsize)
+                if medianPDF != "only":
+                    ax.plot(xx, yy, lw=lw, color=color, label=label)
 
-            # yy2, xx2, _ = binned_statistic(vals, weights, statistic='sum', bins=bins)
-            # yy2 /= (vals.size*binsize)
-            # yy3, xx3 = np.histogram(vals, bins=bins, weights=weights, density=False)
-            # yy3 /= (vals.size*binsize)
-            yy, xx4 = np.histogram(vals, bins=bins, weights=weights, density=True)
+        else:
+            # single object, or single list of objects, per sP
 
-            if ylog:
-                yy = logZeroNaN(yy)
+            for j, objID in enumerate(sP_objIDs):
+                # load
+                load_haloID = objID if haloIDs is not None else None
+                load_subID = objID if subhaloIDs is not None else None
 
-            if subhaloIDs is not None or haloIDs is not None:
-                yy_save[:, j] = yy
+                vals = sP.snapshotSubset(ptType, ptProperty, haloID=load_haloID, subhaloID=load_subID)
+                if xlog:
+                    vals = np.log10(vals)
 
-            # plot
-            if xx.size > sKn:
-                yy = savgol_filter(yy, sKn, sKo)
+                # weights
+                if ptWeight is None:
+                    weights = np.zeros(vals.size, dtype="float32") + 1.0
+                else:
+                    weights = sP.snapshotSubset(ptType, ptWeight, haloID=load_haloID, subhaloID=load_subID)
 
-            label = "%s [%d]" % (sP.simName, objID) if len(sPs) > 1 else str(objID)
-            ls = ":" if sP.simName == "L11 (Primordial Only)" else "-"
-            lw_loc = lw - 1 if len(sP_objIDs) < 10 else 1
-            color = None if len(sP_objIDs) < 10 else (None if j == 0 else l.get_color())  # noqa: F821
-            if ctName is not None:
-                color = cmap.to_rgba(cmap_props[j])  # color = colors[j]
+                # arbitrary property restriction(s)?
+                if qRestrictions is not None:
+                    mask = np.zeros(vals.size, dtype="int16")
+                    for rFieldName, rFieldMin, rFieldMax in qRestrictions:
+                        # load and update mask
+                        r_vals = sP.snapshotSubset(ptType, rFieldName, haloID=load_haloID, subhaloID=load_subID)
 
-            if medianPDF != "only":
-                (l,) = ax.plot(xx, yy, linestyle=ls, lw=lw_loc, color=color, label=label)
+                        wRestrict = np.where((r_vals < rFieldMin) | (r_vals > rFieldMax))
+                        mask[wRestrict] = 1
+                        print(
+                            "[%d] restrict [%s] eliminated [%d] of [%d] = %.2f%%"
+                            % (objID, rFieldName, len(wRestrict[0]), mask.size, len(wRestrict[0]) / mask.size * 100)
+                        )
 
-        # add mean?
-        if len(sP_objIDs) > 1 and medianPDF:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=RuntimeWarning)  # 'mean of empty slice'
-                yy1 = np.nanmean(yy_save, axis=1)
-                yy2 = np.nanmedian(yy_save, axis=1)
-                yy3 = yy_save[:, int(yy_save.shape[1] / 2)]
+                    # apply mask
+                    wRestrict = np.where(mask == 0)
+                    vals = vals[wRestrict]
+                    weights = weights[wRestrict]
 
-            if xx.size > sKn:
-                yy1 = savgol_filter(yy1, sKn, sKo)
-                yy2 = savgol_filter(yy2, sKn + 4, sKo)
-                yy3 = savgol_filter(yy3, sKn, sKo)
+                # histogram
+                yy, xx = np.histogram(vals, bins=bins, weights=weights, density=True)
 
-            # ax.plot(xx, yy1, linestyle='-', color='black', lw=lw, alpha=0.8, label='mean')
-            # ax.plot(xx, yy3, linestyle='-', color='black', lw=lw, alpha=0.8, label='middle')
-            ax.plot(xx, yy2, linestyle="-", color="black", lw=lw, alpha=1.0, label="median")
+                if ylog:
+                    yy = logZeroNaN(yy)
+
+                if subhaloIDs is not None or haloIDs is not None:
+                    yy_save[:, j] = yy
+
+                # plot
+                if xx.size > sKn:
+                    yy = savgol_filter(yy, sKn, sKo)
+
+                label = "%s [%d]" % (sP.simName, objID) if len(sPs) > 1 else str(objID)
+                if len(sP_objIDs) == 1:
+                    label = str(sP)
+                lw_loc = lw - 1 if (len(sP_objIDs) > 1 and len(sP_objIDs) < 10) else lw
+
+                color = colors[i]
+                if ctName is not None:
+                    color = cmap.to_rgba(cmap_props[j])  # color = colors[j]
+
+                if medianPDF != "only":
+                    ax.plot(xx, yy, lw=lw_loc, color=color, label=label)
+
+            # add mean?
+            if len(sP_objIDs) > 1 and medianPDF:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=RuntimeWarning)  # 'mean of empty slice'
+                    yy1 = np.nanmean(yy_save, axis=1)
+                    yy2 = np.nanmedian(yy_save, axis=1)
+                    yy3 = yy_save[:, int(yy_save.shape[1] / 2)]
+
+                if xx.size > sKn:
+                    yy1 = savgol_filter(yy1, sKn, sKo)
+                    yy2 = savgol_filter(yy2, sKn + 4, sKo)
+                    yy3 = savgol_filter(yy3, sKn, sKo)
+
+                # ax.plot(xx, yy1, linestyle='-', color='black', lw=lw, alpha=0.8, label='mean')
+                # ax.plot(xx, yy3, linestyle='-', color='black', lw=lw, alpha=0.8, label='middle')
+                ax.plot(xx, yy2, linestyle="-", color="black", lw=lw, alpha=1.0, label="median")
 
     # finish plot
     if legend:
-        ax.legend(loc="best", ncol=3)
+        ax.legend(loc="best")
 
     if colorbar:
         # cb_axes = inset_locator.inset_axes(ax, width='40%', height='4%', loc=[0.2,0.8])
@@ -240,7 +269,9 @@ def histogram1D(
     if pdf is not None:
         pdf.savefig(facecolor=fig.get_facecolor())
     else:
-        fig.savefig("histo1D_%s_%s_%s_wt-%s_%s.pdf" % (sPstr, ptType, ptProperty, ptWeight, hStr))
+        if saveFilename is None:
+            saveFilename = "histo1D_%s_%s_%s_wt-%s_%s.pdf" % (sPstr, ptType, ptProperty, ptWeight, hStr)
+        fig.savefig(saveFilename)
     plt.close(fig)
 
 
@@ -354,6 +385,8 @@ def phaseSpace2d(
     # binned_statistic_2d instead of histogram2d?
     binnedStat = False
     if meancolors is not None:
+        if weights == ("mass",) or weights == ["mass"]:
+            weights = None  # clear if left at default
         assert weights is None  # one or the other
         binnedStat = True
         weights = iterable(meancolors)  # loop over these instead
@@ -697,16 +730,7 @@ def phaseSpace2d(
 
     # colorbar
     if colorbar:
-        if xQuant == "hdens" and yQuant == "temp" and len(weights) == 3:
-            # TNG colors paper
-            fig.subplots_adjust(right=0.93)
-            cbar_ax = fig.add_axes([0.94, 0.131, 0.02, 0.831])
-        else:
-            # more general
-            fig.subplots_adjust(right=0.89)
-            cbar_ax = make_axes_locatable(ax).append_axes("right", size="4%", pad=0.15)
-
-        cb = plt.colorbar(im, cax=cbar_ax)
+        cb = fig.colorbar(im, ax=ax, pad=0.02)
         if not binnedStat:
             wtStr = "Relative " + wtStr + " [ log ]"
         cb.ax.set_ylabel(wtStr)
@@ -1045,15 +1069,16 @@ def profilesStacked1d(
     op="mean",
     weighting=None,
     ptRestrictions=None,
+    nBins=50,
     proj2D=None,
     xlim=None,
     ylim=None,
     plotMedian=True,
-    plotIndiv=False,
+    indiv=False,
     ctName=None,
     ctProp=None,
     colorbar=False,
-    figsize=figsize,
+    saveFilename=None,
 ):
     """Radial profile(s) of some quantity vs. radius for halos (FoF-scope, using non-caching auxCat functionality).
 
@@ -1064,11 +1089,11 @@ def profilesStacked1d(
     If haloIDs is not None, then use these FoF IDs as inputs instead of Subfind IDs.
     ptType and ptProperty specify the quantity to bin, and op (mean, sum, min, max) the operation to apply in each bin.
     If ptRestrictions, then a dictionary containing k:v pairs where k is fieldName, v is a 2-tuple [min,max],
-      to restrict all cells/particles by, e.g. sfrgt0 = {'StarFormationRate':['gt',0.0]},
-      sfreq0 = {'StarFormationRate':['eq',0.0]}.
+    to restrict all cells/particles by, e.g. sfrgt0 = {'StarFormationRate':['gt',0.0]},
+    sfreq0 = {'StarFormationRate':['eq',0.0]}.
     if proj2D is not None, then a 2-tuple as input to subhaloRadialProfile().
     If plotMedian is False, then skip the average profile.
-    if plotIndiv, then show individual profiles, and in this case:
+    if indiv, then show individual profiles, and in this case:
     If ctName is not None, sample from this colormap to choose line color per object.
     Assign based on the property ctProp.
     If colorbar is not False, then use this field (string) to display a colorbar mapping.
@@ -1077,7 +1102,7 @@ def profilesStacked1d(
 
     # config
     if xlim is None:
-        xlim = [0.0, 3.0]  # for plot only [loc pkpc]
+        xlim = [0.0, 3.0]  # for plot only [log pkpc]
     percs = [16, 84]
     scope = "fof"  # fof, subfind
 
@@ -1094,8 +1119,7 @@ def profilesStacked1d(
         ylim = ylim2
 
     # start plot
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
+    fig, ax = plt.subplots()
 
     ax.set_xlabel("Radius [ log pkpc ]")
     ax.set_ylabel(ylabel)
@@ -1137,6 +1161,9 @@ def profilesStacked1d(
             scope=scope,
             weighting=weighting,
             subhaloIDsTodo=objIDs,
+            radMin=xlim[0] - 0.2,  # log code
+            radMax=xlim[1] + 0.2,  # log code
+            radNumBins=nBins,
             proj2D=proj2D,
             ptRestrictions=ptRestrictions,
         )
@@ -1152,9 +1179,12 @@ def profilesStacked1d(
 
             # calculate median radial profile and scatter
             yy_indiv = data[w, :]
-            yy_mean = np.nanmean(data[w, :], axis=0)
-            yy_median = np.nanmedian(data[w, :], axis=0)
-            yp = np.nanpercentile(data[w, :], percs, axis=0)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)  # 'mean of empty slice', 'all-nan slice'
+
+                yy_mean = np.nanmean(data[w, :], axis=0)
+                yy_median = np.nanmedian(data[w, :], axis=0)
+                yp = np.nanpercentile(data[w, :], percs, axis=0)
 
             if proj2D is not None:
                 print("Normalizing to column density (could use generalization, i.e. mass fields only).")
@@ -1203,24 +1233,24 @@ def profilesStacked1d(
                 yp = savgol_filter(yp, sKn, sKo, axis=1)  # P[10,90]
 
             # plot median scatter band?
-            if plotMedian and len(sPs) == 1 and objIDs.size > 1:
-                colorMed = None if not plotIndiv else "black"
+            color = colors[i]  # if not ndiv else "black"
+            if plotMedian and nSamples == 1 and objIDs.size > 1:
                 w = np.where(np.isfinite(yp[0, :]) & np.isfinite(yp[-1, :]))[0]
-                ax.fill_between(rr[w], yp[0, w], yp[-1, w], color=colorMed, interpolate=True, alpha=0.1)
+                ax.fill_between(rr[w], yp[0, w], yp[-1, w], color=color, interpolate=True, alpha=0.2)
 
-            # plot individual?
-            if plotIndiv:
+            # plot individual profiles?
+            if indiv:
                 for k in range(yy_indiv.shape[0]):
-                    color = "black"
+                    c = colors[i]  # "black"
                     if ctName is not None:
-                        color = cmap.to_rgba(cmap_props[k])  # color = colors[j]
-                    ax.plot(rr, yy_indiv[k, :], "-", lw=lw, color=color, alpha=0.6)
+                        c = cmap.to_rgba(cmap_props[k])  # color = colors[j]
+                    ax.plot(rr, yy_indiv[k, :], "-", lw=1, color=c, alpha=0.2, zorder=-(i + 1))
 
             # plot stack
             if plotMedian:
                 sampleDesc = "" if nSamples == 1 else list(subhaloIDs[i].keys())[j]
                 label = "%s %s" % (sP.simName, sampleDesc) if len(sPs) > 1 else sampleDesc
-                ax.plot(rr, yy_median, "-", lw=lw, color=colorMed, label=label.strip())
+                ax.plot(rr, yy_median, "-", lw=lw + int(indiv), color=color, label=label.strip())
 
             # save to text file (not generalized)
             if 0:
@@ -1248,14 +1278,21 @@ def profilesStacked1d(
         # cb_axes = fig.add_axes([0.48,0.2,0.35,0.04]) # x0, y0, width, height
         cb_axes = fig.add_axes([0.3, 0.3, 0.4, 0.04])  # x0, y0, width, height
         _, label, _, _ = sP.simSubhaloQuantity(ctProp)
-        plt.colorbar(cmap, label=label, cax=cb_axes, orientation="horizontal")
+        fig.colorbar(cmap, label=label, cax=cb_axes, orientation="horizontal")
 
-    sPstr = sP.simName if len(sPs) == 1 else "nSp-%d" % len(sPs)
-    wtStr = "_wt-" + weighting if weighting is not None else ""
-    fig.savefig(
-        "radProfilesStack_%s_%s_%s_Ns-%d_Nh-%d_scope-%s%s.pdf"
-        % (sPstr, ptType, ptProperty, nSamples, len(objIDs), scope, wtStr)
-    )
+    if saveFilename is None:
+        saveFilename = "radProfilesStack_%s_%s_%s_Ns-%d_Nh-%d_scope-%s%s.pdf" % (
+            "-".join([sP.simName for sP in sPs]),
+            ptType,
+            ptProperty,
+            nSamples,
+            len(objIDs),
+            scope,
+            "_wt-" + weighting if weighting is not None else "",
+        )
+
+    fig.savefig(saveFilename)
+
     plt.close(fig)
 
 
