@@ -25,7 +25,7 @@ jobs:
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
-          name: release-sdist
+          name: temet-sdist
           path: dist/
 
   build_wheels:
@@ -51,7 +51,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
-          name: release-dists-${{ strategy.job-index }}
+          name: temet-dists-${{ strategy.job-index }}
           path: dist/
 
   pypi-publish:
@@ -72,8 +72,8 @@ jobs:
       - name: Retrieve release distributions
         uses: actions/download-artifact@v6
         with:
-          #name: release-*
-          pattern: release-*
+          #name: temet-sdist
+          pattern: temet-*
           merge-multiple: true
           path: dist/
 
