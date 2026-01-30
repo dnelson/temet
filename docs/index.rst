@@ -2,7 +2,8 @@
 temet toolkit: documentation
 ============================
 
-Welcome to the documentation for **temet**, a python toolkit for the execution, analysis, and 
+Welcome to the documentation for **temet** (`github repo <https://github.com/dnelson/temet>`_), 
+a python toolkit for the execution, analysis, and 
 visualization of numerical simulations. Specifically, hydrodynamical simulations run with the 
 `AREPO <https://wwwmpa.mpa-garching.mpg.de/~volker/arepo/>`_ moving mesh code, as well as codes 
 producing similarly structured outputs including 

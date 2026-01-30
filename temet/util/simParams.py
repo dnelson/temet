@@ -374,7 +374,7 @@ class simParams:
         # return self.__dict__ == other.__dict__
 
     def _set_deriv_path(self):
-        """ Determine a suitable derivPath (for all derived data files) that is writeable. """
+        """Determine a suitable derivPath (for all derived data files) that is writeable."""
         derivPath = os.path.join(self.arepoPath, "data.files/")
         writable = os.access(self.arepoPath, os.W_OK)
 
@@ -410,7 +410,7 @@ class simParams:
 
         if self.arepoPath.endswith("output/"):
             # convention: arepoPath is the sim root directory, while simPath is the output/ directory (with snapshots)
-            self.arepoPath = self.arepoPath.rstrip("output/")
+            self.arepoPath = self.arepoPath[: -len("output/")]
 
         self.simPath = os.path.join(self.arepoPath, "output/")
 
