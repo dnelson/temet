@@ -373,21 +373,19 @@ class simParams:
         )
         # return self.__dict__ == other.__dict__
 
-    def scan_simulation(self, inputPath, simName=None):
-        """Fill simulation parameters automatically, based on path."""
-        self.arepoPath = os.path.expanduser(inputPath)
-        self.simPath = os.path.join(self.arepoPath, "output/")
-
-        assert os.path.exists(self.arepoPath), "Error: Simulation path [%s] not found!" % self.arepoPath
-        assert os.path.exists(self.simPath), "Error: Simulation path [%s] not found!" % self.simPath
-
+    def _set_deriv_path(self):
+        """ Determine a suitable derivPath (for all derived data files) that is writeable. """
         derivPath = os.path.join(self.arepoPath, "data.files/")
         writable = os.access(self.arepoPath, os.W_OK)
 
         if writable or (os.path.isdir(derivPath) and os.access(derivPath, os.W_OK)):
-            # either we want to be able to create a cache folder in the arepoPath
-            # or at least being able for an existing cache folder
+            # either we want to be able to create the folder, or be able to write to an existing folder
             self.derivPath = derivPath
+
+            # create it if it doesn't exist already
+            if not path.isdir(self.derivPath):
+                p = Path(self.derivPath)
+                p.mkdir(parents=True, exist_ok=True)
         else:
             # otherwise we create a new cache folder in the home folder of the user
             sha = hashlib.sha256()
@@ -399,6 +397,27 @@ class simParams:
             p.mkdir(parents=True, exist_ok=True)
             with open(os.path.join(p, "simpath.txt"), "w") as f:
                 f.write(self.arepoPath)
+
+        # set cache/ path and create directory if it doesn't exist
+        self.cachePath = self.derivPath + "cache/"
+
+        if not path.isdir(self.cachePath):
+            mkdir(self.cachePath)
+
+    def scan_simulation(self, inputPath, simName=None):
+        """Fill simulation parameters automatically, based on path."""
+        self.arepoPath = os.path.expanduser(inputPath)
+
+        if self.arepoPath.endswith("output/"):
+            # convention: arepoPath is the sim root directory, while simPath is the output/ directory (with snapshots)
+            self.arepoPath = self.arepoPath.rstrip("output/")
+
+        self.simPath = os.path.join(self.arepoPath, "output/")
+
+        assert os.path.exists(self.arepoPath), "Error: Simulation path [%s] not found!" % self.arepoPath
+        assert os.path.exists(self.simPath), "Error: Simulation path [%s] not found!" % self.simPath
+
+        self._set_deriv_path()
 
         self.postPath = os.path.join(self.arepoPath, "postprocessing/")
 
@@ -1466,24 +1485,16 @@ class simParams:
             raise Exception("Invalid resolution.")
 
         self.simPath = self.arepoPath + "output/"
-        self.derivPath = self.arepoPath + "data.files/"
         self.postPath = self.arepoPath + "postprocessing/"
-        self.cachePath = self.arepoPath + "data.files/cache/"
+
+        # check if simulation exists
+        if not path.isdir(self.simPath):
+            raise Exception("simParams: it appears [%s] does not exist." % self.arepoPath)
+
+        self._set_deriv_path()
 
         if self.simNameAlt == "":
             self.simNameAlt = self.simName
-
-        if not path.isdir(self.simPath) and not path.isdir(self.derivPath):
-            raise Exception("simParams: it appears [%s] does not exist." % self.arepoPath)
-
-        # if data.files/ doesn't exist but postprocessing does (e.g. dev runs), use postprocessing/ for all
-        if not path.isdir(self.derivPath):
-            self.derivPath = self.postPath
-            self.cachePath = self.postPath + "cache/"
-        else:
-            # if cache/ doesn't exist, make it
-            if not path.isdir(self.cachePath):
-                mkdir(self.cachePath)
 
         # if wwwrun user, override derivPath with a local filesystem cache location
         if getpass.getuser() == "wwwrun":
