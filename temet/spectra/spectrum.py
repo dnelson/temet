@@ -563,6 +563,12 @@ def generate_spectra_from_saved_rays(
             print(" already exists, skipping...")
             continue
 
+        # hack: enforce pinned cloudy ion table version
+        from inspect import signature
+
+        table_ver = signature(cloudyIon.__init__).parameters["res"].default
+        assert table_ver == "lg_c17", "Stop. For production mockspec use, change back to 'lg_c17' in cloudyIon init."
+
         # do we not already have the ion density loaded?
         if densField is None or lines[line]["ion"] != lines[lineNames[0]]["ion"]:
             densField = "%s numdens" % lines[line]["ion"]
