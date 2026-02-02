@@ -60,6 +60,11 @@ anywhere, but are used as is. Any changes you make are reflected (i.e. immediate
 Download Data Files
 -------------------
 
+.. note::
+
+   When you ``import temet`` for the first time, you will be reminded to download these data files.
+
+
 Several large tabulated data files are used to compute e.g. stellar luminosities (from FSPS), ion abundances and emissivities (from CLOUDY), and X-ray emission (from APEC/XPSEC). For convenience these can be downloaded as
 
 .. code-block:: bash
@@ -76,7 +81,11 @@ The default plotting style uses the Roboto font. To install this font locally, d
     wget https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Light.ttf
     wget https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-LightItalic.ttf
 
-Note: on MPCDF machines, suggested organization of simulation directories is as follows
+
+Organizing Simulation Folders
+-----------------------------
+
+On MPCDF machines (and the TNG Lab), we suggest organization of simulation directories as follows
 
 .. code-block:: bash
 
@@ -90,6 +99,8 @@ Note: on MPCDF machines, suggested organization of simulation directories is as 
 the last two lines create symlinks to the actual output directory where the simulation data files 
 (``groupcat_*`` and ``snapdir_*``) reside, as well as to the postprocessing directory (containing ``trees``, etc).
 Replace as needed with the actual path on your machine.
+
+This allows many "known" simulations to be loaded by name only.
 
 
 External Package Installation

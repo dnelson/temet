@@ -1,9 +1,45 @@
-"""Create external data files required for GFM runs (photometrics, cooling, etc)."""
+"""Create/use/handle external data files."""
 
 import glob
 
 import h5py
 import numpy as np
+
+
+def check_data_tables():
+    """Check for existence of data tables, prompt to download if not present."""
+    import pathlib
+    from importlib import resources
+
+    tables_path = resources.files("temet.tables")
+    tables_contents = list(tables_path.iterdir())
+
+    has_asked = any(x.name == ".asked" for x in tables_contents)
+
+    if len(tables_contents) != 2 or has_asked:
+        # tables/ does not contain only ".gitignore" and "fonts/" i.e has been modified
+        return
+
+    # check for existence at local path
+    path = tables_contents[0].parent
+    local_path = "/usr/local/share/temet/tables"
+
+    if pathlib.Path(local_path).exists():
+        print(f"First time importing temet. Will link to and use data tables on local path [{local_path}].")
+        # symlink to local path
+        path.rename(path.with_suffix(".bak"))
+        path.symlink_to(local_path, target_is_directory=True)
+
+        return
+
+    # no data yet, ask to download
+    (tables_path / ".asked").touch()
+
+    print("First time importing temet. Suggest to download data tables (~7 GB). To do so (see docs):")
+    cmd = "wget -r -nH --cut-dirs=1 --no-parent --reject='index.html*' -e robots=off temet.tng-project.org/tables/"
+
+    print(" [1] cd " + str(path))
+    print(" [2] " + cmd)
 
 
 def makeStellarPhotometricsHDF5_BC03():
