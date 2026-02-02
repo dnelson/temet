@@ -1,4 +1,7 @@
 # Ignore everything in this directory
 *
-# Except this file
+
+# Except this file and fonts/
 !.gitignore
+!fonts/
+!fonts/*

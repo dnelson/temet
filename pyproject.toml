@@ -10,11 +10,11 @@ packages = [
 ]
 
 [tool.setuptools.package-data]
-temet = ["temet/plot/mpl.style", "temet/util/*.cpp"]
+temet = ["temet/plot/mpl.style", "temet/util/*.cpp", "temet/tables/fonts/*.ttf"]
 
 [project]
 name = "temet"
-version = "0.9.0"
+version = "0.9.1"
 authors = [
     { name="Dylan Nelson", email="dnelson@uni-heidelberg.de" },
 ]
