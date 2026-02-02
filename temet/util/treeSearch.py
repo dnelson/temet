@@ -8,7 +8,7 @@ import time
 import numpy as np
 from numba import jit
 
-from ..util.helper import pSplit
+from ..util.helper import num_cpus, pSplit
 from ..util.sphMap import _NEAREST, _getkernel
 
 
@@ -775,7 +775,7 @@ def calcHsml(
     weighted_num=False,
     treePrec="single",
     tree=None,
-    nThreads=32,
+    nThreads=None,
     nearest=False,
     verbose=False,
 ):
@@ -797,7 +797,8 @@ def calcHsml(
       treePrec (str): construct the tree using 'single' or 'double' precision for coordinates.
       tree (list or None): if not None, should be a list of all the needed tree arrays (pre-computed),
         i.e the exact return of :py:func`~util.treeSearch.buildFullTree`.
-      nThreads (int): do multithreaded calculation (on treefind, while tree construction remains serial).
+      nThreads (int): if >1, do multithreaded calculation.
+        if None, determine automatically from available CPU count. If 1, do single-threaded calculation.
       nearest (bool): if True, then instead of returning hsml values based on nNGB, return indices and
         distances to single closest match only.
       verbose (bool): print timing and warning messages.
@@ -814,6 +815,10 @@ def calcHsml(
     assert nDims in treeDims, "Invalid ndims specification (3D only)."
     if posMask is not None:
         assert nearest  # otherwise generalize to also work for hsml
+
+    if nThreads is None:
+        # determine automatically
+        nThreads = min(num_cpus() // 2, 36)  # half of available, at most 36
 
     # handle small inputs
     if pos.shape[0] < nNGB - nNGBDev:
@@ -943,7 +948,7 @@ def calcHsml(
     return hsml
 
 
-def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePrec="single", tree=None, nThreads=32):
+def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePrec="single", tree=None, nThreads=None):
     """Reduction operation on all particles/cells within a fixed search distance around each position.
 
     Calculate a reduction of a given quantity on all the particles within a fixed search
@@ -960,7 +965,8 @@ def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePre
       tree (list or None): if not None, should be a list of all the needed tree arrays (pre-computed),
                         i.e the exact return of buildFullTree().
       treePrec (str): construct the tree using 'single' or 'double' precision for coordinates.
-      nThreads (int): do multithreaded calculation (on treefind, while tree construction remains serial).
+      nThreads (int): if >1, do multithreaded calculation.
+        if None, determine automatically from available CPU count. If 1, do single-threaded calculation.
 
     Returns:
       ndarray[float]: reduction operation applied for each input.
@@ -978,6 +984,10 @@ def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePre
     assert pos.shape[1] in treeDims, "Invalid ndims specification (3D only)."
     assert quant.ndim == 1 and quant.size == pos.shape[0], "Strange quant shape."
     assert op in ops.keys(), "Unrecognized reduction operation."
+
+    if nThreads is None:
+        # determine automatically
+        nThreads = min(num_cpus() // 2, 36)  # half of available, at most 36
 
     if posSearch is None:
         assert hsml.size in [1, quant.size], "Strange hsml shape."

@@ -12,7 +12,7 @@ import h5py
 import numpy as np
 
 from ..cosmo import hydrogen
-from ..util.helper import closest, logZeroNaN, rootPath
+from ..util.helper import closest, logZeroNaN, num_cpus, rootPath
 from ..util.simParams import simParams
 
 
@@ -714,9 +714,13 @@ def _getRhoTZzGrid(res, uvb):
     return densities, temps, metals, redshifts
 
 
-def runGrid(redshiftInd, nThreads=71, res="lg", uvb="FG11"):
+def runGrid(redshiftInd, nThreads=None, res="lg", uvb="FG11"):
     """Run a sequence of CLOUDY models over a parameter grid at a redshift (one redshift per job)."""
     import multiprocessing as mp
+
+    if nThreads is None:
+        # determine automatically
+        nThreads = num_cpus() - 1  # leave just one core free
 
     # config
     densities, temps, metals, redshifts = _getRhoTZzGrid(res=res, uvb=uvb)

@@ -3,6 +3,8 @@ General helper functions, small algorithms, basic I/O, etc.
 """
 
 import collections.abc as collections
+import multiprocessing
+import os
 from functools import wraps
 from hashlib import sha256
 from inspect import getsource
@@ -167,6 +169,19 @@ def reportMemory():
 
     process = psutil.Process(os.getpid())
     return process.memory_info().rss / 1024.0**3  # GB
+
+
+def num_cpus():
+    """Return number of available CPUs, or the number that should be used, whichever is smaller."""
+    N = os.getenv("OMP_NUM_THREADS", None)
+
+    if N is None:
+        N = multiprocessing.cpu_count()
+
+    N = int(N)
+    assert N >= 1
+
+    return N
 
 
 def numPartToChunkLoadSize(numPart):

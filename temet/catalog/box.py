@@ -7,7 +7,7 @@ import numpy as np
 from ..cosmo import hydrogen
 from ..cosmo.cloudy import cloudyIon
 from ..cosmo.hydrogen import calculateCDDF
-from ..util.helper import numPartToChunkLoadSize, reportMemory
+from ..util.helper import num_cpus, numPartToChunkLoadSize, reportMemory
 
 
 def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSFR=False):
@@ -176,6 +176,14 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSF
             # SFR>0 gas has a fraction=1 of the given species
             assert species in preCompSpecies  # otherwise handle
 
+        # determine parallelism (high memory load)
+        nThreads = min(num_cpus() // 2, 8)
+        if boxGridDim > 60000:
+            nThreads = nThreads // 2
+        if boxGridDim > 100000:
+            nThreads = nThreads // 2
+        nThreads = max(nThreads, 1)
+
         if species in hDensSpecies:
             # calculate atomic hydrogen mass (HI) or total neutral hydrogen mass (HI+H2) [10^10 Msun/h]
             atomic = species == "HI" or species == "HI2" or species == "HI3"
@@ -196,6 +204,7 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSF
                 nPixels=boxGridDim,
                 sP=sP,
                 colDens=True,
+                nThreads=nThreads,
                 sliceFac=boxWidthFrac,
             )
 
@@ -235,6 +244,7 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSF
                 nPixels=boxGridDim,
                 sP=sP,
                 colDens=True,
+                nThreads=nThreads,
                 sliceFac=boxWidthFrac,
             )
 
@@ -242,12 +252,6 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSF
 
         if species in preCompSpecies:
             # anything directly loaded from the snapshots, return in units of [10^10 Msun * h / ckpc^2]
-            nThreads = 8
-            if boxGridDim > 60000:
-                nThreads = 4
-            if boxGridDim > 100000:
-                nThreads = 2
-
             if allSFR:
                 w = np.where(gas["StarFormationRate"] > 0)
                 gas[species][w] = gas["Masses"][w]
@@ -278,6 +282,7 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSF
                 nPixels=boxGridDim,
                 sP=sP,
                 colDens=False,
+                nThreads=nThreads,
                 sliceFac=boxWidthFrac,
             )
 
@@ -293,6 +298,7 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSF
                 nPixels=boxGridDim,
                 sP=sP,
                 colDens=False,
+                nThreads=nThreads,
                 sliceFac=boxWidthFrac,
             )
 

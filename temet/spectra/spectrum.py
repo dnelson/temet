@@ -28,7 +28,7 @@ from ..spectra.util import (
     sP_units_Mpc_in_cm,
     varconvolve,
 )
-from ..util.helper import pSplitRange
+from ..util.helper import num_cpus, pSplitRange
 from ..util.voronoiRay import rayTrace
 
 
@@ -986,7 +986,7 @@ def create_spectra_from_traced_rays(
     cell_dens,
     cell_temp,
     cell_vellos,
-    nThreads=60,
+    nThreads=None,
 ):
     """Generate a fullset of mock absorption spectra given the pre-existing set of rays.
 
@@ -1007,9 +1007,14 @@ def create_spectra_from_traced_rays(
       cell_vellos (array[float]): gas per-cell line of sight velocities [linear km/s]
       z_lengths (array[float]): the comoving distance to each z_vals relative to sP.redshift [pMpc]
       z_vals (array[float]): a sampling of redshifts, starting at sP.redshift
-      nThreads (int): parallelize calculation using this threads (serial computation if one)
+      nThreads (int): if >1, do multithreaded calculation.
+        if None, determine automatically from available CPU count. If 1, do single-threaded calculation.
     """
     n_rays = rays_len.size
+
+    if nThreads is None:
+        # determine automatically
+        nThreads = min(int(num_cpus() * 0.9), 64)  # 90% of available, at most 64
 
     # line properties
     f, gamma, wave0, ion_amu, ion_mass = line_params(line)

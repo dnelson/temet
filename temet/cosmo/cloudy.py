@@ -9,7 +9,7 @@ import numpy as np
 from scipy.ndimage import map_coordinates
 
 from ..cosmo.cloudyGrid import basePath, getEmissionLines
-from ..util.helper import closest, iterable, pSplitRange
+from ..util.helper import closest, iterable, num_cpus, pSplitRange
 
 
 class cloudyIon:
@@ -370,7 +370,7 @@ class cloudyIon:
         if temp is None:
             return self.grid["temp"], locData[i0, i1, i2, :]
 
-    def frac(self, element, ionNum, dens, metal, temp, redshift=None, nThreads=16):
+    def frac(self, element, ionNum, dens, metal, temp, redshift=None, nThreads=None):
         """Interpolate the ion abundance table, return log(ionization fraction).
 
         Input gas properties can be scalar or np.array(), in which case they must have the same size.
@@ -386,13 +386,17 @@ class cloudyIon:
           temp (ndarrray): temperature [log K]
           metal (ndarray): metallicity [log solar]
           redshift (float or None): redshift, if we are interpolating in redshift space.
-          nThreads (int): number of threads to use for interpolation (1=serial).
+          nThreads (int): number of threads to use for interpolation (1=serial). if None, automatically determine.
 
         Return:
           ndarray: ionization fraction per cell [log].
         """
         element = self._resolveElementNames(element)
         ionNum = self._resolveIonNumbers(ionNum)
+
+        if nThreads is None:
+            # determine automatically
+            nThreads = min(num_cpus() // 4, 16)  # half of available, at most 36
 
         if redshift is not None and not self.redshiftInterp:
             raise Exception("Redshift input for interpolation, but we have selected nearest hyperslice.")

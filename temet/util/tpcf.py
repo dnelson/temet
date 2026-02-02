@@ -7,7 +7,7 @@ import threading
 import numpy as np
 from numba import jit
 
-from ..util.helper import pSplitRange
+from ..util.helper import num_cpus, pSplitRange
 from ..util.sphMap import _NEAREST
 
 
@@ -168,19 +168,23 @@ def _reduceQuantsInRad(
     # void return
 
 
-def tpcf(pos, radialBins, boxSizeSim, weights=None, pos2=None, weights2=None, nThreads=32):
+def tpcf(pos, radialBins, boxSizeSim, weights=None, pos2=None, weights2=None, nThreads=None):
     """Calculate and simultaneously histogram the results of a two-point auto correlation function.
 
     Approach: compute all the pairwise (periodic) distances in pos. 3D only.
 
-      pos[N,3]      : array of 3-coordinates for the galaxies/points
-      radialBins[M] : array of (inner) bin edges in radial distance (code units)
-      boxSizeSim[1] : the physical size of the simulation box for periodic wrapping (0=non periodic)
-      weights[N]    : if not None, then use these scalars for a weighted correlation function
-      pos2[L,3]     : if not None, then cross-correlation instead of auto, of pos vs. pos1
-      weights2[L]   : must be None if weights is None, and vice versa
+    Args:
+      pos (ndarray[float,[N,3]]): array of 3-coordinates for the galaxies/points
+      radialBins (ndarray[float,M]): array of (inner) bin edges in radial distance (code units)
+      boxSizeSim (float): the physical size of the simulation box for periodic wrapping (0=non periodic)
+      weights (ndarray[float,N]): if not None, then use these scalars for a weighted correlation function
+      pos2 (ndarray[float,L,3]): if not None, then cross-correlation instead of auto, of pos vs. pos1
+      weights2 (ndarray[float,L]): must be None if weights is None, and vice versa
+      nThreads (int): if >1, do multithreaded calculation.
+        if None, determine automatically from available CPU count. If 1, do single-threaded calculation.
 
-      return is xi(r),DD,RR where xi[i]=(DD/RR-1) is computed between radialBins[i:i+1] (size == M-1)
+    Return:
+      a 3-tuple of: xi(r),DD,RR where xi[i]=(DD/RR-1) is computed between radialBins[i:i+1] (size == M-1)
     """
     # input sanity checks
     if pos.ndim != 2 or pos.shape[1] != 3 or pos.shape[0] <= 1:
@@ -197,6 +201,10 @@ def tpcf(pos, radialBins, boxSizeSim, weights=None, pos2=None, weights2=None, nT
     else:
         meanWeight = 1.0
         xi_dtype = "int64"
+
+    if nThreads is None:
+        # determine automatically
+        nThreads = min(num_cpus() // 2, 36)  # half of available, at most 36
 
     # cross-correlation sanity checks
     if pos2 is not None:
@@ -330,7 +338,7 @@ def tpcf(pos, radialBins, boxSizeSim, weights=None, pos2=None, weights2=None, nT
     return xi, DD, RR
 
 
-def quantReductionInRad(pos_search, pos_target, radial_bins, quants, reduce_op, boxSizeSim, nThreads=8):
+def quantReductionInRad(pos_search, pos_target, radial_bins, quants, reduce_op, boxSizeSim, nThreads=None):
     """Calculate a reduction operation on one or more quantities for each search point.
 
     In each case, consider all target points falling within a 3D periodic search radius.
@@ -341,6 +349,8 @@ def quantReductionInRad(pos_search, pos_target, radial_bins, quants, reduce_op, 
     quants[M]/[M,P] : 1d or P-d array of quantities, one per pos_target, to process
     reduce_op[str]  : one of 'min', 'max', 'sum'
     boxSizeSim[1]   : the physical size of the simulation box for periodic wrapping (0=non periodic)
+    nThreads (int): if >1, do multithreaded calculation.
+      if None, determine automatically from available CPU count. If 1, do single-threaded calculation.
 
     return is reduced_quants[N,M-1]/[N,M-1,P]
     """
@@ -358,6 +368,10 @@ def quantReductionInRad(pos_search, pos_target, radial_bins, quants, reduce_op, 
     if quants.ndim not in [1, 2] or (quants.ndim == 2 and quants.shape[0] != pos_target.shape[0]):
         raise Exception("Strange dimensions of quants.")
 
+    if nThreads is None:
+        # determine automatically
+        nThreads = min(num_cpus() // 4, 16)  # quarter of available, at most 16
+
     # prepare
     reduce_op = reduce_op.lower()
     reduceOps = {"max": 0, "min": 1, "sum": 2}
@@ -365,7 +379,7 @@ def quantReductionInRad(pos_search, pos_target, radial_bins, quants, reduce_op, 
     reduce_type = reduceOps[reduce_op]
 
     nSearch = pos_search.shape[0]
-    #nTarget = pos_target.shape[0]
+    # nTarget = pos_target.shape[0]
     nQuants = quants.shape[1] if quants.ndim == 2 else 1
 
     # radial bin(s)

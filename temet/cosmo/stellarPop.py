@@ -12,7 +12,7 @@ from numba import jit
 from scipy.interpolate import interp1d
 from scipy.ndimage import map_coordinates
 
-from ..util.helper import iterable, logZeroMin, logZeroNaN, rootPath, trapsum
+from ..util.helper import iterable, logZeroMin, logZeroNaN, num_cpus, rootPath, trapsum
 from ..util.rotation import rotateCoordinateArray, rotationMatrixFromVec
 from ..util.simParams import simParams
 from ..util.sphMap import sphMap
@@ -1263,7 +1263,8 @@ class sps:
         pxSizeCode = self.sP.units.physicalKpcToCodeLength(pxSize)
         nPixels = np.int32(np.ceil(extentStars / pxSizeCode))[0:2]
 
-        nThreads = 8
+        # determine automatically
+        nThreads = min(num_cpus(), 8)  # all available, at most 8
 
         if pos_in.shape[0] < 1e3 and pos_stars_in.shape[0] < 1e3:
             nThreads = 4

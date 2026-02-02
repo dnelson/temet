@@ -7,7 +7,7 @@ import threading
 import numpy as np
 from numba import jit
 
-from ..util.helper import periodicDistsN, pSplitRange
+from ..util.helper import num_cpus, periodicDistsN, pSplitRange
 from ..util.sphMap import _NEAREST_POS
 from ..util.treeSearch import _treeSearchNearestSingle, buildFullTree
 
@@ -691,7 +691,7 @@ def _rayTraceReduced(
     return r_answer
 
 
-def rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=None, quant2=None, mode="full", nThreads=72, tree=None):
+def rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=None, quant2=None, mode="full", nThreads=None, tree=None):
     """Tree-based ray-tracing through a Voronoi mesh.
 
     For a given set of particle coordinates, assumed to be Voronoi cell center positions, perform a
@@ -709,7 +709,8 @@ def rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=None, quant2=None, mode=
       mode (str): one of the following modes of operation:
         **full**: return full rays as a 4-tuple of (offsets, lengths, cell_dx, cell_inds)
         **count, dx_sum, etc**: return a summary statistic for each ray (single array of values)
-      nThreads (int): do multithreaded calculation (mem required=nThreads times more).
+      nThreads (int): if >1, do multithreaded calculation.
+        if None, determine automatically from available CPU count. If 1, do single-threaded calculation.
       tree (list or None): if not None, should be a list of all the needed tree arrays (pre-computed),
                            i.e the exact return of :py:func:`util.treeSearch.buildFullTree`.
     """
@@ -736,6 +737,10 @@ def rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=None, quant2=None, mode=
     assert ray_dir.ndim == 1 and ray_dir.size == 3, "Strange ray_dir."
     assert quant is None or (quant.ndim == 1 and quant.size == pos.shape[0]), "Strange quant shape."
     assert quant2 is None or (quant2.ndim == 1 and quant2.size == pos.shape[0]), "Strange quant2 shape."
+
+    if nThreads is None:
+        # determine automatically
+        nThreads = min(num_cpus(), 72)  # all available, at most 72
 
     # build tree
     if tree is None:

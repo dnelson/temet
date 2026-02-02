@@ -7,7 +7,7 @@ import threading
 import numpy as np
 from numba import jit
 
-from ..util.helper import pSplit
+from ..util.helper import num_cpus, pSplit
 
 
 @jit(nopython=True, nogil=True, cache=True)
@@ -1090,7 +1090,7 @@ def sphMap(
     ndims,
     hsml_1=None,
     colDens=False,
-    nThreads=16,
+    nThreads=None,
     multi=False,
     posTarget=None,
     maxIntProj=False,
@@ -1121,7 +1121,8 @@ def sphMap(
       hsml_1 (ndarray[float][N]): if not None, do asymmetric sph kernel projection with
         ``hsml==hsml_0`` (x), and ``hsml_1`` (y).
       colDens (bool): if True, normalize each grid value by its area (default=False).
-      nThreads (int): do multithreaded calculation (mem required=nThreads times more).
+      nThreads (int): if >1, do multithreaded calculation (mem required=nThreads times more).
+        if None, determine automatically from available CPU count. If 1, do single-threaded calculation.
       multi (bool): if True, return the tuple (dens,quant) instead of selecting one, under the
         assumption that we are using sphMap() in a chunked mode and have to normalize later.
       posTarget (ndarray[float][N,3]): array of 3-coordinates for a set of targets (e.g. star particle
@@ -1206,6 +1207,10 @@ def sphMap(
         assert refGrid.dtype in [np.float32, np.float64]
         assert hsml_1 is None  # not supported
         assert maxIntProj is False and minIntProj is False  # doesn't make sense
+
+    if nThreads is None:
+        # determine automatically
+        nThreads = min(num_cpus() // 2, 36)  # half of available, at most 36
 
     # _calcSphMapTargets() mode?
     nTargets = 0
@@ -1444,7 +1449,7 @@ def sphMap(
 
 
 def sphMapWholeBox(
-    pos, hsml, mass, quant, axes, nPixels, sP, colDens=False, nThreads=8, multi=False, posTarget=None, sliceFac=1.0
+    pos, hsml, mass, quant, axes, nPixels, sP, colDens=False, nThreads=None, multi=False, posTarget=None, sliceFac=1.0
 ):
     """Wrap sphMap() specialized to projecting an entire cosmological/periodic box (or subbox).
 
@@ -1453,6 +1458,10 @@ def sphMapWholeBox(
     """
     boxSizeImg = sP.boxSize * np.array([1.0, 1.0, 1.0 * sliceFac])
     boxCen = sP.boxSize * np.array([0.5, 0.5, 0.5])
+
+    if nThreads is None:
+        # determine automatically
+        nThreads = min(num_cpus() // 2, 36)  # half of available, at most 36
 
     if sP.isSubbox:
         boxSizeImg = sP.subboxSize[sP.subbox] * np.array([1.0, 1.0, 1.0 * sliceFac])
