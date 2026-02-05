@@ -12,7 +12,8 @@ from numba import jit
 from scipy.interpolate import interp1d
 from scipy.ndimage import map_coordinates
 
-from ..util.helper import iterable, logZeroMin, logZeroNaN, num_cpus, rootPath, trapsum
+from ..util.extern import tables_path
+from ..util.helper import iterable, logZeroMin, logZeroNaN, num_cpus, trapsum
 from ..util.rotation import rotateCoordinateArray, rotationMatrixFromVec
 from ..util.simParams import simParams
 from ..util.sphMap import sphMap
@@ -315,7 +316,7 @@ def _dust_tau_model_lum_indiv(
 class sps:
     """Use pre-computed FSPS stellar photometrics tables to derive magnitudes for simulation stars."""
 
-    basePath = rootPath + "/tables/fsps/"
+    basePath = tables_path + "fsps/"
 
     imfTypes = {"salpeter": 0, "chabrier": 1, "kroupa": 2}
     isoTracks = ["mist", "padova07", "parsec", "basti", "geneva"]
@@ -1559,8 +1560,8 @@ def debug_check_rawspec():
     redshift = 0.8
 
     paths = [
-        rootPath + "/tables/fsps/mags_padova07_chabrier_cf00_bands-143_z=0.5.hdf5",
-        rootPath + "/tables/fsps/mags_padova07_chabrier_cf00_bands-143_z=0.5_em.hdf5",
+        tables_path + "fsps/mags_padova07_chabrier_cf00_bands-143_z=0.5.hdf5",
+        tables_path + "fsps/mags_padova07_chabrier_cf00_bands-143_z=0.5_em.hdf5",
     ]
 
     # start plot

@@ -12,11 +12,12 @@ import h5py
 import numpy as np
 
 from ..cosmo import hydrogen
+from ..util.extern import tables_path
 from ..util.helper import closest, logZeroNaN, num_cpus, rootPath
 from ..util.simParams import simParams
 
 
-basePath = rootPath + "tables/cloudy/"
+basePath = tables_path + "cloudy/"
 basePathTemp = expanduser("~") + "/data/cloudy_tables/"
 
 # emission lines recorded (must redo Cloudy grid to add lines)
@@ -386,7 +387,7 @@ def _loadExternalUVB(redshifts=None, hm12=False, puchwein19=False):
     if hm12:
         filePath = rootPath + "data/haardt.madau/hm2012.uvb.txt"
     if puchwein19:
-        filePath = rootPath + "/data/puchwein/p19.uvb.txt"
+        filePath = rootPath + "data/puchwein/p19.uvb.txt"
 
     sP = simParams(res=1820, run="tng")  # for units
 

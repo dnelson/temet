@@ -9,7 +9,8 @@ from math import fmod
 import numpy as np
 from numba import jit
 
-from ..util.helper import closest, rootPath
+from ..util.extern import tables_path
+from ..util.helper import closest
 
 
 class Plane:
@@ -379,7 +380,7 @@ def findCuboidRemapInds(remapRatio, nPixels=None):
     assert np.abs(1.0 - np.prod(remapRatio)) < 1e-3, "Error: Check L1*L2*L3 == 1 constraint."
 
     # load pre-computed mapping posibilities
-    file = rootPath + "tables/box_remap_N7.txt"  # e1,e2,e3,u11,u12,u13,u21,u22,u23,u31,u32,u33,periodicity
+    file = tables_path + "box_remap_N7.txt"  # e1,e2,e3,u11,u12,u13,u21,u22,u23,u31,u32,u33,periodicity
     data = np.loadtxt(file, comments="#", usecols=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])  # skip last (periodicity)
 
     # calculate closest matching edge length set (use abs(xyz) distance metric)

@@ -16,7 +16,8 @@ from scipy.ndimage import map_coordinates
 
 from ..cosmo.hydrogen import neutral_fraction
 from ..plot.config import figsize
-from ..util.helper import isUnique, rootPath
+from ..util.extern import tables_path
+from ..util.helper import isUnique
 from ..util.match import match
 from ..util.simParams import simParams
 
@@ -228,7 +229,7 @@ def convertMillenniumSubhaloCatalog(snap=63):
         header = f.read(4 * 5)
 
     NGroups = struct.unpack("i", header[0:4])[0]
-    #NIds = struct.unpack("i", header[4:8])[0]
+    # NIds = struct.unpack("i", header[4:8])[0]
     TotNGroups = struct.unpack("i", header[8:12])[0]
     NFiles = struct.unpack("i", header[12:16])[0]
     NSubs = struct.unpack("i", header[16:20])[0]
@@ -1724,7 +1725,7 @@ def convertSimbaSnapshot(snap=151):
     loadPath = basePath + "%s/orig-snapshots/" % (run.replace("m", "L") + "FP")
     savePath = basePath + "%s/output/" % (run.replace("m", "L") + "FP")
 
-    gfmPhotoPath = rootPath + "/tables/bc03/stellar_photometrics.hdf5"
+    gfmPhotoPath = tables_path + "bc03/stellar_photometrics.hdf5"
 
     sP = simParams(run="simba")  # for units only
 

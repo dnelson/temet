@@ -11,11 +11,12 @@ from scipy.integrate import cumulative_trapezoid
 from scipy.ndimage import map_coordinates
 
 from ..plot.util import contourf, plothist, plotxy, sampleColorTable
-from ..util.helper import closest, rootPath
+from ..util.extern import tables_path
+from ..util.helper import closest
 from ..util.simParams import simParams
 
 
-basePath = rootPath + "tables/xray/"
+basePath = tables_path + "xray/"
 
 # fmt: off
 apec_elem_names = ["H","He","Li","Be","B","C","N","O","F","Ne","Na","Mg","Al","Si","P","S","Cl","Ar","K","Ca",

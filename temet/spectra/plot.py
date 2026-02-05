@@ -470,9 +470,9 @@ def cos_disptab():
     """Handle DISPTAB files, wavelength grids, and LSF files for HST-COS (pre-processing step)."""
     from astropy.io import fits
 
-    from ..util.helper import rootPath
+    from ..util.extern import tables_path
 
-    basePath = rootPath + "tables/hst/"
+    basePath = tables_path + "hst/"
 
     files = glob.glob(basePath + "*.fits")
 

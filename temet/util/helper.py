@@ -19,6 +19,7 @@ from scipy.stats import binned_statistic, gaussian_kde
 
 
 # --- root path (e.g. '/home/username/temet/temet/') ----
+# or '~/.local/lib/python3.x/site-packages/temet/' if installed via pip
 rootPath = abspath(dirname(__file__) + "/../") + "/"
 
 # --- utility functions ---

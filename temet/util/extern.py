@@ -1,9 +1,21 @@
 """Create/use/handle external data files."""
 
 import glob
+from os import path
 
 import h5py
 import numpy as np
+
+from ..util.helper import rootPath
+
+
+# decide path of external data tables
+tables_path = rootPath + "tables/"
+
+_local_path = "/usr/local/share/temet/tables"
+
+if path.isdir(_local_path):
+    tables_path = _local_path
 
 
 def check_data_tables():
@@ -11,29 +23,27 @@ def check_data_tables():
     import pathlib
     from importlib import resources
 
-    tables_path = resources.files("temet.tables")
-    tables_contents = list(tables_path.iterdir())
+    t_path = resources.files("temet.tables")
+    t_contents = list(t_path.iterdir())
 
-    has_asked = any(x.name == ".asked" for x in tables_contents)
+    has_asked = any(x.name == ".asked" for x in t_contents)
 
-    if len(tables_contents) != 2 or has_asked:
+    if len(t_contents) != 2 or has_asked:
         # tables/ does not contain only ".gitignore" and "fonts/" i.e has been modified
         return
 
     # check for existence at local path
-    path = tables_contents[0].parent
-    local_path = "/usr/local/share/temet/tables"
+    path = t_contents[0].parent
 
-    if pathlib.Path(local_path).exists():
-        print(f"First time importing temet. Will link to and use data tables on local path [{local_path}].")
-        # symlink to local path
-        path.rename(path.with_suffix(".bak"))
-        path.symlink_to(local_path, target_is_directory=True)
-
+    if pathlib.Path(_local_path).exists():
+        # symlink to local path - no. breaks uninstall.
+        # print(f"First time importing temet. Will link to and use data tables on local path [{local_path}].")
+        # path.rename(path.with_suffix(".bak"))
+        # path.symlink_to(local_path, target_is_directory=True)
         return
 
     # no data yet, ask to download
-    (tables_path / ".asked").touch()
+    (t_path / ".asked").touch()
 
     print("First time importing temet. Suggest to download data tables (~7 GB). To do so (see docs):")
     cmd = "wget -r -nH --cut-dirs=1 --no-parent --reject='index.html*' -e robots=off temet.tng-project.org/tables/"

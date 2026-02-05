@@ -16,7 +16,8 @@ from ..cosmo.cloudyGrid import loadUVB
 from ..cosmo.hydrogen import photoCrossSecGray, photoRate, uvbEnergyDensity
 from ..plot.config import figsize, linestyles
 from ..plot.util import contourf, loadColorTable, sampleColorTable
-from ..util.helper import closest, evenlySample, logZeroNaN, rootPath
+from ..util.extern import tables_path
+from ..util.helper import closest, evenlySample, logZeroNaN
 from ..util.simParams import simParams
 
 
@@ -291,7 +292,7 @@ def grackleTable():
     # filename2 = 'grid_cooling_UVB=FG11.hdf5' # my new version (testing)
     ##filename2 = 'CloudyData_UVB=FG2011_shielded.h5' # orig
 
-    filepath = rootPath + "tables/cloudy/"
+    filepath = tables_path + "cloudy/"
     # filename1 = 'grid_cooling_UVB=FG20_unshielded.hdf5'
     filename1 = "grid_cooling_UVB=FG20.hdf5"
     filename2 = "grid_cooling_UVB=FG20_ext.hdf5"
