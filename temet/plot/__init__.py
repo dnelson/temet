@@ -1,5 +1,6 @@
 """Plotting routines."""
 
+import logging
 import pathlib
 from importlib import resources
 
@@ -36,3 +37,6 @@ try:
         matplotlib.font_manager.fontManager.addfont(font_file)
 except FileNotFoundError:
     pass
+
+# disable fontTools timestamp warnings
+logging.getLogger("fontTools.ttLib.tables").setLevel(logging.ERROR)
