@@ -1522,8 +1522,21 @@ def curRepoVersion():
     else:
         chdir("/var/www/python/")
 
-    command = ["git", "rev-parse", "--short", "HEAD"]
-    repoRevStr = subprocess.check_output(command, stderr=subprocess.DEVNULL).strip()
+    repoRevStr = ""
+
+    try:
+        # git repo i.e. editable installation
+        command = ["git", "rev-parse", "--short", "HEAD"]
+        repoRevStr = subprocess.check_output(command, stderr=subprocess.DEVNULL).strip()
+    except subprocess.CalledProcessError:
+        try:
+            # pip installation
+            command = ["pip", "show", "temet"]
+            pip_info_str = subprocess.check_output(command, stderr=subprocess.DEVNULL).strip()
+            repoRevStr = "v" + pip_info_str.split()[3].decode()
+        except subprocess.CalledProcessError:
+            pass
+
     chdir(oldCwd)
 
     return repoRevStr
