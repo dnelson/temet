@@ -1082,7 +1082,7 @@ def renderMultiPanel(panels, conf):
     conf.nLinear = conf.nCols if conf.nCols > conf.nRows else conf.nRows
     min_fontsize = 14 if "edged" in conf.plotStyle else 12
     max_fontsize = 60 if conf.nLinear <= 2 else 40
-    fontsize_exp = 0.8
+    fontsize_exp = 0.83
     if not hasattr(conf, "fontsize"):
         conf.fontsize = (conf.rasterPx[0] / 1000) ** fontsize_exp * 10 * (conf.nCols**fontsize_exp) * 1.2
         conf.fontsize = int(np.clip(conf.fontsize, min_fontsize, max_fontsize))

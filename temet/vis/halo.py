@@ -298,7 +298,7 @@ def renderSingleHalo(panels_in, plotConfig=None, localVars=None, skipExisting=Fa
             _sim_str = "_" + "-".join([p["sP"].simName for p in panels])
         if all("partType" in p for p in panels) and all("partField" in p for p in panels) and len(panels) <= 2:
             _field_str = "_" + "_".join(["%s-%s" % (p["partType"], p["partField"]) for p in panels])
-        saveFilename = "renderHalo_N%d%s%s.jpg" % (len(panels), _sim_str, _field_str)
+        saveFilename = "renderHalo_N%d%s%s.png" % (len(panels), _sim_str, _field_str)
 
     if plotConfig is None:
         plotConfig = plotConfigDefaults()
