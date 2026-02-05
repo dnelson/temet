@@ -10,6 +10,7 @@ from matplotlib.colors import to_rgb
 from scipy.signal import savgol_filter
 
 from ..plot.config import colors, figsize, linestyles, lw, markers, sKn, sKo
+from ..plot.util import _finish_plot
 from ..util.helper import closest, logZeroNaN, running_median
 from ..util.simParams import simParams
 
@@ -84,6 +85,7 @@ def scatter2d(
     f_selection=None,
     f_pre=None,
     f_post=None,
+    saveFilename=None,
 ):
     """Scatterplot between two quantities, optionally including time evolution tracks through this plane.
 
@@ -106,6 +108,7 @@ def scatter2d(
         It must accept two arguments: the figure axis, and a list of simulation objects.
       f_post (function): if not None, this 'custom' function hook is called just after plotting.
         It must accept two arguments: the figure axis, and a list of simulation objects.
+      saveFilename (str): name (and extension, setting format) of output plot. Automatic if None.
     """
     # currently assume all sims have the same parent
     # rng = np.random.default_rng(424242)
@@ -311,8 +314,9 @@ def scatter2d(
         f_post(ax, sims)
 
     _add_legends(ax, hInds, res, variants, colors)
-    fig.savefig(f"mcst_{xQuant}-vs-{yQuant}.pdf")
-    plt.close(fig)
+
+    saveNameDefault = f"scatter2d_evo_{xQuant}-vs-{yQuant}.pdf"
+    _finish_plot(fig, saveFilename, saveNameDefault)
 
 
 def tracks1d(
@@ -325,23 +329,25 @@ def tracks1d(
     plot_parent: bool = True,
     sizefac: float = 1.0,
     f_selection: Callable = None,
+    saveFilename: str = None,
 ) -> None:
     """Evolution of a quantity versus redshift.
 
     Designed for comparison between many zoom runs, including the target subhalo (only) from each.
 
     Args:
-      sims (list[simParams]): list of simulation objects to compare.
-      quant (str): name of quantity to plot.
-      xlim (list[float][2]): if not None, override default x-axis (redshift) limits.
-      ylim (list[float][2]): if not None, override default y-axis limits.
-      sfh_lin (bool): show SFH with linear y-axis.
-      sfh_treebased (bool): if True, use merger tree-based tracks even for SFH-related quantities.
-      plot_parent (bool): if True, plot halos from the parent box for comparison.
-      sizefac (float): multiplier on figure size.
-      f_selection (function): if not None, this 'custom' function hook is called to determine which
+      sims: list of simulations to compare.
+      quant: name of quantity to plot.
+      xlim: if not None, 2-tuple that overrides default x-axis (redshift) limits.
+      ylim: if not None, 2-tuple that overrides default y-axis limits.
+      sfh_lin: show SFH with linear y-axis.
+      sfh_treebased: if True, use merger tree-based tracks even for SFH-related quantities.
+      plot_parent: if True, plot halos from the parent box for comparison.
+      sizefac: multiplier on figure size.
+      f_selection: if not None, this 'custom' function hook is called to determine which
         subhalo IDs to plot for each sim. It must accept a single argument: the simulation object,
         and return a list of subhalo IDs to plot. If None, defaults to sim.zoomSubhaloID only.
+      saveFilename: name (and extension, setting format) of output plot. Automatic if None.
     """
     # quantities based on stellar formation times of stars in the final snapshot, as opposed to tree MPBs
     star_zform_quants = ["mstar2_log", "mstar_log", "mstar_tot_log", "sfr", "sfr2"]
@@ -575,7 +581,9 @@ def tracks1d(
 
     # finish and save plot
     _add_legends(ax, hInds, res, variants, colors, lineplot=True)
+
     hStr = "" if len(set(hInds)) > 1 else "_h%d" % hInds[0]
     tStr = "_tree" if sfh_treebased else ""
-    fig.savefig(f"mcst_{quant}-vs-redshift{hStr}{tStr}.pdf")
-    plt.close(fig)
+    saveNameDefault = f"tracks1d_evo_{quant}-vs-redshift{hStr}{tStr}.pdf"
+
+    _finish_plot(fig, saveFilename, saveNameDefault)

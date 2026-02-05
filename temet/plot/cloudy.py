@@ -15,13 +15,13 @@ from ..cosmo.cloudy import cloudyIon
 from ..cosmo.cloudyGrid import loadUVB
 from ..cosmo.hydrogen import photoCrossSecGray, photoRate, uvbEnergyDensity
 from ..plot.config import figsize, linestyles
-from ..plot.util import contourf, loadColorTable, sampleColorTable
+from ..plot.util import _finish_plot, contourf, loadColorTable, sampleColorTable
 from ..util.extern import tables_path
 from ..util.helper import closest, evenlySample, logZeroNaN
 from ..util.simParams import simParams
 
 
-def plotUVB(uvb="FG11"):
+def plotUVB(uvb="FG11", saveFilename=None):
     """Debug plots of the UVB(nu) as a function of redshift."""
     # config
     redshifts = [0.0, 2.0, 4.0, 6.0, 7.0, 8.0, 9.0]
@@ -105,8 +105,7 @@ def plotUVB(uvb="FG11"):
     cb.ax.set_ylabel(r"log J$_{\nu}(\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]")
 
     # finish
-    fig.savefig("uvb_%s.pdf" % uvb)
-    plt.close(fig)
+    _finish_plot(fig, saveFilename, saveNameDefault="uvb_%s.pdf" % uvb)
 
 
 def plotIonAbundances(res="lg_c17", elements=("Magnesium",)):

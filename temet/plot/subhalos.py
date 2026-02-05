@@ -13,7 +13,14 @@ from scipy.stats import binned_statistic_2d
 
 from ..cosmo.util import subsampleRandomSubhalos
 from ..plot.config import figsize, linestyles, sKn, sKo
-from ..plot.util import getWhiteBlackColors, loadColorTable, sampleColorTable, setAxisColors, setColorbarColors
+from ..plot.util import (
+    _finish_plot,
+    getWhiteBlackColors,
+    loadColorTable,
+    sampleColorTable,
+    setAxisColors,
+    setColorbarColors,
+)
 from ..util.helper import binned_stat_2d, iterable, kde_2d, logZeroNaN, lowess, running_median, running_median_sub
 
 
@@ -159,7 +166,7 @@ def histogram2d(
             ctName = "gray_r" if pStyle == "white" else "gray"
         cmap = loadColorTable(ctName)
 
-        clabel = "log N$_{\\rm gal}$+1"
+        clabel = r"log N$_{\rm gal}$+1"
         cMinMax = [0.0, 2.0] if clim is None else clim
         if sP.boxSize > 100000:
             cMinMax = [0.0, 2.5]
@@ -171,7 +178,7 @@ def histogram2d(
             cMinMax = clim
 
     if sim_cvals is None:
-        return  # property is not calculated for this run (e.g. expensive auxCat)
+        return False  # property is not calculated for this run (e.g. expensive auxCat)
 
     # flagging?
     sim_flag = np.ones(sim_xvals.shape).astype("bool")
@@ -223,7 +230,7 @@ def histogram2d(
         wInfCval = np.isinf(sim_cvals)
 
         if np.count_nonzero(wInfCval) > 0:  # unusual
-            print(" warning: [%d] infinite color values [%s]." % (np.count_nonzero(wInfCval), cQuant))
+            print("WARNING: [%d] infinite color values [%s]." % (np.count_nonzero(wInfCval), cQuant))
 
         assert np.count_nonzero(wFiniteCval) + np.count_nonzero(wNaNCval) + np.count_nonzero(wInfCval) == sim_cvals.size
 
@@ -250,9 +257,6 @@ def histogram2d(
     ax.set_ylim(yMinMax)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-
-    if getuser() != "wwwrun":
-        print(" ", xQuant, yQuant, cQuant, sP.simName, cenSatSelect)
 
     cssStrings = {"all": "all galaxies", "cen": "centrals only", "sat": "satellites"}
     if getuser() == "wwwrun":
@@ -550,23 +554,9 @@ def histogram2d(
     setColorbarColors(cb, color2)
 
     # finish plot and save
-    if pdf is not None:
-        pdf.savefig(facecolor=fig.get_facecolor())
-    else:
-        # note: saveFilename could be an in-memory buffer
-        if saveFilename is None:
-            saveFilename = "histo2d_%s_%s_%s_%s_%s_%s.pdf" % (
-                yQuant,
-                xQuant,
-                cQuant,
-                cStatistic,
-                cenSatSelect,
-                minCount,
-            )
-        fig.savefig(saveFilename, format=output_fmt, facecolor=fig.get_facecolor())
-    plt.close(fig)
+    saveNameDefault = "histo2d_%s_%s_%s_%s_%s_%s.pdf" % (yQuant, xQuant, cQuant, cStatistic, cenSatSelect, minCount)
 
-    return True
+    _finish_plot(fig, saveFilename, saveNameDefault, pdf, output_fmt=output_fmt)
 
 
 def slice(
@@ -603,7 +593,8 @@ def slice(
     assert cenSatSelect in ["all", "cen", "sat"]
 
     if len(yQuants) == 0:
-        return
+        return False
+
     nRows = int(np.floor(np.sqrt(len(yQuants))))
     nCols = int(np.ceil(len(yQuants) / nRows))
 
@@ -625,17 +616,14 @@ def slice(
     for i, yQuant in enumerate(yQuants):
         ax = fig.add_subplot(nRows, nCols, i + 1)
 
+        # loop over each run and add to the same plot
         for sP in sPs:
-            # loop over each run and add to the same plot
-            print(" ", yQuant, sP.simName, xQuant, cenSatSelect, sQuant, sRange)
-
             # y-axis: load galaxy properties (in histo2D were the color mappings)
             sim_yvals, ylabel, yMinMax, yLog = sP.simSubhaloQuantity(yQuant)
             if ylim is not None:
                 yMinMax = ylim
 
             if sim_yvals is None:
-                print("   skip")
                 continue  # property is not calculated for this run (e.g. expensive auxCat)
             if yLog is True:
                 sim_yvals = logZeroNaN(sim_yvals)
@@ -644,7 +632,6 @@ def slice(
             sim_svals, slabel, _, _ = sP.simSubhaloQuantity(sQuant)
 
             if sim_svals is None:
-                print("   skip")
                 continue
 
             # x-axis: load/calculate x-axis quantity (e.g. simulation colors), cached in sP.data
@@ -653,7 +640,6 @@ def slice(
                 xMinMax = xlim
 
             if sim_xvals is None:
-                print("   skip")
                 continue
             if xLog is True:
                 sim_xvals = logZeroNaN(sim_xvals)
@@ -742,13 +728,9 @@ def slice(
             ax.legend(handles + handlesO, labels + labelsO, loc="best")
 
     # finish plot and save
-    if pdf is not None:
-        pdf.savefig()
-    else:
-        if saveFilename is None:
-            saveFilename = "slice1d_%s_%s_%s_%s.pdf" % ("-".join(yQuants), xQuant, sQuant, cenSatSelect)
-        fig.savefig(saveFilename)
-    plt.close(fig)
+    saveNameDefault = "slice1d_%s_%s_%s_%s.pdf" % ("-".join(yQuants), xQuant, sQuant, cenSatSelect)
+
+    _finish_plot(fig, saveFilename, saveNameDefault, pdf)
 
 
 def median(
@@ -842,8 +824,7 @@ def median(
       filterFlag (bool): if True, exclude SubhaloFlag==0 (non-cosmological) objects.
       colorbarInside (bool): place colorbar (assuming scatterColor is used) inside the panel.
       saveFilename (str): name (and extension, setting format) of output plot. Automatic if None.
-      pdf (PdfPages or None): if None, an actual PDF file is written to disk with the figure.
-        If not None, then the figure is added to this existing pdf collection.
+      pdf (PdfPages or None): If not None, then the figure is added to this existing pdf collection.
 
     Returns:
       None. PDF figure is saved in current directory, or added to ``pdf`` if input.
@@ -879,10 +860,8 @@ def median(
         if f_pre is not None:
             f_pre(ax)
 
+        # loop over each run and add to the same plot
         for _j, sP in enumerate(sPs):
-            # loop over each run and add to the same plot
-            print(" ", yQuant, xQuant, sP.simName, cenSatSelect)
-
             # y-axis: load fullbox galaxy properties
             sim_yvals, ylabel_def, yMinMax, yLog = sP.simSubhaloQuantity(yQuant)
             if ylim is not None:
@@ -891,13 +870,12 @@ def median(
                 ylabel = ylabel_def
 
             if sim_yvals is None:
-                print("   skip")
                 continue  # property is not calculated for this run (e.g. expensive auxCat)
             if yLog:
                 # check for zero values (should generalize)
                 w_zero = np.where(sim_yvals == 0)[0]
                 if len(w_zero) and yQuant in ["sfr_30pkpc", "sfr", "sfr2"]:
-                    print("Warning: setting [%d] zero SFRs to random around minimum y-axis value!" % len(w_zero))
+                    print("NOTE: Setting [%d] zero SFRs to random around minimum y-axis value!" % len(w_zero))
                     rng = np.random.default_rng(424242)
                     low_val = ylim[0] + 1 * (ylim[1] - ylim[0]) / 100  # 1% above the bottom
                     high_val = ylim[0] + 15 * (ylim[1] - ylim[0]) / 100  # to 8% above the bottom
@@ -923,7 +901,6 @@ def median(
             if sQuant is not None:
                 sim_svals, slabel, _, sLog = sP.simSubhaloQuantity(sQuant)
                 if sim_svals is None:
-                    print("   skip")
                     continue
                 if sLog:
                     sim_svals = logZeroNaN(sim_svals)
@@ -1289,14 +1266,9 @@ def median(
             cb.ax.set_ylabel(clabel, size=newsize)  # default: 24.192 (14 * x-large)
 
     # finish plot and save
-    if pdf is not None:
-        pdf.savefig()
-    else:
-        if saveFilename is None:
-            simNames = "-".join(sorted({sP.simName for sP in sPs}))
-            colorStr = "-%s" % scatterColor if scatterColor is not None else ""
-            yQuantsStr = "-".join(list(yQuants))
-            saveFilename = "median_%s_%s-%s%s_%s.pdf" % (simNames, yQuantsStr, xQuant, colorStr, cenSatSelect)
-        fig.savefig(saveFilename)
+    simNames = "-".join(sorted({sP.simName for sP in sPs}))
+    colorStr = "-%s" % scatterColor if scatterColor is not None else ""
+    yQuantsStr = "-".join(list(yQuants))
+    saveNameDefault = "median_%s_%s-%s%s_%s.pdf" % (simNames, yQuantsStr, xQuant, colorStr, cenSatSelect)
 
-    plt.close(fig)
+    _finish_plot(fig, saveFilename, saveNameDefault, pdf)

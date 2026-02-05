@@ -12,7 +12,7 @@ from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
 
 from ..plot.config import colors, figsize, linestyles, lw, sKn, sKo
-from ..plot.util import loadColorTable, sampleColorTable
+from ..plot.util import _finish_plot, loadColorTable, sampleColorTable
 from ..util.helper import cache, closest, gaussian_filter_nan, iterable, logZeroNaN, running_median
 from ..util.match import match
 
@@ -34,8 +34,8 @@ def histogram1d(
     ctName=None,
     ctProp=None,
     colorbar=False,
-    pdf=None,
     saveFilename=None,
+    pdf=None,
 ):
     """Simple 1D histogram/PDF of some quantity, for the whole box or one or more halos/subhalos.
 
@@ -196,10 +196,8 @@ def histogram1d(
 
                         wRestrict = np.where((r_vals < rFieldMin) | (r_vals > rFieldMax))
                         mask[wRestrict] = 1
-                        print(
-                            "[%d] restrict [%s] eliminated [%d] of [%d] = %.2f%%"
-                            % (objID, rFieldName, len(wRestrict[0]), mask.size, len(wRestrict[0]) / mask.size * 100)
-                        )
+                        # print("[%d] restrict [%s] eliminated [%d] of [%d] = %.2f%%"
+                        #    % (objID, rFieldName, len(wRestrict[0]), mask.size, len(wRestrict[0]) / mask.size * 100))
 
                     # apply mask
                     wRestrict = np.where(mask == 0)
@@ -248,7 +246,7 @@ def histogram1d(
                 # ax.plot(xx, yy3, linestyle='-', color='black', lw=lw, alpha=0.8, label='middle')
                 ax.plot(xx, yy2, linestyle="-", color="black", lw=lw, alpha=1.0, label="median")
 
-    # finish plot
+    # legend and colorbar
     if legend:
         ax.legend(loc="best")
 
@@ -258,7 +256,7 @@ def histogram1d(
         _, label, _, _ = sP.simSubhaloQuantity(ctProp)
         plt.colorbar(cmap, label=label, cax=cb_axes, orientation="horizontal")
 
-    # save plot
+    # finish plot and save
     sPstr = sP.simName if len(sPs) == 1 else "nSp-%d" % len(sPs)
     hStr = "global"
     if haloIDs is not None:
@@ -266,13 +264,9 @@ def histogram1d(
     elif subhaloIDs is not None:
         hStr = "subhIDs-n%d" % len(subhaloIDs)
 
-    if pdf is not None:
-        pdf.savefig(facecolor=fig.get_facecolor())
-    else:
-        if saveFilename is None:
-            saveFilename = "histo1D_%s_%s_%s_wt-%s_%s.pdf" % (sPstr, ptType, ptProperty, ptWeight, hStr)
-        fig.savefig(saveFilename)
-    plt.close(fig)
+    saveNameDefault = "histo1D_%s_%s_%s_wt-%s_%s.pdf" % (sPstr, ptType, ptProperty, ptWeight, hStr)
+
+    _finish_plot(fig, saveFilename, saveNameDefault, pdf)
 
 
 def _draw_special_lines(sP, ax, ptProperty):
@@ -423,10 +417,8 @@ def phaseSpace2d(
 
             wRestrict = np.where((r_vals < rFieldMin) | (r_vals > rFieldMax))
             mask[wRestrict] = 1
-            print(
-                " restrict [%s] eliminated [%d] of [%d] = %.2f%%"
-                % (rFieldName, len(wRestrict[0]), mask.size, len(wRestrict[0]) / mask.size * 100)
-            )
+            # print(" restrict [%s] eliminated [%d] of [%d] = %.2f%%"
+            #    % (rFieldName, len(wRestrict[0]), mask.size, len(wRestrict[0]) / mask.size * 100))
 
         # apply mask
         wRestrict = np.where(mask == 0)
@@ -749,23 +741,18 @@ def phaseSpace2d(
         legend = ax.legend(handles, qLabels, borderpad=0.4, loc="upper right")
         ax.add_artist(legend)
 
-    # save
-    if pdf is not None:
-        pdf.savefig(facecolor=fig.get_facecolor())
-    else:
-        # note: saveFilename could be an in-memory buffer
-        if saveFilename is None:
-            saveFilename = "phase2d_%s_%d_%s_x-%s_y-%s_wt-%s_%s.pdf" % (
-                sP.simName,
-                sP.snap,
-                partType,
-                xQuant,
-                yQuant,
-                "-".join([w.replace(" ", "") for w in weights]),
-                "nh%d" % len(haloIDs) if haloIDs is not None else "fullbox",
-            )
-        fig.savefig(saveFilename)
-    plt.close(fig)
+    # finish plot and save
+    saveNameDefault = "phase2d_%s_%d_%s_x-%s_y-%s_wt-%s_%s.pdf" % (
+        sP.simName,
+        sP.snap,
+        partType,
+        xQuant,
+        yQuant,
+        "-".join([w.replace(" ", "") for w in weights]),
+        "nh%d" % len(haloIDs) if haloIDs is not None else "fullbox",
+    )
+
+    _finish_plot(fig, saveFilename, saveNameDefault, pdf)
 
 
 def median(
@@ -788,6 +775,8 @@ def median(
     sizefac=1.0,
     f_pre=None,
     f_post=None,
+    saveFilename=None,
+    pdf=None,
 ):
     """Plot the relationship between two particle/cell properties, for the full box or one or more (sets of) halos.
 
@@ -818,9 +807,11 @@ def median(
         It must accept the figure axis as its single argument.
       f_post (function): if not None, this 'custom' function hook is called just after plotting.
         It must accept the figure axis as its single argument.
+      saveFilename (str): name (and extension, setting format) of output plot. Automatic if None.
+      pdf (PdfPages or None): If not None, then the figure is added to this existing pdf collection.
 
-    Returns:
-      None. Produces a PDF figure in the current directory.
+    Return:
+      None.
     """
     assert np.sum([total, totalCum]) in [0, 1]  # at most one
 
@@ -1053,11 +1044,12 @@ def median(
 
     ax.legend(loc=legendLoc)
 
-    # finish plot
+    # finish plot and save
     sStr = "%s_z-%.1f" % (sPs[0].simName, sPs[0].redshift) if len(sPs) == 1 else "sPn%d" % len(sPs)
     plotType = "Median" if np.sum([total, totalCum]) == 0 else ("Total" if total else "TotalCum")
-    fig.savefig("particle%s_%s_%s-vs-%s_%s_%s.pdf" % (plotType, partType, xQuant, yQuant, sStr, hStr))
-    plt.close(fig)
+    saveNameDefault = "particle%s_%s_%s-vs-%s_%s_%s.pdf" % (plotType, partType, xQuant, yQuant, sStr, hStr)
+
+    _finish_plot(fig, saveFilename, saveNameDefault, pdf)
 
 
 def profilesStacked1d(
@@ -1079,6 +1071,7 @@ def profilesStacked1d(
     ctProp=None,
     colorbar=False,
     saveFilename=None,
+    pdf=None,
 ):
     """Radial profile(s) of some quantity vs. radius for halos (FoF-scope, using non-caching auxCat functionality).
 
@@ -1187,7 +1180,7 @@ def profilesStacked1d(
                 yp = np.nanpercentile(data[w, :], percs, axis=0)
 
             if proj2D is not None:
-                print("Normalizing to column density (could use generalization, i.e. mass fields only).")
+                print("WARNING: Normalizing to column density (could use generalization, i.e. mass fields only).")
                 # [code mass] -> [code mass / code length^2]
                 yy_indiv /= attrs["bin_areas_code"]
                 yy_mean /= attrs["bin_areas_code"]
@@ -1270,7 +1263,7 @@ def profilesStacked1d(
                 with open(filename, "w") as f:
                     f.write(out)
 
-    # finish plot
+    # legend and colorbar
     ax.legend(loc="best")
 
     if colorbar:
@@ -1280,20 +1273,18 @@ def profilesStacked1d(
         _, label, _, _ = sP.simSubhaloQuantity(ctProp)
         fig.colorbar(cmap, label=label, cax=cb_axes, orientation="horizontal")
 
-    if saveFilename is None:
-        saveFilename = "radProfilesStack_%s_%s_%s_Ns-%d_Nh-%d_scope-%s%s.pdf" % (
-            "-".join([sP.simName for sP in sPs]),
-            ptType,
-            ptProperty,
-            nSamples,
-            len(objIDs),
-            scope,
-            "_wt-" + weighting if weighting is not None else "",
-        )
+    # finish plot and save
+    saveNameDefault = "radProfilesStack_%s_%s_%s_Ns-%d_Nh-%d_scope-%s%s.pdf" % (
+        "-".join([sP.simName for sP in sPs]),
+        ptType,
+        ptProperty,
+        nSamples,
+        len(objIDs),
+        scope,
+        "_wt-" + weighting if weighting is not None else "",
+    )
 
-    fig.savefig(saveFilename)
-
-    plt.close(fig)
+    _finish_plot(fig, saveFilename, saveNameDefault, pdf)
 
 
 @cache
@@ -1372,6 +1363,8 @@ def profile(
     ylim=None,
     sfreq0=False,
     scope="fof",
+    saveFilename=None,
+    pdf=None,
 ):
     """Radial profile of some quantity vs. radius from a halo, one per simulation (i.e. for zooms).
 
@@ -1507,17 +1500,19 @@ def profile(
                 horizontalalignment="center",
             )
 
-    # finish plot
+    # legend
     ax.legend(loc="best")
 
+    # finish plot and save
     sPstr = sP.simName if len(sPs) == 1 else "nSp-%d" % len(sPs)
     if haloIDs is not None:
         hStr = "haloID-%d" % haloIDs[0] if len(haloIDs) == 1 else "nH-%d" % len(haloIDs)
     else:
         hStr = "subhID-%d" % subhaloIDs[0] if len(subhaloIDs) == 1 else "nSH-%d" % len(subhaloIDs)
 
-    fig.savefig("radProfile_%s_%s_%s_%s_scope-%s.pdf" % (sPstr, ptType, ptProperty, hStr, scope))
-    plt.close(fig)
+    saveNameDefault = "radProfile_%s_%s_%s_%s_scope-%s.pdf" % (sPstr, ptType, ptProperty, hStr, scope)
+
+    _finish_plot(fig, saveFilename, saveNameDefault, pdf)
 
 
 def profilesStacked2d(
@@ -1534,6 +1529,8 @@ def profilesStacked2d(
     max_z=20.0,
     scope="fof",
     ctName="viridis",
+    saveFilename=None,
+    pdf=None,
 ):
     """2D stacked radial profile of some quantity vs. distance, for one halo, as a function of time (temporal-spatial).
 
@@ -1553,6 +1550,8 @@ def profilesStacked2d(
       max_z (float): maximum redshift to include in the plot.
       scope (str): 'global', 'fof', 'subfind'.
       ctName (str): colormap name for the 2D plot.
+      saveFilename (str): name (and extension, setting format) of output plot. Automatic if None.
+      pdf (PdfPages or None): If not None, then the figure is added to this existing pdf collection.
     """
     assert haloID is None or subhaloID is None  # pick one
 
@@ -1721,13 +1720,15 @@ def profilesStacked2d(
     cax = make_axes_locatable(ax).append_axes("right", size="3%", pad=0.2)
     fig.colorbar(im, cax=cax, label=clabel)
 
+    # finish plot and save
     if haloID is not None:
         hStr = "h%d" % haloID
     else:
         hStr = "shID-%d" % subhaloID
 
-    fig.savefig("radProfile2DEvo_%s_%s_%s_%s_scope-%s.pdf" % (sim, ptType, ptProperty, hStr, scope))
-    plt.close(fig)
+    saveNameDefault = "radProfile2DEvo_%s_%s_%s_%s_scope-%s.pdf" % (sim, ptType, ptProperty, hStr, scope)
+
+    _finish_plot(fig, saveFilename, saveNameDefault, pdf)
 
 
 def profileEvo2d(
@@ -1744,6 +1745,8 @@ def profileEvo2d(
     xlim=(9.0, 15.0),
     xbinsize=None,
     ctName="viridis",
+    saveFilename=None,
+    pdf=None,
 ):
     """2D Stacked radial profile(s) of some quantity vs. radius from (all) halos.
 
@@ -1817,8 +1820,6 @@ def profileEvo2d(
 
     # loop over simulations
     for i, sP in enumerate(sPs):
-        print(sP.simName)
-
         # load (except for first, which is already available above)
         if i > 0:
             xvals, _, _, _ = sP.simSubhaloQuantity(xQuant)
@@ -1849,8 +1850,6 @@ def profileEvo2d(
             bin_stop = bin_edges[j + 1]
 
             w = np.where((xvals > bin_start) & (xvals <= bin_stop))[0]
-
-            print(bin_start, bin_stop, len(w), xvals[w].mean())
 
             if len(w) == 0:
                 continue
@@ -1925,7 +1924,8 @@ def profileEvo2d(
     cax = make_axes_locatable(ax).append_axes("right", size="3%", pad=0.2)
     fig.colorbar(im, cax=cax, label=clabel)
 
-    # finish plot
+    # finish plot and save
     sPstr = "-".join([sP.simName for sP in sPs])
-    fig.savefig("radProfiles2DStack_%s_%d_%s_%s_vs_%s.pdf" % (sPstr, sPs[0].snap, ptType, ptProperty, xQuant))
-    plt.close(fig)
+    saveNameDefault = "radProfiles2DStack_%s_%d_%s_%s_vs_%s.pdf" % (sPstr, sPs[0].snap, ptType, ptProperty, xQuant)
+
+    _finish_plot(fig, saveFilename, saveNameDefault, pdf)

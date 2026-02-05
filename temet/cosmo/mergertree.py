@@ -531,7 +531,7 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
 
     if tree is None:
         # subhalo not in tree
-        return None
+        return False
 
     nrows = tree["count"]
 
@@ -652,8 +652,6 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
     if saveFilename is not None:
         fig.savefig(saveFilename, format=output_fmt, dpi=dpi)
         plt.close(fig)
-
-        return True
     else:
         # return image array itself, i.e. draw the canvas then extract the (Nx,Ny,3) array
         canvas = FigureCanvasAgg(fig)

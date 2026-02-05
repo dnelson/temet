@@ -10,6 +10,31 @@ from ..util.helper import iterable, logZeroNaN, running_median
 from .config import linestyles, lw
 
 
+def _finish_plot(fig, saveFilename, saveNameDefault, pdf=None, output_fmt=None):
+    """Finish plot: decide default saveFilename, then save to existing PDF, to a file, and/or show."""
+    from ..plot import in_notebook
+
+    # add to existing PdfPages?
+    if pdf is not None:
+        pdf.savefig()
+
+    # save to file?
+    if saveFilename is None and not in_notebook:
+        saveFilename = saveNameDefault
+
+    if saveFilename is not None:
+        # note: saveFilename could be an in-memory buffer (e.g. for TNG website), in which case
+        # output_fmt in ['jpg','png','pdf'] is required explicitly for proper rendering
+        # if output_fmt is None, then matplotlib infers it automatically from the file extension
+        fig.savefig(saveFilename, format=output_fmt, facecolor=fig.get_facecolor())
+
+    # show to screen i.e. notebook?
+    if saveFilename is None and in_notebook:
+        plt.show()
+
+    plt.close(fig)
+
+
 # --- vis ---
 
 

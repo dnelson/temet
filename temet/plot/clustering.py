@@ -21,7 +21,7 @@ def galaxyTwoPoint(sPs, cenSatSelects=("all", "cen", "sat"), colorBin=None, cTyp
     rMinMax = [0.01, 100.0]  # log Mpc
     yMinMax = [1e-2, 5e4]
 
-    rLabel = "r [ Mpc ]"
+    rLabel = r"r [ Mpc ]"
     yLabel = r"$\xi(r \pm \Delta r)$  [ real space two-point autocorr ]"
 
     # load/calculate
@@ -35,8 +35,7 @@ def galaxyTwoPoint(sPs, cenSatSelects=("all", "cen", "sat"), colorBin=None, cTyp
             cfs.append({"rad": rad, "xi": xi, "xi_err": xi_err, "css": cenSatSelect, "sP": sP})
 
     # start plot
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
+    fig, ax = plt.subplots()
     setAxisColors(ax)
 
     ax.set_xlim(rMinMax)
@@ -99,8 +98,8 @@ def galaxyTwoPointQuantBounds(
     drawSymbols = True
     symSize = 7.0
 
-    rLabel = "r [ log Mpc ]"
-    yLabel = "log %s$\\xi(r)$"
+    rLabel = r"r [ log Mpc ]"
+    yLabel = r"log %s$\xi(r)$"
 
     # load/calculate
     cfs = OrderedDict()
@@ -406,9 +405,7 @@ def conformityWithRedFrac(sP, cenSatSelectSec="all"):
             confs[label][colorLabel] = conf
 
     # start plot
-    fig = plt.figure(figsize=figsize)
-    gs = gridspec.GridSpec(1, 1)
-    ax = fig.add_subplot(gs[0])
+    fig, ax = plt.subplots()
     setAxisColors(ax)
 
     ax.set_xlim(rMinMax)

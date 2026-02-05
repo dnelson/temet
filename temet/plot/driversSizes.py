@@ -12,6 +12,7 @@ from scipy.signal import savgol_filter
 
 from ..cosmo.util import cenSatSubhaloIndices
 from ..plot.config import binSize, colors, figsize, linestyles, sKn, sKo
+from ..plot.util import _finish_plot
 from ..util.helper import logZeroNaN, running_median
 from ..util.simParams import simParams
 
@@ -26,6 +27,7 @@ def galaxySizes(
     markersize=12.0,
     xlim=None,
     ylim=None,
+    saveFilename=None,
     pdf=None,
 ):
     """Galaxy sizes (half mass radii) vs stellar mass or halo mass, compared to data.
@@ -41,8 +43,8 @@ def galaxySizes(
       markersize (float): if ``scatterPoints`` then override the default marker size.
       xlim (2-tuple): plot x-limits.
       ylim (2-tuple): plot y-limits.
-      pdf (PdfPages or None): if None, an actual PDF file is written to disk with the figure.
-        If not None, then the figure is added to this existing pdf collection.
+      saveFilename (str): name (and extension, setting format) of output plot. Automatic if None.
+      pdf (PdfPages or None): If not None, then the figure is added to this existing pdf collection.
     """
     from ..load.data import baldry2012SizeMass, lange2016SizeMass, shen2003SizeMass
 
@@ -285,21 +287,18 @@ def galaxySizes(
     # legend
     ax.legend(loc="lower right")
 
-    # finish figure
-    if pdf is not None:
-        pdf.savefig(facecolor=fig.get_facecolor())
-    else:
-        saveFilename = "sizes_%s_z%.1f_halomass=%s_halflight=%s.pdf" % (
-            "-".join([str(sim) for sim in sPs]),
-            simRedshift,
-            vsHaloMass,
-            "-".join([str(s) for s in addHalfLightRad]) if addHalfLightRad is not None else "None",
-        )
-        fig.savefig(saveFilename, facecolor=fig.get_facecolor())
-    plt.close(fig)
+    # finish plot and save
+    saveNameDefault = "sizes_%s_z%.1f_halomass=%s_halflight=%s.pdf" % (
+        "-".join([str(sim) for sim in sPs]),
+        simRedshift,
+        vsHaloMass,
+        "-".join([str(s) for s in addHalfLightRad]) if addHalfLightRad is not None else "None",
+    )
+
+    _finish_plot(fig, saveFilename, saveNameDefault, pdf)
 
 
-def galaxyHISizeMass(sPs, pdf, simRedshift=0.0):
+def galaxyHISizeMass(sPs, simRedshift=0.0, saveFilename=None, pdf=None):
     """Galaxy HI size-mass relation, at redshift zero."""
     # plot setup
     fig, ax = plt.subplots()
@@ -366,13 +365,10 @@ def galaxyHISizeMass(sPs, pdf, simRedshift=0.0):
     handles, labels = ax.get_legend_handles_labels()
     ax.legend(handles, labels, loc="lower right")
 
-    # finish figure
-    if pdf is not None:
-        pdf.savefig(facecolor=fig.get_facecolor())
-    else:
-        saveFilename = "sizes_HI_%s_z%.1f.pdf" % ("-".join([str(sim) for sim in sPs]), simRedshift)
-        fig.savefig(saveFilename, facecolor=fig.get_facecolor())
-    plt.close(fig)
+    # finish plot and save
+    saveNameDefault = "sizes_HI_%s_z%.1f.pdf" % ("-".join([str(sim) for sim in sPs]), simRedshift)
+
+    _finish_plot(fig, saveFilename, saveNameDefault, pdf)
 
 
 def sizeModelsRatios():
@@ -656,7 +652,7 @@ def clumpSizes(sP):
     plt.close(fig)
 
 
-def characteristicSizes(sP, vsHaloMass=False):
+def characteristicSizes(sP, vsHaloMass=False, saveFilename=None):
     """Compare many different 'characteristic' halo/galaxy sizes as a function of mass."""
     from ..load.data import baldry2012SizeMass
 
@@ -792,6 +788,7 @@ def characteristicSizes(sP, vsHaloMass=False):
 
     ax.legend(loc="upper left", ncol=2)
 
-    # finish figure
-    fig.savefig("characteristic_sizes_%s_%d.pdf" % (sP.simName, sP.snap))
-    plt.close(fig)
+    # finish plot and save
+    saveNameDefault = "characteristic_sizes_%s_%d.pdf" % (sP.simName, sP.snap)
+
+    _finish_plot(fig, saveFilename, saveNameDefault)
