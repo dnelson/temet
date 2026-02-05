@@ -11,6 +11,7 @@ import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.ndimage import gaussian_filter
 
+from ..plot import in_notebook
 from ..plot.util import loadColorTable, setAxisColors
 from ..util.boxRemap import remapPositions
 from ..util.helper import pSplitRange
@@ -1529,6 +1530,11 @@ def renderMultiPanel(panels, conf):
                 addCustomColorbars(fig, conf, vConfig, heightFac, barBottom, barTop, color2, widthFrac, 0.55)
 
     # note: conf.saveFilename may be an in-memory buffer, or an actual filesystem path
-    fig.savefig(conf.saveFilename, format=conf.outputFmt, facecolor=fig.get_facecolor(), bbox_inches=0)
+    if conf.saveFilename is not None:
+        fig.savefig(conf.saveFilename, format=conf.outputFmt, facecolor=fig.get_facecolor(), bbox_inches=0)
+
+    if conf.saveFilename is None and in_notebook:
+        plt.show()
+
     plt.close(fig)
     plt.rcParams.update({"figure.autolayout": True})
