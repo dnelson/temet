@@ -424,7 +424,7 @@ def groupCatHasField(sP, objType, field):
 
 def groupCatFields(sP, objType):
     """Return list of all fields in the group catalog for either halos or subhalos."""
-    for i in range(groupCatNumChunks(sP.basePath, sP.snap)):
+    for i in range(groupCatNumChunks(sP.simPath, sP.snap)):
         with h5py.File(gcPath(sP.simPath, sP.snap, i), "r") as f:
             if objType in f:
                 fields = list(f[objType].keys())
