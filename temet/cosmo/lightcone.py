@@ -6,6 +6,8 @@ from os.path import isfile
 import h5py
 import numpy as np
 
+from ..plot.config import figsize
+from ..plot.util import _finish_plot
 from ..util.boxRemap import findCuboidRemapInds, remapPositions
 from ..util.helper import pSplitRange
 from ..util.simParams import simParams
@@ -20,6 +22,10 @@ def _load(sP, group, field, inds):
         data = sP.subhalos(field)[inds]
     elif group == "Group":
         data = sP.halos(field)[inds]
+    elif group.endswith(".hdf5"):
+        # single file with custom fields
+        with h5py.File(group, "r") as f:
+            data = f[field][inds]
     else:
         raise Exception("Unhandled group.")
 
@@ -169,7 +175,7 @@ def lightcone_coordinates(sP, group, pos, vel, config, snap_index):
     return z_cosmo, z_obs, dec, ra
 
 
-def generate_lightcone(index_todo=None):
+def generate_lightcone(index_todo=None, conf=1):
     """Generate a lightcone from a set of saved snapshots of a cubic periodic cosmological volume.
 
     Our technique is to apply the volume remapping to reshape the cubic box into an elongated cuboid
@@ -180,15 +186,28 @@ def generate_lightcone(index_todo=None):
     start_time = time.time()
 
     # config
-    sP = simParams(run="tng300-1")
+    if conf == 1:
+        sP = simParams(run="tng300-1")
 
-    max_redshift = 1.0
-    onlyFullSnaps = True  # can only use full if we need e.g. MagneticField
-    minimal = False  # if True, no actual particle fields other than {snap,index} are copied
+        max_redshift = 1.0
+        onlyFullSnaps = True  # can only use full if we need e.g. MagneticField
 
-    remapShape = [10.0499, 0.2985, 0.3333]
+        remapShape = [10.0499, 0.2985, 0.3333]
 
-    data_groups = ["Group", "Subhalo", "PartType5", "PartType4", "PartType1", "PartType0"]
+        minimal = False  # if True, no actual particle fields other than {snap,index} are copied
+        data_groups = ["Group", "Subhalo", "PartType5", "PartType4", "PartType1", "PartType0"]
+
+    if conf == 2:
+        # Yen-Ting
+        sP = simParams("tng100-1")
+
+        max_redshift = 0.1
+        onlyFullSnaps = False  # dummy, need 'morphologies_deeplearning.hdf5' fields (snaps 99,95 only)
+
+        remapShape = [3.0, 0.7454, 0.4472]
+
+        minimal = False  # if True, no actual particle fields other than {snap,index} are copied
+        data_groups = ["Group", "Subhalo"]
 
     # decide snapshots to use
     snaps = sP.validSnapList(onlyFull=onlyFullSnaps)[::-1]
@@ -198,9 +217,17 @@ def generate_lightcone(index_todo=None):
     snaps = snaps[w]
     redshifts = redshifts[w]
 
+    if conf == 2:
+        # for the morphology fields, we only have snapshots 99 and 95 available, so we just use those
+        snaps = [99, 95]
+        redshifts = sP.snapNumToRedshift(snaps)
+
     # we take information from each snapshot until we reach the redshift/distance halfway to the next
     # e.g. z=0.05 between snap 99 (z=0) and snap 91 (z=0.1)
-    redshifts_mid = np.hstack((redshifts[0], (redshifts[1:] + redshifts[:-1]) / 2, redshifts[-1]))
+    redshifts_mid = np.hstack((redshifts[0], (redshifts[1:] + redshifts[:-1]) / 2, max_redshift))
+
+    if max_redshift > redshifts[-1] + 0.1:
+        print("Warning: max_redshift is significantly beyond the redshift of the last snapshot.")
 
     # midpoints in cosmological distance between snapshots, i.e. the point where we switch to the
     # next snapshot. note: first value is special (z=0), and last value is special (max_redshift)
@@ -233,6 +260,10 @@ def generate_lightcone(index_todo=None):
         "dists_mid": dists_mid,
         "remapShape": remapShape,
     }
+    config["deg_sq"] = config["dec"] * config["ra"]
+    print("cone config:")
+    for k, v in config.items():
+        print(f"  {k}: {v}")
 
     # loop over snapshots to process
     for i, snap in enumerate(snaps):
@@ -276,12 +307,36 @@ def generate_lightcone(index_todo=None):
                     data = _load(sP, group, field, snap_index)
                     f[group][field] = data
 
+                # write custom/extra fields i.e. from postprocessing catalogs
+                if group == "Subhalo" and conf == 2:
+                    post_file = sP.postPath + "released/morphologies_deeplearn.hdf5"
+                    with h5py.File(post_file, "r") as f_post:
+                        SubhaloID = f_post[f"Snapshot_{snap}"]["SubhaloID"][()]
+
+                        for key in f_post[f"Snapshot_{snap}"].keys():
+                            if key == "SubhaloID":
+                                continue
+
+                            # expand subhalo-subset data to full size
+                            data_loc = f_post[f"Snapshot_{snap}"][key]
+                            data_loc_full = np.zeros(sP.numSubhalos, dtype=data_loc.dtype)
+                            data_loc_full.fill(np.nan)
+                            data_loc_full[SubhaloID] = data_loc
+
+                            # take subset in cone, write
+                            data_loc_full = data_loc_full[snap_index]
+
+                            f[group + "/morphologies_deeplearn/" + key] = data_loc_full
+
+    if index_todo is None:
+        finalize_lightcone()
+
     print("Done [%.1f min]." % ((time.time() - start_time) / 60))
 
 
 def finalize_lightcone():
     """Write total counts in analogy to normal snapshots to facilitate loading."""
-    sP = simParams(run="tng300-1")
+    sP = simParams(run="tng100-1")
 
     # load metadata
     path = sP.postPath + "lightcones/lightcone.%d.hdf5"
@@ -372,3 +427,58 @@ def lightcone3DtoSkyCoords(pos, vel, sP, velType):
     ra = phi
 
     return ra, dec, redshift
+
+
+def plot_lightcone():
+    """Helper to visualize the geometry of the lightcone."""
+    import matplotlib.pyplot as plt
+
+    sP = simParams(run="tng100-1")
+
+    # load
+    path = sP.postPath + "lightcones/lightcone.%d.hdf5"
+    with h5py.File(path % 0, "r") as f:
+        config = dict(f["Header"].attrs)
+
+    # loop over files, load ra, dec, z_obs for subhalos
+    ra = []
+    dec = []
+    z_obs = []
+
+    for i in range(config["NumFilesPerSnapshot"]):
+        print(i, len(ra))
+
+        with h5py.File(path % i, "r") as f:
+            ra = np.hstack((ra, f["Subhalo/ra"][()]))
+            dec = np.hstack((dec, f["Subhalo/dec"][()]))
+            z_obs = np.hstack((z_obs, f["Subhalo/z_obs"][()]))
+
+    # plot geometry
+    fig = plt.figure(figsize=(figsize[0] * 1.6, figsize[1] * 1.4))
+    gs = fig.add_gridspec(2, 2)
+    ax_top = fig.add_subplot(gs[0, :])
+    ax_b1 = fig.add_subplot(gs[1, 0])
+    ax_b2 = fig.add_subplot(gs[1, 1])
+
+    opts = {"s": 1.0, "alpha": 1.0, "zorder": -1}
+
+    # top panel: lightcone geometry, plot subhalo positions vs. redshift
+    ax_top.scatter(z_obs, ra, c="black", **opts)
+    ax_top.set_rasterization_zorder(1)  # elements below z=1 are rasterized
+    ax_top.set_xlabel("Redshift")
+    ax_top.set_ylabel("RA [deg]")
+
+    # bottom panel: positions in (ra,dec) colored by redshift
+    sc1 = ax_b1.scatter(ra, dec, c=z_obs, **opts)
+    ax_b1.set_xlabel("RA [deg]")
+    ax_b1.set_ylabel("DEC [deg]")
+    ax_b1.set_rasterization_zorder(1)  # elements below z=1 are rasterized
+    plt.colorbar(sc1, ax=ax_b1, label="Redshift")
+
+    # bottom panel: redshift distribution histogram
+    ax_b2.hist(z_obs, bins=50)
+    ax_b2.set_xlabel("Redshift")
+    ax_b2.set_ylabel("Number of Subhalos")
+
+    # finish and save
+    _finish_plot(fig, f"lightcone_geometry_{sP.simName}.pdf")

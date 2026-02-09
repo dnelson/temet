@@ -10,8 +10,15 @@ from ..util.helper import iterable, logZeroNaN, running_median
 from .config import linestyles, lw
 
 
-def _finish_plot(fig, saveFilename, saveNameDefault, pdf=None, output_fmt=None):
-    """Finish plot: decide default saveFilename, then save to existing PDF, to a file, and/or show."""
+def _finish_plot(fig, saveFilename, saveNameDefault=None, pdf=None, output_fmt=None):
+    """Finish plot: save to existing PDF (PdfPages), to a file, and/or show.
+
+    If we are not in a notebook, then we save to file unless saveFilenameDefault is explicitly set to None.
+    In this case, saveFilename is used unless it is None, in which case saveNameDefault is used.
+    On the other hand, if we are in a notebook, then we show to screen if saveFilename is None, as is the
+    default argument for generalized plotting routines. In this case we do not save a file. If a file save
+    is wanted instead of showing to screen, then saveFilename must be explicitly set to a non-None value.
+    """
     from ..plot import in_notebook
 
     # add to existing PdfPages?
