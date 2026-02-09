@@ -981,7 +981,7 @@ def z_gas_sfr(sim, field):
     return vals
 
 
-z_gas_sfr.label = r"$\rm{Z_{gas}}}$"
+z_gas_sfr.label = r"$\rm{Z_{gas}}$"
 z_gas_sfr.units = r"$\rm{Z_\odot}$"  # solar
 z_gas_sfr.limits = [-2.0, 0.5]
 z_gas_sfr.log = True
