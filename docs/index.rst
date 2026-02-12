@@ -14,9 +14,9 @@ producing similarly structured outputs including
 In addition, this codebase is focused on cosmological simulations for large-scale structure and 
 galaxy formation, particularly those processed with a substructure identification algorithm 
 (halo finder) such as ``subfind``, including `Illustris <https://www.illustris-project.org/>`_, 
-`IllustrisTNG <https://www.tng-project.org/>`_, EAGLE, and so on. Generally speaking, any 
-simulation data available from the TNG public data release platform can be directly analyzed 
-with this toolkit.
+`IllustrisTNG <https://www.tng-project.org/>`_, `TNG-Cluster <https://www.tng-project.org/cluster>`_, 
+EAGLE, SIMBA, THESAN, and so on. Generally speaking, any simulation data available from the TNG 
+public data release platform can be directly analyzed with this toolkit.
 
 .. image:: _static/logo_lg.png
 

@@ -247,6 +247,9 @@ by name. In this case metadata and other important attributes are hardcoded in
 * TNG zooms
     * TNG50_zoom, TNG100_zoom, TNG_zoom where ``hInd`` gives the haloID, and ``res`` gives the resolution.
 
+* THESAN
+    * Thesan, Thesan-Dark, Thesan-HR (and all variations)
+
 * cosmosTNG
     * TNG model and DMO versions of the eight ``variant={A,B,C,D,E,F,G,H}`` at ``res={1,2,3}``.
 

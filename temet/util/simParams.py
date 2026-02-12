@@ -113,6 +113,9 @@ run_abbreviations = {
     "simba25": ["simba", 512],
     "simba25-1": ["simba", 512],
     "simba50-1": ["simba50", 512],
+    "thesan": ["thesan", 1],
+    "thesan-dark": ["thesan_dm", 1],
+    "thesan-hr": ["thesan_hr", 1],
     "millennium-1": ["millennium", 1],
     "millennium-2": ["millennium", 2],
 }
@@ -1027,6 +1030,47 @@ class simParams:
             dirStr = "h%d_L%d%s" % (self.hInd, self.res, vStr)
 
             self.arepoPath = self.basePath + "sims.auriga/" + dirStr + "/"
+            self.simName = dirStr
+
+        # THESAN
+        if run in ["thesan", "thesan_dm", "thesan_hr"]:
+            assert self.variant in ["None", "FDM", "WDM", "large", "res8x", "sDAO", "High", "Low", "WC", "noRT", "tng"]
+            self.validResLevels = [1, 2]
+            self.groupOrdered = True
+
+            self.gravSoft = 1.5 * 2 ** (res - 1)
+            self.targetGasMass = 0  # TODO
+
+            self.boxSize = 64691.7
+            self.mpcUnits = False
+
+            self.omega_m = 0.3089
+            self.omega_L = 0.6911
+            self.omega_b = 0.0486
+            self.HubbleParam = 0.6774
+
+            if "_dm" in run:
+                # DMO
+                self.targetGasMass = 0.0
+            else:
+                # baryonic, THESAN fiducial model
+                self.trMCFields = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+                self.metals = ["H", "He", "C", "N", "O", "Ne", "Mg", "Si", "Fe", "total"]  # TNG
+                self.eEOS = 1
+                self.star = 1
+                self.winds = 2
+                self.BHs = 2
+
+            # paths
+            vStr = "Dark-" if "_dm" in run else ""
+            if self.variant != "None":
+                vStr += "%s-" % self.variant
+
+            dirStr = "Thesan-%s%d" % (vStr, res)
+            if "_hr" in run:
+                dirStr = "Thesan-HR-%s" % (vStr)  # no res
+
+            self.arepoPath = self.basePath + "sims.other/" + dirStr + "/"
             self.simName = dirStr
 
         # ILLUSTRIS
