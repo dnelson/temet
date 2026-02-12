@@ -13,18 +13,23 @@ from scipy.interpolate import interp1d
 
 from ..load.simtxt import loadCpuTxt, loadTimebinsTxt
 from ..plot.config import figsize
-from ..plot.util import getWhiteBlackColors, setAxisColors
+from ..plot.util import _finish_plot, getWhiteBlackColors, setAxisColors
 from ..util.helper import closest
 from ..util.simParams import simParams
 
 
 def _redshiftAxisHelper(ax):
     """Add a redshift axis to the top of a single-panel plot, assuming bottom axis is scale factor."""
-    zVals = np.array([20.0, 15.0, 10.0, 6.0, 4.0, 3.0, 2.0, 1.5, 1.0, 0.75, 0.5, 0.25, 0.0])
+    scalefac_lim = ax.get_xlim()
+
+    if scalefac_lim[1] >= 0.25:
+        zVals = np.array([20.0, 15.0, 10.0, 6.0, 4.0, 3.0, 2.0, 1.5, 1.0, 0.75, 0.5, 0.25, 0.0])
+    else:
+        zVals = np.array([127, 50, 20, 15, 12, 10, 9, 8, 7, 6.5, 6, 5.5, 5.0, 4.0])
+
     axTop = ax.twiny()
     axTickVals = 1 / (1 + zVals)
 
-    scalefac_lim = ax.get_xlim()
     w = np.where((axTickVals >= scalefac_lim[0]) & (axTickVals <= scalefac_lim[1]))
 
     axTop.set_xlim(scalefac_lim)
@@ -88,12 +93,11 @@ def plotCpuTimes(sims=None, xlim=(0.0, 1.0)):
     ]
     # plotKeys = ['total']
 
-    # multipage pdf: one plot per value
-    fName1 = "cpu_times.pdf"
-    fName2 = "cpu_times_all.pdf"
+    saveFilename = "cpu_times"
+    # print(" -- run: %s --" % datetime.now().strftime("%d %B, %Y"))
 
-    pdf = PdfPages(fName1)
-    print(" -- run: %s --" % datetime.now().strftime("%d %B, %Y"))
+    # plot 1: multipage pdf: one plot per value
+    pdf = PdfPages(saveFilename + ".pdf")
 
     for plotKey in plotKeys:
         fig = plt.figure(figsize=(12.5, 9))
@@ -212,58 +216,43 @@ def plotCpuTimes(sims=None, xlim=(0.0, 1.0)):
                     print("  * To z = %.3f estimate %.2f Mhs" % (1.0 / xx[ww] - 1.0, yy[ww]))
 
             # total time prediction based on L75n1820TNG and L25n1024_4503 profiles
-            # if plotKey in ['total'] and xx.max() < 0.99 and sim.variant == 'None':
-            #    sPs_predict = [simParams(res=1820, run='tng')]
-            #                   #simParams(res=1024, run='tng', variant='4503')]
-            #    ls = ['--','-.']
+            if 0 and plotKey in ["total"] and xx.max() < 0.99 and sim.variant == "None":
+                sPs_predict = [simParams(res=1820, run="tng")]  # simParams(res=1024, run='tng', variant='4503')]
 
-            #    for j, sP_p in enumerate(sPs_predict):
-            #        p_a, p_cpu, p_tot = _cpuEstimateFromOtherRunProfile(sP_p, xx.max(), yy.max())
-            #        w = np.where(p_a > xx.max())
+                ls = ["--", "-."]
 
-            #        # plot
-            #        ax.plot(p_a[w], p_cpu[w], linestyle=ls[j], color=l.get_color())
+                for j, sP_p in enumerate(sPs_predict):
+                    p_a, p_cpu, p_tot = _cpuEstimateFromOtherRunProfile(sP_p, xx.max(), yy.max())
+                    w = np.where(p_a > xx.max())
 
-            #        # estimate finish date
-            #        remainingRunDays = (p_tot-yy.max()) * 1e6 / (cpu['numCPUs'] * 24.0)
-            #        p_date = datetime.now() + timedelta(days=remainingRunDays)
-            #        p_str = p_date.strftime('%d %B, %Y')
-            #        print(' [w/ %s] Predicted: %.1f million CPUhs (%s)' % (sP_p.simName,p_tot,p_str))
+                    # plot
+                    ax.plot(p_a[w], p_cpu[w], linestyle=ls[j], color=l.get_color())
 
-            #        #pLabels.append( ' [w/ %s]: %3.1f MHs (%s)' % (sP_p.simName,p_tot,p_str))
-            #        pLabels.append( ' [w/ %s]: %3.1f MHs' % (sP_p.simName,p_tot))
-            #        pColors.append( plt.Line2D( [0], [0], color=l.get_color(), marker='', linestyle=ls[j]) )
+                    # estimate finish date
+                    remainingRunDays = (p_tot - yy.max()) * 1e6 / (cpu["numCPUs"] * 24.0)
+                    p_date = datetime.now() + timedelta(days=remainingRunDays)
+                    p_str = p_date.strftime("%d %B, %Y")
+                    print(" [w/ %s] Predicted: %.1f million CPUhs (%s)" % (sP_p.simName, p_tot, p_str))
+
+                    pLabels.append(" [w/ %s]: %3.1f MHs" % (sP_p.simName, p_tot))
+                    pColors.append(plt.Line2D([0], [0], color=l.get_color(), marker="", linestyle=ls[j]))
 
         _redshiftAxisHelper(ax)
 
-        # add to legend for predictions
-        if len(pLabels) > 0:
-            pass
-            # pLabels.append( '(Last Updated: %s)' % datetime.now().strftime('%d %B, %Y'))
-            # pColors.append( plt.Line2D( [0], [0], color='white', marker='', linestyle='-') )
-        else:
-            pLabels = []
-            pColors = []
-
         # make legend, sim names + extra
         handles, labels = ax.get_legend_handles_labels()
-        ax.legend(handles + pColors, labels + pLabels, loc="best")  # , prop={'size':13})
+        ax.legend(handles + pColors, labels + pLabels, loc="best")
 
         pdf.savefig()
         plt.close(fig)
 
     pdf.close()
 
-    # singlepage pdf: all values on one panel
-    pdf = PdfPages(fName2)
-
+    # plot 2 - all values on one panel (one plot and PDF per simulation)
     for sim in sims:
-        fig = plt.figure(figsize=(12.5, 9))
+        fig, ax = plt.subplots(figsize=(12.5, 9))
 
-        ax = fig.add_subplot(111)
         ax.set_xlim(xlim)
-
-        ax.set_title("")
         ax.set_xlabel("Scale Factor")
 
         ind = 3  # 1=diff perc (missing in 3col format), 3=cum perc
@@ -271,14 +260,11 @@ def plotCpuTimes(sims=None, xlim=(0.0, 1.0)):
         keys = ["time", "hatb"] + plotKeys
 
         # load select datasets from cpu.hdf5
-        if sim.run == "tng" and sim.res in [1024, 910, 1820, 1080, 2160, 1250, 2500]:
-            hatbMin = 41
-        else:
-            hatbMin = 0
+        hatbMin = 41
 
         cpu = loadCpuTxt(sim.arepoPath, keys=keys, hatbMin=hatbMin)
 
-        # plot each
+        # plot each code component
         for plotKey in plotKeys:
             if "total" in plotKey:
                 continue
@@ -293,19 +279,58 @@ def plotCpuTimes(sims=None, xlim=(0.0, 1.0)):
             xx = cpu["time"][w]
             yy = np.squeeze(np.squeeze(cpu[plotKey])[w, ind])
 
-            (l,) = ax.plot(xx, yy, label=plotKey)
+            # for zooms which stop at high-z, adjust x-axis
+            if xx.max() < 0.99 and sim.isZoom and sim.sP_parent is not None and sim.sP_parent.redshift > 0:
+                ax.set_xlim([0.0, xx.max()])
+
+            ax.plot(xx, yy, label=plotKey)
 
         _redshiftAxisHelper(ax)
+        ax.legend(loc="best")
 
-        handles, labels = ax.get_legend_handles_labels()
-        pLabels = [sim.simName]
-        pColors = [plt.Line2D([0], [0], color="white", marker="", linestyle="-")]
-        ax.legend(handles + pColors, labels + pLabels, loc="best")  # , prop={'size':13})
+        _finish_plot(fig, saveFilename + "_%s.pdf" % sim.simName)
 
-        pdf.savefig()
-        plt.close(fig)
+    # plot 3: different CPU time (total)
+    fig, ax = plt.subplots(figsize=(12.5, 9))
 
-    pdf.close()
+    ax.set_xlim(xlim)
+    ax.set_xlabel("Scale Factor")
+
+    ind = 2  # cumulative
+    ax.set_ylabel("CPU Time [Kh per 100Myr]")
+    ax.set_yscale("log")
+    keys = ["time", "hatb", "total"]
+
+    hatbMin = 41
+
+    for sim in sims:
+        # load select datasets from cpu.hdf5
+        cpu = loadCpuTxt(sim.arepoPath, keys=keys, hatbMin=hatbMin)
+
+        # plot only total CPU time
+        plotKey = "total"
+
+        step = int(cpu["time"].size / 1000)
+
+        xx = cpu["time"][::step]
+        yy = np.squeeze(np.squeeze(cpu[plotKey])[:, ind])[::step]
+
+        yy = yy / (1e3 * 60.0 * 60.0) * cpu["numCPUs"]  # sec per CPU to total kCPUh
+
+        xx_Myr = sim.units.redshiftToAgeFlat(1 / xx - 1) * 1000  # Myr
+        xx_Myr_diff = np.diff(xx_Myr)
+        yy_diff = np.diff(yy) / xx_Myr_diff * 100.0  # Kh per 100 Myr
+
+        ax.plot(xx[:-1], yy_diff, label=sim.simName)
+
+    # for zooms which stop at high-z, adjust x-axis
+    if xx.max() < 0.99 and sim.isZoom and sim.sP_parent is not None and sim.sP_parent.redshift > 0:
+        ax.set_xlim([0.0, xx.max()])
+
+    _redshiftAxisHelper(ax)
+    ax.legend(loc="best")
+
+    _finish_plot(fig, saveFilename + "_diff.pdf")
 
 
 def plotTimebins():
