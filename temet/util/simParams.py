@@ -61,6 +61,7 @@ from functools import partial
 from glob import glob
 from os import mkdir, path
 from pathlib import Path
+from typing import NamedTuple
 
 import h5py
 import numpy as np
@@ -1068,7 +1069,9 @@ class simParams:
 
             dirStr = "Thesan-%s%d" % (vStr, res)
             if "_hr" in run:
-                dirStr = "Thesan-HR-%s" % (vStr)  # no res
+                if self.variant != "None":
+                    vStr += "-%s" % self.variant  # convention flips
+                dirStr = "Thesan-HR%s" % (vStr)  # no res
 
             self.arepoPath = self.basePath + "sims.other/" + dirStr + "/"
             self.simName = dirStr
@@ -1872,10 +1875,24 @@ class simParams:
         """Return indices of satellite subhalos in the group catalog at this sP.snap."""
         return self.cenSatSubhaloIndices(cenSatSelect="sat")
 
+    class numPartTuple(NamedTuple):
+        """Named tuple for classic GADGET/AREPO (TNG-like) particle type ordering."""
+
+        gas: int  # 0
+        dm: int  # 1
+        dm_lowres: int  # 2
+        tracers: int  # 3
+        stars: int  # 4
+        bh: int  # 5
+
     @property
     def numPart(self):
         """Return number of particles/cells of all types at this sP.snap."""
-        return self.snapshotHeader()["NumPart"]
+        NumPart = self.snapshotHeader()["NumPart"]
+
+        if len(NumPart) == 6:
+            return self.numPartTuple(*NumPart)
+        return NumPart  # non-standard cases
 
     @property
     def simCode(self):
