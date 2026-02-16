@@ -665,6 +665,19 @@ def sf_sn_details(sim, overwrite=False):
     # concat file is missing, check for individual files, run concat
     if not isfile(file_sf):
         print("Concat sf_details*.txt...")
+        files_sf = [f for f in os.listdir(path + "sf_details/") if f.startswith("sf_details_") and f.endswith(".txt")]
+        for f in files_sf:
+            # check for corrupt rows
+            result = subprocess.run(
+                "awk -F' ' '{print NF}' " + f + " | sort -nu",
+                cwd=path + "sf_details/",
+                shell=True,
+                capture_output=True,
+                text=True,
+            )
+
+            assert result.stdout.count("\n") == 1, f"File [{f}] has inconsistent number of columns!"
+
         subprocess.run("cat sf_details_*.txt > sf_details.txt", cwd=path + "sf_details/", shell=True)
 
     if not isfile(file_sf_ids):
