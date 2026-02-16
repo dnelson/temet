@@ -13,7 +13,7 @@ from scipy.stats import binned_statistic
 
 from ..cosmo.util import snapNumToRedshift
 from ..plot.config import colors, figsize, lw
-from ..util.helper import running_median
+from ..util.helper import closest, running_median
 from ..util.simParams import simParams
 from .subhalos import addRedshiftAxis
 
@@ -1370,7 +1370,7 @@ def simHighZComparison():
     fs1 = 15  # diagonal lines, cost labels, legend
     fs2 = 17  # sim name labels, particle number text
 
-    redshift = 6.0  # reference redshift (for e.g. TNG50)
+    redshift = 6.0  # reference redshift (for e.g. TNG50, UM, and SPHINX)
 
     # plot setup
     fig = plt.figure(figsize=[figsize[0] * 1.2, figsize[1] * 0.9])
@@ -1378,34 +1378,42 @@ def simHighZComparison():
     # fig.subplots_adjust(right=0.8)
     ax.set_rasterization_zorder(1)  # elements below z=1 are rasterized
 
-    ax.set_xlim([1.2e5, 1e0])
-    ax.set_ylim([5e8, 1.5e12])
+    ax.set_xlim([1.0e5, 1e0])
+    ax.set_ylim([2e8, 1.5e12])  # 5e8
     ax.set_xscale("log")
     ax.set_yscale("log")
 
     ax.set_xlabel(r"Baryon Mass Resolution [ M$_{\odot}$ ]")
     ax.set_ylabel(r"Halo Mass at $z=%d$ [ M$_{\odot}$ ]" % redshift)
 
-    # raw MCST data (temporary, z=6)
-    mcst_h31619 = [9.1, 9.0, 8.38]  # h31619_L15_ST8
-    mcst_h12688 = [9.02, 8.78, 9.04, 8.59, 8.49]  # h12688_L14_ST8
-    mcst_h10677 = [9.0, 8.9, 8.85, 8.79, 8.66]  # h10677_L14_ST8
-    mcst_h4182 = [9.7, 9.52, 9.10, 8.96, 8.55]  # h4182_L14_ST8
-    mcst_h1242 = [9.93, 9.51, 9.29, 9.27, 9.31]  # h1242_L13_ST8
+    # MCST halos (z=6)
+    st_h73172 = [9.2]
+    st_h219612 = [8.7]
+    st_h311384 = [8.5]
+    st_h844537 = [8.0]
+    st_h31619 = [9.1, 9.0, 8.38]
+    st_h23908 = [9.5, 8.4]
+    st_h15581 = [9.6, 8.1]
+    st_h5072 = [10.0, 9.4]
+    st_h1958 = [10.4]
 
-    mcst_halos = [mcst_h31619, mcst_h12688, mcst_h10677, mcst_h4182, mcst_h1242]
+    mcst_halos = [st_h1958, st_h5072, st_h15581, st_h23908, st_h31619, st_h73172, st_h219612, st_h311384, st_h844537]
 
     mcst_mhalo = []
     mcst_mgas = []
 
-    # h31619_L16_ST8 maybe
-    mcst_mhalo += mcst_h31619
-    mcst_mgas += [3] * len(mcst_h31619)
+    # L16 maybe
+    mcst_L16 = st_h844537 + st_h311384 + st_h219612 + st_h73172 + st_h31619 + st_h23908 + st_h15581
+    mcst_mhalo += mcst_L16
+    mcst_mgas += [3] * len(mcst_L16)
 
-    # L15 and L14
+    # L15 probably
+    mcst_L15 = st_h844537 + st_h311384 + st_h219612 + st_h73172 + st_h31619 + st_h23908 + st_h15581 + st_h5072
+    mcst_mhalo += mcst_L15
+    mcst_mgas += [24] * len(mcst_L15)
+
+    # L14
     for halo in mcst_halos:
-        mcst_mhalo += halo
-        mcst_mgas += [24] * len(halo)
         mcst_mhalo += halo
         mcst_mgas += [180] * len(halo)
 
@@ -1438,13 +1446,45 @@ def simHighZComparison():
 
     f2_mhalo = np.log10(np.array(f2_mhalo) / 1.2 / 2.0)  # adjust mvir to m200c, and z=5 to z=6 (roughly)
 
+    # LYRA III (Gutcke+22) (z=0 values!) (note: Brown+25 additional LYRA sample is all lower mass)
+    lyra_mhalo = [9.52, 9.45, 9.33, 9.24, 8.46]
+    lyra_mgas = 4.0
+
     # EDGE (all z=0!)
+    # note: using TNG50-1, a z=0 halo mass of 9.5 has a mean z=6 mass of 8.3 (1 sigma = 0.3), so placing as upper lims
     edge_mhalo = [9.17, 9.17]  # Agertz+20 (many variations of this halo, including a few at the high res)
     edge_mgas = [161, 20]  # Agertz+20
     edge_mhalo += [9.52, 9.51, 9.53, 9.53, 9.51, 9.40, 9.57, 9.40, 9.40, 9.15]  # Rey+20
     edge_mgas += [960 * 0.17] * 10  # 960 m_DM * 0.17 baryon fraction ~ 160 Msun for gas
     edge_mhalo += [9.11, 9.15, 9.43, 9.51, 9.52, 9.15, 9.15]  # Orkney+21
     edge_mgas += [18] * 7
+
+    # EDGE-2 (all z=0!) - Rey+25 Table A1
+    # note: 1.1e10 at z=0 maps to ~5.4e8 at z=6 in the mean, so would be visible (approximate it with scatter)
+    edge2_mhalo = [1.2e9, 1.4e9, 3.4e9, 2.5e9, 3.8e9, 5.8e9, 5.7e9, 5.9e9, 5.8e9, 7.5e9, 5.2e9, 6.9e9, 6.6e9, 1.1e10]
+    edge2_mhalo = np.log10(edge2_mhalo)
+    edge2_mgas = [953 * 0.17] * len(edge2_mhalo)  # 953 m_DM * 0.17 baryon fraction ~ 160 Msun for gas
+
+    # EDGE-INFERNO (Andersson+23 Fig 1 shows Mhalo(z) tracks)
+    edgei_mhalo = np.log10([2e8, 3e8])  # and two more <1e8
+    edgei_mgas = [980 * 0.17] * len(edgei_mhalo)  # 980 m_DM * 0.17 baryon fraction ~ 166 Msun for gas
+
+    # Go+25 (https://arxiv.org/abs/2411.14683 Table 1) (z=0 values!) (see also Jeon+26)
+    go25_mhalo = np.log10([1.8e8, 4.2e8, 6.0e8, 7.9e8, 11.7e8, 12.7e9])
+    go25_mgas = 60
+
+    # Garcia+25 (https://arxiv.org/abs/2503.08779) "refinement when gas mass exceeds 160 Msun, which is ~8x the
+    # initial mean gas mass per high-res cell" although "initial DM mass resolution is 800 msun"
+    garcia25_mhalo = [10.0]  # z=0 value!
+    garcia25_mgas = [20]
+
+    # Obelisk (Trebitsch+22 https://arxiv.org/abs/2002.04045)
+    obelisk_mhalo = []  # 2.5e13 at z~2, unknown at z=6, asked for in an email
+    obelisk_mgas = [1.2e6 * 0.17]  # 1.2e6 m_DM * 0.17 baryon fraction ~ 2e5 Msun for gas (off plot for now)
+
+    # Seven Dwarfs (Mina+21, Baumschlager+25) (two high-mass halos are 3.6e10 and 1.5e10 at z=0, mapped to z=6)
+    sevendwarfs_mhalo = np.log10([1e9, 5.5e8])  # approximate
+    sevendwarfs_mgas = [3.3e3] * len(sevendwarfs_mhalo)
 
     # Smith+2019 (z=6 values, Fig 3)
     s19_mhalo = np.log10(np.array([1.8e8, 2.2e8, 8e8, 1.1e9, 2.5e9, 8e8]) / 1.2)  # mvir -> m200c rough adjustment
@@ -1481,31 +1521,79 @@ def simHighZComparison():
     vela_mgas = 1.4e4  # 8.3e4 m_DM * 0.17 baryon fraction = 13600 msun
 
     # Megatron (low-res, high-res, and 23 variants at medium-res)
+    # Katz+25 z=6 dwarf with many variations
     k25_mhalo = [9.0, 9.0] + list(rng.uniform(low=8.9, high=9.1, size=23))
     k25_mgas = [4.0e4, 653] + [5.2e3] * 23
+
+    # Vintegatan (note: is FIRE m12i halo) and Vintegatan-GM
+    vint_mhalo = [10.3]  # 12.1 at z=0, approx, taking typical MPBs from TNG50
+    vint_mgas = [7070]  # Agertz+21
+    vintgm_mhalo = [10.6, 10.0, 10.2, 10.3, 10.4]  # approx, taking typical MPBs from TNG50
+    vintgm_mgas = [3.6e4] * len(vintgm_mhalo)  # Joshi+24 (https://arxiv.org/abs/2307.02206)
+
+    vintegatan_mhalo = vint_mhalo + vintgm_mhalo
+    vintegatan_mgas = vint_mgas + vintgm_mgas
+
+    # THESAN-ZOOM: IDs are group IDs frmo Thesan-Dark-1 at z=3, convert to z=6 halo masses
+    thesanzoom_ids = [2, 39, 205, 578, 1163, 5760, 10304, 33206, 37591, 137030, 500531, 519761, 2274036, 5229300]
+
+    if 0:
+        thesanzoom_mhalo = []
+        sim = simParams("thesan-dark", redshift=3.0)
+        for haloID in thesanzoom_ids:
+            subID = sim.halo(haloID)["GroupFirstSub"]
+            mpb = sim.loadMPB(subID, treeName="LHaloTree")
+            z_closest, z_ind = closest(mpb["Redshift"], 6.0)
+            mass_z6 = sim.units.codeMassToLogMsun(mpb["Group_M_Crit200"][z_ind])[0]
+            thesanzoom_mhalo.append(mass_z6)
+    else:
+        thesanzoom_mhalo = [11.65, 11.4, 11.0, 10.9, 10.6, 10.0, 10.1, 9.6, 9.4, 9.3, 8.9, 8.6, 8.1, 7.7]
+
+    x4_mgas = 9.1e3
+    x8_mgas = 1.1e3
+    x16_mgas = 1.4e2
+    tzoom_mhalo = thesanzoom_mhalo + thesanzoom_mhalo[5:] + thesanzoom_mhalo[9:]
+    tzoom_mgas = [x4_mgas] * 14 + [x8_mgas] * 9 + [x16_mgas] * 5
+
+    # SIRIUS (Hirai+25 https://arxiv.org/abs/2411.18680)
+    # also: Kaneko+26 (https://arxiv.org/abs/2601.13765) presents a smaller halo at mgas=2.37, stopped at z=8.7
+    sirius_mhalo = np.log10([2.5e8])  # 1.5e8 at z=6.5 (moved up for visibility)
+    sirius_mgas = [18.9]  # 6e7 particles in zoom ICs, 652k stars formed
+
+    # SIEGE: Calura+22, Pascale+23 (run to z=6.14, same simulation)
+    # Calura+25 (https://arxiv.org/abs/2411.02502) run to z=10.5
+    # Pascale+25 (https://arxiv.org/abs/2505.06346) run to z=6.14, a different model
+    # "4e10 within 3rvir" is ~2x less within r200, but it seems 4e10 is actually the sum of all the HR mass
+    # Pascale+23 Figure 2 shows Mvir values for the halos: 9.5, 9.1, 9.0, 8.9, ...
+    siege_mhalo = np.log10(10.0 ** np.array([9.5, 9.1, 9.0, 8.85, 8.6, 8.55]) / 1.2)  # mvir -> m200c
+    siege_mgas = [165 * 0.17] * len(siege_mhalo)  # 168 m_DM * 0.17 baryon fraction ~ 28.5 Msun for gas
 
     # set simulation data (for zoom simulations)
     zooms = [
         {"name": "MCST", "M_halo": mcst_mhalo, "m_gas": mcst_mgas},
-        {
-            "name": "LYRA",
-            "M_halo": [9.52, 9.45, 9.33, 9.24, 8.46],
-            "m_gas": 4.0,
-        },  # Lyra III (Gutcke+22) (currently z=0 values!)
+        {"name": "LYRA", "M_halo": lyra_mhalo, "m_gas": lyra_mgas},
+        {"name": "EDGE", "M_halo": edge_mhalo, "m_gas": edge_mgas},
+        {"name": "EDGE2", "M_halo": edge2_mhalo, "m_gas": edge2_mgas},
+        {"name": "EDGE-INFERNO", "M_halo": edgei_mhalo, "m_gas": edgei_mgas},
+        {"name": "Go+25", "M_halo": go25_mhalo, "m_gas": go25_mgas},
         {"name": "FIRE-2", "M_halo": f2_mhalo, "m_gas": f2_mgas},
         {"name": "Auriga", "M_halo": au_mhalo, "m_gas": au_mgas},
         {"name": "SERRA", "M_halo": serra_mhalo, "m_gas": serra_mgas},
         {"name": "FirstLight", "M_halo": fl_mhalo, "m_gas": fl_mgas},
         {"name": "VELA-6", "M_halo": vela_mhalo, "m_gas": vela_mgas},
-        {"name": "EDGE", "M_halo": edge_mhalo, "m_gas": edge_mgas},
-        {"name": "MEGATRON", "M_halo": k25_mhalo, "m_gas": k25_mgas},  # Katz+24 z=6 dwarf with many variations
+        {"name": "MEGATRON", "M_halo": k25_mhalo, "m_gas": k25_mgas},
+        {"name": "THESAN-ZOOM", "M_halo": tzoom_mhalo, "m_gas": tzoom_mgas},
+        {"name": "Vintegatan", "M_halo": vintegatan_mhalo, "m_gas": vintegatan_mgas},
         {"name": "Azahar", "M_halo": 11.3, "m_gas": 7.6e4},  # Yuan+24
+        {"name": "Pandora", "M_halo": [np.log10(8e8 / 1.2)], "m_gas": 255},  # Martin-Alvazez+23 (dwarf 1 of Smith+19)
+        {"name": "SIRIUS", "M_halo": sirius_mhalo, "m_gas": sirius_mgas},
         {"name": "Smith+19", "M_halo": s19_mhalo, "m_gas": s19_mgas},
-        {"name": "Pandora", "M_halo": [np.log10(8e8 / 1.2)], "m_gas": 255},
-    ]  # Martin-Alvazez+23 (dwarf 1 of Smith+19)
+        {"name": "SIEGE", "M_halo": siege_mhalo, "m_gas": siege_mgas},
+        {"name": "Seven Dwarfs", "M_halo": sevendwarfs_mhalo, "m_gas": sevendwarfs_mgas},
+    ]
 
     models_ismeos = ["Auriga"]
-    models_z0 = ["LYRA", "EDGE"]
+    models_z0 = ["LYRA", "EDGE", "EDGE2", "Go+25"]
 
     # load individual symbols for tng50-1
     sim = simParams(run="tng50-1", redshift=redshift)
@@ -1588,6 +1676,50 @@ def simHighZComparison():
         zorder=0,
     )
 
+    # THESAN-HR: load individual halos
+    sim = simParams(run="thesan-hr", redshift=redshift)
+    mhalo = sim.subhalos("m200c")
+
+    thesanhr_mgas = 1.13e4
+    thesanhr_mgas = np.zeros(mhalo.size) + thesanhr_mgas + rng.uniform(-1.0, 1.0, size=mhalo.size) * 7.0e2
+
+    ax.scatter(
+        thesanhr_mgas,
+        mhalo,
+        s=12.0,
+        marker="D",
+        facecolors="none",
+        label=r"THESAN-HR",
+        edgecolor="#000",
+        lw=1.0,
+        alpha=0.5,
+        zorder=0,
+    )
+
+    # "load" individual halos for FIREbox^HR (fake it using a sub-volume of TNG50)
+    fireboxhr_mgas = 7823  # Msun
+    fireboxhr_Lbox = 22.1  # cMpc
+
+    sim = simParams(run="tng50-1", redshift=6.0)
+    mhalo = sim.subhalos("m200c")
+    pos = sim.subhalos("SubhaloPos") / 1000 / sim.HubbleParam  # ckpc/h -> cMpc
+
+    w = np.where((np.max(pos, axis=1) < fireboxhr_Lbox) & (mhalo > ax.get_ylim()[0]))
+    fireboxhr_mgas = np.zeros(w[0].size) + fireboxhr_mgas + rng.uniform(-1.0, 1.0, size=w[0].size) * 5.0e2
+
+    ax.scatter(
+        fireboxhr_mgas,
+        mhalo[w],
+        s=12.0,
+        marker="s",
+        facecolors="none",
+        label=r"FIREbox$^{\rm HR}$",
+        edgecolor="#000",
+        lw=1.0,
+        alpha=0.5,
+        zorder=0,
+    )
+
     # plot lines of constant number of particles (per halo)
     halo_mass = ax.get_ylim()
 
@@ -1616,9 +1748,9 @@ def simHighZComparison():
         y = 10.0 ** np.array(sim["M_halo"])
         x = np.zeros(y.size) + sim["m_gas"]
 
-        if i == 10:
+        if i in [10, 19]:
             ax.plot([], [])  # skip first color i.e. red (given to MCST) to avoid confusion
-        marker_normal = "D" if i < 10 else "s"  # colors start to repeat
+        marker_normal = "D" if i < 11 else "s"  # colors start to repeat
 
         marker = "o" if sim["name"] in models_ismeos else marker_normal
         opts = {"ms": msize, "zorder": 1}
@@ -1628,9 +1760,24 @@ def simHighZComparison():
         # opts['markeredgecolor'] = 'white'
 
         if sim["name"] in models_z0:
-            opts["markeredgewidth"] = lw
+            # using TNG50-1, a z=0 halo mass of 9.5 has a mean z=6 mass of 8.3 (1 sigma = 0.3), so draw as upper lims
+            # a z=0 halo mass of 10.0 has a mean z=6 mass of
+            opts["markeredgewidth"] = lw - 1
             opts["markerfacecolor"] = "none"
-            opts["ms"] -= 2
+            opts["ms"] -= 1
+            marker = "v"
+
+            ylim = np.log10(ax.get_ylim())
+            if ylim[0] < 8.3:
+                print("Warning: showing z=0 runs as upper limits not valid if ymin goes much below 1e8 Msun.")
+
+            rng = np.random.default_rng(424342)
+            y_pad = (ylim[1] - ylim[0]) / 100
+            y_fac = 2
+            if sim["name"] == "EDGE2":
+                y_fac *= 4  # approximate that there are a few EDGE2 halos up to ~5e8 with some scatter
+            y = 10.0 ** rng.uniform(low=ylim[0] + y_pad, high=ylim[0] + y_pad * y_fac, size=y.size)
+            x += rng.uniform(-0.1, 0.1, size=x.size) * sim["m_gas"]  # to avoid overplotting multiple sims
 
         if sim["name"] == "MCST":
             opts["zorder"] = 10
@@ -1640,29 +1787,50 @@ def simHighZComparison():
 
         (l,) = ax.plot(x, y, ls="None", marker=marker, label=sim["name"], **opts)
 
-        # if 'TNG' in sim['name'] : # label certain runs only
-        #    textOpts = {'color':l.get_color(), 'fontsize':fs2*1.4, 'ha':'center', 'va':'bottom'}
-        #    ax.text(x, y*0.8, sim['name'], **textOpts)
+        if sim["name"] == "SIRIUS":
+            # add Kaneko+26 galaxy (upper limit) manually
+            kaneko26_mhalo = [2.2e8]  # 8.8e8 at z=0
+            kaneko26_mgas = [2.37]
 
-        if sim["name"] in models_z0:
-            ax.text(
-                x.min(),
-                y.max() * 1.2,
-                "(z=0)",
-                color=l.get_color(),
-                alpha=0.7,
-                fontsize=fs1 - 2,
-                ha="center",
-                va="bottom",
-            )
+            opts["markeredgewidth"] = lw - 1
+            opts["markerfacecolor"] = "none"
+            opts["ms"] -= 1
+            ax.plot(kaneko26_mgas, kaneko26_mhalo, ls="None", marker="v", color=l.get_color(), **opts)
+
+        if sim["name"] == "Seven Dwarfs":
+            # add lower-mass galaxies (upper limits) manually
+            b25_mhalo = [2.2e8, 2.2e8]  # 3.3e9 and 1.7e9 at z=0
+            b25_mgas = [3.4e3, 3.2e3]
+
+            opts["markeredgewidth"] = lw - 1
+            opts["markerfacecolor"] = "none"
+            opts["ms"] -= 1
+            ax.plot(b25_mgas, b25_mhalo, ls="None", marker="v", color=l.get_color(), **opts)
+
+        if sim["name"] == "SIEGE":
+            # add lower-mass galaxies (upper limits) manually
+            siege25_mhalo = [2.2e8, 2.2e8]  # placed at bottom of y-axes manually, represents many smaller halos
+            siege25_mgas = [siege_mgas[0] * 0.98, siege_mgas[0] * 1.02]
+
+            opts["markeredgewidth"] = lw - 1
+            opts["markerfacecolor"] = "none"
+            opts["ms"] -= 1
+            ax.plot(siege25_mgas, siege25_mhalo, ls="None", marker="v", color=l.get_color(), **opts)
+
+        if 0 and sim["name"] in models_z0:
+            opts_z0 = {"alpha": 0.7, "fontsize": fs1 - 2, "ha": "center", "va": "bottom"}
+            ax.text(x.min(), y.max() * 1.2, "(z=0)", color=l.get_color(), **opts_z0)
 
     # legend and finish
     legParams = {
-        "ncol": 2,
+        "ncol": 3,
         "columnspacing": 1.0,
         "fontsize": fs1,
         "markerscale": 0.9,
-    }  # , 'frameon':1, 'framealpha':0.9, 'fancybox':False}
+        "frameon": 1,
+        "framealpha": 0.9,
+        "fancybox": False,
+    }
     ax.legend(loc="upper right", **legParams)
 
     fig.savefig("sim_comparison.pdf")
