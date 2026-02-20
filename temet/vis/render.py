@@ -494,6 +494,7 @@ def stellar3BandCompositeImage(
 
             # handle zero values
             ww = np.where(grid_loc == 0.0)
+
             if 0:
                 # old: leads to flickering/issues in movies
                 ww_nonzero = np.where(grid_loc > 0.0)
@@ -503,7 +504,7 @@ def stellar3BandCompositeImage(
                 else:
                     grid_loc[ww] = 1e-10  # full empty/zero image (leave as all black)
             else:
-                grid_loc[ww] = 1e-10  # full empty/zero image (leave as all black)
+                grid_loc[ww] = 1e-30  # full empty/zero image (leave as all black)
 
             grid_log = np.log10(grid_loc)
 
