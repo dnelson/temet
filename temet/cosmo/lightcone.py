@@ -149,15 +149,15 @@ def lightcone_coordinates(sP, group, pos, vel, config, snap_index):
 
     # convert distances to redshift
     z_cosmo = np.interp(r, zz_dist, zz)  # linear
-    a_cosmo = 1 / (z_cosmo + 1)
+    #a_cosmo = 1 / (z_cosmo + 1)
 
     # convert velocities into physical [km/s]
     if group == "Group":
         pec_vel = vel
     elif group == "Subhalo":
-        pec_vel = vel / a_cosmo[:, np.newaxis]
+        pec_vel = vel / sP.scalefac #/ a_cosmo[:, np.newaxis]
     else:  # PartType
-        pec_vel = vel * np.sqrt(a_cosmo)[:, np.newaxis]
+        pec_vel = vel * np.sqrt(sP.scalefac) #np.sqrt(a_cosmo)[:, np.newaxis]
 
     # unit vector for direction between observer and this point
     r_norm = pos / r[:, np.newaxis]
