@@ -4,6 +4,7 @@ Definitions of custom snapshot fields.
 
 from functools import partial
 from getpass import getuser
+from multiprocessing import current_process
 from os.path import getsize, isfile
 
 import h5py
@@ -2370,11 +2371,13 @@ def vel_rel(sim, partType, field, args):
     # get reference velocity
     if sim.isZoom and args["subhaloID"] is None and args["haloID"] is None:
         args["subhaloID"] = sim.zoomSubhaloID
-        print(f"WARNING: Using {sim.zoomSubhaloID =} for zoom run to compute [{field}]!")
+        if current_process().name == "MainProcess":
+            print(f"WARNING: Using {sim.zoomSubhaloID =} for zoom run to compute [{field}]!")
 
     if args["haloID"] is None and args["subhaloID"] is None:
         assert sim.refVel is not None
-        print(f"WARNING: Using refVel in non-zoom run to compute [{field}]!")
+        if current_process().name == "MainProcess":
+            print(f"WARNING: Using refVel in non-zoom run to compute [{field}]!")
         refVel = sim.refVel
     else:
         # take central subhalo velocity of (host) halo
@@ -2420,11 +2423,13 @@ def rad(sim, partType, field, args):
     # get (host) halo center position
     if sim.isZoom and args["subhaloID"] is None and args["haloID"] is None and sim.refPos is None:
         args["subhaloID"] = sim.zoomSubhaloID
-        print(f"WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!")
+        if current_process().name == "MainProcess":
+            print(f"WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!")
 
     if args["haloID"] is None and args["subhaloID"] is None:
         assert sim.refPos is not None
-        print(f"Note: Using refPos to compute [{field}]!")
+        if current_process().name == "MainProcess":
+            print(f"Note: Using refPos to compute [{field}]!")
         haloPos = sim.refPos
         halo = sim.halo(sim.refSubhalo["SubhaloGrNr"])
     else:
@@ -2496,11 +2501,13 @@ def dist_2dz(sim, partType, field, args):
     # get (host) halo center position, or position of reference
     if sim.isZoom and args["subhaloID"] is None and args["haloID"] is None and sim.refPos is None:
         args["subhaloID"] = sim.zoomSubhaloID
-        print(f"WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!")
+        if current_process().name == "MainProcess":
+            print(f"WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!")
 
     if args["haloID"] is None and args["subhaloID"] is None:
         assert sim.refPos is not None
-        print(f"WARNING: Using refPos in non-zoom run to compute [{field}]!")
+        if current_process().name == "MainProcess":
+            print(f"WARNING: Using refPos in non-zoom run to compute [{field}]!")
         haloPos = sim.refPos[0:2]
         halo = sim.halo(sim.refSubhalo["SubhaloGrNr"])
     else:
@@ -2537,11 +2544,13 @@ def vrad(sim, partType, field, args):
     # get position and velocity of reference
     if sim.isZoom and args["subhaloID"] is None and args["haloID"] is None and sim.refPos is None:
         args["subhaloID"] = sim.zoomSubhaloID
-        print(f"WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!")
+        if current_process().name == "MainProcess":
+            print(f"WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!")
 
     if args["haloID"] is None and args["subhaloID"] is None:
         if sim.refPos is not None and sim.refVel is not None:
-            print(f"Note: Using refPos and refVel to compute [{field}]!")
+            if current_process().name == "MainProcess":
+                print(f"Note: Using refPos and refVel to compute [{field}]!")
             refPos = sim.refPos
             refVel = sim.refVel
         else:
@@ -2604,7 +2613,8 @@ def angmom(sim, partType, field, args):
     # reference position and velocity
     if sim.isZoom and args["subhaloID"] is None and args["haloID"] is None:
         args["subhaloID"] = sim.zoomSubhaloID
-        print(f"WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!")
+        if current_process().name == "MainProcess":
+            print(f"WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!")
 
     shID = args["subhaloID"]
     if shID is None:
