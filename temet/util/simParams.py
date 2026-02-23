@@ -355,7 +355,7 @@ class simParams:
 
         # if redshift passed in, convert to snapshot number and save, and attach units(z)
         self.setRedshift(self.redshift)
-        self.setSnap(self.snap)
+        self.setSnap(self.snap, init=True)
 
     def __repr__(self):
         """Representation of this simParams object as a string (for debugging)."""
@@ -1612,7 +1612,7 @@ class simParams:
         self.units = units(sP=self)
         self.data = {}
 
-    def setSnap(self, snap=None):
+    def setSnap(self, snap=None, init=False):
         """Update sP based on new snapshot."""
         self.snap = snap
         if self.snap is not None:
@@ -1636,10 +1636,11 @@ class simParams:
         self.units = units(sP=self)
 
         # clear subhalo/halo targets
-        self.haloInd = None
-        self.subhaloInd = None
-        self.refPos = None
-        self.refVel = None
+        if not init:
+            self.haloInd = None
+            self.subhaloInd = None
+            self.refPos = None
+            self.refVel = None
 
         # clear cache
         old_data = {}
