@@ -17,6 +17,114 @@ from .util import simParams
 from .util.match import match
 
 
+def mcst_smbh_mdot():
+    """Check if we can reproduce the BH_Mdot field from the other fields."""
+    sim = simParams(run="structures", hInd=219612, res=15, variant="ST15", redshift=5.5)
+
+    i = 0
+
+    bh_mass = sim.bhs("BH_Mass")[i]
+    bh_mdot = sim.bhs("BH_Mdot")[i]
+    bh_mdotbondi = sim.bhs("BH_MdotBondi")[i]
+    bh_u = sim.bhs("BH_U")[i]
+    bh_density = sim.bhs("BH_Density")[i]
+    bh_gasvel = sim.bhs("BH_GasVel")[i]
+    bh_vel = sim.bhs("Velocities")[i]
+
+    # comoving to physical
+    bh_gasvel /= sim.units.scalefac
+    bh_vel *= np.sqrt(sim.units.scalefac)
+
+    rel_vel = np.linalg.norm(bh_gasvel - bh_vel)
+    # rel_vel = 0.0
+    print(f"{bh_gasvel = }, {bh_vel = }, {rel_vel = } km/s")
+
+    # remove all 'a' and 'h' factors (i.e. "code units" without the cosmological factors)
+    # note: 'h' factors cancel in bondi formula, so we can just leave them
+    # bh_mass /= sim.HubbleParam  # 1e10 msun
+    # bh_density *= sim.HubbleParam**2 / sim.units.scalefac**3  # 1e10 msun/kpc^3
+    bh_density /= sim.units.scalefac**3  # 1e10 msun/kpc^3
+
+    print(f"{bh_mass = }, {bh_mdot = }, {bh_mdotbondi = }, {bh_u = }, {bh_density = }")
+
+    # note: bh_mdot == bh_mdotbondi
+    bh_mdot_msunyr = sim.units.codeMassOverTimeToMsunPerYear(bh_mdot)  # Msun/yr
+
+    # sound speed
+    csnd = sim.units.calcSoundSpeedKmS(bh_u, bh_density)  # physical km/s
+    csnd2 = np.sqrt(sim.units.gamma * (sim.units.gamma - 1) * bh_u)  # same
+    print(f"{csnd = }, {csnd2 = }")
+
+    # compute mdot from Bondi formula (stay in code units)
+    alpha = 1.0
+
+    # kpc^2 (km/s)^4 / (1e10 msun)^2 * (1e10 Msun/h)^2 * (1e10 Msun/kpc^3) / (km/s)^3
+    # kpc^2 (km/s) / (1e10 msun)^2 * (1e10 Msun/h)^2 * (1e10 Msun/kpc^3)
+    # (km/kpc) * 1e10 Msun / h^2 / s
+    # CodeMass / CodeTime / h^2
+    mdotbondi = alpha * 4 * np.pi * sim.units.G**2 * bh_mass**2 * bh_density
+    mdotbondi /= (csnd**2 + rel_vel**2) ** (3 / 2)  # code units
+
+    mdotbondi_msunyr = sim.units.codeMassOverTimeToMsunPerYear(mdotbondi)  # Msun/yr
+
+    # medd = sim.units.codeBHMassToMdotEdd(bh_mass)
+    # print(f"eddington ratio: {mdotbondi_msunyr / medd = }")
+
+    print(f"{bh_mdot_msunyr = }, {mdotbondi_msunyr = } , ratio: {bh_mdot_msunyr / mdotbondi_msunyr}")
+
+
+def tng_smbh_mdot():
+    """Check if we can reproduce the BH_Mdot field from the other fields."""
+    sim = simParams(run="tng50-3", redshift=5.0)
+
+    i = 0
+
+    bh_mass = sim.bhs("BH_Mass")[i]
+    bh_mdot = sim.bhs("BH_Mdot")[i]
+    bh_mdotbondi = sim.bhs("BH_MdotBondi")[i]
+    bh_u = sim.bhs("BH_U")[i]
+    bh_density = sim.bhs("BH_Density")[i]
+
+    # remove all 'a' and 'h' factors (i.e. "code units" without the cosmological factors)
+    # note: 'h' factors cancel in bondi formula, so we can just leave them
+    # bh_mass /= sim.HubbleParam  # 1e10 msun
+    # bh_density *= sim.HubbleParam**2 / sim.units.scalefac**3  # 1e10 msun/kpc^3
+    bh_density /= sim.units.scalefac**3  # 1e10 msun/kpc^3
+
+    medd = sim.units.codeBHMassToMdotEdd(bh_mass)
+
+    print(f"{bh_mass = }, {bh_mdot = }, {bh_mdotbondi = }, {bh_u = }, {bh_density = }")
+
+    # note: bh_mdot == bh_mdotbondi
+    bh_mdot_msunyr = sim.units.codeMassOverTimeToMsunPerYear(bh_mdot)  # Msun/yr
+    # bh_mass_msun = sim.units.codeMassToMsun(bh_mass)  # Msun
+    print(f"{bh_mdot_msunyr = }")
+
+    # sound speed
+    csnd = sim.units.calcSoundSpeedKmS(bh_u, bh_density)  # physical km/s
+    csnd2 = np.sqrt(sim.units.gamma * (sim.units.gamma - 1) * bh_u)  # same
+    print(f"{csnd = }, {csnd2 = }")
+
+    # compute mdot from Bondi formula (stay in code units)
+    alpha = 1.0
+
+    # kpc^2 (km/s)^4 / (1e10 msun)^2 * (1e10 Msun/h)^2 * (1e10 Msun/kpc^3) / (km/s)^3
+    # kpc^2 (km/s) / (1e10 msun)^2 * (1e10 Msun/h)^2 * (1e10 Msun/kpc^3)
+    # kpc^2 (km/s) * h^2 * (1e10 Msun/kpc^3)
+    mdotbondi = alpha * 4 * np.pi * sim.units.G**2 * bh_mass**2 * bh_density
+    mdotbondi /= csnd**3  # code units
+
+    mdotbondi_msunyr = sim.units.codeMassOverTimeToMsunPerYear(mdotbondi)  # Msun/yr
+
+    print(f"{mdotbondi = }, {mdotbondi_msunyr = }")
+    print(f"eddington ratio: {mdotbondi_msunyr / medd = }")
+    print(f"ratio: {bh_mdot_msunyr / mdotbondi_msunyr = }")
+
+    import pdb
+
+    pdb.set_trace()
+
+
 def check_spec():
     """Check OVI COS vs idealized spectra."""
     from temet.spectra.util import _equiv_width

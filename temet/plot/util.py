@@ -744,6 +744,30 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
         cm_data = [[red_r, red_g, red_b], [blue_r, blue_g, blue_b]]
         cmap = LinearSegmentedColormap.from_list("blue_red_t10", cm_data)
 
+    if ctName == "blue_red_sharp":
+        # discontinuous colormap: magma on the upper half, grayscale on the lower half
+        assert valMinMax is not None  # need for placing discontinuities at correct physical locations
+        valCut = 0.0
+
+        fCut = (valCut - valMinMax[0]) / (valMinMax[1] - valMinMax[0])
+        if fCut <= 0 or fCut >= 1:
+            print("Warning: strange fCut, fix!")
+            fCut = 0.5
+
+        # sample from both colormaps
+        x1 = np.linspace(0.0, 1.0, int(512 * (1 - fCut)))
+        x2 = np.linspace(0.0, 1.0, int(512 * fCut))
+        x1 = x1 ** (1 / 3)  # more samples near the end (avoid too much light blue)
+        x2 = x2 ** (4)  # avoid too much light red
+        colors1 = get_cmap("Blues")(x1)
+        colors2 = get_cmap("Reds_r")(x2)
+
+        # combine them and construct a new colormap
+        colors = np.vstack((colors2, colors1))
+        cmap = LinearSegmentedColormap.from_list("blue_red_sharp", colors)
+
+        return cmap
+
     if cmap is None:
         raise Exception("Unrecognized colormap request [" + ctName + "] or not implemented.")
 

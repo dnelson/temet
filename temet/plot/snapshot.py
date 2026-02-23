@@ -325,15 +325,18 @@ def phaseSpace2d(
     normColMax=False,
     hideBelow=False,
     ctName="viridis",
+    ctCenter=None,
     colorEmpty=False,
     smoothSigma=0.0,
     nBins=None,
     qRestrictions=None,
+    qRestrictionsLabel=True,
     median=False,
     normContourQuantColMax=False,
     addHistX=False,
     addHistY=False,
     colorbar=True,
+    sizefac: float = 1.0,
     f_pre=None,
     f_post=None,
     saveFilename=None,
@@ -353,6 +356,7 @@ def phaseSpace2d(
     are called before and after the rest of plotting, respectively.
     If addHistX and/or addHistY, then int, specifies the number of bins to add marginalized 1D histogram(s).
     If hideBelow, then pixel values below clim[0] are left pure white.
+    If ctCenter is not None, then the value to place at the middle of the colormap (i.e. 0 for diverging vrad).
     If colorEmpty, then empty/unoccupied pixels are colored at the bottom of the cmap.
     If smoothSigma is not zero, gaussian smooth contours at this level.
     If qRestrictions, then a list containing 3-tuples, each of [fieldName,min,max], to restrict all points by.
@@ -426,7 +430,7 @@ def phaseSpace2d(
         yvals = yvals[wRestrict]
 
     # start figure
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=figsize * np.array(sizefac))
 
     # loop over each weight requested
     for i, wtProp in enumerate(weights):
@@ -508,7 +512,10 @@ def phaseSpace2d(
             w = np.where(np.isnan(zz))
             zz[w] = clim[0]
 
-        cmap = loadColorTable(ctName)
+        if ctCenter is not None:
+            cmap = loadColorTable(ctName, valMinMax=clim, cmapCenterVal=ctCenter)
+        else:
+            cmap = loadColorTable(ctName)
         norm = Normalize(vmin=clim[0], vmax=clim[1], clip=False)
         im = plt.imshow(
             zz,
@@ -727,18 +734,30 @@ def phaseSpace2d(
             wtStr = "Relative " + wtStr + " [ log ]"
         cb.ax.set_ylabel(wtStr)
 
+        # if a plot contains multiple colorbars, their tick label width varies depending on the
+        # automatic formatter, causing the main panel sizes to vary and be mismatched. enforce a minimum.
+        # doesn't really work with the padding strategy:
+        #bbox = cb.ax._position
+        #print(meancolors, bbox, bbox.width)
+
+        #min_length = 5  # e.g. '-0.75'
+        #tick_values = cb.ax.get_yticks()
+        #tick_labels = cb.ax.get_yticklabels()
+
+        #for label in tick_labels:
+        #    label.set_text(label.get_text().ljust(min_length))
+        #cb.ax.set_yticks(tick_values)
+        #cb.ax.set_yticklabels(tick_labels)
+
     # info legend
-    if qRestrictions is not None:
+    if qRestrictions is not None and qRestrictionsLabel:
         qLabels = []
         for rFieldName, rFieldMin, rFieldMax in qRestrictions:
             # rLabel, _, _ = sP.simParticleQuantity(partType, rFieldName)
             qLabels.append("%g < %s < %g" % (rFieldMin, rFieldName, rFieldMax))
 
-        if sP.run in ["structures"]:
-            qLabels.append("z = %.1f" % sP.redshift)
-
         handles = [plt.Line2D([0], [0], lw=0) for i in range(len(qLabels))]
-        legend = ax.legend(handles, qLabels, borderpad=0.4, loc="upper right")
+        legend = ax.legend(handles, qLabels, handlelength=0, loc="lower left")  # borderpad=0.4
         ax.add_artist(legend)
 
     # finish plot and save

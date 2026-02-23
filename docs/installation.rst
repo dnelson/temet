@@ -35,7 +35,7 @@ If you don't yet have a working python installation/environment, then e.g. on th
 Automatic Installation
 ----------------------
 
-If you do not plan on editing this package and hope to simply use it as is, you can simply install it
+If you do not plan on editing this package and hope to simply use it as is, you can install with pip
 
 .. code-block:: bash
 

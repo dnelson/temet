@@ -676,7 +676,7 @@ def sf_sn_details(sim, overwrite=False):
                 text=True,
             )
 
-            assert result.stdout.count("\n") == 1, f"File [{f}] has inconsistent number of columns!"
+            assert result.stdout.count("\n") in [0, 1], f"File [{f}] has inconsistent number of columns!"
 
         subprocess.run("cat sf_details_*.txt > sf_details.txt", cwd=path + "sf_details/", shell=True)
 
@@ -761,6 +761,9 @@ def sf_sn_details(sim, overwrite=False):
     _, unique_inds = np.unique(sf_ids_keys, return_index=True)
     for key in list(sf_ids.keys()):
         sf_ids[key] = sf_ids[key][unique_inds]
+
+    # sf["tistep"] = sf["tistep"].astype("int32")
+    # sf_ids["tistep"] = sf_ids["tistep"].astype("int32")
 
     # combine sf_details and sf_details_ids
     if sf["task"].size == sf_ids["task"].size:

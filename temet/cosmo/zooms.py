@@ -13,6 +13,7 @@ from scipy.signal import savgol_filter
 
 from ..load.simtxt import getCpuTxtLastTimestep
 from ..plot.config import colors, linestyles, lw, sKn, sKo
+from ..plot.util import _finish_plot
 from ..util.helper import logZeroNaN, running_median
 from ..util.simParams import simParams
 from ..vis.box import renderBox
@@ -157,35 +158,34 @@ def calculate_contamination(sPzoom, rVirFacs=(1, 2, 3, 4, 5, 10), verbose=False)
     return r
 
 
-def contamination_profile():
-    """Check level of low-resolution contamination (DM particles) in zoom run. Plot radial profile."""
-    # config
-    hInd = 0  # 31619 # 10677
+def contamination_profile(sim: simParams, haloID: int = 0):
+    """Check level of low-resolution contamination (DM particles) in zoom run. Plot radial profile.
 
+    Args:
+      sim: the zoom simulation to analyze.
+      haloID: the zoom halo ID, at the final redshift (0 by default).
+    """
     # load zoom: group catalog
-    # sPz = simParams(res=zoomRes, run=zoomRun, hInd=hInd, redshift=redshift, variant=variant)
-    sPz = simParams(run="tng50_zoom", hInd=11, res=11, variant="sf8", redshift=6.0)
-
-    halo_zoom = sPz.groupCatSingle(haloID=0)
+    halo_zoom = sim.groupCatSingle(haloID=0)
 
     # load parent box
-    sP = sPz.sP_parent
-    halo = sP.groupCatSingle(haloID=hInd)
+    sim_parent = sim.sP_parent
+    halo = sim_parent.groupCatSingle(haloID=sim.hInd)
 
     print("parent halo pos: ", halo["GroupPos"])
-    print("zoom halo cenrelpos: ", halo_zoom["GroupPos"] - sP.boxSize / 2)
-    print("parent halo mass: ", sP.units.codeMassToLogMsun([halo["Group_M_Crit200"], halo["GroupMass"]]))
-    print("zoom halo mass: ", sP.units.codeMassToLogMsun([halo_zoom["Group_M_Crit200"], halo_zoom["GroupMass"]]))
+    print("zoom halo cenrelpos: ", halo_zoom["GroupPos"] - sim_parent.boxSize / 2)
+    print("parent halo mass: ", sim_parent.units.codeMassToLogMsun(halo["Group_M_Crit200"]))
+    print("zoom halo mass: ", sim_parent.units.codeMassToLogMsun(halo_zoom["Group_M_Crit200"]))
 
     # print/load contamination statistics
-    contam = calculate_contamination(sPz, verbose=True)
-    min_dist_lr = contam["min_dist_lr"] * sPz.HubbleParam
+    contam = calculate_contamination(sim, verbose=True)
+    min_dist_lr = contam["min_dist_lr"] * sim.HubbleParam
 
     # plot contamination profiles
     fig, ax = plt.subplots()
     ylim = [-5.0, 0.0]
 
-    ax.set_xlabel("Distance [%s]" % sPz.units.UnitLength_str)
+    ax.set_xlabel("Distance [%s]" % sim.units.UnitLength_str)
     ax.set_ylabel("Low-res DM Contamination Fraction [log]")
     ax.xaxis.set_minor_locator(MultipleLocator(500))
     ax.set_xlim([0.0, contam["rr"].max()])
@@ -204,8 +204,8 @@ def contamination_profile():
     ax2.xaxis.set_minor_locator(MultipleLocator(1))
 
     ax.legend(loc="lower right")
-    fig.savefig("contamination_profile_%s_%d.pdf" % (sPz.simName, sPz.snap))
-    plt.close(fig)
+
+    _finish_plot(fig, "contamination_profile_%s_%d.pdf" % (sim.simName, sim.snap))
 
 
 def contamination_compare_profiles():

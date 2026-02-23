@@ -18,22 +18,27 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
 
     Note: cannot use for a movie since the face-on/edge-on rotations have random orientations each frame.
     """
-    rVirFracs = [1.0]
+    rVirFracs = [2.0, 5.0, 10.0]
     fracsType = "rhalf_stars_fof"  #'rHalfMassStars'
-    nPixels = [960, 960]  # face-on panels
-    nPixels_e = [960, 240]  # edge-on panels
-    size = 1.0 if sP.hInd > 20000 else 5.0
+    nPixels = [1400, 1400]  # [960, 960]  # face-on panels
+    nPixels_e = [1400, 350]  # [960, 240]  # edge-on panels
+
+    if sP.hInd > 30000:
+        size = 1.0
+    elif sP.hInd > 20000:
+        size = 2.0
+    else:
+        size = 5.0
+
     sizeType = "kpc"
     labelSim = False  # True
-    labelHalo = "mhalo,mstar,haloid"
+    labelHalo = False  # "mhalo,mstar,haloid"
     labelZ = True
     labelScale = "physical"
     plotBHs = "all"
     plotSubhalos = False  #'all'
     relCoords = True
-    if 1:
-        axes = [0, 1]
-        # rotation   = 'edge-on' #'face-on'
+    axes = [0, 1]
 
     # observational resolution?
     if 0:
@@ -53,7 +58,7 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
     zfac = 0.0
     if sP.redshift >= 9.9:
         zfac = 1.0
-        size = 0.05  # 0.1 # z=10, 11, 12 tests of L16
+        # size = 0.05  # 0.1 # z=10, 11, 12 tests of L16
 
     # panels (can vary hInd, variant, res)
     panels = []
@@ -62,9 +67,11 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
         gas_field = "coldens_msunkpc2"  # 'HI'
         stars_field = "stellarCompObsFrame"  # stellarComp'
 
-        gas_mm = [4.0 + zfac, 8.5 + zfac]  # [20.0+zfac,22.5+zfac]
+        gas_mm = [5.0 + zfac, 8.5 + zfac]  # [20.0+zfac,22.5+zfac]
         dm_mm = [7.0 + zfac, 11.0 + zfac]
-        panels.append({"partType": "gas", "partField": gas_field, "valMinMax": gas_mm, "rotation": "face-on"})
+        panels.append(
+            {"partType": "gas", "partField": gas_field, "valMinMax": gas_mm, "rotation": "face-on", "labelZ": False}
+        )
         # panels.append( {'partType':'dm', 'partField':gas_field, 'valMinMax':dm_mm, 'rotation':'face-on'} )
         # panels.append( {'partType':'stars', 'nPixels':[480,480], 'method':'histo', 'partField':stars_field,
         #                 'rotation':'face-on'} )
@@ -94,7 +101,7 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
                 "partField": stars_field,
                 "nPixels": nPixels_e,
                 "labelScale": False,
-                "labelSim": True,
+                "labelSim": False,
                 "labelHalo": False,
                 "labelZ": False,
                 "rotation": "edge-on",
@@ -103,7 +110,7 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
 
     class plotConfig:
         plotStyle = "edged"
-        colorbars = True
+        colorbars = False
         fontsize = 28  # 24
         saveFilename = "galaxy_%s_%d_h%d%s.pdf" % (sP.simName, sP.snap, haloID, "_nosats" if noSats else "")
 

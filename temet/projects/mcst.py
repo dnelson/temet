@@ -52,7 +52,10 @@ def _get_existing_sims(variants, res, hInds, redshift, all=False, single=False):
                     sim = simParams(run="structures", res=r, hInd=hInd, variant=variant, redshift=redshift)
                     if np.abs(sim.redshift - redshift) < 0.3 or all:
                         if single:
-                            if sim.res > found_maxres:
+                            # if multiple resolutions exist, only keep the highest (but require that it is done)
+                            higher_res_is_done = np.abs(sim.redshift - redshift) < 0.1
+
+                            if sim.res > found_maxres and (higher_res_is_done or found_maxres == 0):
                                 if len(sims) > 0 and sims[-1].hInd == hInd and sims[-1].variant == variant:
                                     assert sims[-1].res < sim.res, "Error in single highest-res selection."
                                     sims.pop()
@@ -118,65 +121,137 @@ def _zoomSubhaloIDsToPlot(sim, verbose=False):
 
 def smhm_relation(sims):
     """Diagnostic plot of stellar mass vs halo mass including empirical constraints."""
-    from temet.load.data import behrooziUM
+    from temet.load.data import behrooziUM, paquereau25
 
     xQuant = "mhalo_200_log"
     yQuant = "mstar2_log"
     xlim = [7.3, 10.3]
     ylim = [4.0, 8.5]  # log mstar
 
-    # focus on low-mass end:
-    # xlim = [5.5, 9.3]
-    # ylim = [2.4, 7.0]
-
     def _draw_data(ax, sims):
         # Behroozi+2019 (UniverseMachine) stellar mass-halo mass relation
         b19_um = behrooziUM(sims[0])
-        label = b19_um["label"] + " z = %.1f" % sims[0].redshift
+        label = b19_um["label"] + " (z = %.1f)" % sims[0].redshift
 
-        ax.plot(b19_um["haloMass"], b19_um["mstar_mid"], "--", color="#bbb", label=label)
-        ax.plot(b19_um["haloMass"], b19_um["mstar_low"], ":", color="#bbb", alpha=0.8)
-        ax.plot(b19_um["haloMass"], b19_um["mstar_high"], ":", color="#bbb", alpha=0.8)
-        # ax.fill_between(b19_um['haloMass'], b19_um['mstar_low'], b19_um['mstar_high'], color='#bbb', alpha=0.4)
+        ax.plot(b19_um["haloMass"], b19_um["mstar_mid"], "--", color="#ccc", label=label)
+        ax.fill_between(b19_um["haloMass"], b19_um["mstar_low"], b19_um["mstar_high"], color="#ccc", alpha=0.3)
+        # ax.plot(b19_um["haloMass"], b19_um["mstar_low"], "--", color="#ccc", alpha=0.8)
+        # ax.plot(b19_um["haloMass"], b19_um["mstar_high"], "--", color="#ccc", alpha=0.8)
+
+        # MEGATRON (Katz+26) - Figure 6 (upper panel)
+        k26_mhalo = [7.01, 7.29, 7.66, 7.85, 8.09, 8.29, 8.72, 9.28, 9.69, 10.11]  # log msun (median)
+        k26_mstar = [2.32, 3.09, 3.62, 4.16, 5.11, 6.35, 7.15, 7.79, 8.27, 8.51]  # log msun
+        k26_mstar_up = [3.17, 4.05, 4.57, 5.39, 6.43, 6.85, 7.35, 7.96, 8.42, 8.64]  # upper band (1 sigma scatter)
+        k26_mstar_down = [0.0, 0.0, 0.0, 3.57, 4.19, 4.86, 6.84, 7.56, 8.07, 8.40]
+        k26_label = "Katz+26 MEGATRON (z=10)"
+
+        ax.plot(k26_mhalo, k26_mstar, "-.", color="#999", alpha=0.8, label=k26_label)
+        ax.fill_between(k26_mhalo, k26_mstar_down, k26_mstar_up, color="#999", alpha=0.1)
+
+        # Paquereau+2025 - COSMOS-Web HOD-based, z=0-12 (no halo mass overlap yet)
+        # p25 = paquereau25(redshift=5.5, mstar="Mth")
+
+        # ax.plot(p25["mhalo"], p25["mstar"], ":", color="#000", alpha=0.8, label=p25["label"])
+
+        # THESAN-ZOOM (Kannan+25) - Figure 3 (z=5, is closer to z=5.5 in z=7 in tage) (individual target galaxies)
+        k25_mhalo = [7.49, 7.46, 7.45, 7.98, 8.09, 8.13, 8.57, 8.64, 8.99, 9.04, 9.06, 9.28, 9.29, 9.41, 9.32, 9.41,
+                     9.71, 9.80, 10.42, 10.30, 10.27, 10.54, 10.71, 10.71, 11.52, 11.63]  # log msun # fmt: skip
+        k25_mstar = [3.83, 4.04, 4.85, 4.05, 4.20, 4.42, 5.11, 5.29, 5.82, 5.95, 6.14, 5.97, 6.15, 6.22, 6.42, 6.73,
+                     7.10, 7.20, 7.43, 7.68, 7.87, 7.98, 8.27, 8.67, 9.31, 9.54]  # log msun # fmt: skip
+        k25_label = "Kannan+25 THESAN-ZOOM (z=5)"
+
+        ax.plot(k25_mhalo, k25_mstar, "s", color="#999", alpha=0.8, label=k25_label)
+
+        # SPICE (Bhagwat+24) - Figure 5 (bursty and smooth models)
+        b24_mhalo1 = [1.3e8, 2.3e8, 4.8e8, 9.2e8, 1.9e9, 7.3e9, 1.5e10, 3.0e10, 6.0e10, 1.2e11, 2.4e11]  # log msun
+        b24_mhalo2 = [2.4e8, 4.7e8, 9.4e8, 1.9e9, 7.4e9, 1.5e10, 5.8e10, 1.2e11, 2.4e11]  # log msun
+        b24_ratio1 = [3.2e-3, 3.9e-3, 7.4e-3, 1.2e-2, 1.9e-2, 3.5e-2, 4.4e-2, 7.5e-2, 1.1e-1, 1.5e-1, 4.1e-1]  # ratio
+        b24_ratio2 = [1.9e-3, 2.7e-3, 5.0e-3, 8.1e-3, 1.6e-2, 1.9e-2, 4.0e-2, 4.5e-2, 6.6e-2]  # ratio
+        b24_mstar1 = np.array(b24_mhalo1) * sims[0].units.f_b * b24_ratio1
+        b24_mstar2 = np.array(b24_mhalo2) * sims[0].units.f_b * b24_ratio2
+        b24_label = "Bhagwat+24 SPICE (z=5)"
+
+        ax.plot(np.log10(b24_mhalo1), np.log10(b24_mstar1), ":", color="#999", alpha=0.8, label=b24_label)
+        ax.plot(np.log10(b24_mhalo2), np.log10(b24_mstar2), ":", color="#999", alpha=0.8)
+
+        # todo: flares? (cannot find the paper)
+
+        # COLIBRE (Chaikan+25, Fig 3, L25/L25m5, z=5)
+        c25_mhalo = [3.02e9, 4.94e9, 7.43e9, 1.98e10, 2.75e10, 4.98e10, 1.25e11, 1.96e11, 3.20e11, 5.12e11]  # log msun
+        c25_ratio = [4.47e-4, 5.51e-4, 7.31e-4, 1.40e-3, 2.06e-3, 2.85e-3, 6.99e-7, 7.60e-3, 9.19e-3, 1.34e-2]  # ratio
+        c25_mstar = np.array(c25_mhalo) * c25_ratio
+        c25_label = "Chaikan+25 COLIBRE (z=5)"
+
+        ax.plot(np.log10(c25_mhalo), np.log10(c25_mstar), ls=linestyles[4], color="#777", alpha=0.8, label=c25_label)
 
     subhalos_evo.scatter2d(
-        sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data, f_selection=_zoomSubhaloIDsToPlot
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        parents=False,
+        legend="simple",
+        f_pre=_draw_data,
+        f_selection=_zoomSubhaloIDsToPlot,
     )
 
 
 def sfr_vs_mstar(sims: list[simParams], yQuant: str) -> None:
     """Diagnostic plot of SFR vs Mstar including observational data."""
-    from temet.load.data import curti23, nakajima23
+    from temet.load.data import asada26, chemerynska24, curti23, nakajima23
 
     xQuant = "mstar2_log"
-    ylim = [-3.5, 2.0]  # log sfr
-    xlim = [5.7, 10.2]  # log mstar
+    ylim = [-3.5, 1.5]  # log sfr
+    xlim = [4.5, 9.0]  # log mstar
 
     def _draw_data(ax, sims):
         xlim = ax.get_xlim()
         sim_parent = sims[0].sP_parent
 
         # constant sSFR lines
-        sSFR = [1e-10, 1e-9, 1e-8, 1e-7]  # yr^-1
+        sSFR = [1e-7, 1e-8, 1e-9, 1e-10]  # yr^-1
+        opts = {"fontsize": 11, "color": "#444", "alpha": 1.0, "ha": "left", "va": "bottom", "rotation": 30.0}
 
         for i, s in enumerate(sSFR):
             yy = np.log10(s * 10.0 ** np.array(xlim))
             label = "sSFR = $10^{%d}$ yr$^{-1}$" % np.log10(s)
-            x_label = xlim[0] + 0.08
-            y_label = yy[0] + 0.15
-            if i == 0:
-                x_label = xlim[0] + 1.0
-                y_label = yy[0] + 1.1
+            x_label = xlim[0] + (xlim[1] - xlim[0]) * (0.1 + 0.15 * i)
+            y_label = np.interp(x_label, xlim, yy) + 0.15
             if i > 0:
                 label = "$10^{%d}$ yr$^{-1}$" % np.log10(s)
+
             ax.plot(xlim, yy, ":", color="#444", lw=1, alpha=1.0)
-            ax.text(
-                x_label, y_label, label, fontsize=11, color="#444", alpha=1.0, ha="left", va="bottom", rotation=30.0
-            )
+            ax.text(x_label, y_label, label, **opts)
+
+        # Chemerynska+24 UNCOVER (z=6-8) https://arxiv.org/abs/2407.17110 (Table 1)
+        c24 = chemerynska24()
+
+        ax.errorbar(
+            c24["mstar"],
+            c24["sfr_ha"],
+            xerr=[c24["mstar_err1"], c24["mstar_err2"]],
+            yerr=[c24["sfr_ha_err1"], c24["sfr_ha_err2"]],
+            fmt="o",
+            color="#333",
+            alpha=0.4,
+            label=c24["label"] + r" $H\alpha$",
+        )
+
+        ax.errorbar(
+            c24["mstar"],
+            c24["sfr_uv"],
+            xerr=[c24["mstar_err1"], c24["mstar_err2"]],
+            yerr=[c24["sfr_uv_err1"], c24["sfr_uv_err2"]],
+            fmt="o",
+            color="#000",
+            alpha=0.4,
+            label=c24["label"] + r" UV",
+        )
 
         # Curti+23 JWST JADES (z=3-10)
         c23 = curti23()
-        label = c23["label"] + r" $z\,\sim\,%.0f$" % sim_parent.redshift
+        label = c23["label"]  # + r" $z\,\sim\,%.0f$" % sim_parent.redshift
 
         w = np.where(np.abs(c23["redshift"] - sim_parent.redshift < 1.0))  # e.g. z=3.5-4.5 for sim at z=4
 
@@ -191,17 +266,27 @@ def sfr_vs_mstar(sims: list[simParams], yQuant: str) -> None:
 
         # Nakajima+23 (z=4-10) JWST CEERS
         n23 = nakajima23()
-        label = n23["label"] + r" $z\,\sim\,%.0f$" % sim_parent.redshift
+        label = n23["label"]  # + r" $z\,\sim\,%.0f$" % sim_parent.redshift
 
         w = np.where(np.abs(n23["redshift"] - sim_parent.redshift < 2.0))  # e.g. z=3-5 for sim at z=4
 
         xerr = [n23["mstar_err1"][w], n23["mstar_err2"][w]]
         yerr = [n23["sfr_err1"][w], n23["sfr_err2"][w]]
-        ax.errorbar(n23["mstar"][w], n23["sfr"][w], xerr=xerr, yerr=yerr, fmt="o", color="#555", alpha=0.3, label=label)
+        ax.errorbar(n23["mstar"][w], n23["sfr"][w], xerr=xerr, yerr=yerr, fmt="p", color="#555", alpha=0.3, label=label)
 
-        # Asada+26 (z~6) GLIMPSE
-        # https://arxiv.org/abs/2601.20045
-        # TODO
+        # Asada+26 (z~6) GLIMPSE (z=5.5-6.5)
+        a26 = asada26()
+
+        ax.errorbar(
+            a26["mstar"],
+            a26["sfr_ha"],
+            xerr=a26["mstar_err"],
+            yerr=a26["sfr_err"],
+            fmt="D",
+            color="#555",
+            alpha=0.4,
+            label=a26["label"],
+        )
 
         # Popesso+23 model at z=3+ (Eqn. 15)
         a0 = 2.71
@@ -221,7 +306,74 @@ def sfr_vs_mstar(sims: list[simParams], yQuant: str) -> None:
             ax.plot(xlim, np.log10(sfr), "--", color="#555", lw=lw, alpha=0.7, label=label)
 
     subhalos_evo.scatter2d(
-        sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data, f_selection=_zoomSubhaloIDsToPlot
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        parents=False,
+        tracks=True,
+        legend="simple",
+        f_pre=_draw_data,
+        f_selection=_zoomSubhaloIDsToPlot,
+    )
+
+
+def sfr_10_100_ratio(sims):
+    """Plot ratio of SFR on 10 Myr vs 100 Myr timescales, vs stellar mass."""
+    from temet.load.data import atek22
+
+    xQuant = "mstar2_log"
+    yQuant = "sfr_10_100_ratio"
+
+    def _draw_data(ax, sims):
+        # Navarro-Carrera+26 (Figure 8, right panel, median line) z=4-6
+        nc26_mstar = [6.3, 7.7, 8.4]  # log Msun
+        nc26_ratio = [0.2, 0.05, 0.0]  # log SFR_Ha / SFR_UV
+
+        ax.plot(nc26_mstar, nc26_ratio, "--", color="#333", lw=lw, alpha=0.8, label="Navarro-Carrera+26")
+
+        # Rinaldi+23 MIDIS (z=7-8) - Figure 9
+        r23_x = [7.47, 7.47, 7.43, 7.71, 7.99, 8.07, 8.09, 8.54, 8.52, 8.71, 8.89, 9.01]  # log Msun
+        r23_y = [-0.50, 0.31, 0.53, 1.43, 0.65, -0.20, -0.48, -0.95, -0.61, -0.61, -0.45, -0.92]  # log SFR ratio
+
+        r23_x_left = [7.10, 7.42, 7.17, 7.66, 7.65, 7.39, 7.92, 8.12, 8.48, 8.48, 8.82, 8.96]
+        r23_x_right = [7.63, 7.52, 7.62, 7.75, 8.15, 8.49, 8.38, 8.61, 8.57, 8.83, 8.95, 9.05]
+        r23_y_up = [-0.17, 0.44, 0.94, 2.07, 1.55, -0.10, -0.36, -0.78, -0.54, -0.51, -0.36, -0.81]
+        r23_y_down = [-0.82, 0.17, 0.12, -0.34, -0.25, -0.29, -0.61, -1.13, -0.77, -0.72, -0.57, -1.02]
+
+        ax.errorbar(
+            r23_x,
+            r23_y,
+            xerr=[np.array(r23_x) - r23_x_left, r23_x_right - np.array(r23_x)],
+            yerr=[np.array(r23_y) - r23_y_down, r23_y_up - np.array(r23_y)],
+            fmt="o",
+            color="#000",
+            alpha=0.4,
+            label="Rinaldi+23 MIDIS",
+        )
+
+        # Atek+22 3D-HST (z~1)
+        a22 = atek22()
+        opts = {"marker": "s", "lw": 0, "ms": 4, "color": "#555", "alpha": 0.3}
+
+        ax.plot(a22["mstar"], a22["sfr_Ha_UV_ratio"], label=a22["label"], **opts)
+
+        # todo: Pirie+ 25 JELS (z~6), ~30 galaxies at 7.5 < M* < 9.5
+        # https://ui.adsabs.harvard.edu/abs/2025MNRAS.541.1348P/abstract (Figure 12)
+
+    subhalos_evo.scatter2d(
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=[4.5, 9.0],
+        ylim=[-1.2, 2.0],
+        sizefac=0.8,
+        parents=False,
+        legend="simple",
+        legend_locs=["upper left", "upper right"],
+        f_selection=_zoomSubhaloIDsToPlot,
+        f_post=_draw_data,
     )
 
 
@@ -572,20 +724,41 @@ def stellar_mzr(sims):
     )
 
 
-def phase_diagram(sim):
+def phase_diagram(sim, yQuant="temp", cQuant=None, ext="pdf"):
     """Driver."""
     # config
-    yQuant = "temp"  #'csnd'
     xQuant = "nh"
 
-    xlim = [-6.5, 7.0]
-    ylim = [1.0, 7.0] if yQuant == "temp" else [-0.5, 2.5]
+    xlim = [-6.0, 7.0]  # xmax == 6 for L15, xmax == 7 for L16
     haloIDs = None  # [0]
     qRestrictions = [["rad_rvir", 0.0, 5.0]]  # within 5rvir only
     qRestrictions.append(["highres_massfrac", 0.5, 1.0])  # high-res only
-    clim = [-4.0, -0.2]
 
-    saveFilename = "phase_%s_%s_%s_%03d.png" % (sim.simName, xQuant, yQuant, sim.snap)
+    if yQuant == "temp":
+        ylim = [1.0, 7.5]  # [1.0, 8.0]
+    if yQuant == "csnd":
+        ylim = [-0.5, 2.5]
+
+    cStr = cQuant
+    if cQuant is None:
+        clim = [-5.0, 0.0]  # show mass distribution
+        cStr = "mass"
+        ctName = "viridis"
+        ctCenter = None
+    if cQuant == "Z_solar":
+        clim = [-2.0, 0.0]
+        ctName = "plasma"
+        ctCenter = None
+    if cQuant == "vrad":
+        clim = [-60, 120]
+        ctName = "blue_red_sharp"  # "blue_red_sharp"
+        ctCenter = 0.0
+    if cQuant == "rad_rvir":
+        clim = [-2.0, 0.0]
+        ctName = "inferno"
+        ctCenter = None
+
+    saveFilename = "phase_%s_%s_%s_%s_%03d.%s" % (sim.simName, xQuant, yQuant, cStr, sim.snap, ext)
 
     # MCS model: star formation threshold
     def _f_post(ax):
@@ -613,11 +786,17 @@ def phase_diagram(sim):
         sim,
         xQuant=xQuant,
         yQuant=yQuant,
+        meancolors=cQuant,
+        ctName=ctName,
+        ctCenter=ctCenter,
         haloIDs=haloIDs,
         qRestrictions=qRestrictions,
+        qRestrictionsLabel=False,
+        nBins=250,
         xlim=xlim,
         ylim=ylim,
         clim=clim,
+        sizefac=0.8,
         hideBelow=False,
         f_post=_f_post,
         saveFilename=saveFilename,
@@ -1267,7 +1446,7 @@ def blackhole_position_vs_time(sim, snap_based=True):
 def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0):
     """Plot PDFs of gas properties at the sites and moments of star formation (or supernovae)."""
     # config
-    z_bins = [[5.5, 8.0], [8.0, 10.0], [10.0, 15.0]]
+    z_bins = [[5.5, 8.0], [8.0, 15.0]]  # [[5.5, 8.0], [8.0, 10.0], [10.0, 15.0]]
     if not split_z:
         z_bins = [[5.5, 15.0]]
 
@@ -1277,13 +1456,13 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
 
         if field == "Density":
             xlabel = "Ambient Gas Density [ log cm$^{-3}$ ]"
-            xlim = [1, 7] if not supernovae else [-6, 5]
+            xlim = [1, 8] if not supernovae else [-6, 8]
         if field == "Temperature":
             xlabel = "Ambient Gas Temperature [ log K ]"
-            xlim = [1, 4.5] if not supernovae else [1, 9]
+            xlim = [1, 5.5] if not supernovae else [1, 9.5]
         if field == "Metallicity":
             xlabel = "Ambient Gas Metallicity [ log Z/Z$_{\\odot}$ ]"
-            xlim = [-4.1, 0.5] if not supernovae else [-4.1, 2]
+            xlim = [-5.1, 1.0] if not supernovae else [-5.1, 2]
 
         ax.set_xlabel(xlabel)
         if supernovae:
@@ -1308,7 +1487,9 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
                 vals = np.log10(dens)
 
             if field == "Temperature":
-                vals = np.log10(data["Temperature"])
+                temp = data["Temperature"]
+                temp[temp <= 0] = temp[temp > 0].min()  # zeros rarely occur
+                vals = np.log10(temp)
 
             if field == "Metallicity":
                 # unit conversions: solar
@@ -1321,17 +1502,23 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
             for j, z_bin in enumerate(z_bins):
                 w = np.where((z >= z_bin[0]) & (z < z_bin[1]))[0]
 
+                if len(w) == 0:
+                    continue
+
                 # plot hist
-                label = f"{sim.simName}" if j == 0 else ""
+                label = f"h{sim.hInd}" if j == 0 else ""  # sim.simName
 
                 c = colors[i % len(colors)]
-                ax.hist(vals[w], bins=40, histtype="step", linestyle=linestyles[j], color=c, label=label)
+
+                # use numpy for histogram
+                hist, bins = np.histogram(vals[w], bins=40)
+                ax.step(bins[:-1], hist, where="post", color=c, linestyle=linestyles[j], label=label)
 
         # second legend
         if split_z:
             labels = [f"{z_bin[0]} < z < {z_bin[1]}" for z_bin in z_bins]
             handles = [
-                plt.Line2D((0, 0), (0, 0), ls=linestyles[i], color="black", label=label) for i in range(len(z_bins))
+                plt.Line2D([0], [0], ls=linestyles[i], color="black", label=labels[i]) for i in range(len(z_bins))
             ]
             legend2 = ax.legend(handles, labels, loc="upper left")
             ax.add_artist(legend2)
@@ -1426,6 +1613,8 @@ def select_ics():
     rng = np.random.default_rng(42424242)
 
     massbins = [[8.0, 8.1], [8.5, 8.6], [9.0, 9.1], [9.5, 9.6], [10.0, 10.1], [10.5, 10.6], [11.0, 11.1]]
+    # massbins = [[8.1, 8.2], [8.2, 8.3], [8.3, 8.4]]
+
     mstar_tol = 0.2
 
     for massbin in massbins:
@@ -1454,57 +1643,53 @@ def select_ics():
         print(" haloIDs: ", halo_ids[0:5])
 
 
+def run_table_latex():
+    """Helper to generate LaTeX tables of simulation parameters."""
+    # list of sims to include
+    variants = ["ST15"]
+    res = [14, 15, 16]
+    hInds = [1958, 5072, 15581, 23908, 31619, 73172, 219612, 311384, 446076, 539722, 844537]
+    redshift = 5.5
+
+    sims = _get_existing_sims(variants, res, hInds, redshift, all=True, single=True)
+
+    for sim in sims:
+        sfr_100myr = sim.subhalos("sfr_100myr")
+        z_stars_masswt = logZeroNaN(sim.subhalos("z_stars_masswt"))  # no radial restriction
+        z_gas_sfrwt = logZeroNaN(sim.subhalos("z_gas_sfrwt"))  # no radial restriction
+        sub2 = sim.halo(1)["GroupFirstSub"]
+        s = f"{sim.simName:<16} z={sim.redshift:.2f} "
+        s += f"SFR: {sfr_100myr[0]:.2f}, {sfr_100myr[sub2]:.2f} "
+        s += f"Z*: {z_stars_masswt[0]:.2f}, {z_stars_masswt[sub2]:.2f} "
+        s += f"Zgas: {z_gas_sfrwt[0]:.2f}, {z_gas_sfrwt[sub2]:.2f}"
+        print(s)
+
+
 # -------------------------------------------------------------------------------------------------
 
 
 def paperPlots(a=False):
     """Plots for MCST intro paper. (if a == True, make all figures)."""
     # list of sims to include
-    variants = ["ST15"]  # ['ST14','ST15'] #,'ST15c','ST15m','ST15s']
-    res = [16]  # , 15, 16]  # [14,15,16]
-    # hInds: [1958,5072,15581,23908,31619,73172,219612,311384,844537]
-    hInds = [219612]  # , 311384, 844537]
+    variants = ["ST15"]  # ['ST15c','ST15m','ST15s']
+    res = [14, 15, 16]
+    hInds = [1958, 5072, 15581, 23908, 31619, 73172, 219612, 311384, 446076, 539722, 844537]
+    # hInds = [31619, 73172]
     redshift = 5.5
 
     # if (all == False), only dz < 0.1 matches
     # if (single == True), only the highest available res of each halo
-    sims = _get_existing_sims(variants, res, hInds, redshift, all=True, single=False)
+    sims = _get_existing_sims(variants, res, hInds, redshift, all=False, single=True)
 
-    # contamination diagnostic printout and SMBH printout (info only)
-    if 0:
-        for sim in sims:
-            # subIDs = _zoomSubhaloIDsToPlot(sim)
-            # for subID in subIDs:
-            #    subhalo = sim.subhalo(subID)
-            #    s = f' h[{subhalo["SubhaloGrNr"]}] sub[{subID:4d}] '
-            #    s += f'Re = {sim.units.codeLengthToPc(subhalo["SubhaloHalfmassRadType"][4]):.2f} pc, '
-            #    s += f'M_BH = {sim.units.codeMassToLogMsun(subhalo["SubhaloBHMass"])[0]:.2f}'
-            #    print(s)
-
-            ##sim.setSnap(sim.validSnapList()[-1]) # careful
-            bhs = sim.bhs(
-                [
-                    "BH_Mass",
-                    "BH_Hsml",
-                    "BH_Ngb",
-                    "Masses",
-                    "BH_CumEgyInjection_QM",
-                    "BH_CumMassGrowth_QM",
-                    "BH_MPB_CumEgyHigh",
-                    "BH_Progs",
-                ]
-            )
-            for i in range(bhs["count"]):
-                s = f"{str(sim):<24} BH {i}:"
-                s += f"BH_Mass = {sim.units.codeMassToLogMsun(bhs['BH_Mass'][i])[0]:.3f}, "
-                s += f"Mass = {sim.units.codeMassToLogMsun(bhs['Masses'][i])[0]:.3f}, "
-                s += f"CumEgy = {sim.units.codeEnergyToErg(bhs['BH_CumEgyInjection_QM'][i]):.2e}, "
-                s += f"CumMass = {sim.units.codeMassToLogMsun(bhs['BH_CumMassGrowth_QM'][i])[0]:.2f}, "
-                s += f"CumEgy_MPB = {sim.units.codeEnergyToErg(bhs['BH_MPB_CumEgyHigh'][i]):.2e}, "
-                s += f"BH_Hsml = {sim.units.codeLengthToPc(bhs['BH_Hsml'][i]):.3f} pc, "
-                s += f"BH_Ngb = {bhs['BH_Ngb'][i]}, "
-                s += f"NumProgs = {bhs['BH_Progs'][i]}"
-                print(s)
+    # contamination diagnostic printout (info only)
+    for sim in []:  # sims:
+        subIDs = _zoomSubhaloIDsToPlot(sim)
+        for subID in subIDs:
+            subhalo = sim.subhalo(subID)
+            s = f" h[{subhalo['SubhaloGrNr']}] sub[{subID:4d}] "
+            s += f"Re = {sim.units.codeLengthToPc(subhalo['SubhaloHalfmassRadType'][4]):.2f} pc, "
+            s += f"M_BH = {sim.units.codeMassToLogMsun(subhalo['SubhaloBHMass'])[0]:.2f}"
+            print(s)
 
     # ------------
 
@@ -1515,7 +1700,7 @@ def paperPlots(a=False):
         grackle_equil()
 
     # fig 2: simulation comparison meta-plot
-    if 1:
+    if 0:
         simHighZComparison()
 
     # fig 3: composite vis (i) parent box dm, (ii) halo-scale gas, (iii) galaxy-scale gas+stars
@@ -1545,75 +1730,75 @@ def paperPlots(a=False):
 
     # fig 6a: sfr vs mstar relation
     if 0 or a:
-        for yQuant in ["sfr_100myr", "sfr_10myr"]:
-            sfr_vs_mstar(sims, yQuant=yQuant)
+        sfr_vs_mstar(sims, yQuant="sfr_100myr")
+        # sfr_vs_mstar(sims, yQuant="sfr_10myr")
 
-    # fig 6b: sfr burstyness (10/100 myr ratios) vs redshift
-    if 0 or a:
-        xQuant = "mstar2_log"
-        yQuant = "sfr_10_100_ratio"
-        subhalos_evo.scatter2d(
-            sims,
-            xQuant=xQuant,
-            yQuant=yQuant,
-            xlim=[4.7, 9.2],
-            ylim=[-1.0, 2.0],
-            sizefac=0.8,
-            f_selection=_zoomSubhaloIDsToPlot,
-        )
-
-    # fig 6c: star formation history (using stellar histo)
+    # fig 6b: star formation history (using stellar histo) (all halos in one panel)
     if 0 or a:
         quant = "sfr2"
+        opts = {"xlim": [12.5, 5.5], "ylim": [-5.5, 0.5], "sizefac": [1.3, 0.7], "legend": "simple"}
 
-        opts = {"xlim": [12.1, 5.5], "ylim": [-5.5, 0.5], "sizefac": 0.8, "f_selection": _zoomSubhaloIDsToPlot}
+        subhalos_evo.tracks1d(sims, quant, sfh_lin=False, sfh_treebased=False, parents=False, **opts)
 
-        subhalos_evo.tracks1d(sims, quant, sfh_lin=False, sfh_treebased=False, **opts)
+    # fig 6b: star formation history (using stellar histo) (one plot per halo, i.e. gallery of small panels)
+    if 0 or a:
+        quant = "sfr2"
+        opts = {"xlim": [12.5, 5.5], "ylim": [-5.5, 0.5], "sizefac": 0.6, "legend": "simple"}
+        # opts["f_selection"] = _zoomSubhaloIDsToPlot  # plot additional (uncontamined) galaxies as faint lines
 
-        # (one plot per halo) todo: gallery of lots of small panels?
-        # for hInd in hInds:
-        #    sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
-        #    subhalos_evo.tracks1d(sims_loc, quant, sfh_lin=False, sfh_treebased=False, **opts)
+        for i, sim in enumerate(sims):
+            opts["color"] = colors[i]
+            subhalos_evo.tracks1d([sim], quant, sfh_lin=False, sfh_treebased=False, parents=False, **opts)
 
-    # fig 7a: smhm relation
+    # fig 7: sfr burstyness (10/100 myr ratios) vs redshift
+    if 0 or a:
+        sfr_10_100_ratio(sims)
+
+    # fig 8a: smhm relation
     if 0 or a:
         smhm_relation(sims)
 
-    # fig 7b: stellar mass vs redshift evo (using stellar histo)
+    # fig 8b: stellar mass vs redshift evo (using stellar histo)
     if 0 or a:
         quant = "mstar2_log"
-        xlim = [12.1, 5.5]
-        ylim = [3.8, 8.0]
+        xlim = [12.5, 5.5]
+        ylim = [4.0, 9.0]
 
-        opts = {"xlim": xlim, "ylim": ylim, "sizefac": 0.8, "f_selection": _zoomSubhaloIDsToPlot}
+        opts = {
+            "xlim": xlim,
+            "ylim": ylim,
+            "sizefac": 0.8,
+            "legend": "simple",
+            "legend_locs": ["lower right", "upper left"],
+            "legend_ncols": [1, 4],
+            "f_selection": _zoomSubhaloIDsToPlot,
+        }
 
-        subhalos_evo.tracks1d(sims, quant, sfh_treebased=False, plot_parent=False, **opts)
+        subhalos_evo.tracks1d(sims, quant, sfh_treebased=False, parents=False, **opts)
         # subhalos_evo.tracks1d(sims, quant='mgas2_log', **opts)
 
-        # for hInd in hInds:
-        #    sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
-        #    subhalos_evo.tracks1d(sims_loc, quant, sfh_treebased=False, **opts)
-
-    # fig 7c: SF and stellar feedback
+    # fig 8c: density, temperature, and metallicity PDFs at star formation and supernovae sites
     if 0 or a:
         split_z = True
         starformation_diagnostics(sims, split_z=split_z, sizefac=0.8)
         starformation_diagnostics(sims, supernovae=True, split_z=split_z, sizefac=0.8)
 
-    # fig 8: phase space diagrams (one per run)
+    # fig 9: phase space diagrams (show one halo)
     if 0 or a:
+        sims = [simParams("structures", hInd=219612, res=16, variant="ST15", snap=375)]
         for sim in sims:
-            phase_diagram(sim)
+            phase_diagram(sim)  # mass
+            phase_diagram(sim, cQuant="Z_solar")
+            phase_diagram(sim, cQuant="vrad")
+            phase_diagram(sim, cQuant="rad_rvir")
 
-    # fig 9a - stellar metallicity
+    # fig 10a - stellar metallicity
     if 0 or a:
         stellar_mzr(sims)
 
-    # fig 9b - metallicity vs time evolution
+    # fig 10b - metallicity vs time evolution
     if 0 or a:
         opts = {"xlim": [14.1, 5.5], "ylim": [-4.1, 0.5], "sizefac": 0.8, "f_selection": _zoomSubhaloIDsToPlot}
-
-        # todo: https://arxiv.org/abs/2512.12983
 
         subhalos_evo.tracks1d(sims, quant="Z_gas", **opts)  # cat/tree
         subhalos_evo.tracks1d(sims, quant="Z_gas_sfrwt", **opts)  # cat/tree
@@ -1628,31 +1813,44 @@ def paperPlots(a=False):
         #    subhalos_evo.tracks1d(sims_loc, 'Z_gas_sfrwt', **opts)
         #    subhalos_evo.tracks1d(sims_loc, 'Z_stars_masswt', **opts)
 
-    # fig 9c - gas metallicity
+    # fig 10c - gas metallicity
     if 0 or a:
+        # todo: https://arxiv.org/abs/2512.12983
+        # todo: https://arxiv.org/abs/2602.13007
+
         gas_mzr(sims)
 
-    # fig 10a - stellar sizes
+    # fig 11a - stellar sizes
     if 0 or a:
         sizes_vs_mstar(sims)
 
-    # fig 10b - stellar size evo
+    # fig 11b - stellar size evo
     if 0 or a:
         opts = {"xlim": [14.1, 5.5], "ylim": [-3.5, 0.0], "sizefac": 0.8, "f_selection": _zoomSubhaloIDsToPlot}
 
         subhalos_evo.tracks1d(sims, quant="size_stars_log", **opts)
         # subhalos_evo.tracks1d(sims, quant='rhalf_stars_fof', **opts)
 
-    # fig 10c - gas sizes
+    # fig 11c - gas sizes
     if 0 or a:
         size_halpha_vs_mstar(sims)
 
-    # fig 11b - smbh vs mhalo and mstar relations
+    # fig 12: single large galaxy image
+    if 0:
+        sim = simParams("structures", hInd=23908, res=14, variant="ST14", redshift=5.5, haloInd=0)
+        vis_single_galaxy(sim, haloID=0)
+        # vis_single_galaxy(sim, haloID=0, noSats=True)
+
+        # vis_single_halo(sim, haloID=0)
+        # vis_gallery_manyfields(sim, haloID=0)
+
+    # fig 13a - smbh vs mhalo and mstar relations
     if 0 or a:
+        # little growth: discussion compare to Partmann+24 and Petersson+25 (similar, no growth, blamed on SNe)
         mbh_vs_mhalo(sims)
         mbh_vs_mstar(sims)
 
-    # fig 11c - black hole time evolution
+    # fig 13b - black hole time evolution
     if 0 or a:
         for sim in sims:
             blackhole_properties_vs_time(sim)
@@ -1739,23 +1937,6 @@ def paperPlots(a=False):
 
     # ------------
 
-    # vis: single image,z gas and stars
-    if 0 or a:
-        for sim in sims:
-            # vis_single_galaxy(sim, haloID=0)
-            # vis_single_galaxy(sim, haloID=0, noSats=True)
-            sim.setSnap(0)
-            vis_single_halo(sim, haloID=0)
-            # vis_gallery_manyfields(sim, haloID=0)
-
-    # vis: full high-res region
-    if 0 or a:
-        for sim in sims:
-            vis_highres_region(sim, partType="gas")
-            vis_highres_region(sim, partType="dm")
-
-    # ------------
-
     # star cluster histogram test
     if 0:
         # start plot
@@ -1791,9 +1972,9 @@ def paperPlots(a=False):
 
         subhalos_evo.tracks1d(sims, "mstar2", ylim=[3.5, 7.5], sfh_treebased=True, **opts)
         subhalos_evo.tracks1d(sims, "mstar_fof", ylim=[3.5, 7.5], sfh_treebased=True, **opts)
-        subhalos_evo.tracks1d(sims, "mhalo", ylim=[6.0, 11.0], plot_parent=False, **opts)
-        subhalos_evo.tracks1d(sims, "rvir", ylim=[0.5, 2.0], plot_parent=False, **opts)
-        # subhalos_evo.tracks1d(sims, 're_rvir_ratio', ylim=[-3.5,-0.5], plot_parent=False, **opts)
+        subhalos_evo.tracks1d(sims, "mhalo", ylim=[6.0, 11.0], parents=False, **opts)
+        subhalos_evo.tracks1d(sims, "rvir", ylim=[0.5, 2.0], parents=False, **opts)
+        # subhalos_evo.tracks1d(sims, 're_rvir_ratio', ylim=[-3.5,-0.5], parents=False, **opts)
 
     # diagnostic: CPU times
     if 0 or a:
@@ -1813,36 +1994,33 @@ def paperPlots(a=False):
     if 0:
         diagnostic_sfr_jeans_mass(sims, haloID=0)
 
-    # ------------
 
-    # movie: phase space diagram
-    if 0:
-        sim = sims[0].copy()
-        for snap in sim.validSnapList():
-            sim.setSnap(snap)
-            phase_diagram(sim)
+def makeMovies():
+    """Make movie frames."""
+    redshift = 5.5
 
-    # movie: galaxy-scale gas + stars vis (tree mpb manual search)
-    # if 0:
-    #    for sim in sims:
-    #        vis_movie(sim, haloID=0)
+    sim = simParams(run="structures", res=14, hInd=15581, variant="ST15", redshift=redshift)
+
+    # # movie: galaxy-scale gas + stars vis (tree mpb manual search)
+    # # vis_movie(sim, haloID=0)
 
     # movie: galaxy-scale gas + stars vis (final tree mpb smoothed)
-    if 0:
-        vis_movie_mpbsm(sims, conf=1)
+    vis_movie_mpbsm([sim], conf=1)
 
     # movie: halo-scale many fields (final tree mpb smoothed)
-    if 0:
-        vis_single_halo(sims[0], movie=True)
+    vis_single_halo(sim, movie=True)
 
-    # movie: galaxy-scale many fields (final tree mpb smoothed)
-    if 0:
-        vis_single_halo(sims[0], movie=True, galscale=True)
+    # # movie: galaxy-scale many fields (final tree mpb smoothed)
+    # # vis_single_halo(sim, movie=True, galscale=True)
+
+    # movie: phase space diagram
+    for snap in sim.validSnapList():
+        sim.setSnap(snap)
+        phase_diagram(sim, ext="png")
+    sim.setRedshift(redshift)
 
     # movie: high-res region
-    if 0 or a:
-        sim = sims[0].copy()
-        for snap in sim.validSnapList():
-            sim.setSnap(snap)
-            vis_highres_region(sim, partType="gas")
-            # vis_highres_region(sim, partType='dm')
+    for snap in sim.validSnapList():
+        sim.setSnap(snap)
+        vis_highres_region(sim, partType="gas")
+        # vis_highres_region(sim, partType='dm')
