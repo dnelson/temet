@@ -1,0 +1,7 @@
+# file_type = SHMR as log(M_med / Mh_min) function of log(Mh_min); zmin = 8.0; zmax = 10.5; Rows = {'logMstarMh_lower_err', 'logMh', 'logMh_upper_err', 'logMstarMh_upper_err', 'logMh_lower_err', 'logMstarMh'}; N_SMbins = 2; logSM_bins = [8.7, 9.0, 12.0, nan, nan, nan, nan, nan]; Area = COSMOS-Web_FullSurvey
+1.082971114169673044e+01 1.093323491066652942e+01
+-1.889161141696730439e+00 -1.673394910666528901e+00
+2.098752938256636114e-01 2.034879376556248398e-01
+1.991828495408256294e-01 2.127895901333176909e-01
+1.022280313019211934e-01 8.313180152821250668e-02
+7.795344108287409479e-02 1.038410579833043967e-01

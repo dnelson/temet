@@ -115,7 +115,7 @@ def behrooziObsSFRD():
     return r
 
 
-def behrooziUM(sim):
+def behrooziUM(sim, redshift=None):
     """Load from data files: Behroozi+ (2019) Universe Machine DR1. Stellar mass / halo mass relation."""
     basePath = dataBasePath + "behroozi/umachine-dr1/"
     files = glob.glob(basePath + "smhm*.dat")
@@ -123,18 +123,20 @@ def behrooziUM(sim):
     scalefacs = np.array([float(file.split("smhm_a")[1].replace(".dat", "")) for file in files])
     redshifts = 1 / scalefacs - 1
 
-    z_closest, fileind_closest = closest(redshifts, sim.redshift)
+    if redshift is None:
+        redshift = sim.redshift
+    z_closest, fileind_closest = closest(redshifts, redshift)
     file = files[fileind_closest]
 
-    if np.abs(sim.redshift - z_closest) > 0.1:
-        print("WARNING: Selected redshift [%f] for requested [%f] UM DR1." % (z_closest, sim.redshift))
+    if np.abs(redshift - z_closest) > 0.1:
+        print("WARNING: Selected redshift [%f] for requested [%f] UM DR1." % (z_closest, redshift))
 
     # columns: halo mass [log msun], median M*/Mh ratio [log], err_up, err_down, ...
     # note: this is for 'all', many other columns include: cen, cen_sf, cen_q, sat, all_sf, all_q, and 'true' values
     data = np.loadtxt(file)
 
     r = {
-        "label": "Behroozi+ (2019)",
+        "label": "Behroozi+19 UM",
         "redshift": z_closest,
         "haloMass": data[:, 0],  # log msun
         "smhmRatio": data[:, 1],  # log ratio
@@ -3840,6 +3842,145 @@ def nakajima23():
     w = np.where(["<" in m for m in r["sfr"]])[0]
     r["sfr_upperlim"][w] = 1
     r["sfr"] = np.array([m.replace("<", "") for m in r["sfr"]], dtype="float32")
+
+    return r
+
+
+def asada26():
+    """Load observational data points from Asada+26 (JWST GLIMPSE)."""
+    # https://arxiv.org/abs/2601.20045 (Table 1)
+
+    mstar = [6.79, 6.80, 7.0, 6.84, 6.4, 6.34, 6.57, 6.95, 6.51, 6.47, 6.82, 6.16, 6.28, 5.62, 6.47, 6.76]
+    mstar_err = 0.1  # rough average
+    sfr_ha = [-0.31, -0.33, -0.22, -0.04, -0.27, -0.68, -0.92, -0.78, -1.03, -0.98, -0.45, 0.08, 0.02,
+              -1.00, -2.02, -0.33]  # (h-alpha based i.e. 10 Myr tracer) # fmt: skip
+    sfr_err = 0.07  # rough average
+    Z = [7.30, 7.38, 7.71, 7.17, 6.94, 7.10, 6.98, 7.31, 7.49, 7.21, 7.11, 7.00, 8.09, 7.15, 7.22, 7.54]
+    Z_err = 0.2  # rough average
+
+    r = {
+        "mstar": np.array(mstar),  # [log Msun]
+        "mstar_err": mstar_err,
+        "sfr_ha": np.array(sfr_ha),  # [log Msun/yr]
+        "sfr_err": sfr_err,
+        "Z": np.array(Z),  # [12 + log(O/H)]
+        "Z_err": Z_err,
+        "label": "Asada+26 GLIMPSE",
+    }
+
+    return r
+
+
+def chemerynska24():
+    """Load observational data points from Chemerynska+24 (UNCOVER) z=6-8 (A2744 lensing)."""
+    # https://arxiv.org/abs/2407.17110 (Table 1)
+
+    mstar = [5.88, 6.61, 6.30, 6.54, 7.12, 6.57, 6.83, 6.73]
+    mstar_err1 = [0.13, 0.07, 0.03, 0.14, 0.07, 0.10, 0.25, 0.15]
+    mstar_err2 = [0.08, 0.06, 0.03, 0.19, 0.08, 0.06, 0.20, 0.08]
+    sfr_ha = np.array([0.33, 0.92, 1.32, 0.49, 0.78, 0.85, 1.00, 0.73])
+    sfr_ha_err1 = [0.14, 0.08, 0.03, 0.12, 0.08, 0.11, 0.34, 0.17]
+    sfr_ha_err2 = [0.07, 0.06, 0.03, 0.15, 0.07, 0.05, 0.15, 0.07]
+    sfr_uv = np.array([0.01, 0.04, 0.02, 0.04, 0.16, 0.04, 0.07, 0.05])
+    sfr_uv_err1 = [0.14, 0.08, 0.03, 0.12, 0.08, 0.11, 0.34, 0.17]
+    sfr_uv_err2 = [0.07, 0.06, 0.03, 0.15, 0.07, 0.05, 0.15, 0.07]
+    Z = [6.95, 7.01, 6.84, 6.70, 6.97, 7.19, 7.46, 6.99]
+    Z_err = [0.15, 0.19, 0.06, 0.15, 0.18, 0.20, 0.32, 0.18]
+    redshift = [7.70, 6.87, 6.00, 6.88, 6.38, 6.72, 6.23, 6.75]
+
+    r = {
+        "mstar": np.array(mstar),  # [log Msun]
+        "mstar_err1": np.array(mstar_err1),
+        "mstar_err2": np.array(mstar_err2),
+        "sfr_ha": np.log10(sfr_ha),  # [log Msun/yr]
+        "sfr_ha_err1": np.log10(sfr_ha + sfr_ha_err1) - np.log10(sfr_ha),  # dex (up)
+        "sfr_ha_err2": np.log10(sfr_ha) - np.log10(sfr_ha - sfr_ha_err2),  # dex (down)
+        "sfr_uv": np.log10(sfr_uv),  # [log Msun/yr]
+        "sfr_uv_err1": np.log10(sfr_uv + sfr_uv_err1) - np.log10(sfr_uv),  # dex (up)
+        "sfr_uv_err2": np.log10(sfr_uv) - np.log10(sfr_uv - sfr_uv_err2),  # dex (down)
+        "Z": np.array(Z),  # [12 + log(O/H)]
+        "Z_err": np.array(Z_err),
+        "redshift": np.array(redshift),
+        "label": "Chemerynska+24 UNCOVER",
+    }
+
+    # note: sfr_uv_err2 has negative 1 sigma fast (become nan, not drawn) -> make visible
+    w = np.where(np.isnan(r["sfr_uv_err2"]))
+    r["sfr_uv_err2"][w] = 0.5  # 0.5 dex (arbitrary, large)
+
+    return r
+
+
+def atek22():
+    """Load observational data points from Atek+22 (3D-HST) on SFR_Halpha/SFR_UV ratios."""
+    # https://arxiv.org/abs/2202.04081 (Figure 8)
+    path = dataBasePath + "atek/atek22_fig8.txt"
+
+    data = np.genfromtxt(path, comments="#", delimiter=",", dtype=None, encoding=None)
+
+    r = {
+        "mstar": np.array([d[0] for d in data]),
+        "sfr_Ha_UV_ratio": np.array([d[1] for d in data]),
+        "label": "Atek+22 3D-HST",
+    }
+
+    return r
+
+
+def paquereau25(redshift=5.5, zStr=None, mstar="Mth"):
+    """Load observational data points from Atek+22 (3D-HST) on SFR_Halpha/SFR_UV ratios."""
+    # https://github.com/LouisePaquereau/GalClustering_COSMOS-Web_Paquereau2025/
+    # https://arxiv.org/abs/2202.04081 (Figure 8)
+    zStrs = [
+        "0.1-0.6",
+        "0.6-1.0",
+        "1.0-1.5",
+        "1.5-2.0",
+        "2.0-2.5",
+        "2.5-3.0",
+        "3.0-4.0",
+        "4.0-5.0",
+        "5.0-6.0",
+        "6.0-8.0",
+        "8.0-10.5",
+        "10.5-14.0",
+    ]
+    zVals = np.array([np.array(zStr.split("-"), dtype="float32").mean() for zStr in zStrs], dtype="float32")
+
+    if zStr is None:
+        # find closest match from available datasets
+        zStr = zStrs[np.argmin(np.abs(zVals - redshift))]
+
+    # two versions: M_{*,th} or M_{*,med} where the latter is more comparable to standard AM
+    if mstar == "Mth":
+        path = dataBasePath + "paquereau/shmr_zbin%s_Mth-Mhmin.dat" % zStr
+    elif mstar == "Mmed":
+        path = dataBasePath + "paquereau/shmr_zbin%s_Mmed-Mhmin.dat" % zStr
+
+    with open(path, "r") as f:
+        lines = f.readlines()
+
+    # first comment line has mstar bins
+    assert lines[0].startswith("#")
+    mstar = np.array(lines[0].split(";")[5].split("[")[1].split("]")[0].split(","), dtype="float32")
+
+    # ordering of rows in header metadata is wrong
+    logMh = np.array(lines[1].split(), dtype="float32")
+    logMstarMh = np.array(lines[2].split(), dtype="float32")
+    logMh_upper_err = np.array(lines[3].split(), dtype="float32")  # not clear (order might be wrong!)
+    logMstarMh_upper_err = np.array(lines[4].split(), dtype="float32")  # not clear
+    logMh_lower_err = np.array(lines[5].split(), dtype="float32")  # not clear
+    logMstarMh_lower_err = np.array(lines[6].split(), dtype="float32")  # not clear
+
+    r = {
+        "mstar": np.log10(10.0**logMstarMh * 10.0**logMh),  # log msun
+        "mhalo": logMh,  # log msun
+        "mstar_err1": logMstarMh_upper_err,
+        "mstar_err2": logMstarMh_lower_err,
+        "mhalo_err1": logMh_upper_err,
+        "mhalo_err2": logMh_lower_err,
+        "label": "Paquereau+25 COSMOS-Web (z=%s)" % zStr.replace(".0", ""),
+    }
 
     return r
 
