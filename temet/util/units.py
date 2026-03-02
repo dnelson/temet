@@ -53,7 +53,6 @@ class units:
     mu = 0.6  # for ionized primordial (e.g. hot halo gas)
     Gravity = 6.6738e-8  # G in cgs, cm**3/g/s**2 (== GRAVITY)
     H0_h1_s = 3.24078e-18  # H0 (with h=1) in [1/s] (=H0_kmsMpc/HubbleParam/kpc_in_km) (=HUBBLE in Arepo)
-    Z_solar = 0.0127  # solar metallicity = (massZ/massTot) in the sun (TNG/MCST)
     L_sun = 3.839e33  # solar luminosity [erg/s]
     Msun_in_g = 1.98892e33  # solar mass [g]
     c_cgs = 2.9979e10  # speed of light in [cm/s]
@@ -83,6 +82,8 @@ class units:
     winds_e = 3.6  # winds: energy factor, TNG fiducial model (1.09 in Illustris)
     winds_kappa = 7.4  # winds: velocity factor, TNG fiducial model (3.7 in Illustris)
     winds_vmin = 350.0  # winds: injection velocity floor, TNG fiducial model (0.0 in Illustris)
+
+    Z_solar = 0.0127  # solar metallicity = (massZ/massTot) in the sun (TNG value)
 
     # SFR/SH03 model parameters
     PhysDensThresh = 7.54654e-4  # SF threshold density (from CritOverDensity, code units, comoving) = 0.232 h^2/cm^3
@@ -213,6 +214,11 @@ class units:
         self.kmS_in_kpcGyr = self.s_in_Myr / self.kpc_in_km * 1e3  # Myr->Gyr
         self.kpc_in_cm = self.kpc_in_km * 1e5
         self.msunKpc3_in_gCm3 = self.Msun_in_g / (self.kpc_in_cm) ** 3.0
+
+        # model dependent values
+        if self._sP is not None:
+            if 'structures' in self._sP.run:
+                self.Z_solar = 0.01388 # Asplund+21 (Table 2)
 
         # derived constants (in code units without little h factors)
         self.H0 = self._sP.HubbleParam * 100 * 1e5 / (self.Mpc_in_cm)
