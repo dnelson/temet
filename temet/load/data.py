@@ -3777,11 +3777,21 @@ def chiu18():
     return r
 
 
-def curti23():
+def curti23(sim):
     """Load observational data points from Curti+2023 JWST JADES galaxy properties."""
     path = dataBasePath + "curti/curti23_b1.txt"
 
     data = np.genfromtxt(path, comments="#", delimiter="&", dtype=None, encoding=None)
+
+    logOHp12 = np.array([d[12] for d in data])  # 12 + log(O/H)
+    logOHp12_err1 = np.array([d[13] for d in data])  # 12 + log(O/H)
+    logOHp12_err2 = -np.array([d[14] for d in data])  # 12 + log(O/H) (negative -> positive sign)
+
+    OH_ratio = 10.0 ** (logOHp12 - logOHp12_solar)
+    # OH_ratio = 10.0 ** (logOHp12 - 12.0) / 10.0 ** (logOHp12_solar - 12.0) # equivalent
+
+    OH_ratio_err1 = 10.0 ** (logOHp12 + logOHp12_err1 - logOHp12_solar) - OH_ratio
+    OH_ratio_err2 = OH_ratio - 10.0 ** (logOHp12 - logOHp12_err2 - logOHp12_solar)
 
     r = {
         "nirspec_id": [d[0] for d in data],
@@ -3794,8 +3804,11 @@ def curti23():
         "sfr_a_err2": np.array([d[9] for d in data]),  # msun/yr (down) (negative sign, leave negative)
         "sfr_b": np.array([d[10] for d in data]),  # msun/yr (H-alpha based)
         "sfr_b_err": np.array([d[11] for d in data]),  # msun/yr
-        "metallicity": np.array([d[12] for d in data]),  # 12 + log(O/H)
-        "label": "Curti+23 JADES",
+        "metallicity": logOHp12,  # 12 + log(O/H)
+        "Z": OH_ratio,  # linear Z/Zsun
+        "Z_err1": OH_ratio_err1,  # linear Z/Zsun
+        "Z_err2": OH_ratio_err2,  # linear Z/Zsun
+        "label": "Curti+24 JADES",
     }
 
     return r
@@ -3863,8 +3876,8 @@ def asada26():
         "mstar_err": mstar_err,
         "sfr_ha": np.array(sfr_ha),  # [log Msun/yr]
         "sfr_err": sfr_err,
-        "Z": np.array(Z),  # [12 + log(O/H)]
-        "Z_err": Z_err,
+        "metallicity": np.array(Z),  # [12 + log(O/H)]
+        "metallicity_err": Z_err,
         "label": "Asada+26 GLIMPSE",
     }
 
@@ -3898,8 +3911,8 @@ def chemerynska24():
         "sfr_uv": np.log10(sfr_uv),  # [log Msun/yr]
         "sfr_uv_err1": np.log10(sfr_uv + sfr_uv_err1) - np.log10(sfr_uv),  # dex (up)
         "sfr_uv_err2": np.log10(sfr_uv) - np.log10(sfr_uv - sfr_uv_err2),  # dex (down)
-        "Z": np.array(Z),  # [12 + log(O/H)]
-        "Z_err": np.array(Z_err),
+        "metallicity": np.array(Z),  # [12 + log(O/H)]
+        "metallicity_err": np.array(Z_err),
         "redshift": np.array(redshift),
         "label": "Chemerynska+24 UNCOVER",
     }

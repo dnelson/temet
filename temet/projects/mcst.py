@@ -271,7 +271,7 @@ def sfr_vs_mstar(sims: list[simParams], yQuant: str) -> None:
         )
 
         # Curti+23 JWST JADES (z=3-10)
-        c23 = curti23()
+        c23 = curti23(sims[0])
         label = c23["label"]  # + r" $z\,\sim\,%.0f$" % sim_parent.redshift
 
         w = np.where(np.abs(c23["redshift"] - sim_parent.redshift < 1.0))  # e.g. z=3.5-4.5 for sim at z=4
@@ -600,6 +600,8 @@ def sizes_vs_mstar(sims):
             m24_mstar, m24_reff, yerr=m24_reff_err, fmt="D--", color="#555", alpha=0.5, label="Matharu+24 FRESCO (z=5)"
         )
 
+        # TODO: https://arxiv.org/abs/2602.22206 (Figure 8), also some discussion of clusters
+
     subhalos_evo.scatter2d(
         sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data, f_selection=_zoomSubhaloIDsToPlot
     )
@@ -632,15 +634,22 @@ def size_halpha_vs_mstar(sims):
 
 def gas_mzr(sims):
     """Diagnostic plot of gas-phase mass-metallicity relation (MZR)."""
+    from temet.load.data import asada26, chemerynska24, curti23, logOHp12_solar, nakajima23
+
     xQuant = "mstar2_log"
     yQuant = "Z_gas_sfrwt"
     ylim = [-2.6, 0.0]  # log pkpc
     xlim = [4.0, 9.0]  # log mstar
 
     def _draw_data(ax, sims):
-        # adjust from A09 (all curves from Stanton+24) to our Zsun
-        solar_asplund09 = 0.0142
-        fac = solar_asplund09 / sims[0].units.Z_solar
+        # change main y-axis label, and create second y-axis with 12 + log(O/H) units
+        ax.set_ylabel(r"Gas Metallicity $\rm{Z_{gas}}$ [ $\rm{Z_\odot}$ ]")
+
+        yy2 = np.array(ax.get_ylim()) + logOHp12_solar  # 12 + log(O/H)
+
+        ax_y2 = ax.twinx()
+        ax_y2.set_ylim(yy2)
+        ax_y2.set_ylabel(r"12 + $\log(\rm{O/H})$")
 
         # Stanton+ (2024) - NIRVANDELS z=3.5 (SB99)
         s24_mstar = [8.5, 9.5, 10.5]  # log mstar
@@ -650,42 +659,112 @@ def gas_mzr(sims):
         s24_z_c17 = [-0.58, -0.39, -0.21]  # alternative C17 calibration
         s24_z_s24 = [-0.59, -0.30, -0.01]  # alternative S24 calibration
 
+        # adjust from A09 (Stanton+24) to our Zsun
+        solar_asplund09 = 0.0142
+        fac = solar_asplund09 / sims[0].units.Z_solar
+
         s24_z_b18 = np.log10(10.0 ** np.array(s24_z_b18) * fac)
         s24_z_b18_low = np.log10(10.0 ** np.array(s24_z_b18_low) * fac)
         s24_z_b18_high = np.log10(10.0 ** np.array(s24_z_b18_high) * fac)
         s24_z_c17 = np.log10(10.0 ** np.array(s24_z_c17) * fac)
         s24_z_s24 = np.log10(10.0 ** np.array(s24_z_s24) * fac)
 
-        ax.plot(s24_mstar, s24_z_b18, "-", color="#555", alpha=1.0, label="Stanton+24 z=3.5 (B18)")
+        ax.plot(s24_mstar, s24_z_b18, "-", color="#888", alpha=0.8, label="Stanton+24 z~4 VANDELS")
         ax.fill_between(s24_mstar, s24_z_b18_low, s24_z_b18_high, color="#555", alpha=0.2)
-        ax.plot(s24_mstar, s24_z_c17, "-", color="#999", alpha=1.0, label="Stanton+24 (C17)")
-        ax.plot(s24_mstar, s24_z_s24, ":", color="#999", alpha=1.0, label="Stanton+24 (S24)")
+        # ax.plot(s24_mstar, s24_z_c17, "-", color="#999", alpha=1.0, label="Stanton+24 (C17)")
+        # ax.plot(s24_mstar, s24_z_s24, ":", color="#999", alpha=1.0, label="Stanton+24 (S24)")
 
-        # Sanders+21 z=3.3 (B18 calibration)
-        s21_mstar = [8.5, 9.5, 11.0]  # log mstar
-        s21_z = [-0.72, -0.42, 0.01]  # log Z/Zsun
-        s21_z = np.log10(10.0 ** np.array(s21_z) * fac)
+        # Li+23 z=3 (B18 calibration)
+        li23_mstar = [8.1, 9.0, 10.0]  # log mstar
+        li23_z = [-0.59, -0.45, -0.29]  # log Z/Zsun
+        li23_z = np.log10(10.0 ** np.array(li23_z) * fac)
 
-        ax.plot(s21_mstar, s21_z, "--", color="#999", alpha=1.0, label="Sanders+21 z=3.3 (B18)")
+        li23_mstar = [6.5, 7.5, 8.4, 9.9]
+        li23_12pOH = np.array([7.85, 8.00, 8.14, 8.38])
+        li23_12pOH_up = np.array([7.97, 8.07, 8.19, 8.48])
+        li23_12pOH_down = np.array([7.72, 7.92, 8.10, 8.29])
 
-        # Li+22 z=3 (B18 calibration)
-        li22_mstar = [8.1, 9.0, 10.0]  # log mstar
-        li22_z = [-0.59, -0.45, -0.29]  # log Z/Zsun
-        li22_z = np.log10(10.0 ** np.array(li22_z) * fac)
+        li23_z = li23_12pOH - logOHp12_solar
+        li23_z_up = li23_12pOH_up - logOHp12_solar
+        li23_z_down = li23_12pOH_down - logOHp12_solar
 
-        ax.plot(li22_mstar, li22_z, "-.", color="#999", alpha=1.0, label="Li+22 z=3.0 (B18)")
+        ax.fill_between(li23_mstar, li23_z_down, li23_z_up, color="#888", alpha=0.5)
+        ax.plot(li23_mstar, li23_z, "-.", color="#666", alpha=1.0, label="Li+23 z~3 NIRISS")
 
-        # TODO: z=5-6
-        # Cameron+26 JADES (https://arxiv.org/abs/2601.15964)
-        # Curti+23
-        # Kotiwale+25 (https://arxiv.org/abs/2510.19959)
-        # Lewis+25 (https://arxiv.org/abs/2512.03134)
-        # Asada+26 (z~6) GLIMPSE (https://arxiv.org/abs/2601.20045)
-        # Stanton+25 (https://arxiv.org/abs/2511.00705)
-        # Sanders+25 (https://arxiv.org/abs/2508.10099)
+        # Kotiwale+25 (https://arxiv.org/abs/2510.19959) (Table 2)
+        k25_label = "Kotiwale+25 z~6 EIGER/ALT"
+        k25_mstar = [7.36, 7.88, 8.13, 8.35, 8.64, 8.84, 9.21, 9.71]
+        k25_mstar_e1 = [0.29, 0.09, 0.08, 0.09, 0.08, 0.11, 0.18, 0.26]
+        k25_mstar_e2 = [0.26, 0.09, 0.09, 0.06, 0.08, 0.06, 0.19, 0.17]
+        k25_12pOH_A = [7.76, 7.75, 7.51, 7.83, 7.72, 7.72, 7.83, 7.66]  # "lower branch"
+        k25_12pOH_B = [8.19, 8.21, 8.54, 8.12, 8.25, 8.24, 8.11, 8.32]  # "upper branch"
 
-        # Nishigaki+25 (https://arxiv.org/abs/2512.12983)
+        k25_Z_A = np.array(k25_12pOH_A) - logOHp12_solar
+        k25_Z_B = np.array(k25_12pOH_B) - logOHp12_solar
+
+        xerr = [k25_mstar_e1, k25_mstar_e2]
+        ax.errorbar(k25_mstar, k25_Z_A, xerr=xerr, fmt="D", color="#555", alpha=0.7, label=k25_label)
+        ax.errorbar(k25_mstar, k25_Z_B, xerr=xerr, fmt="D", color="#555", alpha=0.9)
+
+        # Chemerynska+24 UNCOVER (z=6-8) https://arxiv.org/abs/2407.17110 (Table 1)
+        c24 = chemerynska24()
+
+        x = c24["mstar"]
+        y = c24["metallicity"] - logOHp12_solar
+        x_err = [c24["mstar_err1"], c24["mstar_err2"]]
+        y_err1 = (c24["metallicity"] + c24["metallicity_err"] - logOHp12_solar) - y
+        y_err2 = y - (c24["metallicity"] - c24["metallicity_err"] - logOHp12_solar)
+
+        ax.errorbar(x, y, xerr=x_err, yerr=[y_err2, y_err1], fmt="X", color="#555", alpha=0.6, label=c24["label"])
+
         # Arellano-Cordova+26 (https://arxiv.org/abs/2602.13007) (https://arxiv.org/abs/2412.10557)
+        a26_label = "Arellano-Cordova+26"
+        a26_mstar = [8.02, 8.05, 7.66, 7.70, 8.18, 9.30]
+        a26_mstar_err = [0.06, 0.17, 0.27, 0.24, 0.06, 0.13]
+        a26_12pOH = [7.99, 7.72, 7.50, 7.66, 7.42, 7.74]
+        a26_12pOH_err = [0.13, 0.03, 0.05, 0.07, 0.05, 0.22]
+
+        a26_y = np.array(a26_12pOH) - logOHp12_solar
+        ax.errorbar(
+            a26_mstar, a26_y, xerr=a26_mstar_err, yerr=a26_12pOH_err, fmt="8", color="#555", alpha=0.9, label=a26_label
+        )
+
+        # Nakajima+23 (z=4-10) JWST CEERS
+        n23 = nakajima23()
+        label = n23["label"]  # + r" $z\,\sim\,%.0f$" % sim_parent.redshift
+
+        w = np.where(np.abs(n23["redshift"] - sims[0].redshift < 2.0))  # e.g. z=3-5 for sim at z=4
+
+        n23_y = n23["metallicity"][w] - logOHp12_solar
+        ax.errorbar(n23["mstar"][w], n23_y, fmt="P", color="#555", alpha=0.3, label=label)
+
+        # Asada+26 (z~6) GLIMPSE (z=5.5-6.5)
+        a26 = asada26()
+
+        x = a26["mstar"]
+        y = a26["metallicity"] - logOHp12_solar
+        x_err = a26["mstar_err"]
+        y_err1 = (a26["metallicity"] + a26["metallicity_err"] - logOHp12_solar) - y
+        y_err2 = y - (a26["metallicity"] - a26["metallicity_err"] - logOHp12_solar)
+
+        ax.errorbar(x, y, xerr=x_err, yerr=[y_err2, y_err1], fmt="h", color="#555", alpha=0.9, label=a26["label"])
+
+        # Curti+23 JADES
+        c23 = curti23(sims[0])
+
+        w = np.where(np.abs(c23["redshift"] - sims[0].redshift < 1.0))  # e.g. z=4.5-6.6
+
+        x = c23["mstar"][w]
+        y = np.log10(c23["Z"][w])
+        xerr = [c23["mstar_err1"][w], c23["mstar_err2"][w]]
+        yerr = [np.log10(c23["Z_err1"][w] + c23["Z"][w]) - y, y - np.log10(c23["Z"][w] - c23["Z_err2"][w])]
+        ax.errorbar(x, y, xerr=xerr, yerr=yerr, fmt="s", color="#555", alpha=0.4, label=c23["label"])
+
+        # Cameron+26 JADES (https://arxiv.org/abs/2601.15964) - no Z vs M* (mention)
+        # Stanton+25 (https://arxiv.org/abs/2511.00705) - skip, z=2-8, but only M* > 8 (mention)
+        # Lewis+25 (https://arxiv.org/abs/2512.03134) - skip, only M* > 8 (mention)
+        # Sanders+25 (https://arxiv.org/abs/2508.10099) - skip (mention)
+        # Nishigaki+25 (https://arxiv.org/abs/2512.12983) - skip, mostly M* > 8 (mention)
 
     subhalos_evo.scatter2d(
         sims,
@@ -695,6 +774,7 @@ def gas_mzr(sims):
         ylim=ylim,
         parents=False,
         legend="simple",
+        legend_ncols=[1, 2],
         f_pre=_draw_data,
         f_selection=_zoomSubhaloIDsToPlot,
     )
@@ -1915,7 +1995,6 @@ def paperPlots(a=False):
 
     # fig 11a - stellar sizes
     if 0 or a:
-        # todo: https://arxiv.org/abs/2602.22206 (Figure 8), also some discussion of clusters
         sizes_vs_mstar(sims)
 
     # fig 11b - stellar size evo

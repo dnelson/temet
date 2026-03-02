@@ -1,4 +1,4 @@
-# Curti+2023 (https://arxiv.org/abs/2304.08516) Table B1
+# Curti+2024 (https://arxiv.org/abs/2304.08516) Table B1
 # NIRSpec ID & JADES ID & JADES ID & Redshift & log M*     & errup & errdown & SFR_a                 & errup & errdown & SFR_b [\Ha]           & err & 12 + log(O/H) & C & Metallicity & NC & AGN 
 #            & JADES-GS & JADES-GS &          & [M$_\odot] &       &         & [M$_{\odot yr$^{-1}}] &       &         & [M$_{\odot yr$^{-1}}] &     &               & * & diagnostics &    &     
 2923     & +53.15407 & -27.82094 & 3.015 & 7.39 & 0.05 & -0.05 & 0.28 & 0.02 & -0.02 & 0.23 & 0.02 & 7.44 & 0.16 & -0.13 & P & R3,R2,R,O32       & 1

@@ -208,25 +208,6 @@ class cloudyIon:
         # http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.ndimage.interpolation.map_coordinates.html
         # spline_filter()
 
-    def _metallicityOH12ToMassRatio(self, metal, element):
-        """Convert metallicity from number density ratio to mass ratio (unused).
-
-        Metallicity traditionally defined as a number density of oxygen relative to hydrogen, and is
-        given as 12 + log(O/H). To convert to the mass density of oxygen relative to hydrogen (equal to
-        total oxygen mass divided by total hydrogen mass):
-          log(Z_gas) = 12 + log(O/H) - 12 - log( (M_O / M_H)/(X*M_H + Y*M_He) )
-                     = log(O/H) - log( 16.0*1.0079 / (0.75*1.0079 + 0.25*4.0) )
-        """
-        assert 0  # to finish
-        M_X = self.atomicMass(element)
-        M_H = self.atomicMass("Hydrogen")
-        M_He = self.atomicMass("Helium")
-
-        # for element XX, Z_gas = (nXX/nH) / ( (M_XX/M_H)/(X*M_H + Y*M_He) )
-        factor = (M_X / M_H) / (self.sP.units.hydrogen_massfrac * M_H + self.sP.units.helium_massfrac * M_He)
-
-        return metal / factor
-
     def _solarMetalAbundanceMassRatio(self, element):
         """Convert solar abundances (num dens ratios relative to hydrogen) to mass ratios relative to the total."""
         numDensRatio = self._solarAbundance(element)
