@@ -75,7 +75,7 @@ def _get_existing_sims(variants, res, hInds, redshift, all=False, single=False):
     return sims
 
 
-def _zoomSubhaloIDsToPlot(sim, verbose=False):
+def _zoomSubhaloIDsToPlot(sim, min_mhalo=7.0, verbose=False):
     """Define a common rule for which subhalo(s) to plot for a given zoom run."""
     subhaloIDs = [sim.zoomSubhaloID]
 
@@ -87,7 +87,7 @@ def _zoomSubhaloIDsToPlot(sim, verbose=False):
     mhalo = sim.subhalos("mhalo_log")
     grnr = sim.subhalos("SubhaloGrNr")
 
-    w = np.where((contam_frac < 1e-3) & (cen_flag == 1) & (mstar > 0))[0]
+    w = np.where((contam_frac < 1e-3) & (cen_flag == 1) & (mstar > 0) & (mhalo > min_mhalo))[0]
 
     subhaloIDs = w
 
@@ -145,8 +145,8 @@ def smhm_relation(sims):
         k26_mstar_down = [0.0, 0.0, 0.0, 3.57, 4.19, 4.86, 6.84, 7.56, 8.07, 8.40]
         k26_label = "Katz+26 MEGATRON (z=10)"
 
-        ax.plot(k26_mhalo, k26_mstar, "-.", color="#999", alpha=0.8, label=k26_label)
-        ax.fill_between(k26_mhalo, k26_mstar_down, k26_mstar_up, color="#999", alpha=0.1)
+        ax.plot(k26_mhalo, k26_mstar, "-.", color="#777", alpha=0.8, label=k26_label)
+        ax.fill_between(k26_mhalo, k26_mstar_down, k26_mstar_up, color="#777", alpha=0.1)
 
         # Paquereau+2025 - COSMOS-Web HOD-based, z=0-12 (no halo mass overlap yet)
         # p25 = paquereau25(redshift=5.5, mstar="Mth")
@@ -162,6 +162,13 @@ def smhm_relation(sims):
 
         ax.plot(k25_mhalo, k25_mstar, "s", color="#999", alpha=0.8, label=k25_label)
 
+        # SIRIUS (Lin+26 - Table 4) ("end" at t=1.2 Gyr)
+        l26_mhalo = [1.3e9, 6.3e7, 7.9e7, 1.3e8, 1.0e9, 7.9e7, 8.0e8, 5.0e8]
+        l26_mstar = [3.2e6, 6.7e4, 1.3e5, 5.6e4, 2.4e6, 9.6e4, 1.8e6, 1.0e6]
+        l26_label = "Lin+26 SIRIUS (z=5)"
+
+        ax.plot(np.log10(l26_mhalo), np.log10(l26_mstar), "D", color="#777", alpha=0.8, label=l26_label)
+
         # SPICE (Bhagwat+24) - Figure 5 (bursty and smooth models)
         b24_mhalo1 = [1.3e8, 2.3e8, 4.8e8, 9.2e8, 1.9e9, 7.3e9, 1.5e10, 3.0e10, 6.0e10, 1.2e11, 2.4e11]  # log msun
         b24_mhalo2 = [2.4e8, 4.7e8, 9.4e8, 1.9e9, 7.4e9, 1.5e10, 5.8e10, 1.2e11, 2.4e11]  # log msun
@@ -171,10 +178,8 @@ def smhm_relation(sims):
         b24_mstar2 = np.array(b24_mhalo2) * sims[0].units.f_b * b24_ratio2
         b24_label = "Bhagwat+24 SPICE (z=5)"
 
-        ax.plot(np.log10(b24_mhalo1), np.log10(b24_mstar1), ":", color="#999", alpha=0.8, label=b24_label)
-        ax.plot(np.log10(b24_mhalo2), np.log10(b24_mstar2), ":", color="#999", alpha=0.8)
-
-        # todo: flares? (cannot find the paper)
+        ax.plot(np.log10(b24_mhalo1), np.log10(b24_mstar1), ":", color="#777", alpha=0.8, label=b24_label)
+        ax.plot(np.log10(b24_mhalo2), np.log10(b24_mstar2), ":", color="#777", alpha=0.8)
 
         # COLIBRE (Chaikan+25, Fig 3, L25/L25m5, z=5)
         c25_mhalo = [3.02e9, 4.94e9, 7.43e9, 1.98e10, 2.75e10, 4.98e10, 1.25e11, 1.96e11, 3.20e11, 5.12e11]  # log msun
@@ -184,6 +189,21 @@ def smhm_relation(sims):
 
         ax.plot(np.log10(c25_mhalo), np.log10(c25_mstar), ls=linestyles[4], color="#777", alpha=0.8, label=c25_label)
 
+        # todo: flares? (cannot find the paper)
+
+        # constant SFE lines i.e. fractions of f_b * M_halo
+        eps_star = [1.0, 0.1, 0.01, 0.001]
+        opts = {"fontsize": 11, "color": "#444", "alpha": 1.0, "ha": "right", "va": "bottom", "rotation": 24.0}
+
+        for i, eps in enumerate(eps_star):
+            yy = np.log10(eps * sims[0].units.f_b * 10.0 ** np.array(xlim))
+            label = r"$\epsilon_\star = %s$" % eps
+            x_label = xlim[1] - (xlim[1] - xlim[0]) * [0.45, 0.8, 0.93, 0.45][i]
+            y_label = np.interp(x_label, xlim, yy) - 0.3 - 0.03 * i
+
+            ax.plot(xlim, yy, ":", color=opts["color"], lw=1, alpha=1.0)
+            ax.text(x_label, y_label, label, **opts)
+
     subhalos_evo.scatter2d(
         sims,
         xQuant=xQuant,
@@ -192,6 +212,7 @@ def smhm_relation(sims):
         ylim=ylim,
         parents=False,
         legend="simple",
+        legend_ncols=[1, 2],
         f_pre=_draw_data,
         f_selection=_zoomSubhaloIDsToPlot,
     )
@@ -361,6 +382,9 @@ def sfr_10_100_ratio(sims):
 
         # todo: Pirie+ 25 JELS (z~6), ~30 galaxies at 7.5 < M* < 9.5
         # https://ui.adsabs.harvard.edu/abs/2025MNRAS.541.1348P/abstract (Figure 12)
+
+        # todo: Saldana-Lopez+25 (z~6) a few galaxies at M* ~ 1e8
+        # https://ui.adsabs.harvard.edu/abs/2025MNRAS.544..132S/abstract (Table A1)
 
     subhalos_evo.scatter2d(
         sims,
@@ -610,8 +634,8 @@ def gas_mzr(sims):
     """Diagnostic plot of gas-phase mass-metallicity relation (MZR)."""
     xQuant = "mstar2_log"
     yQuant = "Z_gas_sfrwt"
-    ylim = [-2.5, 0.0]  # log pkpc
-    xlim = [4.4, 9.0]  # log mstar
+    ylim = [-2.6, 0.0]  # log pkpc
+    xlim = [4.0, 9.0]  # log mstar
 
     def _draw_data(ax, sims):
         # adjust from A09 (all curves from Stanton+24) to our Zsun
@@ -652,11 +676,16 @@ def gas_mzr(sims):
         ax.plot(li22_mstar, li22_z, "-.", color="#999", alpha=1.0, label="Li+22 z=3.0 (B18)")
 
         # TODO: z=5-6
-        # https://arxiv.org/abs/2510.19959
-        # https://arxiv.org/abs/2512.03134
+        # Cameron+26 JADES (https://arxiv.org/abs/2601.15964)
+        # Curti+23
+        # Kotiwale+25 (https://arxiv.org/abs/2510.19959)
+        # Lewis+25 (https://arxiv.org/abs/2512.03134)
+        # Asada+26 (z~6) GLIMPSE (https://arxiv.org/abs/2601.20045)
+        # Stanton+25 (https://arxiv.org/abs/2511.00705)
+        # Sanders+25 (https://arxiv.org/abs/2508.10099)
 
-        # Asada+26 (z~6) GLIMPSE
-        # https://arxiv.org/abs/2601.20045
+        # Nishigaki+25 (https://arxiv.org/abs/2512.12983)
+        # Arellano-Cordova+26 (https://arxiv.org/abs/2602.13007) (https://arxiv.org/abs/2412.10557)
 
     subhalos_evo.scatter2d(
         sims,
@@ -664,9 +693,10 @@ def gas_mzr(sims):
         yQuant=yQuant,
         xlim=xlim,
         ylim=ylim,
+        parents=False,
+        legend="simple",
         f_pre=_draw_data,
         f_selection=_zoomSubhaloIDsToPlot,
-        sizefac=0.8,
     )
 
 
@@ -674,8 +704,8 @@ def stellar_mzr(sims):
     """Diagnostic plot of stellar mass-metallicity relation (MZR)."""
     xQuant = "mstar2_log"
     yQuant = "Z_stars"  # Z_stars is cat/tree (<2rhalf), while Z_stars_masswt is aux (subhalo)
-    ylim = [-2.5, 0.0]  # log pkpc
-    xlim = [4.4, 9.0]  # log mstar
+    ylim = [-2.6, 0.0]  # log pkpc
+    xlim = [4.0, 9.0]  # log mstar
 
     def _draw_data(ax, sims):
         # adjust from A09 (all curves from Stanton+24) to our Zsun
@@ -694,33 +724,93 @@ def stellar_mzr(sims):
         s24_z_high = np.log10(10.0 ** np.array(s24_z_high) * fac)
         s24_z_v40 = np.log10(10.0 ** np.array(s24_z_v40) * fac)
 
-        ax.plot(s24_mstar, s24_z, "-", color="#555", alpha=1.0, label="Stanton+24 NIRVANDELS z=3.5")
+        ax.plot(s24_mstar, s24_z, "-", color="#999", alpha=1.0, label="Stanton+24 ($z=3.5$)")
         ax.fill_between(s24_mstar, s24_z_low, s24_z_high, color="#555", alpha=0.2)
-        ax.plot(s24_mstar, s24_z_v40, "-", color="#999", alpha=1.0, label="Stanton+24 v40")
+        # ax.plot(s24_mstar, s24_z_v40, "-", color="#999", alpha=1.0, label="Stanton+24 v40")
 
         # Cullen+ (2019)  2.5 < z < 5.0 (SB99)
-        c19_mstar = [8.5, 9.5, 10.2]  # log mstar
-        c19_z = [-1.08, -0.82, -0.63]  # log Z/Zsun
-        c19_z = np.log10(10.0 ** np.array(c19_z) * fac)
+        # c19_mstar = [8.5, 9.5, 10.2]  # log mstar
+        # c19_z = [-1.08, -0.82, -0.63]  # log Z/Zsun
+        # c19_z = np.log10(10.0 ** np.array(c19_z) * fac)
 
-        ax.plot(c19_mstar, c19_z, "--", color="#999", alpha=1.0, label="Cullen+19 2.5<z<5")
+        # ax.plot(c19_mstar, c19_z, "--", color="#999", alpha=1.0, label="Cullen+19 ($2.5<z<5$)")
 
         # Chartab+ (2023) z=2.5, Kashino+ (2022) z=2 (BPASS)
-        k22_mstar = [8.9, 9.5, 10.0, 10.5]  # log mstar
-        k22_z = [-1.16, -0.97, -0.81, -0.65]  # log Z/Zsun
-        k22_z = np.log10(10.0 ** np.array(k22_z) * fac)
+        # k22_mstar = [8.9, 9.5, 10.0, 10.5]  # log mstar
+        # k22_z = [-1.16, -0.97, -0.81, -0.65]  # log Z/Zsun
+        # k22_z = np.log10(10.0 ** np.array(k22_z) * fac)
 
-        ax.plot(k22_mstar, k22_z, ":", color="#999", alpha=1.0, label="Kashino+22 z=2-3")
+        # ax.plot(k22_mstar, k22_z, ":", color="#999", alpha=1.0, label="Kashino+22 z=2-3")
 
         # Calabro+ (2021), z=2-5 (UV Index)
         c21_mstar = [8.5, 9.5, 10.5]  # log mstar
         c21_z = [-1.23, -0.83, -0.45]  # log Z/Zsun
         c21_z = np.log10(10.0 ** np.array(c21_z) * fac)
 
-        ax.plot(c21_mstar, c21_z, "-.", color="#999", alpha=1.0, label="Calabro+21 z=2.5")
+        ax.plot(c21_mstar, c21_z, "-.", color="#999", alpha=1.0, label="Calabro+21 ($z=2-5$)")
+
+        # THESAN-ZOOM z=6 (McClymont+26 Figure 3)
+        m26_mstar = [6.0, 7.0, 8.0, 9.0, 10.0, 11.0]  # log mstar
+        m26_z = [-1.83, -1.50, -1.19, -0.90, -0.63, -0.39]  # log Z/Zsun
+        m26_label = "McClymont+26 (THESAN-ZOOM)"
+
+        m26_z_solar = 0.02  # Sec 2.3 last paragraph
+        fac = m26_z_solar / sims[0].units.Z_solar
+        m26_z = np.log10(10.0 ** np.array(m26_z) * fac)
+
+        ax.plot(m26_mstar, m26_z, "--", color="#555", alpha=0.9, label=m26_label)
+
+        # FIRE z=6 (Ma+16)
+        ma16_mstar = [6.0, 7.0, 8.0, 9.0, 10.0, 11.0]  # log mstar
+        ma16_z = [-2.09, -1.76, -1.44, -1.12, -0.80, -0.49]  # log Z/Zsun
+        ma16_label = "Ma+16 (FIRE)"
+
+        ma16_z = np.log10(10.0 ** np.array(ma16_z) * fac)  # taken from McClymont+26, assume unified Z_solar
+
+        ax.plot(ma16_mstar, ma16_z, "-.", color="#555", alpha=0.9, label=ma16_label)
+
+        # note: Rey+25 gives stellar MZR (in <Fe/H>) at z~10 for Megatron
+        # roughly on top of local z~0 dwarfs, could do a similar comparison
+
+        # Nakane+25 (https://arxiv.org/abs/2503.11457) (uses Z_sun from Asplund+09)
+        n25_label = "Nakane+25 (z=9-12)"
+        # n25_names = ["GHZ2", "GS-z11-0", "GN-z11", "MACS0647-JD", "JADES6438", "GS-z9-0", "Gz9p3"]
+        # n25_z = [12.3, 11.1, 10.6, 10.2, 9.7, 9.4, 9.3]  # redshift
+        n25_mstar = [9.05, 8.3, 9.1, 7.6, 8.35, 8.2, 9.2]  # note: JADES Mstar assumed same as GS-Z11-0 (same M_UV)
+        n25_mstar_err = [0.2, 0.1, 0.3, 0.1, 0.1, 0.1, 0.15]  # roughly, symmetrized
+        n25_Z_stars = [-0.87, -0.09, -0.60, -1.87, -0.1, -1.23, -0.13]
+        n25_Z_stars_err_up = [0.23, 0.24, 0.06, 0, 0, 0.09, 0.24]  # note: 0 values are upper lims
+        n25_Z_stars_err_down = [1.87, 0.36, 0.12, 0.1, 0.1, 0.59, 2.01]
+        n25_upper_limits = [False, False, False, True, True, False, False]
+
+        fac = solar_asplund09 / sims[0].units.Z_solar
+        n25_Z_stars = np.log10(10.0 ** np.array(n25_Z_stars) * fac)
+
+        # ax.plot(n25_mstar, n25_Z_stars, "o", color="#555", alpha=0.8, label="Nakane+25 (z=9-12)")
+        ax.errorbar(
+            n25_mstar,
+            n25_Z_stars,
+            xerr=n25_mstar_err,
+            yerr=[n25_Z_stars_err_down, n25_Z_stars_err_up],
+            uplims=n25_upper_limits,
+            fmt="o",
+            color="#555",
+            alpha=0.8,
+            label=n25_label,
+        )
 
     subhalos_evo.scatter2d(
-        sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data, f_selection=_zoomSubhaloIDsToPlot
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        sizefac=0.8,
+        parents=False,
+        legend="simple",
+        legend_ncols=[1, 3],
+        f_pre=_draw_data,
+        f_selection=_zoomSubhaloIDsToPlot,
     )
 
 
@@ -1679,7 +1769,7 @@ def paperPlots(a=False):
 
     # if (all == False), only dz < 0.1 matches
     # if (single == True), only the highest available res of each halo
-    sims = _get_existing_sims(variants, res, hInds, redshift, all=False, single=True)
+    sims = _get_existing_sims(variants, res, hInds, redshift, all=True, single=True)
 
     # contamination diagnostic printout (info only)
     for sim in []:  # sims:
@@ -1731,7 +1821,7 @@ def paperPlots(a=False):
     # fig 6a: sfr vs mstar relation
     if 0 or a:
         sfr_vs_mstar(sims, yQuant="sfr_100myr")
-        # sfr_vs_mstar(sims, yQuant="sfr_10myr")
+        sfr_vs_mstar(sims, yQuant="sfr_10myr")
 
     # fig 6b: star formation history (using stellar histo) (all halos in one panel)
     if 0 or a:
@@ -1792,36 +1882,38 @@ def paperPlots(a=False):
             phase_diagram(sim, cQuant="vrad")
             phase_diagram(sim, cQuant="rad_rvir")
 
-    # fig 10a - stellar metallicity
+    # fig 10a - gas metallicity
+    if 0 or a:
+        gas_mzr(sims)
+
+    # fig 10b - stellar metallicity
     if 0 or a:
         stellar_mzr(sims)
 
-    # fig 10b - metallicity vs time evolution
+    # fig 10c - metallicity vs time evolution
     if 0 or a:
-        opts = {"xlim": [14.1, 5.5], "ylim": [-4.1, 0.5], "sizefac": 0.8, "f_selection": _zoomSubhaloIDsToPlot}
+        opts = {
+            "xlim": [14.1, 5.5],
+            "ylim": [-4.1, 0.0],
+            "parents": False,
+            "smooth": False,  # True - needs improvements for this case
+            "legend": "simple",
+            # "legend_locs": ["lower right", "upper left"],
+            "sizefac": 0.8,
+            "f_selection": _zoomSubhaloIDsToPlot,
+        }
 
-        subhalos_evo.tracks1d(sims, quant="Z_gas", **opts)  # cat/tree
-        subhalos_evo.tracks1d(sims, quant="Z_gas_sfrwt", **opts)  # cat/tree
+        # subhalos_evo.tracks1d(sims, quant="Z_gas", **opts)  # cat/tree
+        # subhalos_evo.tracks1d(sims, quant="Z_gas_sfrwt", **opts)  # cat/tree
         subhalos_evo.tracks1d(sims, quant="Z_stars", **opts)  # cat/tree (<2rhalf)
-        subhalos_evo.tracks1d(sims, quant="Z_stars_masswt", **opts)  # aux (subhalo)
-        # subhalos_evo.tracks1d(sims, quant='Z_stars_2rhalfstarsfof_masswt', **opts) # aux
-        # subhalos_evo.tracks1d(sims, quant='Z_stars_1kpc_masswt', **opts) # aux
-        # subhalos_evo.tracks1d(sims, quant='Z_stars_fof_masswt', **opts) # aux
-
-        # for hInd in hInds:
-        #    sims_loc = _get_existing_sims(variants, res, [hInd], redshift)
-        #    subhalos_evo.tracks1d(sims_loc, 'Z_gas_sfrwt', **opts)
-        #    subhalos_evo.tracks1d(sims_loc, 'Z_stars_masswt', **opts)
-
-    # fig 10c - gas metallicity
-    if 0 or a:
-        # todo: https://arxiv.org/abs/2512.12983
-        # todo: https://arxiv.org/abs/2602.13007
-
-        gas_mzr(sims)
+        # subhalos_evo.tracks1d(sims, quant="Z_stars_masswt", **opts)  # aux (subhalo)
+        ## subhalos_evo.tracks1d(sims, quant='Z_stars_2rhalfstarsfof_masswt', **opts) # aux
+        ## subhalos_evo.tracks1d(sims, quant='Z_stars_1kpc_masswt', **opts) # aux
+        ## subhalos_evo.tracks1d(sims, quant='Z_stars_fof_masswt', **opts) # aux
 
     # fig 11a - stellar sizes
     if 0 or a:
+        # todo: https://arxiv.org/abs/2602.22206 (Figure 8), also some discussion of clusters
         sizes_vs_mstar(sims)
 
     # fig 11b - stellar size evo

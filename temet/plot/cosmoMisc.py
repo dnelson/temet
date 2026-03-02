@@ -1534,7 +1534,7 @@ def simHighZComparison():
     vintegatan_mhalo = vint_mhalo + vintgm_mhalo
     vintegatan_mgas = vint_mgas + vintgm_mgas
 
-    # THESAN-ZOOM: IDs are group IDs frmo Thesan-Dark-1 at z=3, convert to z=6 halo masses
+    # THESAN-ZOOM: IDs are group IDs from Thesan-Dark-1 at z=3, convert to z=6 halo masses
     thesanzoom_ids = [2, 39, 205, 578, 1163, 5760, 10304, 33206, 37591, 137030, 500531, 519761, 2274036, 5229300]
 
     if 0:
@@ -1557,8 +1557,12 @@ def simHighZComparison():
 
     # SIRIUS (Hirai+25 https://arxiv.org/abs/2411.18680)
     # also: Kaneko+26 (https://arxiv.org/abs/2601.13765) presents a smaller halo at mgas=2.37, stopped at z=8.7
+    # Lin+26 Table 2 (https://arxiv.org/abs/2602.22206) has eight halos, same resolution, similarly low masses
     sirius_mhalo = np.log10([2.5e8])  # 1.5e8 at z=6.5 (moved up for visibility)
     sirius_mgas = [18.9]  # 6e7 particles in zoom ICs, 652k stars formed
+
+    # GEAR (Revaz & Jablonka 2018), m_gas = 4096 Msun/h
+    # m200 at z=0: [8.7e9, 8.7e9, 9.5e9, 6.8e9, 2.9e9, 2.6e9, 1.9e9, 1.8e9...] # all lower lims at z=6
 
     # SIEGE: Calura+22, Pascale+23 (run to z=6.14, same simulation)
     # Calura+25 (https://arxiv.org/abs/2411.02502) run to z=10.5

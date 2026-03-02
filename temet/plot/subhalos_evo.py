@@ -87,7 +87,14 @@ def _add_legends_simple(ax, hInds, res, variants, colors, lineplot=False, locs=N
     handles, labels = ax.get_legend_handles_labels()
 
     if ncols is None:
-        ncols = [np.min([3, len(variants)])]  # at most three
+        ncols_first = np.min([3, len(variants)])  # at most three
+
+        ncols_second = np.min([2, len(variants)])  # at most two
+        if lineplot and "Redshift" in ax.get_xlabel():
+            ncols_second = np.max([2, ncols_second])  # at least two
+        if ax.bbox.size[0] < 700:  # sizefac <= 0.8
+            ncols_second = np.max([2, ncols_second])  # at least two
+        ncols = [ncols_first, ncols_second]  # second index
 
     legend = ax.legend(handles, labels, loc=locs[0], ncols=ncols[0])
     ax.add_artist(legend)
@@ -108,14 +115,6 @@ def _add_legends_simple(ax, hInds, res, variants, colors, lineplot=False, locs=N
 
         labels.append("h%d" % hInd)
 
-    if ncols is None:
-        ncols = np.min([2, len(variants)])  # at most two
-        if lineplot and "Redshift" in ax.get_xlabel():
-            ncols = np.max([2, ncols])  # at least two
-        if ax.bbox.size[0] < 700:  # sizefac <= 0.8
-            ncols = np.max([2, ncols])  # at least two
-        ncols = [1, ncols]  # second index
-
     legParams = {"frameon": 1, "framealpha": 0.7, "fancybox": False}  # add white background
 
     legend2 = ax.legend(handles, labels, loc=locs[1], ncols=ncols[1], **legParams)
@@ -135,6 +134,7 @@ def scatter2d(
     sizefac: float = 1.0,
     legend: str = "dev",
     legend_locs: list[str] = None,
+    legend_ncols: list[int] = None,
     verbose: bool = False,
     f_selection: Callable = None,
     f_pre: Callable = None,
@@ -157,6 +157,7 @@ def scatter2d(
       parents: if True, plot the original halos from the parent box for comparison.
       legend : either 'dev' (default),  'simple', or 'none', to determine how legend(s) are shown.
       legend_locs: if not None, a list of two strings indicating the locations of the two legends.
+      legend_ncols: if not None, a list of two integers indicating the number of columns for the two legends.
       verbose: if True, print warnings about points that are out of bounds or NaN, and how they are handled.
       sizefac: multiplier on figure size, can be scalar or 2-tuple.
       f_selection (function): if not None, this 'custom' function hook is called to determine which
@@ -387,7 +388,7 @@ def scatter2d(
     if legend == "dev":
         _add_legends(ax, hInds, res, variants, colors)
     elif legend == "simple":
-        _add_legends_simple(ax, hInds, res, variants, colors, locs=legend_locs)
+        _add_legends_simple(ax, hInds, res, variants, colors, locs=legend_locs, ncols=legend_ncols)
 
     saveNameDefault = f"scatter2d_evo_{xQuant}-vs-{yQuant}.pdf"
     _finish_plot(fig, saveFilename, saveNameDefault)
@@ -459,6 +460,7 @@ def tracks1d(
     ylim: list[float] = None,
     sfh_lin: bool = False,
     sfh_treebased: bool = False,
+    smooth: bool = False,
     parents: bool = True,
     color: str = None,
     sizefac: float = 1.0,
@@ -479,6 +481,7 @@ def tracks1d(
       ylim: if not None, 2-tuple that overrides default y-axis limits.
       sfh_lin: show SFH with linear y-axis.
       sfh_treebased: if True, use merger tree-based tracks even for SFH-related quantities.
+      smooth: if True, smooth the tracks in time (only for tree/quantMPB-based fields).
       parents: if True, plot the original halos from the parent box for comparison.
       color: if not None, override default color scheme and use this color for all lines.
       sizefac: multiplier on figure size, can be scalar or 2-tuple.
@@ -624,7 +627,7 @@ def tracks1d(
                     ax.plot([x, sim.redshift], [y, y], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=0.2)
             else:
                 # general case
-                mpb = sim.quantMPB(subhaloID, quants=[quant])
+                mpb = sim.quantMPB(subhaloID, quants=[quant], smooth=smooth)
                 vals_track = mpb[quant]
                 if valLog and not sfh_lin:
                     vals_track = logZeroNaN(vals_track)
