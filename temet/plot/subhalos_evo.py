@@ -461,6 +461,7 @@ def tracks1d(
     sfh_lin: bool = False,
     sfh_treebased: bool = False,
     smooth: bool = False,
+    monotonic: bool = False,
     parents: bool = True,
     color: str = None,
     sizefac: float = 1.0,
@@ -482,6 +483,7 @@ def tracks1d(
       sfh_lin: show SFH with linear y-axis.
       sfh_treebased: if True, use merger tree-based tracks even for SFH-related quantities.
       smooth: if True, smooth the tracks in time (only for tree/quantMPB-based fields).
+      monotonic: if True, enforce that tracks are monotonically increasing (e.g. avoid spurious dips).
       parents: if True, plot the original halos from the parent box for comparison.
       color: if not None, override default color scheme and use this color for all lines.
       sizefac: multiplier on figure size, can be scalar or 2-tuple.
@@ -530,6 +532,8 @@ def tracks1d(
     ax.set_ylim(yMinMax)
 
     if quant in star_zform_quants:
+        assert not monotonic, "Not a good idea for SFR, check."
+
         ylabel = ylabel.replace(r"<2r_{\star},", "")  # aperture restriction on SFH not yet implemented
 
         if np.min(xMinMax) > 5.0:
@@ -631,6 +635,17 @@ def tracks1d(
                 vals_track = mpb[quant]
                 if valLog and not sfh_lin:
                     vals_track = logZeroNaN(vals_track)
+
+                if monotonic:
+                    # inforce montonically increasing with time
+                    cur_max = -np.inf
+                    for i in range(vals_track.size-1,0,-1):
+                        if np.isnan(vals_track[i]):
+                            continue
+                        if vals_track[i] > cur_max:
+                            cur_max = vals_track[i]
+                        else:
+                            vals_track[i] = cur_max
 
                 ax.plot(mpb["z"], vals_track, ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha)
 

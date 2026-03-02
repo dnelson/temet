@@ -1769,7 +1769,7 @@ def paperPlots(a=False):
 
     # if (all == False), only dz < 0.1 matches
     # if (single == True), only the highest available res of each halo
-    sims = _get_existing_sims(variants, res, hInds, redshift, all=True, single=True)
+    sims = _get_existing_sims(variants, res, hInds, redshift, all=False, single=True)
 
     # contamination diagnostic printout (info only)
     for sim in []:  # sims:
@@ -1894,11 +1894,13 @@ def paperPlots(a=False):
     if 0 or a:
         opts = {
             "xlim": [14.1, 5.5],
-            "ylim": [-4.1, 0.0],
+            "ylim": [-4.3, 1.0],
             "parents": False,
-            "smooth": False,  # True - needs improvements for this case
+            "smooth": False,
+            "monotonic": True,
             "legend": "simple",
-            # "legend_locs": ["lower right", "upper left"],
+            "legend_locs": ["lower right", "upper left"],
+            "legend_ncols": [1, 3],
             "sizefac": 0.8,
             "f_selection": _zoomSubhaloIDsToPlot,
         }
