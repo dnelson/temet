@@ -212,7 +212,6 @@ def smhm_relation(sims):
         ylim=ylim,
         parents=False,
         legend="simple",
-        legend_ncols=[1, 2],
         f_pre=_draw_data,
         f_selection=_zoomSubhaloIDsToPlot,
     )
@@ -539,8 +538,8 @@ def sizes_vs_mstar(sims):
     """Diagnostic plot of galaxy stellar size (half mass radius for now) versus stellar mass."""
     xQuant = "mstar2_log"
     yQuant = "rhalf_stars"
-    ylim = [-2.5, 1.5]  # log pkpc
-    xlim = [4.8, 10.2]  # log mstar
+    ylim = [-2.5, 1.0]  # log pkpc
+    xlim = [4.5, 9.0]  # log mstar
 
     def _draw_data(ax, sims):
         # ELVES (z=0 local volume, not directly related)
@@ -562,8 +561,8 @@ def sizes_vs_mstar(sims):
         reff = np.log10(A * (10.0**xx / 7e10) ** alpha)  # log pkpc
 
         # data constrained vs extrapolation
-        ax.plot(xx[1:], reff[1:], ":", lw=lw, color="#999", alpha=1.0, label="Mowla+19 HST (z=2.5-3)")
-        ax.plot(xx[:-1], reff[:-1], ":", lw=lw - 1, color="#999", alpha=0.7)
+        ax.plot(xx[1:], reff[1:], ":", color="#999", alpha=1.0, label="Mowla+19 HST (z=2.5-3)")
+        ax.plot(xx[:-1], reff[:-1], ":", color="#999", alpha=0.8)
 
         reff_low = np.log10(A_low * (10.0**xx / 7e10) ** alpha)  # log pkpc
         reff_high = np.log10(A_high * (10.0**xx / 7e10) ** alpha)  # log pkpc
@@ -571,6 +570,9 @@ def sizes_vs_mstar(sims):
         ax.fill_between(xx, reff_low, reff_high, color="#999", alpha=0.2)
 
         # Ormerod+24 CEERS (only down to M* = 9.5) [log msun] and [kpc]
+
+        # TODO: move to data, drop from here (too massive)
+
         o24_mstar = [9.61,9.64,9.71,9.76,9.66,9.71,9.61,9.57,9.61,9.59,9.64,9.65,9.69,9.65,9.62,9.61,9.59,9.58,9.58,
                      9.57,9.59,9.59,9.61,9.63,9.66,9.64,9.65,9.67,9.65,9.70,9.61,9.62,9.61,9.59,9.63,9.66,9.67,9.63,
                      9.64,9.58,9.60,9.59,9.62,9.64,9.57,9.56,9.57,9.60,9.62,9.61,9.70,9.73,9.75,9.71,9.74,9.70,9.71,
@@ -589,7 +591,7 @@ def sizes_vs_mstar(sims):
                   1.6,1.6,1.45,1.72,1.26,1,4.37,3.37,2.7,3.03,2.29,4.06,2.83,2.4,2.17,1.6,1.64,1.41,1.17,1.03,0.899,
                   0.741,0.675,0.639,0.506,0.527,0.893,7.31,6.02,1.67,2.08,0.781,0.81,0.786,0.67,1.84,1.34]  # fmt: skip
 
-        ax.plot(o24_mstar, np.log10(o24_Re), "s", color="#777", alpha=0.6, label="Ormerod+24 CEERS (z=3-4)")
+        # ax.plot(o24_mstar, np.log10(o24_Re), "s", color="#777", alpha=0.6, label="Ormerod+24 CEERS (z=3-4)")
 
         # Matharu+24 FRESCO (z ~ 5.3)
         m24_mstar = [8.1, 8.6, 9.1, 9.6]  # log mstar
@@ -597,13 +599,22 @@ def sizes_vs_mstar(sims):
         m24_reff_err = 0.1  # dex, assumed
 
         ax.errorbar(
-            m24_mstar, m24_reff, yerr=m24_reff_err, fmt="D--", color="#555", alpha=0.5, label="Matharu+24 FRESCO (z=5)"
+            m24_mstar, m24_reff, yerr=m24_reff_err, fmt="D--", color="#555", alpha=0.9, label="Matharu+24 FRESCO (z=5)"
         )
 
         # TODO: https://arxiv.org/abs/2602.22206 (Figure 8), also some discussion of clusters
 
     subhalos_evo.scatter2d(
-        sims, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, f_pre=_draw_data, f_selection=_zoomSubhaloIDsToPlot
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        parents=False,
+        legend="simple",
+        legend_ncols=[1, 3],
+        f_pre=_draw_data,
+        f_selection=_zoomSubhaloIDsToPlot,
     )
 
 
@@ -774,7 +785,6 @@ def gas_mzr(sims):
         ylim=ylim,
         parents=False,
         legend="simple",
-        legend_ncols=[1, 2],
         f_pre=_draw_data,
         f_selection=_zoomSubhaloIDsToPlot,
     )
@@ -1824,15 +1834,42 @@ def run_table_latex():
     sims = _get_existing_sims(variants, res, hInds, redshift, all=True, single=True)
 
     for sim in sims:
+        # load
         sfr_100myr = sim.subhalos("sfr_100myr")
         z_stars_masswt = logZeroNaN(sim.subhalos("z_stars_masswt"))  # no radial restriction
         z_gas_sfrwt = logZeroNaN(sim.subhalos("z_gas_sfrwt"))  # no radial restriction
-        sub2 = sim.halo(1)["GroupFirstSub"]
-        s = f"{sim.simName:<16} z={sim.redshift:.2f} "
-        s += f"SFR: {sfr_100myr[0]:.2f}, {sfr_100myr[sub2]:.2f} "
-        s += f"Z*: {z_stars_masswt[0]:.2f}, {z_stars_masswt[sub2]:.2f} "
-        s += f"Zgas: {z_gas_sfrwt[0]:.2f}, {z_gas_sfrwt[sub2]:.2f}"
-        print(s)
+        R_stars = sim.subhalos("size_stars") * 1000  # physical pc
+
+        mhalo = sim.subhalos("mhalo_log")  # log msun
+        mstar = sim.subhalos("mstar_log")  # log msun
+        cen_flag = sim.subhalos("cen_flag")
+        grnr = sim.subhalos("SubhaloGrNr")
+
+        vrot = sim.subhalos("vrot_stars_map")
+        sigma = sim.subhalos("veldisp_stars_map")
+
+        M_BH = sim.units.codeMassToLogMsun(sim.bhs("BH_Mass"))
+        M_BH = np.max(M_BH)  # simulation wide
+
+        # show first two halos
+        for haloID in [0, 1]:
+            subID = sim.halo(haloID)["GroupFirstSub"]
+
+            N_Cl = np.where((grnr == haloID) & (cen_flag == 0) & (mstar > 0))[0]
+
+            s = f"{sim.simName:<16} z={sim.redshift:.2f} [{haloID = }] "
+            s += f"Mhalo: {mhalo[subID]:.2f} "
+            s += f"Mstar: {mstar[subID]:.2f} ".replace("nan", "   0")
+            s += f"SFR: {sfr_100myr[subID]:.2f} "
+            s += f"Z*: {z_stars_masswt[subID]:.2f} ".replace("nan", "  ---")
+            s += f"Zgas: {z_gas_sfrwt[subID]:.2f}".replace("nan", "  ---")
+            s += f" R*: {R_stars[subID]:5.1f} ".replace("nan", "  ---")
+            s += f"Vrot: {vrot[subID]:4.1f} ".replace("nan", "---")
+            s += f"Sigma: {sigma[subID]:4.1f} ".replace("nan", "---")
+            s += f"(V/s): {vrot[subID] / sigma[subID]:4.1f} ".replace("nan", "---")
+            s += f"N_Cl: {N_Cl.size:>3}"
+            s += f" M_BH: {M_BH:.3f}"
+            print(s)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -1994,7 +2031,7 @@ def paperPlots(a=False):
         ## subhalos_evo.tracks1d(sims, quant='Z_stars_fof_masswt', **opts) # aux
 
     # fig 11a - stellar sizes
-    if 0 or a:
+    if 1 or a:
         sizes_vs_mstar(sims)
 
     # fig 11b - stellar size evo

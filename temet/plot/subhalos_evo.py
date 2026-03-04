@@ -94,6 +94,8 @@ def _add_legends_simple(ax, hInds, res, variants, colors, lineplot=False, locs=N
             ncols_second = np.max([2, ncols_second])  # at least two
         if ax.bbox.size[0] < 700:  # sizefac <= 0.8
             ncols_second = np.max([2, ncols_second])  # at least two
+        if len(hInds) > 8:
+            ncols_second = np.max([2, ncols_second])  # at least two
         ncols = [ncols_first, ncols_second]  # second index
 
     legend = ax.legend(handles, labels, loc=locs[0], ncols=ncols[0])
@@ -639,7 +641,7 @@ def tracks1d(
                 if monotonic:
                     # inforce montonically increasing with time
                     cur_max = -np.inf
-                    for i in range(vals_track.size-1,0,-1):
+                    for i in range(vals_track.size - 1, 0, -1):
                         if np.isnan(vals_track[i]):
                             continue
                         if vals_track[i] > cur_max:

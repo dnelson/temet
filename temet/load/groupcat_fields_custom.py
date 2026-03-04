@@ -332,7 +332,7 @@ mstar2.limits = lambda sim, f: [9.0, 11.0] if sim.boxSize > 50000 else [8.0, 11.
 mstar2.log = True
 
 
-@catalog_field
+@catalog_field(alias="mstar")
 def mstar_tot(sim, field):
     """Galaxy stellar mass, total subhalo/subfind value."""
     mass = sim.subhalos("SubhaloMassType")[:, sim.ptNum("stars")]

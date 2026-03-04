@@ -1416,6 +1416,36 @@ veldisp_gas_01r500c_xray.log = False  # True
 
 
 @catalog_field
+def veldisp_stars_map(sim, field):
+    """Stellar velocity dispersion (line-of-sight, unweighted), based on pixelized map."""
+    acField = "Subhalo_VelDisp_Stars_Map"
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+
+    return ac[acField]
+
+
+veldisp_stars_map.label = r"$\rm{\sigma_{\star}}$"
+veldisp_stars_map.units = r"$\rm{km/s}$"
+veldisp_stars_map.limits = [0.0, 1.0]
+veldisp_stars_map.log = True
+
+
+@catalog_field
+def vrot_stars_map(sim, field):
+    """Stellar rotation velocity (line-of-sight, mass weighted), based on pixelized map."""
+    acField = "Subhalo_Vrot_Stars_Map"
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+
+    return ac[acField]
+
+
+vrot_stars_map.label = r"$\rm{V_{rot,\star}}$"
+vrot_stars_map.units = r"$\rm{km/s}$"
+vrot_stars_map.limits = [0.0, 1.5]
+vrot_stars_map.log = True
+
+
+@catalog_field
 def gas_vrad_2rhalf(sim, field):
     """Mean gas radial velocity within the galaxy (< 2rhalfstars), mass-weighted."""
     acField = "Subhalo_Gas_RadialVel_2rhalfstars_massWt"

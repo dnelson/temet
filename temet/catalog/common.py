@@ -18,6 +18,8 @@ userCustomFields = [
     "veldisp3d",
     "veldisp1d",
     "veldisp_z",
+    "vrot_map",
+    "veldisp_map",
     "shape_ellipsoid",
     "shape_ellipsoid_1r",
     "tff",

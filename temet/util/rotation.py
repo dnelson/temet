@@ -66,6 +66,23 @@ def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
     return ang_mom_mean
 
 
+def _moment_of_inertia(xyz, mass):
+    """Helper for below."""
+    I = np.zeros((3, 3), dtype="float32")
+
+    I[0, 0] = np.sum(mass * (xyz[:, 1] * xyz[:, 1] + xyz[:, 2] * xyz[:, 2]))
+    I[1, 1] = np.sum(mass * (xyz[:, 0] * xyz[:, 0] + xyz[:, 2] * xyz[:, 2]))
+    I[2, 2] = np.sum(mass * (xyz[:, 0] * xyz[:, 0] + xyz[:, 1] * xyz[:, 1]))
+    I[0, 1] = -1 * np.sum(mass * (xyz[:, 0] * xyz[:, 1]))
+    I[0, 2] = -1 * np.sum(mass * (xyz[:, 0] * xyz[:, 2]))
+    I[1, 2] = -1 * np.sum(mass * (xyz[:, 1] * xyz[:, 2]))
+    I[1, 0] = I[0, 1]
+    I[2, 0] = I[0, 2]
+    I[2, 1] = I[1, 2]
+
+    return I
+
+
 @cache
 def momentOfInertiaTensor(
     sP, gas=None, stars=None, rHalf=None, shPos=None, subhaloID=None, useStars=True, onlyStars=False
@@ -156,17 +173,7 @@ def momentOfInertiaTensor(
     sP.correctPeriodicDistVecs(xyz)
 
     # construct moment of inertia
-    I = np.zeros((3, 3), dtype="float32")
-
-    I[0, 0] = np.sum(masses * (xyz[:, 1] * xyz[:, 1] + xyz[:, 2] * xyz[:, 2]))
-    I[1, 1] = np.sum(masses * (xyz[:, 0] * xyz[:, 0] + xyz[:, 2] * xyz[:, 2]))
-    I[2, 2] = np.sum(masses * (xyz[:, 0] * xyz[:, 0] + xyz[:, 1] * xyz[:, 1]))
-    I[0, 1] = -1 * np.sum(masses * (xyz[:, 0] * xyz[:, 1]))
-    I[0, 2] = -1 * np.sum(masses * (xyz[:, 0] * xyz[:, 2]))
-    I[1, 2] = -1 * np.sum(masses * (xyz[:, 1] * xyz[:, 2]))
-    I[1, 0] = I[0, 1]
-    I[2, 0] = I[0, 2]
-    I[2, 1] = I[1, 2]
+    I = _moment_of_inertia(xyz, masses)
 
     return I
 
@@ -294,9 +301,12 @@ def rotationMatrixFromAngle(angle):
     return R.astype("float32")
 
 
-def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter, shiftBack=True):
+def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter=None, shiftBack=True):
     """Rotate a [N,3] array of Coordinates about rotCenter according to rotMatrix."""
     pos_in = np.array(pos)  # do not modify input
+
+    if rotCenter is None:
+        rotCenter = [0, 0, 0]
 
     # shift
     for i in range(3):

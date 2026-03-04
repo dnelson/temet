@@ -640,6 +640,18 @@ def_fields = {
         rad="0.1r500crit",
         cenSatSelect="cen",
     ),
+    "Subhalo_VelDisp_Stars_Map": partial(
+        subhaloRadialReduction, ptType="stars", ptProperty="veldisp_map", op="ufunc", scope="fof", rad=None
+    ),
+    "Subhalo_Vrot_Stars_Map": partial(
+        subhaloRadialReduction,
+        ptType="stars",
+        ptProperty="vrot_map",
+        op="ufunc",
+        scope="fof",
+        weighting="mass",
+        rad=None,
+    ),
     # stellar age/metallicity
     "Subhalo_StellarAge_NoRadCut_MassWt": partial(
         subhaloRadialReduction, ptType="stars", ptProperty="stellar_age", op="mean", rad=None, weighting="mass"

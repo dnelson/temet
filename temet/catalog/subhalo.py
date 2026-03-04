@@ -345,6 +345,99 @@ def _process_custom_func(sP, op, ptProperty, gc, subhaloID, particles, rr, i0, i
 
         return result
 
+    # 2d gridding: line-of-sight velocity dispersion and rotation velocity
+    if ptProperty in ["veldisp_map", "vrot_map"]:
+        # prepare grid
+        pos = np.squeeze(particles["Coordinates"][i0:i1, :][wValid, :])
+        vel = np.squeeze(particles["Velocities"][i0:i1, :][wValid, :])
+        mass = np.squeeze(particles["Masses"][i0:i1][wValid])
+        weights = np.squeeze(particles["weights"][i0:i1][wValid])
+
+        boxCen = gc["SubhaloPos"][subhaloID, :]
+
+        if mass.size == 1:
+            return np.nan  # cannot grid one cell
+
+        # handle rotation
+        from scipy.stats import binned_statistic_2d
+
+        from ..util.rotation import _moment_of_inertia, rotationMatricesFromInertiaTensor
+
+        # shift, fix if coordinates wrapped box boundary before shift:
+        for i in range(3):
+            pos[:, i] -= boxCen[i]
+            vel[:, i] -= gc["SubhaloVel"][subhaloID, i]
+
+        sP.correctPeriodicDistVecs(pos)
+
+        I = _moment_of_inertia(pos, mass)
+
+        rotMatrices = rotationMatricesFromInertiaTensor(I)
+        rotation = "face-on" if ptProperty == "veldisp_map" else "edge-on"
+        rotMatrix = rotMatrices[rotation]
+
+        # apply rotation
+        axes = [0, 1]
+        sliceIndRot = 2
+
+        pos = np.transpose(np.dot(rotMatrix, pos.transpose()))
+
+        vel = np.transpose(np.dot(rotMatrix, vel.transpose()))
+        vel = np.squeeze(np.array(vel[:, sliceIndRot]))
+        vel = vel.astype("float32")  # rotMatrix was posssibly in double
+
+        # unit conversions
+        pos = sP.units.codeLengthToKpc(pos)
+        vel = sP.units.particleCodeVelocityToKms(vel)
+
+        vel -= vel.mean()  # assume line-of-sight velocity centered at systemic of same component
+
+        # grid setup
+        xvals = np.squeeze(pos[:, axes[0]])
+        yvals = np.squeeze(pos[:, axes[1]])
+
+        xMinMax = [-5.0, 5.0]  # pkpc
+        yMinMax = [-5.0, 5.0]
+        nPixels = [28, 28]  # NIRCam spatial resolution is ~350-700 pc at z=6
+
+        xy = np.linspace(xMinMax[0], xMinMax[1], nPixels[0])
+        xxyy = np.meshgrid(xy, xy)
+
+        # mask pixels to galaxy region and compute result
+        max_height = 1.0  # kpc, TODO
+        max_rad = 5.0  # kpc, TODO
+
+        if ptProperty == "vrot_map":
+            grid_weights, _, _, _ = binned_statistic_2d(
+                xvals, yvals, weights, "sum", bins=nPixels, range=[xMinMax, yMinMax]
+            )
+            grid_vel, _, _, _ = binned_statistic_2d(
+                xvals, yvals, vel * weights, "sum", bins=nPixels, range=[xMinMax, yMinMax]
+            )
+
+            assert np.array_equal(np.isnan(grid_weights), np.isnan(grid_vel))
+            ww = np.where(grid_weights > 0)
+            grid_vel[ww] /= grid_weights[ww]  # weighted mean
+
+            rad = np.sqrt(xxyy[0] ** 2.0 + xxyy[1] ** 2.0)
+            mask = np.where((rad < max_rad) & (grid_weights > 0))
+
+            if np.count_nonzero(mask) == 0:
+                result = np.nan
+            else:
+                result = np.abs(grid_vel[mask]).max()
+
+        if ptProperty == "veldisp_map":
+            assert weights.min() == 1 and weights.max() == 1  # unweighted (else generalize)
+
+            grid_vel, _, _, _ = binned_statistic_2d(xvals, yvals, vel, "std", bins=nPixels, range=[xMinMax, yMinMax])
+
+            mask = np.where((np.abs(xxyy[0]) < max_rad) & (np.abs(xxyy[1]) < max_height))
+
+            result = np.nanstd(grid_vel[mask])
+
+        return result
+
     raise Exception("Unhandled op.")
 
 
@@ -400,6 +493,8 @@ def subhaloRadialReduction(
         "grid2d_isophot_area",
         "grid2d_isophot_gini",
         "grid2d_m20",
+        "veldisp_map",
+        "vrot_map",
     ]
     assert op in ops_basic + ops_custom
     assert scope in ["subfind", "fof", "global"]
@@ -436,7 +531,7 @@ def subhaloRadialReduction(
         select += " (Only [%s] subhalos)" % cenSatSelect
 
     # load group information
-    gc = sP.groupCat(fieldsSubhalos=["SubhaloPos", "SubhaloLenType"])
+    gc = sP.groupCat(fieldsSubhalos=["SubhaloPos", "SubhaloVel", "SubhaloLenType"])
     gc["SubhaloOffsetType"] = sP.groupCatOffsetListIntoSnap()["snapOffsetsSubhalo"]
     nSubsTot = sP.numSubhalos
 
@@ -535,6 +630,12 @@ def subhaloRadialReduction(
         allocSize = (nSubsDo,)
     if ptProperty in ["veldisp_z"]:
         fieldsLoad.append("vel_z")
+        allocSize = (nSubsDo,)
+
+    if ptProperty in ["vrot_map", "veldisp_map"]:
+        fieldsLoad.append("pos")
+        fieldsLoad.append("vel")
+        fieldsLoad.append("mass")
         allocSize = (nSubsDo,)
 
     opts = None  # todo: can move to function argument
