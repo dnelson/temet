@@ -521,6 +521,7 @@ def mbh_vs_mstar(sims: list[simParams]) -> None:
         )
 
         # todo: Larson+23, Ubler+23, Maiolino+23, Harikane+23, etc (see Brooks+25 Fig 6)
+        # todo: https://arxiv.org/abs/2603.04358
 
     subhalos_evo.scatter2d(
         sims,
@@ -538,10 +539,21 @@ def sizes_vs_mstar(sims):
     """Diagnostic plot of galaxy stellar size (half mass radius for now) versus stellar mass."""
     xQuant = "mstar2_log"
     yQuant = "rhalf_stars"
-    ylim = [-2.5, 1.0]  # log pkpc
+    ylim = [-2.6, 1.2]  # log pkpc
     xlim = [4.5, 9.0]  # log mstar
 
     def _draw_data(ax, sims):
+        # Thesan-Zoom (McClymont+26 Figure 2 https://arxiv.org/abs/2503.04894)
+        m26_mstar = [6.0, 7.0, 8.0, 9.0, 9.5]  # log msun
+        m26_rhalf = [-0.18, 0.01, 0.20, 0.41, 0.53]  # log kpc
+
+        ax.plot(m26_mstar, m26_rhalf, ":", color="#555", alpha=0.9, label="McClymont+26 (THESAN-ZOOM)")
+
+        # Lin+26 SIRIUS (z ~ 5) https://arxiv.org/abs/2602.22206 (Figure 8)
+        l26_label = "Lin+26 (SIRIUS)"
+        l26_mstar = [5.6e4, 6.6e4, 9.5e4, 1.3e5, 1.0e6, 2.4e6, 1.8e6, 3.2e6]  # msun
+        l26_rh2d = np.array([7.7e1, 5.5e1, 7.4e1, 8.5e1, 5.7e1, 1.1e2, 2.7e1, 2.9e1]) / 1000  # pc -> kpc
+
         # ELVES (z=0 local volume, not directly related)
         label = "Carlsten+21 ELVES (z=0)"
         xx = np.log10([5e5, 5e8])
@@ -553,7 +565,8 @@ def sizes_vs_mstar(sims):
         ax.fill_between(xx, yy_low, yy_high, color="#999", alpha=0.2)
 
         # Mowla+2019 HST (extrapolation below M* = 9.5)
-        xx = np.array([5.5, 9.5, 11.5])
+        m19_label = r"Mowla+19 HST ($z \sim 3$)"
+        xx = np.array([4.5, 9.5, 11.5])
         A = 10.0**0.51  # Table 2, z=2.75, star-forming
         A_high = 10.0 ** (0.51 + 0.09)
         A_low = 10.0 ** (0.51 - 0.09)
@@ -561,7 +574,7 @@ def sizes_vs_mstar(sims):
         reff = np.log10(A * (10.0**xx / 7e10) ** alpha)  # log pkpc
 
         # data constrained vs extrapolation
-        ax.plot(xx[1:], reff[1:], ":", color="#999", alpha=1.0, label="Mowla+19 HST (z=2.5-3)")
+        ax.plot(xx[1:], reff[1:], ":", color="#999", alpha=1.0, label=m19_label)
         ax.plot(xx[:-1], reff[:-1], ":", color="#999", alpha=0.8)
 
         reff_low = np.log10(A_low * (10.0**xx / 7e10) ** alpha)  # log pkpc
@@ -569,40 +582,70 @@ def sizes_vs_mstar(sims):
 
         ax.fill_between(xx, reff_low, reff_high, color="#999", alpha=0.2)
 
-        # Ormerod+24 CEERS (only down to M* = 9.5) [log msun] and [kpc]
+        # Allen+25 (https://arxiv.org/abs/2410.16354v1 Table A1) (rest-optical uses F356W for the 5<z<6 redshift bin)
+        a24_label = r"Allen+25 JWST ($z \sim 5$)"
+        xx = np.array([4.5, 8.0, 9.0, 11.0])
+        A = 10.0 ** (-0.070)
+        sigma_Reff = 0.193  # intrinsic scatter
+        M0 = 1e9
+        alpha = 0.231
+        reff = np.log10(A * (10.0**xx / M0) ** alpha)  # log pkpc
+        log_reff = alpha * np.log10(10.0**xx / M0) + np.log10(A)
+        print(xx)
+        print(reff)
+        print(10.0**log_reff)
 
-        # TODO: move to data, drop from here (too massive)
-
-        o24_mstar = [9.61,9.64,9.71,9.76,9.66,9.71,9.61,9.57,9.61,9.59,9.64,9.65,9.69,9.65,9.62,9.61,9.59,9.58,9.58,
-                     9.57,9.59,9.59,9.61,9.63,9.66,9.64,9.65,9.67,9.65,9.70,9.61,9.62,9.61,9.59,9.63,9.66,9.67,9.63,
-                     9.64,9.58,9.60,9.59,9.62,9.64,9.57,9.56,9.57,9.60,9.62,9.61,9.70,9.73,9.75,9.71,9.74,9.70,9.71,
-                     9.71,9.73,9.73,9.77,9.76,9.68,9.71,9.76,9.74,9.79,9.80,9.83,9.88,9.86,9.82,9.81,9.79,9.85,9.84,
-                     9.83,9.84,9.85,9.87,9.90,9.86,9.86,9.84,9.81,9.87,9.98,9.91,9.96,9.99,9.98,9.89,9.86,9.88,9.91,
-                     9.91,9.93,9.94,9.96,9.98,9.99,9.93,9.95,9.95,10.05,10.03,10.04,9.99,10.02,10.05,10.08,10.14,
-                     10.12,10.06,10.13,10.20,10.23,10.15,10.13,10.18,10.25,10.28,10.37,10.37,10.44,10.49,10.52,10.50,
-                     10.49,10.38,10.39,10.49,10.44,10.58,10.60,10.47,10.40,10.53,10.65,10.29,10.28,9.90,10.77,10.97,
-                     10.85,10.91,11.05,11.14,11.29,11.18]  # fmt: skip
-        o24_Re = [4.06,4.34,4.17,4.2,3.32,3.24,2.76,2.46,2.17,1.96,2.04,2.13,2,1.79,1.8,1.73,1.71,1.64,1.45,1.36,1.34,
-                  1.27,1.31,1.35,1.36,1.31,1.47,1.51,1.65,1.43,1.24,1.2,1.13,1.09,1.11,1.1,1.04,0.993,0.929,0.967,
-                  0.917,0.863,0.887,0.846,0.751,0.635,0.602,0.571,0.602,0.684,0.545,0.635,0.618,0.786,0.781,0.887,
-                  0.935,0.993,0.863,0.917,0.869,0.993,1.3,1.29,1.74,1.65,2.15,2.4,2.3,2.21,1.9,1.67,1.54,1.54,1.26,
-                  1.12,0.899,0.98,1.01,1.01,1.06,0.83,0.781,0.746,0.721,0.657,0.781,1.22,1.22,1.23,1.31,1.41,1.54,
-                  1.54,1.52,1.65,1.6,1.74,1.84,1.78,1.51,2.02,2.79,3.41,3.46,2.93,2.85,2.67,2.55,2.35,2.04,2.23,2.55,
-                  1.6,1.6,1.45,1.72,1.26,1,4.37,3.37,2.7,3.03,2.29,4.06,2.83,2.4,2.17,1.6,1.64,1.41,1.17,1.03,0.899,
-                  0.741,0.675,0.639,0.506,0.527,0.893,7.31,6.02,1.67,2.08,0.781,0.81,0.786,0.67,1.84,1.34]  # fmt: skip
-
-        # ax.plot(o24_mstar, np.log10(o24_Re), "s", color="#777", alpha=0.6, label="Ormerod+24 CEERS (z=3-4)")
+        ax.plot(xx, reff, "--", color="#555", alpha=0.9, label=a24_label)
+        ax.fill_between(xx, reff - sigma_Reff, reff + sigma_Reff, color="#555", alpha=0.2)
 
         # Matharu+24 FRESCO (z ~ 5.3)
+        m24_label = "Matharu+24 FRESCO (z=5)"
         m24_mstar = [8.1, 8.6, 9.1, 9.6]  # log mstar
-        m24_reff = [-0.56, -0.38, -0.35, -0.13]  # log kpc
+        m24_reff = [-0.56, -0.38, -0.35, -0.13]  # log kpc (stellar continuum)
         m24_reff_err = 0.1  # dex, assumed
 
+        ax.errorbar(m24_mstar, m24_reff, yerr=m24_reff_err, fmt="D:", color="#555", alpha=0.9, label=m24_label)
+
+        # JELS (https://arxiv.org/abs/2509.08045) (V-band as proxy for bulk of stellar population)
+        # fmt: off
+        s25_label = "Stephenson+25 JELS (z=6)"
+        s25_mstar = [8.23, 8.21, 8.07, 8.19, 8.22, 8.24, 8.19, 8.23, 8.06, 8.17, 8.21, 8.29, 8.52, 8.61, 8.59, 8.57,
+                     8.67, 9.08, 9.15, 9.19, 9.02, 9.06, 9.28]
+        s25_mstar_left = [7.91, 7.97, 7.89, 8.02, 8.09, 8.11, 7.93, 8.03, 7.91, 8.02, 8.03, 8.12, 8.35, 8.44, 8.41,
+                          8.35, 8.55, 8.91, 9.02, 9.01, 8.92, 8.88, 9.19]
+        s25_mstar_right = [8.55, 8.44, 8.25, 8.37, 8.36, 8.37, 8.44, 8.43, 8.21, 8.32, 8.39, 8.47, 8.69, 8.79, 8.77,
+                           8.79, 8.79, 9.26, 9.29, 9.36, 9.13, 9.25, 9.37]
+
+        s25_re_V = [-1.45, -1.11, -0.73, -0.70, -0.52, -0.34, -0.29, -0.27, -0.20, -0.08, 0.03, -0.15, -0.38, -0.48,
+                    -0.22, -0.08, 0.13, -0.04, 0.03, -0.04, -0.36, -0.32, -0.35]
+        s25_re_V_up  = [-0.76, -0.91, -0.64, -0.60, -0.42, -0.24, -0.20, -0.18, -0.10, 0.02, 0.12, -0.05, -0.27,
+                        -0.38, -0.12, 0.02, 0.23, 0.05, 0.12, 0.06, -0.26, -0.22, -0.25]
+        s25_re_V_down = [-1.60, -1.30, -0.83, -0.79, -0.62, -0.43, -0.39, -0.37, -0.30, -0.18, -0.07, -0.24, -0.47,
+                         -0.58, -0.33, -0.18, 0.04, -0.14, -0.07, -0.13, -0.46, -0.42, -0.44]
+        # fmt: on
+
+        s25_xerr = [np.array(s25_mstar) - np.array(s25_mstar_left), np.array(s25_mstar_right) - np.array(s25_mstar)]
+        s25_yerr = [np.array(s25_re_V) - np.array(s25_re_V_down), np.array(s25_re_V_up) - np.array(s25_re_V)]
+
         ax.errorbar(
-            m24_mstar, m24_reff, yerr=m24_reff_err, fmt="D--", color="#555", alpha=0.9, label="Matharu+24 FRESCO (z=5)"
+            s25_mstar, s25_re_V, xerr=s25_xerr, yerr=s25_yerr, fmt="s", color="#777", alpha=0.7, label=s25_label
         )
 
-        # TODO: https://arxiv.org/abs/2602.22206 (Figure 8), also some discussion of clusters
+        # opts = {"marker": "s", "lw": 0, "ms": 4, "color": "#555", "alpha": 0.3}
+        ax.plot(np.log10(l26_mstar), np.log10(l26_rh2d), lw=0, marker="X", color="#555", alpha=0.6, label=l26_label)
+
+        # JWST PSF (Pirie+25 for JELS)
+        psf_arcsec = 0.05  # best case e.g. F090W
+        label = "JWST PSF (0.05'' @ z=5.5)"
+
+        xx = ax.get_xlim()
+        yy = np.log10(sims[0].units.arcsecToAngSizeKpcAtRedshift(psf_arcsec))
+
+        ax.plot(xx, [yy, yy], ":", color="#444", lw=1, alpha=1.0)
+        ax.text(xx[1] - 1.8, yy - 0.05, label, fontsize=11, color="#999", alpha=1.0, ha="left", va="top")
+
+        # TODO: Miller+25
+        # https://ui.adsabs.harvard.edu/abs/2025ApJ...988..196M/abstract
 
     subhalos_evo.scatter2d(
         sims,
@@ -612,7 +655,8 @@ def sizes_vs_mstar(sims):
         ylim=ylim,
         parents=False,
         legend="simple",
-        legend_ncols=[1, 3],
+        legend_ncols=[2, 2],
+        legend_locs=["upper left", "lower right"],
         f_pre=_draw_data,
         f_selection=_zoomSubhaloIDsToPlot,
     )
@@ -625,11 +669,62 @@ def size_halpha_vs_mstar(sims):
 
     xQuant = "mstar2_log"
     yQuant = "size_halpha_em"  # cloudy-based
-    ylim = [-0.5, 1.5]  # log pkpc
-    xlim = [4.8, 9.0]  # log mstar
+    ylim = [-1.8, 1.8]  # log pkpc
+    xlim = [4.5, 9.0]  # log mstar
 
     def _draw_data(ax, sims):
-        pass
+        # Matharu+24 FRESCO (z ~ 5.3)
+        m24_label = "Matharu+24 FRESCO (z=5)"
+        m24_mstar = [8.1, 8.6, 9.1, 9.6]  # log mstar
+        m24_reff = [-0.11, -0.14, -0.13, -0.024]  # log kpc (Halpha)
+        m24_reff_err = 0.1  # dex, assumed
+
+        ax.errorbar(m24_mstar, m24_reff, yerr=m24_reff_err, fmt="D--", color="#555", alpha=0.9, label=m24_label)
+
+        # JELS (https://arxiv.org/abs/2509.08045)
+        # fmt: off
+        s25_label = "Stephenson+25 JELS (z=6)"
+        s25_mstar = [8.23, 8.19, 8.22, 8.21, 8.24, 8.29, 8.52, 8.59, 8.57, 8.61, 8.67, 8.06, 8.08, 8.18, 8.17, 8.23,
+                     8.21, 9.02, 9.06, 9.19, 9.28, 9.15, 9.08]
+        s25_mstar_left = [7.91, 8.02, 8.09, 7.97, 8.11, 8.12, 8.35, 8.40, 8.35, 8.44, 8.55, 7.91, 7.89, 7.93, 8.02,
+                          8.03, 8.03, 8.91, 8.88, 9.01, 9.18, 9.02, 8.91]
+        s25_mstar_right = [8.55, 8.37, 8.36, 8.44, 8.37, 8.47, 8.69, 8.77, 8.79, 8.79, 8.79, 8.21, 8.25, 8.44, 8.32,
+                           8.43, 8.39, 9.13, 9.25, 9.37, 9.37, 9.29, 9.26]
+
+        s25_re_nb = [-0.75, -0.71, -0.52, -0.49, -0.40, -0.37, -0.36, -0.39, -0.27, -0.20, 0.07, -0.47, -0.37, -0.23,
+                     -0.01, -0.03, 0.12, -0.15, -0.41, -0.35, -0.14, -0.07, -0.07]
+        s25_re_nb_up = [-0.66, -0.61, -0.42, -0.40, -0.31, -0.28, -0.27, -0.29, -0.18, -0.10, 0.17, -0.36, -0.27,
+                        -0.13, 0.09, 0.07, 0.22, -0.05, -0.31, -0.25, -0.05, 0.03, 0.02]
+        s25_re_nb_down = [-0.88, -0.84, -0.64, -0.61, -0.53, -0.50, -0.49, -0.51, -0.40, -0.32, -0.06, -0.62, -0.49,
+                          -0.36, -0.13, -0.16, 0.00, -0.28, -0.53, -0.48, -0.27, -0.19, -0.19]
+        # fmt: on
+
+        s25_xerr = [np.array(s25_mstar) - np.array(s25_mstar_left), np.array(s25_mstar_right) - np.array(s25_mstar)]
+        s25_yerr = [np.array(s25_re_nb) - np.array(s25_re_nb_down), np.array(s25_re_nb_up) - np.array(s25_re_nb)]
+
+        ax.errorbar(
+            s25_mstar, s25_re_nb, xerr=s25_xerr, yerr=s25_yerr, fmt="s", color="#555", alpha=0.9, label=s25_label
+        )
+
+        # Thesan-Zoom (McClymont+26 Figure 2 https://arxiv.org/abs/2503.04894)
+        m26_mstar = [6.0, 7.0, 8.0, 8.5, 9.5]  # log msun
+        m26_rhalf = [0.07, 0.23, 0.39, 0.47, 0.74]  # log kpc (Halpha)
+
+        ax.plot(m26_mstar, m26_rhalf, "-", color="#555", alpha=0.7, label="McClymont+26 (THESAN-ZOOM)")
+
+        # TODO: Danhaive+25
+        # https://ui.adsabs.harvard.edu/abs/2025arXiv251006315D/abstract
+
+    def _draw_psf(ax, sims):
+        # JWST PSF (Pirie+25 for JELS)
+        psf_arcsec = 0.17  # for the NB filters used for Halpha
+        label = "JWST PSF (0.17'' @ z=5.5)"
+
+        xx = ax.get_xlim()
+        yy = np.log10(sims[0].units.arcsecToAngSizeKpcAtRedshift(psf_arcsec))
+
+        ax.plot(xx, [yy, yy], ":", color="#444", lw=1, alpha=1.0)
+        ax.text(xx[1] - 2.5, yy - 0.05, label, fontsize=11, color="#999", alpha=1.0, ha="left", va="top")
 
     subhalos_evo.scatter2d(
         sims,
@@ -637,7 +732,12 @@ def size_halpha_vs_mstar(sims):
         yQuant=yQuant,
         xlim=xlim,
         ylim=ylim,
+        parents=False,
+        legend="simple",
+        legend_ncols=[1, 3],
+        legend_locs=["lower right", "upper left"],
         f_pre=_draw_data,
+        f_post=_draw_psf,
         f_selection=_zoomSubhaloIDsToPlot,
         sizefac=0.8,
     )
@@ -981,63 +1081,6 @@ def phase_diagram(sim, yQuant="temp", cQuant=None, ext="pdf"):
         f_post=_f_post,
         saveFilename=saveFilename,
     )
-
-
-def diagnostic_numhalos_uncontaminated(sims):
-    """Visualize number of non-contaminated halos vs redshift, and their contamination fractions."""
-    ymin = 1e-6
-
-    fig, ax = plt.subplots()
-    ax.set_ylim([ymin, 1.0])
-    ax.set_xlim([14, 2.9])
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.xaxis.set_major_formatter(ScalarFormatter())
-    ax.xaxis.set_minor_formatter(ScalarFormatter())
-    ax.set_xlabel("Redshift")
-    ax.set_ylabel("Low-resolution DM Contamination Fraction")
-
-    max_num = 0
-
-    for sim in sims:
-        sim_loc = sim.copy()
-
-        # loop over snapshots
-        for snap in sim_loc.validSnapList():
-            # load
-            sim_loc.setSnap(snap)
-
-            contam_frac = sim_loc.subhalos("contam_frac")
-            cen_flag = sim_loc.subhalos("cen_flag")
-            mstar = sim_loc.subhalos("mstar2_log")
-
-            # select subhalos of interest
-            subhaloIDs = np.where((cen_flag == 1) & (mstar > 0) & np.isfinite(mstar))[0]
-            mstar = mstar[subhaloIDs]
-            contam_frac = contam_frac[subhaloIDs]
-
-            max_num = np.max([max_num, len(subhaloIDs)])
-
-            print(snap, mstar)
-
-            # plot
-            for j in range(len(subhaloIDs)):
-                yy = contam_frac[j] if contam_frac[j] > ymin else ymin * 1.5
-                ms = mstar[j] * 1.5
-                ax.plot(sim_loc.redshift, yy, marker=markers[0], ms=ms, color=colors[j])
-
-    # legend
-    handles = [plt.Line2D((0, 0), (0, 0), ls="-", color="black", lw=0)]
-    labels = [sim.simName]
-
-    for i in range(max_num):
-        handles.append(plt.Line2D([0], [0], marker=markers[0], color=colors[i], lw=0))
-        labels.append("Halo ID#%d" % i)
-
-    ax.legend(handles, labels, loc="upper left")
-
-    fig.savefig("contam_frac_z_%s.pdf" % sims[0].simName)
-    plt.close(fig)
 
 
 def diagnostic_snapshot_spacing(sims):
@@ -2031,15 +2074,29 @@ def paperPlots(a=False):
         ## subhalos_evo.tracks1d(sims, quant='Z_stars_fof_masswt', **opts) # aux
 
     # fig 11a - stellar sizes
-    if 1 or a:
+    if 0 or a:
         sizes_vs_mstar(sims)
 
     # fig 11b - stellar size evo
     if 0 or a:
-        opts = {"xlim": [14.1, 5.5], "ylim": [-3.5, 0.0], "sizefac": 0.8, "f_selection": _zoomSubhaloIDsToPlot}
+        opts = {
+            "xlim": [14.1, 5.5],
+            "ylim": [-3.5, 0.7],
+            "parents": False,
+            "smooth": False,
+            "smooth_custom": True,
+            "legend": "simple",
+            "legend_ncols": [4, 4],
+            "legend_locs": ["lower right", "upper left"],
+            "sizefac": 0.8,
+            "f_selection": _zoomSubhaloIDsToPlot,
+        }
 
         subhalos_evo.tracks1d(sims, quant="size_stars_log", **opts)
         # subhalos_evo.tracks1d(sims, quant='rhalf_stars_fof', **opts)
+
+    # fig TODO: ratio of (stellar/Halpha) size
+    # fig TODO: look at CII-sizes (e.g. use low-T selection), compare to H-alpha sizes (Ikeda+25, CRISTAL)
 
     # fig 11c - gas sizes
     if 0 or a:
@@ -2047,10 +2104,11 @@ def paperPlots(a=False):
 
     # fig 12: single large galaxy image
     if 0:
-        sim = simParams("structures", hInd=23908, res=14, variant="ST14", redshift=5.5, haloInd=0)
+        sim = simParams("structures", hInd=23908, res=14, variant="ST14", redshift=5.5, haloInd=0)  # original
+        # sim = simParams("structures", hInd=23908, res=15, variant="ST15", redshift=10.0, haloInd=0)
         vis_single_galaxy(sim, haloID=0)
-        # vis_single_galaxy(sim, haloID=0, noSats=True)
 
+        # vis_single_galaxy(sim, haloID=0, noSats=True)
         # vis_single_halo(sim, haloID=0)
         # vis_gallery_manyfields(sim, haloID=0)
 
@@ -2191,10 +2249,6 @@ def paperPlots(a=False):
         from temet.plot.perf import plotCpuTimes
 
         plotCpuTimes(sims, xlim=[0.0, 0.25])
-
-    # diagnostic: number of non-contaminated halos vs redshift
-    if 0 or a:
-        diagnostic_numhalos_uncontaminated(sims)
 
     # diagnostic: snapshot spacing
     if 0:

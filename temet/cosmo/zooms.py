@@ -8,11 +8,11 @@ from os.path import isfile
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.ticker import MultipleLocator
+from matplotlib.ticker import MultipleLocator, ScalarFormatter
 from scipy.signal import savgol_filter
 
 from ..load.simtxt import getCpuTxtLastTimestep
-from ..plot.config import colors, linestyles, lw, sKn, sKo
+from ..plot.config import colors, linestyles, lw, markers, sKn, sKo
 from ..plot.util import _finish_plot
 from ..util.helper import logZeroNaN, running_median
 from ..util.simParams import simParams
@@ -788,4 +788,61 @@ def plot_timeevo():
     # finish plot
     ax.legend(loc="best")
     fig.savefig("time_evo_sh%d_%s_%d.pdf" % (subhaloID, field, fieldIndex))
+    plt.close(fig)
+
+
+def numhalos_uncontaminated_vs_redshift(sims):
+    """Visualize number of non-contaminated halos vs redshift, and their contamination fractions."""
+    ymin = 1e-6
+
+    fig, ax = plt.subplots()
+    ax.set_ylim([ymin, 1.0])
+    ax.set_xlim([14, 2.9])
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.xaxis.set_major_formatter(ScalarFormatter())
+    ax.xaxis.set_minor_formatter(ScalarFormatter())
+    ax.set_xlabel("Redshift")
+    ax.set_ylabel("Low-resolution DM Contamination Fraction")
+
+    max_num = 0
+
+    for sim in sims:
+        sim_loc = sim.copy()
+
+        # loop over snapshots
+        for snap in sim_loc.validSnapList():
+            # load
+            sim_loc.setSnap(snap)
+
+            contam_frac = sim_loc.subhalos("contam_frac")
+            cen_flag = sim_loc.subhalos("cen_flag")
+            mstar = sim_loc.subhalos("mstar2_log")
+
+            # select subhalos of interest
+            subhaloIDs = np.where((cen_flag == 1) & (mstar > 0) & np.isfinite(mstar))[0]
+            mstar = mstar[subhaloIDs]
+            contam_frac = contam_frac[subhaloIDs]
+
+            max_num = np.max([max_num, len(subhaloIDs)])
+
+            print(snap, mstar)
+
+            # plot
+            for j in range(len(subhaloIDs)):
+                yy = contam_frac[j] if contam_frac[j] > ymin else ymin * 1.5
+                ms = mstar[j] * 1.5
+                ax.plot(sim_loc.redshift, yy, marker=markers[0], ms=ms, color=colors[j])
+
+    # legend
+    handles = [plt.Line2D((0, 0), (0, 0), ls="-", color="black", lw=0)]
+    labels = [sim.simName]
+
+    for i in range(max_num):
+        handles.append(plt.Line2D([0], [0], marker=markers[0], color=colors[i], lw=0))
+        labels.append("Halo ID#%d" % i)
+
+    ax.legend(handles, labels, loc="upper left")
+
+    fig.savefig("contam_frac_z_%s.pdf" % sims[0].simName)
     plt.close(fig)

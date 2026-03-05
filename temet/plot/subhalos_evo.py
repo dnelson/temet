@@ -78,10 +78,10 @@ def _add_legends_simple(ax, hInds, res, variants, colors, lineplot=False, locs=N
     This is a simplified version of _add_legends, for e.g. scatter2d where we do not want to differentiate by
     resolution or variant (assuming all are the same).
     """
+    legParams = {"frameon": 1, "framealpha": 0.7, "fancybox": False}  # add white background
+
     if locs is None:
         locs = ["upper left", "lower right"]
-        if r"1/2,\star" in ax.get_ylabel():
-            locs = locs[::-1]
 
     # legend one: remove simulations
     handles, labels = ax.get_legend_handles_labels()
@@ -98,7 +98,7 @@ def _add_legends_simple(ax, hInds, res, variants, colors, lineplot=False, locs=N
             ncols_second = np.max([2, ncols_second])  # at least two
         ncols = [ncols_first, ncols_second]  # second index
 
-    legend = ax.legend(handles, labels, loc=locs[0], ncols=ncols[0])
+    legend = ax.legend(handles, labels, loc=locs[0], ncols=ncols[0], **legParams)
     ax.add_artist(legend)
 
     # legend two
@@ -116,8 +116,6 @@ def _add_legends_simple(ax, hInds, res, variants, colors, lineplot=False, locs=N
             handles.append(plt.Line2D([0], [0], color=c, lw=0, marker=marker, ms=12))
 
         labels.append("h%d" % hInd)
-
-    legParams = {"frameon": 1, "framealpha": 0.7, "fancybox": False}  # add white background
 
     legend2 = ax.legend(handles, labels, loc=locs[1], ncols=ncols[1], **legParams)
     ax.add_artist(legend2)
@@ -339,7 +337,7 @@ def scatter2d(
                 # plot as series of markers
                 r, g, b = to_rgb(l.get_color())
                 xy_c = [[r, g, b, a] for a in alpha]
-                ax.scatter(x_track, y_track, marker=marker, color=xy_c, alpha=alpha, zorder=10)
+                ax.scatter(x_track, y_track, marker=marker, color=xy_c, alpha=alpha)  # , zorder=10)
 
                 # plot as line
                 # points = np.vstack((x_track, y_track)).T.reshape(-1, 1, 2)
@@ -464,6 +462,7 @@ def tracks1d(
     sfh_treebased: bool = False,
     smooth: bool = False,
     monotonic: bool = False,
+    smooth_custom: bool = False,
     parents: bool = True,
     color: str = None,
     sizefac: float = 1.0,
@@ -486,6 +485,7 @@ def tracks1d(
       sfh_treebased: if True, use merger tree-based tracks even for SFH-related quantities.
       smooth: if True, smooth the tracks in time (only for tree/quantMPB-based fields).
       monotonic: if True, enforce that tracks are monotonically increasing (e.g. avoid spurious dips).
+      smooth_custom: if True, apply custom smoothing to the tracks.
       parents: if True, plot the original halos from the parent box for comparison.
       color: if not None, override default color scheme and use this color for all lines.
       sizefac: multiplier on figure size, can be scalar or 2-tuple.
@@ -648,6 +648,18 @@ def tracks1d(
                             cur_max = vals_track[i]
                         else:
                             vals_track[i] = cur_max
+
+                if smooth_custom:
+                    # (iteratively) fill any single gaps
+                    for _niter in range(10):
+                        for i in range(vals_track.size - 2, 1, -1):
+                            if np.isnan(vals_track[i]) and (
+                                np.isfinite(vals_track[i - 1]) or np.isfinite(vals_track[i + 1])
+                            ):
+                                vals_track[i] = np.nanmean([vals_track[i - 1], vals_track[i + 1]])
+
+                    # smooth (possibly again) (different parameters, default sKn=5, sKo=3) (e.g. after log)
+                    vals_track = savgol_filter(vals_track, 10, 1)
 
                 ax.plot(mpb["z"], vals_track, ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha)
 
