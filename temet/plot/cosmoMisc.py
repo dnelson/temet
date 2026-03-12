@@ -1479,8 +1479,11 @@ def simHighZComparison():
     garcia25_mgas = [20]
 
     # Obelisk (Trebitsch+22 https://arxiv.org/abs/2002.04045)
-    obelisk_mhalo = []  # 2.5e13 at z~2, unknown at z=6, asked for in an email
+    obelisk_mhalo = []  # 2.5e13 at z~2 (many at z=6, email from maxime gives data file at z=6)
     obelisk_mgas = [1.2e6 * 0.17]  # 1.2e6 m_DM * 0.17 baryon fraction ~ 2e5 Msun for gas (off plot for now)
+
+    # obelisk_mhalo = np.loadtxt('Obelisk_haloes_00075.txt')[:,1]
+    # obelisk_mhalo = np.log10(obelisk_mhalo / 1.2) # mvir -> m200c rough adjustment
 
     # Seven Dwarfs (Mina+21, Baumschlager+25) (two high-mass halos are 3.6e10 and 1.5e10 at z=0, mapped to z=6)
     sevendwarfs_mhalo = np.log10([1e9, 5.5e8])  # approximate

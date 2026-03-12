@@ -155,32 +155,42 @@ def behrooziUM(sim, redshift=None):
     return r
 
 
-def zhang21(sim, redshift=None):
-    """Load from data files: Zhang+21 (TRINITY semi-empirical model for SMBHs)."""
+def zhang23(sim, mstar=False, redshift=None):
+    """Load from data files: Zhang+23 (TRINITY semi-empirical model for SMBHs)."""
     if redshift is None:
         redshift = sim.redshift
 
-    file = dataBasePath + "zhang/fig14_median_BHHM_fit_z=0-10.dat"
+    if mstar:
+        file = dataBasePath + "zhang/fig13_median_BHSM_fit_z=0-10.dat"
+    else:
+        file = dataBasePath + "zhang/fig14_median_BHHM_fit_z=0-10.dat"
 
-    # columns: z log10(Mpeak)[Msun] log10(Mbh_median)[Msun]
-    # log10(16-th percentile of Mbh_median)[Msun] log10(84-th percentile of Mbh_median)[Msun]
+    # columns: z
+    # log10(Mpeak)[Msun] or log10(Mstar)[Msun], depending on file
+    # log10(Mbh_median)[Msun]
+    # log10(16-th percentile of Mbh_median)[Msun]
+    # log10(84-th percentile of Mbh_median)[Msun]
     data = np.loadtxt(file)
 
     r = {
-        "label": "Zhang+ (21) TRINITY",
+        "label": "Zhang+23",
         "redshift": data[:, 0],
-        "mhalo": data[:, 1],  # log msun
         "mbh": data[:, 2],  # log msun
         "mbh_p16": data[:, 3],  # p16
         "mbh_p84": data[:, 4],
     }  # p84
+
+    if mstar:
+        r["mstar"] = data[:, 1]  # log msun
+    else:
+        r["mhalo"] = data[:, 1]  # log msun
 
     # select at a particular redshift?
     z_closest, _ = closest(r["redshift"], redshift)
     w = np.where(r["redshift"] == z_closest)[0]
 
     if np.abs(z_closest - redshift) > 0.1:
-        print("Warning: Selected [z=%f] for Zhang+21 (TRINITY) at requested [z=%f]." % (z_closest, redshift))
+        print("Warning: Selected [z=%f] for Zhang+23 (TRINITY) at requested [z=%f]." % (z_closest, redshift))
 
     for key in r:
         if key == "label":

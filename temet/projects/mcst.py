@@ -402,7 +402,7 @@ def sfr_10_100_ratio(sims):
 
 def mbh_vs_mhalo(sims: list[simParams]) -> None:
     """SMBH mass versus halo mass."""
-    from temet.load.data import zhang21
+    from temet.load.data import zhang23
 
     xQuant = "mhalo_200_log"
     yQuant = "mass_smbh"  # largest BH_Mass in each subhalo
@@ -415,8 +415,21 @@ def mbh_vs_mhalo(sims: list[simParams]) -> None:
         ylim = ax.get_ylim()
         sim_parent = sims[0].sP_parent
 
-        # Zhang+21 TRINITY semi-empirical model
-        z21 = zhang21(sim_parent)
+        # constant mbh/mhalo ratios
+        mbh_mhalo_ratios = [1e-3, 1e-4, 1e-5]
+        opts = {"fontsize": 12, "color": "#444", "alpha": 0.3, "ha": "left", "va": "bottom", "rotation": 30.0}
+
+        for i, ratio in enumerate(mbh_mhalo_ratios):
+            yy = np.log10(10.0 ** np.array(xlim) * ratio)
+            label = r"$M_{\rm BH} = 10^{%d} M_{\rm halo}$" % np.log10(ratio)
+            ax.plot(xlim, yy, ":", color=opts["color"], alpha=opts["alpha"])
+
+            x_label = xlim[0] + (xlim[1] - xlim[0]) * 0.3  # (0.1 + 0.15 * i)
+            y_label = np.interp(x_label, xlim, yy) + 0.1
+            ax.text(x_label, y_label, label, **opts)
+
+        # Zhang+23 TRINITY semi-empirical model
+        z21 = zhang23(sim_parent)
 
         ax.plot(z21["mhalo"], z21["mbh"], "--", color="#444", alpha=0.8, label=z21["label"])
         ax.fill_between(z21["mhalo"], z21["mbh_p16"], z21["mbh_p84"], color="#444", alpha=0.4)
@@ -429,8 +442,8 @@ def mbh_vs_mhalo(sims: list[simParams]) -> None:
         mhalo_seed = sim_parent.units.codeMassToLogMsun(MinFoFMassForNewSeed_MCST)
 
         ax.plot([xlim[0], (xlim[1] + xlim[0]) / 2], [mbh_seed, mbh_seed], ":", color="#444", alpha=0.8)
-        label = r"MCST $M_{\rm BH,seed}$ (@ M$_{\rm FoF} = 10^{%.1f}$ M$_{\rm sun}$)" % mhalo_seed
-        ax.text(xlim[0] + 0.05, mbh_seed + 0.06, label, fontsize=11, color="#444", alpha=0.8, ha="left", va="bottom")
+        label = r"$M_{\rm BH,seed}$ (@ M$_{\rm FoF} = 10^{%.1f}$ M$_{\rm sun}$)" % mhalo_seed
+        ax.text(xlim[0] + 0.8, mbh_seed + 0.1, label, fontsize=13, color="#444", alpha=0.5, ha="left", va="bottom")
 
         mhalo_seed_tng = sim_parent.units.codeMassToLogMsun(MinFoFMassForNewSeed_TNG)
         ax.plot([mhalo_seed_tng, mhalo_seed_tng], [ylim[1], ylim[1] - 0.1], "-", color="#444", alpha=0.4)
@@ -441,6 +454,10 @@ def mbh_vs_mhalo(sims: list[simParams]) -> None:
         yQuant=yQuant,
         xlim=xlim,
         ylim=ylim,
+        parents=False,
+        legend="simple",
+        legend_locs=["lower right", "upper left"],
+        legend_ncols=[1, 1],
         f_pre=_draw_data,
         f_selection=_zoomSubhaloIDsToPlot,
         sizefac=0.8,
@@ -449,9 +466,11 @@ def mbh_vs_mhalo(sims: list[simParams]) -> None:
 
 def mbh_vs_mstar(sims: list[simParams]) -> None:
     """SMBH mass versus stellar mass."""
+    from temet.load.data import zhang23
+
     xQuant = "mstar2_log"
     yQuant = "mass_smbh"  # largest BH_Mass in each subhalo
-    xlim = [4.8, 10.2]  # mstar
+    xlim = [4.5, 10.0]  # mstar
     ylim = [2.8, 7.0]  # msmbh
 
     def _draw_data(ax, sims):
@@ -466,28 +485,46 @@ def mbh_vs_mstar(sims: list[simParams]) -> None:
         mhalo_seed = sim_parent.units.codeMassToLogMsun(MinFoFMassForNewSeed_MCST)
 
         ax.plot([xlim[0], (xlim[1] + xlim[0]) / 2], [mbh_seed, mbh_seed], ":", color="#444", alpha=0.8)
-        label = r"MCST $M_{\rm BH,seed}$ (@ M$_{\rm FoF} = 10^{%.1f}$ M$_{\rm sun}$)" % mhalo_seed
+        label = r"$M_{\rm BH,seed}$ (@ M$_{\rm FoF} = 10^{%.1f}$ M$_{\rm sun}$)" % mhalo_seed
         ax.text(xlim[0] + 0.8, mbh_seed + 0.1, label, fontsize=13, color="#444", alpha=0.5, ha="left", va="bottom")
 
         # constant mbh/mstar ratios
-        for i, ratio in enumerate([1.0, 0.1, 0.01]):
-            x = np.arange(xlim[0], xlim[1], 0.1)
-            y = np.log10(10.0**x * ratio)
+        mbh_mstar_ratios = [0.1, 0.01, 0.001]
+        opts = {"fontsize": 12, "color": "#444", "alpha": 0.3, "ha": "left", "va": "bottom", "rotation": 45.0}
+
+        for i, ratio in enumerate(mbh_mstar_ratios):
+            yy = np.log10(10.0 ** np.array(xlim) * ratio)
             label = r"$M_{\rm BH} = M_{\star}$ / %d" % (1 / ratio)
-            if ratio == 1:
-                label = r"$M_{\rm BH} = \,M_{\star}$"
-            ax.plot(x, y, linestyles[i + 1], color="#444", alpha=0.3)
-            ax.text(
-                xlim[0] + 0.1,
-                y[0] + 0.2,
-                label,
-                fontsize=13,
-                color="#444",
-                alpha=0.3,
-                ha="left",
-                va="bottom",
-                rotation=45.0,
-            )
+            ax.plot(xlim, yy, ":", color=opts["color"], alpha=opts["alpha"])
+
+            x_label = xlim[0] + (xlim[1] - xlim[0]) * (0.45 - 0.1 * i)
+            y_label = np.interp(x_label, xlim, yy) + 0.15
+            ax.text(x_label, y_label, label, **opts)
+
+        # Zhang+23 TRINITY semi-empirical model
+        z21 = zhang23(sim_parent, mstar=True)
+
+        ax.plot(z21["mstar"], z21["mbh"], "--", color="#444", alpha=0.7, label=z21["label"])
+        ax.fill_between(z21["mstar"], z21["mbh_p16"], z21["mbh_p84"], color="#444", alpha=0.4)
+
+        # Pacucci+23
+        p23_alpha = -2.43
+        p23_beta = 1.06
+        # p23_sigma = 0.69
+
+        p23_yy = p23_alpha + p23_beta * np.array(xlim)
+        ls = (0, (3, 1, 1, 1, 1, 1))
+        ax.plot(xlim, p23_yy, linestyle=ls, color="#444", alpha=0.6, label="Pacucci+23")
+        # ax.fill_between(xlim, p23_yy - p23_sigma, p23_yy + p23_sigma, color="#444", alpha=0.05)
+
+        # Ziparo+26 - Eqn 9 (https://arxiv.org/abs/2603.04358)
+        z26_alpha = -4.06
+        z26_beta = 1.17
+        z26_sigma = 0.63  # intrinsic orthogonal scatter
+
+        z26_yy = z26_alpha + z26_beta * np.array(xlim)
+        ax.plot(xlim, z26_yy, "-.", color="#444", alpha=0.8, label="Ziparo+26")
+        ax.fill_between(xlim, z26_yy - z26_sigma, z26_yy + z26_sigma, color="#444", alpha=0.2)
 
         # Brooks+25 (z=5.6 and z=5.8 stack points) (Table 1 / Fig 6)
         b25_label = "Brooks+25"  # JWST (z = 5.5-6)'
@@ -520,8 +557,8 @@ def mbh_vs_mstar(sims: list[simParams]) -> None:
             g25_mstar, g25_mbh, xerr=g25_mstar_err, yerr=g25_mbh_err, fmt="s", color="#555", alpha=0.8, label=g25_label
         )
 
-        # todo: Larson+23, Ubler+23, Maiolino+23, Harikane+23, etc (see Brooks+25 Fig 6)
-        # todo: https://arxiv.org/abs/2603.04358
+        # todo: could add direct/uncorrected JWST samples e.g. Larson+23, Ubler+23, Maiolino+23, Harikane+23, etc
+        # (see Brooks+25 Fig 6 / Ortame+26 Fig 6)
 
     subhalos_evo.scatter2d(
         sims,
@@ -529,6 +566,10 @@ def mbh_vs_mstar(sims: list[simParams]) -> None:
         yQuant=yQuant,
         xlim=xlim,
         ylim=ylim,
+        parents=False,
+        legend="simple",
+        legend_locs=["lower right", "upper left"],
+        legend_ncols=[1, 1],
         f_pre=_draw_data,
         f_selection=_zoomSubhaloIDsToPlot,
         sizefac=0.8,
@@ -646,6 +687,9 @@ def sizes_vs_mstar(sims):
 
         # TODO: Miller+25
         # https://ui.adsabs.harvard.edu/abs/2025ApJ...988..196M/abstract
+
+        # TODO: Ceverino+26 (FirstLight simulations)
+        # https://arxiv.org/abs/2603.05045
 
     subhalos_evo.scatter2d(
         sims,
@@ -2114,8 +2158,7 @@ def paperPlots(a=False):
 
     # fig 13a - smbh vs mhalo and mstar relations
     if 0 or a:
-        # little growth: discussion compare to Partmann+24 and Petersson+25 (similar, no growth, blamed on SNe)
-        mbh_vs_mhalo(sims)
+        # mbh_vs_mhalo(sims)
         mbh_vs_mstar(sims)
 
     # fig 13b - black hole time evolution
@@ -2123,7 +2166,7 @@ def paperPlots(a=False):
         for sim in sims:
             blackhole_properties_vs_time(sim)
             # blackhole_position_vs_time(sim, snap_based=True)
-            blackhole_position_vs_time(sim, snap_based=False)
+            # blackhole_position_vs_time(sim, snap_based=False)
 
     # ------------
 
@@ -2249,10 +2292,6 @@ def paperPlots(a=False):
         from temet.plot.perf import plotCpuTimes
 
         plotCpuTimes(sims, xlim=[0.0, 0.25])
-
-    # diagnostic: snapshot spacing
-    if 0:
-        diagnostic_snapshot_spacing(sims)
 
     # diagnostic: SFR debug
     if 0:
