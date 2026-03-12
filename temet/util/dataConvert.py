@@ -1885,3 +1885,37 @@ def exportIltisCutout(sim, haloIDs, emLine="O  7 21.6020A", haloSizeRvir=2.0, sf
             f["global_inds"] = inds
 
         print("Saved: [%s]" % fileName, flush=True)
+
+
+def parsec_v2():
+    """Convert PARSEC v2 stellar evolutionary information into single HDF5 files.
+
+    Source: https://stev.oapd.inaf.it/PARSEC/tracks_v2_VMS.html
+    """
+    files = glob.glob("ejecta/*total*")
+
+    data = {}
+    # note: these files start at 14 Msun ZAMS
+    # where for 8 < ZAMS < 14 we have CCSN/NS, and for ZAMS < 8 we have NOSN/WD
+    fate_map = {"CCSN": "NS", "FSN": "BH", "PPISN": "BH", "PISN": "None", "DBH": "BH", "NOT": "None"}
+
+    for file in files:
+        print(file)
+        Z = float(file.split("_")[0].replace("ejecta/Z", ""))
+        d = np.genfromtxt(file, dtype=None)
+        keys = d[0, :]
+
+        data_loc = {}
+        for i, key in enumerate(keys):
+            data_loc[str(key)] = d[1:, i]
+            if key != "SNT":
+                data_loc[key] = data_loc[key].astype("float32")
+        data_loc["SNT"] = [str(s) for s in data_loc["SNT"]]
+        data_loc["Remnant"] = [fate_map[s] for s in data_loc["SNT"]]
+        data[Z] = data_loc
+
+    # write
+    with h5py.File("parsec_v2_ejecta.hdf5", "w") as f:
+        for Z_val, _ in data.items():
+            for key in data[Z_val]:
+                f[f"Z_{Z_val}/{key}"] = data[Z_val][key]

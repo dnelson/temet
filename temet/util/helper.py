@@ -37,7 +37,15 @@ def isUnique(x):
 
 def closest(array, value):
     """Return closest element of array to input value."""
-    ind = np.nanargmin(np.abs(array - value))
+    if isinstance(value, np.ndarray):
+        # value is actually an array, find closest for each element
+        # expand array to 2D, with each row a copy of the original array, and value to 2D with each column a copy of the original value
+        array_expanded = np.tile(array, (value.size, 1)).T
+        ind = np.nanargmin(np.abs(array_expanded - value), axis=0)
+    else:
+        # value is a scalar, find closest
+        ind = np.nanargmin(np.abs(array - value))
+
     ind_nd = np.unravel_index(ind, array.shape)
     return array[ind_nd], ind
 

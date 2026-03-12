@@ -2201,6 +2201,100 @@ def stellar_masshist(sim, partType, field, args):
     return result
 
 
+stellar_masshist.label = "Stellar Mass Histogram"  # not for plotting
+stellar_masshist.units = ""  # dimensionless
+stellar_masshist.limits = [0, 1]
+stellar_masshist.log = False
+
+
+@snap_field(aliases=["remnant_type", "remnant_mass"])
+def stellar_remnant(sim, partType, field, args):
+    """Stellar remnant type. MCST model.
+    (-1=still star (single or low-mass pop), 0=none, 1=white dwarf, 2=neutron star, 3=black hole)."""
+    assert sim.star == 3  # MCST solo star method only (could be generalized to non-solo)
+
+    AgeAtNextDeath = sim.snapshotSubset(partType, "AgeAtNextDeath", **args)
+    InitialSoloMass = sim.snapshotSubset(partType, "InitialSoloMass", **args)
+    Mini_Msun = sim.units.codeMassToMsun(InitialSoloMass)
+
+    # load PARSEC tables
+    from ..util.extern import tables_path
+
+    path = tables_path + "parsec/v2_ejecta.hdf5"
+
+    Z_vals = []
+    Min = []
+    Mrem = []
+    rem = []
+
+    with h5py.File(path, "r") as f:
+        for key in f.keys():
+            Z_vals.append(float(key.replace("Z_", "")))
+            Min.append(f[key]["Min"][()])
+            Mrem.append(f[key]["Mrem"][()])
+            rem.append([r.decode() for r in f[key]["Remnant"][()]])
+
+    rem_map = {"None": 0, "WD": 1, "NS": 2, "BH": 3}
+
+    Z_vals = np.array(Z_vals)
+
+    # need InitialMetallicity... (double-check if the "Metallicity" field evolves with time)
+    Metallicity = sim.snapshotSubset(partType, "Metallicity", **args)
+
+    # allocate
+    remnant_type = np.zeros(AgeAtNextDeath.size, dtype="int8")
+    remnant_type -= 1
+
+    remnant_mass = np.zeros(AgeAtNextDeath.size, dtype="float32")
+    remnant_mass.fill(np.nan)
+
+    # WD is independent of metallicity, defined as Mini < 8 Msun
+    w_WD = np.where(np.isinf(AgeAtNextDeath) & (Mini_Msun > 0) & (Mini_Msun < 8.0))
+    remnant_type[w_WD] = 1
+    remnant_mass[w_WD] = 0.6  # assign typical WD mass [Msun]
+
+    # 8 < ZAMS < 14 is always a CCSN and results in a NS, independent of Z
+    w_NS = np.where(np.isinf(AgeAtNextDeath) & (Mini_Msun > 0) & (Mini_Msun >= 8.0) & (Mini_Msun < 14.0))
+    remnant_type[w_NS] = 2
+    remnant_mass[w_NS] = 1.4  # assign typical NS mass [Msun]
+
+    # identify all particles that have died (are now remnants), that are not WDs
+    w_gt8 = np.where(np.isinf(AgeAtNextDeath) & (Mini_Msun > 0) & (Mini_Msun >= 14.0))
+
+    if len(w_gt8[0]) > 0:
+        # NS and BH (and None) depend on metallicity, identify closest Z and Min tables, assign remnant type
+        _, Z_ind = closest(Z_vals, Metallicity[w_gt8])
+
+        # simply loop over each >14 Msun star (slow, but there are not many of these)
+        for i in range(len(w_gt8[0])):
+            ind_pt4 = w_gt8[0][i]
+            Min_loc = Min[Z_ind[i]]
+            Mrem_loc = Mrem[Z_ind[i]]
+            rem_loc = rem[Z_ind[i]]
+
+            # find bin in initial mass table (i.e. closest value that is lower)
+            ind_loc = np.where(Mini_Msun[ind_pt4] < Min_loc)[0][0]
+
+            remnant_type[ind_pt4] = rem_map[rem_loc[ind_loc]]
+            remnant_mass[ind_pt4] = Mrem_loc[ind_loc]
+
+    # sanity check
+    w_deadstars = np.where(np.isinf(AgeAtNextDeath) & (InitialSoloMass > 0))
+    assert np.count_nonzero(remnant_type >= 0) == len(w_deadstars[0])
+
+    if field.endswith("_mass"):
+        remnant_mass = sim.units.msunToCodeMass(remnant_mass)  # convert to code mass units
+        return remnant_mass
+
+    return remnant_type
+
+
+stellar_remnant.label = lambda sim, pt, f: "Remnant Type (1=WD, 2=NS, 3=BH)" if f.endswith("_type") else "Remnant Mass"
+stellar_remnant.units = lambda sim, pt, f: "" if f.endswith("_type") else "code_mass"
+stellar_remnant.limits = lambda sim, pt, f: [-1, 4] if f.endswith("_type") else [0, 100]
+stellar_remnant.log = False
+
+
 # -------------------- black holes ----------------------------------------------------------------
 
 
