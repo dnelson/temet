@@ -1217,6 +1217,41 @@ def splitSingleHDF5IntoChunks(snap=151):
     print("Done.")
 
 
+def splitSingleHDF5ICIntoChunks(snap=151):
+    """Split a single-file initial conditions file (HDF5 format) into a number of roughly equally sized chunks."""
+    fileName = "ics_zoom_TNG50-1_halo5072_L16_sf4.0.hdf5"
+    fileNameOut = "ics_zoom_TNG50-1_halo5072_L16_sf4.0.%d.hdf5"
+    numChunksSave = 4
+
+    # open original file
+    with h5py.File(fileName, "r") as f:
+        # loop over output files
+        for i in range(numChunksSave):
+            # create new file
+            with h5py.File(fileNameOut % i, "w") as fOut:
+                # copy metadata
+                f.copy("Header", fOut)
+                fOut["Header"].attrs["NumFilesPerSnapshot"] = numChunksSave
+
+                # loop over relevant particle types
+                for ptNum in [1, 2]:
+                    # determine index range
+                    indRange = pSplitRange([0, f["Header"].attrs["NumPart_Total"][ptNum]], numChunksSave, i)
+
+                    # update particle counts
+                    fOut["Header"].attrs["NumPart_ThisFile"][ptNum] = indRange[1] - indRange[0]
+
+                    # create group and copy particle data for this type
+                    gName = "PartType%d" % ptNum
+                    g = fOut.create_group(gName)
+
+                    for field in f[gName].keys():
+                        print(i, gName, field, indRange)
+                        fOut[gName][field] = f[gName][field][indRange[0] : indRange[1]]
+
+    print("Done.")
+
+
 def combineMultipleHDF5FilesIntoSingle():
     """Combine multiple groupcat file chunks into a single HDF5 file."""
     simName = "L35n2160TNG"
@@ -1896,7 +1931,7 @@ def parsec_v2():
 
     data = {}
     # note: these files start at 14 Msun ZAMS
-    # where for 8 < ZAMS < 14 we have CCSN/NS, and for ZAMS < 8 we have NOSN/WD
+    # for 8 < ZAMS < 14 we have CCSN/NS, and for ZAMS < 8 we have NOSN/WD
     fate_map = {"CCSN": "NS", "FSN": "BH", "PPISN": "BH", "PISN": "None", "DBH": "BH", "NOT": "None"}
 
     for file in files:
