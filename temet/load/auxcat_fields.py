@@ -299,6 +299,15 @@ def_fields = {
     "Subhalo_Mass_1pkpc_2D_Stars": partial(
         subhaloRadialReduction, ptType="stars", ptProperty="Masses", op="sum", rad="1pkpc_2d"
     ),
+    # masses (MCST)
+    "Subhalo_Remnant_Mass": partial(
+        subhaloRadialReduction,
+        ptType="stars",
+        ptProperty="Masses",
+        op="sum",
+        rad=None,
+        ptRestrictions={"remnant_type": ["ge", 0]},
+    ),
     # cooling properties
     "Subhalo_CoolingTime_HaloGas": partial(
         subhaloRadialReduction,

@@ -461,6 +461,25 @@ fgas_r500.units = ""  # dimensionless
 fgas_r500.limits = [0.0, 0.2]
 fgas_r500.log = False
 
+
+@catalog_field
+def remnant_massfrac(sim, field):
+    """Stellar remnant mass fraction (= M_remnant / Mstar), global subhalo."""
+    acField = "Subhalo_Remnant_Mass"
+    M_remnant = sim.auxCat(acField, expandPartial=True)[acField]
+    M_star = sim.subhalos("SubhaloMassType")[:, sim.ptNum("stars")]
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        vals = M_remnant / M_star
+
+    return vals
+
+
+remnant_massfrac.label = r"Stellar Remnant Mass Fraction"
+remnant_massfrac.units = ""  # dimensionless
+remnant_massfrac.limits = [0.0, 1.0]
+remnant_massfrac.log = False
+
 # ---------------------------- auxcat: sfr --------------------------------------------------------
 
 

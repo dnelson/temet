@@ -9,6 +9,7 @@ from . import (
     color_analysis,
     lrg,
     mcst,
+    mcst_clusters,
     mcst_vis,
     mg2emission,
     mockspec,

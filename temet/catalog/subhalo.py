@@ -463,7 +463,7 @@ def subhaloRadialReduction(
       ptType (str): particle type e.g. 'gas', 'stars', 'dm', 'bhs'.
       ptProperty (str): particle/cell quantity to apply reduction operation to.
       op (str): reduction operation to apply. 'sum', 'mean', 'max' or custom user-defined string.
-      rad (float or str): if a scalar, then [physical kpc], otherwise a string label for a given
+      rad (float or str or None): if a scalar, then [physical kpc], otherwise a string label for a given
         radial restriction specification e.g. 'rvir' or '2rhalfstars' (see :py:func:`_radialRestriction`).
       ptRestrictions (dict): apply cuts to which particles/cells are included. Each key,val pair in the dict
         specifies a particle/cell field string in key, and a [min,max] pair in value, where e.g. np.inf can be
@@ -506,7 +506,10 @@ def subhaloRadialReduction(
     if ptType == "stars":
         if ptRestrictions is None:
             ptRestrictions = {}
-        ptRestrictions["GFM_StellarFormationTime"] = ["gt", 0.0]  # real stars
+        if sP.stars == 1:
+            ptRestrictions["GFM_StellarFormationTime"] = ["gt", 0.0]  # real stars
+        if sP.stars in [2, 3]:
+            print('Note: could add "real stars" restriction (using remnant_type).')
 
     # config
     ptLoadType = sP.ptNum(ptType)
@@ -822,6 +825,8 @@ def subhaloRadialReduction(
 
                 if inequality == "gt":
                     validMask &= particles[restrictionField][i0:i1] > val
+                if inequality == "ge":
+                    validMask &= particles[restrictionField][i0:i1] >= val
                 if inequality == "lt":
                     validMask &= particles[restrictionField][i0:i1] <= val
                 if inequality == "eq":

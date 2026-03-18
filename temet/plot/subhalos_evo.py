@@ -127,8 +127,7 @@ def scatter2d(
     yQuant: str,
     xlim: list[float] = None,
     ylim: list[float] = None,
-    vstng100: bool = False,
-    vstng50: bool = True,
+    vs_sim: str = "TNG50-1",
     tracks: bool = True,
     parents: bool = True,
     sizefac: float = 1.0,
@@ -151,8 +150,7 @@ def scatter2d(
       yQuant: name of quantity to plot on the y-axis.
       xlim: if not None, 2-tuple overriding default x-axis limits.
       ylim: if not None, 2-tuple overriding default y-axis limits.
-      vstng100: if True, plot the TNG100-1 relation for comparison.
-      vstng50: if True, plot the TNG100-1 relation for comparison.
+      vs_sim: if not None, then the name of another simulation to compare against e.g. "TNG50-1".
       tracks: if True, plot tracks of individual galaxies. If False, only plot final redshift values.
       parents: if True, plot the original halos from the parent box for comparison.
       legend : either 'dev' (default),  'simple', or 'none', to determine how legend(s) are shown.
@@ -184,38 +182,14 @@ def scatter2d(
     res = sorted({sim.res for sim in sims})
     variants = sorted({sim.variant for sim in sims})
 
-    # load: parent box relation (and also field metadata)
-    sim_parent_relation = sim_parent
+    # get metadata
+    _, xlabel, xMinMax, xLog = sims[0].simSubhaloQuantity(xQuant)
+    _, ylabel, yMinMax, yLog = sims[0].simSubhaloQuantity(yQuant)
 
-    if vstng100:
-        sim_parent_relation = simParams(run="tng100-1", redshift=sim_parent.redshift)
-    if vstng50:
-        sim_parent_relation = simParams(run="tng50-1", redshift=sim_parent.redshift)
-
-    parent_xvals, xlabel, xMinMax, xLog = sim_parent_relation.simSubhaloQuantity(xQuant)
     if xlim is not None:
         xMinMax = xlim
-    if xLog:
-        parent_xvals = logZeroNaN(parent_xvals)
-
-    parent_yvals, ylabel, yMinMax, yLog = sim_parent_relation.simSubhaloQuantity(yQuant)
     if ylim is not None:
         yMinMax = ylim
-    if yLog:
-        parent_yvals = logZeroNaN(parent_yvals)
-
-    parent_cen = sim_parent_relation.subhalos("cen_flag")
-    w = np.where(parent_cen == 1)
-
-    xm, ym, _, pm = running_median(parent_xvals[w], parent_yvals[w], binSize=0.05, percs=[5, 16, 50, 84, 95])
-
-    # mass threshold
-    if "mhalo" in xQuant:
-        mhalo_min = sim_parent_relation.units.codeMassToLogMsun(sim_parent_relation.dmParticleMass * 100)
-        w = np.where(xm >= mhalo_min)[0]
-        xm = xm[w]
-        ym = ym[w]
-        pm = pm[:, w]
 
     # start plot
     fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
@@ -225,20 +199,47 @@ def scatter2d(
     ax.set_xlim(xMinMax)
     ax.set_ylim(yMinMax)
 
-    # parent box relation
-    pm = savgol_filter(pm, sKn, sKo, axis=1)
+    # load: parent box relation (and also field metadata)
+    sim_parent_relation = sim_parent
 
-    if xQuant in ["mstar_log", "mstar2_log"]:
-        # restrict to mstar > 1*baryon mass resolution to avoid resolution effects
-        mstar_min = sim_parent_relation.units.codeMassToLogMsun(sim_parent_relation.targetGasMass * 1)
-        w = np.where(xm >= mstar_min)[0]
-        xm = xm[w]
-        ym = ym[w]
-        pm = pm[:, w]
+    if vs_sim is not None:
+        sim_parent_relation = simParams(run=vs_sim, redshift=sim_parent.redshift)
 
-    ax.fill_between(xm, pm[0, :], pm[-1, :], color="#aaa", alpha=0.2)
-    ax.fill_between(xm, pm[1, :], pm[-2, :], color="#aaa", alpha=0.4)
-    ax.plot(xm, ym, color="#aaa", lw=lw * 1.5, alpha=1.0, label=sim_parent_relation)
+        parent_xvals, xlabel, xMinMax, xLog = sim_parent_relation.simSubhaloQuantity(xQuant)
+        if xLog:
+            parent_xvals = logZeroNaN(parent_xvals)
+
+        parent_yvals, ylabel, yMinMax, yLog = sim_parent_relation.simSubhaloQuantity(yQuant)
+        if yLog:
+            parent_yvals = logZeroNaN(parent_yvals)
+
+        parent_cen = sim_parent_relation.subhalos("cen_flag")
+        w = np.where(parent_cen == 1)
+
+        xm, ym, _, pm = running_median(parent_xvals[w], parent_yvals[w], binSize=0.05, percs=[5, 16, 50, 84, 95])
+
+        # mass threshold
+        if "mhalo" in xQuant:
+            mhalo_min = sim_parent_relation.units.codeMassToLogMsun(sim_parent_relation.dmParticleMass * 100)
+            w = np.where(xm >= mhalo_min)[0]
+            xm = xm[w]
+            ym = ym[w]
+            pm = pm[:, w]
+
+        # parent box relation
+        pm = savgol_filter(pm, sKn, sKo, axis=1)
+
+        if xQuant in ["mstar_log", "mstar2_log"]:
+            # restrict to mstar > 1*baryon mass resolution to avoid resolution effects
+            mstar_min = sim_parent_relation.units.codeMassToLogMsun(sim_parent_relation.targetGasMass * 1)
+            w = np.where(xm >= mstar_min)[0]
+            xm = xm[w]
+            ym = ym[w]
+            pm = pm[:, w]
+
+        ax.fill_between(xm, pm[0, :], pm[-1, :], color="#aaa", alpha=0.2)
+        ax.fill_between(xm, pm[1, :], pm[-2, :], color="#aaa", alpha=0.4)
+        ax.plot(xm, ym, color="#aaa", lw=lw * 1.5, alpha=1.0, label=sim_parent_relation)
 
     if f_pre is not None:
         f_pre(ax, sims)
