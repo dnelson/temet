@@ -977,7 +977,7 @@ def median(
                             vals = vals[wPastRestrict]  # AND
 
                         with np.errstate(invalid="ignore"):
-                            wRestrict = np.where((vals >= rFieldMin) & (vals < rFieldMax))
+                            wRestrict = np.where((vals >= rFieldMin) & (vals <= rFieldMax))
 
                         sim_yy = sim_yy[wRestrict]
                         sim_xx = sim_xx[wRestrict]

@@ -121,7 +121,7 @@ def _zoomSubhaloIDsToPlot(sim, min_mhalo=7.0, verbose=False):
 
 
 def smhm_relation(sims):
-    """Diagnostic plot of stellar mass vs halo mass including empirical constraints."""
+    """Stellar mass vs halo mass including empirical constraints."""
     from temet.load.data import behrooziUM, paquereau25
 
     xQuant = "mhalo_200_log"
@@ -219,7 +219,7 @@ def smhm_relation(sims):
 
 
 def sfr_vs_mstar(sims: list[simParams], yQuant: str) -> None:
-    """Diagnostic plot of SFR vs Mstar including observational data."""
+    """Relation between SFR and Mstar including observational data."""
     from temet.load.data import asada26, chemerynska24, curti23, nakajima23
 
     xQuant = "mstar2_log"

@@ -4,31 +4,38 @@ MCST: stellar clusters paper.
 https://arxiv.org/abs/xxxx.xxxxx
 """
 
-from os.path import isfile
-
-import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.ticker import ScalarFormatter
 
-from temet.load.simtxt import blackhole_details_mergers, sf_sn_details
-from temet.plot import snapshot, subhalos_evo
+from temet.plot import snapshot, subhalos, subhalos_evo
 from temet.plot.config import colors, figsize, linestyles, lw, markers
-from temet.plot.cosmoMisc import simHighZComparison
 from temet.plot.subhalos import addUniverseAgeAxis
-from temet.plot.util import colored_line
-from temet.projects.mcst_vis import (
-    vis_gallery_galaxy,
-    vis_highres_region,
-    vis_movie_mpbsm,
-    vis_movie_mpbsm_multi,
-    vis_parent_box,
-    vis_single_galaxy,
-    vis_single_halo,
-)
 from temet.util import simParams
 from temet.util.helper import cache, logZeroNaN
+
 from .mcst import _get_existing_sims, _zoomSubhaloIDsToPlot
+
+
+mass_label = r"Star Cluster Mass [ log M$_{\odot}$ ]"
+size_label = r"Star Cluster Size $R_{1/2}$ [ pc ]"  # always show tick labels in linear
+
+mass_lim = [1.5, 5.0]  # log msun
+size_lim = [-0.5, 0.8]  # log pc
+
+
+def _starClusterSubhaloIDs(sim):
+    """Define a common rule for which subhalo(s) are identified as star clusters."""
+    # all satellites of the first halo with non-zero stellar mass
+    halo_id = sim.subhalos("halo_id")
+    cen_flag = sim.subhalos("cen_flag")
+    mstar = sim.subhalos("mstar_tot")
+    # mdm = sim.subhalos("mdm_tot")
+
+    subhaloIDs = np.where((halo_id == 0) & (cen_flag == 0) & (mstar > 0))[0]  # mdm == 0
+
+    print(f"[{sim}] Showing {len(subhaloIDs)} subhalos.")
+
+    return subhaloIDs
 
 
 def diagnostic_sfr_jeans_mass(sims, haloID=0):
@@ -269,61 +276,160 @@ def stellar_remnants(sim, haloID=0):
     plt.close(fig)
 
 
-def star_cluster_histogram(sims, quant, haloID=0):
+def star_cluster_histogram(sims, quant, sizefac=1.0):
     """Plot the mass function, or size distribution, of star clusters."""
     # start plot
-    fig, ax = plt.subplots()
-    if quant == "mass":
-        ax.set_xlabel(r"Star Cluster Mass [ log M$_{\odot}$ ]")
-    if quant == "size":
-        ax.set_xlabel(r"Star Cluster Size $R_{1/2}$ [ log kpc ]")
+    fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
+
     ax.set_ylabel("Number of Star Clusters")
     ax.set_yscale("log")
 
+    if quant == "mass":
+        xlim = mass_lim
+        xlabel = mass_label
+
+    if quant == "size":
+        xlim = size_lim
+        xlabel = size_label
+
+    ax.set_xlabel(xlabel)
+    ax.set_xlim(xlim)
+
     for sim in sims:
-        haloID = 0
-
-        sub_haloIDs = sim.subhalos("SubhaloGrNr")
-        sub_ids = np.where(sub_haloIDs == haloID)[0][1:]
-
-        mstar = sim.subhalos("mstar_tot")[sub_ids]
-        rhalf = sim.subhalos("rhalf_stars")[sub_ids]
-        mdm = sim.subhalos("mdm_tot")[sub_ids]
-
         # make selection
-        w = np.where((mstar > 0) & (mdm == 0))[0]
-
-        print(
-            f"{sim.simName}: Found {len(w)} star clusters (mstar > 0, mdm=0) in halo {haloID} of {len(sub_ids)} subhalos."
-        )
-
-        w_total = np.where(mstar > 0)[0]
-        print(f"{sim.simName}: Found {len(w_total)} subhalos with mstar > 0 (including those with mdm > 0).")
-        print(f"--> {len(w_total) - len(w)} subhalos with mstar > 0 but mdm > 0 (sats?).")
-        print(f"--> {len(sub_ids) - len(w_total)} subhalos with mstar = 0 (dark).")
+        subIDs = _starClusterSubhaloIDs(sim)
 
         # histogram quantity
         if quant == "mass":
-            h_quant = np.log10(mstar[w])
+            mstar = sim.subhalos("mstar_tot")
+            h_quant = np.log10(mstar[subIDs])
         if quant == "size":
-            h_quant = np.log10(rhalf[w])
+            rhalf = sim.subhalos("rhalf_stars") * 1000  # pc
+            h_quant = np.log10(rhalf[subIDs])
 
-        label = f"{sim.simName} (N={len(w)}/{mstar.size})"
-        # ax.hist(h_quant, bins=30, histtype="step", label=label)
+        label = f"h{sim.hInd}"  # f"{sim.simName} (N={len(subIDs)}/{sim.numSubhalos})"
 
-        h = np.histogram(h_quant, bins=30)  # range=[min,max]
-        ax.stairs(*h, fill=True, label=label)
+        h = np.histogram(h_quant, bins=30, range=xlim)  # range=[min,max]
+        ax.stairs(*h, fill=True, alpha=0.8, label=label)
 
     if quant == "mass":
         min_mass = np.log10(20 * sim.units.codeMassToMsun(sim.targetGasMass))
-        ax.plot([min_mass, min_mass], ax.get_ylim(), color="black", linestyle="--", label="20x targetGasMass")
+        ax.plot([min_mass, min_mass], ax.get_ylim(), color="black", linestyle=":", alpha=0.5)
+
     if quant == "size":
-        pass
+        sizeticks_lin = [0.5, 1.0, 2.0, 5.0]  # pc
+        sizeticks_log = np.log10(sizeticks_lin)
+        ax.set_xticks(sizeticks_log)
+        ax.set_xticklabels(sizeticks_lin)
 
     ax.legend(loc="upper right")
 
     fig.savefig(f"star_cluster_histo_{quant}.pdf")
     plt.close(fig)
+
+
+def size_vs_mass(sims, sizefac=0.8):
+    """Size-mass relation for star clusters."""
+    from ..plot.util import _finish_plot
+
+    xQuant = "mstar_tot"
+    yQuant = "rhalf_stars_pc"
+    xlim = [1.5, 5.0]
+    ylim = [-0.5, 0.8]
+
+    # subhalos.median(
+    #    sims,
+    #    xQuant=xQuant,
+    #    yQuants=[yQuant],
+    #    cenSatSelect="sat",
+    #    qRestrictions=[["halo_id", 0, 0]],  # select only subhalos in haloID=0
+    #    xlim=xlim,
+    #    ylim=ylim,
+    #    scatterPoints=True,
+    #    # f_selection=_zoomSubhaloIDsToPlot,
+    # )
+
+    # subhalos_evo.scatter2d(
+    #    sims,
+    #    xQuant=xQuant,
+    #    yQuant=yQuant,
+    #    xlim=xlim,
+    #    ylim=ylim,
+    #    tracks=False,
+    #    parents=False,
+    #    legend="simple",
+    #    f_selection=_starClusterSubhaloIDs,
+    # )
+
+    # unique list of included halo IDs, resolutions, and variants
+    hInds = sorted({sim.hInd for sim in sims})
+    # res = sorted({sim.res for sim in sims})
+    variants = sorted({sim.variant for sim in sims})
+
+    _, xlabel, xMinMax, xLog = sims[0].simSubhaloQuantity(xQuant)
+    _, ylabel, yMinMax, yLog = sims[0].simSubhaloQuantity(yQuant)
+
+    # start plot
+    fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
+
+    ax.set_xlabel(mass_label)
+    ax.set_ylabel(size_label)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+
+    yticks_lin = [0.5, 1.0, 2.0, 5.0]  # pc
+    yticks_log = np.log10(yticks_lin)
+    ax.set_yticks(yticks_log)
+    ax.set_yticklabels(yticks_lin)
+
+    # allocate for stack
+    xx = []
+    yy = []
+
+    # individual zoom runs
+    for _i, sim in enumerate(sims):
+        # load
+        xvals = sim.subhalos(xQuant)
+        yvals = sim.subhalos(yQuant)
+
+        xvals = logZeroNaN(xvals)
+        yvals = logZeroNaN(yvals)
+
+        # which subhalo(s) to include?
+        subhaloIDs = _starClusterSubhaloIDs(sim)
+
+        xvals = xvals[subhaloIDs]
+        yvals = yvals[subhaloIDs]
+
+        xx.append(xvals)
+        yy.append(yvals)
+
+        # color set by hInd
+        c = colors[hInds.index(sim.hInd)]
+
+        # marker set by variant
+        marker = markers[variants.index(sim.variant) % len(markers)]
+
+        # marker size set by resolution
+        ms_loc = 6.0
+
+        style = {"color": c, "ms": ms_loc, "fillstyle": "full", "linestyle": "none", "alpha": 0.8}
+
+        label = f"h{sim.hInd}"  # f"{sim.simName} (N={len(subhaloIDs)}/{sim.numSubhalos})"
+        (l,) = ax.plot(xvals, yvals, marker=marker, label=label, **style)
+
+    # fit line to xx,yy using np.polyfit
+    x_all = np.concatenate(xx)
+    y_all = np.concatenate(yy)
+    w = np.where((x_all > xlim[0]) & (x_all < xlim[1]) & (y_all > ylim[0]) & (y_all < ylim[1]))[0]
+    coeffs = np.polyfit(x_all[w], y_all[w], deg=1)
+    x_fit = np.array(xlim) + [0.2, -0.2]
+    y_fit = np.polyval(coeffs, x_fit)
+    ax.plot(x_fit, y_fit, "-", color="#555", lw=3, alpha=0.5)
+
+    ax.legend(loc="upper left")
+
+    _finish_plot(fig, saveFilename=f"scatter2d_evo_{xQuant}-vs-{yQuant}.pdf")
 
 
 # -------------------------------------------------------------------------------------------------
@@ -335,12 +441,17 @@ def paperPlots(a=False):
     variants = ["ST15"]  # ['ST15c','ST15m','ST15s']
     res = [14, 15, 16]
     hInds = [1958, 5072, 15581, 23908, 31619, 73172, 219612, 311384, 446076, 539722, 844537]
-    # hInds = [31619, 73172]
     redshift = 5.5
 
     # if (all == False), only dz < 0.1 matches
     # if (single == True), only the highest available res of each halo
-    sims = _get_existing_sims(variants, res, hInds, redshift, all=False, single=True)
+    # sims = _get_existing_sims(variants, res, hInds, redshift, all=False, single=True)
+
+    sims = []
+    sims.append(simParams("structures", hInd=31619, res=14, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=219612, res=15, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=311384, res=15, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=844537, res=16, variant="ST15", redshift=5.5))
 
     # ------------
 
@@ -348,10 +459,14 @@ def paperPlots(a=False):
     # fig TODO: gas mass fraction of ISM gas in different phases, at e.g. z=10 and z=6 (bar plots?)
     # fig TODO: Kennicut-Schmidt relation, global or spatially resolved
 
-    # star cluster histogram test
-    if 1 or a:
-        sim = simParams("structures", hInd=31619, res=14, variant="ST14", redshift=5.5)
-        star_cluster_histogram([sim], quant="mass")
+    # star clusters: mass and size distributions
+    if 0 or a:
+        star_cluster_histogram(sims, quant="mass")
+        star_cluster_histogram(sims, quant="size", sizefac=0.8)
+
+    # clusters: size-mass relation
+    if 0 or a:
+        size_vs_mass(sims)
 
     # fig: stellar remnants: mass distribution
     if 0 or a:

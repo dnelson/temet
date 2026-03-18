@@ -27,6 +27,22 @@ subhalo_id.limits = [0, 7]
 subhalo_id.log = True
 
 
+@catalog_field(alias="halo_index")
+def halo_id(sim, field):
+    """Halo ID/index."""
+    assert "_log" not in field
+
+    grnr = sim.subhalos("SubhaloGrNr")
+
+    return grnr
+
+
+halo_id.label = "Halo ID"
+halo_id.units = ""  # dimensionless
+halo_id.limits = [0, 7]
+halo_id.log = True
+
+
 @catalog_field(aliases=["cen_flag", "is_cen", "is_central"])
 def central_flag(sim, field):
     """Subhalo central flag (1 if central, 0 if not)."""
@@ -998,6 +1014,9 @@ def size_stars(sim, field):
     if "_code" not in field:
         rad = sim.units.codeLengthToKpc(rad)
 
+    if "_pc" in field:
+        rad *= 1e3  # kpc to pc
+
     return rad
 
 
@@ -1005,6 +1024,22 @@ size_stars.label = r"r$_{\rm 1/2,\star}$"
 size_stars.units = lambda sim, f: r"$\rm{kpc}$" if "_code" not in f else "code_length"
 size_stars.limits = lambda sim, f: [0.2, 1.6] if sim.redshift < 1 else [-0.4, 1.4]
 size_stars.log = True
+
+
+@catalog_field(aliases=["rhalf_stars_pc"])
+def size_stars_pc(sim, field):
+    """Stellar half mass radius [pc]."""
+    rad = sim.subhalos("rhalf_stars")  # pkpc
+
+    rad *= 1e3  # kpc to pc
+
+    return rad
+
+
+size_stars_pc.label = r"Star Cluster Size r$_{\rm 1/2,\star}$"
+size_stars_pc.units = r"$\rm{pc}$"
+size_stars_pc.limits = [-1.0, 1.5]
+size_stars_pc.log = True
 
 
 @catalog_field(aliases=["size_stars_rvir_ratio"])
