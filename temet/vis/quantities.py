@@ -19,6 +19,8 @@ colDensityFields = [
     "coldens_sq_msunkpc2",
     "HI",
     "HI_segmented",
+    "coldens_H2",
+    "coldens_dust",
     "xray",
     "xray_lum",
     "xray_lum_05-2kev",
@@ -335,15 +337,18 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
             config["label"] = r"N$_{\rm HI}$ [log cm$^{-2}$]"
             config["ctName"] = "HI_segmented"
 
-    if partField in ["H2_BR", "H2_GK", "H2_KMT", "HI_BR", "HI_GK", "HI_KMT"]:
+    if partField in ["H2_BR", "H2_GK", "H2_KMT", "HI_BR", "HI_GK", "HI_KMT", "coldens_H2", "coldens_dust"]:
         grid = sP.units.codeColDensToPhys(grid, cgs=True, numDens=True)
 
         if "H2" in partField:
             config["label"] = r"N$_{\rm H2}$ [log cm$^{-2}$]"
-            config["ctName"] = "viridis"  # 'H2_segmented'
+            config["ctName"] = "inferno"  # 'H2_segmented'
         if "HI" in partField:
             config["label"] = r"N$_{\rm HI}$ [log cm$^{-2}$]"
             config["ctName"] = "viridis"  #'HI_segmented'
+        if "dust" in partField:
+            config["label"] = r"N$_{\rm dust}$ [log cm$^{-2}$]"
+            config["ctName"] = "copper"
 
     if partField in ["xray", "xray_lum", "xray_lum_05-2kev", "xray_lum_0.5-2.0kev", "xray_lum_0.5-5.0kev"]:
         grid = sP.units.codeColDensToPhys(grid, totKpc2=True)

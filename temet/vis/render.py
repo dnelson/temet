@@ -584,9 +584,16 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         mass = sP.snapshotSubsetP(partType, weightField, indRange=indRange).astype("float32")
         massTot = mass.sum()  # for checks
 
-    # neutral hydrogen (do column densities, ignore atomic vs molecular complication)
+    # neutral hydrogen (do column densities, ignore atomic vs molecular complication for TNG-like)
     if partField in ["HI", "HI_segmented"]:
         mass *= sP.snapshotSubsetP(partType, "xhi", indRange=indRange)
+
+    # molecular hydrogen (column densities, use on-the-fly snapshot values)
+    if partField in ["coldens_H2"]:
+        mass *= sP.snapshotSubsetP(partType, "xH2", indRange=indRange)
+
+    if partField in ["coldens_dust"]:
+        mass *= sP.snapshotSubsetP(partType, "xdust", indRange=indRange)
 
     # molecular hydrogen (Popping pre-computed files, here with abbreviated names)
     if partField in ["H2_BR", "H2_GK", "H2_KMT", "HI_BR", "HI_GK", "HI_KMT"]:

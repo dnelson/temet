@@ -321,7 +321,8 @@ nh.log = True
 
 @snap_field(alias="massfrac_hi")
 def xhi(sim, partType, field, args):
-    """Neutral hydrogen fraction, relative to the total gas mass. No H2 model applied."""
+    """Neutral hydrogen fraction, relative to the total gas mass.
+    No H2 model (subtraction) applied for TNG-like simulations."""
     if sim.snapHasField(partType, "NeutralHydrogenAbundance"):
         nh0_frac = sim.snapshotSubset(partType, "NeutralHydrogenAbundance", **args)
         return sim.units.hydrogen_massfrac * nh0_frac
@@ -335,6 +336,56 @@ xhi.units = ""  # dimensionless
 xhi.limits = [-9.0, 0.0]
 xhi.limits_halo = [-5.0, 0.0]
 xhi.log = True
+
+
+@snap_field(alias="massfrac_h2")
+def xh2(sim, partType, field, args):
+    """Molecular hydrogen fraction, relative to the total gas mass."""
+    if sim.snapHasField(partType, "H2IMassFraction"):  # grackle
+        H2I_frac = sim.snapshotSubset(partType, "HIMassFraction", **args)  # neutral molecular hydrogen
+        H2II_frac = sim.snapshotSubset(partType, "HIMassFraction", **args)  # singly ionized molecular hydrogen
+        return H2I_frac + H2II_frac
+
+    assert 0, "No H2 mass fraction field found in snapshot. Could return mass_h2 computation."
+
+
+xh2.label = r"Molecular Hydrogen Mass Fraction $\rm{x_{H2}}$"
+xh2.units = ""  # dimensionless
+xh2.limits = [-9.0, 0.0]
+xh2.limits_halo = [-5.0, 0.0]
+xh2.log = True
+
+
+@snap_field(alias="massfrac_dust")
+def xdust(sim, partType, field, args):
+    """Dust mass fraction, relative to the total gas mass. Use Remy-Ruyer+14 scaling with metallicity."""
+    if sim.snapHasField(partType, "DustMassFraction"):  # hypothetical
+        return sim.snapshotSubset(partType, "DustMassFraction", **args)
+
+    # load metallicity
+    Z = sim.snapshotSubset(partType, "Z_solar", **args)
+    Z = np.log10(Z)
+
+    dust_frac = np.zeros(Z.size, dtype="float32")
+
+    # apply Remy-Ruyer+14 broken power-law scaling with metallicity-dependent X_CO (Table 1)
+    w = np.where(Z > -0.59)
+    dust_frac[w] = 2.21 - Z[w]
+
+    w = np.where(Z <= -0.59)
+    dust_frac[w] = 0.96 - 3.1 * Z[w]
+
+    dust_frac = 10.0 ** (-dust_frac)  # absolute
+    dust_frac = np.clip(dust_frac, 0.0, 1.0)
+
+    return dust_frac
+
+
+xdust.label = r"Dust Mass Fraction $\rm{x_{dust}}$"
+xdust.units = ""  # dimensionless
+xdust.limits = [-9.0, 0.0]
+xdust.limits_halo = [-5.0, 0.0]
+xdust.log = True
 
 
 @snap_field
@@ -2283,14 +2334,13 @@ def stellar_remnant(sim, partType, field, args):
     assert np.count_nonzero(remnant_type >= 0) == len(w_deadstars[0])
 
     if field.endswith("_mass"):
-        remnant_mass = sim.units.msunToCodeMass(remnant_mass)  # convert to code mass units
         return remnant_mass
 
     return remnant_type
 
 
 stellar_remnant.label = lambda sim, pt, f: "Remnant Type (1=WD, 2=NS, 3=BH)" if f.endswith("_type") else "Remnant Mass"
-stellar_remnant.units = lambda sim, pt, f: "" if f.endswith("_type") else "code_mass"
+stellar_remnant.units = lambda sim, pt, f: "" if f.endswith("_type") else r"$\rm{M_{\rm sun}}$"
 stellar_remnant.limits = lambda sim, pt, f: [-1, 4] if f.endswith("_type") else [0, 100]
 stellar_remnant.log = False
 

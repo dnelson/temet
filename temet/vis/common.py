@@ -880,10 +880,6 @@ def addCustomColorbars(
     tOffset = 0.15  # padding between top of bar and top of text label (fraction of bar height)
     lOffset = 0.02  # padding between colorbar edges and end label (frac of bar width)
 
-    # factor = 0.65 # tng data release paper: tng_fields override
-    # conf.fontsize = 13 # tng data release paper: tng_fields override
-    # height = 0.047 # tng data release paper: tng_fields override
-
     height *= heightFac
 
     # if hasattr(conf, "fontsize"):  # and conf.nCols == 1:
@@ -1257,9 +1253,6 @@ def renderMultiPanel(panels, conf):
             if "mock_redshift" in p:
                 p["sP"].setRedshift(old_redshift)
 
-        # if nRows == 1 and nCols == 3:
-        #    plt.subplots_adjust(top=0.97, bottom=0.06)  # fix degenerate case
-
     if conf.plotStyle in ["edged", "edged_black"]:
         # colorbar plot area sizing
         aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf, "rasterPx") else 1.0
@@ -1299,32 +1292,6 @@ def renderMultiPanel(panels, conf):
                     print(f"WARNING: [{k}] has multiple panels with auto cbar minmax. Disabling global colorbar.")
                     oneGlobalColorbar = False
 
-        # height of colorbar is this value times a constant (as a fraction of the figure size)
-        heightFac = 1.0 * conf.nLinear**0.4
-
-        if nRows == 2 and not oneGlobalColorbar:
-            # two rows, special case, colors on top and bottom, every panel can be different
-            barAreaTop = 0.5 * barAreaHeight
-            barAreaBottom = 0.5 * barAreaHeight
-            heightFac *= 0.5
-        else:
-            # colorbars on the bottom of the plot, one per column (columns should be same field/valMinMax)
-            barAreaTop = 0.0
-            barAreaBottom = barAreaHeight
-
-        if nRows == 2 and oneGlobalColorbar:
-            barAreaBottom *= 0.7
-            heightFac *= 0.7
-
-        # colorbar has its own space, or is on top of the plot?
-        barTop = barAreaTop  # used to draw bars
-        barBottom = barAreaBottom  # used to draw bars
-
-        if conf.colorbarOverlay:
-            # used to resize actual panels, so set to zero
-            barAreaTop = 0.0
-            barAreaBottom = 0.0
-
         # variable-height rows? e.g. face-on and edge-on views together
         varRowHeights = False
         nShortPanels = 0
@@ -1336,13 +1303,38 @@ def renderMultiPanel(panels, conf):
                     rowHeightRatio = p["nPixels"][1] / p["nPixels"][0]  # e.g. 0.25 for 4x longer than tall
                     nShortPanels += 1
 
-        # if varRowHeights and nRows == 2 and nCols == 1: # single face-on edge-on combination
-        #    barAreaBottom *= (1-rowHeightRatio/2)
-        if varRowHeights and nRows == 2:
-            barAreaTop = 0.0  # disable top set of bars
-
         assert nShortPanels / nCols == np.round(nShortPanels / nCols)  # exact number of panels to make full rows
         nShortRows = nShortPanels / nCols
+
+        # height of colorbar is this value times a constant (as a fraction of the figure size)
+        heightFac = 1.0 * conf.nLinear**0.4
+
+        if nRows == 2 and not oneGlobalColorbar and not varRowHeights:
+            # two rows, special case, colors on top and bottom, every panel can be different
+            barAreaTop = 0.5 * barAreaHeight
+            barAreaBottom = 0.5 * barAreaHeight
+            heightFac *= 0.5
+        else:
+            # colorbars on the bottom of the plot, one per column (columns should be same field/valMinMax)
+            barAreaTop = 0.0
+            barAreaBottom = barAreaHeight
+
+        if nRows == 2 and oneGlobalColorbar and not varRowHeights:
+            barAreaBottom *= 0.7
+            heightFac *= 0.7
+
+        if varRowHeights and nRows == 2:
+            barAreaTop = 0.0  # disable top set of bars
+            barAreaBottom *= 0.9  # rowHeightRatio ** (1 / 5)
+
+        # colorbar has its own space, or is on top of the plot?
+        barTop = barAreaTop  # used to draw bars
+        barBottom = barAreaBottom  # used to draw bars
+
+        if conf.colorbarOverlay:
+            # used to resize actual panels, so set to zero
+            barAreaTop = 0.0
+            barAreaBottom = 0.0
 
         # start plot
         fig = plt.figure(layout="none", facecolor=color1)
@@ -1351,7 +1343,6 @@ def renderMultiPanel(panels, conf):
         height_in = sizeFac[1] * np.ceil(nRows)
 
         if varRowHeights:
-            barAreaBottom /= np.sqrt(rowHeightRatio)
             assert nShortRows == nRows / 2  # otherwise unexpected configuration
 
             nTallRows = nRows - nShortRows  # == nRows/2

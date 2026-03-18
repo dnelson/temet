@@ -13,7 +13,7 @@ from temet.vis.box import renderBox
 from temet.vis.halo import renderSingleHalo, renderSingleHaloFrames
 
 
-def vis_single_galaxy(sP, haloID=0, noSats=False):
+def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
     """Visualization: single image of a galaxy.
 
     Note: cannot use for a movie since the face-on/edge-on rotations have random orientations each frame.
@@ -23,12 +23,13 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
     nPixels = [1400, 1400]  # [960, 960]  # face-on panels
     nPixels_e = [1400, 350]  # [960, 240]  # edge-on panels
 
-    if sP.hInd > 30000:
-        size = 1.0
-    elif sP.hInd > 20000:
-        size = 2.0
-    else:
-        size = 5.0
+    if size is None:
+        if sP.hInd > 30000:
+            size = 1.0
+        elif sP.hInd > 20000:
+            size = 2.0
+        else:
+            size = 5.0
 
     sizeType = "kpc"
     labelSim = False  # True
@@ -46,7 +47,7 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
         nircam_fwhm = 1.0 * 0.031  # arcsec at 0.6-2.3 um (is 2x worse at 2.4-5 um)
         smoothFWHM = sP.units.arcsecToCodeLength(nircam_fwhm)
 
-    subhaloInd = sP.halo(haloID)["GroupFirstSub"]
+    subhaloInd = sP.halo(sP.haloInd)["GroupFirstSub"]
 
     # remove all particle/cells in satellite subhalos
     if noSats:
@@ -54,7 +55,7 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
         ptRestrictions = {"sat_member": ["eq", 0]}
         plotSubhalos = False
 
-    # redshift-dependent vis (h31619 L16 tests)
+    # redshift-dependent vis
     zfac = 0.0
     if sP.redshift >= 9.9:
         zfac = 1.0
@@ -63,8 +64,8 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
     # panels (can vary hInd, variant, res)
     panels = []
 
-    if 1:
-        gas_field = "coldens_msunkpc2"  # 'HI'
+    if conf == 0:
+        gas_field = "coldens_msunkpc2"
         stars_field = "stellarCompObsFrame"  # stellarComp'
 
         gas_mm = [5.0 + zfac, 8.5 + zfac]  # [20.0+zfac,22.5+zfac]
@@ -108,11 +109,28 @@ def vis_single_galaxy(sP, haloID=0, noSats=False):
             }
         )
 
+    if conf == 1:
+        # comparison: N_HI, N_H2, N_dust
+        partType = "gas"
+        edge_opts = {"nPixels": nPixels_e, "labelScale": False, "labelSim": True, "labelHalo": False, "labelZ": False}
+
+        # face-on
+        panels.append({"partField": "coldens", "valMinMax": [19.0, 23.0], "rotation": "face-on", "labelZ": False})
+        panels.append({"partField": "HI", "valMinMax": [18.0, 22.5], "rotation": "face-on", "labelZ": False})
+        panels.append({"partField": "coldens_H2", "valMinMax": [18.0, 22.5], "rotation": "face-on", "labelZ": False})
+        panels.append({"partField": "coldens_dust", "valMinMax": [17.0, 20.0], "rotation": "face-on", "labelZ": False})
+
+        # edge-on
+        panels.append({"partField": "coldens", "valMinMax": [19.0, 23.0], "rotation": "edge-on"} | edge_opts)
+        panels.append({"partField": "HI", "valMinMax": [18.0, 22.5], "rotation": "edge-on"} | edge_opts)
+        panels.append({"partField": "coldens_H2", "valMinMax": [18.0, 22.5], "rotation": "edge-on"} | edge_opts)
+        panels.append({"partField": "coldens_dust", "valMinMax": [17.0, 20.0], "rotation": "edge-on"} | edge_opts)
+
     class plotConfig:
         plotStyle = "edged"
-        colorbars = False
+        colorbars = True  # False
         fontsize = 28  # 24
-        saveFilename = "galaxy_%s_%d_h%d%s.pdf" % (sP.simName, sP.snap, haloID, "_nosats" if noSats else "")
+        saveFilename = "galaxy_%s_%d_h%d%s.pdf" % (sP.simName, sP.snap, sP.haloInd, "_nosats" if noSats else "")
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -347,7 +365,7 @@ def vis_movie(sP, haloID=0, frame=None):
 
 
 def vis_movie_mpbsm(sims, haloID=0, conf=1):
-    """Render movie of a zoom run using the final merger tree and MPB-smoothed halo tracking."""
+    """Render movie of a -single- zoom run using the final merger tree and MPB-smoothed halo tracking."""
     panels = []
 
     # panel selection
@@ -376,50 +394,32 @@ def vis_movie_mpbsm(sims, haloID=0, conf=1):
         pf2 = "stellarComp"  # ObsFrame
         vmm2 = None
 
-    if len(sims) == 1:
-        # one run: gas and stars side-by-side
-        sub_ind = sims[0].halo(haloID)["GroupFirstSub"]
+    # one run: gas and stars side-by-side
+    sub_ind = sims[0].halo(haloID)["GroupFirstSub"]
 
-        panels.append(
-            {
-                "sP": sims[0],
-                "subhaloInd": sub_ind,
-                "partType": pt1,
-                "partField": pf1,
-                "valMinMax": vmm1,
-                "labelScale": "physical",
-                "labelSim": True,
-            }
-        )
-        panels.append(
-            {
-                "sP": sims[0],
-                "subhaloInd": sub_ind,
-                "partType": pt2,
-                "partField": pf2,
-                "valMinMax": vmm2,
-                "labelScale": "physical",
-                "labelHalo": True,
-                "labelZ": True,
-            }
-        )
-    else:
-        # multiple runs: one panel each
-        for sim in sims:
-            sub_ind = sim.halo(haloID)["GroupFirstSub"]
-
-            panels.append(
-                {
-                    "sP": sim,
-                    "subhaloInd": sub_ind,
-                    "partType": pt1,
-                    "partField": pf1,
-                    "valMinMax": vmm1,
-                    "labelScale": "physical",
-                    "labelSim": True,
-                    "labelHalo": True,
-                }
-            )
+    panels.append(
+        {
+            "sP": sims[0],
+            "subhaloInd": sub_ind,
+            "partType": pt1,
+            "partField": pf1,
+            "valMinMax": vmm1,
+            "labelScale": "physical",
+            "labelSim": True,
+        }
+    )
+    panels.append(
+        {
+            "sP": sims[0],
+            "subhaloInd": sub_ind,
+            "partType": pt2,
+            "partField": pf2,
+            "valMinMax": vmm2,
+            "labelScale": "physical",
+            "labelHalo": True,
+            "labelZ": True,
+        }
+    )
 
     class plotConfig:
         plotStyle = "edged"
@@ -428,6 +428,55 @@ def vis_movie_mpbsm(sims, haloID=0, conf=1):
         fontsize = 26
         savePath = ""
         saveFileBase = "%s_evo_%s" % ("-".join([s.simName for s in sims]), conf)
+
+    renderSingleHaloFrames(panels, plotConfig, locals())
+
+
+def vis_movie_mpbsm_multi(sims, conf=1):
+    """Render movie of -many- zoom runs using the final merger tree and MPB-smoothed halo tracking."""
+    panels = []
+
+    # panel selection
+    rVirFracs = [1.0]
+    fracsType = "rHalfMassStars"
+    method = "sphMap_global"
+    nPixels = [960, 960]
+    size = 2.0 if np.max([s.hInd for s in sims]) > 20000 else 5.0
+    sizeType = "kpc"
+    axes = [0, 1]
+    plotBHs = "all"
+    labelSim = True
+    labelHalo = "mstar,mhalo"
+    labelScale = "physical"
+    relCoords = True
+    rotation = None
+    autoLimits = False  # disable auto-scaling of stellar band images across frames
+
+    if conf == 1:
+        pt = "gas"
+        pf = "coldens_msunkpc2"
+        vmm = [5.0, 7.5]
+
+    if conf == 2:
+        pt = "stars"
+        pf = "stellarComp"  # ObsFrame
+        vmm = None
+
+    # multiple runs: one panel each
+    for sim in sims:
+        sub_ind = sim.halo(sim.haloInd)["GroupFirstSub"]
+
+        panels.append({"sP": sim, "subhaloInd": sub_ind, "partType": pt, "partField": pf, "valMinMax": vmm})
+
+    panels[-1]["labelZ"] = True  # lower right corner
+
+    class plotConfig:
+        plotStyle = "edged"
+        rasterPx = int(nPixels[0] / 2)  # 1920, or 3840
+        colorbars = False  # True
+        fontsize = 14  # 28
+        savePath = ""
+        saveFileBase = "evo_n%d_conf%s" % (len(sims), conf)
 
     renderSingleHaloFrames(panels, plotConfig, locals())
 
