@@ -954,6 +954,9 @@ class simParams:
             self.arepoPath = self.basePath + "sims.structures/" + dirStr + "/"
             self.simName = "h%d_L%d_%s" % (self.hInd, self.zoomLevel, self.variant)
 
+            if self.haloInd is not None and self.haloInd > 0:
+                self.simName += "abcdefghijklmnopqrstuvwxyz"[self.haloInd % 26]
+
         # COSMOSTNG
         if run in ["cosmostng"]:
             # 8 small-scale power variations (hydro), and DMO variats
