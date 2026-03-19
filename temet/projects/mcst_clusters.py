@@ -6,6 +6,7 @@ https://arxiv.org/abs/xxxx.xxxxx
 
 import matplotlib.pyplot as plt
 import numpy as np
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from temet.plot import snapshot, subhalos_evo
 from temet.plot.config import colors, figsize, markers
@@ -247,31 +248,96 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
     plt.close(fig)
 
 
-def stellar_remnants(sim, haloID=0):
+def stellar_remnants(sims, haloID=0, sizefac=0.8):
     """Plot the mass distribution of different stellar remnant types (WD, NS, BH)."""
+    # load
+    remnant_type = []
+    remnant_mass = []
+
+    for sim in sims:
+        if sim.star != 3:
+            print(f" note: [{sim}] does not have solo stars, skipping.")
+            continue
+
+        loc_type = sim.stars("remnant_type", haloID=haloID)
+        loc_mass = sim.stars("remnant_mass", haloID=haloID)
+        remnant_type = np.hstack((remnant_type, loc_type))
+        remnant_mass = np.hstack((remnant_mass, loc_mass))
+
+    # type_names = {0: "none", 1: "white dwarf", 2: "neutron star", 3: "black hole"}
+    type_names = {1: "white dwarf", 2: "neutron star", 3: "black hole"}
+
+    # config
+    x_split = 2.0  # where x-axis is split
+    xmin = 0.5
+    xmax = 100
+
+    assert np.nanmax(remnant_mass) < xmax, "Need to increase xmax to show all remnants (BHs)."
+
     # start plot
-    fig, ax = plt.subplots()
-    ax.set_xlabel(r"Remnant Mass [ M$_{\odot}$ ]")
+    fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
     ax.set_ylabel("Number")
     ax.set_yscale("log")
 
-    remnant_type = sim.stars("remnant_type", haloID=haloID)
-    remnant_mass = sim.stars("remnant_mass", haloID=haloID)
+    # double x-axis: left and right sides of the plot have different ranges (and could be log/linear)
+    ax.set_xlim([xmin, x_split])  # to show WDs and NSs
+    ax.set_xscale("linear")
+    ax.spines["right"].set_visible(False)
 
-    type_names = {0: "none", 1: "white dwarf", 2: "neutron star", 3: "black hole"}
+    divider = make_axes_locatable(ax)
+    ax2 = divider.append_axes("right", size=5.8, pad=0, sharey=ax)
+    ax2.set_xlim([x_split, xmax])  # to show BHs
+    ax2.set_xscale("linear")
+
+    ax.set_xlabel(" ")
+    ax2.set_xlabel(r"Remnant Mass [ M$_{\odot}$ ]")
+    ax2.xaxis.set_label_coords(0.35, -0.07)
+
+    ax2.spines["left"].set_visible(False)
+    ax2.spines["left"].set_linewidth(5)
+
+    ax2.yaxis.set_ticks_position("right")
+    ax2.tick_params(axis="y", which="both", labelright=False)
+
+    h_max = 0.0
 
     for type_num, type_name in type_names.items():
         w = np.where(remnant_type == type_num)[0]
-        label = f"{type_name} (N={len(w)})"
+        n_frac = len(w) / len(remnant_type) * 100
+        m_frac = remnant_mass[w].sum() / np.nansum(remnant_mass) * 100
+        label = f"{type_name} (N = {n_frac:.1f}%, mass = {m_frac:.1f}%)"
 
-        h = np.histogram(remnant_mass[w], bins=50, range=[0, 100])  # [0.5, 2.0] to show WDs and NSs
-        ax.stairs(*h, fill=True, label=label)
+        # right panel (for BHs)
+        nbins = int((xmax - x_split) / 2.0)
+        h = np.histogram(remnant_mass[w], bins=nbins, range=[0, xmax])  # [0.5, 2.0] to show WDs and NSs
+        ax2.stairs(*h, fill=True, label=label)
 
-        print(type_name, len(w), remnant_mass[w].min(), remnant_mass[w].max())
+        h_max = np.max([h_max, h[0].max()])
 
-    ax.legend(loc="best")
+        # print(type_name, len(w), remnant_mass[w].min(), remnant_mass[w].max())
 
-    fig.savefig(f"stellar_remnants_{sim.simName}_{sim.snap}.pdf")
+        # left panel (for WDs and NSs)
+        nbins = int((x_split - xmin) / 0.1)
+        h = np.histogram(remnant_mass[w], bins=nbins, range=[xmin, x_split])
+        ax.stairs(*h, fill=True)
+
+        h_max = np.max([h_max, h[0].max()])
+
+    # fix ylim
+    ylim = [2, h_max * 1.2]
+    ax.set_ylim(ylim)
+    ax2.set_ylim(ylim)
+
+    # finish plot
+    ax2.plot([x_split, x_split], ax.get_ylim(), ":", color="black", alpha=0.3, zorder=1)
+
+    ax2.legend(loc="best")
+
+    if len(sims) == 1:
+        saveFilename = "stellar_remnants_{sim.simName}_{sim.snap}.pdf"
+    else:
+        saveFilename = "stellar_remnants_n%d.pdf" % (len(sims))
+    fig.savefig(saveFilename)
     plt.close(fig)
 
 
@@ -454,9 +520,6 @@ def paperPlots(a=False):
 
     # ------------
 
-    # fig TODO: gas mass fraction of ISM gas in different phases, at e.g. z=10 and z=6 (bar plots?)
-    # fig TODO: Kennicut-Schmidt relation, global or spatially resolved
-
     # fig 1a: clusters: mass and size distributions
     if 0 or a:
         star_cluster_histogram(sims, quant="mass")
@@ -466,7 +529,7 @@ def paperPlots(a=False):
     if 0 or a:
         size_vs_mass(sims)
 
-    # fig: pressure vs. rho phase space diagram (see Schaye+26 Colibre Fig 8)
+    # fig 3: pressure vs. rho phase space diagram (see Schaye+26 Colibre Fig 8)
     if 0 or a:
         xlim = [-6.0, 5.0]
         sim = simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5)
@@ -477,30 +540,23 @@ def paperPlots(a=False):
         phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="Z_solar", ext="pdf")
         phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="tff_local", ext="pdf")
 
+    # fig 4: kennicut-schmidt relation (global)
+
+    # fig 5: kennicut-schmidt relation (local/spatially resolved)
+
+    # fig 6: gas mass fraction of ISM gas in different phases, at e.g. z=10 and z=6 (bar plots?)
+
+    # fig todo: Sigma_*, Sigma_e, and stellar surface densities in general
+    # https://ui.adsabs.harvard.edu/abs/2025A%26A...699A.343G/abstract
+
+    # fig todo: Sigma_SFR (e.g. Ceverino+26 shows JWST data comparisons)
+
+    # fig todo: any cluster population stat, e.g. mass func slope, size-mass slope, vs. halo mass (color by redshift)
+    #  "universality" or not?
+
     # fig: stellar remnants: mass distribution
     if 0 or a:
-        # config
-        sim = simParams("structures", hInd=31619, res=15, variant="ST15", redshift=7.0)
-        stellar_remnants(sim)
-
-    # fig: mass fraction of PartType4 in stellar remnants
-    if 0 or a:
-        # note: only L15/L16 since require solo stars for remnant_type calculation
-        subhalos_evo.scatter2d(
-            sims,
-            xQuant="mhalo_200_log",
-            yQuant="remnant_massfrac",
-            xlim=[7.0, 10.5],
-            ylim=[0, 0.5],
-            vs_sim=None,
-            tracks=False,
-            parents=False,
-            legend="simple",
-            legend_ncols=[1, 1],
-            legend_locs=["upper right", "upper right"],
-            f_selection=_zoomSubhaloIDsToPlot,
-            sizefac=0.8,
-        )
+        stellar_remnants(sims)
 
     # radial profiles - halo comparisons
     if 0 or a:
@@ -518,12 +574,13 @@ def paperPlots(a=False):
         snapshot.profile(sims, ptType="gas", ptProperty="cellsize_kpc", ylim=[-3.5, -0.5], scope="global", **opts)
 
     # radial profiles: 2d vs time
-    if 0 or a:
+    if 1 or a:
         # evo
         opts = {"haloID": 0, "max_z": 10.0, "rlog": True, "rlim": [-2.0, 1.5]}
 
+        # TODO: profileEvo2d vs profiledStacked2d MISMATCH
         for sim in sims:
-            snapshot.profileEvo2d(
+            snapshot.profilesStacked2d(
                 sim,
                 ptType="gas",
                 ptProperty="numdens",
@@ -534,7 +591,7 @@ def paperPlots(a=False):
                 **opts,
             )
 
-            snapshot.profileEvo2d(
+            snapshot.profilesStacked2d(
                 sim,
                 ptType="stars",
                 ptProperty="dens",
@@ -545,7 +602,7 @@ def paperPlots(a=False):
                 **opts,
             )
 
-            snapshot.profileEvo2d(
+            snapshot.profilesStacked2d(
                 sim,
                 ptType="gas",
                 ptProperty="temp",
@@ -556,7 +613,7 @@ def paperPlots(a=False):
                 **opts,
             )
 
-            snapshot.profileEvo2d(
+            snapshot.profilesStacked2d(
                 sim,
                 ptType="gas",
                 ptProperty="vrad",
@@ -567,7 +624,7 @@ def paperPlots(a=False):
                 **opts,
             )
 
-            snapshot.profileEvo2d(
+            snapshot.profilesStacked2d(
                 sim,
                 ptType="gas",
                 ptProperty="menc_vesc",
@@ -577,6 +634,25 @@ def paperPlots(a=False):
                 ctName="afmhot",
                 **opts,
             )
+
+    # diagnostic: mass fraction of PartType4 in stellar remnants
+    if 0 or a:
+        # note: only L15/L16 since require solo stars for remnant_type calculation
+        subhalos_evo.scatter2d(
+            sims,
+            xQuant="mhalo_200_log",
+            yQuant="remnant_massfrac",
+            xlim=[7.0, 10.5],
+            ylim=[0, 0.5],
+            vs_sim=None,
+            tracks=False,
+            parents=False,
+            legend="simple",
+            legend_ncols=[1, 1],
+            legend_locs=["upper right", "upper right"],
+            f_selection=_zoomSubhaloIDsToPlot,
+            sizefac=0.8,
+        )
 
     # diagnostic: SFR debug
     if 0:
