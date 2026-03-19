@@ -12,9 +12,47 @@ import numpy as np
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
-from .plot.config import figsize
-from .util import simParams
-from .util.match import match
+from ..plot.config import figsize
+from ..util import simParams
+from ..util.match import match
+
+
+def zarr_proteus():
+    """Test creation of a zarr file so we can see its structure."""
+    from os import remove
+
+    import zarr
+
+    # load some test data
+    file_in = "/u/dnelson/ProteusGPU/run/output/snapshot_0.hdf5"
+    data = {}
+
+    with h5py.File(file_in, "r") as f:
+        for key in f["hydro"]:
+            print(key)
+            data[key] = f["hydro"][key][()].astype("float32")
+
+    # create zarr (standard metadata)
+    root = zarr.group("proteus_test.zarr")
+    hydro = root.create_group(name="hydro")
+
+    for key in data.keys():
+        print("write: ", key)
+        # hydro[key] = data[key] # works but no control
+        # chunks=False does not work, but should
+        # chunks=None does not work
+        # chunks=1 is 1 file per element!
+        hydro.create_array(name=key, data=data[key], chunks=data[key].shape, compressors=None)
+
+    if 0:
+        # consolidate metadata
+        zarr.consolidate_metadata("proteus_test.zarr")
+
+        # delete all interior json files (not needed)
+        remove("proteus_test.zarr/hydro/zarr.json")
+        remove("proteus_test.zarr/hydro/Energy/zarr.json")
+        remove("proteus_test.zarr/hydro/rho/zarr.json")
+        remove("proteus_test.zarr/hydro/vel/zarr.json")
 
 
 def mcst_smbh_mdot():
