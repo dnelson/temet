@@ -1243,7 +1243,7 @@ def splitSingleHDF5ICIntoChunks(snap=151):
 
                     # create group and copy particle data for this type
                     gName = "PartType%d" % ptNum
-                    g = fOut.create_group(gName)
+                    fOut.create_group(gName)
 
                     for field in f[gName].keys():
                         print(i, gName, field, indRange)

@@ -495,7 +495,7 @@ def simParticleQuantity(sP, ptType, ptProperty, haloLims=False, u=False):
     Returns:
       tuple: label, lim, log
     """
-    from ..load.snapshot import custom_fields, custom_multi_fields, snapshot_fields
+    from ..load.snapshot import custom_fields, custom_multi_fields, snapshot_field_aliases, snapshot_fields
 
     label = None
     ptType = ptType.lower()
@@ -509,6 +509,12 @@ def simParticleQuantity(sP, ptType, ptProperty, haloLims=False, u=False):
 
             # prop is e.g. 'delta_temp', convert to 'temp' to get associated metadata
             # prop = prop.replace(search_key,'')
+
+    # property name is an alias for a snapshot field?
+    for altLabels, toLabel in snapshot_field_aliases:
+        # alternate field name map, and accept lowercase versions
+        if prop in altLabels or ptProperty == toLabel.lower():
+            prop = toLabel.lower()
 
     # extract metadata from field registry
     if prop in snapshot_fields:

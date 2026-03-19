@@ -21,6 +21,37 @@ from ..util.helper import iterable, logZeroNaN, pSplitRange
 # registry for snapshot field metadata (in snap_fields.py)
 snapshot_fields = {}
 
+# note: no alias should conflict with a custom field name (or its alias)
+snapshot_field_aliases = [
+    [["center_of_mass", "com", "center"], "CenterOfMass"],
+    [["xyz", "positions", "pos"], "Coordinates"],
+    [["dens", "rho"], "Density"],
+    [["dmdens"], "SubfindDMDensity"],
+    [["xe", "xelec"], "ElectronAbundance"],
+    [["agnrad", "gfm_agnrad"], "GFM_AGNRadiation"],
+    [["coolrate", "gfm_coolrate"], "GFM_CoolingRate"],
+    [["winddmveldisp"], "GFM_WindDMVelDisp"],
+    [["metal", "Z", "gfm_metal", "metallicity"], "GFM_Metallicity"],
+    [["metals"], "GFM_Metals"],
+    [["u", "utherm"], "InternalEnergy"],
+    [["machnum", "shocks_machnum"], "Machnumber"],
+    [["dedt", "energydiss", "shocks_dedt", "shocks_energydiss"], "EnergyDissipation"],
+    [["b", "bfield"], "MagneticField"],
+    [["mass"], "Masses"],
+    [["numtr"], "NumTracers"],
+    [["id", "ids"], "ParticleIDs"],
+    [["pot"], "Potential"],
+    [["sfr"], "StarFormationRate"],
+    [["vel"], "Velocities"],
+    [["vol"], "Volume"],
+    # stars only:
+    [["initialmass", "ini_mass", "mass_ini"], "GFM_InitialMass"],
+    [["stellarformationtime", "sftime", "birthtime"], "GFM_StellarFormationTime"],
+    [["stellarphotometrics", "stellarphot", "sphot"], "GFM_StellarPhotometrics"],
+    # blackholes only:
+    [["bh_dens", "bh_rho"], "BH_Density"],
+]
+
 # and custom-derived snapshot fields (in snap_fields_custom.py)
 custom_fields = {}
 custom_fields_aliases = {}
@@ -522,39 +553,8 @@ def snapshotSubset(
     # alternate field names mappings
     invNameMappings = {}
 
-    altNames = [
-        [["center_of_mass", "com", "center"], "CenterOfMass"],
-        [["xyz", "positions", "pos"], "Coordinates"],
-        [["dens", "rho"], "Density"],
-        [["dmdens"], "SubfindDMDensity"],
-        [["xe", "xelec"], "ElectronAbundance"],
-        [["agnrad", "gfm_agnrad"], "GFM_AGNRadiation"],
-        [["coolrate", "gfm_coolrate"], "GFM_CoolingRate"],
-        [["winddmveldisp"], "GFM_WindDMVelDisp"],
-        [["metal", "Z", "gfm_metal", "metallicity"], "GFM_Metallicity"],
-        [["metals"], "GFM_Metals"],
-        [["u", "utherm"], "InternalEnergy"],
-        [["machnum", "shocks_machnum"], "Machnumber"],
-        [["dedt", "energydiss", "shocks_dedt", "shocks_energydiss"], "EnergyDissipation"],
-        [["b", "bfield"], "MagneticField"],
-        [["mass"], "Masses"],
-        [["numtr"], "NumTracers"],
-        [["id", "ids"], "ParticleIDs"],
-        [["pot"], "Potential"],
-        [["pres"], "Pressure"],
-        [["sfr"], "StarFormationRate"],
-        [["vel"], "Velocities"],
-        [["vol"], "Volume"],
-        # stars only:
-        [["initialmass", "ini_mass", "mass_ini"], "GFM_InitialMass"],
-        [["stellarformationtime", "sftime", "birthtime"], "GFM_StellarFormationTime"],
-        [["stellarphotometrics", "stellarphot", "sphot"], "GFM_StellarPhotometrics"],
-        # blackholes only:
-        [["bh_dens", "bh_rho"], "BH_Density"],
-    ]
-
     for i, field in enumerate(fields):
-        for altLabels, toLabel in altNames:
+        for altLabels, toLabel in snapshot_field_aliases:
             # alternate field name map, lowercase versions accepted
             if field.lower() in altLabels or field == toLabel.lower():
                 # invNameMappings[toLabel] = fields[i] # save inverse so we can undo
@@ -738,7 +738,7 @@ def snapshotSubset(
                 raise Exception("Should fix h-units for consistency.")
 
     # inverse map multiDimSliceMaps such that return dict has key names exactly as requested
-    # todo: could also do for altNames (just uncomment above, but need to refactor codebase)
+    # todo: could also do for snapshot_field_aliases (just uncomment above, but need to refactor codebase)
     if isinstance(r, dict):
         for newLabel, origLabel in invNameMappings.items():
             r[origLabel] = r.pop(newLabel)  # change key label

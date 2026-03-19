@@ -122,7 +122,7 @@ def _zoomSubhaloIDsToPlot(sim, min_mhalo=7.0, verbose=False):
 
 def smhm_relation(sims):
     """Stellar mass vs halo mass including empirical constraints."""
-    from temet.load.data import behrooziUM, paquereau25
+    from temet.load.data import behrooziUM  # paquereau25
 
     xQuant = "mhalo_200_log"
     yQuant = "mstar2_log"
@@ -420,7 +420,7 @@ def mbh_vs_mhalo(sims: list[simParams]) -> None:
         mbh_mhalo_ratios = [1e-3, 1e-4, 1e-5]
         opts = {"fontsize": 12, "color": "#444", "alpha": 0.3, "ha": "left", "va": "bottom", "rotation": 30.0}
 
-        for i, ratio in enumerate(mbh_mhalo_ratios):
+        for _i, ratio in enumerate(mbh_mhalo_ratios):
             yy = np.log10(10.0 ** np.array(xlim) * ratio)
             label = r"$M_{\rm BH} = 10^{%d} M_{\rm halo}$" % np.log10(ratio)
             ax.plot(xlim, yy, ":", color=opts["color"], alpha=opts["alpha"])
@@ -1051,12 +1051,14 @@ def stellar_mzr(sims):
     )
 
 
-def phase_diagram(sim, yQuant="temp", cQuant=None, ext="pdf"):
+def phase_diagram(sim, xlim=None, yQuant="temp", cQuant=None, ext="pdf"):
     """Driver."""
     # config
     xQuant = "nh"
 
-    xlim = [-6.0, 7.0]  # xmax == 6 for L15, xmax == 7 for L16
+    if xlim is None:
+        xlim = [-6.0, 7.0]  # xmax == 6 for L15, xmax == 7 for L16
+
     haloIDs = None  # [0]
     qRestrictions = [["rad_rvir", 0.0, 5.0]]  # within 5rvir only
     qRestrictions.append(["highres_massfrac", 0.5, 1.0])  # high-res only
@@ -1065,25 +1067,35 @@ def phase_diagram(sim, yQuant="temp", cQuant=None, ext="pdf"):
         ylim = [1.0, 7.5]  # [1.0, 8.0]
     if yQuant == "csnd":
         ylim = [-0.5, 2.5]
+    if yQuant == "pres":
+        ylim = [-1.0, 8.0]  # ymax == 6 for L15, ymax == 8 for L16
 
     cStr = cQuant
+    ctCenter = None
+
     if cQuant is None:
         clim = [-5.0, 0.0]  # show mass distribution
         cStr = "mass"
         ctName = "viridis"
-        ctCenter = None
     if cQuant == "Z_solar":
         clim = [-2.0, 0.0]
         ctName = "plasma"
-        ctCenter = None
     if cQuant == "vrad":
         clim = [-60, 120]
         ctName = "blue_red_sharp"  # "blue_red_sharp"
         ctCenter = 0.0
+    if cQuant == "vmag":
+        clim = [150, 200]
+        ctName = "solar"
+    if cQuant == "csnd":
+        clim = [0, 2.0]
+        ctName = "magma"
     if cQuant == "rad_rvir":
         clim = [-2.0, 0.0]
         ctName = "inferno"
-        ctCenter = None
+    if cQuant == "tff_local":
+        clim = [0.0, 4.0]
+        ctName = "thermal"
 
     saveFilename = "phase_%s_%s_%s_%s_%03d.%s" % (sim.simName, xQuant, yQuant, cStr, sim.snap, ext)
 
@@ -1106,8 +1118,16 @@ def phase_diagram(sim, yQuant="temp", cQuant=None, ext="pdf"):
             )  # Smith+ Eqn. 1 [cm/s]
             # [cm^2/s^2 g / erg * K] = [cm^2/s^2 g s^2/cm^2/g * K] = [K]
             temp = csnd**2 * units.mass_proton / units.gamma / units.boltzmann
+            pres = (dens / sim.units.mass_proton) * temp  # K / cm^3
 
-            ax.plot(xx, np.log10(temp), ls=[":", "--"][i], color="black", alpha=0.7)
+            if yQuant == "temp":
+                yy = temp
+            if yQuant == "csnd":
+                yy = csnd
+            if yQuant == "pres":
+                yy = pres
+
+            ax.plot(xx, np.log10(yy), ls=[":", "--"][i], color="black", alpha=0.7)
 
     snapshot.phaseSpace2d(
         sim,

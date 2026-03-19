@@ -3980,7 +3980,7 @@ def paquereau25(redshift=5.5, zStr=None, mstar="Mth"):
     elif mstar == "Mmed":
         path = dataBasePath + "paquereau/shmr_zbin%s_Mmed-Mhmin.dat" % zStr
 
-    with open(path, "r") as f:
+    with open(path) as f:
         lines = f.readlines()
 
     # first comment line has mstar bins

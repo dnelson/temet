@@ -562,15 +562,15 @@ def tff_local(sim, partType, field, args):
     dens = sim.units.codeDensToPhys(dens, cgs=True)  # g/cm^3
 
     tff = np.sqrt(3 * np.pi / (32 * sim.units.Gravity * dens))  # s
-    tff /= sim.units.s_in_yr  # yr
+    tff /= sim.units.s_in_Myr
 
     return tff
 
 
 tff_local.label = "Free-fall Time"
-tff_local.units = r"$\rm{yr}$"
-tff_local.limits = [0.0, 6.0]
-tff_local.limits_halo = [2.0, 6.0]
+tff_local.units = r"$\rm{Myr}$"
+tff_local.limits = [0.0, 3.0]
+tff_local.limits_halo = [-1.0, 2.0]
 tff_local.log = True
 
 
@@ -736,6 +736,9 @@ f_b.log = False
 @snap_field(aliases=["gas_pres", "gas_pressure", "pres", "p_gas", "p_thermal"])
 def pressure(sim, partType, field, args):
     """Gas *thermal* pressure."""
+    if sim.snapHasField(partType, "Pressure"):
+        return sim.snapshotSubset(partType, "Pressure", **args)
+
     u = sim.snapshotSubset(partType, "u", **args)
     dens = sim.snapshotSubset(partType, "dens", **args)
 

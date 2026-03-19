@@ -7,13 +7,12 @@ https://arxiv.org/abs/xxxx.xxxxx
 import matplotlib.pyplot as plt
 import numpy as np
 
-from temet.plot import snapshot, subhalos, subhalos_evo
-from temet.plot.config import colors, figsize, linestyles, lw, markers
-from temet.plot.subhalos import addUniverseAgeAxis
+from temet.plot import snapshot, subhalos_evo
+from temet.plot.config import colors, figsize, markers
 from temet.util import simParams
-from temet.util.helper import cache, logZeroNaN
+from temet.util.helper import logZeroNaN
 
-from .mcst import _get_existing_sims, _zoomSubhaloIDsToPlot
+from .mcst import _get_existing_sims, _zoomSubhaloIDsToPlot, phase_diagram
 
 
 mass_label = r"Star Cluster Mass [ log M$_{\odot}$ ]"
@@ -80,7 +79,7 @@ def diagnostic_sfr_jeans_mass(sims, haloID=0):
 
         rad_rvir = sim.snapshotSubset("gas", "rad_rvir", haloID=haloID)
 
-        tff = sim.snapshotSubset("gas", "tff_local", haloID=haloID)  # yr
+        tff = sim.snapshotSubset("gas", "tff_local", haloID=haloID) / 1e6  # yr
 
         # calculate SFR that we would expect
         sfr_calc = np.zeros(mass.size, dtype="float32")
@@ -455,18 +454,28 @@ def paperPlots(a=False):
 
     # ------------
 
-    # fig TODO: pressure vs. rho phase space diagram (see Schaye+26 Colibre Fig 8)
     # fig TODO: gas mass fraction of ISM gas in different phases, at e.g. z=10 and z=6 (bar plots?)
     # fig TODO: Kennicut-Schmidt relation, global or spatially resolved
 
-    # star clusters: mass and size distributions
+    # fig 1a: clusters: mass and size distributions
     if 0 or a:
         star_cluster_histogram(sims, quant="mass")
         star_cluster_histogram(sims, quant="size", sizefac=0.8)
 
-    # clusters: size-mass relation
+    # fig 1b: clusters: size-mass relation
     if 0 or a:
         size_vs_mass(sims)
+
+    # fig: pressure vs. rho phase space diagram (see Schaye+26 Colibre Fig 8)
+    if 0 or a:
+        xlim = [-6.0, 5.0]
+        sim = simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5)
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant=None, ext="pdf")
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="rad_rvir", ext="pdf")
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="vrad", ext="pdf")
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="csnd", ext="pdf")
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="Z_solar", ext="pdf")
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="tff_local", ext="pdf")
 
     # fig: stellar remnants: mass distribution
     if 0 or a:

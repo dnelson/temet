@@ -1475,12 +1475,12 @@ def simHighZComparison():
 
     # Garcia+25 (https://arxiv.org/abs/2503.08779) "refinement when gas mass exceeds 160 Msun, which is ~8x the
     # initial mean gas mass per high-res cell" although "initial DM mass resolution is 800 msun"
-    garcia25_mhalo = [10.0]  # z=0 value!
-    garcia25_mgas = [20]
+    # garcia25_mhalo = [10.0]  # z=0 value!
+    # garcia25_mgas = [20]
 
     # Obelisk (Trebitsch+22 https://arxiv.org/abs/2002.04045)
-    obelisk_mhalo = []  # 2.5e13 at z~2 (many at z=6, email from maxime gives data file at z=6)
-    obelisk_mgas = [1.2e6 * 0.17]  # 1.2e6 m_DM * 0.17 baryon fraction ~ 2e5 Msun for gas (off plot for now)
+    # obelisk_mhalo = []  # 2.5e13 at z~2 (many at z=6, email from maxime gives data file at z=6)
+    # obelisk_mgas = [1.2e6 * 0.17]  # 1.2e6 m_DM * 0.17 baryon fraction ~ 2e5 Msun for gas (off plot for now)
 
     # obelisk_mhalo = np.loadtxt('Obelisk_haloes_00075.txt')[:,1]
     # obelisk_mhalo = np.log10(obelisk_mhalo / 1.2) # mvir -> m200c rough adjustment

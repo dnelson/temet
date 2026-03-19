@@ -360,10 +360,8 @@ def scatter2d(
         xvals = sim_parent_load.subhalos(xQuant)
         yvals = sim_parent_load.subhalos(yQuant)
 
-        for i, hInd in enumerate(hInds):
+        for i, subhaloInd in enumerate(subhaloInds):
             # zooms at a different redshift than the parent volume?
-            subhaloInd = subhaloInds[i]
-
             if np.abs(sims[0].redshift - sim_parent.redshift) > 0.1:
                 parent_mpb = sim_parent.loadMPB(subhaloInds[i])
                 _, target_ind = closest(parent_mpb["Redshift"], sims[0].redshift)

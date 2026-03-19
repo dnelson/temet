@@ -141,7 +141,7 @@ def vis_gallery_galaxy(sims, conf=0):
     fracsType = "rhalf_stars_fof"  #'rHalfMassStars'
     nPixels = [960, 960]
     sizeType = "kpc"
-    # labelSim   = True
+    labelSim = True
     labelHalo = "mhalo,mstar"
     labelZ = True
     labelScale = "physical"
@@ -167,13 +167,8 @@ def vis_gallery_galaxy(sims, conf=0):
         # face-on + edge-on pairs
         sub_ind = sim.halo(sim.haloInd)["GroupFirstSub"]
         size_loc = 1.0 if sim.hInd < 300000 else 0.5
-        label_sim = sim.simName
-        if sim.haloInd > 0:
-            label_sim += "b"
 
-        panels.append(
-            {"sP": sim, "subhaloInd": sub_ind, "labelSim": label_sim, "rotation": "face-on", "size": size_loc}
-        )
+        panels.append({"sP": sim, "subhaloInd": sub_ind, "rotation": "face-on", "size": size_loc})
 
     class plotConfig:
         plotStyle = "edged"
