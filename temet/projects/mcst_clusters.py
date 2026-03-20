@@ -10,6 +10,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from temet.plot import snapshot, subhalos_evo
 from temet.plot.config import colors, figsize, markers
+from temet.plot.util import tableau10_colors
 from temet.util import simParams
 from temet.util.helper import logZeroNaN
 
@@ -497,6 +498,79 @@ def size_vs_mass(sims, sizefac=0.8):
     _finish_plot(fig, saveFilename=f"scatter2d_evo_{xQuant}-vs-{yQuant}.pdf")
 
 
+def gas_phase_fractions(sims, frac_type="Mass"):
+    """Create a bar chart showing the fractions of gas in different phases (multi-phase ISM)."""
+    # config
+    subhaloID = 0
+
+    ylim = [1e-4, 5.0]
+
+    acFieldBase = f"Subhalo_{frac_type}_r015rvir_Gas_"  # r < 0.15rvir is the spatial definition for the 'galaxy'/'ISM'
+
+    phases = ["Total", "Hot", "Warm_Ionized", "Warm_Neutral", "Cool", "Cold"]  # "Warm"
+    colors = [tableau10_colors[n] for n in ["gray", "red", "orange", "orange_dark", "lightblue", "blue"]]
+
+    # start plot
+    fig, ax = plt.subplots(figsize=(figsize[0] * 1.2, figsize[1] * 0.5))
+    ax.set_ylabel(f"ISM {frac_type} Fraction")
+    ax.set_yscale("log")
+    ax.set_ylim(ylim)
+
+    ax.set_xlim([-0.5, len(sims) + 0.5])
+    ax.set_xticks(range(len(sims) + 1))
+    ax.set_xticklabels(["stack"] + [f"h{sim.hInd}" for sim in sims])
+
+    # build dataset
+    assert phases[0] == "Total"
+    data = {}
+
+    for phase in phases:
+        data[phase] = np.zeros(len(sims) + 1, dtype="float32")  # +1 for stack
+
+    # loop over simulations, load fractions (auxCat)
+    for i, sim in enumerate(sims):
+        for phase in phases:
+            phase_fracs = sim.auxCat(f"{acFieldBase}{phase}")[f"{acFieldBase}{phase}"]
+            frac = np.clip(phase_fracs[subhaloID], 1e-10, np.inf)  # avoid zero if absolutely no gas at all
+
+            # normalize by total to get fractions
+            if phase != "Total":
+                frac /= data["Total"][i + 1]
+
+            data[phase][i + 1] = frac
+
+    # calculate stack
+    for phase in phases:
+        data[phase][0] = np.mean(data[phase][1:])
+
+        # clip to make all visible
+        data[phase] = np.clip(data[phase], ylim[0] * 1.2, np.inf)
+
+    # plot barchart
+    width = 1 / len(phases)  # * 1.0
+
+    x = np.arange(len(sims) + 1) - width * (len(phases) / 2)  # center label locations
+
+    for i, (phase_name, phase_fracs) in enumerate(data.items()):
+        if i == 0:
+            continue  # skip Total
+
+        label = phase_name.replace("_", " ")
+        ax.bar(x + (width * i), phase_fracs, width, color=colors[i], label=label)
+
+    # finish plot
+    ax.plot([0.5, 0.5], ax.get_ylim(), ":", color="black", alpha=0.3)
+    ax.legend(loc="upper right", ncols=len(phases))
+
+    if len(sims) == 1:
+        saveFilename = f"gas_phase_fracs_{frac_type}_{sim.simName}_{sim.snap}.pdf"
+    else:
+        saveFilename = f"gas_phase_fracs_{frac_type}_n{len(sims)}.pdf"
+
+    fig.savefig(saveFilename)
+    plt.close(fig)
+
+
 # -------------------------------------------------------------------------------------------------
 
 
@@ -513,9 +587,15 @@ def paperPlots(a=False):
     # sims = _get_existing_sims(variants, res, hInds, redshift, all=False, single=True)
 
     sims = []
+    sims.append(simParams("structures", hInd=1958, res=14, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=5072, res=14, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=15581, res=14, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=23908, res=14, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=31619, res=14, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=73172, res=14, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=219612, res=15, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=311384, res=15, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=446076, res=15, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=539722, res=15, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=844537, res=16, variant="ST15", redshift=5.5))
 
     # ------------
@@ -545,6 +625,9 @@ def paperPlots(a=False):
     # fig 5: kennicut-schmidt relation (local/spatially resolved)
 
     # fig 6: gas mass fraction of ISM gas in different phases, at e.g. z=10 and z=6 (bar plots?)
+    if 0 or a:
+        gas_phase_fractions(sims, frac_type="Mass")
+        gas_phase_fractions(sims, frac_type="Vol")
 
     # fig todo: Sigma_*, Sigma_e, and stellar surface densities in general
     # https://ui.adsabs.harvard.edu/abs/2025A%26A...699A.343G/abstract
@@ -567,18 +650,13 @@ def paperPlots(a=False):
 
         snapshot.profile(sims, ptType="stars", ptProperty="dens", ylim=[2.5, 11.0], scope="global", **opts)
 
-        snapshot.profile(sims, ptType="gas", ptProperty="temp", ylim=[3.0, 6.0], scope="global", **opts)
-
-        snapshot.profile(sims, ptType="gas", ptProperty="menc_vesc", ylim=[0.0, 1.7], scope="fof", **opts)
-
         snapshot.profile(sims, ptType="gas", ptProperty="cellsize_kpc", ylim=[-3.5, -0.5], scope="global", **opts)
 
     # radial profiles: 2d vs time
-    if 1 or a:
+    if 0 or a:
         # evo
-        opts = {"haloID": 0, "max_z": 10.0, "rlog": True, "rlim": [-2.0, 1.5]}
+        opts = {"haloID": 0, "max_z": 10.0, "rlog": True, "rlim": [-2.0, 1.0], "smooth_sizes": True}
 
-        # TODO: profileEvo2d vs profiledStacked2d MISMATCH
         for sim in sims:
             snapshot.profilesStacked2d(
                 sim,
@@ -588,6 +666,28 @@ def paperPlots(a=False):
                 clog=True,
                 scope="global",
                 ctName="magma",
+                **opts,
+            )
+
+            snapshot.profilesStacked2d(
+                sim,
+                ptType="gas",
+                ptProperty="vrad",
+                clim=[-50.0, 50.0],
+                clog=False,
+                scope="global",
+                ctName="curl",
+                **opts,
+            )
+
+            snapshot.profilesStacked2d(
+                sim,
+                ptType="gas",
+                ptProperty="tff_local",
+                clim=[-2.0, 2.0],
+                clog=True,
+                scope="global",
+                ctName="inferno",
                 **opts,
             )
 
@@ -610,17 +710,6 @@ def paperPlots(a=False):
                 clog=True,
                 scope="global",
                 ctName="thermal",
-                **opts,
-            )
-
-            snapshot.profilesStacked2d(
-                sim,
-                ptType="gas",
-                ptProperty="vrad",
-                clim=[-50.0, 50.0],
-                clog=False,
-                scope="global",
-                ctName="curl",
                 **opts,
             )
 

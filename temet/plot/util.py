@@ -45,6 +45,21 @@ def _finish_plot(fig, saveFilename, saveNameDefault=None, pdf=None, output_fmt=N
 # --- vis ---
 
 
+tableau10_colors = {
+    "blue": "#1F77B4",
+    "orange": "#FF7F0E",
+    "orange_dark": "#bb5202",
+    "green": "#2CA02C",
+    "red": "#D62728",
+    "purple": "#9467BD",
+    "brown": "#8C564B",
+    "pink": "#E377C2",
+    "yellow": "#BCBD22",
+    "lightblue": "#17BECF",
+    "gray": "#7F7F7F",
+}
+
+
 def getWhiteBlackColors(pStyle):
     """Plot style helper."""
     assert pStyle in ["white", "black"]
@@ -835,19 +850,7 @@ def sampleColorTable(ctName, num, bounds=None):
     if ctName == "tableau10":
         # current custom implementation of name-based color picking from this cm
         # note: exists in matplotlib 2.0+ as 'tab10'
-        colors = {
-            "blue": "#1F77B4",
-            "orange": "#FF7F0E",
-            "green": "#2CA02C",
-            "red": "#D62728",
-            "purple": "#9467BD",
-            "brown": "#8C564B",
-            "pink": "#E377C2",
-            "gray": "#BCBD22",
-            "yellow": "#17BECF",
-            "lightblue": "#7F7F7F",
-        }
-        r = [colors[name] for name in iterable(num)]
+        r = [tableau10_colors[name] for name in iterable(num)]
         if len(r) == 1:
             return r[0]
         return r

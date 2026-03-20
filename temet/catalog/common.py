@@ -99,6 +99,12 @@ def _radialRestriction(sP, nSubsTot, rad):
 
         radSqMax = (1.00 * parentR200) ** 2
         radSqMin = (0.15 * parentR200) ** 2
+    elif rad == "r015vir_galaxy":
+        # matching 'galaxy' definition, r < 0.15rvir (meaningless for non-centrals)
+        gcLoad = sP.groupCat(fieldsHalos=["Group_R_Crit200"], fieldsSubhalos=["SubhaloGrNr"])
+        parentR200 = gcLoad["halos"][gcLoad["subhalos"]]
+
+        radSqMax = (0.15 * parentR200) ** 2
     elif rad == "20pkpc_halfrvir":
         # 'inner halo' definition: from 20 pkpc to 0.5 r200c (must be centrals only to avoid nans)
         parentR200 = sP.subhalos("rhalo_200_code")

@@ -1992,7 +1992,8 @@ def paperPlots(a=False):
         subhalos_evo.tracks1d(sims, "mstar_fof", ylim=[3.5, 7.5], sfh_treebased=True, **opts)
         subhalos_evo.tracks1d(sims, "mhalo", ylim=[6.0, 11.0], parents=False, **opts)
         subhalos_evo.tracks1d(sims, "rvir", ylim=[0.5, 2.0], parents=False, **opts)
-        # subhalos_evo.tracks1d(sims, 're_rvir_ratio', ylim=[-3.5,-0.5], parents=False, **opts)
+        subhalos_evo.tracks1d(sims, "rhalf_stars", ylim=[-2.0, 0.5], parents=False, **opts)
+        subhalos_evo.tracks1d(sims, "re_rvir_ratio", ylim=[-3.5, -0.5], parents=False, **opts)
 
     # diagnostic: CPU times
     if 0 or a:

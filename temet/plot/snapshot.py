@@ -737,17 +737,17 @@ def phaseSpace2d(
         # if a plot contains multiple colorbars, their tick label width varies depending on the
         # automatic formatter, causing the main panel sizes to vary and be mismatched. enforce a minimum.
         # doesn't really work with the padding strategy:
-        #bbox = cb.ax._position
-        #print(meancolors, bbox, bbox.width)
+        # bbox = cb.ax._position
+        # print(meancolors, bbox, bbox.width)
 
-        #min_length = 5  # e.g. '-0.75'
-        #tick_values = cb.ax.get_yticks()
-        #tick_labels = cb.ax.get_yticklabels()
+        # min_length = 5  # e.g. '-0.75'
+        # tick_values = cb.ax.get_yticks()
+        # tick_labels = cb.ax.get_yticklabels()
 
-        #for label in tick_labels:
+        # for label in tick_labels:
         #    label.set_text(label.get_text().ljust(min_length))
-        #cb.ax.set_yticks(tick_values)
-        #cb.ax.set_yticklabels(tick_labels)
+        # cb.ax.set_yticks(tick_values)
+        # cb.ax.set_yticklabels(tick_labels)
 
     # info legend
     if qRestrictions is not None and qRestrictionsLabel:
@@ -1545,6 +1545,7 @@ def profilesStacked2d(
     clog=None,
     clim=None,
     sfreq0=False,
+    smooth_sizes=False,
     max_z=20.0,
     scope="fof",
     ctName="viridis",
@@ -1566,6 +1567,7 @@ def profilesStacked2d(
       clog (bool): log color axis.
       clim (list[float]): 2-tuple of color (ptProperty) axis limits.
       sfreq0 (bool): restrict to non-eEOS cells (only).
+      smooth_sizes (bool): whether to smooth the MPB-based sizes (r200c, rhalf) that are overplotted.
       max_z (float): maximum redshift to include in the plot.
       scope (str): 'global', 'fof', 'subfind'.
       ctName (str): colormap name for the 2D plot.
@@ -1574,7 +1576,7 @@ def profilesStacked2d(
     """
     assert haloID is None or subhaloID is None  # pick one
 
-    nRadBins = 100
+    nRadBins = 150
 
     # get halo and subhalo IDs
     if subhaloID is not None:
@@ -1595,6 +1597,9 @@ def profilesStacked2d(
     if rlog:
         r200c = np.log10(r200c)
         rhalf = np.log10(rhalf)
+    if smooth_sizes:
+        r200c = savgol_filter(r200c, sKn, sKo)
+        rhalf = savgol_filter(rhalf, sKn, sKo)
 
     zvals = sim.snapNumToRedshift(snaps)
 
@@ -1671,7 +1676,7 @@ def profilesStacked2d(
         rlabel = "Galactocentric Radius [ pkpc ]"
 
     # start plot
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, ax = plt.subplots(figsize=(figsize[0] * 1.2, figsize[1]))
 
     ax.set_xlabel("Redshift")
     ax.set_ylabel(rlabel)
@@ -1705,10 +1710,21 @@ def profilesStacked2d(
     ax.set_xticklabels([f"{z:.1f}" for z in zvals])
 
     # mark size evolution
-    (l,) = ax.plot(r200c, "--", color="white")
-    ax.text(10, r200c[10] * 1.05, r"r$_{200c}$", color=l.get_color(), fontsize=20, va="bottom", ha="left")
-    (l,) = ax.plot(rhalf, "--", color="black")
-    ax.text(5, rhalf[5] + 0.1, r"r$_{\rm 1/2\star}$", color=l.get_color(), fontsize=20, va="bottom", ha="left")
+    text_opts = {
+        "color": "white",
+        "fontsize": 20,
+        "va": "bottom",
+        "ha": "center",
+        "bbox": dict(facecolor="black", alpha=0.15, pad=2),
+    }
+
+    (l,) = ax.plot(r200c, "-", lw=lw + 2, color="black", alpha=0.6)  # under
+    (l,) = ax.plot(r200c, "--", lw=lw, color="white", zorder=2)
+    ax.text(snaps.size - 10, r200c[-10] + 0.1, r"r$_{200c}$", **text_opts)
+
+    (l,) = ax.plot(rhalf, "-", lw=lw + 2, color="black", alpha=0.6)  # under
+    (l,) = ax.plot(rhalf, "--", lw=lw, color="white", zorder=2)
+    ax.text(snaps.size - 10, rhalf[-10] + 0.3, r"r$_{\rm 1/2\star}$", **text_opts)
 
     # contour lines in the color quantity
     # for cval in [-1.0, 0.0, 1.0]:
@@ -1733,11 +1749,8 @@ def profilesStacked2d(
     ax2.set_xlabel("Age of the Universe [ Gyr ]", labelpad=12)
 
     # add colorbar and finish plot
-    dax = make_axes_locatable(ax2).append_axes("right", size="3%", pad=0.2)
-    dax.get_yaxis().set_ticks([])  # dummy such that ax2 is aligned with ax
-    dax.get_xaxis().set_ticks([])
-    cax = make_axes_locatable(ax).append_axes("right", size="3%", pad=0.2)
-    fig.colorbar(im, cax=cax, label=clabel)
+    cb = fig.colorbar(im, ax=ax, pad=0.02)
+    cb.ax.set_ylabel(clabel)
 
     # finish plot and save
     if haloID is not None:

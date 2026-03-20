@@ -831,6 +831,9 @@ def subhaloRadialReduction(
                     validMask &= particles[restrictionField][i0:i1] <= val
                 if inequality == "eq":
                     validMask &= particles[restrictionField][i0:i1] == val
+                if inequality == "between":
+                    validMask &= particles[restrictionField][i0:i1] >= val[0]
+                    validMask &= particles[restrictionField][i0:i1] < val[1]
 
         wValid = np.where(validMask)
 

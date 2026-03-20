@@ -60,7 +60,9 @@ version, tagged on the date near the finalization of the paper.
 * [Nelson et al. (2021) - TNG50 MgII emission](http://arxiv.org/abs/2106.09023) - `projects.mg2emission.paperPlots()`
 * [Nelson et al. (2023) - OVII X-ray Scattering](https://arxiv.org/abs/2306.05453) - `projects.xray_scattering.paperPlots()`
 * [Nelson et al. (2024) - Introducing TNG-Cluster](https://arxiv.org/abs/2311.06338) - `projects.tngcluster.paperPlots()`
-* [Nelson et al. (2025) - SALSA](https://arxiv.org/abs/2510.19904) - `projects.mockspec.paperPlots()`
+* [Nelson et al. (2026a) - SALSA](https://arxiv.org/abs/2510.19904) - `projects.mockspec.paperPlots()`
+* [Nelson et al. (2026b) - Introducing MCST](https://arxiv.org/abs/xxxx.xxxxx) - `projects.mcst.paperPlots()`
+* [Nelson et al. (2026c) - MCST star clusters](https://arxiv.org/abs/xxxx.xxxxx) - `projects.mcst_clusters.paperPlots()`
 
 
 Contributing
