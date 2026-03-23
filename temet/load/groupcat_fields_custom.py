@@ -1049,7 +1049,7 @@ def re_rvir_ratio(sim, field):
     rad = radtype[:, sim.ptNum("stars")]
 
     rad_norm = sim.subhalos("rhalo_200_code")
-    with np.errstate(invalid="ignore"):
+    with np.errstate(invalid="ignore", divide="ignore"):
         rad /= rad_norm
 
     return rad
@@ -1087,13 +1087,13 @@ def surfdens1_stars(sim, field):
     aperture = sim.units.codeLengthToKpc(sim.subhalos("SubhaloHalfmassRadType")[:, sim.ptNum("stars")])
     area = np.pi * aperture**2
 
-    with np.errstate(invalid="ignore"):
+    with np.errstate(invalid="ignore", divide="ignore"):
         vals = mass / area  # Msun/kpc^2
 
     return vals
 
 
-surfdens1_stars.label = r"$\rm{\Sigma_{*,<r_{\star}}}$"
+surfdens1_stars.label = r"$\rm{\Sigma_{\star,r_{\star}}}$"
 surfdens1_stars.units = r"$\rm{M_{sun}\, kpc^{-2}}$"
 surfdens1_stars.limits = [6.5, 9.0]
 surfdens1_stars.log = True
@@ -1107,16 +1107,36 @@ def surfdens2_stars(sim, field):
     aperture = 2.0 * sim.units.codeLengthToKpc(sim.subhalos("SubhaloHalfmassRadType")[:, sim.ptNum("stars")])
     area = np.pi * aperture**2
 
-    with np.errstate(invalid="ignore"):
+    with np.errstate(invalid="ignore", divide="ignore"):
         vals = mass / area  # Msun/kpc^2
 
     return vals
 
 
-surfdens2_stars.label = r"$\rm{\Sigma_{*,<2r_{\star}}}$"
+surfdens2_stars.label = r"$\rm{\Sigma_{\star,2r_{\star}}}$"
 surfdens2_stars.units = r"$\rm{M_{sun}\, kpc^{-2}}$"
 surfdens2_stars.limits = [6.5, 9.0]
 surfdens2_stars.log = True
+
+
+@catalog_field
+def surfdens_stars(sim, field):
+    """Galaxy stellar surface density (total subhalo stellar mass, normalized by the stellar half mass radius)."""
+    mstar = sim.subhalos("SubhaloMassType")[:, sim.ptNum("stars")]
+    mass = sim.units.codeMassToMsun(mstar)
+    aperture = sim.units.codeLengthToKpc(sim.subhalos("SubhaloHalfmassRadType")[:, sim.ptNum("stars")])
+    area = np.pi * aperture**2
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        vals = mass / area  # Msun/kpc^2
+
+    return vals
+
+
+surfdens_stars.label = r"Stellar Surface Density $\rm{\Sigma_{\star}}$"
+surfdens_stars.units = r"$\rm{M_{sun}\, kpc^{-2}}$"
+surfdens_stars.limits = [6.5, 9.0]
+surfdens_stars.log = True
 
 
 @catalog_field
@@ -1127,13 +1147,13 @@ def surfdens1_dm(sim, field):
     aperture = sim.units.codeLengthToKpc(sim.subhalos("SubhaloHalfmassRadType")[:, sim.ptNum("stars")])
     area = np.pi * aperture**2
 
-    with np.errstate(invalid="ignore"):
+    with np.errstate(invalid="ignore", divide="ignore"):
         vals = mass / area  # Msun/kpc^2
 
     return vals
 
 
-surfdens1_dm.label = r"$\rm{\Sigma_{DM,<r_{\star}}}$"
+surfdens1_dm.label = r"$\rm{\Sigma_{DM,r_{\star}}}$"
 surfdens1_dm.units = r"$\rm{M_{sun}\, kpc^{-2}}$"
 surfdens1_dm.limits = [6.5, 9.0]
 surfdens1_dm.log = True

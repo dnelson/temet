@@ -4037,6 +4037,81 @@ def ormerod24():
     return r
 
 
+def claeyssens23():
+    """Load observational data points from Claeyssens+ (2023) JWST stellar clumps."""
+    # https://arxiv.org/abs/2208.10450 (Table A2)
+
+    path = dataBasePath + "claeyssens/c23_table2.txt"
+
+    data = np.genfromtxt(path, comments="#", delimiter="&", dtype=None, encoding=None)
+
+    reff = np.zeros(len(data), dtype="float32")
+    reff_err_down = np.zeros(len(data), dtype="float32")
+    reff_err_up = np.zeros(len(data), dtype="float32")
+    mstar = np.zeros(len(data), dtype="float32")
+    mstar_err_down = np.zeros(len(data), dtype="float32")
+    mstar_err_up = np.zeros(len(data), dtype="float32")
+    metallicity = np.zeros(len(data), dtype="float32")
+
+    for i, d in enumerate(data):
+        if "<" in d[6]:
+            # upper limit on size
+            reff[i] = float(d[6].replace("<", ""))
+            reff_err_down[i] = -reff[i]  # large
+        else:
+            reff[i] = float(d[6].split("$")[0])
+            reff_err_down[i] = float(d[6].split("{")[1].split("}")[0])
+            reff_err_up[i] = float(d[6].split("{")[2].split("}")[0])
+
+        if "--" in d[8]:
+            # no stellar mass measurement
+            mstar[i] = np.nan
+        else:
+            mstar[i] = float(d[8].split("$")[0])
+            mstar_err_down[i] = float(d[8].split("{")[1].split("}")[0])
+            mstar_err_up[i] = float(d[8].split("{")[2].split("}")[0])
+
+        if "--" in d[-1]:
+            # no metallicity measurement
+            metallicity[i] = np.nan
+        else:
+            metallicity[i] = float(d[-1])
+
+    # calculate surface densities
+    reff_err = np.sqrt(reff_err_down**2 + reff_err_up**2)  # combine asymmetric errors
+    mstar_err = np.sqrt(mstar_err_down**2 + mstar_err_up**2)  # combine asymmetric errors
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        sigma = 10.0**mstar / (2 * np.pi * (reff / 1000) ** 2)  # msun/kpc^2
+
+        sigma_err = (
+            1.15e6 / np.pi * np.sqrt((10.0 ** (2 * mstar) * (reff**2 * mstar_err**2 + 0.75 * reff_err**2)) / reff**6)
+        )
+
+        sigma_err_up = np.log10(sigma + sigma_err) - np.log10(sigma)
+        sigma_err_down = np.log10(sigma) - np.log10(sigma - sigma_err)
+
+        sigma_err_up[np.isnan(sigma_err_up)] = np.nanmedian(sigma_err_up[np.isfinite(sigma_err_up)])  # replace with med
+        sigma_err_down[np.isnan(sigma_err_down)] = sigma_err_up[np.isnan(sigma_err_down)]  # replace with sym
+
+    r = {
+        "z": np.array([d[2] for d in data]),  # redshift
+        "r_eff": np.array(reff),  # effective radius [pc]
+        "r_eff_err1": np.array(reff_err_up),  # err up [pc]
+        "r_eff_err2": -np.array(reff_err_down),  # err down [pc]
+        "mstar": np.array(mstar),  # log msun
+        "mstar_err1": np.array(mstar_err_up),  # log msun (up)
+        "mstar_err2": -np.array(mstar_err_down),  # log msun (down)
+        "sigma": np.log10(sigma),  # stellar mass surface density [log msun/kpc^2]
+        "sigma_err1": sigma_err_up,  # err up [dex]
+        "sigma_err2": sigma_err_down,  # err down [dex]
+        "metallicity": metallicity,  # absolute metallicity
+        "label": "Claeyssens+23 JWST",
+    }
+
+    return r
+
+
 def loadSDSSData(loadFields=None, redshiftBounds=(0.0, 0.1), petro=False):
     """Load some CSV->HDF5 files dumped from the SkyServer."""
     # SELECT

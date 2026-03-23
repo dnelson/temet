@@ -400,32 +400,8 @@ def size_vs_mass(sims, sizefac=0.8):
 
     xQuant = "mstar_tot"
     yQuant = "rhalf_stars_pc"
-    xlim = [1.5, 5.0]
-    ylim = [-0.5, 0.8]
-
-    # subhalos.median(
-    #    sims,
-    #    xQuant=xQuant,
-    #    yQuants=[yQuant],
-    #    cenSatSelect="sat",
-    #    qRestrictions=[["halo_id", 0, 0]],  # select only subhalos in haloID=0
-    #    xlim=xlim,
-    #    ylim=ylim,
-    #    scatterPoints=True,
-    #    # f_selection=_zoomSubhaloIDsToPlot,
-    # )
-
-    # subhalos_evo.scatter2d(
-    #    sims,
-    #    xQuant=xQuant,
-    #    yQuant=yQuant,
-    #    xlim=xlim,
-    #    ylim=ylim,
-    #    tracks=False,
-    #    parents=False,
-    #    legend="simple",
-    #    f_selection=_starClusterSubhaloIDs,
-    # )
+    xlim = [1.5, 7.0]  # 5.0
+    ylim = [-0.5, 1.8]  # 0.8
 
     # unique list of included halo IDs, resolutions, and variants
     hInds = sorted({sim.hInd for sim in sims})
@@ -443,10 +419,40 @@ def size_vs_mass(sims, sizefac=0.8):
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
 
-    yticks_lin = [0.5, 1.0, 2.0, 5.0]  # pc
+    yticks_lin = [0.5, 1.0, 2.0, 5.0, 10, 25]  # pc
     yticks_log = np.log10(yticks_lin)
     ax.set_yticks(yticks_log)
     ax.set_yticklabels(yticks_lin)
+
+    # draw data (TODO)
+    def f_pre():
+        from temet.load.data import claeyssens23
+
+        # Claeyssens+23 (JWST): https://arxiv.org/abs/2208.10450 ("clumps")
+        c23 = claeyssens23()
+
+        w = np.where(c23["z"] >= 5.0)
+
+        yerr = [
+            np.log10(c23["r_eff"][w]) - np.log10(c23["r_eff"][w] - c23["r_eff_err2"][w]),
+            np.log10(c23["r_eff"][w] + c23["r_eff_err1"][w]) - np.log10(c23["r_eff"][w]),
+        ]
+
+        print(c23["mstar"][w])
+        print(np.log10(c23["r_eff"][w]))
+
+        markers, caps, bars = ax.errorbar(
+            c23["mstar"][w],
+            np.log10(c23["r_eff"][w]),
+            xerr=[c23["mstar_err1"][w], c23["mstar_err2"][w]],
+            yerr=yerr,
+            fmt="o",
+            color="#555",
+            alpha=0.7,
+            label=c23["label"] + " ($z > 5$)",
+        )
+
+    f_pre()
 
     # allocate for stack
     xx = []
@@ -571,6 +577,51 @@ def gas_phase_fractions(sims, frac_type="Mass"):
     plt.close(fig)
 
 
+def sigma_star(sims: list[simParams]) -> None:
+    """The stellar mass surface density (Sigma_*) as a function of galaxy mass."""
+    from temet.load.data import claeyssens23
+
+    yQuant = "surfdens_stars"
+    xQuant = "mstar2_log"
+
+    ylim = [5.5, 12.0]  # log msun/kpc^2
+    xlim = [4.5, 9.0]  # log mstar
+
+    def _draw_data(ax, sims):
+        # no: https://ui.adsabs.harvard.edu/abs/2025A%26A...699A.343G/abstract (only M* > 9)
+
+        # Claeyssens+23 (JWST): https://arxiv.org/abs/2208.10450 ("clumps")
+        c23 = claeyssens23()
+        w = np.where(c23["z"] >= 5.0)
+
+        markers, caps, bars = ax.errorbar(
+            c23["mstar"][w],
+            c23["sigma"][w],
+            xerr=[c23["mstar_err1"][w], c23["mstar_err2"][w]],
+            yerr=[c23["sigma_err1"][w], c23["sigma_err2"][w]],
+            fmt="o",
+            color="#555",
+            alpha=0.7,
+            label=c23["label"] + " ($z > 5$)",
+        )
+        # markers.set_alpha(1.0)  # leave errorbar lines faint?
+
+    subhalos_evo.scatter2d(
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        parents=False,
+        tracks=True,
+        legend="simple",
+        legend_locs=["upper left", "upper right"],
+        legend_ncols=[1, 1],
+        f_pre=_draw_data,
+        f_selection=_zoomSubhaloIDsToPlot,
+    )
+
+
 # -------------------------------------------------------------------------------------------------
 
 
@@ -587,13 +638,14 @@ def paperPlots(a=False):
     # sims = _get_existing_sims(variants, res, hInds, redshift, all=False, single=True)
 
     sims = []
-    sims.append(simParams("structures", hInd=1958, res=14, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=5072, res=14, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=1958, res=14, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=5072, res=14, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=15581, res=14, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=23908, res=14, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=31619, res=14, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=73172, res=14, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=219612, res=15, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=446076, res=15, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=539722, res=15, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=844537, res=16, variant="ST15", redshift=5.5))
@@ -629,8 +681,9 @@ def paperPlots(a=False):
         gas_phase_fractions(sims, frac_type="Mass")
         gas_phase_fractions(sims, frac_type="Vol")
 
-    # fig todo: Sigma_*, Sigma_e, and stellar surface densities in general
-    # https://ui.adsabs.harvard.edu/abs/2025A%26A...699A.343G/abstract
+    # fig: stellar surface density (Sigma_*)
+    if 0 or a:
+        sigma_star(sims)
 
     # fig todo: Sigma_SFR (e.g. Ceverino+26 shows JWST data comparisons)
 

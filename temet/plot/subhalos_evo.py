@@ -129,6 +129,7 @@ def scatter2d(
     ylim: list[float] = None,
     vs_sim: str = "TNG50-1",
     tracks: bool = True,
+    median: bool = False,
     parents: bool = True,
     sizefac: float = 1.0,
     legend: str = "dev",
@@ -152,6 +153,7 @@ def scatter2d(
       ylim: if not None, 2-tuple overriding default y-axis limits.
       vs_sim: if not None, then the name of another simulation to compare against e.g. "TNG50-1".
       tracks: if True, plot tracks of individual galaxies. If False, only plot final redshift values.
+      median: if True, plot the running median of the full collection of zoom points.
       parents: if True, plot the original halos from the parent box for comparison.
       legend : either 'dev' (default),  'simple', or 'none', to determine how legend(s) are shown.
       legend_locs: if not None, a list of two strings indicating the locations of the two legends.
@@ -169,10 +171,10 @@ def scatter2d(
     """
     # currently assume all sims have the same parent
     # rng = np.random.default_rng(424242)
-    sim_parent = sims[0].sP_parent.copy()
+    sim_parent = sims[-1].sP_parent.copy()
 
     # show relation/values from the parent box at the same redshift as selected for the zooms
-    sim_parent.setRedshift(sims[0].redshift)
+    sim_parent.setRedshift(sims[-1].redshift)
 
     for sim in sims:
         assert sim.sP_parent.simName == sim_parent.simName, "All sims must have the same parent box."
@@ -205,11 +207,11 @@ def scatter2d(
     if vs_sim is not None:
         sim_parent_relation = simParams(run=vs_sim, redshift=sim_parent.redshift)
 
-        parent_xvals, xlabel, xMinMax, xLog = sim_parent_relation.simSubhaloQuantity(xQuant)
+        parent_xvals = sim_parent_relation.subhalos(xQuant)
         if xLog:
             parent_xvals = logZeroNaN(parent_xvals)
 
-        parent_yvals, ylabel, yMinMax, yLog = sim_parent_relation.simSubhaloQuantity(yQuant)
+        parent_yvals = sim_parent_relation.subhalos(yQuant)
         if yLog:
             parent_yvals = logZeroNaN(parent_yvals)
 
@@ -244,6 +246,9 @@ def scatter2d(
     if f_pre is not None:
         f_pre(ax, sims)
 
+    xx = []
+    yy = []
+
     # individual zoom runs
     for _i, sim in enumerate(sims):
         # load
@@ -265,6 +270,9 @@ def scatter2d(
         for j, subhaloID in enumerate(subhaloIDs):
             xval = xvals[subhaloID]
             yval = yvals[subhaloID]
+
+            xx.append(xval)
+            yy.append(yval)
 
             if verbose:
                 if np.isnan(xval) or np.isnan(yval):
@@ -299,6 +307,7 @@ def scatter2d(
             if j > 0:
                 style["fillstyle"] = "none"
                 style["markeredgewidth"] = 2
+                style["ms"] = ms_loc - 4
 
             clip = False if marker_lim else True
 
@@ -345,6 +354,13 @@ def scatter2d(
                 # segments = np.hstack((points[:-1], points[1:]))
                 # lc = LineCollection(segments, array=alpha, color=l.get_color(), lw=lw_loc)
                 # line = ax.add_collection(lc)
+
+    # running median of all zoom points?
+    if median:
+        xm, ym, _, pm = running_median(np.array(xx), np.array(yy), binSize=0.25, percs=[16, 50, 84])
+
+        ax.fill_between(xm, pm[0, :], pm[-1, :], color="#555", alpha=0.2)
+        ax.plot(xm, ym, color="#555", lw=lw, alpha=0.8)
 
     # halos from parent box: at the same redshift as the zooms?
     if parents:
