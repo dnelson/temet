@@ -415,8 +415,8 @@ def addBoxMarkers(p, conf, ax, pExtent):
             if rad > 5 * pxScale:
                 c = plt.Circle((xyPos[0], xyPos[1]), rad, color=color, linewidth=1.5, fill=False, alpha=0.6)
                 ax.add_artist(c)
-            # else:
-            #    print('Warning: Drawing radius at [%.1f %s] is zero or small, skip.' % (rVirFrac,p['fracsType']))
+            else:
+                print("Warning: Drawing radius at [%.1f %s] is zero or small, skip." % (rVirFrac, p["fracsType"]))
 
     if "labelZ" in p and p["labelZ"]:
         if p["sP"].redshift >= 0.99 or np.abs(np.round(10 * p["sP"].redshift) / 10 - p["sP"].redshift) < 1e-2:
@@ -574,6 +574,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
         if "sfr" in str(p["labelHalo"]):
             legend_labels.append(r"SFR = %.1f M$_\odot$ yr$^{-1}$" % subhalo["SubhaloSFRinRad"])
+        if "rhalfstars" in str(p["labelHalo"]):
+            rhalfstars = subhalo["SubhaloHalfmassRadType"][p["sP"].ptNum("stars")]
+            legend_labels.append(r"R$_{\rm \star, 1/2}$ = %.1f pc" % p["sP"].units.codeLengthToPc(rhalfstars))
         if "redshift" in str(p["labelHalo"]):
             # legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,p['sP'].subhaloInd))
             legend_labels.append("z = %.1f, ID %d" % (p["sP"].redshift, subhalo["SubhaloGrNr"]))
@@ -1363,6 +1366,7 @@ def renderMultiPanel(panels, conf):
         for i, p in enumerate(panels):
             if p["boxSizeImg"] is None:
                 continue  # blank panel
+
             # grid projection for image
             grid, config, _ = gridBox(**p)
 

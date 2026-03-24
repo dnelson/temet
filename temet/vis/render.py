@@ -468,7 +468,11 @@ def stellar3BandCompositeImage(
             # new auto bounds
             band_vals = np.log10(band0_grid[band0_grid > 0])
 
-            percs = np.nanpercentile(band_vals, [20, 99.5])
+            percs = [20, 99.5]
+            if isinstance(autoLimits, list) and len(autoLimits) == 2:
+                percs = autoLimits
+
+            percs = np.nanpercentile(band_vals, percs)
 
             if band_vals.size > 0:
                 minValLog = percs[[0, 0, 0]]

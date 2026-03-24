@@ -15,6 +15,7 @@ from temet.util import simParams
 from temet.util.helper import logZeroNaN
 
 from .mcst import _get_existing_sims, _zoomSubhaloIDsToPlot, phase_diagram
+from .mcst_vis import vis_gallery_clusters
 
 
 mass_label = r"Star Cluster Mass [ log M$_{\odot}$ ]"
@@ -661,6 +662,44 @@ def paperPlots(a=False):
     if 0 or a:
         size_vs_mass(sims)
 
+    # fig 2: gallery of clusters (~10pc stamps?)
+    if 0 or a:
+        # exploration to find nice clusters:
+        sims = []
+
+        if 0:
+            sim = simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5)
+
+            mstar = sim.subhalos("mstar_tot")
+            halo_id = sim.subhalos("halo_id")
+            rhalf = sim.subhalos("size_stars_pc")
+            # subIDs = np.where((mstar > 1e3) & (rhalf < 0.9) & (rhalf > 0.1) & (halo_id == 0))[0]
+            subIDs = np.where((mstar > 1e3) & (rhalf > 1.1) & (halo_id == 0))[0]
+            print(subIDs)
+
+            for i, subID in enumerate(subIDs[:12]):  # limit to twelve clusters
+                sim_loc = sim.copy()
+                sim_loc.subhaloInd = subID
+                sims.append(sim_loc)
+                print(i, subID, mstar[subID], rhalf[subID])
+
+        else:
+            # final set for paper
+            sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5, subhaloInd=29))
+            sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5, subhaloInd=115))
+            sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5, subhaloInd=172))
+            sims.append(simParams("structures", hInd=23908, res=16, variant="ST15", redshift=15.0, subhaloInd=3))
+            sims.append(simParams("structures", hInd=446076, res=16, variant="ST15", redshift=5.5, subhaloInd=1))
+            sims.append(simParams("structures", hInd=446076, res=16, variant="ST15", redshift=5.5, subhaloInd=13))
+            sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5, subhaloInd=200))
+            sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=6.0, subhaloInd=113))
+            sims.append(simParams("structures", hInd=539722, res=16, variant="ST15", redshift=5.8, subhaloInd=45))
+            sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=6.0, subhaloInd=12))
+            sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=6.5, subhaloInd=29))
+            sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5, subhaloInd=90))
+
+        vis_gallery_clusters(sims)
+
     # fig 3: pressure vs. rho phase space diagram (see Schaye+26 Colibre Fig 8)
     if 0 or a:
         xlim = [-6.0, 5.0]
@@ -673,6 +712,7 @@ def paperPlots(a=False):
         phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="tff_local", ext="pdf")
 
     # fig 4: kennicut-schmidt relation (global)
+    # fig todo: Sigma_SFR (e.g. Ceverino+26 shows JWST data comparisons)
 
     # fig 5: kennicut-schmidt relation (local/spatially resolved)
 
@@ -681,11 +721,19 @@ def paperPlots(a=False):
         gas_phase_fractions(sims, frac_type="Mass")
         gas_phase_fractions(sims, frac_type="Vol")
 
-    # fig: stellar surface density (Sigma_*)
+    # fig: stellar surface density of galaxies (Sigma_*)
     if 0 or a:
         sigma_star(sims)
 
-    # fig todo: Sigma_SFR (e.g. Ceverino+26 shows JWST data comparisons)
+    # fig: stellar surface density of clusters (Sigma_*, in Msun/pc^2) vs. mass or size (van Donkelaar+26 Fig 4)e
+
+    # fig todo: radius and radial velocity at formation time (use birth values of member stars?)
+
+    # fig todo: gas fraction vs M* (van Donkelaar+26 Fig 3)
+
+    # vis todo: time evolution from pre-birth to post-birth (gas dens, vrad, tff_local, Q, stars, ...)
+
+    # fig todo: quantitative assessment of reason for formation (e.g. self-grav instability, compression, ...)
 
     # fig todo: any cluster population stat, e.g. mass func slope, size-mass slope, vs. halo mass (color by redshift)
     #  "universality" or not?

@@ -38,7 +38,7 @@ def haloImgSpecs(
     **kwargs,
 ):
     """Factor out some box/image related calculations common to all halo plots."""
-    assert sizeType in ["rVirial", "r500", "rHalfMass", "rHalfMassStars", "codeUnits", "kpc", "arcsec", "arcmin"]
+    assert sizeType in ["rVirial", "r500", "rHalfMass", "rHalfMassStars", "codeUnits", "kpc", "pc", "arcsec", "arcmin"]
 
     if mpb is None:
         # load halo position and virial radius (of the central zoom halo, or a given halo in a periodic box)
@@ -125,6 +125,8 @@ def haloImgSpecs(
             s_img = s
         if s_type == "kpc":
             s_img = sP.units.physicalKpcToCodeLength(s)
+        if s_type == "pc":
+            s_img = sP.units.physicalKpcToCodeLength(s / 1000)
         if s_type == "arcsec":
             s_pkpc = sP.units.arcsecToAngSizeKpcAtRedshift(s, sP.redshift)
             s_img = sP.units.physicalKpcToCodeLength(s_pkpc)
