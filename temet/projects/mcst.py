@@ -10,6 +10,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import ScalarFormatter
+from scipy.stats import binned_statistic_2d
 
 from temet.load.simtxt import blackhole_details_mergers, sf_sn_details
 from temet.plot import snapshot, subhalos_evo
@@ -1530,19 +1531,27 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
     if not split_z:
         z_bins = [[5.5, 15.0]]
 
+    dens_lim = [1, 8] if not supernovae else [-6, 8]  # log cm^-3
+    temp_lim = [1, 5.5] if not supernovae else [1, 9.5]  # log K
+    metallicity_lim = [-5.1, 1.0] if not supernovae else [-5.1, 2]  # log Z/Z_solar
+
+    dens_label = "Ambient Gas Density [ log cm$^{-3}$ ]"
+    temp_label = "Ambient Gas Temperature [ log K ]"
+    metallicity_label = "Ambient Gas Metallicity [ log Z/Z$_{\\odot}$ ]"
+
     for field in ["Density", "Temperature", "Metallicity"]:
         # plot
         fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
 
         if field == "Density":
-            xlabel = "Ambient Gas Density [ log cm$^{-3}$ ]"
-            xlim = [1, 8] if not supernovae else [-6, 8]
+            xlabel = dens_label
+            xlim = dens_lim
         if field == "Temperature":
-            xlabel = "Ambient Gas Temperature [ log K ]"
-            xlim = [1, 5.5] if not supernovae else [1, 9.5]
+            xlabel = temp_label
+            xlim = temp_lim
         if field == "Metallicity":
-            xlabel = "Ambient Gas Metallicity [ log Z/Z$_{\\odot}$ ]"
-            xlim = [-5.1, 1.0] if not supernovae else [-5.1, 2]
+            xlabel = metallicity_label
+            xlim = metallicity_lim
 
         ax.set_xlabel(xlabel)
         if supernovae:
@@ -1560,19 +1569,20 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
                 data = data_sn
 
             if field == "Density":
-                # unit conversions: physical [1/cm^3]
+                # unit conversions: physical [log 1/cm^3]
                 dens = sim.units.codeDensToPhys(data["Density"], scalefac=data["Time"], cgs=True, numDens=True)
                 dens[dens <= 0] = dens[dens > 0].min()  # zeros/negatives rarely occur (including corrupted txt lines)
                 dens[~np.isfinite(dens)] = dens[np.isfinite(dens)].max()  # rarely inf
                 vals = np.log10(dens)
 
             if field == "Temperature":
+                # [log K]
                 temp = data["Temperature"]
                 temp[temp <= 0] = temp[temp > 0].min()  # zeros rarely occur
                 vals = np.log10(temp)
 
             if field == "Metallicity":
-                # unit conversions: solar
+                # unit conversions: [log solar]
                 metallicity = sim.units.metallicityInSolar(data["Metallicity"])
                 metallicity[metallicity == 0] = metallicity[metallicity > 0].min()  # zeros rarely occur
                 vals = np.log10(metallicity)
@@ -1587,6 +1597,7 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
 
                 # plot hist
                 label = f"h{sim.hInd}" if j == 0 else ""  # sim.simName
+                label = sim.simName
 
                 c = colors[i % len(colors)]
 
@@ -1608,6 +1619,54 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
         ax.legend(loc="upper right")
         fig.savefig(f"{'sn' if supernovae else 'sf'}_{field}{'_h' + str(hInds[0]) if len(hInds) == 1 else ''}.pdf")
         plt.close(fig)
+
+    # two-dimensional density-temperature diagram at star formation sites
+    for sim in sims:
+        # load
+        data, data_sn = sf_sn_details(sim)
+
+        # density: physical [log 1/cm^3]
+        dens = sim.units.codeDensToPhys(data["Density"], scalefac=data["Time"], cgs=True, numDens=True)
+        dens[dens <= 0] = dens[dens > 0].min()  # zeros/negatives rarely occur (including corrupted txt lines)
+        dens[~np.isfinite(dens)] = dens[np.isfinite(dens)].max()  # rarely inf
+        dens = np.log10(dens)
+
+        # temperature [log K]
+        temp = data["Temperature"]
+        temp[temp <= 0] = temp[temp > 0].min()  # zeros rarely occur
+        temp = np.log10(temp)
+
+        # restrict to redshift bins
+        z = 1 / data["Time"] - 1
+
+        for j, z_bin in enumerate(z_bins):
+            w = np.where((z >= z_bin[0]) & (z < z_bin[1]))[0]
+
+            if len(w) == 0:
+                continue
+
+            # histogram in 2d
+            nBins2D = [120, 80]
+
+            cc, _, _, _ = binned_statistic_2d(dens[w], temp[w], None, "count", bins=nBins2D, range=[dens_lim, temp_lim])
+
+            cc = cc.T  # imshow convention
+            cc = np.log10(cc)
+
+            # start figure
+            fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
+            ax.set_xlabel(dens_label)
+            ax.set_ylabel(temp_label)
+            ax.set_xlim(dens_lim)
+            ax.set_ylim(temp_lim)
+
+            # plot
+            extent = [ax.get_xlim()[0], ax.get_xlim()[1], ax.get_ylim()[0], ax.get_ylim()[1]]
+            plt.imshow(cc, extent=extent, origin="lower", interpolation="nearest", aspect="auto")
+
+            # finish figure
+            fig.savefig(f"{'sn' if supernovae else 'sf'}_z{j}_2d_{sim.simName}.pdf")
+            plt.close(fig)
 
 
 def select_ics():
@@ -1781,7 +1840,6 @@ def paperPlots(a=False):
     variants = ["ST15"]  # ['ST15c','ST15m','ST15s']
     res = [14, 15, 16]
     hInds = [1958, 5072, 15581, 23908, 31619, 73172, 219612, 311384, 446076, 539722, 844537]
-    # hInds = [31619, 73172]
     redshift = 5.5
 
     # if (all == False), only dz < 0.1 matches
@@ -1802,9 +1860,9 @@ def paperPlots(a=False):
 
     # fig 1: equilibrium curves of new grackle tables
     if 0:
-        from temet.cosmo.cooling import grackle_equil
+        from temet.cosmo.cooling import grackle_equil_vs_Zz
 
-        grackle_equil()
+        grackle_equil_vs_Zz()
 
     # fig 2: simulation comparison meta-plot
     if 0:
@@ -2006,7 +2064,7 @@ def makeMovies():
     """Make movie frames."""
     redshift = 5.5
 
-    sim = simParams(run="structures", res=14, hInd=15581, variant="ST15", redshift=redshift)
+    sim = simParams(run="structures", res=16, hInd=311384, variant="ST15", redshift=redshift)
 
     # # movie: galaxy-scale gas + stars vis (tree mpb manual search)
     # # vis_movie(sim, haloID=0)
@@ -2015,7 +2073,7 @@ def makeMovies():
     vis_movie_mpbsm([sim], conf=1)
 
     # movie: halo-scale many fields (final tree mpb smoothed)
-    vis_single_halo(sim, movie=True)
+    # vis_single_halo(sim, movie=True)
 
     # # movie: galaxy-scale many fields (final tree mpb smoothed)
     # # vis_single_halo(sim, movie=True, galscale=True)

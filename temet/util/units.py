@@ -217,8 +217,8 @@ class units:
 
         # model dependent values
         if self._sP is not None:
-            if 'structures' in self._sP.run:
-                self.Z_solar = 0.01388 # Asplund+21 (Table 2)
+            if "structures" in self._sP.run:
+                self.Z_solar = 0.01388  # Asplund+21 (Table 2)
 
         # derived constants (in code units without little h factors)
         self.H0 = self._sP.HubbleParam * 100 * 1e5 / (self.Mpc_in_cm)
@@ -886,7 +886,7 @@ class units:
         Returns:
           array[float]: densities in physical units, as specified above.
         """
-        assert self._sP.redshift is not None
+        assert scalefac is not None or self._sP.redshift is not None
         if numDens and not cgs:
             raise Exception("Odd choice.")
         if totKpc3 and (cgs or numDens or msunpc3):
