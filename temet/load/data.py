@@ -4112,6 +4112,39 @@ def claeyssens23():
     return r
 
 
+def brown21():
+    """Load observational data points from Brown & Gnedin+21 (LEGUS) on star clusters."""
+    # https://arxiv.org/abs/2106.12420 (https://gillenbrown.com/LEGUS-sizes/)
+    path = dataBasePath + "brown/brown21.txt"
+
+    data = np.loadtxt(path)
+
+    r = {
+        "gal_mstar": np.array([d[0] for d in data]),  # log msun
+        "gal_sfr": np.array([d[1] for d in data]),  # msun/yr
+        "age": np.array([d[2] for d in data]),  # log yr
+        "age_err1": np.array([d[3] for d in data]),  # log yr (minimum)
+        "age_err2": np.array([d[4] for d in data]),  # log yr (maximum)
+        "mass": np.array([d[5] for d in data]),  # msun
+        "mass_err1": np.array([d[6] for d in data]),  # msun (minimum)
+        "mass_err2": np.array([d[7] for d in data]),  # msun (maximum)
+        "axis_ratio": np.array([d[8] for d in data]),  # dimenionless
+        "reliable": np.array([d[9] for d in data], dtype="bool"),  # boolean flag (1=yes)
+        "r_eff": np.array([d[10] for d in data]),  # pc
+        "r_eff_err1": np.array([d[11] for d in data]),  # pc (down)
+        "r_eff_err2": np.array([d[12] for d in data]),  # pc (up)
+        "crossing_time": np.array([d[13] for d in data]),  # log yr
+        "crossing_time_err": np.array([d[14] for d in data]),  # dex
+        "density": np.array([d[15] for d in data]),  # log Msun/pc^3
+        "density_err": np.array([d[16] for d in data]),  # dex
+        "surfdens": np.array([d[17] for d in data]),  # log Msun/pc^2
+        "surfdens_err": np.array([d[18] for d in data]),  # dex
+        "label": "Brown+21 LEGUS",
+    }
+
+    return r
+
+
 def loadSDSSData(loadFields=None, redshiftBounds=(0.0, 0.1), petro=False):
     """Load some CSV->HDF5 files dumped from the SkyServer."""
     # SELECT

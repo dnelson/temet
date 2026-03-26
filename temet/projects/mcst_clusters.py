@@ -423,6 +423,8 @@ def size_vs_mass(sims: list[simParams]) -> None:
         ax.set_yticklabels(sizeticks_lin)
 
     def _draw_fitline(ax, sims, **kwargs):
+        from temet.load.data import brown21
+
         # fit line to x,y using np.polyfit
         x_all = np.array(kwargs["x"])
         y_all = np.array(kwargs["y"])
@@ -436,8 +438,14 @@ def size_vs_mass(sims: list[simParams]) -> None:
 
         ax.plot(x_fit, y_fit, "-", color="#555", lw=3, alpha=0.5)
 
-        # todo: Brown+21 data (https://arxiv.org/abs/2106.12420)
-        # https://gillenbrown.com/LEGUS-sizes/
+        # Brown+21 LEGUS (https://arxiv.org/abs/2106.12420)
+        b21 = brown21()
+
+        w = np.where(b21["reliable"])
+        x = np.log10(b21["mass"][w])
+        y = np.log10(b21["r_eff"][w])
+
+        ax.plot(x, y, marker="x", mew=1, ms=4, ls="None", color="#000", alpha=0.5, zorder=-12, label=b21["label"])
 
     subhalos_evo.scatter2d(
         sims,
@@ -651,12 +659,12 @@ def paperPlots(a=False):
     # ------------
 
     # fig 1a: clusters: mass and size distributions
-    if 1 or a:
-        # star_cluster_histogram(sims, quant="mass")
+    if 0 or a:
+        star_cluster_histogram(sims, quant="mass")
         star_cluster_histogram(sims, quant="size", sizefac=0.8)
 
     # fig 1b: clusters: size-mass relation
-    if 0 or a:
+    if 1 or a:
         size_vs_mass(sims)
 
     # fig 2: gallery of clusters (~10pc stamps?)
