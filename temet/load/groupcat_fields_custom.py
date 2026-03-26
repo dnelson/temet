@@ -1014,9 +1014,6 @@ def size_stars(sim, field):
     if "_code" not in field:
         rad = sim.units.codeLengthToKpc(rad)
 
-    if "_pc" in field:
-        rad *= 1e3  # kpc to pc
-
     return rad
 
 
@@ -1032,6 +1029,22 @@ def size_stars_pc(sim, field):
     rad = sim.subhalos("rhalf_stars")  # pkpc
 
     rad *= 1e3  # kpc to pc
+
+    # check for zeros (subfind seems to have failed sometimes?)
+    mstar = sim.subhalos("mstar_tot")
+    # mstar = sim.subhalos("SubhaloLenType")[:, sim.ptNum("stars")]
+
+    subIDs = np.where((mstar > 0) & (rad == 0))[0]
+    if len(subIDs):
+        from ..catalog.common import findHalfLightRadius
+
+        # print(f" Warning: Found {len(subIDs)} subhalos with zero size but non-zero stellar mass, fixing!")
+
+        for _i, subID in enumerate(subIDs):
+            star_rad = sim.snapshotSubset("stars", "subhalo_rad_pc", subhaloID=subID)
+            star_mass = sim.snapshotSubset("stars", "mass", subhaloID=subID)
+            rad[subID] = findHalfLightRadius(star_rad, star_mass, mags=False)
+            # print(f" [{_i + 1}/{len(subIDs)}] subhalo {subID}, new rhalf_stars_pc = {rad[subID]:.2f} pc")
 
     return rad
 
@@ -1137,6 +1150,20 @@ surfdens_stars.label = r"Stellar Surface Density $\rm{\Sigma_{\star}}$"
 surfdens_stars.units = r"$\rm{M_{sun}\, kpc^{-2}}$"
 surfdens_stars.limits = [6.5, 9.0]
 surfdens_stars.log = True
+
+
+@catalog_field
+def surfdens_stars_pc(sim, field):
+    """Galaxy stellar surface density (total subhalo stellar mass, normalized by the stellar half mass radius)."""
+    sigma_star = sim.subhalos("surfdens_stars")  # Msun/kpc^2
+    sigma_star_pc = sigma_star / 1e6  # Msun/pc^2
+    return sigma_star_pc
+
+
+surfdens_stars_pc.label = r"Stellar Surface Density $\rm{\Sigma_{\star}}$"
+surfdens_stars_pc.units = r"$\rm{M_{sun}\, pc^{-2}}$"
+surfdens_stars_pc.limits = [0.5, 6.0]
+surfdens_stars_pc.log = True
 
 
 @catalog_field
