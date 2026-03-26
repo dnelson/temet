@@ -2636,6 +2636,53 @@ rad_kpc.limits_halo = lambda sim, pt, f: [0.0, 3.0] if "_linear" not in f else [
 rad_kpc.log = lambda sim, pt, f: True if "_linear" not in f else False
 
 
+@snap_field(aliases=["subhalo_rad_kpc", "subhalo_rad_pc"])
+def subhalo_rad(sim, partType, field, args):
+    """3D radial distance from (parent) subhalo center."""
+    pos = sim.snapshotSubset(partType, "pos", **args)
+
+    if isinstance(pos, dict) and pos["count"] == 0:
+        return pos  # no particles of type, empty return
+
+    # get (host) halo center position
+    if sim.isZoom and args["subhaloID"] is None and args["haloID"] is None and sim.refPos is None:
+        args["subhaloID"] = sim.zoomSubhaloID
+        if current_process().name == "MainProcess":
+            print(f"WARNING: Using {sim.zoomSubhaloID = } for zoom run to compute [{field}]!")
+
+    if args["haloID"] is None and args["subhaloID"] is None:
+        assert sim.refPos is not None
+        if current_process().name == "MainProcess":
+            print(f"Note: Using refPos to compute [{field}]!")
+        subhaloPos = sim.refPos
+    else:
+        subhaloID = args["subhaloID"]
+        if args["haloID"] is not None:
+            subhaloID = sim.halo(args["haloID"])["GroupFirstSub"]
+
+        halo = sim.subhalo(subhaloID)
+        subhaloPos = halo["SubhaloPos"]  # note: is identical to GroupPos of parent halo
+
+    # compute
+    rr = sim.periodicDists(subhaloPos, pos)
+
+    if field.endswith("_kpc"):
+        rr = sim.units.codeLengthToKpc(rr)
+    if field.endswith("_pc"):
+        rr = sim.units.codeLengthToPc(rr)
+
+    return rr
+
+
+subhalo_rad.label = "[pt] Radial Distance"
+subhalo_rad.units = (
+    lambda sim, pt, f: r"$\rm{kpc}$" if f.endswith("_kpc") else (r"$\rm{pc}$" if f.endswith("_pc") else "code_length")
+)
+subhalo_rad.limits = [0.0, 3.0]
+subhalo_rad.limits_halo = [0.0, 2.0]
+subhalo_rad.log = True
+
+
 @snap_field(aliases=["dist_2dz_r200", "dist_2dz_r500"])
 def dist_2dz(sim, partType, field, args):
     """2D distance (i.e. impact parameter), projecting along z-hat, from (parent) halo center."""

@@ -180,6 +180,41 @@ def vis_gallery_galaxy(sims, conf=0):
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 
+def vis_gallery_clusters(sims):
+    """Visualization: gallery of images of individual star clusters."""
+    rVirFracs = False
+    fracsType = "rHalfMassStars"
+    nPixels = [480, 480]  # 240, 360
+    labelSim = True
+    labelHalo = "id,mstar,rhalfstars"
+    labelZ = True
+    labelScale = "physical"
+    method = "sphMap"  # fof-scope
+    axes = [0, 1]
+
+    # render setup
+    size = 2.0
+    sizeType = "pc"
+
+    partType = "stars"
+    partField = "stellarCompObsFrame"
+    valMinMax = None
+    autoLimits = [20, 80]  # percs for auto-scaling of stellar images
+
+    # create one panel per cluster (simulations and redshifts vary)
+    panels = []
+
+    for sim in sims:
+        panels.append({"sP": sim, "subhaloInd": sim.subhaloInd})
+
+    class plotConfig:
+        plotStyle = "edged"
+        colorbars = True if conf != 1 else False
+        saveFilename = "gallery_clusters_conf%d_%d.pdf" % (conf, len(sims))
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+
 def vis_single_halo(sP, haloID=0, movie=False, galscale=False):
     """Visualization: single halo, multiple fields."""
     nPixels = [960, 960]

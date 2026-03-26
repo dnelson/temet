@@ -4057,7 +4057,7 @@ def claeyssens23():
         if "<" in d[6]:
             # upper limit on size
             reff[i] = float(d[6].replace("<", ""))
-            reff_err_down[i] = -reff[i]  # large
+            reff_err_down[i] = -0.5 * reff[i]  # large
         else:
             reff[i] = float(d[6].split("$")[0])
             reff_err_down[i] = float(d[6].split("{")[1].split("}")[0])

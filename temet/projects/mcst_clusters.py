@@ -21,8 +21,11 @@ from .mcst_vis import vis_gallery_clusters
 mass_label = r"Star Cluster Mass [ log M$_{\odot}$ ]"
 size_label = r"Star Cluster Size $R_{1/2}$ [ pc ]"  # always show tick labels in linear
 
-mass_lim = [1.5, 5.0]  # log msun
-size_lim = [-0.5, 0.8]  # log pc
+mass_lim = [1.5, 4.0]  # log msun
+size_lim = [-1.8, 0.8]  # log pc [-0.5, 1.8] for L15
+sigma_lim = [0.5, 6.0]  # log msun/pc^2
+
+sizeticks_lin = [0.05, 0.1, 0.5, 1.0, 2.0, 5.0]  # pc
 
 
 def _starClusterSubhaloIDs(sim):
@@ -371,23 +374,31 @@ def star_cluster_histogram(sims, quant, sizefac=1.0):
             mstar = sim.subhalos("mstar_tot")
             h_quant = np.log10(mstar[subIDs])
         if quant == "size":
-            rhalf = sim.subhalos("rhalf_stars") * 1000  # pc
+            rhalf = sim.subhalos("size_stars_pc")  # pc
             h_quant = np.log10(rhalf[subIDs])
 
         label = f"h{sim.hInd}"  # f"{sim.simName} (N={len(subIDs)}/{sim.numSubhalos})"
+        label = sim.simName  # while we are studying the res dependence
 
         h = np.histogram(h_quant, bins=30, range=xlim)  # range=[min,max]
         ax.stairs(*h, fill=True, alpha=0.8, label=label)
 
-    if quant == "mass":
-        min_mass = np.log10(20 * sim.units.codeMassToMsun(sim.targetGasMass))
-        ax.plot([min_mass, min_mass], ax.get_ylim(), color="black", linestyle=":", alpha=0.5)
+        if quant == "mass":
+            min_mass = np.log10(20 * sim.units.codeMassToMsun(sim.targetGasMass))
+            ax.plot([min_mass, min_mass], ax.get_ylim(), color="black", linestyle=":", alpha=0.5)
+
+        if quant == "size":
+            grav_soft_stars = {13: 0.0244, 14: 0.0122, 15: 0.0061, 16: 0.003}
+            grav_soft_code = grav_soft_stars[sim.res]
+            grav_soft_logpc = np.log10(sim.units.codeLengthToPc(grav_soft_code))
+            ax.plot([grav_soft_logpc, grav_soft_logpc], ax.get_ylim(), color="black", linestyle=":", alpha=0.5)
 
     if quant == "size":
-        sizeticks_lin = [0.5, 1.0, 2.0, 5.0]  # pc
         sizeticks_log = np.log10(sizeticks_lin)
         ax.set_xticks(sizeticks_log)
         ax.set_xticklabels(sizeticks_lin)
+
+        # todo: overplot Brown+21 data
 
     ax.legend(loc="upper right")
 
@@ -395,114 +406,145 @@ def star_cluster_histogram(sims, quant, sizefac=1.0):
     plt.close(fig)
 
 
-def size_vs_mass(sims, sizefac=0.8):
+def size_vs_mass(sims: list[simParams]) -> None:
     """Size-mass relation for star clusters."""
-    from ..plot.util import _finish_plot
-
     xQuant = "mstar_tot"
     yQuant = "rhalf_stars_pc"
-    xlim = [1.5, 7.0]  # 5.0
-    ylim = [-0.5, 1.8]  # 0.8
+    xlim = mass_lim
+    ylim = size_lim
 
-    # unique list of included halo IDs, resolutions, and variants
-    hInds = sorted({sim.hInd for sim in sims})
-    # res = sorted({sim.res for sim in sims})
-    variants = sorted({sim.variant for sim in sims})
+    def _f_pre(ax, sims):
+        # set axis label for mass
+        ax.set_xlabel(mass_label)
 
-    _, xlabel, xMinMax, xLog = sims[0].simSubhaloQuantity(xQuant)
-    _, ylabel, yMinMax, yLog = sims[0].simSubhaloQuantity(yQuant)
+        # set custom tick labels for size
+        sizeticks_log = np.log10(sizeticks_lin)
+        ax.set_yticks(sizeticks_log)
+        ax.set_yticklabels(sizeticks_lin)
 
-    # start plot
-    fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
+    def _draw_fitline(ax, sims, **kwargs):
+        # fit line to x,y using np.polyfit
+        x_all = np.array(kwargs["x"])
+        y_all = np.array(kwargs["y"])
+        w = np.where((x_all > xlim[0]) & (x_all < xlim[1]) & (y_all > ylim[0]) & (y_all < ylim[1]))[0]
 
-    ax.set_xlabel(mass_label)
-    ax.set_ylabel(size_label)
-    ax.set_xlim(xlim)
-    ax.set_ylim(ylim)
+        coeffs = np.polyfit(x_all[w], y_all[w], deg=1)
 
-    yticks_lin = [0.5, 1.0, 2.0, 5.0, 10, 25]  # pc
-    yticks_log = np.log10(yticks_lin)
-    ax.set_yticks(yticks_log)
-    ax.set_yticklabels(yticks_lin)
+        # overplot best-fit line
+        x_fit = np.array(xlim) + [0.2, -0.2]
+        y_fit = np.polyval(coeffs, x_fit)
 
-    # draw data (TODO)
-    def f_pre():
+        ax.plot(x_fit, y_fit, "-", color="#555", lw=3, alpha=0.5)
+
+        # todo: Brown+21 data (https://arxiv.org/abs/2106.12420)
+        # https://gillenbrown.com/LEGUS-sizes/
+
+    subhalos_evo.scatter2d(
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        vs_sim=None,
+        parents=False,
+        tracks=False,
+        sizefac=0.8,
+        markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
+        legend="simple",
+        legend_locs=["lower right", "upper left"],
+        legend_ncols=[1, 1],
+        f_pre=_f_pre,
+        f_post=_draw_fitline,
+        f_selection=_starClusterSubhaloIDs,
+    )
+
+
+def sigma_star_galaxies(sims: list[simParams]) -> None:
+    """The stellar mass surface density (Sigma_*) as a function of galaxy mass."""
+    yQuant = "surfdens_stars"
+    xQuant = "mstar2_log"
+
+    ylim = [5.5, 12.0]  # log msun/kpc^2
+    xlim = [4.5, 9.0]  # log mstar
+
+    def _draw_data(ax, sims):
         from temet.load.data import claeyssens23
+        # no: https://ui.adsabs.harvard.edu/abs/2025A%26A...699A.343G/abstract (only M* > 9)
 
         # Claeyssens+23 (JWST): https://arxiv.org/abs/2208.10450 ("clumps")
         c23 = claeyssens23()
-
         w = np.where(c23["z"] >= 5.0)
 
-        yerr = [
-            np.log10(c23["r_eff"][w]) - np.log10(c23["r_eff"][w] - c23["r_eff_err2"][w]),
-            np.log10(c23["r_eff"][w] + c23["r_eff_err1"][w]) - np.log10(c23["r_eff"][w]),
-        ]
-
-        print(c23["mstar"][w])
-        print(np.log10(c23["r_eff"][w]))
-
-        markers, caps, bars = ax.errorbar(
+        ax.errorbar(
             c23["mstar"][w],
-            np.log10(c23["r_eff"][w]),
+            c23["sigma"][w],
             xerr=[c23["mstar_err1"][w], c23["mstar_err2"][w]],
-            yerr=yerr,
+            yerr=[c23["sigma_err1"][w], c23["sigma_err2"][w]],
             fmt="o",
             color="#555",
             alpha=0.7,
             label=c23["label"] + " ($z > 5$)",
         )
 
-    f_pre()
+    subhalos_evo.scatter2d(
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        parents=False,
+        tracks=True,
+        legend="simple",
+        legend_locs=["upper left", "upper right"],
+        legend_ncols=[1, 1],
+        f_pre=_draw_data,
+        f_selection=_zoomSubhaloIDsToPlot,
+    )
 
-    # allocate for stack
-    xx = []
-    yy = []
 
-    # individual zoom runs
-    for _i, sim in enumerate(sims):
-        # load
-        xvals = sim.subhalos(xQuant)
-        yvals = sim.subhalos(yQuant)
+def sigma_star_clusters(sims: list[simParams], vs_size=False) -> None:
+    """The stellar mass surface density (Sigma_*) as a function of galaxy mass."""
+    yQuant = "surfdens_stars_pc"
+    xQuant = "mstar_tot_log"
 
-        xvals = logZeroNaN(xvals)
-        yvals = logZeroNaN(yvals)
+    ylim = sigma_lim  # log msun/pc^2
+    xlim = mass_lim  # log mstar
 
-        # which subhalo(s) to include?
-        subhaloIDs = _starClusterSubhaloIDs(sim)
+    if vs_size:
+        xQuant = "rhalf_stars_pc"
+        xlim = size_lim  # log pc
 
-        xvals = xvals[subhaloIDs]
-        yvals = yvals[subhaloIDs]
+    def _f_pre(ax, sims):
+        # set custom tick labels for size
+        if vs_size:
+            sizeticks_log = np.log10(sizeticks_lin)
+            ax.set_xticks(sizeticks_log)
+            ax.set_xticklabels(sizeticks_lin)
 
-        xx.append(xvals)
-        yy.append(yvals)
+        # draw observational data
+        # TODO: https://arxiv.org/abs/2401.03224 (Fig 2, Sigma* vs size)
 
-        # color set by hInd
-        c = colors[hInds.index(sim.hInd)]
+        # todo: Brown+21 data (https://arxiv.org/abs/2106.12420)
 
-        # marker set by variant
-        marker = markers[variants.index(sim.variant) % len(markers)]
+        # draw other sim data
+        # TODO: (van Donkelaar+26 Fig 4)
 
-        # marker size set by resolution
-        ms_loc = 6.0
-
-        style = {"color": c, "ms": ms_loc, "fillstyle": "full", "linestyle": "none", "alpha": 0.8}
-
-        label = f"h{sim.hInd}"  # f"{sim.simName} (N={len(subhaloIDs)}/{sim.numSubhalos})"
-        (l,) = ax.plot(xvals, yvals, marker=marker, label=label, **style)
-
-    # fit line to xx,yy using np.polyfit
-    x_all = np.concatenate(xx)
-    y_all = np.concatenate(yy)
-    w = np.where((x_all > xlim[0]) & (x_all < xlim[1]) & (y_all > ylim[0]) & (y_all < ylim[1]))[0]
-    coeffs = np.polyfit(x_all[w], y_all[w], deg=1)
-    x_fit = np.array(xlim) + [0.2, -0.2]
-    y_fit = np.polyval(coeffs, x_fit)
-    ax.plot(x_fit, y_fit, "-", color="#555", lw=3, alpha=0.5)
-
-    ax.legend(loc="upper left")
-
-    _finish_plot(fig, saveFilename=f"scatter2d_evo_{xQuant}-vs-{yQuant}.pdf")
+    subhalos_evo.scatter2d(
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        vs_sim=None,
+        parents=False,
+        tracks=False,
+        markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
+        legend="simple",
+        legend_locs=["upper left", "upper right"],
+        legend_ncols=[1, 1],
+        f_pre=_f_pre,
+        f_selection=_starClusterSubhaloIDs,
+    )
 
 
 def gas_phase_fractions(sims, frac_type="Mass"):
@@ -578,51 +620,6 @@ def gas_phase_fractions(sims, frac_type="Mass"):
     plt.close(fig)
 
 
-def sigma_star(sims: list[simParams]) -> None:
-    """The stellar mass surface density (Sigma_*) as a function of galaxy mass."""
-    from temet.load.data import claeyssens23
-
-    yQuant = "surfdens_stars"
-    xQuant = "mstar2_log"
-
-    ylim = [5.5, 12.0]  # log msun/kpc^2
-    xlim = [4.5, 9.0]  # log mstar
-
-    def _draw_data(ax, sims):
-        # no: https://ui.adsabs.harvard.edu/abs/2025A%26A...699A.343G/abstract (only M* > 9)
-
-        # Claeyssens+23 (JWST): https://arxiv.org/abs/2208.10450 ("clumps")
-        c23 = claeyssens23()
-        w = np.where(c23["z"] >= 5.0)
-
-        markers, caps, bars = ax.errorbar(
-            c23["mstar"][w],
-            c23["sigma"][w],
-            xerr=[c23["mstar_err1"][w], c23["mstar_err2"][w]],
-            yerr=[c23["sigma_err1"][w], c23["sigma_err2"][w]],
-            fmt="o",
-            color="#555",
-            alpha=0.7,
-            label=c23["label"] + " ($z > 5$)",
-        )
-        # markers.set_alpha(1.0)  # leave errorbar lines faint?
-
-    subhalos_evo.scatter2d(
-        sims,
-        xQuant=xQuant,
-        yQuant=yQuant,
-        xlim=xlim,
-        ylim=ylim,
-        parents=False,
-        tracks=True,
-        legend="simple",
-        legend_locs=["upper left", "upper right"],
-        legend_ncols=[1, 1],
-        f_pre=_draw_data,
-        f_selection=_zoomSubhaloIDsToPlot,
-    )
-
-
 # -------------------------------------------------------------------------------------------------
 
 
@@ -641,21 +638,21 @@ def paperPlots(a=False):
     sims = []
     # sims.append(simParams("structures", hInd=1958, res=14, variant="ST15", redshift=5.5))
     # sims.append(simParams("structures", hInd=5072, res=14, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=15581, res=14, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=23908, res=14, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=31619, res=14, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=73172, res=14, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=219612, res=15, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=15581, res=14, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=23908, res=14, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=31619, res=14, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=73172, res=14, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=446076, res=15, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=539722, res=15, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=844537, res=16, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=446076, res=16, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=539722, res=16, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=844537, res=16, variant="ST15", redshift=5.5))
 
     # ------------
 
     # fig 1a: clusters: mass and size distributions
-    if 0 or a:
-        star_cluster_histogram(sims, quant="mass")
+    if 1 or a:
+        # star_cluster_histogram(sims, quant="mass")
         star_cluster_histogram(sims, quant="size", sizefac=0.8)
 
     # fig 1b: clusters: size-mass relation
@@ -700,6 +697,15 @@ def paperPlots(a=False):
 
         vis_gallery_clusters(sims)
 
+    # fig X: galaxies: stellar surface density (Sigma_*)
+    if 0 or a:
+        sigma_star_galaxies(sims)
+
+    # fig: stellar surface density of clusters (Sigma_*)
+    if 0 or a:
+        sigma_star_clusters(sims)
+        sigma_star_clusters(sims, vs_size=True)
+
     # fig 3: pressure vs. rho phase space diagram (see Schaye+26 Colibre Fig 8)
     if 0 or a:
         xlim = [-6.0, 5.0]
@@ -721,12 +727,6 @@ def paperPlots(a=False):
         gas_phase_fractions(sims, frac_type="Mass")
         gas_phase_fractions(sims, frac_type="Vol")
 
-    # fig: stellar surface density of galaxies (Sigma_*)
-    if 0 or a:
-        sigma_star(sims)
-
-    # fig: stellar surface density of clusters (Sigma_*, in Msun/pc^2) vs. mass or size (van Donkelaar+26 Fig 4)e
-
     # fig todo: radius and radial velocity at formation time (use birth values of member stars?)
 
     # fig todo: gas fraction vs M* (van Donkelaar+26 Fig 3)
@@ -737,6 +737,10 @@ def paperPlots(a=False):
 
     # fig todo: any cluster population stat, e.g. mass func slope, size-mass slope, vs. halo mass (color by redshift)
     #  "universality" or not?
+
+    # fig todo: histogram of cluster formation redshifts (with respect to important events/starbursts/mergers)
+
+    # fig todo: ages, i.e. histograms of member star ages (matched to vis gallery), or age vs. X scaling relations
 
     # fig: stellar remnants: mass distribution
     if 0 or a:

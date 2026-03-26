@@ -896,15 +896,15 @@ class simParams:
             assert hInd is not None
             # assert self.variant in ['DM','SN','SNU1','SNU2','SNPIPE','TNG','ST','ST2'] # too many
 
-            self.validResLevels = [11, 12, 13, 14, 15, 16]
+            self.validResLevels = [13, 14, 15, 16]
             self.groupOrdered = True
 
-            # TNG50-1 zooms to z=3
+            # TNG50-1 zooms, mostly selected at z=5.5
             parentRes = 2160
             self.zoomLevel = self.res  # L11 (TNG50-1)
             self.sP_parent = simParams(res=parentRes, run="tng", redshift=5.5)
 
-            self.gravSoft = 0.390 / (res - 10)
+            self.gravSoft = 0.390 / (res - 10)  # fix
             if self.variant != "DM":
                 self.targetGasMass = 5.73879e-6 / 8 ** (res - 11)
             self.boxSize = 35000.0  # ckpc/h

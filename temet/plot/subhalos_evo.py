@@ -132,6 +132,7 @@ def scatter2d(
     median: bool = False,
     parents: bool = True,
     sizefac: float = 1.0,
+    markerstyle: dict = None,
     legend: str = "dev",
     legend_locs: list[str] = None,
     legend_ncols: list[int] = None,
@@ -160,6 +161,8 @@ def scatter2d(
       legend_ncols: if not None, a list of two integers indicating the number of columns for the two legends.
       verbose: if True, print warnings about points that are out of bounds or NaN, and how they are handled.
       sizefac: multiplier on figure size, can be scalar or 2-tuple.
+      markerstyle: if not None, a dictionary of keyword arguments to pass to the scatter plot for all points.
+        If None, use default (automatic) choice of size and type (by resolution, variant, and non-primary halo status).
       f_selection (function): if not None, this 'custom' function hook is called to determine which
         subhalo IDs to plot for each sim. It must accept a single argument: the simulation object,
         and return a list of subhalo IDs to plot. If None, defaults to sim.zoomSubhaloID only.
@@ -195,6 +198,8 @@ def scatter2d(
 
     # start plot
     fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
+
+    ax.set_rasterization_zorder(-10)  # elements below z=-10 are rasterized (can set in markerstyle)
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
@@ -246,8 +251,8 @@ def scatter2d(
     if f_pre is not None:
         f_pre(ax, sims)
 
-    xx = []
-    yy = []
+    x = []
+    y = []
 
     # individual zoom runs
     for _i, sim in enumerate(sims):
@@ -271,8 +276,8 @@ def scatter2d(
             xval = xvals[subhaloID]
             yval = yvals[subhaloID]
 
-            xx.append(xval)
-            yy.append(yval)
+            x.append(xval)
+            y.append(yval)
 
             if verbose:
                 if np.isnan(xval) or np.isnan(yval):
@@ -281,13 +286,20 @@ def scatter2d(
                     print(f"Out of bounds in {sim.simName} {xQuant}={xval:.3f} {yQuant}={yval:.3f}")
 
             marker_lim = False  # None
-            if np.isnan(yval) or yval < yMinMax[0]:
-                yval = yMinMax[0]  # + (yMinMax[1]-yMinMax[0])/25 * rng.uniform(0.6, 1.0)
+            if np.isnan(yval) or yval < yMinMax[0] or yval > yMinMax[1]:
+                if yval < yMinMax[0]:
+                    yval = yMinMax[0]  # + (yMinMax[1]-yMinMax[0])/25 * rng.uniform(0.6, 1.0)
+                if yval > yMinMax[1]:
+                    yval = yMinMax[1]
                 if verbose:
                     print(f" set [y] {yQuant}={yval:.3f} for visibility.")
                 marker_lim = True  # 11 #CARETDOWNBASE #r'$\downarrow$'
-            if np.isnan(xval) or xval < xMinMax[0]:
-                xval = xMinMax[0]  # + (xMinMax[1]-xMinMax[0])/25 * rng.uniform(0.6, 1.0)
+
+            if np.isnan(xval) or xval < xMinMax[0] or xval > xMinMax[1]:
+                if xval < xMinMax[0]:
+                    xval = xMinMax[0]  # + (xMinMax[1]-xMinMax[0])/25 * rng.uniform(0.6, 1.0)
+                if xval > xMinMax[1]:
+                    xval = xMinMax[1]
                 if verbose:
                     print(f" set [x] {xQuant}={xval:.3f} for visibility.")
                 marker_lim = True  # 8 #CARETLEFTBASE #r'$\leftarrow$'
@@ -298,20 +310,21 @@ def scatter2d(
             # marker set by variant
             marker = markers[variants.index(sim.variant) % len(markers)]
 
-            # marker size set by resolution
-            ms_loc = (sim.res - 10) * 2.5 + 4
-            # lw_loc = sim.res - 10
+            # automatic marker style: size set by resolution
+            if markerstyle is None:
+                ms_loc = (sim.res - 10) * 2.5 + 4
+                # lw_loc = sim.res - 10
 
-            # filled for main target, open for additional halos
-            style = {"color": c, "ms": ms_loc, "fillstyle": "full"}
-            if j > 0:
-                style["fillstyle"] = "none"
-                style["markeredgewidth"] = 2
-                style["ms"] = ms_loc - 4
+                # filled for main target, open for additional halos
+                markerstyle = {"ms": ms_loc, "fillstyle": "full"}
+                if j > 0:
+                    markerstyle["fillstyle"] = "none"
+                    markerstyle["markeredgewidth"] = 2
+                    markerstyle["ms"] = ms_loc - 4
 
             clip = False if marker_lim else True
 
-            (l,) = ax.plot(xval, yval, marker=marker, clip_on=clip, label="", **style)
+            (l,) = ax.plot(xval, yval, marker=marker, clip_on=clip, label="", color=c, **markerstyle)
 
             if tracks and sim.hasMergerTree:
                 # various criterion for how far back to go
@@ -357,7 +370,7 @@ def scatter2d(
 
     # running median of all zoom points?
     if median:
-        xm, ym, _, pm = running_median(np.array(xx), np.array(yy), binSize=0.25, percs=[16, 50, 84])
+        xm, ym, _, pm = running_median(np.array(x), np.array(y), binSize=0.25, percs=[16, 50, 84])
 
         ax.fill_between(xm, pm[0, :], pm[-1, :], color="#555", alpha=0.2)
         ax.plot(xm, ym, color="#555", lw=lw, alpha=0.8)
@@ -398,7 +411,7 @@ def scatter2d(
 
     # finish and save plot
     if f_post is not None:
-        f_post(ax, sims)
+        f_post(ax, sims, x=x, y=y)
 
     if legend == "dev":
         _add_legends(ax, hInds, res, variants, colors)
