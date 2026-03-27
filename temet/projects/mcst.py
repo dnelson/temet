@@ -77,7 +77,7 @@ def _get_existing_sims(variants, res, hInds, redshift, all=False, single=False):
     return sims
 
 
-def _zoomSubhaloIDsToPlot(sim, min_mhalo=7.0, verbose=False):
+def _zoomSubhaloIDsToPlot(sim, min_mhalo=7.5, verbose=False):
     """Define a common rule for which subhalo(s) to plot for a given zoom run."""
     subhaloIDs = [sim.zoomSubhaloID]
 
@@ -348,7 +348,7 @@ def sfr_10_100_ratio(sims):
     xQuant = "mstar2_log"
     yQuant = "sfr_10_100_ratio"
 
-    def _draw_data(ax, sims):
+    def _draw_data(ax, sims, **kwargs):
         # Navarro-Carrera+26 (Figure 8, right panel, median line) z=4-6
         nc26_mstar = [6.3, 7.7, 8.4]  # log Msun
         nc26_ratio = [0.2, 0.05, 0.0]  # log SFR_Ha / SFR_UV
@@ -582,7 +582,7 @@ def sizes_vs_mstar(sims):
     """Diagnostic plot of galaxy stellar size (half mass radius for now) versus stellar mass."""
     xQuant = "mstar2_log"
     yQuant = "rhalf_stars"
-    ylim = [-2.6, 1.2]  # log pkpc
+    ylim = [-2.7, 1.5]  # log pkpc
     xlim = [4.5, 9.0]  # log mstar
 
     def _draw_data(ax, sims):
@@ -687,6 +687,29 @@ def sizes_vs_mstar(sims):
         ax.plot(xx, [yy, yy], ":", color="#444", lw=1, alpha=1.0)
         ax.text(xx[1] - 1.8, yy - 0.05, label, fontsize=11, color="#999", alpha=1.0, ha="left", va="top")
 
+        # Nakane+25 VENUS (https://arxiv.org/abs/2511.14483) (Table 2)
+        n25_label = "Nakane+25 VENUS (z=11)"
+        n25_mstar = [7.57, 7.03, 7.09, 6.87, 6.92, 7.53, 7.02, 7.11, 6.98]  # log msun
+        n25_mstar_err = [0.26, 0.19, 0.41, 0.24, 0.36, 0.22, 0.14, 0.35, 0.24]  # dex
+        n25_reff = (
+            np.array([181, 15, 22, 67, 36, 197, 17, 36, 56]) / 1000
+        )  # kpc, "intrinsic" (corrected for magnification)
+        n25_reff_err = np.array([18, 3, 5, 12, 8, 28, 9, 33, 21]) / 1000  # kpc
+
+        n25_yerr1 = np.log10(n25_reff) - np.log10(np.array(n25_reff) - np.array(n25_reff_err))
+        n25_yerr2 = np.log10(np.array(n25_reff) + np.array(n25_reff_err)) - np.log10(n25_reff)
+
+        ax.errorbar(
+            n25_mstar,
+            np.log10(n25_reff),
+            xerr=n25_mstar_err,
+            yerr=[n25_yerr1, n25_yerr2],
+            fmt="o",
+            color="#333",
+            alpha=0.7,
+            label=n25_label,
+        )
+
         # TODO: Miller+25
         # https://ui.adsabs.harvard.edu/abs/2025ApJ...988..196M/abstract
 
@@ -761,7 +784,7 @@ def size_halpha_vs_mstar(sims):
         # TODO: Danhaive+25
         # https://ui.adsabs.harvard.edu/abs/2025arXiv251006315D/abstract
 
-    def _draw_psf(ax, sims):
+    def _draw_psf(ax, sims, **kwargs):
         # JWST PSF (Pirie+25 for JELS)
         psf_arcsec = 0.17  # for the NB filters used for Halpha
         label = "JWST PSF (0.17'' @ z=5.5)"
@@ -1101,7 +1124,7 @@ def phase_diagram(sim, xlim=None, yQuant="temp", cQuant=None, ext="pdf"):
     saveFilename = "phase_%s_%s_%s_%s_%03d.%s" % (sim.simName, xQuant, yQuant, cStr, sim.snap, ext)
 
     # MCS model: star formation threshold
-    def _f_post(ax):
+    def _f_post(ax, **kwargs):
         from temet.util.units import units
 
         xx = ax.get_xlim()
