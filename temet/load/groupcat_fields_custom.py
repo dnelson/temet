@@ -1146,7 +1146,7 @@ def surfdens_stars(sim, field):
     return vals
 
 
-surfdens_stars.label = r"Stellar Surface Density $\rm{\Sigma_{\star}}$"
+surfdens_stars.label = r"Surface Density $\rm{\Sigma_{\star}}$"
 surfdens_stars.units = r"$\rm{M_{sun}\, kpc^{-2}}$"
 surfdens_stars.limits = [6.5, 9.0]
 surfdens_stars.log = True
@@ -1160,7 +1160,7 @@ def surfdens_stars_pc(sim, field):
     return sigma_star_pc
 
 
-surfdens_stars_pc.label = r"Stellar Surface Density $\rm{\Sigma_{\star}}$"
+surfdens_stars_pc.label = r"Surface Density $\rm{\Sigma_{\star}}$"
 surfdens_stars_pc.units = r"$\rm{M_{sun}\, pc^{-2}}$"
 surfdens_stars_pc.limits = [0.5, 6.0]
 surfdens_stars_pc.log = True

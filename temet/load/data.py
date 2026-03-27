@@ -4106,7 +4106,7 @@ def claeyssens23():
         "sigma_err1": sigma_err_up,  # err up [dex]
         "sigma_err2": sigma_err_down,  # err down [dex]
         "metallicity": metallicity,  # absolute metallicity
-        "label": "Claeyssens+23 JWST",
+        "label": "Claeyssens+23",
     }
 
     return r
@@ -4140,6 +4140,97 @@ def brown21():
         "surfdens": np.array([d[17] for d in data]),  # log Msun/pc^2
         "surfdens_err": np.array([d[18] for d in data]),  # dex
         "label": "Brown+21 LEGUS",
+    }
+
+    return r
+
+
+def adamo24():
+    """Load observational data points from Adamdo+24 (Cosmic Gems star clusters) (https://arxiv.org/abs/2401.03224)."""
+    # r_eff = [1.1, 1.1, 1.0, 0.6, 0.4, 1.7, 1.4, 1.9]  # note: third and seventh are upper limits [pc]
+    # r_eff_err_up = [0.7, 0.1, 0.0, 0.1, 0.2, 0.8, 0.0, 11.4]
+    # r_eff_err_down = [0.2, 0.5, 0.9, 0.6, 0.1, 0.4, 1.3, 1.8]  # limits have errors near zero
+
+    r_eff_FM = np.array([1.1, 0.9, 0.9, 0.8, 0.7, 1.3, 1.0, 0.9])  # 'forward modeled' [pc]
+    r_eff_FM_err = [0.1, 0.1, 0.2, 0.2, 0.2, 0.1, 0.04, 0.1]
+
+    r_eff_FM_log = np.log10(r_eff_FM)
+    r_eff_FM_err1 = np.log10(r_eff_FM + r_eff_FM_err) - np.log10(r_eff_FM)  # dex (up)
+    r_eff_FM_err2 = np.log10(r_eff_FM) - np.log10(r_eff_FM - r_eff_FM_err)  # dex (down)
+
+    mstar = np.array([2.45e6, 2.65e6, 1.13e6, 1.13e6, 1.01e6, 2.89e6, 3.01e6, 4.36e6])
+    mstar_err_up = [5.20e6, 1.09e6, 1.77e6, 1.23e6, 0.37e6, 1.56e6, 3.21e6, 0.98e6]
+    mstar_err_down = [1.56e6, 1.26e6, 0.65e6, 0.74e6, 0.36e6, 1.35e6, 1.61e6, 1.90e6]
+
+    mstar_err1 = np.log10(mstar + mstar_err_up) - np.log10(mstar)  # dex (up)
+    mstar_err2 = np.log10(mstar) - np.log10(mstar - mstar_err_down)  # dex (down)
+
+    surfdens = np.array([1.92e5, 1.93e5, 1.3e5, 2.39e5, 6.92e5, 0.88e5, 5.10e5, 1.05e5])  # [msun/pc^2]
+    surfdens_err_up = [1.60e5, 4.16e5, 9e5, 4.71e5, 4.90e5, 0.98e5, 9e5, 7.89e5]
+    surfdens_err_down = [1.44e5, 1.11e5, 0e4, 1.98e5, 4.22e5, 0.46e5, 0e4, 0.89e5]  # third and seventh are lower lims
+
+    surfdens_err1 = np.log10(surfdens + surfdens_err_up) - np.log10(surfdens)  # dex (up)
+    surfdens_err2 = np.log10(surfdens) - np.log10(surfdens - surfdens_err_down)  # dex (down)
+
+    # age = np.array([1.94, 2.11, 1.90, 2.17, 3.06, 1.94, 1.8, 1.99])  # [log]
+    # age_err_up = [0.71, 0.83, 9, 0.85, 0.32, 0.52, 9, 1.12]
+    # age_err_down = [0.27, 0.50, 0, 1.03, 0.59, 0.41, 0, 1.49]  # third and seventh are lower lims
+
+    r = {
+        "mstar": np.log10(mstar),  # log msun
+        "mstar_err1": mstar_err1,  # dex (up)
+        "mstar_err2": mstar_err2,  # dex (down)
+        "r_eff": r_eff_FM_log,  # log pc
+        "r_eff_err1": r_eff_FM_err1,  # dex (up)
+        "r_eff_err2": r_eff_FM_err2,  # dex (down)
+        "surfdens": np.log10(surfdens),  # log msun/pc^2
+        "surfdens_err1": surfdens_err1,  # dex (up)
+        "surfdens_err2": surfdens_err2,  # dex (down)
+        "label": "Adamo+24 Cosmic Gems",
+    }
+
+    return r
+
+
+def mowla24():
+    """Load observational data points from Mowla+24 (Firefly Sparkle) (https://arxiv.org/abs/2402.08696)."""
+    r50 = np.array([6.8, 6.2, 5.1, 4.9, 4.6, 4.3, 4.1, 3.9, 4.2, 4.3])  # [pc]
+    r50_err_up = np.array([0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.5, 0.6, 0.6])
+    r50_err_down = np.array([1.3, 1.3, 1.2, 1.2, 1.1, 1.1, 1.1, 1.0, 1.0, 1.0])
+
+    r50_err1 = np.log10(r50 + r50_err_up) - np.log10(r50)  # dex (up)
+    r50_err2 = np.log10(r50) - np.log10(r50 - r50_err_down)  # dex (down)
+
+    mstar = np.array([5.4, 5.4, 5.8, 5.7, 5.3, 5.7, 5.7, 5.7, 5.7, 5.3])  # log msun
+    mstar_err1 = np.array([0.7, 0.4, 0.8, 0.7, 0.5, 0.7, 0.7, 0.8, 0.7, 0.4])  # dex
+    mstar_err2 = np.array([0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.6, 0.6, 0.2])  # dex
+
+    # calculate surface densities and errors
+    surfdens = 10.0**mstar / (2 * np.pi * r50**2)  # msun/pc^2
+    mstar_err_sym = 0.5 * (mstar_err1 + mstar_err2)  # symmetrize errors for simplicity
+    r50_err_sym = 0.5 * (r50_err1 + r50_err2)
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        surfdens_err = np.sqrt(
+            (10.0 ** (2 * mstar) * (r50**2 * mstar_err_sym**2 * np.log(10) ** 2 + 4 * r50_err_sym**2)) / r50**6
+        ) / (2 * np.pi)
+
+        surfdens_err1 = np.log10(surfdens + surfdens_err) - np.log10(surfdens)  # dex (up)
+        surfdens_err2 = np.log10(surfdens) - np.log10(surfdens - surfdens_err)  # dex (down)
+
+        surfdens_err2[np.isnan(surfdens_err2)] = surfdens_err1[np.isnan(surfdens_err2)]  # replace with sym
+
+    r = {
+        "mstar": mstar,  # log msun
+        "mstar_err1": mstar_err1,  # dex (up)
+        "mstar_err2": mstar_err2,  # dex (down)
+        "r_eff": np.log10(r50),  # log pc
+        "r_eff_err1": r50_err1,  # dex (up)
+        "r_eff_err2": r50_err2,  # dex (down)
+        "surfdens": np.log10(surfdens),  # log msun/pc^2
+        "surfdens_err1": surfdens_err1,  # dex (up)
+        "surfdens_err2": surfdens_err2,  # dex (down)
+        "label": "Mowla+24 Firefly Sparkle",
     }
 
     return r

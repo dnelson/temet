@@ -22,8 +22,8 @@ mass_label = r"Star Cluster Mass [ log M$_{\odot}$ ]"
 size_label = r"Star Cluster Size $R_{1/2}$ [ pc ]"  # always show tick labels in linear
 
 mass_lim = [1.5, 4.0]  # log msun
-size_lim = [-1.8, 0.8]  # log pc [-0.5, 1.8] for L15
-sigma_lim = [0.5, 6.0]  # log msun/pc^2
+size_lim = [-1.8, 0.8]  # log pc, [-0.5, 1.8] for L15
+sigma_lim = [1.8, 6.0]  # log msun/pc^2, [0.5, 4.0] for L15
 
 sizeticks_lin = [0.05, 0.1, 0.5, 1.0, 2.0, 5.0]  # pc
 
@@ -378,20 +378,24 @@ def star_cluster_histogram(sims, quant, sizefac=1.0):
             h_quant = np.log10(rhalf[subIDs])
 
         label = f"h{sim.hInd}"  # f"{sim.simName} (N={len(subIDs)}/{sim.numSubhalos})"
-        label = sim.simName  # while we are studying the res dependence
+        # label = sim.simName  # while we are studying the res dependence
 
         h = np.histogram(h_quant, bins=30, range=xlim)  # range=[min,max]
         ax.stairs(*h, fill=True, alpha=0.8, label=label)
 
+    # overplot resolution lines
+    ylim = ax.get_ylim()
+
+    for sim in sims:
         if quant == "mass":
             min_mass = np.log10(20 * sim.units.codeMassToMsun(sim.targetGasMass))
-            ax.plot([min_mass, min_mass], ax.get_ylim(), color="black", linestyle=":", alpha=0.5)
+            ax.plot([min_mass, min_mass], ylim, color="black", linestyle=":", alpha=0.5)
 
         if quant == "size":
             grav_soft_stars = {13: 0.0244, 14: 0.0122, 15: 0.0061, 16: 0.003}
             grav_soft_code = grav_soft_stars[sim.res]
             grav_soft_logpc = np.log10(sim.units.codeLengthToPc(grav_soft_code))
-            ax.plot([grav_soft_logpc, grav_soft_logpc], ax.get_ylim(), color="black", linestyle=":", alpha=0.5)
+            ax.plot([grav_soft_logpc, grav_soft_logpc], ylim, color="black", linestyle=":", alpha=0.5)
 
     if quant == "size":
         sizeticks_log = np.log10(sizeticks_lin)
@@ -436,7 +440,7 @@ def size_vs_mass(sims: list[simParams]) -> None:
         x_fit = np.array(xlim) + [0.2, -0.2]
         y_fit = np.polyval(coeffs, x_fit)
 
-        ax.plot(x_fit, y_fit, "-", color="#555", lw=3, alpha=0.5)
+        ax.plot(x_fit, y_fit, "-", color="#000", alpha=0.9)
 
         # Brown+21 LEGUS (https://arxiv.org/abs/2106.12420)
         b21 = brown21()
@@ -447,6 +451,40 @@ def size_vs_mass(sims: list[simParams]) -> None:
 
         ax.plot(x, y, marker="x", mew=1, ms=4, ls="None", color="#000", alpha=0.5, zorder=-12, label=b21["label"])
 
+        # Brown+21 fit (Fig 13, including the local open clusters at low mass)
+        # b21_betas = [0.242, 0.180, 0.279]  # full sample, 1-10Myr, and 10-100Myr age bins
+        # b21_R4s = [2.548, 2.365, 2.506]
+        b21_betas = [0.29]
+        b21_R4s = [2.57]
+
+        x_fit = np.array(xlim)  # + [0.1, -0.1]
+
+        for beta, R4 in zip(b21_betas, b21_R4s):
+            y_fit = np.log10(R4 * (10.0**x_fit / 1e4) ** beta)
+
+            label = ""  # rf"Brown+21 ($\beta={beta:.3f}$, $R_4={R4:.1f}$ pc)"
+            ax.plot(x_fit, y_fit, "-", color="#000", alpha=0.5, label=label)
+
+        # Grudic+23 fit to STARFORGE sims
+        g23_beta = 0.25
+        g23_R4 = 1.4
+
+        y_fit = np.log10(g23_R4 * (10.0**x_fit / 1e4) ** g23_beta)
+
+        ax.plot(x_fit, y_fit, "-.", color="#000", alpha=0.5, label=r"Grudi${\'c}$+23")
+
+        # Marks+12 model fit
+        m12_beta = 0.13
+        m12_R1 = 0.1
+
+        y_fit = np.log10(m12_R1 * (10.0**x_fit / 1.0) ** m12_beta)
+
+        ax.plot(x_fit, y_fit, ls="--", color="#000", alpha=0.5, label="Marks+12")
+
+        # TODO: if cluster masses start to exceed 4.5, then we can/should consider the JWST "cluster" datasets:
+        # see https://arxiv.org/abs/2603.24550 Figure 1
+        # Vanzella+22,23, Mowla+24, Adamo+24, Messa+25, also SFing clumps in high-z (Fujimoto+25, Nakane+25)
+
     subhalos_evo.scatter2d(
         sims,
         xQuant=xQuant,
@@ -456,7 +494,7 @@ def size_vs_mass(sims: list[simParams]) -> None:
         vs_sim=None,
         parents=False,
         tracks=False,
-        sizefac=0.8,
+        sizefac=1.0,
         markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
         legend="simple",
         legend_locs=["lower right", "upper left"],
@@ -472,7 +510,7 @@ def sigma_star_galaxies(sims: list[simParams]) -> None:
     yQuant = "surfdens_stars"
     xQuant = "mstar2_log"
 
-    ylim = [5.5, 12.0]  # log msun/kpc^2
+    ylim = [5.5, 13.5]  # log msun/kpc^2
     xlim = [4.5, 9.0]  # log mstar
 
     def _draw_data(ax, sims):
@@ -491,7 +529,7 @@ def sigma_star_galaxies(sims: list[simParams]) -> None:
             fmt="o",
             color="#555",
             alpha=0.7,
-            label=c23["label"] + " ($z > 5$)",
+            label=c23["label"],
         )
 
     subhalos_evo.scatter2d(
@@ -502,40 +540,63 @@ def sigma_star_galaxies(sims: list[simParams]) -> None:
         ylim=ylim,
         parents=False,
         tracks=True,
+        sizefac=0.8,
         legend="simple",
-        legend_locs=["upper left", "upper right"],
-        legend_ncols=[1, 1],
+        legend_locs=["upper right", "upper left"],
+        legend_ncols=[1, 2],
         f_pre=_draw_data,
         f_selection=_zoomSubhaloIDsToPlot,
     )
 
 
-def sigma_star_clusters(sims: list[simParams], vs_size=False) -> None:
-    """The stellar mass surface density (Sigma_*) as a function of galaxy mass."""
+def sigma_star_vs_mass_clusters(sims: list[simParams]) -> None:
+    """The stellar mass surface density (Sigma_*) of star clusters, as a function of cluster mass."""
     yQuant = "surfdens_stars_pc"
     xQuant = "mstar_tot_log"
 
     ylim = sigma_lim  # log msun/pc^2
     xlim = mass_lim  # log mstar
 
-    if vs_size:
-        xQuant = "rhalf_stars_pc"
-        xlim = size_lim  # log pc
-
     def _f_pre(ax, sims):
-        # set custom tick labels for size
-        if vs_size:
-            sizeticks_log = np.log10(sizeticks_lin)
-            ax.set_xticks(sizeticks_log)
-            ax.set_xticklabels(sizeticks_lin)
+        from temet.load.data import brown21
 
-        # draw observational data
-        # TODO: https://arxiv.org/abs/2401.03224 (Fig 2, Sigma* vs size)
+        # set custom ticks and tick labels
+        ax.set_xlabel(mass_label)
 
-        # todo: Brown+21 data (https://arxiv.org/abs/2106.12420)
+        # draw lines of constant size
+        xx = np.linspace(xlim[0], xlim[1], 100)
+        opts = {
+            "fontsize": 11,
+            "color": "#444",
+            "alpha": 1.0,
+            "ha": "left",
+            "va": "bottom",
+            "rotation": 27.0,
+            "bbox": {"facecolor": "white", "alpha": 0.5, "pad": 2},
+        }
 
-        # draw other sim data
-        # TODO: (van Donkelaar+26 Fig 4)
+        sizes = [0.02, 0.05, 0.1, 0.5, 1.0]  # pc
+
+        for i, size in enumerate(sizes):
+            yy = np.log10(10.0**xx / (np.pi * (size) ** 2))
+            label = f"{size:.1f} pc" if size >= 0.1 else f"{size:.2f} pc"
+
+            ax.plot(xx, yy, ls=":", lw=1, color="#444", alpha=1.0)
+            ind = 3 if i < 3 else 20 + 15 * (i - 3)
+            ax.text(xx[ind], yy[ind] + 0.05, label, **opts)
+
+        # Brown+21 LEGUS (https://arxiv.org/abs/2106.12420)
+        b21 = brown21()
+
+        w = np.where(b21["reliable"])
+        y = b21["surfdens"][w]
+        x = np.log10(b21["mass"][w])
+
+        ax.plot(x, y, marker="x", mew=1, ms=4, ls="None", color="#000", alpha=0.5, zorder=-12, label=b21["label"])
+
+        # TODO: if cluster masses start to exceed 4.5, then we can/should consider the JWST "cluster" datasets:
+        # see https://arxiv.org/abs/2603.24550 Figure 1
+        # Vanzella+22,23, Mowla+24, Adamo+24, Messa+25, also SFing clumps in high-z (Fujimoto+25, Nakane+25)
 
     subhalos_evo.scatter2d(
         sims,
@@ -546,10 +607,122 @@ def sigma_star_clusters(sims: list[simParams], vs_size=False) -> None:
         vs_sim=None,
         parents=False,
         tracks=False,
+        sizefac=0.8,
         markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
         legend="simple",
         legend_locs=["upper left", "upper right"],
         legend_ncols=[1, 1],
+        f_pre=_f_pre,
+        f_selection=_starClusterSubhaloIDs,
+    )
+
+
+def sigma_star_vs_size_clusters(sims: list[simParams]) -> None:
+    """The stellar mass surface density (Sigma_*) of stars clusters, as a function of cluster size."""
+    yQuant = "surfdens_stars_pc"
+    xQuant = "rhalf_stars_pc"
+
+    ylim = sigma_lim  # log msun/pc^2
+    xlim = size_lim  # log pc
+
+    def _f_pre(ax, sims):
+        from temet.load.data import adamo24, brown21, mowla24
+
+        # set custom ticks and tick labels
+        sizeticks_log = np.log10(sizeticks_lin)
+        ax.set_xticks(sizeticks_log)
+        ax.set_xticklabels(sizeticks_lin)
+
+        # draw lines of constant mass
+        xx = np.linspace(xlim[0], xlim[1], 100)
+        opts = {
+            "fontsize": 11,
+            "color": "#444",
+            "alpha": 1.0,
+            "ha": "left",
+            "va": "bottom",
+            "rotation": -41.0,
+            "bbox": {"facecolor": "white", "alpha": 0.15, "pad": 2},
+        }
+
+        masses = [1e1, 1e2, 1e3, 1e4, 1e5]  # msun
+
+        for i, mass in enumerate(masses):
+            yy = np.log10(mass / (np.pi * (10.0**xx) ** 2))
+            label = r"$10^{" + f"{np.log10(mass):.0f}" + r"}$ M$_{\odot}$"
+
+            ax.plot(xx, yy, ls=":", lw=1, color="#444", alpha=1.0)
+            ax.text(xx[30 + 10 * i], yy[30 + 10 * i] - 0.1, label, **opts)
+
+        # draw observational data
+        a24 = adamo24()
+
+        ax.errorbar(
+            a24["r_eff"],
+            a24["surfdens"],
+            xerr=[a24["r_eff_err1"], a24["r_eff_err2"]],
+            yerr=[a24["surfdens_err2"], a24["surfdens_err1"]],
+            fmt="D",
+            color="#555",
+            alpha=0.7,
+            label=a24["label"],
+        )
+
+        m24 = mowla24()
+
+        ax.errorbar(
+            m24["r_eff"],
+            m24["surfdens"],
+            xerr=[m24["r_eff_err1"], m24["r_eff_err2"]],
+            yerr=[m24["surfdens_err2"], m24["surfdens_err1"]],
+            fmt="s",
+            color="#555",
+            alpha=0.7,
+            label=m24["label"],
+        )
+
+        # Brown+21 LEGUS (https://arxiv.org/abs/2106.12420)
+        b21 = brown21()
+
+        w = np.where(b21["reliable"])
+        y = b21["surfdens"][w]
+        x = np.log10(b21["r_eff"][w])
+
+        ax.plot(x, y, marker="x", mew=1, ms=4, ls="None", color="#000", alpha=0.5, zorder=-12, label=b21["label"])
+
+        # sim: van Donkelaar+26 Fig 4
+        vd26_label = "van Donkelaar+26"
+        vd26_rhalf = np.log10([2.97,2.53,2.97,3.22,3.56,2.69,2.92,3.12,2.57,2.79,2.71,3.02,2.97,2.97,2.97,3.13,2.92,
+                      2.54,2.57,3.03,3.46,3.81,3.86,3.65,3.76,3.8,3.77,3.95,4.3,4.35,3.51,3.71,3.85,4.1,4.35,4.48,4.57,
+                      4.63,4.67,4.76,4.53,4.33,4.58,4.96,4.77,5.71,6.58,7.3,7.6,7.74,9.11,9.98,12.0])  # fmt: skip
+        vd26_sigma = np.log10([9.01e+05, 3.35e+05, 2.59e+05, 3.45e+05, 3.23e+05, 1.91e+05,
+                     1.64e+05, 1.22e+05, 6.84e+04, 6.48e+04, 5.81e+04, 4.93e+04,
+                     3.40e+04, 3.29e+04, 2.08e+04, 1.26e+04, 4.92e+03, 3.07e+03,
+                     2.64e+03, 2.17e+03, 3.43e+03, 4.31e+03, 5.92e+03, 1.40e+04,
+                     1.73e+04, 1.95e+04, 4.47e+04, 3.63e+04, 3.75e+04, 5.26e+04,
+                     7.97e+04, 1.36e+05, 1.28e+05, 2.54e+05, 2.80e+05, 1.55e+05,
+                     2.40e+05, 2.65e+05, 2.83e+05, 1.31e+04, 5.42e+03, 4.65e+03,
+                     3.62e+03, 1.46e+03, 6.23e+02, 3.81e+02, 2.17e+03, 2.52e+03,
+                     1.04e+04, 1.68e+03, 2.11e+02, 2.23e+02, 6.37e+02])  # fmt: skip
+
+        ax.plot(
+            vd26_rhalf, vd26_sigma, marker="o", mew=2, mfc="None", ls="None", color="#000", alpha=0.5, label=vd26_label
+        )
+
+    subhalos_evo.scatter2d(
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        vs_sim=None,
+        parents=False,
+        tracks=False,
+        sizefac=1.0,
+        markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
+        legend="simple",
+        legend_locs=["lower left", "upper left"],
+        legend_ncols=[1, 2],
         f_pre=_f_pre,
         f_selection=_starClusterSubhaloIDs,
     )
@@ -649,25 +822,25 @@ def paperPlots(a=False):
     # sims.append(simParams("structures", hInd=15581, res=14, variant="ST15", redshift=5.5))
     # sims.append(simParams("structures", hInd=23908, res=14, variant="ST15", redshift=5.5))
     # sims.append(simParams("structures", hInd=31619, res=14, variant="ST15", redshift=5.5))
-    # sims.append(simParams("structures", hInd=73172, res=14, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=73172, res=15, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=446076, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=539722, res=16, variant="ST15", redshift=5.5))
-    # sims.append(simParams("structures", hInd=844537, res=16, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=844537, res=16, variant="ST15", redshift=5.5))
 
     # ------------
 
-    # fig 1a: clusters: mass and size distributions
+    # fig 1: clusters: mass function
     if 0 or a:
         star_cluster_histogram(sims, quant="mass")
         star_cluster_histogram(sims, quant="size", sizefac=0.8)
 
-    # fig 1b: clusters: size-mass relation
-    if 1 or a:
+    # fig 2: clusters: size-mass relation, size distribution
+    if 0 or a:
         size_vs_mass(sims)
 
-    # fig 2: gallery of clusters (~10pc stamps?)
+    # fig 3: gallery of clusters (~10pc stamps?)
     if 0 or a:
         # exploration to find nice clusters:
         sims = []
@@ -705,16 +878,7 @@ def paperPlots(a=False):
 
         vis_gallery_clusters(sims)
 
-    # fig X: galaxies: stellar surface density (Sigma_*)
-    if 0 or a:
-        sigma_star_galaxies(sims)
-
-    # fig: stellar surface density of clusters (Sigma_*)
-    if 0 or a:
-        sigma_star_clusters(sims)
-        sigma_star_clusters(sims, vs_size=True)
-
-    # fig 3: pressure vs. rho phase space diagram (see Schaye+26 Colibre Fig 8)
+    # fig 4: pressure vs. rho phase space diagram (see Schaye+26 Colibre Fig 8)
     if 0 or a:
         xlim = [-6.0, 5.0]
         sim = simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5)
@@ -725,30 +889,49 @@ def paperPlots(a=False):
         phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="Z_solar", ext="pdf")
         phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="tff_local", ext="pdf")
 
-    # fig 4: kennicut-schmidt relation (global)
-    # fig todo: Sigma_SFR (e.g. Ceverino+26 shows JWST data comparisons)
-
-    # fig 5: kennicut-schmidt relation (local/spatially resolved)
-
-    # fig 6: gas mass fraction of ISM gas in different phases, at e.g. z=10 and z=6 (bar plots?)
+    # fig 5: gas mass fraction of ISM gas in different phases, at e.g. z=10 and z=6 (bar plots?)
     if 0 or a:
         gas_phase_fractions(sims, frac_type="Mass")
         gas_phase_fractions(sims, frac_type="Vol")
 
-    # fig todo: radius and radial velocity at formation time (use birth values of member stars?)
+    # fig 6: kennicut-schmidt relation (global)
+    # fig todo: Sigma_SFR (e.g. Ceverino+26 shows JWST data comparisons)
 
-    # fig todo: gas fraction vs M* (van Donkelaar+26 Fig 3)
+    # fig 6: kennicut-schmidt relation (local/spatially resolved)
+
+    # --- cluster properties ---
+
+    # fig 7a: stellar surface density of clusters (Sigma_*)
+    if 0 or a:
+        sigma_star_vs_size_clusters(sims)
+        sigma_star_vs_mass_clusters(sims)
+
+    # fig 7b: galaxies: stellar surface density (Sigma_*)
+    if 0 or a:
+        sigma_star_galaxies(sims)
+
+    # fig 8: gas fraction vs M* (van Donkelaar+26 Fig 3)
+
+    # fig 9: histogram of cluster formation redshifts (with respect to important events/starbursts/mergers)
+
+    # fig 10: ages, i.e. histograms of member star ages (matched to vis gallery), or age vs. X scaling relations
+
+    # --- formation ---
+
+    # fig todo: radius and radial velocity at formation time (use birth values of member stars?)
 
     # vis todo: time evolution from pre-birth to post-birth (gas dens, vrad, tff_local, Q, stars, ...)
 
     # fig todo: quantitative assessment of reason for formation (e.g. self-grav instability, compression, ...)
 
+    # fig todo: crossing time (Brown+21 eqn 21), Fig 14, Fig 15 (fraction of bound clusters)
+
+    # --- relation to galaxies ---
+
+    # fig todo: \Gamma
+
     # fig todo: any cluster population stat, e.g. mass func slope, size-mass slope, vs. halo mass (color by redshift)
     #  "universality" or not?
-
-    # fig todo: histogram of cluster formation redshifts (with respect to important events/starbursts/mergers)
-
-    # fig todo: ages, i.e. histograms of member star ages (matched to vis gallery), or age vs. X scaling relations
 
     # fig: stellar remnants: mass distribution
     if 0 or a:
