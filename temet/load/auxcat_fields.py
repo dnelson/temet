@@ -408,6 +408,12 @@ def_fields = {
         ptRestrictions={"temp": ["lt", 100]},
     ),
     # masses (MCST)
+    "Subhalo_Gas_Mass_2rhalfstarsFoF": partial(
+        subhaloRadialReduction, ptType="gas", ptProperty="mass", op="sum", rad="2rhalfstars", scope="fof"
+    ),
+    "Subhalo_Stars_Mass_2rhalfstarsFoF": partial(
+        subhaloRadialReduction, ptType="stars", ptProperty="mass", op="sum", rad="2rhalfstars", scope="fof"
+    ),
     "Subhalo_Remnant_Mass": partial(
         subhaloRadialReduction,
         ptType="stars",

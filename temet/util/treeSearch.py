@@ -1079,7 +1079,7 @@ def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePre
 
 
 def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, posMask=None, treePrec="single", tree=None):
-    """Find and return the actual particle indices (indexing pos, hsml) within the search radii of posSearch locations.
+    """Find and return the actual particle indices (indexing pos) within the search radii of posSearch locations.
 
     Serial by construction, since we do only one search.
 

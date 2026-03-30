@@ -562,6 +562,7 @@ def subhaloRadialReduction(
         sP, pSplit, minStellarMass=minStellarMass, minHaloMass=minHaloMass, cenSatSelect=cenSatSelect
     )
     nSubsDo = len(subhaloIDsTodo)
+    fracSubsDo = nSubsDo / nSubsTot
 
     if rad not in ["2rhalfstars_fof"]:
         # skip check if e.g. some (sub)halos have no stars, and so no stellar half mass radii, in which case
@@ -766,6 +767,8 @@ def subhaloRadialReduction(
     # loop over subhalos
     printFac = 100.0 if (sP.res > 512 or scope == "global") else 10.0
 
+    tree_scope = None
+
     for i, subhaloID in enumerate(subhaloIDsTodo):
         if i % np.max([1, int(nSubsDo / printFac)]) == 0 and i <= nSubsDo and username != "wwwrun":
             print("   %4.1f%%" % (float(i + 1) * 100.0 / nSubsDo))
@@ -780,43 +783,76 @@ def subhaloRadialReduction(
         if i1 == i0:
             continue  # zero length of this type
 
+        # use tree-based searches?
+        if scope == "fof" and fracSubsDo == 1 and not radRestrictIn2D and rad is not None:
+            if tree_scope is None or tree_scope[0] != i0 or tree_scope[1] != i1:
+                # build tree for this fof group
+                # note: could move to global tree, and use posMask in calcParticleIndices() instead
+                tree = buildFullTree(particles["Coordinates"][i0:i1, :], boxSizeSim=sP.boxSize, treePrec="float64")
+
+                tree_scope = [i0, i1]
+
         # use squared radii and sq distance function
         validMask = np.ones(i1 - i0, dtype="bool")
 
         rr = None
         if "Coordinates" in particles:
-            if not radRestrictIn2D:
-                # apply in 3D
-                rr = sP.periodicDistsSq(gc["SubhaloPos"][subhaloID, :], particles["Coordinates"][i0:i1, :])
+            if tree_scope is not None:
+                # tree-based search
+                assert radSqMax.ndim == 1
+
+                inds = calcParticleIndices(
+                    particles["Coordinates"][i0:i1, :],
+                    gc["SubhaloPos"][subhaloID, :],
+                    np.sqrt(radSqMax[subhaloID]),
+                    sP.boxSize,
+                    treePrec="float64",
+                    tree=tree,
+                )
+
+                if inds is None:
+                    continue  # zero length of particles satisfying radial cut
+
+                rr = sP.periodicDistsSq(gc["SubhaloPos"][subhaloID, :], particles["Coordinates"][i0:i1, :][inds, :])
+
+                # radial / circular aperture
+                validMask *= False  # set all False, then only set True for those within radial cut
+                validMask[inds] = (rr <= radSqMax[subhaloID]) & (rr >= radSqMin[subhaloID])
+
             else:
-                # apply in 2D projection, limited support for now, just Nside='z-axis'
-                # otherwise, for any more complex projection, need to apply it here, and anyways
-                # for nProj>1, this validMask selection logic becomes projection dependent, so
-                # need to move it inside the range(nProj) loop, which is definitely doable
-                assert Nside == "z-axis"
-                p_inds = [0, 1]  # x,y
-                pt_2d = gc["SubhaloPos"][subhaloID, :]
-                pt_2d = [pt_2d[p_inds[0]], pt_2d[p_inds[1]]]
-                vecs_2d = np.zeros((i1 - i0, 2), dtype=particles["Coordinates"].dtype)
-                vecs_2d[:, 0] = particles["Coordinates"][i0:i1, p_inds[0]]
-                vecs_2d[:, 1] = particles["Coordinates"][i0:i1, p_inds[1]]
-
-                rr = sP.periodicDistsSq(pt_2d, vecs_2d)  # handles 2D
-
-            if rad is not None:
-                if radSqMax.ndim == 1:
-                    # radial / circular aperture
-                    validMask &= rr <= radSqMax[subhaloID]
-                    validMask &= rr >= radSqMin[subhaloID]
+                # brute-force search
+                if not radRestrictIn2D:
+                    # apply in 3D
+                    rr = sP.periodicDistsSq(gc["SubhaloPos"][subhaloID, :], particles["Coordinates"][i0:i1, :])
                 else:
-                    # rectangular aperture in projected (x,y), e.g. slit
-                    xDist = vecs_2d[:, 0] - pt_2d[0]
-                    yDist = vecs_2d[:, 1] - pt_2d[1]
-                    sP.correctPeriodicDistVecs(xDist)
-                    sP.correctPeriodicDistVecs(yDist)
+                    # apply in 2D projection, limited support for now, just Nside='z-axis'
+                    # otherwise, for any more complex projection, need to apply it here, and anyways
+                    # for nProj>1, this validMask selection logic becomes projection dependent, so
+                    # need to move it inside the range(nProj) loop, which is definitely doable
+                    assert Nside == "z-axis"
+                    p_inds = [0, 1]  # x,y
+                    pt_2d = gc["SubhaloPos"][subhaloID, :]
+                    pt_2d = [pt_2d[p_inds[0]], pt_2d[p_inds[1]]]
+                    vecs_2d = np.zeros((i1 - i0, 2), dtype=particles["Coordinates"].dtype)
+                    vecs_2d[:, 0] = particles["Coordinates"][i0:i1, p_inds[0]]
+                    vecs_2d[:, 1] = particles["Coordinates"][i0:i1, p_inds[1]]
 
-                    validMask &= xDist <= np.sqrt(radSqMax[subhaloID, 0])
-                    validMask &= yDist <= np.sqrt(radSqMax[subhaloID, 1])
+                    rr = sP.periodicDistsSq(pt_2d, vecs_2d)  # handles 2D
+
+                if rad is not None:
+                    if radSqMax.ndim == 1:
+                        # radial / circular aperture
+                        validMask &= rr <= radSqMax[subhaloID]
+                        validMask &= rr >= radSqMin[subhaloID]
+                    else:
+                        # rectangular aperture in projected (x,y), e.g. slit
+                        xDist = vecs_2d[:, 0] - pt_2d[0]
+                        yDist = vecs_2d[:, 1] - pt_2d[1]
+                        sP.correctPeriodicDistVecs(xDist)
+                        sP.correctPeriodicDistVecs(yDist)
+
+                        validMask &= xDist <= np.sqrt(radSqMax[subhaloID, 0])
+                        validMask &= yDist <= np.sqrt(radSqMax[subhaloID, 1])
 
         # apply particle-level restrictions
         if ptRestrictions is not None:

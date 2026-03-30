@@ -767,6 +767,25 @@ fgas.log = True
 
 
 @catalog_field
+def fgas2_fof(sim, field):
+    """Subhalo gas mass fraction (all phases), measured within twice the stellar half mass radius, but FoF-scope."""
+    acFieldGas = "Subhalo_Gas_Mass_2rhalfstarsFoF"
+    mgas = sim.auxCat(acFieldGas)[acFieldGas]
+    mstar = sim.subhalos("SubhaloMassInRadType")[:, sim.ptNum("stars")]
+
+    with np.errstate(invalid="ignore"):
+        fgas = mgas / (mgas + mstar)
+
+    return fgas
+
+
+fgas2_fof.label = r"$\rm{f_{gas} = M_{\rm gas} / (M_{gas} + M_\star)}$"
+fgas2_fof.units = ""  # dimensionless
+fgas2_fof.limits = [-3.0, 0.0]  # [0, 1]  # -3.0, 0.0]
+fgas2_fof.log = True  # False  # True
+
+
+@catalog_field
 def fdm(sim, field):
     """Galaxy DM fraction, measured within the entire subhalo."""
     mdm = sim.subhalos("SubhaloMassType")[:, sim.ptNum("dm")]
@@ -1184,6 +1203,32 @@ surfdens1_dm.label = r"$\rm{\Sigma_{DM,r_{\star}}}$"
 surfdens1_dm.units = r"$\rm{M_{sun}\, kpc^{-2}}$"
 surfdens1_dm.limits = [6.5, 9.0]
 surfdens1_dm.log = True
+
+
+@catalog_field(alias="tcross")
+def crossing_time(sim, field):
+    """Galaxy crossing time (following Gieles & Portegies Zwart 2011)."""
+    rad = sim.units.codeLengthToKpc(sim.subhalos("SubhaloHalfmassRadType")[:, sim.ptNum("stars")])
+
+    mstar = sim.subhalos("SubhaloMassType")[:, sim.ptNum("stars")]
+    mstar = sim.units.codeMassToMsun(mstar) / 1e10
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        # G = None  # kpc (km/s)**2 / 1e10 msun (== All.G)
+        vals = 10 * np.sqrt(rad**3 / (sim.units.G * sim.units.kmS_in_kpcGyr**2 * mstar))  # Gyr
+
+    vals *= 1e3  # Myr
+
+    vals[rad == 0] = np.nan
+
+    return vals
+
+
+crossing_time.label = r"Crossing Time $\rm{t_{cross}}$"
+crossing_time.units = r"$\rm{Myr}$"
+crossing_time.limits = [-1.0, 2.5]
+crossing_time.log = True
+
 
 # -------------------- general subhalo properties ------------------------------------------------
 

@@ -1238,8 +1238,10 @@ def splitSingleHDF5ICIntoChunks(snap=151):
                     # determine index range
                     indRange = pSplitRange([0, f["Header"].attrs["NumPart_Total"][ptNum]], numChunksSave, i)
 
-                    # update particle counts
-                    fOut["Header"].attrs["NumPart_ThisFile"][ptNum] = indRange[1] - indRange[0]
+                    # update particle counts (updating only 1 index seems to silently fail)
+                    NumPart_ThisFile = fOut["Header"].attrs["NumPart_ThisFile"]
+                    NumPart_ThisFile[ptNum] = indRange[1] - indRange[0]
+                    fOut["Header"].attrs["NumPart_ThisFile"] = NumPart_ThisFile
 
                     # create group and copy particle data for this type
                     gName = "PartType%d" % ptNum

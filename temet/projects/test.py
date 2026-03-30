@@ -24,7 +24,7 @@ def zarr_proteus():
     import zarr
 
     # load some test data
-    file_in = "/u/dnelson/ProteusGPU/run/output/snapshot_0.hdf5"
+    file_in = "/u/dnelson/ProteusGPU/run_scaling/output/snapshot_0.hdf5"
     data = {}
 
     with h5py.File(file_in, "r") as f:
@@ -53,6 +53,75 @@ def zarr_proteus():
         remove("proteus_test.zarr/hydro/Energy/zarr.json")
         remove("proteus_test.zarr/hydro/rho/zarr.json")
         remove("proteus_test.zarr/hydro/vel/zarr.json")
+
+
+def vis_proteus():
+    """Quick visualization of a 2D proteus sim."""
+    snap_path = "/u/dnelson/ProteusGPU/run_kh2k/output/snapshot_*.hdf5"
+    files = sorted(glob.glob(snap_path))
+
+    # config
+    n_x = 1920
+    aspect = 1920 / 1080
+
+    # loop over snapshots
+    for i, file in enumerate(files):
+        print(file)
+        snap = int(file.split("/")[-1].split("_")[1].split(".")[0])
+        saveFilename = f"proteus_{snap:03d}.png"
+
+        if path.isfile(saveFilename) and i > 0:
+            continue
+
+        # load
+        with h5py.File(file, "r") as f:
+            t = f["header"].attrs["time"]
+            extent = f["header"].attrs["extent"]
+            pos = f["cells"]["seeds"][()]
+            rho = f["hydro"]["rho"][()]
+            u = f["hydro"]["Energy"][()]
+
+            field = np.log10(rho)  # np.log10(u)
+
+            if i == 0:
+                vmm = np.percentile(field, [5, 95])
+
+        # plot
+        n_y = int(n_x / aspect)
+        figsize = [19.2, 19.2 / aspect]
+
+        fig = plt.figure(layout="none", figsize=figsize)
+        ax = fig.add_axes([0, 0, 1, 1])
+        ax.set_axis_off()
+
+        if 0:
+            # quick scatter
+            sc = ax.scatter(pos[:, 0], pos[:, 1], c=field, s=1, cmap="viridis")
+            ax.set_title(f"Proteus KH2K t={t:.2f}")
+            ax.set_xlabel("x")
+            ax.set_ylabel("y")
+            plt.colorbar(sc, label="log10(rho)")
+
+        if 1:
+            # full image: sample x,y coordinates across extend, build kd tree, find nearest cell to each pixel
+            from scipy.spatial import cKDTree
+
+            height = extent / aspect
+            x = np.linspace(0, extent, n_x)
+            y = np.linspace(extent / 2 - height / 2, extent / 2 + height / 2, n_y)
+
+            # sample
+            xx, yy = np.meshgrid(x, y)
+            tree = cKDTree(pos)
+            _, ind = tree.query(np.c_[xx.ravel(), yy.ravel()])
+
+            img = field[ind].reshape(xx.shape)
+
+            ax.imshow(img, origin="lower", vmin=vmm[0], vmax=vmm[1], cmap="viridis")
+            ax.text(0.02, 0.02, f"t = {t:.3f}", fontsize=24, c="#fff", transform=ax.transAxes, ha="left", va="bottom")
+
+        fig.savefig(saveFilename, dpi=n_x / figsize[0])
+        plt.close(fig)
 
 
 def mcst_smbh_mdot():

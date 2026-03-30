@@ -2695,18 +2695,21 @@ stellar_zform_vimos.limits = [0.5, 6.0]
 stellar_zform_vimos.log = False
 
 
-@catalog_field
+@catalog_field(alias="stellarage_myr")
 def stellarage(sim, field):
     """Mean stellar age (mass-weighted), all stars in subhalo."""
     acField = "Subhalo_StellarAge_NoRadCut_MassWt"
     vals = sim.auxCat(fields=[acField])[acField]
 
+    if field.endswith("_myr"):
+        vals = vals * 1e3  # Gyr -> Myr
+
     return vals
 
 
-stellarage.label = r"$\rm{log t_{age,\star}$"
-stellarage.units = r"$\rm{Gyr}$"
-stellarage.limits = [0.0, 1.0]
+stellarage.label = r"$\rm{log t_{age,\star}}$"
+stellarage.units = lambda sim, f: r"$\rm{Myr}$" if f.endswith("_myr") else r"$\rm{Gyr}$"
+stellarage.limits = lambda sim, f: [-1.0, 2.5] if f.endswith("_myr") else [0.0, 1.0]
 stellarage.log = True
 
 

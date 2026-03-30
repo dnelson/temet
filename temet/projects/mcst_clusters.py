@@ -9,10 +9,9 @@ import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from temet.plot import snapshot, subhalos_evo
-from temet.plot.config import colors, figsize, markers
+from temet.plot.config import figsize
 from temet.plot.util import tableau10_colors
 from temet.util import simParams
-from temet.util.helper import logZeroNaN
 
 from .mcst import _get_existing_sims, _zoomSubhaloIDsToPlot, phase_diagram
 from .mcst_vis import vis_gallery_clusters
@@ -20,12 +19,15 @@ from .mcst_vis import vis_gallery_clusters
 
 mass_label = r"Star Cluster Mass [ log M$_{\odot}$ ]"
 size_label = r"Star Cluster Size $R_{1/2}$ [ pc ]"  # always show tick labels in linear
+age_label = r"Star Cluster Age [ Myr ]"
 
 mass_lim = [1.5, 4.0]  # log msun
 size_lim = [-1.8, 0.8]  # log pc, [-0.5, 1.8] for L15
 sigma_lim = [1.8, 6.0]  # log msun/pc^2, [0.5, 4.0] for L15
+age_lim = [-0.6, 3.0]  # log Myr
 
 sizeticks_lin = [0.05, 0.1, 0.5, 1.0, 2.0, 5.0]  # pc
+ageticks_lin = [0.25, 1, 2.5, 10, 25, 50, 100, 250, 500, 1000]  # Myr
 
 
 def _starClusterSubhaloIDs(sim):
@@ -346,7 +348,7 @@ def stellar_remnants(sims, haloID=0, sizefac=0.8):
     plt.close(fig)
 
 
-def star_cluster_histogram(sims, quant, sizefac=1.0):
+def star_cluster_histogram(sims, quant, nbins=30, sizefac=1.0):
     """Plot the mass function, or size distribution, of star clusters."""
     # start plot
     fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
@@ -362,8 +364,14 @@ def star_cluster_histogram(sims, quant, sizefac=1.0):
         xlim = size_lim
         xlabel = size_label
 
+    if quant == "age":
+        xlim = age_lim
+        xlabel = age_label
+
     ax.set_xlabel(xlabel)
     ax.set_xlim(xlim)
+
+    ymax = 0
 
     for sim in sims:
         # make selection
@@ -376,35 +384,59 @@ def star_cluster_histogram(sims, quant, sizefac=1.0):
         if quant == "size":
             rhalf = sim.subhalos("size_stars_pc")  # pc
             h_quant = np.log10(rhalf[subIDs])
+        if quant == "age":
+            age = sim.subhalos("stellarage_myr")
+            h_quant = np.log10(age[subIDs])
 
         label = f"h{sim.hInd}"  # f"{sim.simName} (N={len(subIDs)}/{sim.numSubhalos})"
         # label = sim.simName  # while we are studying the res dependence
 
-        h = np.histogram(h_quant, bins=30, range=xlim)  # range=[min,max]
+        h = np.histogram(h_quant, bins=nbins, range=xlim)  # range=[min,max]
         ax.stairs(*h, fill=True, alpha=0.8, label=label)
 
+        ymax = max(ymax, h[0].max())
+
     # overplot resolution lines
+    legend_loc = "upper right"
+    ax.set_ylim([0.8, ymax * 1.2])
     ylim = ax.get_ylim()
 
     for sim in sims:
         if quant == "mass":
             min_mass = np.log10(20 * sim.units.codeMassToMsun(sim.targetGasMass))
-            ax.plot([min_mass, min_mass], ylim, color="black", linestyle=":", alpha=0.5)
+            ax.plot([min_mass, min_mass], ylim, color="#444", linestyle=":", lw=1, alpha=1.0)
 
         if quant == "size":
             grav_soft_stars = {13: 0.0244, 14: 0.0122, 15: 0.0061, 16: 0.003}
             grav_soft_code = grav_soft_stars[sim.res]
             grav_soft_logpc = np.log10(sim.units.codeLengthToPc(grav_soft_code))
-            ax.plot([grav_soft_logpc, grav_soft_logpc], ylim, color="black", linestyle=":", alpha=0.5)
+            ax.plot([grav_soft_logpc, grav_soft_logpc], ylim, color="#444", linestyle=":", lw=1, alpha=1.0)
+
+    if quant == "age":
+        # vertical lines at lookback times to specific redshifts
+        redshifts = [5.7, 6.0, 8.0, 14]
+        for z in redshifts:
+            age_z = np.log10((sim.tage - sim.units.redshiftToAgeFlat(z)) * 1000)
+            yy = [ylim[0], ylim[0] * 10]
+            ax.plot([age_z, age_z], yy, color="#444", linestyle=":", alpha=1.0)
+            ax.text(age_z - 0.02, yy[1], f"z={z:.0f}", rotation=90, va="top", ha="right", color="#444", alpha=1.0)
 
     if quant == "size":
+        # set custom ticks
         sizeticks_log = np.log10(sizeticks_lin)
         ax.set_xticks(sizeticks_log)
         ax.set_xticklabels(sizeticks_lin)
 
         # todo: overplot Brown+21 data
 
-    ax.legend(loc="upper right")
+    if quant == "age":
+        # set custom ticks
+        ageticks_log = np.log10(ageticks_lin)
+        ax.set_xticks(ageticks_log)
+        ax.set_xticklabels(ageticks_lin)
+        legend_loc = "upper left"
+
+    ax.legend(loc=legend_loc)
 
     fig.savefig(f"star_cluster_histo_{quant}.pdf")
     plt.close(fig)
@@ -801,6 +833,119 @@ def gas_phase_fractions(sims, frac_type="Mass"):
     plt.close(fig)
 
 
+def gasfrac_vs_mass_clusters(sims: list[simParams]) -> None:
+    """The gas fraction (M_gas / (M_gas+M_stars)) of star clusters, as a function of cluster mass."""
+    yQuant = "fgas2_fof"  # auxcat-based recomputation within 2rhalf, but full fof-scope
+    xQuant = "mstar_tot_log"  # subhalo mass
+
+    ylim = [-3.0, 0.0]  # [0, 1]
+    xlim = mass_lim  # log mstar
+
+    def _f_pre(ax, sims):
+        # set custom axis label
+        ax.set_xlabel(mass_label)
+
+        # note: (van Donkelaar+26 Fig 3)
+
+    subhalos_evo.scatter2d(
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        vs_sim=None,
+        parents=False,
+        tracks=False,
+        sizefac=0.8,
+        markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
+        legend="simple",
+        # legend_locs=["upper left", "upper right"],
+        # legend_ncols=[1, 1],
+        f_pre=_f_pre,
+        f_selection=_starClusterSubhaloIDs,
+    )
+
+
+def age_vs_mass_clusters(sims: list[simParams]) -> None:
+    """Cluster age as a function of cluster mass."""
+    yQuant = "stellarage_myr"  # cluster age
+    xQuant = "mstar_tot_log"  # subhalo mass
+
+    ylim = age_lim  # log Myr
+    xlim = mass_lim  # log mstar
+
+    def _f_pre(ax, sims):
+        # set custom ticks and tick labels
+        ax.set_ylabel(age_label)
+        ageticks_log = np.log10(ageticks_lin)
+        ax.set_yticks(ageticks_log)
+        ax.set_yticklabels(ageticks_lin)
+
+    subhalos_evo.scatter2d(
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        vs_sim=None,
+        parents=False,
+        tracks=False,
+        sizefac=0.8,
+        markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
+        legend="simple",
+        # legend_locs=["upper left", "upper right"],
+        # legend_ncols=[1, 1],
+        f_pre=_f_pre,
+        f_selection=_starClusterSubhaloIDs,
+    )
+
+
+def age_vs_tcross_clusters(sims: list[simParams]) -> None:
+    """Cluster age as a function of cluster mass."""
+    xQuant = "stellarage_myr"
+    yQuant = "crossing_time"
+
+    xlim = age_lim  # log Myr
+    ylim = age_lim  # log Myr
+
+    def _f_pre(ax, sims):
+        # set custom ticks and tick labels
+        ax.set_xlabel(age_label)
+        # ageticks_log = np.log10(ageticks_lin)
+        # ax.set_xticks(ageticks_log)
+        # ax.set_xticklabels(ageticks_lin)
+        pass
+
+        # overplot line where age = tcross
+        ax.plot(xlim, xlim, ls="-", color="#444", alpha=0.7)
+
+    def _f_post(ax, sims, **kwargs):
+        t_pos = 0.8
+        t_pad = 0.07
+        opts = {"rotation": 38, "color": "#444", "ha": "center", "va": "center", "alpha": 1.0}
+        ax.text(xlim[0] + t_pos - t_pad, xlim[0] + t_pos + t_pad, "Unbound", **opts)
+        ax.text(xlim[0] + t_pos + t_pad, xlim[0] + t_pos - t_pad, "Bound", **opts)
+
+    subhalos_evo.scatter2d(
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        vs_sim=None,
+        parents=False,
+        tracks=False,
+        sizefac=0.8,
+        markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
+        legend="simple",
+        # legend_locs=["upper left", "upper right"],
+        # legend_ncols=[1, 1],
+        f_pre=_f_pre,
+        f_post=_f_post,
+        f_selection=_starClusterSubhaloIDs,
+    )
+
+
 # -------------------------------------------------------------------------------------------------
 
 
@@ -910,21 +1055,27 @@ def paperPlots(a=False):
     if 0 or a:
         sigma_star_galaxies(sims)
 
-    # fig 8: gas fraction vs M* (van Donkelaar+26 Fig 3)
+    # fig 8: gas fraction vs M*
+    if 0 or a:
+        gasfrac_vs_mass_clusters(sims)
+
+    # --- formation ---
 
     # fig 9: histogram of cluster formation redshifts (with respect to important events/starbursts/mergers)
 
     # fig 10: ages, i.e. histograms of member star ages (matched to vis gallery), or age vs. X scaling relations
+    if 0 or a:
+        star_cluster_histogram(sims, quant="age", nbins=100, sizefac=0.8)
+        age_vs_mass_clusters(sims)
 
-    # --- formation ---
+        # crossing time (Brown+21 eqn 21,, Fig 14, Fig 15) (Claeyssens+22 Fig 10) (also: fraction of bound clusters)
+        age_vs_tcross_clusters(sims)
 
     # fig todo: radius and radial velocity at formation time (use birth values of member stars?)
 
     # vis todo: time evolution from pre-birth to post-birth (gas dens, vrad, tff_local, Q, stars, ...)
 
     # fig todo: quantitative assessment of reason for formation (e.g. self-grav instability, compression, ...)
-
-    # fig todo: crossing time (Brown+21 eqn 21), Fig 14, Fig 15 (fraction of bound clusters)
 
     # --- relation to galaxies ---
 
