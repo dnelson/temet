@@ -2111,7 +2111,7 @@ def numratio_(sim, partType, field, args):
     """Metal abundance number density ratio e.g. 'numratio_Si_H', relative to solar, i.e. [Si/H]."""
     from ..cosmo.cloudy import cloudyIon
 
-    el1, el2, _ = field.split("_")
+    el1, el2 = field.split("_")[1:]
 
     ion = cloudyIon(sP=None)
     el1_massratio = sim.snapshotSubset(partType, "metals_" + el1, **args)
@@ -2131,7 +2131,7 @@ numratio_.log = True
 @snap_field(multi=True)
 def massratio_(sim, partType, field, args):
     """Metal abundance mass ratio e.g. 'massratio_Si_H', absolute (not relative to solar)."""
-    el1, el2, _ = field.split("_")
+    el1, el2 = field.split("_")[1:]
 
     el1_massratio = sim.snapshotSubset(partType, "metals_" + el1, **args)
     el2_massratio = sim.snapshotSubset(partType, "metals_" + el2, **args)

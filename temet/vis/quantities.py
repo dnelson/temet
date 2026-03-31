@@ -61,6 +61,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
         "coldens_msunckpc2",
         "coldens_msun_ster",
         "ionmassratio_OVI_OVII",  # (generalize),
+        "massratio_N_O",  # (generalize),
         "HI",
         "HI_segmented",
         "H2_BR",
@@ -320,12 +321,20 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     if "ionmassratio_" in partField:
         ion = cloudyIon(sP=None)
-        ion1, ion2, _ = partField.split("_")
+        ion1, ion2 = partField.split("_")[1:]
 
         grid = grid
         config["label"] = r"%s / %s Mass Ratio [log]" % (ion.formatWithSpace(ion1), ion.formatWithSpace(ion2))
         config["ctName"] = "Spectral"
         config["plawScale"] = 0.6
+
+    if "massratio_" in partField:
+        metal1, metal2 = partField.split("_")[1:]
+
+        grid = grid
+        config["label"] = r"(%s / %s) Mass Ratio [log]" % (metal1, metal2)
+        config["ctName"] = "Spectral"
+        # config["plawScale"] = 0.6
 
     if partField in ["HI", "HI_segmented"]:
         grid = sP.units.codeColDensToPhys(grid, cgs=True, numDens=True)

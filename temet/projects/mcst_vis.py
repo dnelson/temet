@@ -110,27 +110,95 @@ def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
         )
 
     if conf == 1:
-        # comparison: N_HI, N_H2, N_dust
+        # comparison (first set): N_gas, N_HI, N_H2, stars
         partType = "gas"
-        edge_opts = {"nPixels": nPixels_e, "labelScale": False, "labelSim": True, "labelHalo": False, "labelZ": False}
+        edge_opts = {"nPixels": nPixels_e, "labelScale": False, "labelHalo": False, "labelZ": False}
 
         # face-on
+        panels.append({"partType": "stars", "partField": "stellarCompObsFrame", "rotation": "face-on", "labelZ": False})
         panels.append({"partField": "coldens", "valMinMax": [19.0, 23.0], "rotation": "face-on", "labelZ": False})
         panels.append({"partField": "HI", "valMinMax": [18.0, 22.5], "rotation": "face-on", "labelZ": False})
         panels.append({"partField": "coldens_H2", "valMinMax": [18.0, 22.5], "rotation": "face-on", "labelZ": False})
-        panels.append({"partField": "coldens_dust", "valMinMax": [17.0, 20.0], "rotation": "face-on", "labelZ": False})
 
         # edge-on
+        panels.append(
+            {"partType": "stars", "partField": "stellarCompObsFrame", "rotation": "edge-on", "labelSim": True}
+            | edge_opts
+        )
         panels.append({"partField": "coldens", "valMinMax": [19.0, 23.0], "rotation": "edge-on"} | edge_opts)
         panels.append({"partField": "HI", "valMinMax": [18.0, 22.5], "rotation": "edge-on"} | edge_opts)
         panels.append({"partField": "coldens_H2", "valMinMax": [18.0, 22.5], "rotation": "edge-on"} | edge_opts)
+
+    if conf == 2:
+        # comparison (second set): dm, N_dust, temp, vmag
+        partType = "gas"
+        edge_opts = {"nPixels": nPixels_e, "labelScale": False, "labelHalo": False, "labelZ": False}
+
+        # face-on
+        panels.append(
+            {
+                "partType": "dm",
+                "partField": "coldens_msunkpc2",
+                "valMinMax": [7.0, 9.5],
+                "rotation": "face-on",
+                "labelZ": False,
+            }
+        )
+        panels.append({"partField": "coldens_dust", "valMinMax": [17.0, 20.0], "rotation": "face-on", "labelZ": False})
+        panels.append({"partField": "temp", "valMinMax": [3.5, 5.5], "rotation": "face-on", "labelZ": False})
+        panels.append({"partField": "vmag", "valMinMax": [70, 350], "rotation": "face-on", "labelZ": False})
+
+        # edge-on
+        panels.append(
+            {
+                "partType": "dm",
+                "partField": "coldens_msunkpc2",
+                "valMinMax": [7.0, 9.5],
+                "rotation": "edge-on",
+                "labelSim": True,
+            }
+            | edge_opts
+        )
         panels.append({"partField": "coldens_dust", "valMinMax": [17.0, 20.0], "rotation": "edge-on"} | edge_opts)
+        panels.append({"partField": "temp", "valMinMax": [3.5, 5.5], "rotation": "edge-on"} | edge_opts)
+        panels.append({"partField": "vmag", "valMinMax": [70, 350], "rotation": "edge-on"} | edge_opts)
+
+    if conf == 3:
+        # comparison (second set): shocks, rad
+        partType = "gas"
+        edge_opts = {"nPixels": nPixels_e, "labelScale": False, "labelHalo": False, "labelZ": False}
+
+        # face-on
+        panels.append({"partField": "rad_FUV", "valMinMax": [-12, -9], "rotation": "face-on", "labelZ": False})
+        panels.append({"partField": "P_gas", "valMinMax": [3, 6], "rotation": "face-on", "labelZ": False})
+        panels.append(
+            {"partField": "sb_Lyman-alpha_ergs", "valMinMax": [-20, -17], "rotation": "face-on", "labelZ": False}
+        )
+        # panels.append(
+        #    {"partField": "sb_[OII]3729_ergs", "valMinMax": [-22, -19], "rotation": "face-on", "labelZ": False}
+        # )
+        panels.append({"partField": "massratio_N_O", "valMinMax": [-1.6, -1.0], "rotation": "face-on", "labelZ": False})
+
+        # edge-on
+        panels.append(
+            {"partField": "rad_FUV", "valMinMax": [-12, -9], "rotation": "edge-on", "labelSim": "True"} | edge_opts
+        )
+        panels.append({"partField": "P_gas", "valMinMax": [3, 6], "rotation": "edge-on"} | edge_opts)
+        panels.append({"partField": "sb_Lyman-alpha_ergs", "valMinMax": [-20, -17], "rotation": "edge-on"} | edge_opts)
+        # panels.append({"partField": "sb_[OII]3729_ergs", "valMinMax": [-22, -19], "rotation": "edge-on"} | edge_opts)
+        panels.append({"partField": "massratio_N_O", "valMinMax": [-1.6, -1.0], "rotation": "edge-on"} | edge_opts)
 
     class plotConfig:
         plotStyle = "edged"
         colorbars = True  # False
-        fontsize = 28  # 24
-        saveFilename = "galaxy_%s_%d_h%d%s.pdf" % (sP.simName, sP.snap, sP.haloInd, "_nosats" if noSats else "")
+        fontsize = 34  # 28  # 24
+        saveFilename = "galaxy_%s_%d_h%d_conf%d%s.pdf" % (
+            sP.simName,
+            sP.snap,
+            sP.haloInd,
+            conf,
+            "_nosats" if noSats else "",
+        )
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 

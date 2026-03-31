@@ -2041,13 +2041,13 @@ def paperPlots(a=False):
     # fig X: ratio of (stellar/Halpha) size
     # fig X: CII-sizes (e.g. use low-T selection), compare to H-alpha sizes (Ikeda+25, CRISTAL)
 
-    # fig 12: single large galaxy image
+    # fig 12: vis of single galaxy, gallery of fields
     if 0:
         sim = simParams("structures", hInd=23908, res=14, variant="ST14", redshift=5.5, haloInd=0)  # original
         # sim = simParams("structures", hInd=23908, res=15, variant="ST15", redshift=10.0, haloInd=0)
-        vis_single_galaxy(sim)
-        # compare HI, molecular H2, and dust
-        # vis_single_galaxy(sim, size=4.0, conf=1)
+        vis_single_galaxy(sim, size=4.0, conf=1)
+        vis_single_galaxy(sim, size=4.0, conf=2)
+        vis_single_galaxy(sim, size=4.0, conf=3)
 
         # vis_single_galaxy(sim, noSats=True)
         # vis_single_halo(sim, haloID=0)
