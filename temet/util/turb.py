@@ -31,7 +31,8 @@ def _to_uniform_grid(quant, coordinates, grid_size=100):
     # voronoi cell if the coordinates are generating points for the voronoi tesselation
     tree = cKDTree(coordinates)
     _, idx = tree.query(grid, k=1)
-    if len(quant.shape) > 3:
+    print(quant.shape)
+    if len(quant.shape) > 1:
         return quant[idx].reshape(grid_size, grid_size, grid_size, 3)
     else:
         return quant[idx].reshape(grid_size, grid_size, grid_size)
