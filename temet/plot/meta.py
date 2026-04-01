@@ -474,7 +474,10 @@ def periodic_slurm_status(machine="vera", nosave=False):
                 # multiple numeric ranges, e.g. "vera[01-02,101-136]"
                 base, num_ranges = nodeGroup.split("[")
                 for num_range_str in num_ranges.split(","):
-                    num_range = num_range_str.split("-")
+                    num_range = num_range_str.replace("]", "").split("-")
+                    if len(num_range) == 1:
+                        nodesRet.append("%s%s" % (base, num_range[0]))
+                        continue
                     for num in range(int(num_range[0]), int(num_range[1]) + 1):
                         if len(num_range[0]) == 2:
                             nodesRet.append("%s%02d" % (base, num))
@@ -524,33 +527,37 @@ def periodic_slurm_status(machine="vera", nosave=False):
         pos_series_longterm = [0.507, 0.741, 0.485, 0.142]  # left,bottom,width,height
         numMonthsLongTerm = 4
 
-    allocStates = ["ALLOCATED", "MIXED"]
+    allocStates = ["ALLOCATED", "MIXED", "MIXED+PLANNED", "COMPLETING"]
     idleStates = ["IDLE", "PLANNED"]
     downStates = ["DOWN", "DRAINED", "ERROR", "FAIL", "FAILING", "POWER_DOWN", "UNKNOWN"]
 
     # get data
-    jobs = pyslurm.job().get()
-    topo = None  # pyslurm.topology().get() # throwing error
-    stats = pyslurm.statistics().get()
-    nodes = pyslurm.node().get()
-    parts = None  # pyslurm.partition().get() # throwing error
+    jobs = pyslurm.Jobs.load()  # pyslurm.job().get() # removed in pyslurm v25.11
+    topo = None  # pyslurm.topology().get() # removed in pyslurm v25.5
+    stats = pyslurm.slurmctld.diag().to_dict()  # pyslurm.statistics().get() # removed in pyslurm v25.11
+    nodes = pyslurm.Nodes.load()  # pyslurm.node().get() # removed in pyslurm v25.11
+    parts = None  # pyslurm.partition().get() # removed in pyslurm v25.5
 
-    curTime = datetime.fromtimestamp(stats["req_time"])
+    jobs = {jid: jobs[jid].to_dict() for jid in jobs}
+    nodes = {node: nodes[node].to_dict() for node in nodes}
+
+    curTime = datetime.fromtimestamp(stats["request_time"])
     print("Now [%s]." % curTime.strftime("%A (%d %b) %H:%M"))
 
     # jobs: split, and attach running job info to nodes
-    jobs_running = [jobs[jid] for jid in jobs if jobs[jid]["job_state"] == "RUNNING"]
-    jobs_pending = [jobs[jid] for jid in jobs if jobs[jid]["job_state"] == "PENDING"]
+    jobs_running = [jobs[jid] for jid in jobs if jobs[jid]["state"] == "RUNNING"]
+    jobs_pending = [jobs[jid] for jid in jobs if jobs[jid]["state"] == "PENDING"]
 
     for job in jobs_running:
-        for nodeName in job["cpus_allocated"]:
+        # "vera024", "vera024,vera025" or "vera[024,025,026-027]" formats
+        for nodeName in _expandNodeList(job["allocated_nodes"]):
             if "cur_job_owner" in nodes[nodeName]:
                 print("WARNING: Node [%s] already has a job from [%s]." % (nodeName, nodes[nodeName]["cur_job_owner"]))
 
             # nodes[nodeName]['cur_job_user'] = subprocess.check_output('id -nu %d'%job['user_id'], shell=True).strip()
             nodes[nodeName]["cur_job_owner"] = pwd.getpwuid(job["user_id"])[4].split(",")[0]
             nodes[nodeName]["cur_job_name"] = job["name"]
-            nodes[nodeName]["cur_job_runtime"] = job["run_time_str"]
+            nodes[nodeName]["cur_job_runtime"] = job["run_time"]
 
     n_jobs_running = len(jobs_running)
     n_jobs_pending = len(jobs_pending)
@@ -590,19 +597,19 @@ def periodic_slurm_status(machine="vera", nosave=False):
     for node in nodes_main:
         # idle?
         for state in idleStates:
-            if state in node["state"]:
+            if state == node["state"]:
                 nodes_idle.append(node)
                 continue
 
         # down for any reason?
         for state in downStates:
-            if state in node["state"]:
+            if state == node["state"]:
                 nodes_down.append(node)
                 continue
 
         # in use?
         for state in allocStates:
-            if state in node["state"]:
+            if state == node["state"]:
                 nodes_alloc.append(node)
                 continue
 
@@ -628,9 +635,9 @@ def periodic_slurm_status(machine="vera", nosave=False):
             nCores += parts[partName]["total_nodes"] * coresPerNode
     else:
         for node in nodes:
-            nCores += nodes[node]["cpus"]
+            nCores += nodes[node]["total_cpus"]
 
-    nCores_alloc = np.sum([j["num_cpus"] for j in jobs_running]) / nHyper
+    nCores_alloc = np.sum([j["cpus"] for j in jobs_running]) / nHyper
     nCores_idle = nCores - nCores_alloc
 
     print(
@@ -648,19 +655,22 @@ def periodic_slurm_status(machine="vera", nosave=False):
     # cluster: statistics
     cluster_load = float(nCores_alloc) / nCores * 100
 
-    cpu_load_allocnodes_mean = np.mean([float(node["cpu_load"]) / (node["cpus"] / nHyper) for node in nodes_alloc])
-    cpu_load_allnodes_mean = np.mean([float(node["cpu_load"]) / (node["cpus"] / nHyper) for node in nodes_main])
+    mean_load_allocnodes = np.mean([float(node["cpu_load"]) / (node["total_cpus"] / nHyper) for node in nodes_alloc])
+    mean_load_allnodes = np.mean([float(node["cpu_load"]) / (node["total_cpus"] / nHyper) for node in nodes_main])
+
+    mean_load_allocnodes *= 100
+    mean_load_allnodes *= 100
 
     print(
         " Cluster: [%.1f%%] global load, with mean per-node CPU loads: [%.1f%% %.1f%%]."
-        % (cluster_load, cpu_load_allocnodes_mean, cpu_load_allnodes_mean)
+        % (cluster_load, mean_load_allocnodes, mean_load_allnodes)
     )
 
     # time series data file: create if it doesn't exist already
     nSavePts = 1000000
     saveDataFields = [
         "cluster_load",
-        "cpu_load_allocnodes_mean",
+        "mean_load_allocnodes",
         "n_jobs_running",
         "n_jobs_pending",
         "n_nodes_down",
@@ -679,7 +689,7 @@ def periodic_slurm_status(machine="vera", nosave=False):
     if not nosave:
         with h5py.File(saveDataFile, "a") as f:
             ind = f.attrs["count"]
-            f["timestamp"][ind] = stats["req_time"]
+            f["timestamp"][ind] = stats["request_time"]
             for field in saveDataFields:
                 f[field][ind] = locals()[field]
             f.attrs["count"] += 1
@@ -805,7 +815,7 @@ def periodic_slurm_status(machine="vera", nosave=False):
             # load
             load = 0.0
             if nodes[name]["cpu_load"] is not None:
-                load = float(nodes[name]["cpu_load"]) / (nodes[name]["cpus"] / nHyper)
+                load = float(nodes[name]["cpu_load"]) / (nodes[name]["total_cpus"] / nHyper) * 100
 
             if name in [n["name"] for n in nodes_down]:
                 load = 0.0  # if down, we don't get an updated value for this
@@ -846,12 +856,12 @@ def periodic_slurm_status(machine="vera", nosave=False):
         # ax.set_ylabel('CPU / Cluster Load [%]')
         ax.set_ylim(ylim)
 
-        minTs = stats["req_time"] - 24 * 60 * 60 * numDays
+        minTs = stats["request_time"] - 24 * 60 * 60 * numDays
         w = np.where(data["timestamp"] > minTs)[0]
         dates = [datetime.fromtimestamp(ts) for ts in data["timestamp"] if ts > minTs]
 
         ax.plot_date(dates, data["cluster_load"][w], "-", label="cluster load")
-        ax.plot_date(dates, data["cpu_load_allocnodes_mean"][w], "-", label="<node load>")
+        ax.plot_date(dates, data["mean_load_allocnodes"][w], "-", label="<node load>")
         ax.tick_params(axis="y", direction="in", pad=-30)
         ax.yaxis.set_ticks(yticks)
         ax.yaxis.set_ticklabels([str(yt) + "%" for yt in yticks])
@@ -868,7 +878,7 @@ def periodic_slurm_status(machine="vera", nosave=False):
         ax = fig.add_axes(pos_series_longterm)
         ax.set_ylim(ylim)
 
-        minTs = stats["req_time"] - 24 * 60 * 60 * 30 * numMonthsLongTerm
+        minTs = stats["request_time"] - 24 * 60 * 60 * 30 * numMonthsLongTerm
         w = np.where(data["timestamp"] > minTs)[0]
         dates = [datetime.fromtimestamp(ts) for ts in data["timestamp"] if ts > minTs]
 
@@ -877,7 +887,7 @@ def periodic_slurm_status(machine="vera", nosave=False):
         sKn = 351 if machine == "freya" else 5
         sKo = 3
         data_load1 = savgol_filter(data["cluster_load"][w], sKn, sKo)
-        data_load2 = savgol_filter(data["cpu_load_allocnodes_mean"][w], sKn, sKo)
+        data_load2 = savgol_filter(data["mean_load_allocnodes"][w], sKn, sKo)
 
         ax.plot_date(dates, data_load1, "-", label="cluster load")
         ax.plot_date(dates, data_load2, "-", label="<node load>")
@@ -907,7 +917,7 @@ def periodic_slurm_status(machine="vera", nosave=False):
     )
     loadStr = "cluster: [%.1f%%] global load, with mean per-node CPU load: [%.1f%%]." % (
         cluster_load,
-        cpu_load_allocnodes_mean,
+        mean_load_allocnodes,
     )
     jobsStr = "jobs: [%d] running, [%d] waiting," % (n_jobs_running, n_pending_priority + n_pending_resources)
     jobsStr2 = "[%d] userheld, & [%d] dependent." % (n_pending_userheld, n_pending_dependency)
@@ -917,7 +927,7 @@ def periodic_slurm_status(machine="vera", nosave=False):
             next_job_starting["name"][:6] + "..." if len(next_job_starting["name"]) > 8 else next_job_starting["name"]
         )  # truncate
         nextJobsStr = "next to run: id=%d %s (%s)" % (
-            next_job_starting["job_id"],
+            next_job_starting["id"],
             next_job_starting["name2"],
             next_job_starting["user_name"],
         )
