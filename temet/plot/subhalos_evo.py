@@ -311,20 +311,22 @@ def scatter2d(
             marker = markers[variants.index(sim.variant) % len(markers)]
 
             # automatic marker style: size set by resolution
+            marker_loc = markerstyle
+
             if markerstyle is None:
                 ms_loc = (sim.res - 10) * 2.5 + 4
                 # lw_loc = sim.res - 10
 
                 # filled for main target, open for additional halos
-                markerstyle = {"ms": ms_loc, "fillstyle": "full"}
+                marker_loc = {"ms": ms_loc, "fillstyle": "full"}
                 if j > 0:
-                    markerstyle["fillstyle"] = "none"
-                    markerstyle["markeredgewidth"] = 2
-                    markerstyle["ms"] = ms_loc - 4
+                    marker_loc["fillstyle"] = "none"
+                    marker_loc["markeredgewidth"] = 2
+                    marker_loc["ms"] = ms_loc - 4
 
             clip = False if marker_lim else True
 
-            (l,) = ax.plot(xval, yval, marker=marker, clip_on=clip, label="", color=c, **markerstyle)
+            (l,) = ax.plot(xval, yval, marker=marker, clip_on=clip, label="", color=c, **marker_loc)
 
             if tracks and sim.hasMergerTree:
                 # various criterion for how far back to go

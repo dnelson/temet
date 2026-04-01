@@ -371,6 +371,23 @@ frac_halogasfof_sfcold.log = False
 
 
 @catalog_field
+def mass_stars_10myr(sim, field):
+    """Total stellar mass formed in the past 10 Myr (sum of initial star particle masses with ages less than 10Myr)."""
+    acField = "Subhalo_StellarMassFormed_10myr"
+
+    ac = sim.auxCat(fields=[acField])
+    vals = sim.units.codeMassToMsun(ac[acField])
+
+    return vals
+
+
+mass_stars_10myr.label = r"$\rm{M_{\*} (10\,Myr)}$"
+mass_stars_10myr.units = r"$\rm{M_{sun}}$"
+mass_stars_10myr.limits = [7.0, 13.0]
+mass_stars_10myr.log = True
+
+
+@catalog_field
 def mass_smbh(sim, field):
     """Largest SMBH mass in each subhalo. Avoids summing multiple SMBH masses, if more than one present."""
     acField = "Subhalo_BH_Mass_largest"
@@ -416,6 +433,7 @@ smbh_lum.label = r"$\rm{L_{AGN,bol}}$"
 smbh_lum.units = r"$\rm{erg / s}$"
 smbh_lum.limits = [37.0, 42.0]
 smbh_lum.log = True
+
 
 # ---------------------------- auxcat: mass fractions -----------------------------------------------------
 

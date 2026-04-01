@@ -422,6 +422,14 @@ def_fields = {
         rad=None,
         ptRestrictions={"remnant_type": ["ge", 0]},
     ),
+    "Subhalo_Stars_Mass_10myr": partial(
+        subhaloRadialReduction,
+        ptType="stars",
+        ptProperty="mass",
+        op="sum",
+        rad=None,
+        ptRestrictions={"stellar_age": ["lt", 0.01]},
+    ),
     # cooling properties
     "Subhalo_CoolingTime_HaloGas": partial(
         subhaloRadialReduction,

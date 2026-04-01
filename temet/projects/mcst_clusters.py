@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+from temet.load.groupcat import catalog_field
 from temet.plot import snapshot, subhalos_evo
 from temet.plot.config import figsize
 from temet.plot.util import tableau10_colors
@@ -581,6 +582,73 @@ def sigma_star_galaxies(sims: list[simParams]) -> None:
     )
 
 
+@catalog_field
+def cluster_formation_efficiency(sim, field):
+    """Star cluster formation efficiency (definition of Bastian+08)."""
+    mstar_tot = sim.subhalos("mass_stars_10myr")  # msun
+
+    # mass in clusters is a sum over satellite subhalos for each central subhalo, do on the fly
+    age_cl = sim.subhalos("stellarage_myr")  # "Subhalo_StellarAge_NoRadCut_MassWt"
+    mstar_cl = sim.subhalos("mstar_tot")  # msun
+    cen_flag = sim.subhalos("cen_flag")
+
+    mstar_cl[age_cl > 10] = 0  # age threshold of 10 Myr
+    mstar_cl[cen_flag == 1] = 0  # only include satellites, not centrals
+
+    # for each halo, sum (weighted histogram) its subhalos (only satellites by construction)
+    grnr = sim.subhalos("SubhaloGrNr")
+    first_sub = sim.halos("GroupFirstSub")
+
+    mstar_cl_halo, _ = np.histogram(grnr, weights=mstar_cl, bins=np.arange(sim.numHalos + 1))
+
+    # assign values to central subhalos
+    mstar_cl_sub = np.zeros(sim.numSubhalos, dtype="float32")
+    mstar_cl_sub.fill(np.nan)
+
+    w = np.where(first_sub >= 0)
+    mstar_cl_sub[first_sub[w]] = mstar_cl_halo[w]  # assign to central subhalo of each halo
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        cfe = mstar_cl_sub / mstar_tot
+
+    return cfe
+
+
+cluster_formation_efficiency.label = r"Cluster Formation Efficiency $\Gamma$"
+cluster_formation_efficiency.units = r""  # dimensionless
+cluster_formation_efficiency.limits = [-2.0, 0.0]
+cluster_formation_efficiency.log = False  # True
+
+
+def cfe_galaxies(sims: list[simParams]) -> None:
+    """The cluster formation efficiency (Gamma) as a function of galaxy mass."""
+    yQuant = "cluster_formation_efficiency"
+    xQuant = "mstar2_log"
+
+    ylim = [0, 1]  # linear
+    xlim = [4.5, 9.0]  # log mstar
+
+    def _draw_data(ax, sims):
+        pass
+
+    subhalos_evo.scatter2d(
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        vs_sim=None,
+        parents=False,
+        tracks=True,
+        sizefac=0.8,
+        legend="simple",
+        legend_locs=["upper left", "upper right"],
+        legend_ncols=[1, 2],
+        f_pre=_draw_data,
+        f_selection=_zoomSubhaloIDsToPlot,
+    )
+
+
 def sigma_star_vs_mass_clusters(sims: list[simParams]) -> None:
     """The stellar mass surface density (Sigma_*) of star clusters, as a function of cluster mass."""
     yQuant = "surfdens_stars_pc"
@@ -1089,7 +1157,9 @@ def paperPlots(a=False):
 
     # --- relation to galaxies ---
 
-    # fig todo: \Gamma
+    # fig: cluster formation efficiency (Gamma)
+    if 0 or a:
+        cfe_galaxies(sims)
 
     # fig todo: any cluster population stat, e.g. mass func slope, size-mass slope, vs. halo mass (color by redshift)
     #  "universality" or not?
