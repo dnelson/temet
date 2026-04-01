@@ -14,7 +14,7 @@ from temet.plot.util import tableau10_colors
 from temet.util import simParams
 
 from .mcst import _get_existing_sims, _zoomSubhaloIDsToPlot, phase_diagram
-from .mcst_vis import vis_gallery_clusters
+from .mcst_vis import vis_gallery_clusters, vis_single_galaxy
 
 
 mass_label = r"Star Cluster Mass [ log M$_{\odot}$ ]"
@@ -968,24 +968,30 @@ def paperPlots(a=False):
     # sims.append(simParams("structures", hInd=23908, res=14, variant="ST15", redshift=5.5))
     # sims.append(simParams("structures", hInd=31619, res=14, variant="ST15", redshift=5.5))
     # sims.append(simParams("structures", hInd=73172, res=15, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=446076, res=16, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=539722, res=16, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=844537, res=16, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=219612, res=15, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=311384, res=15, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=446076, res=15, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=539722, res=15, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=844537, res=15, variant="ST15", redshift=5.5))
 
     # ------------
 
-    # fig 1: clusters: mass function
+    # fig 1: single large galaxy image
+    if 0:
+        sim = simParams("structures", hInd=23908, res=14, variant="ST14", redshift=5.5, haloInd=0)  # original
+        # sim = simParams("structures", hInd=23908, res=15, variant="ST15", redshift=10.0, haloInd=0)
+        vis_single_galaxy(sim)
+
+    # fig 2: clusters: mass function
     if 0 or a:
         star_cluster_histogram(sims, quant="mass")
         star_cluster_histogram(sims, quant="size", sizefac=0.8)
 
-    # fig 2: clusters: size-mass relation, size distribution
+    # fig 3: clusters: size-mass relation, size distribution
     if 0 or a:
         size_vs_mass(sims)
 
-    # fig 3: gallery of clusters (~10pc stamps?)
+    # fig 4: gallery of clusters (~10pc stamps?)
     if 0 or a:
         # exploration to find nice clusters:
         sims = []
@@ -1022,6 +1028,10 @@ def paperPlots(a=False):
             sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5, subhaloInd=90))
 
         vis_gallery_clusters(sims)
+
+    # fig 5: stellar remnants: mass distribution
+    if 0 or a:
+        stellar_remnants(sims)
 
     # fig 4: pressure vs. rho phase space diagram (see Schaye+26 Colibre Fig 8)
     if 0 or a:
@@ -1065,7 +1075,7 @@ def paperPlots(a=False):
 
     # fig 10: ages, i.e. histograms of member star ages (matched to vis gallery), or age vs. X scaling relations
     if 0 or a:
-        star_cluster_histogram(sims, quant="age", nbins=100, sizefac=0.8)
+        star_cluster_histogram(sims, quant="age", nbins=100, sizefac=1.0)
         age_vs_mass_clusters(sims)
 
         # crossing time (Brown+21 eqn 21,, Fig 14, Fig 15) (Claeyssens+22 Fig 10) (also: fraction of bound clusters)
@@ -1083,10 +1093,6 @@ def paperPlots(a=False):
 
     # fig todo: any cluster population stat, e.g. mass func slope, size-mass slope, vs. halo mass (color by redshift)
     #  "universality" or not?
-
-    # fig: stellar remnants: mass distribution
-    if 0 or a:
-        stellar_remnants(sims)
 
     # radial profiles - halo comparisons
     if 0 or a:

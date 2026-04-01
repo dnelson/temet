@@ -14,7 +14,7 @@ from temet.vis.halo import renderSingleHalo, renderSingleHaloFrames
 
 
 def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
-    """Visualization: single image of a galaxy.
+    """Visualization: single image (or gallery of fields) of a single galaxy, with both face-on and edge-on views.
 
     Note: cannot use for a movie since the face-on/edge-on rotations have random orientations each frame.
     """
@@ -193,6 +193,86 @@ def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
         colorbars = True  # False
         fontsize = 34  # 28  # 24
         saveFilename = "galaxy_%s_%d_h%d_conf%d%s.pdf" % (
+            sP.simName,
+            sP.snap,
+            sP.haloInd,
+            conf,
+            "_nosats" if noSats else "",
+        )
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+
+def vis_single_large(sP, conf=1, size=None, noSats=False):
+    """Visualization: single image (or gallery of fields) of a single galaxy, with both face-on and edge-on views.
+
+    Note: cannot use for a movie since the face-on/edge-on rotations have random orientations each frame.
+    """
+    rVirFracs = [2.0, 5.0, 10.0]
+    fracsType = "rhalf_stars_fof"  #'rHalfMassStars'
+    nPixels = [1400, 1400]  # face-on panels
+
+    if size is None:
+        if sP.hInd > 30000:
+            size = 2.0  # 1.0
+        elif sP.hInd > 20000:
+            size = 4.0  # 2.0
+
+    sizeType = "kpc"
+    labelSim = True
+    labelHalo = "mhalo,mstar,haloid"
+    labelZ = True
+    labelScale = "physical"
+    plotBHs = "all"
+    plotSubhalos = False  #'all'
+    relCoords = True
+    rotation = "face-on"
+    axes = [0, 1]
+
+    # method = "voronoi_slice"
+
+    subhaloInd = sP.halo(sP.haloInd)["GroupFirstSub"]
+
+    # remove all particle/cells in satellite subhalos
+    if noSats:
+        # ptRestrictions = {'subhalo_id':['eq',subhaloInd]}
+        ptRestrictions = {"sat_member": ["eq", 0]}
+        plotSubhalos = False
+
+    # panels
+    partType = "gas"
+
+    if conf == 1:
+        panels = [{"partType": "stars", "partField": "stellarCompObsFrame"}]
+    if conf == 2:
+        panels = [{"partField": "coldens", "valMinMax": [19.0, 23.0]}]
+    if conf == 3:
+        panels = [{"partField": "HI", "valMinMax": [18.0, 22.5]}]
+    if conf == 4:
+        panels = [{"partField": "coldens_H2", "valMinMax": [18.0, 22.5]}]
+    if conf == 5:
+        panels = [{"partType": "dm", "partField": "coldens_msunkpc2", "valMinMax": [7.0, 9.5]}]
+    if conf == 6:
+        panels = [{"partField": "coldens_dust", "valMinMax": [17.0, 20.0]}]
+    if conf == 7:
+        panels = [{"partField": "temp", "valMinMax": [3.5, 5.5]}]
+    if conf == 8:
+        panels = [{"partField": "vmag", "valMinMax": [70, 350]}]
+    if conf == 9:
+        panels = [{"partField": "rad_FUV", "valMinMax": [-12, -9]}]
+    if conf == 10:
+        panels = [{"partField": "P_gas", "valMinMax": [3, 6]}]
+    if conf == 11:
+        panels = [{"partField": "sb_Lyman-alpha_ergs", "valMinMax": [-20, -17]}]
+    if conf == 12:
+        panels = [{"partField": "sb_[OII]3729_ergs", "valMinMax": [-22, -19]}]
+    if conf == 13:
+        panels = [{"partField": "massratio_N_O", "valMinMax": [-1.6, -1.0]}]
+
+    class plotConfig:
+        plotStyle = "edged"
+        colorbars = True  # False
+        saveFilename = "galaxy_lg_%s_%d_h%d_conf%d%s.pdf" % (
             sP.simName,
             sP.snap,
             sP.haloInd,

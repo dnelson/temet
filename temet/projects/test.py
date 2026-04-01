@@ -57,20 +57,26 @@ def zarr_proteus():
 
 def vis_proteus():
     """Quick visualization of a 2D proteus sim."""
-    snap_path = "/u/dnelson/ProteusGPU/run_kh2k/output/snapshot_*.hdf5"
-    files = sorted(glob.glob(snap_path))
-
     # config
-    n_x = 1920
-    aspect = 1920 / 1080
+    if 0:
+        snap_path = "/u/dnelson/ProteusGPU/run_kh2k/output/"
+        n_x = 1920
+        aspect = 1920 / 1080  # 16:9, just ignores top and bottom of box for vis
+    if 1:
+        snap_path = "/u/dnelson/ProteusGPU/run_gresho/output/"
+        n_x = 800
+        aspect = 1.0
+
+    files = glob.glob(snap_path + "snapshot_*.hdf5")
 
     # loop over snapshots
-    for i, file in enumerate(files):
+    for snap in range(len(files)):
+        # snap = int(file.split("/")[-1].split("_")[1].split(".")[0])
+        file = snap_path + "snapshot_%d.hdf5" % snap
         print(file)
-        snap = int(file.split("/")[-1].split("_")[1].split(".")[0])
         saveFilename = f"proteus_{snap:03d}.png"
 
-        if path.isfile(saveFilename) and i > 0:
+        if path.isfile(saveFilename) and snap > 1:
             continue
 
         # load
@@ -83,8 +89,10 @@ def vis_proteus():
 
             field = np.log10(rho)  # np.log10(u)
 
-            if i == 0:
+            if snap == 0:
+                # try auto scaling (works well e.g. for KH)
                 vmm = np.percentile(field, [5, 95])
+            vmm = [-5e-6, 5e-6]
 
         # plot
         n_y = int(n_x / aspect)
