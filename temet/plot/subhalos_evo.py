@@ -173,7 +173,7 @@ def scatter2d(
       saveFilename (str): name (and extension, setting format) of output plot. Automatic if None.
     """
     # currently assume all sims have the same parent
-    # rng = np.random.default_rng(424242)
+    rng = np.random.default_rng(424242)
     sim_parent = sims[-1].sP_parent.copy()
 
     # show relation/values from the parent box at the same redshift as selected for the zooms
@@ -287,8 +287,8 @@ def scatter2d(
 
             marker_lim = False  # None
             if np.isnan(yval) or yval < yMinMax[0] or yval > yMinMax[1]:
-                if yval < yMinMax[0]:
-                    yval = yMinMax[0]  # + (yMinMax[1]-yMinMax[0])/25 * rng.uniform(0.6, 1.0)
+                if yval < yMinMax[0] or np.isnan(yval):
+                    yval = yMinMax[0] + (yMinMax[1] - yMinMax[0]) / 25 * rng.uniform(0.2, 0.8)
                 if yval > yMinMax[1]:
                     yval = yMinMax[1]
                 if verbose:
@@ -296,8 +296,8 @@ def scatter2d(
                 marker_lim = True  # 11 #CARETDOWNBASE #r'$\downarrow$'
 
             if np.isnan(xval) or xval < xMinMax[0] or xval > xMinMax[1]:
-                if xval < xMinMax[0]:
-                    xval = xMinMax[0]  # + (xMinMax[1]-xMinMax[0])/25 * rng.uniform(0.6, 1.0)
+                if xval < xMinMax[0] or np.isnan(xval):
+                    xval = xMinMax[0] + (xMinMax[1] - xMinMax[0]) / 25 * rng.uniform(0.2, 0.8)
                 if xval > xMinMax[1]:
                     xval = xMinMax[1]
                 if verbose:
@@ -413,7 +413,7 @@ def scatter2d(
 
     # finish and save plot
     if f_post is not None:
-        f_post(ax, sims, x=x, y=y)
+        f_post(ax, sims, x=np.array(x), y=np.array(y))
 
     if legend == "dev":
         _add_legends(ax, hInds, res, variants, colors)
@@ -483,6 +483,31 @@ def _load_sfh(sim, quant, subhaloInd, maxpts=1000, dt_sfh=1.0):
         return {"z": star_zform, "mass_or_sfr": star_mass}  # log Msun
 
 
+def _filter_time_track(vals_track, monotonic=False, smooth_custom=False):
+    if monotonic:
+        # inforce montonically increasing with time
+        cur_max = -np.inf
+        for i in range(vals_track.size - 1, 0, -1):
+            if np.isnan(vals_track[i]):
+                continue
+            if vals_track[i] > cur_max:
+                cur_max = vals_track[i]
+            else:
+                vals_track[i] = cur_max
+
+    if smooth_custom:
+        # (iteratively) fill any single gaps
+        for _niter in range(10):
+            for i in range(vals_track.size - 2, 1, -1):
+                if np.isnan(vals_track[i]) and (np.isfinite(vals_track[i - 1]) or np.isfinite(vals_track[i + 1])):
+                    vals_track[i] = np.nanmean([vals_track[i - 1], vals_track[i + 1]])
+
+        # smooth (possibly again) (different parameters, default sKn=5, sKo=3) (e.g. after log)
+        vals_track = savgol_filter(vals_track, 10, 1)
+
+    return vals_track
+
+
 def tracks1d(
     sims: list[simParams],
     quant: str,
@@ -493,6 +518,7 @@ def tracks1d(
     smooth: bool = False,
     monotonic: bool = False,
     smooth_custom: bool = False,
+    treeName: str = None,
     parents: bool = True,
     color: str = None,
     sizefac: float = 1.0,
@@ -504,7 +530,7 @@ def tracks1d(
 ) -> None:
     """Evolution of a quantity versus redshift.
 
-    Designed for comparison between many zoom runs, including the target subhalo (only) from each.
+    Designed for comparison between many zoom runs, including the target subhalo (or a few) from each.
 
     Args:
       sims: list of simulations to compare.
@@ -516,6 +542,7 @@ def tracks1d(
       smooth: if True, smooth the tracks in time (only for tree/quantMPB-based fields).
       monotonic: if True, enforce that tracks are monotonically increasing (e.g. avoid spurious dips).
       smooth_custom: if True, apply custom smoothing to the tracks.
+      treeName: if not None, the name of the merger tree to use for the tracks (otherwise, use SubLink as default).
       parents: if True, plot the original halos from the parent box for comparison.
       color: if not None, override default color scheme and use this color for all lines.
       sizefac: multiplier on figure size, can be scalar or 2-tuple.
@@ -544,7 +571,7 @@ def tracks1d(
     variants = sorted({sim.variant for sim in sims})
 
     # field metadata
-    _, ylabel, yMinMax, yLog = sims[0].simSubhaloQuantity(quant)
+    _, ylabel, yMinMax, _ = sims[0].simSubhaloQuantity(quant)
     if ylim is not None:
         yMinMax = ylim
     if sfh_lin:
@@ -663,72 +690,54 @@ def tracks1d(
                     ax.plot([x, sim.redshift], [y, y], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=0.2)
             else:
                 # general case
-                mpb = sim.quantMPB(subhaloID, quants=[quant], smooth=smooth)
+                mpb = sim.quantMPB(subhaloID, quants=[quant], smooth=smooth, treeName=treeName)
+
+                if mpb is None:
+                    print(" SKIP!")
+                    continue
+
                 vals_track = mpb[quant]
                 if valLog and not sfh_lin:
                     vals_track = logZeroNaN(vals_track)
 
-                if monotonic:
-                    # inforce montonically increasing with time
-                    cur_max = -np.inf
-                    for i in range(vals_track.size - 1, 0, -1):
-                        if np.isnan(vals_track[i]):
-                            continue
-                        if vals_track[i] > cur_max:
-                            cur_max = vals_track[i]
-                        else:
-                            vals_track[i] = cur_max
-
-                if smooth_custom:
-                    # (iteratively) fill any single gaps
-                    for _niter in range(10):
-                        for i in range(vals_track.size - 2, 1, -1):
-                            if np.isnan(vals_track[i]) and (
-                                np.isfinite(vals_track[i - 1]) or np.isfinite(vals_track[i + 1])
-                            ):
-                                vals_track[i] = np.nanmean([vals_track[i - 1], vals_track[i + 1]])
-
-                    # smooth (possibly again) (different parameters, default sKn=5, sKo=3) (e.g. after log)
-                    vals_track = savgol_filter(vals_track, 10, 1)
+                vals_track = _filter_time_track(vals_track, monotonic=monotonic, smooth_custom=smooth_custom)
 
                 ax.plot(mpb["z"], vals_track, ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha)
 
     # galaxies from parent box
-    vals = sim_parent.subhalos(quant)
-    parent_GroupFirstSub = sim_parent.halos("GroupFirstSub")
+    if parents:
+        vals = sim_parent.subhalos(quant)
+        parent_GroupFirstSub = sim_parent.halos("GroupFirstSub")
 
-    for i, hInd in enumerate(hInds):
-        # load
-        if not parents:
-            continue
+        for i, hInd in enumerate(hInds):
+            # load
+            subhaloInd = parent_GroupFirstSub[hInd]
+            val = vals[subhaloInd]
 
-        subhaloInd = parent_GroupFirstSub[hInd]
-        val = vals[subhaloInd]
+            label = "hX in %s" % (sim_parent.simName) if i == 0 else ""
+            if len(hInds) == 1:
+                label = "h%d in %s" % (hInds[0], sim_parent.simName)
 
-        label = "hX in %s" % (sim_parent.simName) if i == 0 else ""
-        if len(hInds) == 1:
-            label = "h%d in %s" % (hInds[0], sim_parent.simName)
+            # final redshift marker
+            if sim_parent.redshift >= xMinMax[1]:
+                (l,) = ax.plot(sim_parent.redshift, val, markers[3], color="#555", label=label)
 
-        # final redshift marker
-        if sim_parent.redshift >= xMinMax[1]:
-            (l,) = ax.plot(sim_parent.redshift, val, markers[3], color="#555", label=label)
+            # time track
+            if quant in star_zform_quants:
+                # special case: stellar mass growth or SFH
+                if sim_parent.subhalo(subhaloInd)["SubhaloLenType"][sim.ptNum("stars")] == 0:
+                    print(f"[{sim}] no stars in {subhaloInd = }, skipping [{quant}].")
+                    continue
 
-        # time track
-        if quant in star_zform_quants:
-            # special case: stellar mass growth or SFH
-            if sim_parent.subhalo(subhaloInd)["SubhaloLenType"][sim.ptNum("stars")] == 0:
-                print(f"[{sim}] no stars in {subhaloInd = }, skipping [{quant}].")
-                continue
+                sfh = _load_sfh(sim_parent, quant, subhaloInd)
 
-            sfh = _load_sfh(sim_parent, quant, subhaloInd)
-
-            w = np.where((sfh["z"] >= 0.0) & (sfh["z"] < xMinMax[0]))
-            ax.plot(sfh["z"][w], sfh["mass_or_sfr"][w], "-", color="#555", alpha=1.0, label=label)
-        else:
-            # general case
-            pass
-            # mpb = sim_parent.quantMPB(subhaloInd, quants=[quant])
-            # ax.plot(mpb['z'], mpb[quant], ls=linestyle, color='#555', alpha=1.0, label=label)
+                w = np.where((sfh["z"] >= 0.0) & (sfh["z"] < xMinMax[0]))
+                ax.plot(sfh["z"][w], sfh["mass_or_sfr"][w], "-", color="#555", alpha=1.0, label=label)
+            else:
+                # general case
+                pass
+                # mpb = sim_parent.quantMPB(subhaloInd, quants=[quant])
+                # ax.plot(mpb['z'], mpb[quant], ls=linestyle, color='#555', alpha=1.0, label=label)
 
     # finish and save plot
     if legend == "dev":
@@ -740,5 +749,172 @@ def tracks1d(
     hStr = "" if len(set(hInds)) > 1 else "_h%d" % hInds[0]
     tStr = "_tree" if sfh_treebased else ""
     saveNameDefault = f"tracks1d_evo_{quant}-vs-redshift{hStr}{tStr}.pdf"
+
+    _finish_plot(fig, saveFilename, saveNameDefault)
+
+
+def tracks2d(
+    sims: list[simParams],
+    xquant: str,
+    yquant: str,
+    xlim: list[float] = None,
+    ylim: list[float] = None,
+    smooth: bool = False,
+    monotonic: bool = False,
+    smooth_custom: bool = False,
+    treeName: str = None,
+    parents: bool = True,
+    color: str = "redshift",
+    sizefac: float = 1.0,
+    legend: str = "dev",
+    legend_locs: list[str] = None,
+    legend_ncols: list[int] = None,
+    f_selection: Callable = None,
+    saveFilename: str = None,
+) -> None:
+    """Evolution of two quantities (x and y-axes) versus time.
+
+    Args:
+      sims: list of simulations to compare.
+      xquant: name of quantity to plot on x-axis.
+      yquant: name of quantity to plot on y-axis.
+      xlim: if not None, 2-tuple that overrides default x-axis (redshift) limits.
+      ylim: if not None, 2-tuple that overrides default y-axis limits.
+      smooth: if True, smooth the tracks in time (only for tree/quantMPB-based fields).
+      monotonic: if True, enforce that tracks are monotonically increasing (e.g. avoid spurious dips).
+      smooth_custom: if True, apply custom smoothing to the tracks.
+      treeName: if not None, the name of the merger tree to use for the tracks (otherwise, use SubLink as default).
+      parents: if True, plot the original halos from the parent box for comparison.
+      color: constant color for all lines, or name of quantity to color by (e.g. 'redshift').
+      sizefac: multiplier on figure size, can be scalar or 2-tuple.
+      legend : either 'dev' (default),  'simple', or 'none', to determine how legend(s) are shown.
+      legend_locs: if not None, a list of two strings indicating the locations of the two legends.
+      legend_ncols: if not None, a list of two integers indicating the number of columns for the two legends.
+      f_selection: if not None, this 'custom' function hook is called to determine which
+        subhalo IDs to plot for each sim. It must accept a single argument: the simulation object,
+        and return a list of subhalo IDs to plot. If None, defaults to sim.zoomSubhaloID only.
+      saveFilename: name (and extension, setting format) of output plot. Automatic if None.
+    """
+    # currently assume all sims have the same parent
+    sim_parent = sims[0].sP_parent
+
+    for sim in sims:
+        assert sim.sP_parent.simName == sim_parent.simName, "All sims must have the same parent box."
+
+    # unique list of included halo IDs, resolutions, and variants
+    hInds = sorted({sim.hInd for sim in sims})
+    res = sorted({sim.res for sim in sims})
+    variants = sorted({sim.variant for sim in sims})
+
+    # field metadata
+    _, xlabel, xMinMax, _ = sims[0].simSubhaloQuantity(xquant)
+    _, ylabel, yMinMax, _ = sims[0].simSubhaloQuantity(yquant)
+    if xlim is not None:
+        xMinMax = xlim
+    if ylim is not None:
+        yMinMax = ylim
+
+    # start plot
+    fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    ax.set_xlim(xMinMax)
+    ax.set_ylim(yMinMax)
+
+    # individual zoom runs
+    for _i, sim in enumerate(sims):
+        # which subhalo(s) to include?
+        if f_selection is not None:
+            subhaloIDs = f_selection(sim)
+        else:
+            subhaloIDs = [sim.zoomSubhaloID]
+
+        # load
+        xvals, _, _, xlog = sim.simSubhaloQuantity(xquant)
+        yvals, _, _, ylog = sim.simSubhaloQuantity(yquant)
+
+        # loop over each subhalo
+        for j, subhaloID in enumerate(subhaloIDs):
+            xval = xvals[subhaloID]
+            yval = yvals[subhaloID]
+            if xlog:
+                xval = logZeroNaN(xval)
+            if ylog:
+                yval = logZeroNaN(yval)
+
+            # color set by hInd
+            c = colors[hInds.index(sim.hInd)]
+
+            # marker and ls set by variant
+            marker = markers[variants.index(sim.variant) % len(markers)]
+            linestyle = linestyles[variants.index(sim.variant) % len(linestyles)]
+
+            # marker size set by resolution
+            ms_loc = (sim.res - 10) * 2.5 + 3
+            lw_loc = lw  # (sim.res - 10) if len(res) > 1 else lw
+            alpha = 1.0
+
+            # if only one hInd, then use color for either variant or res
+            if len(hInds) == 1:
+                marker = markers[0]
+                linestyle = linestyles[0]
+
+                if len(variants) > 1 and len(res) == 1:
+                    c = colors[variants.index(sim.variant) % len(colors)]
+                if len(res) > 1 and len(variants) == 1:
+                    c = colors[res.index(sim.res) % len(colors)]
+                if len(res) > 1 and len(variants) > 1:
+                    c = colors[res.index(sim.res)]
+                    linestyle = linestyles[variants.index(sim.variant) % len(linestyles)]
+
+                if len(subhaloIDs) > 1 and len(variants) <= 2:
+                    linestyle = linestyles[np.min([j, 1])]
+            else:
+                # more than one hInd, additional subhalos are faint
+                if j > 0:
+                    alpha = 0.3
+                    lw_loc = lw - 1
+
+            # color override
+            # if color is not None:
+            #    c = color
+
+            # final redshift marker
+            if len(hInds) == 1 or j == 0:
+                (l,) = ax.plot(xval, yval, marker, color=c, markersize=ms_loc, alpha=alpha, label="")
+
+            # time track
+            mpb = sim.quantMPB(subhaloID, quants=[xquant, yquant], smooth=smooth, treeName=treeName)
+
+            if mpb is None:
+                print(" SKIP!")
+                continue
+
+            xvals_track = mpb[xquant]
+            yvals_track = mpb[yquant]
+            if xlog:
+                xvals_track = logZeroNaN(xvals_track)
+            if ylog:
+                yvals_track = logZeroNaN(yvals_track)
+
+            xvals_track = _filter_time_track(xvals_track, monotonic=monotonic, smooth_custom=smooth_custom)
+            yvals_track = _filter_time_track(yvals_track, monotonic=monotonic, smooth_custom=smooth_custom)
+
+            ax.plot(xvals_track, yvals_track, ls=linestyle, lw=lw_loc, color="black", alpha=alpha)
+
+    # galaxies from parent box
+    assert not parents, "Need to implement."
+
+    # finish and save plot
+    if legend == "dev":
+        _add_legends(ax, hInds, res, variants, colors, lineplot=True)
+    elif legend == "simple":
+        leg_colors = colors if not color else [color]
+        _add_legends_simple(ax, hInds, res, variants, leg_colors, lineplot=True, locs=legend_locs, ncols=legend_ncols)
+
+    hStr = "" if len(set(hInds)) > 1 else "_h%d" % hInds[0]
+    saveNameDefault = f"tracks2d_evo_{xquant}-vs-{yquant}-{color}{hStr}.pdf"
 
     _finish_plot(fig, saveFilename, saveNameDefault)

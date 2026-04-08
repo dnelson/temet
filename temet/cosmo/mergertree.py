@@ -264,7 +264,7 @@ def mpbPositionComplete(sP, id, extraFields=None):
 
 
 @cache
-def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=False):
+def quantMPB(sim, subhaloInd, quants, treeName=None, add_ghosts=False, z_vals=None, smooth=False):
     """Return particular quantit(ies) from a MPB.
 
     A simplified version of e.g. simSubhaloQuantity(). Can be generalized in the future.
@@ -274,6 +274,7 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
       sim (:py:class:`~util.simParams`): simulation instance.
       subhaloInd (int): subhalo index.
       quants (list[str]): quantities to return.
+      treeName (str): name of the merger tree.
       add_ghosts (bool): fill any missing snapshots with ghost entries?
       z_vals (list[float]): if not None, restrict to these redshift values only.
       smooth (bool): smooth the returned quantities in time.
@@ -281,7 +282,10 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
     quants = iterable(quants)
 
     # load main progenitor branch
-    mpb = sim.loadMPB(subhaloInd)
+    mpb = sim.loadMPB(subhaloInd, treeName=treeName_default if treeName is None else treeName)
+
+    if mpb is None:
+        return mpb
 
     r = {}
 
@@ -342,6 +346,11 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
             vals = mpb["SubhaloMassInRadType"][:, sim.ptNum("gas")]
             vals = sim.units.codeMassToMsun(vals)
 
+        if prop in ["fgas2"]:
+            vals1 = mpb["SubhaloMassInRadType"][:, sim.ptNum("gas")]
+            vals2 = mpb["SubhaloMassInRadType"][:, sim.ptNum("stars")]
+            vals = vals1 / (vals1 + vals2)
+
         if prop in ["mass_smbh"]:
             vals = mpb["SubhaloBHMass"]
             vals = sim.units.codeMassToMsun(vals)
@@ -349,10 +358,12 @@ def quantMPB(sim, subhaloInd, quants, add_ghosts=False, z_vals=None, smooth=Fals
         if prop in ["sfr2"]:
             vals = mpb["SubhaloSFRinRad"]
 
-        if prop in ["size_stars", "rhalf_stars"]:
+        if prop in ["size_stars", "rhalf_stars", "size_stars_pc"]:
             vals = mpb["SubhaloHalfmassRadType"][:, sim.ptNum("stars")]
             vals = sim.units.codeLengthToComovingKpc(vals)
             vals *= mpb_a  # comoving -> physical
+            if prop.endswith("pc"):
+                vals *= 1e3
 
         if prop in ["re_rvir_ratio"]:
             vals1 = mpb["SubhaloHalfmassRadType"][:, sim.ptNum("stars")]

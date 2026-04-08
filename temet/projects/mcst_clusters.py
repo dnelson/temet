@@ -13,6 +13,7 @@ from temet.plot import snapshot, subhalos_evo
 from temet.plot.config import figsize
 from temet.plot.util import tableau10_colors
 from temet.util import simParams
+from temet.util.helper import running_median
 
 from .mcst import _get_existing_sims, _zoomSubhaloIDsToPlot, phase_diagram
 from .mcst_vis import vis_gallery_clusters, vis_single_galaxy
@@ -614,7 +615,7 @@ def cluster_formation_efficiency(sim, field):
     return cfe
 
 
-cluster_formation_efficiency.label = r"Cluster Formation Efficiency $\Gamma$"
+cluster_formation_efficiency.label = r"Cluster Formation Efficiency ($\Gamma$)"
 cluster_formation_efficiency.units = r""  # dimensionless
 cluster_formation_efficiency.limits = [-2.0, 0.0]
 cluster_formation_efficiency.log = False  # True
@@ -631,6 +632,10 @@ def cfe_galaxies(sims: list[simParams]) -> None:
     def _draw_data(ax, sims):
         pass
 
+    def _print_stats(ax, sims, **kwargs):
+        mean_cfe = np.nanmean(kwargs["y"])
+        print(f"Mean cluster formation efficiency (CFE) across all galaxies: {mean_cfe:.3f}")
+
     subhalos_evo.scatter2d(
         sims,
         xQuant=xQuant,
@@ -645,6 +650,7 @@ def cfe_galaxies(sims: list[simParams]) -> None:
         legend_locs=["upper left", "upper right"],
         legend_ncols=[1, 2],
         f_pre=_draw_data,
+        f_post=_print_stats,
         f_selection=_zoomSubhaloIDsToPlot,
     )
 
@@ -901,19 +907,37 @@ def gas_phase_fractions(sims, frac_type="Mass"):
     plt.close(fig)
 
 
-def gasfrac_vs_mass_clusters(sims: list[simParams]) -> None:
-    """The gas fraction (M_gas / (M_gas+M_stars)) of star clusters, as a function of cluster mass."""
+def gasfrac_vs_age_clusters(sims: list[simParams]) -> None:
+    """The gas fraction (M_gas / (M_gas+M_stars)) of star clusters, as a function of cluster age."""
     yQuant = "fgas2_fof"  # auxcat-based recomputation within 2rhalf, but full fof-scope
-    xQuant = "mstar_tot_log"  # subhalo mass
+    xQuant = "stellarage_myr"  # cluster age
 
-    ylim = [-3.0, 0.0]  # [0, 1]
-    xlim = mass_lim  # log mstar
+    ylim = [-3.1, 0.0]  # [0, 1]
+    xlim = age_lim  # log Myr
 
     def _f_pre(ax, sims):
-        # set custom axis label
-        ax.set_xlabel(mass_label)
+        # set custom ticks and tick labels
+        ax.set_xlabel(age_label)
+        ageticks_log = np.log10(ageticks_lin)
+        ax.set_xticks(ageticks_log)
+        ax.set_xticklabels(ageticks_lin)
+
+        ax.set_ylabel("Gas Fraction [ log ]")
 
         # note: (van Donkelaar+26 Fig 3)
+
+    def _f_post(ax, sims, x, y):
+        # overplot line where fgas = 1% and 10%
+        ax.plot(xlim, [-2, -2], ls=":", color="#444", alpha=0.2)
+        ax.plot(xlim, [-1, -1], ls=":", color="#444", alpha=0.2)
+
+        # plot running median including fgas == 0 values
+        y[np.isnan(y)] = ylim[0] + 0.1
+        w = np.where(x < np.log10(10))[0]  # filter out points that are moved for visibility
+        xm, ym, _, pm = running_median(x[w], y[w], binSize=0.1, percs=[16, 50, 84])
+
+        ax.fill_between(xm, pm[0, :], pm[-1, :], color="#555", alpha=0.1)
+        ax.plot(xm, ym, "--", color="#555", alpha=0.8)
 
     subhalos_evo.scatter2d(
         sims,
@@ -924,12 +948,14 @@ def gasfrac_vs_mass_clusters(sims: list[simParams]) -> None:
         vs_sim=None,
         parents=False,
         tracks=False,
+        median=True,
         sizefac=0.8,
         markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
         legend="simple",
-        # legend_locs=["upper left", "upper right"],
-        # legend_ncols=[1, 1],
+        legend_locs=["upper left", "upper right"],
+        legend_ncols=[1, 1],
         f_pre=_f_pre,
+        f_post=_f_post,
         f_selection=_starClusterSubhaloIDs,
     )
 
@@ -1034,15 +1060,15 @@ def paperPlots(a=False):
     # sims.append(simParams("structures", hInd=5072, res=14, variant="ST15", redshift=5.5))
     # sims.append(simParams("structures", hInd=15581, res=14, variant="ST15", redshift=5.5))
     # sims.append(simParams("structures", hInd=23908, res=14, variant="ST15", redshift=5.5))
-    # sims.append(simParams("structures", hInd=31619, res=14, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5))
     # sims.append(simParams("structures", hInd=73172, res=15, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=219612, res=15, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=311384, res=15, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=446076, res=15, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=539722, res=15, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=844537, res=15, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=446076, res=16, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=539722, res=16, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=844537, res=16, variant="ST15", redshift=5.5))
 
-    # ------------
+    # --- cluster demographics & properties ---
 
     # fig 1: single large galaxy image
     if 0:
@@ -1057,6 +1083,7 @@ def paperPlots(a=False):
 
     # fig 3: clusters: size-mass relation, size distribution
     if 0 or a:
+        # TODO: add Hunter+03 (cluster masses 1e1-1e3) and Gatto+21 (1e2-1e4) (both Magellanic clouds)
         size_vs_mass(sims)
 
     # fig 4: gallery of clusters (~10pc stamps?)
@@ -1097,85 +1124,45 @@ def paperPlots(a=False):
 
         vis_gallery_clusters(sims)
 
-    # fig 5: stellar remnants: mass distribution
-    if 0 or a:
-        stellar_remnants(sims)
-
-    # fig 4: pressure vs. rho phase space diagram (see Schaye+26 Colibre Fig 8)
-    if 0 or a:
-        xlim = [-6.0, 5.0]
-        sim = simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5)
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant=None, ext="pdf")
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="rad_rvir", ext="pdf")
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="vrad", ext="pdf")
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="csnd", ext="pdf")
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="Z_solar", ext="pdf")
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="tff_local", ext="pdf")
-
-    # fig 5: gas mass fraction of ISM gas in different phases, at e.g. z=10 and z=6 (bar plots?)
-    if 0 or a:
-        gas_phase_fractions(sims, frac_type="Mass")
-        gas_phase_fractions(sims, frac_type="Vol")
-
-    # fig 6: kennicut-schmidt relation (global)
-    # fig todo: Sigma_SFR (e.g. Ceverino+26 shows JWST data comparisons)
-
-    # fig 6: kennicut-schmidt relation (local/spatially resolved)
-
-    # --- cluster properties ---
-
-    # fig 7a: stellar surface density of clusters (Sigma_*)
+    # fig 5a: stellar surface density of clusters (Sigma_*)
     if 0 or a:
         sigma_star_vs_size_clusters(sims)
         sigma_star_vs_mass_clusters(sims)
 
-    # fig 7b: galaxies: stellar surface density (Sigma_*)
+    # fig 5b: galaxies: stellar surface density (Sigma_*)
     if 0 or a:
         sigma_star_galaxies(sims)
 
-    # fig 8: gas fraction vs M*
+    # fig 6: gas fraction vs age (not interesting vs M*)
     if 0 or a:
-        gasfrac_vs_mass_clusters(sims)
+        z_extra = [6.5, 6.3, 6.0, 5.9, 5.8, 5.7, 5.6]
+        for z in z_extra:
+            sims.append(simParams("structures", hInd=539722, res=16, variant="ST15", redshift=z))
+            sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=z))
+            sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=z))
 
-    # --- formation ---
+        gasfrac_vs_age_clusters(sims)
 
-    # fig 9: histogram of cluster formation redshifts (with respect to important events/starbursts/mergers)
-
-    # fig 10: ages, i.e. histograms of member star ages (matched to vis gallery), or age vs. X scaling relations
+    # fig 7a: stellar remnants: mass distribution
     if 0 or a:
+        stellar_remnants(sims)
+
+    # fig 7b todo: most massive star in a cluster, vs the cluster mass (see Lahen+20 fig X, Lahen+23 Fig 14)
+
+    # fig 8: ages, i.e. histograms of member star ages (matched to vis gallery), or age vs. X scaling relations
+    if 0 or a:
+        # i.e. histogram of cluster formation redshifts (with respect to important events/starbursts/mergers)
         star_cluster_histogram(sims, quant="age", nbins=100, sizefac=1.0)
         age_vs_mass_clusters(sims)
 
-        # crossing time (Brown+21 eqn 21,, Fig 14, Fig 15) (Claeyssens+22 Fig 10) (also: fraction of bound clusters)
+        # crossing time (Brown+21 eqn 21, Fig 14, Fig 15) (Claeyssens+22 Fig 10) (also: fraction of bound clusters)
         age_vs_tcross_clusters(sims)
 
-    # fig todo: radius and radial velocity at formation time (use birth values of member stars?)
+    # fig 8b todo: age spread (1sigma, see Fig 10 Lahen+20)
 
-    # vis todo: time evolution from pre-birth to post-birth (gas dens, vrad, tff_local, Q, stars, ...)
+    # --- formation ---
 
-    # fig todo: quantitative assessment of reason for formation (e.g. self-grav instability, compression, ...)
-
-    # --- relation to galaxies ---
-
-    # fig: cluster formation efficiency (Gamma)
-    if 0 or a:
-        cfe_galaxies(sims)
-
-    # fig todo: any cluster population stat, e.g. mass func slope, size-mass slope, vs. halo mass (color by redshift)
-    #  "universality" or not?
-
-    # radial profiles - halo comparisons
-    if 0 or a:
-        haloIDs = [0] * len(sims)  # assume first
-        opts = {"haloIDs": haloIDs, "xlog": True, "xlim": [-2.0, 1.5], "ylog": True}
-
-        snapshot.profile(sims, ptType="gas", ptProperty="numdens", ylim=[-4.5, 4.0], scope="global", **opts)
-
-        snapshot.profile(sims, ptType="stars", ptProperty="dens", ylim=[2.5, 11.0], scope="global", **opts)
-
-        snapshot.profile(sims, ptType="gas", ptProperty="cellsize_kpc", ylim=[-3.5, -0.5], scope="global", **opts)
-
-    # radial profiles: 2d vs time
+    # fig 9: 2d spacetime radial profiles
     if 0 or a:
         # evo
         opts = {"haloID": 0, "max_z": 10.0, "rlog": True, "rlim": [-2.0, 1.0], "smooth_sizes": True}
@@ -1216,17 +1203,6 @@ def paperPlots(a=False):
 
             snapshot.profilesStacked2d(
                 sim,
-                ptType="stars",
-                ptProperty="dens",
-                clim=[3.0, 10.0],
-                clog=True,
-                scope="global",
-                ctName="magma",
-                **opts,
-            )
-
-            snapshot.profilesStacked2d(
-                sim,
                 ptType="gas",
                 ptProperty="temp",
                 clim=[3.0, 6.0],
@@ -1236,16 +1212,118 @@ def paperPlots(a=False):
                 **opts,
             )
 
-            snapshot.profilesStacked2d(
-                sim,
-                ptType="gas",
-                ptProperty="menc_vesc",
-                clim=[0.0, 1.7],
-                clog=True,
-                scope="fof",
-                ctName="afmhot",
-                **opts,
-            )
+    # fig 10: pressure vs. rho phase space diagram (see Schaye+26 Colibre Fig 8)
+    if 0 or a:
+        xlim = [-6.0, 5.0]
+        sim = simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5)
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant=None, ext="pdf")
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="rad_rvir", ext="pdf")
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="vrad", ext="pdf")
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="csnd", ext="pdf")
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="Z_solar", ext="pdf")
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="tff_local", ext="pdf")
+
+    # fig 11: gas mass fraction of ISM gas in different phases, at e.g. z=10 and z=6 (bar plots?)
+    if 0 or a:
+        gas_phase_fractions(sims, frac_type="Mass")
+        gas_phase_fractions(sims, frac_type="Vol")
+
+    # fig 12: kennicut-schmidt relation (global)
+    # fig todo: Sigma_SFR (e.g. Ceverino+26 shows JWST data comparisons)
+
+    # fig 12: kennicut-schmidt relation (local/spatially resolved)
+
+    # fig: merger tree tracks of cluster: mass, size, gas fraction, surface density
+    if 0 or a:
+        sim = simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5)
+        subIDs = _starClusterSubhaloIDs(sim)
+        mpbs = sim.loadMPBs(subIDs, fields=["SubfindID", "SnapNum"], treeName="SubLink_gal")
+
+        # mstar = sims[0].subhalos("mstar_tot")[subIDs]
+        subIDs = list(mpbs.keys())[55:60]  # [0:5]  # choose some at random?
+        print(subIDs)
+
+        opts = {
+            "xlim": [11.1, 5.5],
+            "parents": False,
+            "smooth": False,
+            "treeName": "SubLink_gal",
+            # "legend": "simple",
+            # legend_locs": ["lower right", "upper left"],
+            # "legend_ncols": [1, 3],
+            # "sizefac": 0.8,
+            "f_selection": lambda sim: subIDs,  # _starClusterSubhaloIDs,
+        }
+
+        subhalos_evo.tracks1d([sim], quant="mstar", ylim=mass_lim, **opts)
+        subhalos_evo.tracks1d([sim], quant="size_stars_pc", ylim=size_lim, **opts)
+        ## subhalos_evo.tracks1d([sim], quant="surfdens_stars", ylim=sigma_lim, **opts)
+        subhalos_evo.tracks1d([sim], quant="fgas2", ylim=[-2.0, 0.0], **opts)
+        ## subhalos_evo.tracks1d([sim], quant="fgas2_fof", ylim=[-2.0, 0.0], **opts)
+
+    # fig 13: evolution tracks on size-mass plane (Lahen+25 Figs 10,11) (color by age, redshift, or fgas)
+    # show both actual and model-corrected tracks
+    # when fgas > 10% or so, call this "embedded phase"
+    if 0 or a:
+        sim = simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5)
+
+        if 1:
+            # discovery
+            subIDs = _starClusterSubhaloIDs(sim)
+            mpbs = sim.loadMPBs(subIDs, fields=["SubfindID", "SnapNum"], treeName="SubLink_gal")
+
+            mstar = sim.subhalos("mstar")
+            subIDs = list(mpbs.keys())[55:60]  # [0:5]  # choose some at random?
+            print(subIDs)
+            print(np.log10(mstar[subIDs]))
+        else:
+            subIDs = []
+
+        opts = {
+            "xquant": "mstar",
+            "yquant": "size_stars_pc",
+            "xlim": [2.5, 4.0],
+            "ylim": [-1.8, 0.0],
+            "parents": False,
+            "smooth": False,
+            "treeName": "SubLink_gal",
+            # "legend": "simple",
+            # legend_locs": ["lower right", "upper left"],
+            # "legend_ncols": [1, 3],
+            # "sizefac": 0.8,
+            "f_selection": lambda sim: subIDs,  # _starClusterSubhaloIDs,
+        }
+
+        subhalos_evo.tracks2d([sim], **opts)
+
+    # fig todo: radius and radial velocity at formation time (use birth values of member stars?) (or just tree?)
+
+    # vis todo: time evolution from pre-birth to post-birth (gas dens, vrad, tff_local, Q, stars, ...)
+
+    # fig todo: quantitative assessment of reason for formation (e.g. self-grav instability, compression, ...)
+
+    # --- relation to galaxies ---
+
+    # fig: cluster formation efficiency (Gamma)
+    if 0 or a:
+        cfe_galaxies(sims)
+        # TODO: 10<tau<100 Myr vs 100 myr as well (obs suggest lower, ~1-10% CFEs at older ages)
+
+    # fig todo: cluster formation rate (CFR) vs. SFR
+
+    # fig todo: any cluster population stat, e.g. mass func slope, size-mass slope, vs. halo mass (color by redshift)
+    #  "universality" or not?
+
+    # radial profiles - halo comparisons
+    if 0 or a:
+        haloIDs = [0] * len(sims)  # assume first
+        opts = {"haloIDs": haloIDs, "xlog": True, "xlim": [-2.0, 1.5], "ylog": True}
+
+        snapshot.profile(sims, ptType="gas", ptProperty="numdens", ylim=[-4.5, 4.0], scope="global", **opts)
+
+        snapshot.profile(sims, ptType="stars", ptProperty="dens", ylim=[2.5, 11.0], scope="global", **opts)
+
+        snapshot.profile(sims, ptType="gas", ptProperty="cellsize_kpc", ylim=[-3.5, -0.5], scope="global", **opts)
 
     # diagnostic: mass fraction of PartType4 in stellar remnants
     if 0 or a:
