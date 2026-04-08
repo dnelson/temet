@@ -13,23 +13,23 @@ from ..util.helper import xypairs_to_np
 from ..util.units import units
 
 
-def grackle_cooling(densities, metallicity, uvb="fg20_shielded", redshift=0.0, ssm=0, PE=False, plot=False):
-    """Run a single-cell cooling model (vs time) with Grackle.
+def _DGR(Z_linear):
+    """Remy-Ruyer+14 broken power-law scaling with metallicity-dependent X_CO (Table 1)."""
+    Z = np.log10(Z_linear * 0.1295 / 0.014)  # convert from grackle-assumption to mcs-assumption Z_solar
 
-    This will initialize a single cell at a given temperature, iterate the cooling solver for a fixed time,
-    and output the temperature vs. time.
-    """
-    from pygrackle import FluidContainer, chemistry_data, evolve_constant_density
+    if Z > -0.59:
+        dust_frac = 2.21 - Z
+    else:
+        dust_frac = 0.96 - 3.1 * Z
+
+    dust_frac = 10.0 ** (-dust_frac)  # absolute
+    dust_frac = np.clip(dust_frac, 0.0, 1.0)
+    return dust_frac
+
+
+def _grackle_chemistry(density, metallicity, redshift, uvb, ssm, PE, PE_temp):
+    from pygrackle import chemistry_data
     from pygrackle.utilities.physical_constants import cm_per_mpc, mass_hydrogen_cgs, sec_per_Myr
-
-    tiny_number = 1e-20
-
-    # Set initial values
-    # redshift = 0.0
-    # density     = 0.1 # linear 1/cm^3
-    # metallicity = 1.0 # linear solar
-    initial_temperature = 1.0e6  # K
-    final_time = 100.0  # Myr
 
     # Set solver parameters
     my_chemistry = chemistry_data()
@@ -38,7 +38,7 @@ def grackle_cooling(densities, metallicity, uvb="fg20_shielded", redshift=0.0, s
     my_chemistry.primordial_chemistry = 1  # MCST value = 1
     my_chemistry.metal_cooling = 1
     my_chemistry.UVbackground = 1
-    my_chemistry.self_shielding_method = ssm  # MCST value = 3, but this leads to long-term cooling -> 0 K behavior (!)
+    my_chemistry.self_shielding_method = ssm  # MCST value = 3
     my_chemistry.H2_self_shielding = 0
 
     # set UV background
@@ -53,11 +53,13 @@ def grackle_cooling(densities, metallicity, uvb="fg20_shielded", redshift=0.0, s
             basepath + "grackle/grackle_data_files/input/CloudyData_UVB=HM2012_shielded.h5", "utf-8"
         )
     elif uvb == "fg20_shielded":
-        # new MCST tables
-        grackle_data_file = bytearray(basepath + "arepo1_setups/grid_cooling_UVB=FG20.hdf5", "utf-8")
+        # new MCST tables (production)
+        grackle_data_file = bytearray(basepath + "arepo8_setups/grid_cooling_UVB=FG20_ext.hdf5", "utf-8")
     elif uvb == "fg20_unshielded":
-        # new MCST tables
-        grackle_data_file = bytearray(basepath + "arepo1_setups/grid_cooling_UVB=FG20_unshielded.hdf5", "utf-8")
+        # new MCST tables (testing)
+        grackle_data_file = bytearray(
+            "/u/dnelson/temet/temet/tables/cloudy/grid_cooling_UVB=FG20_unshielded.hdf5", "utf-8"
+        )
 
     # print(grackle_data_file)
     my_chemistry.grackle_data_file = grackle_data_file
@@ -65,6 +67,8 @@ def grackle_cooling(densities, metallicity, uvb="fg20_shielded", redshift=0.0, s
     # my_chemistry.photoelectric_heating # yes if GRACKLE_PHOTOELECTRIC
 
     if PE:
+        assert isinstance(density, float), "PE rate is density-dependent, so cannot run multiple densities at once."
+
         # my_chemistry.use_volumetric_heating_rate = 1 # yes for PE_MCS
         my_chemistry.photoelectric_heating = 1
 
@@ -74,21 +78,25 @@ def grackle_cooling(densities, metallicity, uvb="fg20_shielded", redshift=0.0, s
         u_draine = 8.93e-14  # Draine (1978) has u = 8.93e-14 # erg/cm^3 between 6-13.6 eV (G=1.68)
         G_0 = u_draine / 5.29e-14  # G0 = u_{6-13.6eV} / 5.29e-14 erg/cm^3
 
-        G_0 *= 10.0  # i.e. chi_0 of Kim+23
+        G_0 *= 1.0  # i.e. chi_0 of Kim+23
 
-        D = 0.001  # todo: replace with DGR() function
-        n = 10.0  # cm^-3 # todo: inconsistent with densities array!
-        rho = n * units.mass_proton  # g/cm^3
-        temp = 1e2  # K
-        cs = np.sqrt(units.gamma * units.boltzmann * temp / units.mass_proton)  # cm/s
-        lambda_jeans = cs / (units.Gravity * rho) ** 0.5  # cm
-        G_eff = G_0 * np.exp(-1.33e-21 * D * n * lambda_jeans)
+        D = _DGR(metallicity)
+        n = density  # cm^-3
+
+        if 0:
+            rho = n * units.mass_proton  # g/cm^3
+            temp = PE_temp  # 1e2  # K (iteratively input)
+            cs = np.sqrt(units.gamma * units.boltzmann * temp / units.mass_proton)  # cm/s
+            lambda_jeans = cs / (units.Gravity * rho) ** 0.5  # cm
+            G_eff = G_0 * np.exp(-1.33e-21 * D * n * lambda_jeans)
+        else:
+            G_eff = G_0
 
         eps = np.min([0.041, 8.71e-3 * n**0.235])
 
         gamma_pe = 1.3e-24 * eps * D * G_eff * n  # erg s^-1 cm^-3
 
-        print(G_0, G_eff, gamma_pe)
+        # print(G_0, G_eff, gamma_pe)
 
         my_chemistry.photoelectric_heating_rate = gamma_pe
 
@@ -103,45 +111,117 @@ def grackle_cooling(densities, metallicity, uvb="fg20_shielded", redshift=0.0, s
 
     my_chemistry.initialize()
 
-    # Set up array of 1-zone models
-    fc = FluidContainer(my_chemistry, len(densities))
+    return my_chemistry
 
-    fc["density"][:] = densities
 
-    if my_chemistry.primordial_chemistry > 0:
-        fc["HI"][:] = 0.76 * fc["density"]
-        fc["HII"][:] = tiny_number * fc["density"]
-        fc["HeI"][:] = (1.0 - 0.76) * fc["density"]
-        fc["HeII"][:] = tiny_number * fc["density"]
-        fc["HeIII"][:] = tiny_number * fc["density"]
+def grackle_cooling(densities, metallicity, uvb="fg20_shielded", redshift=0.0, ssm=0, PE=False, plot=False, tf=1):
+    """Run a single-cell cooling model (vs time) with Grackle.
 
-    if my_chemistry.primordial_chemistry > 1:
-        fc["H2I"][:] = tiny_number * fc["density"]
-        fc["H2II"][:] = tiny_number * fc["density"]
-        fc["HM"][:] = tiny_number * fc["density"]
-        fc["de"][:] = tiny_number * fc["density"]
+    This will initialize a single cell at a given temperature, iterate the cooling solver for a fixed time,
+    and output the temperature vs. time.
+    """
+    from pygrackle import FluidContainer, evolve_constant_density
 
-    if my_chemistry.primordial_chemistry > 2:
-        fc["DI"][:] = 2.0 * 3.4e-5 * fc["density"]
-        fc["DII"][:] = tiny_number * fc["density"]
-        fc["HDI"][:] = tiny_number * fc["density"]
+    tiny_number = 1e-20
 
-    if my_chemistry.metal_cooling == 1:
-        fc["metal"][:] = metallicity * fc["density"] * my_chemistry.SolarMetalFractionByMass
-
-    fc["x-velocity"][:] = 0.0
-    fc["y-velocity"][:] = 0.0
-    fc["z-velocity"][:] = 0.0
-
-    fc["energy"][:] = initial_temperature / fc.chemistry_data.temperature_units
-    fc.calculate_temperature()
-    fc["energy"][:] *= initial_temperature / fc["temperature"]
+    # Set initial values
+    # redshift = 0.0
+    # density     = 0.1 # linear 1/cm^3
+    # metallicity = 1.0 # linear solar
+    initial_temperature = 1.0e6  # K
 
     # timestepping safety factor
     safety_factor = 0.05
 
-    # let gas cool at constant density
-    data = evolve_constant_density(fc, final_time=final_time, safety_factor=safety_factor)
+    # if photo-electric heating, we need density to derive the heating rate, so cannot run multiple at once
+    data = []
+
+    # loop over each density
+    for density in densities:
+        # how long do we have to integrate?
+        print(f" {density = }")
+        time = 100.0  # Myr
+        PE_temp = 1e4
+
+        if metallicity < 0.01:
+            time = 1000.0
+
+        if density >= 1e-1:
+            time /= 2
+            PE_temp = 1e3
+        if density >= 1.0:
+            time /= 2
+            PE_temp = 1e2
+        if density >= 10.0:
+            time /= 2
+            PE_temp = 20
+        if density >= 100.0:
+            time /= 2
+
+        for niter in range(5):
+            # Set solver parameters
+            my_chemistry = _grackle_chemistry(density, metallicity, redshift, uvb, ssm, PE, PE_temp=PE_temp)
+
+            # Set up a single 1-zone model (within an array of dummy models, all same dens, to prefer output shapes)
+            fc = FluidContainer(my_chemistry, 1)
+
+            fc["density"][:] = density
+
+            if my_chemistry.primordial_chemistry > 0:
+                fc["HI_density"][:] = 0.76 * fc["density"]
+                fc["HII_density"][:] = tiny_number * fc["density"]
+                fc["HeI_density"][:] = (1.0 - 0.76) * fc["density"]
+                fc["HeII_density"][:] = tiny_number * fc["density"]
+                fc["HeIII_density"][:] = tiny_number * fc["density"]
+
+            if my_chemistry.primordial_chemistry > 1:
+                fc["H2I"][:] = tiny_number * fc["density"]
+                fc["H2II"][:] = tiny_number * fc["density"]
+                fc["HM"][:] = tiny_number * fc["density"]
+                fc["de"][:] = tiny_number * fc["density"]
+
+            if my_chemistry.primordial_chemistry > 2:
+                fc["DI"][:] = 2.0 * 3.4e-5 * fc["density"]
+                fc["DII"][:] = tiny_number * fc["density"]
+                fc["HDI"][:] = tiny_number * fc["density"]
+
+            if my_chemistry.metal_cooling == 1:
+                fc["metal_density"][:] = metallicity * fc["density"] * my_chemistry.SolarMetalFractionByMass
+
+            fc["x_velocity"][:] = 0.0
+            fc["y_velocity"][:] = 0.0
+            fc["z_velocity"][:] = 0.0
+
+            fc["internal_energy"][:] = initial_temperature / fc.chemistry_data.temperature_units
+            fc.calculate_temperature()
+            fc["internal_energy"][:] *= initial_temperature / fc["temperature"]
+
+            # let gas cool at constant density
+            data_loc = evolve_constant_density(fc, final_time=time, safety_factor=safety_factor)
+
+            # look at final value, check convergence
+            if data_loc["temperature"].size > 1:
+                dT = np.abs(data_loc["temperature"][-1] - data_loc["temperature"][-2]) / data_loc["temperature"][-1]
+                dP = np.abs(data_loc["pressure"][-1] - data_loc["pressure"][-2]) / data_loc["pressure"][-1]
+
+                if dT > 1e-2 or dP > 1e-2:
+                    print(f" Warning: [{niter = }] [{density = }] not converged: dT={dT:.2e}, dP={dP:.2e} t = {time}")
+                    time *= 1.5
+                else:
+                    if (PE and niter > 0) or not PE:
+                        break  # converged
+            else:
+                for key in data_loc:
+                    data_loc[key] = [data_loc[key], data_loc[key]]  # avoid issues in return below
+                break  # single return value
+
+            PE_temp = data_loc["temperature"][-1].value
+
+        # assert niter < 5, f"Did not converge after {niter} iterations for density {density}."
+        if niter >= 5:
+            print(f" WARNING: did not converge after {niter} iterations for density {density}.")
+
+        data.append(data_loc)
 
     # plot
     if plot:
@@ -151,15 +231,18 @@ def grackle_cooling(densities, metallicity, uvb="fg20_shielded", redshift=0.0, s
         ax.set_ylabel("T [K]")
         ax2.set_ylabel("$\\mu$")
 
-        # time
-        xx = data["time"].to("Myr")
-        xx[0] += (xx[1] - xx[0]) / 10  # avoid t=0 disappearing in log
-
         # densities
         for i, dens in enumerate(densities):
             label = "n = %.1f [log cm$^{-3}$]" % np.log10(dens)
-            ax.loglog(xx, data["temperature"][:, i], label=label)
-            ax2.semilogx(xx, data["mu"][:, i])
+
+            xx = data[i]["time"].to("Myr")
+            xx[0] += (xx[1] - xx[0]) / 10  # avoid t=0 disappearing in log
+
+            temp = data[i]["temperature"]
+            mu = data[i]["mean_molecular_weight"]
+
+            ax.loglog(xx, temp, label=label)
+            ax2.semilogx(xx, mu)
 
         ax.legend(loc="upper right")
 
@@ -176,19 +259,12 @@ def grackle_cooling(densities, metallicity, uvb="fg20_shielded", redshift=0.0, s
         ax2.add_artist(ax2.legend(handles, labels, loc="upper left", handlelength=0))
 
         # fig.savefig(f'cooling_cell_dens{np.log10(density):.1f}_Z{np.log10(metallicity):.1f}.pdf')
-        fig.savefig("cooling_cell.pdf")
+        fig.savefig(f"cooling_cell_ssm{ssm}_PE{int(PE)}.pdf")
         plt.close(fig)
 
-    # look at final value, check convergence
-    for i, dens in enumerate(densities):
-        dT = np.abs(data["temperature"][-1, i] - data["temperature"][-2, i]) / data["temperature"][-1, i]
-        dP = np.abs(data["pressure"][-1, i] - data["pressure"][-2, i]) / data["pressure"][-1, i]
-
-        if dT > 1e-2 or dP > 1e-2:
-            print(f"Warning: [i={i} dens={dens}] not converged: dT={dT:.2e}, dP={dP:.2e}")
-
-    T_final = data["temperature"][-1, :].value  # K
-    P_final = data["pressure"][-1, :].value  # dyn/cm^2
+    # return final T and P (for each density)
+    T_final = np.array([d["temperature"][-1].value for d in data])  # K
+    P_final = np.array([d["pressure"][-1].value for d in data])  # dyn/cm^2
 
     return (T_final, P_final)
 
@@ -433,14 +509,13 @@ def _add_pres_curves(ax):
     ax.plot(np.log10(Pn), np.log10(P), color="#000", ls=(0, (5, 5)))  # , label='Kim+23 (PI only)'
 
 
-def _load_equil_curves(metallicity, redshift, ssm):
+def _load_equil_curves(metallicity, redshift, ssm, PE):
     """Helper. Load and/or compute equilibrium temperature and pressure vs. density curves."""
-    savefile = f"cache/equil_vs_dens_Z{np.log10(metallicity):.0f}_z{redshift:.0f}_ssm{ssm}.hdf5"
+    savefile = f"cache/equil_vs_dens_Z{np.log10(metallicity):.0f}_z{redshift:.0f}_ssm{ssm}_PE{int(PE)}.hdf5"
 
-    densities = np.linspace(-3.0, 3.0, 40)  # log(1/cm^3)
+    densities = np.hstack((np.linspace(-3.0, 2.0, 26), [2.5, 3.0]))  # log(1/cm^3)
 
-    if metallicity == 1.0:
-        densities = np.linspace(-3.0, 2.0, 20)  # log(1/cm^3)
+    log_n = 10**densities
 
     uvbs = ["hm12_shielded", "hm12_unshielded", "fg20_shielded", "fg20_unshielded"]
     if ssm > 0:
@@ -451,10 +526,10 @@ def _load_equil_curves(metallicity, redshift, ssm):
         pres = {}
 
         # loop over UVBs (and metallicites), compute all densities at once
-        for uvb in uvbs:
-            temp[uvb], pres[uvb] = grackle_cooling(10**densities, metallicity, uvb=uvb, redshift=redshift, ssm=ssm)
 
-        print(metallicity, uvb, temp[uvb].min(), temp[uvb].max())
+        for uvb in uvbs:
+            print(f"Calculate new: {metallicity = :.1f}, {redshift = }, {uvb = }, {savefile = }")
+            temp[uvb], pres[uvb] = grackle_cooling(log_n, metallicity, uvb=uvb, redshift=redshift, ssm=ssm, PE=PE)
 
         # save
         with h5py.File(savefile, "w") as f:
@@ -480,7 +555,7 @@ def _load_equil_curves(metallicity, redshift, ssm):
     return temp, pres, densities, uvbs
 
 
-def grackle_equil(ssm=3):
+def grackle_equil(ssm=3, PE=True):
     """Plot equilibrium temperature curve as a function of density (varying UVBs/SSMs), at fixed Z and z."""
     # https://arxiv.org/pdf/2411.07282 (Fig 1)
     # "Photochemistry and Heating/Cooling of the Multiphase Interstellar Medium with UV
@@ -491,7 +566,7 @@ def grackle_equil(ssm=3):
     # ssm = 1 # grackle.self_shielding_method (MCST value = 3)
 
     # load
-    temp, pres, densities, uvbs = _load_equil_curves(metallicity, redshift, ssm)
+    temp, pres, densities, uvbs = _load_equil_curves(metallicity, redshift, ssm, PE)
 
     # plot
     fig, (ax1, ax2) = plt.subplots(figsize=(figsize[0] * 1.4, figsize[1] * 0.9), ncols=2)
@@ -535,8 +610,9 @@ def grackle_equil_vs_Zz():
     redshifts = [0.0, 6.0]
     metallicities = [1.0, 0.1, 0.001]  # linear solar
 
-    ssm = 3  # grackle.self_shielding_method (MCST value = 3)
-    uvb = "fg20_unshielded"
+    ssm = 0  # 3  # grackle.self_shielding_method (MCST value = 3)
+    PE = True  # photoelectric heating
+    uvb = "fg20_shielded"
 
     # plot
     fig, (ax1, ax2) = plt.subplots(figsize=(figsize[0] * 0.75, figsize[1] * 1.5), nrows=2)
@@ -559,7 +635,7 @@ def grackle_equil_vs_Zz():
         ax2.set_prop_cycle(None)
 
         for _j, metallicity in enumerate(metallicities):
-            temp, pres, densities, _ = _load_equil_curves(metallicity, redshift, ssm)
+            temp, pres, densities, _ = _load_equil_curves(metallicity, redshift, ssm, PE)
 
             T = np.log10(temp[uvb])
             P = np.log10(pres[uvb] / units.boltzmann)  # dyn/cm^2 / (dyn*cm/K) = K/cm^3
@@ -576,5 +652,5 @@ def grackle_equil_vs_Zz():
     ax2.legend(handles, labels, loc="upper left")
     ax1.legend(loc="lower left")
 
-    fig.savefig(f"equil_vs_dens_{uvb}_ssm{ssm}.pdf")
+    fig.savefig(f"equil_vs_dens_{uvb}_ssm{ssm}_PE{int(PE)}.pdf")
     plt.close(fig)
