@@ -975,6 +975,8 @@ def age_vs_mass_clusters(sims: list[simParams]) -> None:
         ax.set_yticks(ageticks_log)
         ax.set_yticklabels(ageticks_lin)
 
+        ax.set_xlabel(mass_label)
+
     subhalos_evo.scatter2d(
         sims,
         xQuant=xQuant,
@@ -1036,6 +1038,79 @@ def age_vs_tcross_clusters(sims: list[simParams]) -> None:
         # legend_ncols=[1, 1],
         f_pre=_f_pre,
         f_post=_f_post,
+        f_selection=_starClusterSubhaloIDs,
+    )
+
+
+def most_massive_stars(sims: list[simParams]) -> None:
+    """Most massive (actual) star in a cluster, as a function of other cluster properties."""
+    xQuant = "mstar_tot"
+    yQuant = "most_massive_starini"
+    xlim = mass_lim
+    ylim = [0.4, 2.177]  # log msun
+
+    def _f_pre(ax, sims):
+        # set custom ticks and tick labels
+        massticks_lin = [3, 8, 14, 20, 40, 80, 150]  # msun
+        massicks_log = np.log10(massticks_lin)
+        ax.set_yticks(massicks_log)
+        ax.set_yticklabels(massticks_lin)
+
+        ax.set_xlabel(mass_label)
+
+    def draw_data(ax, sims, **kwargs):
+        from temet.load.data import weidner13
+
+        # Larson+03 observed relation (https://arxiv.org/abs/astro-ph/0306595 Section 7.3)
+        l03_mstar = np.log10([10, 1000])  # cluster mass
+        l03_maxmass = np.log10([3.6, 26.9])  # most massive star
+
+        l03_mstar = np.array(xlim)
+        l03_maxmass = np.log10(1.2 * 10**l03_mstar**0.45)
+
+        ax.plot(l03_mstar, l03_maxmass, ls="--", color="#000", alpha=0.5, label="Larson+03")
+
+        # Elmegreen+00 theoretical model
+        # e00_mstar = np.log10([10, 1000])
+        # e00_maxmass = np.log10([1.6, 43.3])
+
+        # ax.plot(e00_mstar, e00_maxmass, ls="-.", color="#000", alpha=0.5, label="Elmegreen+00")
+
+        # Weidner+13 individual observations (young clusters with age < 3 Myr)
+        w13 = weidner13()
+
+        _, _, bars = ax.errorbar(
+            w13["mass"],
+            w13["maxstarmass"],
+            xerr=[w13["mass_err1"], w13["mass_err2"]],
+            yerr=[w13["maxstarmass_err1"], w13["maxstarmass_err2"]],
+            fmt="s",
+            color="#222",
+            alpha=0.7,
+            ms=6,
+            label=w13["label"],
+        )
+
+        for bar in bars:
+            bar.set_alpha(0.1)
+
+    subhalos_evo.scatter2d(
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        vs_sim=None,
+        parents=False,
+        median=True,
+        tracks=False,
+        sizefac=0.8,
+        markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
+        legend="simple",
+        # legend_locs=["lower right", "upper left"],
+        # legend_ncols=[1, 1],
+        f_pre=_f_pre,
+        f_post=draw_data,
         f_selection=_starClusterSubhaloIDs,
     )
 
@@ -1147,7 +1222,9 @@ def paperPlots(a=False):
     if 0 or a:
         stellar_remnants(sims)
 
-    # fig 7b todo: most massive star in a cluster, vs the cluster mass (see Lahen+20 fig X, Lahen+23 Fig 14)
+    # fig 7b: most massive star in a cluster, vs the cluster mass (see Lahen+20 fig X, Lahen+23 Fig 14)
+    if 0 or a:
+        most_massive_stars(sims)
 
     # fig 8: ages, i.e. histograms of member star ages (matched to vis gallery), or age vs. X scaling relations
     if 0 or a:

@@ -4236,6 +4236,50 @@ def mowla24():
     return r
 
 
+def weidner13():
+    """Load observational data points from Weidner+13 (https://arxiv.org/abs/1306.1229), star clusters."""
+    path = dataBasePath + "weidner/weidner13_tablea1.txt"
+    with open(path) as f:
+        lines = f.readlines()
+
+    # number, name, mass, err_down, err_up, maxstarmass, err_down, err_up, ...
+    name = []
+    mass = []
+    mass_err1 = []
+    mass_err2 = []
+    maxstarmass = []
+    maxstarmass_err1 = []
+    maxstarmass_err2 = []
+
+    for line in lines:
+        if line[0] == "#":
+            continue
+        parts = line.split(",")
+        name.append(parts[1])
+        mass.append(float(parts[2]))
+        mass_err2.append(-1 * float(parts[3]))  # down (remove negative)
+        mass_err1.append(float(parts[4]))  # up
+        maxstarmass.append(float(parts[5]))
+        maxstarmass_err2.append(-1 * float(parts[6]))  # down (remove negative)
+        maxstarmass_err1.append(float(parts[7]))  # up
+
+    mass = np.array(mass)
+    maxstarmass = np.array(maxstarmass)
+
+    r = {
+        "name": name,
+        "mass": np.log10(mass),  # log msun
+        "mass_err1": np.log10(mass + mass_err1) - np.log10(mass),  # dex (up)
+        "mass_err2": np.log10(mass) - np.log10(mass - mass_err2),  # dex (down)
+        "maxstarmass": np.log10(maxstarmass),  # log msun
+        "maxstarmass_err1": np.log10(maxstarmass + maxstarmass_err1) - np.log10(maxstarmass),  # dex (up)
+        "maxstarmass_err2": np.log10(maxstarmass) - np.log10(maxstarmass - maxstarmass_err2),  # dex (down)
+        "label": "Weidner+13",
+    }
+
+    return r
+
+
 def loadSDSSData(loadFields=None, redshiftBounds=(0.0, 0.1), petro=False):
     """Load some CSV->HDF5 files dumped from the SkyServer."""
     # SELECT

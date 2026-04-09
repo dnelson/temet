@@ -430,6 +430,17 @@ def_fields = {
         rad=None,
         ptRestrictions={"stellar_age": ["lt", 0.01]},
     ),
+    "Subhalo_MostMassiveStar": partial(
+        subhaloRadialReduction,
+        ptType="stars",
+        ptProperty="Masses",
+        op="max",
+        rad=None,
+        ptRestrictions={"InitialSoloMass": ["gt", 0]},
+    ),
+    "Subhalo_MostMassiveStar_Initial": partial(
+        subhaloRadialReduction, ptType="stars", ptProperty="InitialSoloMass", op="max", rad=None
+    ),
     # cooling properties
     "Subhalo_CoolingTime_HaloGas": partial(
         subhaloRadialReduction,

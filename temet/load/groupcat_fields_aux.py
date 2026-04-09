@@ -435,6 +435,33 @@ smbh_lum.limits = [37.0, 42.0]
 smbh_lum.log = True
 
 
+@catalog_field
+def most_massive_star(sim, field):
+    """Mass of the most massive star in each subhalo."""
+    acField = "Subhalo_MostMassiveStar"
+    ac = sim.auxCat(fields=[acField])
+    return sim.units.codeMassToMsun(ac[acField])
+
+
+most_massive_star.label = r"Most Massive Star"
+most_massive_star.units = r"$\rm{M_{sun}}$"
+most_massive_star.limits = [0.0, 2.2]
+most_massive_star.log = True
+
+
+@catalog_field
+def most_massive_starini(sim, field):
+    """Initial mass of the most massive star in each subhalo."""
+    acField = "Subhalo_MostMassiveStar_Initial"
+    ac = sim.auxCat(fields=[acField])
+    return sim.units.codeMassToMsun(ac[acField])
+
+
+most_massive_starini.label = r"Most Massive Star M$_{\rm \star,ZAMS}$"
+most_massive_starini.units = r"$\rm{M_{sun}}$"
+most_massive_starini.limits = [0.0, 2.2]
+most_massive_starini.log = True
+
 # ---------------------------- auxcat: mass fractions -----------------------------------------------------
 
 
