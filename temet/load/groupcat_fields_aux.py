@@ -2758,6 +2758,24 @@ stellarage.limits = lambda sim, f: [-1.0, 2.5] if f.endswith("_myr") else [0.0, 
 stellarage.log = True
 
 
+@catalog_field(alias="stellarage_spread_myr")
+def stellarage_spread(sim, field):
+    """Spread (1sigma) in stellar ages (mass-weighted), all stars in subhalo."""
+    acField = "Subhalo_StellarAgeSpread_NoRadCut_MassWt"
+    vals = sim.auxCat(fields=[acField])[acField]
+
+    if field.endswith("_myr"):
+        vals = vals * 1e3  # Gyr -> Myr
+
+    return vals
+
+
+stellarage_spread.label = r"Age Spread $\rm{\sigma_{age,\star}}$"
+stellarage_spread.units = lambda sim, f: r"$\rm{Myr}$" if f.endswith("_myr") else r"$\rm{Gyr}$"
+stellarage_spread.limits = lambda sim, f: [-3.0, 1.0] if f.endswith("_myr") else [-1.0, 1.0]
+stellarage_spread.log = True
+
+
 @catalog_field
 def stellarage_4pkpc(sim, field):
     """Mean stellar age (r-band luminosity weighted), including only stars within a 4 pkpc aperture."""

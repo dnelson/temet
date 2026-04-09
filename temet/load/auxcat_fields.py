@@ -798,6 +798,9 @@ def_fields = {
     "Subhalo_StellarAge_NoRadCut_MassWt": partial(
         subhaloRadialReduction, ptType="stars", ptProperty="stellar_age", op="mean", rad=None, weighting="mass"
     ),
+    "Subhalo_StellarAgeSpread_NoRadCut_MassWt": partial(
+        subhaloRadialReduction, ptType="stars", ptProperty="stellar_age", op="std", rad=None, weighting="mass"
+    ),
     "Subhalo_StellarAge_NoRadCut_rBandLumWt": partial(
         subhaloRadialReduction,
         ptType="stars",

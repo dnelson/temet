@@ -482,7 +482,7 @@ def subhaloRadialReduction(
       - **result** (:py:class:`~numpy.ndarray`): 1d array, value for each subhalo.
       - **attrs** (dict): metadata.
     """
-    ops_basic = ["sum", "mean", "max"]
+    ops_basic = ["sum", "mean", "max", "std"]
     ops_custom = [
         "ufunc",
         "halfrad",
@@ -897,6 +897,8 @@ def subhaloRadialReduction(
                 if loc_wt.sum() == 0.0:
                     loc_wt = np.zeros(loc_val.size, dtype="float32") + 1.0  # if all zero weights
                 r[i] = np.average(loc_val, weights=loc_wt)
+            if op == "std":
+                r[i] = np.sqrt(np.average((loc_val - np.average(loc_val, weights=loc_wt)) ** 2.0, weights=loc_wt))
         else:
             # vector (e.g. pos, vel, Bfield)
             for j in range(particles[ptProperty].shape[1]):
@@ -912,6 +914,10 @@ def subhaloRadialReduction(
                         loc_wt = np.zeros(loc_val.size, dtype="float32") + 1.0  # if all zero weights
 
                     r[i, j] = np.average(loc_val, weights=loc_wt)
+                if op == "std":
+                    r[i, j] = np.sqrt(
+                        np.average((loc_val - np.average(loc_val, weights=loc_wt)) ** 2.0, weights=loc_wt)
+                    )
 
     attrs = {
         "Description": desc.encode("ascii"),

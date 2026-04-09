@@ -996,6 +996,71 @@ def age_vs_mass_clusters(sims: list[simParams]) -> None:
     )
 
 
+def age_spread_clusters(sims: list[simParams]) -> None:
+    """Cluster age spread (of member stars) as a function of cluster mass."""
+    yQuant = "stellarage_spread_myr"  # cluster age spread
+    xQuant = "mstar_tot_log"  # subhalo mass
+
+    ylim = [-2.25, 1.5]  # age_lim  # log Myr
+    xlim = mass_lim  # log mstar
+
+    def _f_pre(ax, sims):
+        # set custom ticks and tick labels
+        # ax.set_ylabel(age_label)
+        # ageticks_log = np.log10(ageticks_lin)
+        # ax.set_yticks(ageticks_log)
+        # ax.set_yticklabels(ageticks_lin)
+
+        ax.set_xlabel(mass_label)
+
+    def draw_data(ax, sims, **kwargs):
+        # Longmore+2014 review quotes several numbers (Sec 3.2.3)
+        # Orion Nebula Cluster (ONC)
+        xerr = np.reshape([np.log10(3700) - np.log10(2000), np.log10(2000) - np.log10(900)], (2, 1))
+        yerr = np.reshape([np.log10(3.0) - np.log10(2.0), np.log10(2.0) - np.log10(1.0)], (2, 1))
+        ax.errorbar(np.log10(2000), np.log10(2.0), xerr=xerr, yerr=yerr, marker="o", color="#444", label="ONC")
+
+        # Westerlund 1
+        ax.plot(xlim, [np.log10(3), np.log10(3)], ls=":", color="#444", alpha=0.5)
+        ax.text(xlim[1] - 0.1, np.log10(3) + 0.05, "Westerlund 1", color="#444", ha="right", va="bottom", alpha=0.5)
+
+        # W3-main
+        xerr = np.reshape([np.log10(5000) - np.log10(4000), np.log10(4000) - np.log10(3000)], (2, 1))
+        yerr = np.reshape([np.log10(3.0) - np.log10(2.5), np.log10(2.5) - np.log10(2.0)], (2, 1))
+        ax.errorbar(np.log10(4e3), np.log10(2.5), xerr=xerr, yerr=yerr, marker="D", color="#444", label="W3-main")
+
+        # NGC 3603YC (core) (Kudryavtseva+12) (upper limit)
+        ax.plot(xlim, [np.log10(0.1), np.log10(0.1)], ls=":", color="#444", alpha=0.5)
+        ax.text(
+            xlim[1] - 0.1,
+            np.log10(0.1) + 0.05,
+            "NGC 3603YC (upper limit)",
+            color="#444",
+            ha="right",
+            va="bottom",
+            alpha=0.5,
+        )
+
+    subhalos_evo.scatter2d(
+        sims,
+        xQuant=xQuant,
+        yQuant=yQuant,
+        xlim=xlim,
+        ylim=ylim,
+        vs_sim=None,
+        parents=False,
+        tracks=False,
+        sizefac=0.8,
+        markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
+        legend="simple",
+        # legend_locs=["upper left", "upper right"],
+        # legend_ncols=[1, 1],
+        f_pre=_f_pre,
+        f_post=draw_data,
+        f_selection=_starClusterSubhaloIDs,
+    )
+
+
 def age_vs_tcross_clusters(sims: list[simParams]) -> None:
     """Cluster age as a function of cluster mass."""
     xQuant = "stellarage_myr"
@@ -1229,13 +1294,15 @@ def paperPlots(a=False):
     # fig 8: ages, i.e. histograms of member star ages (matched to vis gallery), or age vs. X scaling relations
     if 0 or a:
         # i.e. histogram of cluster formation redshifts (with respect to important events/starbursts/mergers)
-        star_cluster_histogram(sims, quant="age", nbins=100, sizefac=1.0)
-        age_vs_mass_clusters(sims)
+        star_cluster_histogram(sims, quant="age", nbins=100, sizefac=[1.4, 0.8])
+        ## age_vs_mass_clusters(sims)
 
         # crossing time (Brown+21 eqn 21, Fig 14, Fig 15) (Claeyssens+22 Fig 10) (also: fraction of bound clusters)
         age_vs_tcross_clusters(sims)
 
-    # fig 8b todo: age spread (1sigma, see Fig 10 Lahen+20)
+    # fig 8b: age spread (1sigma)
+    if 0 or a:
+        age_spread_clusters(sims)
 
     # --- formation ---
 
