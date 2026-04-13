@@ -241,7 +241,7 @@ class simParams:
             )
 
         # attach various functions pre-specialized to this sP, for convenience
-        from ..cosmo.mergertree import loadMDB, loadMPB, loadMPBs, quantMPB
+        from ..cosmo.mergertree import loadMDB, loadMPB, loadMPBs, quantMPB, treeHasField
         from ..cosmo.util import (
             cenSatSubhaloIndices,
             correctPeriodicDistVecs,
@@ -324,6 +324,7 @@ class simParams:
         self.loadMDB = partial(loadMDB, self)
         self.loadMPBs = partial(loadMPBs, self)
         self.quantMPB = partial(quantMPB, self)
+        self.treeHasField = partial(treeHasField, self)
 
         # loading shortcuts
         self.subhalos = partial(groupCat_subhalos, self)
@@ -904,7 +905,7 @@ class simParams:
             self.zoomLevel = self.res  # L11 (TNG50-1)
             self.sP_parent = simParams(res=parentRes, run="tng", redshift=5.5)
 
-            self.gravSoft = 0.390 / (res - 10)  # fix
+            self.gravSoft = 0.04875 / 2 ** (res - 14)  # DM, stars are 4x smaller
             if self.variant != "DM":
                 self.targetGasMass = 5.73879e-6 / 8 ** (res - 11)
             self.boxSize = 35000.0  # ckpc/h

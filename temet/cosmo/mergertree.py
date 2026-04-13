@@ -159,12 +159,23 @@ def treeFieldnames(sP, treeName=treeName_default):
 
     if treeName in ["SubLink", "SubLink_gal"]:
         with h5py.File(il.sublink.treePath(sP.simPath, treeName), "r") as f:
-            return f.keys()
+            return list(f.keys())
     if treeName in ["LHaloTree"]:
         with h5py.File(il.lhalotree.treePath(sP.simPath, chunkNum=0), "r") as f:
-            return f["Tree0"].keys()
+            return list(f["Tree0"].keys())
 
     raise Exception("Unrecognized treeName.")
+
+
+def treeHasField(sP, field, treeName=treeName_default):
+    """True or False, does tree have this field?"""
+    # cache (for efficiency)
+    cacheKey = "treeFieldNames_%s" % (treeName)
+    if cacheKey in sP.data:
+        return field in sP.data[cacheKey]
+
+    sP.data[cacheKey] = treeFieldnames(sP, treeName=treeName)
+    return field in sP.data[cacheKey]
 
 
 def _insertMPBGhost(mpb, snap):

@@ -6,7 +6,7 @@ import numpy as np
 from scipy.signal import medfilt
 
 
-def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
+def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None, op=None):
     """For every subhalo, compute an assembly/related quantity using a merger tree.
 
     Args:
@@ -19,6 +19,7 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
         ``method`` should be ``mm`` (moving median of ``windowSize``), ``ma`` (moving average
         of ``windowSize``), or ``poly`` (poly fit of ``order`` N). The window size is given
         in units of ``windowVal`` which can be only ``snap``.
+      op (str or None): if not None, then apply the specified statistical operation across all snapshots.
 
     Returns:
       a 2-tuple composed of
@@ -26,7 +27,14 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
       - **result** (:py:class:`~numpy.ndarray`): 1d array, value for each subhalo.
       - **attrs** (dict): metadata.
     """
-    assert quant in ["zForm", "isSat_atForm", "rad_rvir_atForm", "dmFrac_atForm"]
+    assert quant in [
+        "zForm",
+        "isSat_atForm",
+        "rad_rvir_atForm",
+        "dmFrac_atForm",
+        "size_stars_pc_at_maxmstar",
+    ] or sP.treeHasField(quant.split("[")[0], treeName)
+    assert op in [None, "min", "max", "mean", "sum", "std"]
     assert pSplit is None  # not implemented
 
     def _ma(X, windowSize):
@@ -88,6 +96,22 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
 
         dtype = "float32"
         assert smoothing is None
+    elif quant == "size_stars_pc_at_maxmstar":
+        fields += ["SubhaloMassType", "SubhaloHalfmassRadType", "SubfindID"]
+        mpb_valkey = "SubhaloMassType"
+        mpb_valindex = sP.ptNum("stars")
+
+        dtype = "float32"
+    else:
+        mpb_valkey = quant.split("[")[0]  # e.g. 'SubhaloMassType' from 'SubhaloMassType[stars]'
+        fields += [mpb_valkey]
+        mpb_valindex = None
+        if "[" in quant and "]" in quant:
+            mpb_valindex = sP.ptNum(quant.split("[")[1].split("]")[0])  # e.g. 'stars' from 'SubhaloMassType[stars]'
+
+        dtype = "float32"
+
+    sP2 = sP.copy()  # for loading data at different snapshots
 
     if groupFields is not None:
         # we also need group properties, at all snapshots, so load now
@@ -98,15 +122,13 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
             groups = sP.data[cacheKey]
         else:
             groups = {}
-            prevSnap = sP.snap
 
             for snap in sP.validSnapList():
-                sP.setSnap(snap)
+                sP2.setSnap(snap)
                 if snap % 10 == 0:
                     print("%d%%" % (float(snap) / len(sP.validSnapList()) * 100), end=", ")
-                groups[snap] = sP.groupCat(fieldsHalos=groupFields, sq=False)["halos"]
+                groups[snap] = sP2.groupCat(fieldsHalos=groupFields, sq=False)["halos"]
 
-            sP.setSnap(prevSnap)
             sP.data[cacheKey] = groups
             print("Saved [%s] into sP.data cache." % cacheKey)
 
@@ -126,7 +148,7 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
 
     for i in range(nSubsTot):
         if i % int(nSubsTot / printFac) == 0 and i <= nSubsTot:
-            print("   %4.1f%%" % (float(i + 1) * 100.0 / nSubsTot))
+            print(" %4.1f%%" % (float(i + 1) * 100.0 / nSubsTot))
 
         if i not in mpbs:
             continue  # subhalo ID i not in tree at sP.snap
@@ -152,9 +174,6 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
                 coeffs = np.polyfit(loc_snap, loc_vals, smoothing[1])
                 loc_vals = np.polyval(coeffs, loc_snap)  # resample to original X-pts
 
-        # general quantities
-        # (currently none)
-
         # custom quantities: 'at formation' (at end of MPB)
         if quant == "isSat_atForm":
             # subpar = loc_vals[-1]
@@ -170,6 +189,7 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
             else:
                 # GroupFirstSub points elsewhere
                 r[i] = 1
+            continue
 
         if quant == "rad_rvir_atForm":
             sub_pos = mpbs[i]["SubhaloPos"][-1, :]
@@ -189,13 +209,16 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
             else:
                 r[i] = dist / par_rvir
 
+            continue
+
         if quant == "dmFrac_atForm":
             sub_masstype = loc_vals[-1, :]
             sub_mass = mpbs[i]["SubhaloMass"][-1]
 
             r[i] = sub_masstype[dmPtNum] / sub_mass
+            continue
 
-        # custom quantities
+        # custom quantities: formation redshift
         if quant == "zForm":
             # where does half of max of [smoothed] total mass occur?
             halfMaxVal = loc_vals.max() * 0.5
@@ -233,6 +256,51 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
 
             assert z_form >= 0.0
             r[i] = z_form
+            continue
+
+        # custom quantity: stellar half mass radius (in physical pc) at the time of maximum stellar mass
+        if quant == "size_stars_pc_at_maxmstar":
+            # find snapshot where stellar mass is maximum
+            mstar = loc_vals[:, mpb_valindex]
+            ind_max = np.nanargmax(mstar)
+            size_code = mpbs[i]["SubhaloHalfmassRadType"][ind_max, mpb_valindex]
+            scalefac = 1 / (1 + redshifts[loc_snap[ind_max]])
+
+            r[i] = sP.units.codeLengthToComovingKpc(size_code) * scalefac * 1000
+
+            if r[i] == 0:
+                # load and re-calculate
+                from ..catalog.common import findHalfLightRadius
+
+                sP2.setSnap(loc_snap[ind_max])
+
+                print(f"  Warning: Found [subID = {i}] with zero size but non-zero stellar mass, fixing!")
+                star_rad = sP2.snapshotSubset("stars", "subhalo_rad_pc", subhaloID=mpbs[i]["SubfindID"][ind_max])
+                star_mass = sP2.snapshotSubset("stars", "mass", subhaloID=mpbs[i]["SubfindID"][ind_max])
+
+                # if isinstance(star_rad, dict) and star_rad["count"] == 0:
+                #    continue  # skip if no star particles found (shouldn't happen since mstar > 0, but just in case)
+
+                r[i] = findHalfLightRadius(star_rad, star_mass, mags=False)
+
+            assert r[i] > 0
+
+            continue
+
+        # generic quantity
+        if mpb_valindex is not None:
+            loc_vals = loc_vals[:, mpb_valindex]
+
+        if op == "min":
+            r[i] = np.nanmin(loc_vals)
+        elif op == "max":
+            r[i] = np.nanmax(loc_vals)
+        elif op == "mean":
+            r[i] = np.nanmean(loc_vals)
+        elif op == "sum":
+            r[i] = np.nansum(loc_vals)
+        elif op == "std":
+            r[i] = np.nanstd(loc_vals)
 
     subhaloIDsTodo = np.arange(nSubsTot, dtype="int32")
 

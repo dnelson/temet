@@ -462,6 +462,55 @@ most_massive_starini.units = r"$\rm{M_{sun}}$"
 most_massive_starini.limits = [0.0, 2.2]
 most_massive_starini.log = True
 
+
+@catalog_field
+def mstar_initial(sim, field):
+    """Galaxy -initial- stellar mass, using star particle initial masses, total subhalo/subfind value."""
+    acField = "Subhalo_Stars_Mass_Initial"
+
+    ac = sim.auxCat(fields=[acField])
+    return sim.units.codeMassToMsun(ac[acField])
+
+
+mstar_initial.label = r"$\rm{M_{\star,ini}}$"  # (subfind)
+mstar_initial.units = r"$\rm{M_{sun}}$"
+mstar_initial.limits = lambda sim, f: [9.0, 11.5] if sim.boxSize > 50000 else [8.0, 12.0]
+mstar_initial.log = True
+
+
+@catalog_field
+def mstar_max(sim, field):
+    """Galaxy -maximum- (past) stellar mass, using SubLink_galmain progenitor branch, total subhalo/subfind value."""
+    acField = "Subhalo_Stars_Mass_SubLink_gal_Max"
+
+    ac = sim.auxCat(fields=[acField])
+    return sim.units.codeMassToMsun(ac[acField])
+
+
+mstar_max.label = r"$\rm{M_{\star,max}}$"  # (subfind)
+mstar_max.units = r"$\rm{M_{sun}}$"
+mstar_max.limits = lambda sim, f: [9.0, 11.5] if sim.boxSize > 50000 else [8.0, 12.0]
+mstar_max.log = True
+
+
+@catalog_field(aliases=["rhalf_stars_max", "size_stars_code_max", "rhalf_stars_code_max"])
+def size_stars_max(sim, field):
+    """Stellar half mass radius, -maximum past value-, using SubLink_gal main progenitor branch."""
+    acField = "Subhalo_Stars_Size_SubLink_gal_Max"
+
+    rad = sim.auxCat(fields=[acField])[acField]
+
+    if "_code" not in field:
+        rad = sim.units.codeLengthToKpc(rad)
+
+    return rad
+
+
+size_stars_max.label = r"r$_{\rm 1/2,\star,max}$"
+size_stars_max.units = lambda sim, f: r"$\rm{pc}$" if "_code" not in f else "code_length"
+size_stars_max.limits = lambda sim, f: [0.2, 1.6] if sim.redshift < 1 else [-0.4, 1.4]
+size_stars_max.log = True
+
 # ---------------------------- auxcat: mass fractions -----------------------------------------------------
 
 

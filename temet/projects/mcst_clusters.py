@@ -10,7 +10,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from temet.load.groupcat import catalog_field
 from temet.plot import snapshot, subhalos_evo
-from temet.plot.config import figsize
+from temet.plot.config import colors, figsize, linestyles
 from temet.plot.util import tableau10_colors
 from temet.util import simParams
 from temet.util.helper import running_median
@@ -24,11 +24,11 @@ size_label = r"Star Cluster Size $R_{1/2}$ [ pc ]"  # always show tick labels in
 age_label = r"Star Cluster Age [ Myr ]"
 
 mass_lim = [1.5, 4.0]  # log msun
-size_lim = [-1.8, 0.8]  # log pc, [-0.5, 1.8] for L15
-sigma_lim = [1.8, 6.0]  # log msun/pc^2, [0.5, 4.0] for L15
+size_lim = [-1.8, 1.0]  # log pc, [-0.5, 1.8] for L15
+sigma_lim = [0.0, 6.0]  # log msun/pc^2, [0.5, 4.0] for L15
 age_lim = [-0.6, 3.0]  # log Myr
 
-sizeticks_lin = [0.05, 0.1, 0.5, 1.0, 2.0, 5.0]  # pc
+sizeticks_lin = [0.05, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0]  # pc
 ageticks_lin = [0.25, 1, 2.5, 10, 25, 50, 100, 250, 500, 1000]  # Myr
 
 
@@ -363,7 +363,7 @@ def star_cluster_histogram(sims, quant, nbins=30, sizefac=1.0):
         xlabel = mass_label
 
     if quant == "size":
-        xlim = size_lim
+        xlim = [size_lim[0], size_lim[1] + 0.4]
         xlabel = size_label
 
     if quant == "age":
@@ -374,6 +374,7 @@ def star_cluster_histogram(sims, quant, nbins=30, sizefac=1.0):
     ax.set_xlim(xlim)
 
     ymax = 0
+    vals = []
 
     for sim in sims:
         # make selection
@@ -393,26 +394,94 @@ def star_cluster_histogram(sims, quant, nbins=30, sizefac=1.0):
         label = f"h{sim.hInd}"  # f"{sim.simName} (N={len(subIDs)}/{sim.numSubhalos})"
         # label = sim.simName  # while we are studying the res dependence
 
-        h = np.histogram(h_quant, bins=nbins, range=xlim)  # range=[min,max]
+        h = np.histogram(h_quant, bins=nbins, range=xlim)
         ax.stairs(*h, fill=True, alpha=0.8, label=label)
 
         ymax = max(ymax, h[0].max())
+        vals = np.hstack((vals, h_quant))
+
+    # overplot stack
+    h = np.histogram(vals, bins=nbins, range=xlim)
+    h = [h[0] / len(sims), h[1]]  # mean
+    lw = 3.0 if sizefac == 1 else 2.5
+    ax.stairs(*h, fill=False, edgecolor="#000", lw=lw, alpha=0.8, label="Stack")
+
+    # overplot evolutionary model applied to stack
+    if quant in ["mass", "size"]:
+        masses_ini = []
+        sizes_ini = []
+        masses_evo = []
+        sizes_evo = []
+
+        for sim in sims:
+            # load
+            subIDs = _starClusterSubhaloIDs(sim)
+            mstar = sim.subhalos("mstar_tot")[subIDs]  # Msun
+            rhalf = sim.subhalos("size_stars_pc")[subIDs]  # pc
+            age = sim.subhalos("stellarage_myr")[subIDs]
+
+            mstar_ini = sim.subhalos("mstar_max")[subIDs]  # Msun
+            rhalf_ini = sim.subhalos("size_stars_max")[subIDs]  # pc
+
+            masses_ini = np.hstack((masses_ini, mstar_ini))
+            sizes_ini = np.hstack((sizes_ini, rhalf_ini))
+
+            # evolve and store
+            masses_evo_loc, sizes_evo_loc, _ = _cluster_evo_model_1(mstar_ini, rhalf_ini, t=age)
+
+            masses_evo = np.hstack((masses_evo, masses_evo_loc))
+            sizes_evo = np.hstack((sizes_evo, sizes_evo_loc))
+
+        # plot histogram of initial stack
+        if quant == "mass":
+            h = np.histogram(np.log10(masses_ini), bins=nbins, range=xlim)
+        if quant == "size":
+            h = np.histogram(np.log10(sizes_ini), bins=nbins, range=xlim)
+
+        h = [h[0] / len(sims), h[1]]  # mean
+        ax.stairs(*h, fill=False, edgecolor="#000", lw=lw, linestyle="--", alpha=0.3, label="Initial")
+
+        # plot histogram of evolved stack
+        if quant == "mass":
+            h = np.histogram(np.log10(masses_evo), bins=nbins, range=xlim)
+
+            # skip for mass
+        if quant == "size":
+            h = np.histogram(np.log10(sizes_evo), bins=nbins, range=xlim)
+
+            h = [h[0] / len(sims), h[1]]  # mean
+            ax.stairs(*h, fill=False, edgecolor="#000", lw=lw + 0.5, linestyle=":", alpha=0.8, label="Evolved")
 
     # overplot resolution lines
     legend_loc = "upper right"
     ax.set_ylim([0.8, ymax * 1.2])
     ylim = ax.get_ylim()
+    yy = [ylim[1] / 1.5, ylim[1]]
 
     for sim in sims:
         if quant == "mass":
             min_mass = np.log10(20 * sim.units.codeMassToMsun(sim.targetGasMass))
-            ax.plot([min_mass, min_mass], ylim, color="#444", linestyle=":", lw=1, alpha=1.0)
+            ax.plot([min_mass, min_mass], yy, color="#444", linestyle="-", lw=lw, alpha=0.8)
 
         if quant == "size":
             grav_soft_stars = {13: 0.0244, 14: 0.0122, 15: 0.0061, 16: 0.003}
             grav_soft_code = grav_soft_stars[sim.res]
             grav_soft_logpc = np.log10(sim.units.codeLengthToPc(grav_soft_code))
-            ax.plot([grav_soft_logpc, grav_soft_logpc], ylim, color="#444", linestyle=":", lw=1, alpha=1.0)
+            ax.plot([grav_soft_logpc, grav_soft_logpc], yy, color="#444", linestyle="-", lw=lw, alpha=0.8)
+
+            # add another higher redshift (earliest where clusters really form)
+            scalefac = 1 / (1 + 14.0)
+            grav_soft_logpc = np.log10(sim.units.codeLengthToComovingKpc(grav_soft_code) * 1000 * scalefac)
+            ax.plot([grav_soft_logpc, grav_soft_logpc], yy, color="#666", linestyle="-", lw=lw, alpha=0.8)
+
+    # custom behavior
+    if quant == "mass":
+        # add mass function slope of -2
+        x = np.array([2.7, 3.3])  # np.array(xlim) + [0.1, -0.1]
+        y = 10 ** (x * -2.0)
+
+        y *= ymax / y[0]  # * 1.2  # shift to match the top of the stacked histogram
+        ax.plot(x, y, "--", color="#000", alpha=0.8, label=r"$dN/dM \propto M^{-2}$")
 
     if quant == "age":
         # vertical lines at lookback times to specific redshifts
@@ -423,6 +492,12 @@ def star_cluster_histogram(sims, quant, nbins=30, sizefac=1.0):
             ax.plot([age_z, age_z], yy, color="#444", linestyle=":", alpha=1.0)
             ax.text(age_z - 0.02, yy[1], f"z={z:.0f}", rotation=90, va="top", ha="right", color="#444", alpha=1.0)
 
+        # set custom ticks
+        ageticks_log = np.log10(ageticks_lin)
+        ax.set_xticks(ageticks_log)
+        ax.set_xticklabels(ageticks_lin)
+        legend_loc = "upper left"
+
     if quant == "size":
         # set custom ticks
         sizeticks_log = np.log10(sizeticks_lin)
@@ -431,17 +506,59 @@ def star_cluster_histogram(sims, quant, nbins=30, sizefac=1.0):
 
         # todo: overplot Brown+21 data
 
-    if quant == "age":
-        # set custom ticks
-        ageticks_log = np.log10(ageticks_lin)
-        ax.set_xticks(ageticks_log)
-        ax.set_xticklabels(ageticks_lin)
-        legend_loc = "upper left"
-
     ax.legend(loc=legend_loc)
 
     fig.savefig(f"star_cluster_histo_{quant}.pdf")
     plt.close(fig)
+
+
+def _plot_evolved_properties(ax, sims, **kwargs):
+    """Helper function that can be called as f_post(), to overplot the evolved properties of the clusters."""
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+
+    # loop over simulations
+    for sim in sims:
+        # load
+        subIDs = _starClusterSubhaloIDs(sim)
+
+        if subIDs.size == 0:
+            continue
+
+        mstar_ini = sim.subhalos("mstar_max")[subIDs]  # Msun
+        rhalf_ini = sim.subhalos("size_stars_max")[subIDs]  # pc
+        age = sim.subhalos("stellarage_myr")[subIDs]
+
+        # evolve and store
+        masses_evo, sizes_evo, _ = _cluster_evo_model_1(mstar_ini, rhalf_ini, t=age)
+
+        if "Mass" in ax.get_xlabel():
+            xval = np.log10(masses_evo)
+        if "Size" in ax.get_xlabel():
+            xval = np.log10(sizes_evo)
+
+        if "Size" in ax.get_ylabel():
+            yval = np.log10(sizes_evo)
+        if "Surface Density" in ax.get_ylabel():
+            sigma_evo = masses_evo / (np.pi * sizes_evo**2)
+            yval = np.log10(sigma_evo)
+
+        # plot with custom style
+        marker_loc = {"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11}
+
+        (l,) = ax.plot(xval, yval, ls="none", marker="o", **marker_loc)
+
+        # fit line to x,y using np.polyfit
+        if "Mass" in ax.get_xlabel() and "Size" in ax.get_ylabel():
+            w = np.where((xval > xlim[0]) & (xval < xlim[1]) & (yval > ylim[0]) & (yval < ylim[1]))[0]
+
+            coeffs = np.polyfit(xval[w], yval[w], deg=1)
+
+            # overplot best-fit line
+            x_fit = np.array(xlim) + [0.2, -0.2]
+            y_fit = np.polyval(coeffs, x_fit)
+
+            ax.plot(x_fit, y_fit, "-", color=l.get_color(), alpha=0.9)
 
 
 def size_vs_mass(sims: list[simParams]) -> None:
@@ -449,13 +566,13 @@ def size_vs_mass(sims: list[simParams]) -> None:
     xQuant = "mstar_tot"
     yQuant = "rhalf_stars_pc"
     xlim = mass_lim
-    ylim = size_lim
+    ylim = [size_lim[0], 1.3]
 
     def _f_pre(ax, sims):
-        # set axis label for mass
+        # set custom axis and tick labels
         ax.set_xlabel(mass_label)
+        ax.set_ylabel(size_label)
 
-        # set custom tick labels for size
         sizeticks_log = np.log10(sizeticks_lin)
         ax.set_yticks(sizeticks_log)
         ax.set_yticklabels(sizeticks_lin)
@@ -468,13 +585,14 @@ def size_vs_mass(sims: list[simParams]) -> None:
         y_all = np.array(kwargs["y"])
         w = np.where((x_all > xlim[0]) & (x_all < xlim[1]) & (y_all > ylim[0]) & (y_all < ylim[1]))[0]
 
-        coeffs = np.polyfit(x_all[w], y_all[w], deg=1)
+        if len(w) > 0:
+            coeffs = np.polyfit(x_all[w], y_all[w], deg=1)
 
-        # overplot best-fit line
-        x_fit = np.array(xlim) + [0.2, -0.2]
-        y_fit = np.polyval(coeffs, x_fit)
+            # overplot best-fit line
+            x_fit = np.array(xlim) + [0.2, -0.2]
+            y_fit = np.polyval(coeffs, x_fit)
 
-        ax.plot(x_fit, y_fit, "-", color="#000", alpha=0.9)
+            ax.plot(x_fit, y_fit, "-", color="#000", alpha=0.9)
 
         # Brown+21 LEGUS (https://arxiv.org/abs/2106.12420)
         b21 = brown21()
@@ -483,7 +601,7 @@ def size_vs_mass(sims: list[simParams]) -> None:
         x = np.log10(b21["mass"][w])
         y = np.log10(b21["r_eff"][w])
 
-        ax.plot(x, y, marker="x", mew=1, ms=4, ls="None", color="#000", alpha=0.5, zorder=-12, label=b21["label"])
+        ax.plot(x, y, marker="x", mew=1, ms=4, ls="None", color="#000", alpha=0.3, zorder=-12, label=b21["label"])
 
         # Brown+21 fit (Fig 13, including the local open clusters at low mass)
         # b21_betas = [0.242, 0.180, 0.279]  # full sample, 1-10Myr, and 10-100Myr age bins
@@ -513,11 +631,15 @@ def size_vs_mass(sims: list[simParams]) -> None:
 
         y_fit = np.log10(m12_R1 * (10.0**x_fit / 1.0) ** m12_beta)
 
-        ax.plot(x_fit, y_fit, ls="--", color="#000", alpha=0.5, label="Marks+12")
+        ax.plot(x_fit, y_fit, ls="--", color="#000", alpha=0.3, label="Marks+12")
 
         # TODO: if cluster masses start to exceed 4.5, then we can/should consider the JWST "cluster" datasets:
         # see https://arxiv.org/abs/2603.24550 Figure 1
         # Vanzella+22,23, Mowla+24, Adamo+24, Messa+25, also SFing clumps in high-z (Fujimoto+25, Nakane+25)
+
+    def _f_post(ax, sims, **kwargs):
+        _draw_fitline(ax, sims, **kwargs)
+        _plot_evolved_properties(ax, sims)
 
     subhalos_evo.scatter2d(
         sims,
@@ -529,12 +651,13 @@ def size_vs_mass(sims: list[simParams]) -> None:
         parents=False,
         tracks=False,
         sizefac=1.0,
-        markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
+        # markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.5, "zorder": -11},  # rasterize for zorder<-10
+        markerstyle={"ms": 5.0, "fillstyle": "none", "mew": 1.5, "alpha": 0.3, "zorder": -11},
         legend="simple",
         legend_locs=["lower right", "upper left"],
         legend_ncols=[1, 1],
         f_pre=_f_pre,
-        f_post=_draw_fitline,
+        f_post=_f_post,
         f_selection=_starClusterSubhaloIDs,
     )
 
@@ -714,11 +837,13 @@ def sigma_star_vs_mass_clusters(sims: list[simParams]) -> None:
         parents=False,
         tracks=False,
         sizefac=0.8,
-        markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
+        # markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
+        markerstyle={"ms": 5.0, "fillstyle": "none", "mew": 1.5, "alpha": 0.3, "zorder": -11},
         legend="simple",
         legend_locs=["upper left", "upper right"],
         legend_ncols=[1, 1],
         f_pre=_f_pre,
+        f_post=_plot_evolved_properties,
         f_selection=_starClusterSubhaloIDs,
     )
 
@@ -735,6 +860,7 @@ def sigma_star_vs_size_clusters(sims: list[simParams]) -> None:
         from temet.load.data import adamo24, brown21, mowla24
 
         # set custom ticks and tick labels
+        ax.set_xlabel(size_label)
         sizeticks_log = np.log10(sizeticks_lin)
         ax.set_xticks(sizeticks_log)
         ax.set_xticklabels(sizeticks_lin)
@@ -825,11 +951,13 @@ def sigma_star_vs_size_clusters(sims: list[simParams]) -> None:
         parents=False,
         tracks=False,
         sizefac=1.0,
-        markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
+        # markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
+        markerstyle={"ms": 5.0, "fillstyle": "none", "mew": 1.5, "alpha": 0.3, "zorder": -11},
         legend="simple",
         legend_locs=["lower left", "upper left"],
         legend_ncols=[1, 2],
         f_pre=_f_pre,
+        f_post=_plot_evolved_properties,
         f_selection=_starClusterSubhaloIDs,
     )
 
@@ -1180,6 +1308,141 @@ def most_massive_stars(sims: list[simParams]) -> None:
     )
 
 
+def _cluster_evo_model_1(Mcl0, rcl0, t=None):
+    """Evolution model for star cluster mass and size (based on DRAGON-II paper).
+
+    Args:
+        Mcl0 (float): Initial cluster mass [Msun].
+        rcl0 (float): Initial cluster size (half-mass radius) [pc].
+        t (float or ndarray): Time to evaluate at (i.e. cluster age), or if None compute from t=0 to t=1Gyr.
+    """
+    if t is None:
+        t = np.linspace(1, 1000, 100)  # Myr
+
+    # fixed parameters (only for testing)
+    # alpha_M = 0.3
+    # beta_M = 0.3
+    # alpha_R = 0.7
+    # beta_R = 0.6
+
+    # linear interpolation on Table 2 values
+    table2_rhm = [0.47, 0.80, 1.75]
+    table2_alpha_M = [0.15, 0.18, 0.31]
+    table2_beta_M = [0.375, 0.34, 0.295]
+    table2_alpha_R = [0.95, 0.7, 0.73]
+    table2_beta_R = [0.50, 0.57, 0.59]
+
+    alpha_M = np.interp(rcl0, table2_rhm, table2_alpha_M)
+    beta_M = np.interp(rcl0, table2_rhm, table2_beta_M)
+    alpha_R = np.interp(rcl0, table2_rhm, table2_alpha_R)
+    beta_R = np.interp(rcl0, table2_rhm, table2_beta_R)
+
+    # print(f"{alpha_M = :.2f}, {beta_M = :.2f}, {alpha_R = :.2f}, {beta_R = :.2f}")
+
+    # from scipy.interpolate import interp1d
+
+    # alpha_M = interp1d(table2_rhm, table2_alpha_M, kind="linear", fill_value="extrapolate")(rcl0)
+    # beta_M = interp1d(table2_rhm, table2_beta_M, kind="linear", fill_value="extrapolate")(rcl0)
+    # alpha_R = interp1d(table2_rhm, table2_alpha_R, kind="linear", fill_value="extrapolate")(rcl0)
+    # beta_R = interp1d(table2_rhm, table2_beta_R, kind="linear", fill_value="extrapolate")(rcl0)
+
+    # alpha_M = np.clip(alpha_M, 0.1, 0.4)
+    # beta_M = np.clip(beta_M, 0.25, 0.40)
+    # alpha_R = np.clip(alpha_R, 0.6, 1.2)
+    # beta_R = np.clip(beta_R, 0.45, 0.65)
+
+    # compute relaxation time
+    mstar = 0.5  # mean stellar mass in Msun (assumed)
+    N = Mcl0 / mstar  # number of stars, assuming mean mass
+    gamma_n = 0.02  # depends on mass spectrum, 0.11-0.4 for monochromatic, as low as 0.02 for multi-mass spectrum
+    lnLambda = np.log(gamma_n * N)  # Coulomb logarithm
+    lnLambda[lnLambda <= 0] = np.log(2)  # protect against negative log for very low N
+
+    t_relax = 282 / (mstar * lnLambda) * np.sqrt(Mcl0 / 1e5) * (rcl0 / 1.0) ** (3 / 2)  # Eqn 5
+
+    # compute mass and size evolution: DRAGON-II model
+    Mcl = Mcl0 * (1 + alpha_M * (t / t_relax)) ** (-beta_M)  # note: typo in arxiv version
+    rcl = rcl0 * (1 + t / (alpha_R * t_relax)) ** beta_R
+
+    return Mcl, rcl, t
+
+
+def _cluster_evo_model_2(Mcl0, rcl0, t=None):
+    """Evolution model for star cluster mass and size (based on B-POP paper).
+
+    Args:
+        Mcl0 (float): Initial cluster mass [Msun].
+        rcl0 (float): Initial cluster size (half-mass radius) [pc].
+        t (float or ndarray): Time to evaluate at (i.e. cluster age), or if None compute from t=0 to t=1Gyr.
+    """
+    if t is None:
+        t = np.linspace(1, 1000, 100)  # Myr
+
+    # fixed parameters
+    t_st = 10.0  # Myr
+    k1 = -0.1
+    alpha_bnd = 100  # for YCs
+    beta_bnd = 0.6  # how rapidly relaxation takes over in cluster dispersal
+
+    f = alpha_bnd * (Mcl0 / 1e6) ** beta_bnd
+
+    # compute relaxation time
+    mstar = 0.5  # mean stellar mass in Msun (assumed)
+    N = Mcl0 / mstar  # number of stars, assuming mean mass
+    gamma_n = 0.02  # depends on mass spectrum, 0.11-0.4 for monochromatic, as low as 0.02 for multi-mass spectrum
+    lnLambda = np.log(gamma_n * N)  # Coulomb logarithm
+
+    t_relax = 282 / (mstar * lnLambda) * np.sqrt(Mcl0 / 1e5) * (rcl0 / 1.0) ** (3 / 2)  # Eqn 5
+    print(f"Initial relaxation time: {t_relax:.2f} Myr")
+
+    alpha = 0.2  # "selected in the range 0.15-0.25 at any timestep" (randomly changing?)
+    tcc = 0.2 * t_relax  # highly uncertain, adopt this from Gurkan+04
+    t0 = 5 * tcc * (1 + (rcl0 / 1.0))
+
+    print(f"{tcc = }, {t0 = }")
+
+    Mcl = Mcl0 * (1 + t / t_st) ** k1 * (1 - t / (f * t_relax))  # Eqn A4, A5
+    rcl = rcl0 * (1 + t / t0) ** alpha
+
+    assert np.min(Mcl) > 0  # not true for t > f*t_relax and this is quite short...
+    assert np.min(rcl) > 0
+
+    return Mcl, rcl, t
+
+
+def star_cluster_evo_model(model=1):
+    """Model the evolution of the masses and sizes of star clusters using results from collisional simulations."""
+    # based on: https://arxiv.org/abs/2307.04805 (DRAGON-II, Eqns 6 and 7 and Table 2)
+    # based on: https://arxiv.org/abs/2603.20430 (B-POP, Appendix A, Eqns A4-A8)
+
+    # plot results
+    fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(14, 10))
+
+    ax1.set_xlabel("Time [ Myr ]")
+    ax1.set_ylabel("Mass [ log Msun ]")
+    ax2.set_xlabel("Time [ Myr ]")
+    ax2.set_ylabel("Size [ pc ]")
+
+    for i, Mcl0 in enumerate([1e2, 1e3, 1e4]):
+        for j, rcl0 in enumerate([0.05, 0.2, 0.5]):
+            # run model
+            if model == 1:
+                Mcl, rcl, t = _cluster_evo_model_1(Mcl0, rcl0)
+            if model == 2:
+                Mcl, rcl, t = _cluster_evo_model_2(Mcl0, rcl0)
+
+            # add to plot
+            label = f"$M_0 = {Mcl0:.0e}$ , $r_0 = {rcl0:.1f}$ pc"
+            ax1.plot(t, np.log10(Mcl), color=colors[i], linestyle=linestyles[j], label=label)
+            ax2.plot(t, rcl, color=colors[i], linestyle=linestyles[j], label=label)
+
+    ax1.legend()
+    ax2.legend()
+
+    fig.savefig(f"star_cluster_evolution_model{model}.pdf")
+    plt.close(fig)
+
+
 # -------------------------------------------------------------------------------------------------
 
 
@@ -1202,7 +1465,7 @@ def paperPlots(a=False):
     # sims.append(simParams("structures", hInd=23908, res=14, variant="ST15", redshift=5.5))
     # sims.append(simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5))
     # sims.append(simParams("structures", hInd=73172, res=15, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=446076, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=539722, res=16, variant="ST15", redshift=5.5))
@@ -1356,26 +1619,24 @@ def paperPlots(a=False):
                 **opts,
             )
 
-    # fig 10: pressure vs. rho phase space diagram (see Schaye+26 Colibre Fig 8)
+    # fig X: pressure vs. rho phase space diagram (see Schaye+26 Colibre Fig 8)
     if 0 or a:
-        xlim = [-6.0, 5.0]
+        xlim = [0.0, 5.0]
         sim = simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5)
         phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant=None, ext="pdf")
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="rad_rvir", ext="pdf")
         phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="vrad", ext="pdf")
         phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="csnd", ext="pdf")
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="Z_solar", ext="pdf")
         phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="tff_local", ext="pdf")
 
-    # fig 11: gas mass fraction of ISM gas in different phases, at e.g. z=10 and z=6 (bar plots?)
+    # fig 10: gas mass fraction of ISM gas in different phases, at e.g. z=10 and z=6 (bar plots?)
     if 0 or a:
         gas_phase_fractions(sims, frac_type="Mass")
         gas_phase_fractions(sims, frac_type="Vol")
 
-    # fig 12: kennicut-schmidt relation (global)
+    # fig 11: kennicut-schmidt relation (global)
     # fig todo: Sigma_SFR (e.g. Ceverino+26 shows JWST data comparisons)
 
-    # fig 12: kennicut-schmidt relation (local/spatially resolved)
+    # fig 11: kennicut-schmidt relation (local/spatially resolved)
 
     # fig: merger tree tracks of cluster: mass, size, gas fraction, surface density
     if 0 or a:
@@ -1405,7 +1666,7 @@ def paperPlots(a=False):
         subhalos_evo.tracks1d([sim], quant="fgas2", ylim=[-2.0, 0.0], **opts)
         ## subhalos_evo.tracks1d([sim], quant="fgas2_fof", ylim=[-2.0, 0.0], **opts)
 
-    # fig 13: evolution tracks on size-mass plane (Lahen+25 Figs 10,11) (color by age, redshift, or fgas)
+    # fig 12: evolution tracks on size-mass plane (Lahen+25 Figs 10,11) (color by age, redshift, or fgas)
     # show both actual and model-corrected tracks
     # when fgas > 10% or so, call this "embedded phase"
     if 0 or a:

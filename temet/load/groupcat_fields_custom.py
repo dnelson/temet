@@ -1062,6 +1062,7 @@ def size_stars_pc(sim, field):
         for _i, subID in enumerate(subIDs):
             star_rad = sim.snapshotSubset("stars", "subhalo_rad_pc", subhaloID=subID)
             star_mass = sim.snapshotSubset("stars", "mass", subhaloID=subID)
+
             rad[subID] = findHalfLightRadius(star_rad, star_mass, mags=False)
             # print(f" [{_i + 1}/{len(subIDs)}] subhalo {subID}, new rhalf_stars_pc = {rad[subID]:.2f} pc")
 

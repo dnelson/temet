@@ -414,6 +414,15 @@ def_fields = {
     "Subhalo_Stars_Mass_2rhalfstarsFoF": partial(
         subhaloRadialReduction, ptType="stars", ptProperty="mass", op="sum", rad="2rhalfstars", scope="fof"
     ),
+    "Subhalo_Stars_Mass_Initial": partial(
+        subhaloRadialReduction, ptType="stars", ptProperty="InitialMass", op="sum", rad=None
+    ),
+    "Subhalo_Stars_Mass_SubLink_gal_Max": partial(
+        mergerTreeQuant, treeName="SubLink_gal", quant="SubhaloMassType[stars]", smoothing=None, op="max"
+    ),
+    "Subhalo_Stars_Size_SubLink_gal_Max": partial(
+        mergerTreeQuant, treeName="SubLink_gal", quant="size_stars_pc_at_maxmstar", smoothing=None, op="max"
+    ),
     "Subhalo_Remnant_Mass": partial(
         subhaloRadialReduction,
         ptType="stars",

@@ -1093,7 +1093,7 @@ def phase_diagram(sim, xlim=None, yQuant="temp", cQuant=None, ext="pdf"):
     if yQuant == "csnd":
         ylim = [-0.5, 2.5]
     if yQuant == "pres":
-        ylim = [-1.0, 8.0]  # ymax == 6 for L15, ymax == 8 for L16
+        ylim = [2.5, 7.5]  # ymax == 6 for L15, ymax == 8 for L16
 
     cStr = cQuant
     ctCenter = None

@@ -167,9 +167,9 @@ def scatter2d(
         subhalo IDs to plot for each sim. It must accept a single argument: the simulation object,
         and return a list of subhalo IDs to plot. If None, defaults to sim.zoomSubhaloID only.
       f_pre (function): if not None, this 'custom' function hook is called just before plotting.
-        It must accept two arguments: the figure axis, and a list of simulation objects.
+        It must accept two arguments: the figure axis, and a list of simulation objects)
       f_post (function): if not None, this 'custom' function hook is called just after plotting.
-        It must accept two arguments: the figure axis, and a list of simulation objects.
+        It must accept two arguments (the figure axis, and a list of simulation objects), and **kwargs (x and y).
       saveFilename (str): name (and extension, setting format) of output plot. Automatic if None.
     """
     # currently assume all sims have the same parent
