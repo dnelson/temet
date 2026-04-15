@@ -319,6 +319,8 @@ def quantMPB(sim, subhaloInd, quants, treeName=None, add_ghosts=False, z_vals=No
         inds = np.array([closest(r["z"], z_val)[1] for z_val in z_vals])
         r["z"] = r["z"][inds]
 
+    r["redshift"] = r["z"]  # alias
+
     # loop over requested quantities
     for quant in quants:
         prop = quant.lower().replace("_log", "")  # new

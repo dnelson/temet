@@ -388,6 +388,42 @@ mass_stars_10myr.log = True
 
 
 @catalog_field
+def mass_stars_halo_10myr(sim, field):
+    """Total -halo- stellar mass formed in the past 10 Myr (sum of initial star masses with ages less than 10Myr).
+    Centrals only."""
+    acField = "Subhalo_StellarMassFormed_FoF_10myr"
+
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+    vals = sim.units.codeMassToMsun(ac[acField])
+
+    return vals
+
+
+mass_stars_halo_10myr.label = r"$\rm{M_{\*} (10\,Myr)}$"
+mass_stars_halo_10myr.units = r"$\rm{M_{sun}}$"
+mass_stars_halo_10myr.limits = [7.0, 13.0]
+mass_stars_halo_10myr.log = True
+
+
+@catalog_field
+def mass_stars_halo_100myr(sim, field):
+    """Total -halo- stellar mass formed in the past 100 Myr (sum of initial star masses with ages less than 100Myr).
+    Centrals only."""
+    acField = "Subhalo_StellarMassFormed_FoF_100myr"
+
+    ac = sim.auxCat(fields=[acField], expandPartial=True)
+    vals = sim.units.codeMassToMsun(ac[acField])
+
+    return vals
+
+
+mass_stars_halo_100myr.label = r"$\rm{M_{\*} (100\,Myr)}$"
+mass_stars_halo_100myr.units = r"$\rm{M_{sun}}$"
+mass_stars_halo_100myr.limits = [7.0, 13.0]
+mass_stars_halo_100myr.log = True
+
+
+@catalog_field
 def mass_smbh(sim, field):
     """Largest SMBH mass in each subhalo. Avoids summing multiple SMBH masses, if more than one present."""
     acField = "Subhalo_BH_Mass_largest"

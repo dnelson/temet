@@ -125,8 +125,10 @@ def scatter2d(
     sims: list[simParams],
     xQuant: str,
     yQuant: str,
+    cQuant: str = None,
     xlim: list[float] = None,
     ylim: list[float] = None,
+    clim: list[float] = None,
     vs_sim: str = "TNG50-1",
     tracks: bool = True,
     median: bool = False,
@@ -150,10 +152,13 @@ def scatter2d(
       sims: list of simulation objects to compare.
       xQuant: name of quantity to plot on the x-axis.
       yQuant: name of quantity to plot on the y-axis.
+      cQuant: if not None, then the name of a quantity to use for coloring the points. Otherwise, color by zoom hInd.
       xlim: if not None, 2-tuple overriding default x-axis limits.
       ylim: if not None, 2-tuple overriding default y-axis limits.
+      clim: if not None, 2-tuple overriding default color limits (if cQuant is not None).
       vs_sim: if not None, then the name of another simulation to compare against e.g. "TNG50-1".
       tracks: if True, plot tracks of individual galaxies. If False, only plot final redshift values.
+        if 'all', then show all snapshots (not the default dz=0.2 spacing). If a float, use this as dz.
       median: if True, plot the running median of the full collection of zoom points.
       parents: if True, plot the original halos from the parent box for comparison.
       legend : either 'dev' (default),  'simple', or 'none', to determine how legend(s) are shown.
@@ -195,6 +200,11 @@ def scatter2d(
         xMinMax = xlim
     if ylim is not None:
         yMinMax = ylim
+    if cQuant is not None:
+        _, clabel, cMinMax, cLog = sims[0].simSubhaloQuantity(cQuant)
+        if clim is not None:
+            assert clim[0] < clim[1], "Otherwise colorbar is flipped."
+            cMinMax = clim
 
     # start plot
     fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
@@ -265,6 +275,20 @@ def scatter2d(
         if yLog:
             yvals = logZeroNaN(yvals)
 
+        if cQuant is not None:
+            cvals = sim.subhalos(cQuant)
+
+            if cLog:
+                cvals = logZeroNaN(cvals)
+
+            # normalize to [0, 1] for colormap
+            cvals_norm = (cvals - cMinMax[0]) / (cMinMax[1] - cMinMax[0])
+            cvals_norm = np.clip(cvals_norm, 0, 1)
+
+            # convert to colors using a colormap
+            cmap = plt.get_cmap("turbo")
+            colors_cmap = cmap(cvals_norm)
+
         # which subhalo(s) to include?
         if f_selection is not None:
             subhaloIDs = f_selection(sim)
@@ -304,8 +328,15 @@ def scatter2d(
                     print(f" set [x] {xQuant}={xval:.3f} for visibility.")
                 marker_lim = True  # 8 #CARETLEFTBASE #r'$\leftarrow$'
 
-            # color set by hInd
-            c = colors[hInds.index(sim.hInd)]
+            # color
+            if cQuant is None:
+                # set by zoom hInd
+                c = colors[hInds.index(sim.hInd)]
+            else:
+                # or set by some other subhalo quantity via colormap
+                c = colors_cmap[subhaloID]
+                # if marker_lim:
+                #    c = "#555555"  # override with gray for out-of-bounds points
 
             # marker set by variant
             marker = markers[variants.index(sim.variant) % len(markers)]
@@ -334,10 +365,17 @@ def scatter2d(
                 dz = 0.2
                 min_mstar = 4.5
 
+                if isinstance(tracks, (int, float)):
+                    dz = tracks
+
                 # sample at a number of discrete redshifts
                 z_vals = np.arange(sim.redshift + dz, max_z, dz)
 
-                mpb = sim.quantMPB(sim.zoomSubhaloID, quants=[xQuant, yQuant], z_vals=z_vals)
+                if str(tracks) == "all":
+                    z_vals = None
+
+                quants = [xQuant, yQuant] if cQuant is None else [xQuant, yQuant, cQuant]
+                mpb = sim.quantMPB(sim.zoomSubhaloID, quants=quants, z_vals=z_vals)
 
                 x_track = mpb[xQuant]
                 y_track = mpb[yQuant]
@@ -346,6 +384,19 @@ def scatter2d(
                     x_track = logZeroNaN(x_track)
                 if yLog:
                     y_track = logZeroNaN(y_track)
+
+                if cQuant is not None:
+                    c_track = mpb[cQuant]
+
+                    if cLog:
+                        c_track = logZeroNaN(c_track)
+
+                    # normalize to [0, 1] for colormap
+                    c_track_norm = (c_track - cMinMax[0]) / (cMinMax[1] - cMinMax[0])
+                    c_track_norm = np.clip(c_track_norm, 0, 1)
+
+                    # convert to colors using a colormap
+                    xy_c = cmap(c_track_norm)
 
                 if "mstar" in yQuant:
                     # for high-res runs, show only points above 100 star particles
@@ -356,12 +407,16 @@ def scatter2d(
                 if x_track.size == 0:
                     continue
 
-                # variable alpha, decaying towards high redshift
-                alpha = np.linspace(0.6, 0.2, x_track.size)
+                # plot as series of markers, set color
+                alpha = 1.0
 
-                # plot as series of markers
-                r, g, b = to_rgb(l.get_color())
-                xy_c = [[r, g, b, a] for a in alpha]
+                if cQuant is None:
+                    # variable alpha, decaying towards high redshift
+                    alpha = np.linspace(0.6, 0.2, x_track.size)
+
+                    r, g, b = to_rgb(l.get_color())
+                    xy_c = [[r, g, b, a] for a in alpha]
+
                 ax.scatter(x_track, y_track, marker=marker, color=xy_c, alpha=alpha)  # , zorder=10)
 
                 # plot as line
@@ -369,6 +424,13 @@ def scatter2d(
                 # segments = np.hstack((points[:-1], points[1:]))
                 # lc = LineCollection(segments, array=alpha, color=l.get_color(), lw=lw_loc)
                 # line = ax.add_collection(lc)
+
+    # color bar
+    if cQuant is not None:
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=cMinMax[0], vmax=cMinMax[1]))
+        sm.set_array([])
+        cb = fig.colorbar(sm, ax=ax, pad=0.02)
+        cb.set_label(clabel)  # cb.ax.set_ylabel(clabel)
 
     # running median of all zoom points?
     if median:
@@ -417,10 +479,11 @@ def scatter2d(
 
     if legend == "dev":
         _add_legends(ax, hInds, res, variants, colors)
-    elif legend == "simple":
+    elif legend == "simple" and cQuant is None:
         _add_legends_simple(ax, hInds, res, variants, colors, locs=legend_locs, ncols=legend_ncols)
 
-    saveNameDefault = f"scatter2d_evo_{xQuant}-vs-{yQuant}.pdf"
+    cStr = f"-c-{cQuant}" if cQuant is not None else ""
+    saveNameDefault = f"scatter2d_evo_{xQuant}-vs-{yQuant}{cStr}.pdf"
     _finish_plot(fig, saveFilename, saveNameDefault)
 
 

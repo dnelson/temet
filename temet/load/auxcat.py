@@ -213,7 +213,7 @@ def auxCat(
             pSplitStr = " (split %d of %d)" % (pSplit[0], pSplit[1])
             savePath = auxCatPathSplit
 
-        print("Compute and save: [%s] [%s]%s" % (sP.simName, field, pSplitStr))
+        print("Compute and save: [%s] [%s]%s" % (sP, field, pSplitStr))
 
         r[field], attrs = def_fields[field](sP, pSplit)
         r[field + "_attrs"] = attrs

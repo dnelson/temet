@@ -706,17 +706,21 @@ def sigma_star_galaxies(sims: list[simParams]) -> None:
     )
 
 
-@catalog_field
+@catalog_field(aliases=["cfe_10myr", "cfe_100myr"])
 def cluster_formation_efficiency(sim, field):
     """Star cluster formation efficiency (definition of Bastian+08)."""
-    mstar_tot = sim.subhalos("mass_stars_10myr")  # msun
-
     # mass in clusters is a sum over satellite subhalos for each central subhalo, do on the fly
     age_cl = sim.subhalos("stellarage_myr")  # "Subhalo_StellarAge_NoRadCut_MassWt"
     mstar_cl = sim.subhalos("mstar_tot")  # msun
     cen_flag = sim.subhalos("cen_flag")
 
-    mstar_cl[age_cl > 10] = 0  # age threshold of 10 Myr
+    dt = 100 if "100myr" in field else 10  # Myr
+
+    if dt == 10:
+        mstar_cl[age_cl > 10] = 0  # age threshold of <10 Myr
+    if dt == 100:
+        mstar_cl[(age_cl < 10) | (age_cl > 100)] = 0  # age threshold of >10 and <100 Myr
+
     mstar_cl[cen_flag == 1] = 0  # only include satellites, not centrals
 
     # for each halo, sum (weighted histogram) its subhalos (only satellites by construction)
@@ -732,25 +736,40 @@ def cluster_formation_efficiency(sim, field):
     w = np.where(first_sub >= 0)
     mstar_cl_sub[first_sub[w]] = mstar_cl_halo[w]  # assign to central subhalo of each halo
 
+    # galaxy mass is the fof sum (not central subhalo)
+    mstar_tot = sim.subhalos(f"mass_stars_halo_{dt}myr")  # msun
+
+    # calculate CFE = mass in clusters / total stellar mass
     with np.errstate(invalid="ignore", divide="ignore"):
         cfe = mstar_cl_sub / mstar_tot
+
+    if np.count_nonzero(np.isfinite(cfe)):
+        if np.nanmax(cfe) > 1.0:
+            print(" Warning: CFE should be <= 1.0, but max is %.3f" % np.nanmax(cfe))
+        cfe = np.clip(cfe, 0, 1)  # can exceed unity due to mismatch between particle and mean subhalo ages
 
     return cfe
 
 
-cluster_formation_efficiency.label = r"Cluster Formation Efficiency ($\Gamma$)"
+cluster_formation_efficiency.label = (
+    lambda sim, f: r"Cluster Formation Efficiency ($\Gamma_{100}$)"
+    if "100myr" in f
+    else r"Cluster Formation Efficiency ($\Gamma_{10}$)"
+)
 cluster_formation_efficiency.units = r""  # dimensionless
-cluster_formation_efficiency.limits = [-2.0, 0.0]
+cluster_formation_efficiency.limits = [0, 1]  # [-2.0, 0.0]
 cluster_formation_efficiency.log = False  # True
 
 
-def cfe_galaxies(sims: list[simParams]) -> None:
+def cfe_galaxies(sims: list[simParams], dt=10, xQuant="mstar2_log") -> None:
     """The cluster formation efficiency (Gamma) as a function of galaxy mass."""
-    yQuant = "cluster_formation_efficiency"
-    xQuant = "mstar2_log"
-
+    yQuant = f"cfe_{dt}myr"
     ylim = [0, 1]  # linear
-    xlim = [4.5, 9.0]  # log mstar
+
+    if xQuant in ["mstar2_log", "mstar_log"]:
+        xlim = [4.5, 8.5]  # log mstar
+    if xQuant == "sfr_10myr":
+        xlim = [-5.5, -1.0]
 
     def _draw_data(ax, sims):
         pass
@@ -763,11 +782,13 @@ def cfe_galaxies(sims: list[simParams]) -> None:
         sims,
         xQuant=xQuant,
         yQuant=yQuant,
+        cQuant="redshift",
         xlim=xlim,
         ylim=ylim,
+        clim=[5.5, 10],
         vs_sim=None,
         parents=False,
-        tracks=True,
+        tracks=0.1,  # 'all'
         sizefac=0.8,
         legend="simple",
         legend_locs=["upper left", "upper right"],
@@ -1460,12 +1481,12 @@ def paperPlots(a=False):
 
     sims = []
     # sims.append(simParams("structures", hInd=1958, res=14, variant="ST15", redshift=5.5))
-    # sims.append(simParams("structures", hInd=5072, res=14, variant="ST15", redshift=5.5))
-    # sims.append(simParams("structures", hInd=15581, res=14, variant="ST15", redshift=5.5))
-    # sims.append(simParams("structures", hInd=23908, res=14, variant="ST15", redshift=5.5))
-    # sims.append(simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5))
-    # sims.append(simParams("structures", hInd=73172, res=15, variant="ST15", redshift=5.5))
-    # sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=5072, res=14, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=15581, res=14, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=23908, res=14, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=73172, res=15, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=446076, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=539722, res=16, variant="ST15", redshift=5.5))
@@ -1572,7 +1593,8 @@ def paperPlots(a=False):
     # fig 9: 2d spacetime radial profiles
     if 0 or a:
         # evo
-        opts = {"haloID": 0, "max_z": 10.0, "rlog": True, "rlim": [-2.0, 1.0], "smooth_sizes": True}
+        # opts = {"haloID": 0, "max_z": 10.0, "rlog": True, "rlim": [-2.0, 1.0], "smooth_sizes": True}
+        opts = {"haloID": 0, "max_z": 10.0, "rlog": True, "rlim": [-3.0, 0.0], "smooth_sizes": True}
 
         for sim in sims:
             snapshot.profilesStacked2d(
@@ -1608,67 +1630,20 @@ def paperPlots(a=False):
                 **opts,
             )
 
-            snapshot.profilesStacked2d(
-                sim,
-                ptType="gas",
-                ptProperty="temp",
-                clim=[3.0, 6.0],
-                clog=True,
-                scope="global",
-                ctName="thermal",
-                **opts,
-            )
-
-    # fig X: pressure vs. rho phase space diagram (see Schaye+26 Colibre Fig 8)
-    if 0 or a:
-        xlim = [0.0, 5.0]
-        sim = simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5)
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant=None, ext="pdf")
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="vrad", ext="pdf")
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="csnd", ext="pdf")
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="tff_local", ext="pdf")
-
     # fig 10: gas mass fraction of ISM gas in different phases, at e.g. z=10 and z=6 (bar plots?)
     if 0 or a:
         gas_phase_fractions(sims, frac_type="Mass")
         gas_phase_fractions(sims, frac_type="Vol")
 
-    # fig 11: kennicut-schmidt relation (global)
-    # fig todo: Sigma_SFR (e.g. Ceverino+26 shows JWST data comparisons)
-
-    # fig 11: kennicut-schmidt relation (local/spatially resolved)
-
-    # fig: merger tree tracks of cluster: mass, size, gas fraction, surface density
+    # fig 11: cluster formation efficiency (Gamma), vs galaxy M* and SFR
     if 0 or a:
-        sim = simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5)
-        subIDs = _starClusterSubhaloIDs(sim)
-        mpbs = sim.loadMPBs(subIDs, fields=["SubfindID", "SnapNum"], treeName="SubLink_gal")
+        cfe_galaxies(sims, xQuant="mstar2_log")
+        cfe_galaxies(sims, dt=100, xQuant="mstar2_log")
+        cfe_galaxies(sims, xQuant="sfr_10myr")
+        cfe_galaxies(sims, dt=10, xQuant="sfr_10myr")
 
-        # mstar = sims[0].subhalos("mstar_tot")[subIDs]
-        subIDs = list(mpbs.keys())[55:60]  # [0:5]  # choose some at random?
-        print(subIDs)
-
-        opts = {
-            "xlim": [11.1, 5.5],
-            "parents": False,
-            "smooth": False,
-            "treeName": "SubLink_gal",
-            # "legend": "simple",
-            # legend_locs": ["lower right", "upper left"],
-            # "legend_ncols": [1, 3],
-            # "sizefac": 0.8,
-            "f_selection": lambda sim: subIDs,  # _starClusterSubhaloIDs,
-        }
-
-        subhalos_evo.tracks1d([sim], quant="mstar", ylim=mass_lim, **opts)
-        subhalos_evo.tracks1d([sim], quant="size_stars_pc", ylim=size_lim, **opts)
-        ## subhalos_evo.tracks1d([sim], quant="surfdens_stars", ylim=sigma_lim, **opts)
-        subhalos_evo.tracks1d([sim], quant="fgas2", ylim=[-2.0, 0.0], **opts)
-        ## subhalos_evo.tracks1d([sim], quant="fgas2_fof", ylim=[-2.0, 0.0], **opts)
-
-    # fig 12: evolution tracks on size-mass plane (Lahen+25 Figs 10,11) (color by age, redshift, or fgas)
-    # show both actual and model-corrected tracks
-    # when fgas > 10% or so, call this "embedded phase"
+    # fig 12: evolution tracks on size-mass plane (color by age, redshift, or fgas)
+    # TODO: show both actual and model-corrected tracks
     if 0 or a:
         sim = simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5)
 
@@ -1701,23 +1676,56 @@ def paperPlots(a=False):
 
         subhalos_evo.tracks2d([sim], **opts)
 
+    # fig X: merger tree tracks of cluster: mass, size, gas fraction, surface density
+    if 0 or a:
+        sim = simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5)
+        subIDs = _starClusterSubhaloIDs(sim)
+        mpbs = sim.loadMPBs(subIDs, fields=["SubfindID", "SnapNum"], treeName="SubLink_gal")
+
+        # mstar = sims[0].subhalos("mstar_tot")[subIDs]
+        subIDs = list(mpbs.keys())[55:60]  # [0:5]  # choose some at random?
+        print(subIDs)
+
+        opts = {
+            "xlim": [12.1, 5.5],
+            "parents": False,
+            "smooth": False,
+            "treeName": "SubLink_gal",
+            # "legend": "simple",
+            # legend_locs": ["lower right", "upper left"],
+            # "legend_ncols": [1, 3],
+            # "sizefac": 0.8,
+            "f_selection": lambda sim: subIDs,  # _starClusterSubhaloIDs,
+        }
+
+        subhalos_evo.tracks1d([sim], quant="mstar", ylim=[2.4, 4.3], **opts)
+        subhalos_evo.tracks1d([sim], quant="size_stars_pc", ylim=[-1.9, -0.5], **opts)
+        subhalos_evo.tracks1d([sim], quant="surfdens_stars_pc", ylim=[3.9, 6.5], **opts)
+
+    # fig 13: kennicut-schmidt relation (global)
+    # fig todo: Sigma_SFR (e.g. Ceverino+26 shows JWST data comparisons)
+
+    # fig 13: kennicut-schmidt relation (local/spatially resolved)
+
     # fig todo: radius and radial velocity at formation time (use birth values of member stars?) (or just tree?)
 
     # vis todo: time evolution from pre-birth to post-birth (gas dens, vrad, tff_local, Q, stars, ...)
 
     # fig todo: quantitative assessment of reason for formation (e.g. self-grav instability, compression, ...)
 
-    # --- relation to galaxies ---
-
-    # fig: cluster formation efficiency (Gamma)
-    if 0 or a:
-        cfe_galaxies(sims)
-        # TODO: 10<tau<100 Myr vs 100 myr as well (obs suggest lower, ~1-10% CFEs at older ages)
-
-    # fig todo: cluster formation rate (CFR) vs. SFR
-
     # fig todo: any cluster population stat, e.g. mass func slope, size-mass slope, vs. halo mass (color by redshift)
     #  "universality" or not?
+
+    # ---
+
+    # pressure vs. rho phase space diagrams
+    if 0 or a:
+        xlim = [0.0, 5.0]
+        sim = simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5)
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant=None, ext="pdf")
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="vrad", ext="pdf")
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="csnd", ext="pdf")
+        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="tff_local", ext="pdf")
 
     # radial profiles - halo comparisons
     if 0 or a:
