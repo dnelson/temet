@@ -1217,11 +1217,20 @@ def splitSingleHDF5IntoChunks(snap=151):
     print("Done.")
 
 
-def splitSingleHDF5ICIntoChunks(snap=151):
-    """Split a single-file initial conditions file (HDF5 format) into a number of roughly equally sized chunks."""
-    fileName = "ics_zoom_TNG50-1_halo5072_L16_sf4.0.hdf5"
-    fileNameOut = "ics_zoom_TNG50-1_halo5072_L16_sf4.0.%d.hdf5"
-    numChunksSave = 4
+def splitSingleHDF5ICIntoChunks(set_ids=False):
+    fileName = "ics_zoom_TNG50-1_halo1958_L16_sf4.0.hdf5"
+    fileNameOut = "ics_zoom_TNG50-1_halo1958_L16_sf4.0.%d.hdf5"
+    numChunksSave = 8
+
+    # start PartType2 IDs after PartType1 IDs
+    ids_offset = [0, 0, 0, 0, 0, 0]
+    NumPartTotal = [0, 0, 0, 0, 0, 0]
+
+    with h5py.File(fileName, "r") as f:
+        NumPartTotal[1] = f["PartType1"]["ParticleIDs"].size  # do not use NumPart_Total attribute (need to handle HW)
+        NumPartTotal[2] = f["PartType2"]["ParticleIDs"].size
+
+    ids_offset[2] = NumPartTotal[1]
 
     # open original file
     with h5py.File(fileName, "r") as f:
@@ -1236,7 +1245,7 @@ def splitSingleHDF5ICIntoChunks(snap=151):
                 # loop over relevant particle types
                 for ptNum in [1, 2]:
                     # determine index range
-                    indRange = pSplitRange([0, f["Header"].attrs["NumPart_Total"][ptNum]], numChunksSave, i)
+                    indRange = pSplitRange([0, NumPartTotal[ptNum]], numChunksSave, i)
 
                     # update particle counts (updating only 1 index seems to silently fail)
                     NumPart_ThisFile = fOut["Header"].attrs["NumPart_ThisFile"]
@@ -1249,7 +1258,13 @@ def splitSingleHDF5ICIntoChunks(snap=151):
 
                     for field in f[gName].keys():
                         print(i, gName, field, indRange)
-                        fOut[gName][field] = f[gName][field][indRange[0] : indRange[1]]
+                        if set_ids and field == "ParticleIDs":
+                            # assign new IDs
+                            N = indRange[1] - indRange[0]
+                            fOut[gName][field] = np.arange(N, dtype="int64") + ids_offset[ptNum]
+                            ids_offset[ptNum] += N
+                        else:
+                            fOut[gName][field] = f[gName][field][indRange[0] : indRange[1]]
 
     print("Done.")
 
