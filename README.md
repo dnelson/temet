@@ -74,6 +74,7 @@ To directly contribute code or documentation please try to follow existing style
 
 Additional code contributions, fixes, and suggestions to this package have been made by:
 
+* Jonas Biba
 * Chris Byrohl
 * Lukas Eisert
 * Andres Aramburo Garcia
