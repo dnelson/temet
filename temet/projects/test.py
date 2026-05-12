@@ -12,9 +12,354 @@ import numpy as np
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
-from .plot.config import figsize
-from .util import simParams
-from .util.match import match
+from ..plot.config import figsize
+from ..util import simParams
+from ..util.match import match
+
+
+def test_voronoi_dvr():
+    """Toy problem test of volume rendering with our voronoi ray tracer."""
+    from temet.util.voronoiRay import rayTrace
+
+    # set up perturbed Cartesian grid
+    rng = np.random.default_rng(seed=424242)
+    N = 32
+    L = 1.0
+    perturbation = 0.5  # 0.05
+
+    # grid points
+    dx = L / N
+    x1 = (np.arange(N) + 0.5) * dx
+    x, y, z = np.meshgrid(x1, x1, x1, indexing="xy")
+    pos = np.column_stack((x.ravel(), y.ravel(), z.ravel()))
+
+    # perturb
+    for i in range(pos.ndim):
+        pos[:, i] += rng.uniform(-perturbation * dx, perturbation * dx, size=int(N**3))
+
+    # periodic wrap after perturb
+    pos %= L
+
+    # simple radially declining function
+    r = np.linalg.norm(pos - L / 2, axis=1)
+    quant = np.exp(-(r**2) / (L / 3) ** 2)
+
+    # define emissivity as a narrow gaussian transfer function centered at the mean value of quant
+    cen_val = np.mean(quant) * 1.5
+    width = 0.05  # * cen_val
+    emis = np.exp(-(((quant - cen_val) / width) ** 2))
+
+    # define opacity as proportional to density (becomes column density when integrated along the line-of-sight)
+    opacity = 1 * quant  # 50
+
+    # define ray geometry: equally spaced on the front face of a cube, along the z-axis
+    N_ray = 400
+    ray_dir = [0, 0, 1]
+    total_dl = L
+
+    # starting pos equally spaced on front face
+    ray_xy = (np.arange(N_ray) + 0.5) * (L / N_ray)
+    ray_x, ray_y = np.meshgrid(ray_xy, ray_xy, indexing="xy")
+    ray_pos = np.column_stack((ray_x.ravel(), ray_y.ravel(), np.zeros(N_ray**2)))
+
+    # ray-trace
+    class sP:
+        boxSize = L
+
+    print("Start raytrace...")
+    result = rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=emis, quant2=opacity, mode="quant_dvr", nThreads=32)
+
+    img = result.reshape((N_ray, N_ray))
+
+    # plot
+    fig = plt.figure(layout="none", figsize=[10, 10])
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_axis_off()
+
+    vmm = np.percentile(img, [5, 95])
+
+    ax.imshow(img, origin="lower", vmin=vmm[0], vmax=vmm[1], cmap="viridis")
+    # ax.text(0.02, 0.02, f"t = {t:.3f}", fontsize=24, c="#fff", transform=ax.transAxes, ha="left", va="bottom")
+
+    fig.savefig("out.png", dpi=N_ray / figsize[0])
+    plt.close(fig)
+
+
+def zarr_proteus():
+    """Test creation of a zarr file so we can see its structure."""
+    from os import remove
+
+    import zarr
+
+    # load some test data
+    file_in = "/u/dnelson/ProteusGPU/run_scaling/output/snapshot_0.hdf5"
+    data = {}
+
+    with h5py.File(file_in, "r") as f:
+        for key in f["hydro"]:
+            print(key)
+            data[key] = f["hydro"][key][()].astype("float32")
+
+    # create zarr (standard metadata)
+    root = zarr.group("proteus_test.zarr")
+    hydro = root.create_group(name="hydro")
+
+    for key in data.keys():
+        print("write: ", key)
+        # hydro[key] = data[key] # works but no control
+        # chunks=False does not work, but should
+        # chunks=None does not work
+        # chunks=1 is 1 file per element!
+        hydro.create_array(name=key, data=data[key], chunks=data[key].shape, compressors=None)
+
+    if 0:
+        # consolidate metadata
+        zarr.consolidate_metadata("proteus_test.zarr")
+
+        # delete all interior json files (not needed)
+        remove("proteus_test.zarr/hydro/zarr.json")
+        remove("proteus_test.zarr/hydro/Energy/zarr.json")
+        remove("proteus_test.zarr/hydro/rho/zarr.json")
+        remove("proteus_test.zarr/hydro/vel/zarr.json")
+
+
+def vis_proteus(method="voro_slice", snaps=None):
+    """Quick visualization of a Proteus simulation."""
+    from temet.util.treeSearch import buildFullTree, calcHsml
+    from temet.util.voronoiRay import rayTrace
+
+    # config
+    if 0:
+        snap_path = "/u/dnelson/ProteusGPU/run_kh2k/output/"
+        n_x = 1920
+        aspect = 1920 / 1080  # 16:9, just ignores top and bottom of box for vis
+    if 0:
+        snap_path = "/u/dnelson/ProteusGPU/run_gresho/output/"
+        n_x = 800
+        aspect = 1.0
+    if 1:
+        # snap_path = "/u/dnelson/data/ProteusGPU/run_quadshock1_3d/output/"
+        # snap_path = "/vera/ptmp/gc/lucsc/Proteus_cloud_collision_3D/"
+        snap_path = "/u/dnelson/data/ProteusGPU/run_cloud_crash_400/output/"
+        # n_x = 1000  # 80 sec for 100x100 (2.3 hr for 1000x1000) (on 36 cores)
+        # aspect = 1
+        n_x = 1920
+        aspect = 1920 / 1080  # 16:9, just ignores top and bottom of box for vis
+
+    files = glob.glob(snap_path + "snapshot_*.hdf5")
+
+    if snaps is None:
+        snaps = range(len(files))
+
+    # loop over snapshots
+    for snap in snaps:
+        # snap = int(file.split("/")[-1].split("_")[1].split(".")[0])
+        file = snap_path + "snapshot_%d.hdf5" % snap
+        print(file)
+        saveFilename = f"proteus_{snap:03d}.png"
+
+        if path.isfile(saveFilename) and snap > 1:
+            continue
+
+        # load
+        with h5py.File(file, "r") as f:
+            t = f["header"].attrs["time"]
+            extent = f["header"].attrs["extent"]
+            rho = f["hydro"]["rho"][()]
+
+            if "cells" in f:
+                # old
+                pos = f["cells"]["seeds"][()]
+                u = f["hydro"]["Energy"][()]
+            else:
+                # new
+                pos = f["mesh"]["pos"][()]
+                u = f["hydro"]["energy"][()]
+
+            field = np.log10(rho)  # np.log10(u)
+
+        if method == "voro_dvr":
+            assert pos.shape[1] == 3, "Volume rendering only for 3D simulations."
+
+        # plot
+        n_y = int(n_x / aspect)
+        figsize = [19.2, 19.2 / aspect]
+
+        fig = plt.figure(layout="none", figsize=figsize)
+        ax = fig.add_axes([0, 0, 1, 1])
+        ax.set_axis_off()
+
+        if method == "scatter":
+            # quick scatter
+            sc = ax.scatter(pos[:, 0], pos[:, 1], c=field, s=1, cmap="viridis")
+            ax.set_title(f"Proteus KH2K t={t:.2f}")
+            ax.set_xlabel("x")
+            ax.set_ylabel("y")
+            plt.colorbar(sc, label="log10(rho)")
+
+        if method == "voro_slice":
+            # full image: sample x,y coordinates across extent, build kd tree, find nearest cell to each pixel
+            from scipy.spatial import cKDTree
+
+            # build tree
+            tree = cKDTree(pos)
+
+            # define sample points
+            height = extent / aspect
+            x = np.linspace(0, extent, n_x)
+            y = np.linspace(extent / 2 - height / 2, extent / 2 + height / 2, n_y)
+
+            # sample
+            if pos.shape == 2:
+                xx, yy = np.meshgrid(x, y)
+
+                _, ind = tree.query(np.c_[xx.ravel(), yy.ravel()])
+
+            if pos.shape == 3:
+                xx, yy, zz = np.meshgrid(x, y, [extent / 2])  # slice at half-box
+
+                _, ind = tree.query(np.c_[xx.ravel(), yy.ravel(), zz.ravel()])
+
+            img = field[ind].reshape(xx.shape)
+
+            if snap == 0:
+                # try auto scaling (works well e.g. for KH)
+                vmm = np.percentile(field, [5, 95])
+            vmm = [-5e-6, 5e-6]
+
+            ax.imshow(img, origin="lower", vmin=vmm[0], vmax=vmm[1], cmap="viridis")
+            ax.text(0.02, 0.02, f"t = {t:.3f}", fontsize=24, c="#fff", transform=ax.transAxes, ha="left", va="bottom")
+
+        if method == "voro_dvr":
+            # define emissivity as a narrow gaussian transfer function centered at the mean value of quant
+            # cen_val = -0.28  # log dens
+            # width = 0.01  # * cen_val
+            cen_val = -0.1
+            width = 0.05
+            emis = np.exp(-(((field - cen_val) / width) ** 2))
+
+            # define opacity as proportional to density (becomes column density when integrated along the line-of-sight)
+            opacity = 1e-4 * rho  # 1  # 50
+
+            # define ray geometry: equally spaced on the front face of a cube, along the z-axis
+            ray_dir = [0, 0, 1]
+            total_dl = extent
+
+            # starting pos equally spaced on front face
+            height = extent / aspect
+            ray_xx = (np.arange(n_x) + 0.5) * (extent / n_x)
+            ray_yy = (np.arange(n_y) + 0.5) * (height / n_y) + (extent / 2 - height / 2)
+            ray_x, ray_y = np.meshgrid(ray_xx, ray_yy, indexing="xy")
+            ray_pos = np.column_stack((ray_x.ravel(), ray_y.ravel(), np.zeros(n_x * n_y)))
+
+            # ray-trace, time
+            dataFile = f"proteus_{snap:03d}_n{n_x}.hdf5"
+
+            if path.isfile(dataFile):
+                # load
+                with h5py.File(dataFile, "r") as f:
+                    img = f["img"][()]
+                    assert t == f.attrs["t"]
+            else:
+                # render
+                class sP:
+                    boxSize = extent
+
+                start_time = time.time()
+
+                result = rayTrace(
+                    sP, ray_pos, ray_dir, total_dl, pos, quant=emis, quant2=opacity, mode="quant_dvr", nThreads=72
+                )
+
+                print(f"Raytrace took {time.time() - start_time:.1f} seconds.")
+
+                img = result.reshape((n_x, n_x))
+
+                with h5py.File(dataFile, "w") as f:
+                    f["img"] = img
+                    f.attrs["t"] = t
+                    f.attrs["snap"] = snap
+
+            # set color mapping (constant in time)
+            # if snap == 0:
+            #    vmm = np.percentile(img, [5, 95])
+            print(f" percs = {np.percentile(img, [5, 95])}")
+            vmm = [0.0, 0.04]
+            # vmm = np.percentile(img, [5, 95])
+            # print(f"{vmm = }")
+
+            ax.imshow(img, origin="lower", vmin=vmm[0], vmax=vmm[1], cmap="viridis")
+            ax.text(0.02, 0.02, f"t = {t:.3f}", fontsize=24, c="#fff", transform=ax.transAxes, ha="left", va="bottom")
+
+        if method == "step_dvr":
+            # define emissivity as a narrow gaussian transfer function(s) centered at the mean value of quant
+            emis = np.zeros(field.size, dtype="float32")
+            width = 0.05
+
+            for cen_val in [-0.1, -0.3, -0.7]:
+                emis += np.exp(-(((field - cen_val) / width) ** 2))
+
+            # define opacity as proportional to density (becomes column density when integrated along the line-of-sight)
+            # opacity = 1e-4 * rho  # 1  # 50
+
+            # use rays with constant stepsize through the volume, at point simply using the nearest neighbor value
+            # define ray geometry: equally spaced on the front face of a cube, along the z-axis
+            ray_dir = [0, 0, 1]
+            nsteps = int(rho.size ** (1 / 3)) * 2
+            # nsteps = n_x
+            step_size = extent / nsteps
+
+            # starting pos equally spaced on front face
+            height = extent / aspect
+            ray_xx = (np.arange(n_x) + 0.5) * (extent / n_x)
+            ray_yy = (np.arange(n_y) + 0.5) * (height / n_y) + (extent / 2 - height / 2)
+            ray_zz = (np.arange(nsteps) + 0.5) * step_size
+            ray_x, ray_y, ray_z = np.meshgrid(ray_xx, ray_yy, ray_zz, indexing="xy")
+            sample_pts = np.column_stack((ray_x.ravel(), ray_y.ravel(), ray_z.ravel()))
+
+            # ray-trace, time
+            dataFile = f"proteus_{snap:03d}_n{n_x}_step{nsteps}.hdf5"
+
+            if path.isfile(dataFile):
+                # load
+                with h5py.File(dataFile, "r") as f:
+                    img = f["img"][()]
+                    assert t == f.attrs["t"]
+            else:
+                # build tree
+                start_time = time.time()
+
+                # NextNode, length, center, sibling, nextnode = buildFullTree(pos, extent, pos.dtype)
+                # note: can use calcQuantReduction() with op='kernal_mean' and hsml const or variable
+                _, indices = calcHsml(pos, extent, posSearch=sample_pts, treePrec="double", nearest=True, nThreads=72)
+
+                indices = indices.reshape((n_x, n_y, nsteps))
+
+                img = np.sum(emis[indices], axis=2) * step_size  # * np.exp(-tau)
+
+                print(f"Raytrace took {time.time() - start_time:.1f} seconds.")
+
+                with h5py.File(dataFile, "w") as f:
+                    f["img"] = img
+                    f.attrs["t"] = t
+                    f.attrs["snap"] = snap
+
+            # set color mapping (constant in time)
+            # img = np.log(img)
+            # if snap == 0:
+            #    vmm = np.percentile(img, [5, 95])
+            # print(f" percs = {np.percentile(img, [5, 99])}")
+            # vmm = [0.0, 0.03]
+            vmm = np.percentile(img, [0.1, 99.9])
+            # vmm = [np.percentile(img, 99) - 10.0, np.percentile(img, 99)]  # avoid very low values in the log
+            # vmm = [-300.0, -3.0]
+            # print(f"{vmm = }")
+
+            ax.imshow(img, origin="lower", vmin=vmm[0], vmax=vmm[1], cmap="inferno")
+            ax.text(0.02, 0.02, f"t = {t:.3f}", fontsize=24, c="#fff", transform=ax.transAxes, ha="left", va="bottom")
+
+        fig.savefig(saveFilename, dpi=n_x / figsize[0])
+        plt.close(fig)
 
 
 def check_spec():

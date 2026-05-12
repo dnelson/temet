@@ -687,6 +687,15 @@ def _rayTraceReduced(
         elif mode == 7:
             # mean quant (e.g. temp) weighted by quant2*dx (e.g. dens*dl = column density), of all intersected cells
             r_answer[i] = np.sum(quant[ind] * quant2[ind] * dx) / np.sum(quant2[ind] * dx)
+        elif mode == 8:
+            # direct volume render: integrate rays front-to-back and apply a simple DVR formula.
+            # We assume quant is the emissivity and quant2 is the opacity i.e. proportional to density.
+            tau = 0.0
+            I = 0.0
+            for j in range(dx.size):
+                tau += quant2[ind[j]] * dx[j]
+                I += quant[ind[j]] * dx[j] * np.exp(-tau)
+            r_answer[i] = I
 
     return r_answer
 
@@ -723,6 +732,7 @@ def rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=None, quant2=None, mode=
         "quant_mean": 5,
         "quant_weighted_mean": 6,
         "quant_weighted_dx_mean": 7,
+        "quant_dvr": 8,
     }
     assert mode in modes
     if "quant" in mode:
