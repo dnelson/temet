@@ -421,7 +421,7 @@ def_fields = {
         mergerTreeQuant, treeName="SubLink_gal", quant="SubhaloMassType[stars]", smoothing=None, op="max"
     ),
     "Subhalo_Stars_Size_SubLink_gal_Max": partial(
-        mergerTreeQuant, treeName="SubLink_gal", quant="size_stars_pc_at_maxmstar", smoothing=None, op="max"
+        mergerTreeQuant, treeName="SubLink_gal", quant="size_stars_pc_at_maxmstar", smoothing=None, op=None
     ),
     "Subhalo_Remnant_Mass": partial(
         subhaloRadialReduction,

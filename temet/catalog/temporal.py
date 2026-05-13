@@ -288,6 +288,8 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None, op=None):
             continue
 
         # generic quantity
+        assert np.isnan(r[i]) or r[i] == -1  # should never overwrite
+
         if mpb_valindex is not None:
             loc_vals = loc_vals[:, mpb_valindex]
 

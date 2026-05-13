@@ -904,6 +904,26 @@ sfr2_surfdens.log = True
 
 
 @catalog_field
+def sfr_surfdens_10myr(sim, field):
+    """Galaxy star formation rate surface density (10Myr average, within one times the stellar half mass radius)."""
+    dt = 10 * 1e6  # yr
+    mstar = sim.subhalos("mass_stars_10myr")  # msun, total subhalo
+    aperture = sim.units.codeLengthToKpc(sim.subhalos("SubhaloHalfmassRadType")[:, sim.ptNum("stars")])
+    area = np.pi * aperture**2
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        vals = mstar / dt / area  # Msun/yr/kpc^2
+
+    return vals
+
+
+sfr_surfdens_10myr.label = r"$\rm{\Sigma_{SFR,10Myr}}$"
+sfr_surfdens_10myr.units = r"$\rm{M_{sun}\, yr^{-1}\, kpc^{-2}}$"
+sfr_surfdens_10myr.limits = [-3.5, 5.0]
+sfr_surfdens_10myr.log = True
+
+
+@catalog_field
 def ssfr(sim, field):
     """Galaxy specific star formation rate [1/yr] (sSFR, instantaneous, both SFR and M* within 2rhalfstars)."""
     sfr = sim.subhalos("SubhaloSFRinRad")

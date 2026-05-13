@@ -2348,6 +2348,21 @@ stellar_remnant.limits = lambda sim, pt, f: [-1, 4] if f.endswith("_type") else 
 stellar_remnant.log = False
 
 
+@snap_field(aliases=["l_ion", "ionizing_lum"])
+def q_h(sim, partType, field, args):
+    """Ionizing luminosity (number of ionizing photons per second) per star."""
+    IonisingPhotonRate1e49 = sim.snapshotSubset(partType, "IonisingPhotonRate1e49", **args)  # 1e49 photon/s
+
+    return IonisingPhotonRate1e49.astype("float64") * 1e49  # photon/s
+
+
+q_h.label = r"$\rm{L_{ion}}$"
+q_h.units = r"$\rm{photon/s}$"
+q_h.limits = [48, 52]
+q_h.limits_halo = [48, 52]
+q_h.log = True
+
+
 # -------------------- black holes ----------------------------------------------------------------
 
 

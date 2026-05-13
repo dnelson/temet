@@ -6,11 +6,11 @@ from collections.abc import Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import to_rgb
+from matplotlib.colors import is_color_like, to_rgb
 from scipy.signal import savgol_filter
 
 from ..plot.config import colors, figsize, linestyles, lw, markers, sKn, sKo
-from ..plot.util import _finish_plot
+from ..plot.util import _finish_plot, colored_line
 from ..util.helper import cache, closest, logZeroNaN, running_median
 from ..util.simParams import simParams
 
@@ -385,6 +385,9 @@ def scatter2d(
                 if yLog:
                     y_track = logZeroNaN(y_track)
 
+                x.extend(x_track)
+                y.extend(y_track)
+
                 if cQuant is not None:
                     c_track = mpb[cQuant]
 
@@ -566,7 +569,8 @@ def _filter_time_track(vals_track, monotonic=False, smooth_custom=False):
                     vals_track[i] = np.nanmean([vals_track[i - 1], vals_track[i + 1]])
 
         # smooth (possibly again) (different parameters, default sKn=5, sKo=3) (e.g. after log)
-        vals_track = savgol_filter(vals_track, 10, 1)
+        if vals_track.size >= 10:
+            vals_track = savgol_filter(vals_track, 10, 1)
 
     return vals_track
 
@@ -589,6 +593,8 @@ def tracks1d(
     legend_locs: list[str] = None,
     legend_ncols: list[int] = None,
     f_selection: Callable = None,
+    f_pre: Callable = None,
+    f_post: Callable = None,
     saveFilename: str = None,
 ) -> None:
     """Evolution of a quantity versus redshift.
@@ -615,6 +621,10 @@ def tracks1d(
       f_selection: if not None, this 'custom' function hook is called to determine which
         subhalo IDs to plot for each sim. It must accept a single argument: the simulation object,
         and return a list of subhalo IDs to plot. If None, defaults to sim.zoomSubhaloID only.
+      f_pre (function): if not None, this 'custom' function hook is called just before plotting.
+        It must accept two arguments: the figure axis, and a list of simulation objects)
+      f_post (function): if not None, this 'custom' function hook is called just after plotting.
+        It must accept two arguments (the figure axis, and a list of simulation objects), and **kwargs (x and y tracks).
       saveFilename: name (and extension, setting format) of output plot. Automatic if None.
     """
     # quantities based on stellar formation times of stars in the final snapshot, as opposed to tree MPBs
@@ -653,6 +663,12 @@ def tracks1d(
     ax.set_xlim(xMinMax)
     ax.set_ylim(yMinMax)
 
+    if f_pre is not None:
+        f_pre(ax, sims)
+
+    x = []
+    y = []
+
     if quant in star_zform_quants:
         assert not monotonic, "Not a good idea for SFR, check."
 
@@ -689,8 +705,12 @@ def tracks1d(
             if valLog and not sfh_lin:
                 val = logZeroNaN(val)
 
-            # color set by hInd
-            c = colors[hInds.index(sim.hInd)]
+            # if only one hInd, then use color for different subhalos
+            if len(hInds) == 1:
+                c = colors[j]
+            else:
+                # more than one hInd, use for color
+                c = colors[hInds.index(sim.hInd)]
 
             # marker and ls set by variant
             marker = markers[variants.index(sim.variant) % len(markers)]
@@ -714,8 +734,8 @@ def tracks1d(
                     c = colors[res.index(sim.res)]
                     linestyle = linestyles[variants.index(sim.variant) % len(linestyles)]
 
-                if len(subhaloIDs) > 1 and len(variants) <= 2:
-                    linestyle = linestyles[np.min([j, 1])]
+                # if len(subhaloIDs) > 1 and len(variants) <= 2:
+                #    linestyle = linestyles[np.min([j, 1])]
             else:
                 # more than one hInd, additional subhalos are faint
                 if j > 0:
@@ -767,6 +787,9 @@ def tracks1d(
 
                 ax.plot(mpb["z"], vals_track, ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha)
 
+                x.append(mpb["z"])
+                y.append(vals_track)
+
     # galaxies from parent box
     if parents:
         vals = sim_parent.subhalos(quant)
@@ -803,6 +826,9 @@ def tracks1d(
                 # ax.plot(mpb['z'], mpb[quant], ls=linestyle, color='#555', alpha=1.0, label=label)
 
     # finish and save plot
+    if f_post is not None:
+        f_post(ax, sims, x=x, y=y)
+
     if legend == "dev":
         _add_legends(ax, hInds, res, variants, colors, lineplot=True)
     elif legend == "simple":
@@ -827,12 +853,15 @@ def tracks2d(
     smooth_custom: bool = False,
     treeName: str = None,
     parents: bool = True,
-    color: str = "redshift",
+    color: str = None,
+    clim: list[float] = None,
     sizefac: float = 1.0,
     legend: str = "dev",
     legend_locs: list[str] = None,
     legend_ncols: list[int] = None,
     f_selection: Callable = None,
+    f_pre: Callable = None,
+    f_post: Callable = None,
     saveFilename: str = None,
 ) -> None:
     """Evolution of two quantities (x and y-axes) versus time.
@@ -849,6 +878,7 @@ def tracks2d(
       treeName: if not None, the name of the merger tree to use for the tracks (otherwise, use SubLink as default).
       parents: if True, plot the original halos from the parent box for comparison.
       color: constant color for all lines, or name of quantity to color by (e.g. 'redshift').
+      clim: if color is a quantity, this 2-tuple sets the limits for the colormap.
       sizefac: multiplier on figure size, can be scalar or 2-tuple.
       legend : either 'dev' (default),  'simple', or 'none', to determine how legend(s) are shown.
       legend_locs: if not None, a list of two strings indicating the locations of the two legends.
@@ -856,6 +886,10 @@ def tracks2d(
       f_selection: if not None, this 'custom' function hook is called to determine which
         subhalo IDs to plot for each sim. It must accept a single argument: the simulation object,
         and return a list of subhalo IDs to plot. If None, defaults to sim.zoomSubhaloID only.
+      f_pre (function): if not None, this 'custom' function hook is called just before plotting.
+        It must accept two arguments: the figure axis, and a list of simulation objects)
+      f_post (function): if not None, this 'custom' function hook is called just after plotting.
+        It must accept two arguments (the figure axis, and a list of simulation objects), and **kwargs (x and y tracks).
       saveFilename: name (and extension, setting format) of output plot. Automatic if None.
     """
     # currently assume all sims have the same parent
@@ -877,6 +911,12 @@ def tracks2d(
     if ylim is not None:
         yMinMax = ylim
 
+    if color is not None and not is_color_like(color):
+        _, clabel, cMinMax, cLog = sims[0].simSubhaloQuantity(color)
+        if clim is not None:
+            assert clim[0] < clim[1], "Otherwise colorbar is flipped."
+            cMinMax = clim
+
     # start plot
     fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
 
@@ -885,6 +925,12 @@ def tracks2d(
 
     ax.set_xlim(xMinMax)
     ax.set_ylim(yMinMax)
+
+    if f_pre is not None:
+        f_pre(ax, sims)
+
+    x = []
+    y = []
 
     # individual zoom runs
     for _i, sim in enumerate(sims):
@@ -898,6 +944,19 @@ def tracks2d(
         xvals, _, _, xlog = sim.simSubhaloQuantity(xquant)
         yvals, _, _, ylog = sim.simSubhaloQuantity(yquant)
 
+        if color is not None and not is_color_like(color):
+            cvals, _, _, clog = sim.simSubhaloQuantity(color)
+            if clog:
+                cvals = logZeroNaN(cvals)
+
+            # normalize to [0, 1] for colormap
+            cvals_norm = (cvals - cMinMax[0]) / (cMinMax[1] - cMinMax[0])
+            cvals_norm = np.clip(cvals_norm, 0, 1)
+
+            # convert to colors using a colormap
+            cmap = plt.get_cmap("turbo")
+            colors_cmap = cmap(cvals_norm)
+
         # loop over each subhalo
         for j, subhaloID in enumerate(subhaloIDs):
             xval = xvals[subhaloID]
@@ -907,49 +966,41 @@ def tracks2d(
             if ylog:
                 yval = logZeroNaN(yval)
 
-            # color set by hInd
-            c = colors[hInds.index(sim.hInd)]
-
             # marker and ls set by variant
             marker = markers[variants.index(sim.variant) % len(markers)]
             linestyle = linestyles[variants.index(sim.variant) % len(linestyles)]
 
             # marker size set by resolution
-            ms_loc = (sim.res - 10) * 2.5 + 3
+            ms_loc = (sim.res - 10) * 2.0 + 3
             lw_loc = lw  # (sim.res - 10) if len(res) > 1 else lw
             alpha = 1.0
 
             # if only one hInd, then use color for either variant or res
             if len(hInds) == 1:
-                marker = markers[0]
-                linestyle = linestyles[0]
-
-                if len(variants) > 1 and len(res) == 1:
-                    c = colors[variants.index(sim.variant) % len(colors)]
-                if len(res) > 1 and len(variants) == 1:
-                    c = colors[res.index(sim.res) % len(colors)]
-                if len(res) > 1 and len(variants) > 1:
-                    c = colors[res.index(sim.res)]
-                    linestyle = linestyles[variants.index(sim.variant) % len(linestyles)]
-
-                if len(subhaloIDs) > 1 and len(variants) <= 2:
-                    linestyle = linestyles[np.min([j, 1])]
+                c = colors[j]
             else:
                 # more than one hInd, additional subhalos are faint
+                c = colors[hInds.index(sim.hInd)]
+
                 if j > 0:
                     alpha = 0.3
                     lw_loc = lw - 1
 
             # color override
-            # if color is not None:
-            #    c = color
+            if color is not None:
+                if is_color_like(color):
+                    # constant color
+                    c = color
+                else:
+                    # custom quantity mapping
+                    c = colors_cmap[subhaloID]
 
             # final redshift marker
-            if len(hInds) == 1 or j == 0:
-                (l,) = ax.plot(xval, yval, marker, color=c, markersize=ms_loc, alpha=alpha, label="")
+            ax.plot(xval, yval, marker, color=c, markersize=ms_loc, alpha=alpha, label="")
 
             # time track
-            mpb = sim.quantMPB(subhaloID, quants=[xquant, yquant], smooth=smooth, treeName=treeName)
+            quants = [xquant, yquant] if color is None else [xquant, yquant, color]
+            mpb = sim.quantMPB(subhaloID, quants=quants, smooth=smooth, treeName=treeName)
 
             if mpb is None:
                 print(" SKIP!")
@@ -961,16 +1012,43 @@ def tracks2d(
                 xvals_track = logZeroNaN(xvals_track)
             if ylog:
                 yvals_track = logZeroNaN(yvals_track)
+            if color is not None and not is_color_like(color):
+                c_track = mpb[color]
+                if clog:
+                    c_track = logZeroNaN(c_track)
+
+                # normalize to [0, 1] for colormap
+                c_track_norm = (c_track - cMinMax[0]) / (cMinMax[1] - cMinMax[0])
+                c_track_norm = np.clip(c_track_norm, 0, 1)
+
+                # convert to colors using a colormap
+                c = cmap(c_track_norm)
 
             xvals_track = _filter_time_track(xvals_track, monotonic=monotonic, smooth_custom=smooth_custom)
             yvals_track = _filter_time_track(yvals_track, monotonic=monotonic, smooth_custom=smooth_custom)
 
-            ax.plot(xvals_track, yvals_track, ls=linestyle, lw=lw_loc, color="black", alpha=alpha)
+            if isinstance(c, (list, np.ndarray)):
+                colored_line(xvals_track, yvals_track, c, ax=ax, ls=linestyle, lw=lw_loc, alpha=alpha)
+            else:
+                ax.plot(xvals_track, yvals_track, ls=linestyle, lw=lw_loc, color=c, alpha=alpha)
+
+            x.append(xvals_track)
+            y.append(yvals_track)
 
     # galaxies from parent box
     assert not parents, "Need to implement."
 
     # finish and save plot
+    if f_post is not None:
+        f_post(ax, sims, x=x, y=y)
+
+    # color bar
+    if color is not None:
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=cMinMax[0], vmax=cMinMax[1]))
+        sm.set_array([])
+        cb = fig.colorbar(sm, ax=ax, pad=0.02)
+        cb.set_label(clabel)
+
     if legend == "dev":
         _add_legends(ax, hInds, res, variants, colors, lineplot=True)
     elif legend == "simple":

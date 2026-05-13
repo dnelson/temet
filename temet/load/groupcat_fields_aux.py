@@ -529,21 +529,18 @@ mstar_max.limits = lambda sim, f: [9.0, 11.5] if sim.boxSize > 50000 else [8.0, 
 mstar_max.log = True
 
 
-@catalog_field(aliases=["rhalf_stars_max", "size_stars_code_max", "rhalf_stars_code_max"])
+@catalog_field(aliases=["rhalf_stars_max"])
 def size_stars_max(sim, field):
     """Stellar half mass radius, -maximum past value-, using SubLink_gal main progenitor branch."""
     acField = "Subhalo_Stars_Size_SubLink_gal_Max"
 
     rad = sim.auxCat(fields=[acField])[acField]
 
-    if "_code" not in field:
-        rad = sim.units.codeLengthToKpc(rad)
-
     return rad
 
 
 size_stars_max.label = r"r$_{\rm 1/2,\star,max}$"
-size_stars_max.units = lambda sim, f: r"$\rm{pc}$" if "_code" not in f else "code_length"
+size_stars_max.units = lambda sim, f: r"$\rm{pc}$"
 size_stars_max.limits = lambda sim, f: [0.2, 1.6] if sim.redshift < 1 else [-0.4, 1.4]
 size_stars_max.log = True
 

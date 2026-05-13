@@ -11,7 +11,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from temet.load.groupcat import catalog_field
 from temet.plot import snapshot, subhalos_evo
 from temet.plot.config import colors, figsize, linestyles
-from temet.plot.util import tableau10_colors
+from temet.plot.util import colored_line, tableau10_colors
 from temet.util import simParams
 from temet.util.helper import running_median
 
@@ -706,9 +706,9 @@ def sigma_star_galaxies(sims: list[simParams]) -> None:
     )
 
 
-@catalog_field(aliases=["cfe_10myr", "cfe_100myr"])
-def cluster_formation_efficiency(sim, field):
-    """Star cluster formation efficiency (definition of Bastian+08)."""
+@catalog_field(aliases=["cfr_10myr", "cfr_100myr"])
+def cluster_formation_rate(sim, field):
+    """Star cluster formation rate."""
     # mass in clusters is a sum over satellite subhalos for each central subhalo, do on the fly
     age_cl = sim.subhalos("stellarage_myr")  # "Subhalo_StellarAge_NoRadCut_MassWt"
     mstar_cl = sim.subhalos("mstar_tot")  # msun
@@ -736,16 +736,42 @@ def cluster_formation_efficiency(sim, field):
     w = np.where(first_sub >= 0)
     mstar_cl_sub[first_sub[w]] = mstar_cl_halo[w]  # assign to central subhalo of each halo
 
+    # calculate CFR = mass in clusters / time
+    with np.errstate(invalid="ignore", divide="ignore"):
+        cfr = mstar_cl_sub / (dt * 1e6)  # convert Myr to yr
+
+    return cfr
+
+
+cluster_formation_rate.label = (
+    lambda sim, f: r"Cluster Formation Rate ($\rm{CFR_{100}}$)"
+    if "100myr" in f
+    else r"Cluster Formation Rate ($\rm{CFR_{10}}$)"
+)
+cluster_formation_rate.units = r"$\rm{M_{sun}\, yr^{-1}}$"
+cluster_formation_rate.limits = [-4.0, 0.0]
+cluster_formation_rate.log = True
+
+
+@catalog_field(aliases=["cfe_10myr", "cfe_100myr"])
+def cluster_formation_efficiency(sim, field):
+    """Star cluster formation efficiency (definition of Bastian+08)."""
+    dt = 100 if "100myr" in field else 10  # Myr
+
+    # load cluster formation rate
+    cfr = sim.subhalos(f"cfr_{dt}myr")  # msun/yr
+
     # galaxy mass is the fof sum (not central subhalo)
     mstar_tot = sim.subhalos(f"mass_stars_halo_{dt}myr")  # msun
 
     # calculate CFE = mass in clusters / total stellar mass
     with np.errstate(invalid="ignore", divide="ignore"):
-        cfe = mstar_cl_sub / mstar_tot
+        sfr = mstar_tot / (dt * 1e6)  # convert Myr to yr, so that CFE is dimensionless and comparable to CFR
+        cfe = cfr / sfr
 
     if np.count_nonzero(np.isfinite(cfe)):
         if np.nanmax(cfe) > 1.0:
-            print(" Warning: CFE should be <= 1.0, but max is %.3f" % np.nanmax(cfe))
+            print(" Warning: CFE should be <= 1.0, but max is %.4f" % np.nanmax(cfe))
         cfe = np.clip(cfe, 0, 1)  # can exceed unity due to mismatch between particle and mean subhalo ages
 
     return cfe
@@ -761,40 +787,97 @@ cluster_formation_efficiency.limits = [0, 1]  # [-2.0, 0.0]
 cluster_formation_efficiency.log = False  # True
 
 
-def cfe_galaxies(sims: list[simParams], dt=10, xQuant="mstar2_log") -> None:
-    """The cluster formation efficiency (Gamma) as a function of galaxy mass."""
+def cfe_galaxies(sims: list[simParams], dt=10, xQuant="mstar2_log", cfr=False) -> None:
+    """The cluster formation efficiency (Gamma) as a function of galaxy mass, or galaxy SFR."""
+    xlim = None  # auto
+
     yQuant = f"cfe_{dt}myr"
     ylim = [0, 1]  # linear
 
+    if cfr:
+        yQuant = f"cfr_{dt}myr"
+        ylim = [-5.5, 0.0]  # log msun/yr
+
     if xQuant in ["mstar2_log", "mstar_log"]:
         xlim = [4.5, 8.5]  # log mstar
-    if xQuant == "sfr_10myr":
+    if xQuant in ["sfr_10myr", "sfr_100myr"]:
         xlim = [-5.5, -1.0]
+    if "surfdens" in xQuant:
+        xlim = [-4, 6]  # log msun/yr/kpc^2
+        ylim = [4e-3, 1.0]
 
-    def _draw_data(ax, sims):
-        pass
+    def _f_pre(ax, sims):
+        if not cfr and "surfdens" in xQuant:
+            # custom y-axis setup
+            ax.set_yscale("log")
 
-    def _print_stats(ax, sims, **kwargs):
-        mean_cfe = np.nanmean(kwargs["y"])
-        print(f"Mean cluster formation efficiency (CFE) across all galaxies: {mean_cfe:.3f}")
+        # overplot theoretical models
+        if not cfr and "surfdens" in xQuant:
+            # Dinnbier+22 (arXiv 2201.06582 Figure 7 all blue lines)
+            d22_sigma = [-4.0, -3.0, -2.0, -1.0, 0.0]  # log msun/yr/kpc^2
+            d22_cfe_low = 10.0 ** np.array([-1.15, -1.07, -1.01, -0.98, -0.96])  # log CFE
+            d22_cfe_high = 10.0 ** np.array([-0.62, -0.50, -0.40, -0.36, -0.31])
+
+            ax.fill_between(d22_sigma, d22_cfe_low, d22_cfe_high, color="#000", alpha=0.2, label="Dinnbier+22")
+
+            # Kruijssen+12 (https://arxiv.org/abs/1208.2963 Eqn. 45, Fig 6)
+            k12_sigma = np.linspace(-4.0, 0.0, 100)
+            k12_sigma_lin = 10.0**k12_sigma
+            k12_cfe = 1 / (1.15 + 0.6 * k12_sigma_lin ** (-0.4) + 0.05 * k12_sigma_lin ** (-1.0))
+
+            ax.plot(k12_sigma, k12_cfe, "--", color="#000", alpha=0.5, label="Kruijssen+12")
+
+    def _f_post(ax, sims, **kwargs):
+        # print some statistics
+        mean_yval = np.nanmean(kwargs["y"])
+        print(f"Mean {yQuant} across all galaxies: {mean_yval:.3f}")
+
+        # Cook+23 (https://arxiv.org/pdf/2212.07519 Fig 12, Table 6, binned data points for Ha and 1-10 Myr)
+        c23_label = r"Cook+23"
+        c23_sigma = [-3.06, -2.76, -2.35, -1.81, -1.24]
+        c23_sigma_err = [0.25, 0.12, 1.08, 0.58, 0.26]
+        c23_gamma = [np.nan, 0.307, 0.173, 0.241, 0.326]
+        c23_gamma_err = [np.nan, 0.05, 0.105, 0.114, 0.3]  # last err lowered for visual clarity
+
+        ax.errorbar(
+            c23_sigma,
+            c23_gamma,
+            xerr=c23_sigma_err,
+            yerr=c23_gamma_err,
+            fmt="o",
+            color="#555",
+            alpha=0.5,
+            label=c23_label,
+        )
+
+        c23_sigma = [-3.17, -2.72, -2.25, -1.51, -1.17]
+        c23_sigma_err = [0.11, 0.08, 0.04, 0.01, 0.25]
+        c23_gamma = [0.79, 0.346, 0.622, 0.68, 0.16]
+        c23_gamma_err = [0.113, 0.163, 0.278, 0.66, 0.061]  # second to last err lowered for clarity
+
+        ax.errorbar(c23_sigma, c23_gamma, xerr=c23_sigma_err, yerr=c23_gamma_err, fmt="s", color="#555", alpha=0.7)
+
+        # running median
+        # xm, ym, _, pm = running_median(kwargs["x"], kwargs["y"], binSize=0.5, percs=[16, 50, 84])
+        # ax.plot(xm, ym, "-", color="#000", alpha=0.8)
 
     subhalos_evo.scatter2d(
         sims,
         xQuant=xQuant,
         yQuant=yQuant,
-        cQuant="redshift",
+        # cQuant="redshift",
         xlim=xlim,
         ylim=ylim,
-        clim=[5.5, 10],
+        # clim=[5.5, 10],
         vs_sim=None,
         parents=False,
         tracks=0.1,  # 'all'
         sizefac=0.8,
         legend="simple",
-        legend_locs=["upper left", "upper right"],
-        legend_ncols=[1, 2],
-        f_pre=_draw_data,
-        f_post=_print_stats,
+        legend_locs=["lower left", "upper right"] if not cfr else ["lower right", "upper left"],
+        legend_ncols=[1, 1],
+        f_pre=_f_pre,
+        f_post=_f_post,
         f_selection=_zoomSubhaloIDsToPlot,
     )
 
@@ -1377,7 +1460,12 @@ def _cluster_evo_model_1(Mcl0, rcl0, t=None):
     N = Mcl0 / mstar  # number of stars, assuming mean mass
     gamma_n = 0.02  # depends on mass spectrum, 0.11-0.4 for monochromatic, as low as 0.02 for multi-mass spectrum
     lnLambda = np.log(gamma_n * N)  # Coulomb logarithm
-    lnLambda[lnLambda <= 0] = np.log(2)  # protect against negative log for very low N
+
+    # # protect against negative log for very low N (scalar and array cases)
+    if isinstance(lnLambda, (float, np.floating)):
+        lnLambda = np.clip(lnLambda, np.log(2), np.inf)
+    else:
+        lnLambda[lnLambda <= 0] = np.log(2)
 
     t_relax = 282 / (mstar * lnLambda) * np.sqrt(Mcl0 / 1e5) * (rcl0 / 1.0) ** (3 / 2)  # Eqn 5
 
@@ -1464,6 +1552,160 @@ def star_cluster_evo_model(model=1):
     plt.close(fig)
 
 
+def size_mass_evo_clusters(color=None):
+    """Time evolution of star clusters on the size-mass plane, compared to model tracks."""
+    sim = simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5)
+
+    clim = None
+    if color == "redshift":
+        clim = [5.5, 11.0]
+
+    if 0:
+        # discovery
+        subIDs = _starClusterSubhaloIDs(sim)
+        mpbs = sim.loadMPBs(subIDs, fields=["SubfindID", "SnapNum"], treeName="SubLink_gal")
+
+        mstar = sim.subhalos("mstar")
+        subIDs = list(mpbs.keys())[95:100]  # random selections
+        print(subIDs)
+        print(np.log10(mstar[subIDs]))
+    else:
+        subIDs = [90, 91, 283, 364, 433, 472, 505, 560, 563, 661, 685]
+
+    def _f_pre(ax, sims):
+        # set custom ticks and tick labels
+        ax.set_ylabel(size_label)
+        sizeticks_log = np.log10(sizeticks_lin)
+        ww = np.where((sizeticks_log > ax.get_ylim()[0]) & (sizeticks_log < ax.get_ylim()[1]))[0]
+        ax.set_yticks(sizeticks_log[ww])
+        ax.set_yticklabels(np.array(sizeticks_lin)[ww])
+
+        ax.set_xlabel(mass_label)
+
+    def _model_tracks(ax, sims, **kwargs):
+        mstar_ini = sim.subhalos("mstar_max")[subIDs]  # Msun
+        rhalf_ini = sim.subhalos("size_stars_max")[subIDs]  # pc
+        age = sim.subhalos("stellarage_myr")[subIDs]
+
+        # evolve and store
+        for i, subID in enumerate(subIDs):
+            tt = np.linspace(0, age[i], 50)  # Myr
+            # tt = np.logspace(-1.0, np.log10(age[i]), 100)  # Myr
+            masses_evo, sizes_evo, _ = _cluster_evo_model_1(mstar_ini[i], rhalf_ini[i], t=tt)
+
+            # debugging
+            if 0:
+                mpb = sim.loadMPB(subID, treeName="SubLink_gal")
+                print(f"{subID = }, {mstar_ini[i] = :.2f} Msun, {rhalf_ini[i] = :.2f} pc, {age[i] = :.2f} Myr")
+
+                mstar = sim.units.codeMassToMsun(mpb["SubhaloMassType"][:, 4])
+                mass_check = np.max(mstar)
+                ind_max = np.nanargmax(mstar)
+                size_code = mpb["SubhaloHalfmassRadType"][ind_max, 4]
+
+                scalefac = 1 / (1 + mpb["Redshift"][ind_max])
+                size_check = sim.units.codeLengthToComovingKpc(size_code) * scalefac * 1000
+
+                print(f"{mass_check = :.2f} Msun, {size_check = :.2f} pc")
+
+                acField = "Subhalo_Stars_Mass_SubLink_gal_Max"
+                ac = sim.auxCat(acField)
+
+                print(f"{masses_evo[0] = :.2f} Msun, {sizes_evo[0] = :.2f} pc")
+
+            # plot
+            xx = np.log10(masses_evo)
+            yy = np.log10(sizes_evo)
+
+            if color is None:
+                ax.plot(xx, yy, ls=":", color=colors[i], alpha=1.0)
+                ax.plot(xx[0], yy[0], "D", color=colors[i], alpha=1.0, mew=2, mfc="None")  # ms=6
+                ax.plot(xx[-1], yy[-1], "s", color=colors[i], alpha=1.0, mew=2, mfc="None")  # ms=6
+            else:
+                # colors vary along the lines
+                if color == "redshift":
+                    cvals = sim.units.ageFlatToRedshift(sim.tage - age[i] / 1e3 + tt / 1e3)
+                else:
+                    assert 0, "todo check (generalize)"  # need to interpolate MPB vals to model times!
+                    mpb = sim.quantMPB(subID, color, treeName="SubLink_gal")
+                    cvals = mpb[color]
+
+                c_track_norm = (cvals - clim[0]) / (clim[1] - clim[0])
+                c_track_norm = np.clip(c_track_norm, 0, 1)
+                cmap = plt.get_cmap("turbo")
+                c = cmap(c_track_norm)
+
+                colored_line(xx, yy, c, ax=ax, ls=":", alpha=1.0)
+
+                ax.plot(xx[0], yy[0], "D", color=c[0], alpha=1.0, mew=2, mfc="None")  # ms=6
+                ax.plot(xx[-1], yy[-1], "s", color=c[-1], alpha=1.0, mew=2, mfc="None")  # ms=6
+
+    opts = {
+        "xquant": "mstar",
+        "yquant": "size_stars_pc",
+        "xlim": [2.25, 4.25],  # [2.5, 4.0],
+        "ylim": [-1.7, 0.5],  # [-1.8, -0.5],
+        "color": color,
+        "clim": clim,
+        "parents": False,
+        "smooth": False,
+        "smooth_custom": True,  # NOTE: if any smoothing, then evo models do not necessarily start on tracks
+        "treeName": "SubLink_gal",
+        "sizefac": 0.8,
+        "f_pre": _f_pre,
+        "f_post": _model_tracks,
+        "f_selection": lambda sim: subIDs,
+    }
+
+    subhalos_evo.tracks2d([sim], **opts)
+
+    # also 1D evo tracks: mass
+    redshift_lim = [10.5, 5.3]
+    opts_mass = {
+        "xlim": redshift_lim,
+        "ylim": opts["xlim"],
+        "parents": False,
+        "smooth": False,
+        "f_pre": lambda ax, sims: ax.set_ylabel(mass_label),
+        "treeName": "SubLink_gal",
+        "f_selection": lambda sim: subIDs,  # _starClusterSubhaloIDs,
+    }
+
+    subhalos_evo.tracks1d([sim], quant=opts["xquant"], **opts_mass)
+
+    # also 1D evo tracks: size
+    def _f_pre_size(ax, sims):
+        ax.set_ylabel(size_label)
+        sizeticks_log = np.log10(sizeticks_lin)
+        ww = np.where((sizeticks_log > ax.get_ylim()[0]) & (sizeticks_log < ax.get_ylim()[1]))[0]
+        ax.set_yticks(sizeticks_log[ww])
+        ax.set_yticklabels(np.array(sizeticks_lin)[ww])
+
+    opts_size = {
+        "xlim": redshift_lim,
+        "ylim": opts["ylim"],
+        "parents": False,
+        "smooth": False,
+        "f_pre": _f_pre_size,
+        "treeName": "SubLink_gal",
+        "f_selection": lambda sim: subIDs,  # _starClusterSubhaloIDs,
+    }
+
+    subhalos_evo.tracks1d([sim], quant=opts["yquant"], **opts_size)
+
+    # also 1D evo tracks: surface density
+    opts_surfdens = {
+        "xlim": redshift_lim,
+        "ylim": [3.9, 6.5],
+        "parents": False,
+        "smooth": False,
+        "treeName": "SubLink_gal",
+        "f_selection": lambda sim: subIDs,  # _starClusterSubhaloIDs,
+    }
+
+    subhalos_evo.tracks1d([sim], quant="surfdens_stars_pc", **opts_surfdens)
+
+
 # -------------------------------------------------------------------------------------------------
 
 
@@ -1508,6 +1750,7 @@ def paperPlots(a=False):
     # fig 3: clusters: size-mass relation, size distribution
     if 0 or a:
         # TODO: add Hunter+03 (cluster masses 1e1-1e3) and Gatto+21 (1e2-1e4) (both Magellanic clouds)
+        # https://ui.adsabs.harvard.edu/abs/2009ApJ...691..946M/abstract
         size_vs_mass(sims)
 
     # fig 4: gallery of clusters (~10pc stamps?)
@@ -1637,70 +1880,19 @@ def paperPlots(a=False):
 
     # fig 11: cluster formation efficiency (Gamma), vs galaxy M* and SFR
     if 0 or a:
-        cfe_galaxies(sims, xQuant="mstar2_log")
+        cfe_galaxies(sims, dt=10, xQuant="mstar2_log")
         cfe_galaxies(sims, dt=100, xQuant="mstar2_log")
-        cfe_galaxies(sims, xQuant="sfr_10myr")
         cfe_galaxies(sims, dt=10, xQuant="sfr_10myr")
+        cfe_galaxies(sims, dt=10, xQuant="sfr_surfdens_10myr")
+
+        # cfe_galaxies(sims, dt=10, xQuant="mstar2_log", cfr=True)
+        # cfe_galaxies(sims, dt=10, xQuant="sfr_10myr", cfr=True)
 
     # fig 12: evolution tracks on size-mass plane (color by age, redshift, or fgas)
-    # TODO: show both actual and model-corrected tracks
+    # TODO: alternate model approach ~RAPSTER (https://github.com/Kkritos/Rapster) (https://arxiv.org/abs/2210.10055)
     if 0 or a:
-        sim = simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5)
-
-        if 1:
-            # discovery
-            subIDs = _starClusterSubhaloIDs(sim)
-            mpbs = sim.loadMPBs(subIDs, fields=["SubfindID", "SnapNum"], treeName="SubLink_gal")
-
-            mstar = sim.subhalos("mstar")
-            subIDs = list(mpbs.keys())[55:60]  # [0:5]  # choose some at random?
-            print(subIDs)
-            print(np.log10(mstar[subIDs]))
-        else:
-            subIDs = []
-
-        opts = {
-            "xquant": "mstar",
-            "yquant": "size_stars_pc",
-            "xlim": [2.5, 4.0],
-            "ylim": [-1.8, 0.0],
-            "parents": False,
-            "smooth": False,
-            "treeName": "SubLink_gal",
-            # "legend": "simple",
-            # legend_locs": ["lower right", "upper left"],
-            # "legend_ncols": [1, 3],
-            # "sizefac": 0.8,
-            "f_selection": lambda sim: subIDs,  # _starClusterSubhaloIDs,
-        }
-
-        subhalos_evo.tracks2d([sim], **opts)
-
-    # fig X: merger tree tracks of cluster: mass, size, gas fraction, surface density
-    if 0 or a:
-        sim = simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5)
-        subIDs = _starClusterSubhaloIDs(sim)
-        mpbs = sim.loadMPBs(subIDs, fields=["SubfindID", "SnapNum"], treeName="SubLink_gal")
-
-        # mstar = sims[0].subhalos("mstar_tot")[subIDs]
-        subIDs = list(mpbs.keys())[55:60]  # [0:5]  # choose some at random?
-        print(subIDs)
-
-        opts = {
-            "xlim": [12.1, 5.5],
-            "parents": False,
-            "smooth": False,
-            "treeName": "SubLink_gal",
-            # "legend": "simple",
-            # legend_locs": ["lower right", "upper left"],
-            # "legend_ncols": [1, 3],
-            # "sizefac": 0.8,
-            "f_selection": lambda sim: subIDs,  # _starClusterSubhaloIDs,
-        }
-
-        subhalos_evo.tracks1d([sim], quant="mstar", ylim=[2.4, 4.3], **opts)
-        subhalos_evo.tracks1d([sim], quant="size_stars_pc", ylim=[-1.9, -0.5], **opts)
-        subhalos_evo.tracks1d([sim], quant="surfdens_stars_pc", ylim=[3.9, 6.5], **opts)
+        size_mass_evo_clusters()
+        size_mass_evo_clusters(color="redshift")
 
     # fig 13: kennicut-schmidt relation (global)
     # fig todo: Sigma_SFR (e.g. Ceverino+26 shows JWST data comparisons)
