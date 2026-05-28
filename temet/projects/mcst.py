@@ -14,7 +14,7 @@ from scipy.stats import binned_statistic_2d
 
 from temet.load.simtxt import blackhole_details_mergers, sf_sn_details
 from temet.plot import snapshot, subhalos_evo
-from temet.plot.config import colors, figsize, linestyles, lw
+from temet.plot.config import colors, figsize, linestyles, lw, markers
 from temet.plot.cosmoMisc import simHighZComparison
 from temet.plot.subhalos import addUniverseAgeAxis
 from temet.plot.util import colored_line
@@ -563,6 +563,55 @@ def mbh_vs_mstar(sims: list[simParams]) -> None:
         # todo: could add direct/uncorrected JWST samples e.g. Larson+23, Ubler+23, Maiolino+23, Harikane+23, etc
         # (see Brooks+25 Fig 6 / Ortame+26 Fig 6)
 
+    def _add_kjaco_models(ax, sims, **kwargs):
+        # add post-processing model results from Kiara
+        # /bondi_evolution_live/446076_15_15_1018178170_seed1e+03/Mbh [snap_index]
+        # filepath = "cache/MCST_BH_models_bondi_live.h5"  # temporary (/vera/u/kjaco/thesis_files/data_files/)
+        filepath = "cache/MCST_BH_models_freefall_live.h5"  # temporary
+        modelname = "freefall_live_hsml"  # "bondi_evolution_live"
+        paramsets = ["hsml_seed1e+03_eff0.01", "hsml_seed1e+03_eff0.1"]  # , "hsml_seed1e+03_eff1"]
+
+        with h5py.File(filepath, "r") as f:
+            # locate dataset based on simulation
+            for i, sim in enumerate(sims):
+                # decide on BH ID
+                subIDs = _zoomSubhaloIDsToPlot(sim)
+                subID = subIDs[0]
+
+                mstar = sim.subhalos(xQuant)[subID]
+                bhIDs = sim.snapshotSubset("bh", "ids", subhaloID=subID)
+                if isinstance(bhIDs, dict) and bhIDs["count"] == 0:
+                    print(f" Warning: no BHs found in subhalo {subIDs[0]} of {sim}, skipping.")
+                    continue
+
+                bhID = bhIDs[0]
+                if len(bhIDs) > 1:
+                    print(f"Warning: multiple BHs found in subhalo {subIDs[0]} of {sim}, using first.")
+
+                # load
+                for j, paramset in enumerate(paramsets):
+                    gname = f"{modelname}/{sim.simName}/{bhID}_{paramset}"
+                    snap_index = -1  # last
+
+                    if gname not in f:
+                        print(f" Warning: dataset {gname} not found, skipping.")
+                        continue
+
+                    Mbh = f[gname + "/Mbh_ff"][()][snap_index]  # "Mbh"
+                    Mbh = np.log10(Mbh)  # log Msun
+
+                    print(f" Plotting: [{gname}], with M* = {mstar:.2f} and final Mbh = {Mbh:.2f} [log Msun].")
+
+                    # sanity check (final value should be at z=5.5)
+                    gname = f"{modelname}/{sim.simName}/{bhID}_snap"
+                    redshift = f[gname + "/redshift_range"][()]
+
+                    assert np.allclose(sim.redshift, redshift[snap_index])
+
+                    # plot
+                    ms_loc = (sim.res - 10) * 2.5 + 1  # similar scaling as in scatter2d()
+                    ax.plot(mstar, Mbh, color=colors[i], marker=markers[j + 1], ms=ms_loc, mew=2, mfc="None")
+
     subhalos_evo.scatter2d(
         sims,
         xQuant=xQuant,
@@ -574,6 +623,7 @@ def mbh_vs_mstar(sims: list[simParams]) -> None:
         legend_locs=["lower right", "upper left"],
         legend_ncols=[1, 1],
         f_pre=_draw_data,
+        f_post=_add_kjaco_models,
         f_selection=_zoomSubhaloIDsToPlot,
         sizefac=0.8,
     )
@@ -948,6 +998,7 @@ def gas_mzr(sims):
         # Nishigaki+25 (https://arxiv.org/abs/2512.12983) - skip, mostly M* > 8 (mention)
 
         # todo: https://arxiv.org/abs/2603.15761 (see Fig 6)
+        # todo: https://arxiv.org/abs/2605.06770 (GLIMPSED, eight galaxies at M* < 8.2)
 
     subhalos_evo.scatter2d(
         sims,
@@ -1863,6 +1914,7 @@ def paperPlots(a=False):
     # list of sims to include
     variants = ["ST15"]  # ['ST15c','ST15m','ST15s']
     res = [14, 15, 16]
+    # hInds = [31619, 73172, 219612, 446076, 539722]
     hInds = [1958, 5072, 15581, 23908, 31619, 73172, 219612, 311384, 446076, 539722, 844537]
     redshift = 5.5
 
@@ -2091,13 +2143,13 @@ def makeMovies():
     """Make movie frames."""
     redshift = 5.5
 
-    sim = simParams(run="structures", res=16, hInd=311384, variant="ST15", redshift=redshift)
+    sim = simParams(run="structures", res=15, hInd=73172, variant="ST15", redshift=redshift)
 
     # # movie: galaxy-scale gas + stars vis (tree mpb manual search)
     # # vis_movie(sim, haloID=0)
 
     # movie: galaxy-scale gas + stars vis (final tree mpb smoothed)
-    vis_movie_mpbsm([sim], conf=1)
+    # vis_movie_mpbsm([sim], conf=1)
 
     # movie: halo-scale many fields (final tree mpb smoothed)
     # vis_single_halo(sim, movie=True)
