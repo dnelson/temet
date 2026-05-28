@@ -229,6 +229,8 @@ def _treeSearch(xyz, h, NumPart, boxSizeSim, pos, next_node, length, center, sib
         quantResult = -np.inf
     if op == 3:  # min
         quantResult = np.inf
+    if op == 7:  # nearest
+        r2_nearest = np.inf
 
     # 3D-normalized kernel
     C1 = 2.546479089470  # COEFF_1
@@ -287,6 +289,10 @@ def _treeSearch(xyz, h, NumPart, boxSizeSim, pos, next_node, length, center, sib
                 quantResult += quant[p] * kval
             if op == 6:  # count
                 quantResult += 1
+            if op == 7:  # nearest
+                if r2 < r2_nearest:
+                    quantResult = quant[p]
+                    r2_nearest = r2
 
         else:
             # internal node
@@ -658,11 +664,14 @@ def _treeSearchNearestIterate(
         h_guess = boxSizeSim / NumPart ** (1.0 / 3.0) * 0.1
 
     dists = np.zeros(numSearch, dtype=np.float32)
-    indices = np.zeros(numSearch, dtype=np.int64)
+    indices = np.zeros(numSearch, dtype=np.int64) - 1
 
     for i in range(numSearch):
         # iterate ball search using octtree until we have >= 1 neighbor result
         xyz = posSearch[ind0 + i, :]
+
+        if xyz[0] < 0 or xyz[0] > boxSizeSim or xyz[1] < 0 or xyz[1] > boxSizeSim or xyz[2] < 0 or xyz[2] > boxSizeSim:
+            continue
 
         loc_index = -1
         iter_num = 0
@@ -972,7 +981,7 @@ def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePre
       ndarray[float]: reduction operation applied for each input.
     """
     # input sanity checks
-    ops = {"sum": 1, "max": 2, "min": 3, "mean": 4, "kernel_mean": 5, "count": 6}
+    ops = {"sum": 1, "max": 2, "min": 3, "mean": 4, "kernel_mean": 5, "count": 6, "nearest": 7}
     treeDims = [3]
 
     if isinstance(hsml, float):

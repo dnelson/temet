@@ -123,9 +123,10 @@ def zarr_proteus():
         remove("proteus_test.zarr/hydro/vel/zarr.json")
 
 
-def vis_proteus(method="voro_slice", snaps=None):
+def vis_proteus(method="voro_slice", snaps=None, cache=True, rotate=True):
     """Quick visualization of a Proteus simulation."""
-    from temet.util.treeSearch import buildFullTree, calcHsml
+    from temet.util.rotation import rotationMatrixFromAngleDirection
+    from temet.util.treeSearch import calcHsml, calcQuantReduction
     from temet.util.voronoiRay import rayTrace
 
     # config
@@ -137,14 +138,17 @@ def vis_proteus(method="voro_slice", snaps=None):
         snap_path = "/u/dnelson/ProteusGPU/run_gresho/output/"
         n_x = 800
         aspect = 1.0
-    if 1:
-        # snap_path = "/u/dnelson/data/ProteusGPU/run_quadshock1_3d/output/"
+    if 0:
         # snap_path = "/vera/ptmp/gc/lucsc/Proteus_cloud_collision_3D/"
         snap_path = "/u/dnelson/data/ProteusGPU/run_cloud_crash_400/output/"
-        # n_x = 1000  # 80 sec for 100x100 (2.3 hr for 1000x1000) (on 36 cores)
-        # aspect = 1
-        n_x = 1920
+        n_x = 1920  # 80 sec for 100x100 (2.3 hr for 1000x1000) (on 36 cores)
         aspect = 1920 / 1080  # 16:9, just ignores top and bottom of box for vis
+        cen_vals = [-0.1, -0.3, -0.7]
+    if 1:
+        snap_path = "/u/dnelson/data/ProteusGPU/run_riemann3d_256/output/"
+        n_x = 1920
+        aspect = 1920 / 1080
+        cen_vals = [-0.3, 0.3]
 
     files = glob.glob(snap_path + "snapshot_*.hdf5")
 
@@ -154,43 +158,71 @@ def vis_proteus(method="voro_slice", snaps=None):
     # loop over snapshots
     for snap in snaps:
         # snap = int(file.split("/")[-1].split("_")[1].split(".")[0])
-        file = snap_path + "snapshot_%d.hdf5" % snap
-        print(file)
+        files = [snap_path + "snapshot_%d.hdf5" % snap]
+        print(files[0])
         saveFilename = f"proteus_{snap:03d}.png"
 
         if path.isfile(saveFilename) and snap > 1:
             continue
 
+        if not path.isfile(files[0]):
+            # multi-rank chunked
+            files = glob.glob(snap_path + "snapshot_%d.*.hdf5" % snap)
+
         # load
-        with h5py.File(file, "r") as f:
-            t = f["header"].attrs["time"]
-            extent = f["header"].attrs["extent"]
-            rho = f["hydro"]["rho"][()]
+        rho = None
 
-            if "cells" in f:
-                # old
-                pos = f["cells"]["seeds"][()]
-                u = f["hydro"]["Energy"][()]
-            else:
-                # new
-                pos = f["mesh"]["pos"][()]
-                u = f["hydro"]["energy"][()]
+        for file in files:
+            with h5py.File(file, "r") as f:
+                t = f["header"].attrs["time"]
+                extent = f["header"].attrs["extent"]
 
-            field = np.log10(rho)  # np.log10(u)
+                if rho is None:
+                    rho = f["hydro"]["rho"][()]
+                    pos = f["mesh"]["pos"][()]
+                    u = f["hydro"]["energy"][()]
+                else:
+                    rho = np.concatenate([rho, f["hydro"]["rho"][()]])
+                    pos = np.concatenate([pos, f["mesh"]["pos"][()]])
+                    u = np.concatenate([u, f["hydro"]["energy"][()]])
 
-        if method == "voro_dvr":
+        field = np.log10(u)  # unused
+        field = np.log10(rho)
+
+        if method in ["voro_dvr", "step_dvr"]:
             assert pos.shape[1] == 3, "Volume rendering only for 3D simulations."
 
         # plot
         n_y = int(n_x / aspect)
+        height = extent / aspect
+
         figsize = [19.2, 19.2 / aspect]
 
         fig = plt.figure(layout="none", figsize=figsize)
         ax = fig.add_axes([0, 0, 1, 1])
+        ax.set_ylim([extent / 2 - height / 2, extent / 2 + height / 2])
+        ax.set_xlim([0, extent])
         ax.set_axis_off()
+
+        im_extent = [ax.get_xlim()[0], ax.get_xlim()[1], ax.get_ylim()[0], ax.get_ylim()[1]]
+
+        # cube vertex points
+        verts = np.array(
+            [
+                [0, 0, 0],
+                [extent, 0, 0],
+                [0, extent, 0],
+                [extent, extent, 0],
+                [0, 0, extent],
+                [extent, 0, extent],
+                [0, extent, extent],
+                [extent, extent, extent],
+            ]
+        )
 
         if method == "scatter":
             # quick scatter
+            assert not rotate
             sc = ax.scatter(pos[:, 0], pos[:, 1], c=field, s=1, cmap="viridis")
             ax.set_title(f"Proteus KH2K t={t:.2f}")
             ax.set_xlabel("x")
@@ -199,13 +231,13 @@ def vis_proteus(method="voro_slice", snaps=None):
 
         if method == "voro_slice":
             # full image: sample x,y coordinates across extent, build kd tree, find nearest cell to each pixel
+            assert not rotate
             from scipy.spatial import cKDTree
 
             # build tree
             tree = cKDTree(pos)
 
             # define sample points
-            height = extent / aspect
             x = np.linspace(0, extent, n_x)
             y = np.linspace(extent / 2 - height / 2, extent / 2 + height / 2, n_y)
 
@@ -227,7 +259,7 @@ def vis_proteus(method="voro_slice", snaps=None):
                 vmm = np.percentile(field, [5, 95])
             vmm = [-5e-6, 5e-6]
 
-            ax.imshow(img, origin="lower", vmin=vmm[0], vmax=vmm[1], cmap="viridis")
+            ax.imshow(img, origin="lower", extent=im_extent, vmin=vmm[0], vmax=vmm[1], cmap="viridis")
             ax.text(0.02, 0.02, f"t = {t:.3f}", fontsize=24, c="#fff", transform=ax.transAxes, ha="left", va="bottom")
 
         if method == "voro_dvr":
@@ -246,7 +278,6 @@ def vis_proteus(method="voro_slice", snaps=None):
             total_dl = extent
 
             # starting pos equally spaced on front face
-            height = extent / aspect
             ray_xx = (np.arange(n_x) + 0.5) * (extent / n_x)
             ray_yy = (np.arange(n_y) + 0.5) * (height / n_y) + (extent / 2 - height / 2)
             ray_x, ray_y = np.meshgrid(ray_xx, ray_yy, indexing="xy")
@@ -255,7 +286,7 @@ def vis_proteus(method="voro_slice", snaps=None):
             # ray-trace, time
             dataFile = f"proteus_{snap:03d}_n{n_x}.hdf5"
 
-            if path.isfile(dataFile):
+            if path.isfile(dataFile) and cache:
                 # load
                 with h5py.File(dataFile, "r") as f:
                     img = f["img"][()]
@@ -271,14 +302,15 @@ def vis_proteus(method="voro_slice", snaps=None):
                     sP, ray_pos, ray_dir, total_dl, pos, quant=emis, quant2=opacity, mode="quant_dvr", nThreads=72
                 )
 
-                print(f"Raytrace took {time.time() - start_time:.1f} seconds.")
+                print(f" Raytrace took {time.time() - start_time:.1f} seconds.")
 
                 img = result.reshape((n_x, n_x))
 
-                with h5py.File(dataFile, "w") as f:
-                    f["img"] = img
-                    f.attrs["t"] = t
-                    f.attrs["snap"] = snap
+                if cache:
+                    with h5py.File(dataFile, "w") as f:
+                        f["img"] = img
+                        f.attrs["t"] = t
+                        f.attrs["snap"] = snap
 
             # set color mapping (constant in time)
             # if snap == 0:
@@ -288,7 +320,7 @@ def vis_proteus(method="voro_slice", snaps=None):
             # vmm = np.percentile(img, [5, 95])
             # print(f"{vmm = }")
 
-            ax.imshow(img, origin="lower", vmin=vmm[0], vmax=vmm[1], cmap="viridis")
+            ax.imshow(img, origin="lower", extent=im_extent, vmin=vmm[0], vmax=vmm[1], cmap="viridis")
             ax.text(0.02, 0.02, f"t = {t:.3f}", fontsize=24, c="#fff", transform=ax.transAxes, ha="left", va="bottom")
 
         if method == "step_dvr":
@@ -296,7 +328,7 @@ def vis_proteus(method="voro_slice", snaps=None):
             emis = np.zeros(field.size, dtype="float32")
             width = 0.05
 
-            for cen_val in [-0.1, -0.3, -0.7]:
+            for cen_val in cen_vals:
                 emis += np.exp(-(((field - cen_val) / width) ** 2))
 
             # define opacity as proportional to density (becomes column density when integrated along the line-of-sight)
@@ -309,18 +341,32 @@ def vis_proteus(method="voro_slice", snaps=None):
             # nsteps = n_x
             step_size = extent / nsteps
 
-            # starting pos equally spaced on front face
-            height = extent / aspect
             ray_xx = (np.arange(n_x) + 0.5) * (extent / n_x)
             ray_yy = (np.arange(n_y) + 0.5) * (height / n_y) + (extent / 2 - height / 2)
             ray_zz = (np.arange(nsteps) + 0.5) * step_size
             ray_x, ray_y, ray_z = np.meshgrid(ray_xx, ray_yy, ray_zz, indexing="xy")
             sample_pts = np.column_stack((ray_x.ravel(), ray_y.ravel(), ray_z.ravel()))
 
+            if rotate:
+                # rotate sample points about cube center to simulate different viewing angles
+                angle_deg = t * 180 / 1.0  # half rotation until t=1 (over all snaps)
+                print(f" Rotating sample points by {angle_deg:.1f} degrees.")
+                rotMatrix = rotationMatrixFromAngleDirection(-angle_deg, [0, 1, 0])
+
+                sample_pts -= extent / 2
+                sample_pts = np.transpose(np.dot(rotMatrix, sample_pts.transpose()))
+                sample_pts += extent / 2
+
+                # verts = verts * 0.5 + extent / 4  # inner 50% for fun
+
+                verts -= extent / 2
+                verts = np.transpose(np.dot(rotMatrix, verts.transpose()))
+                verts += extent / 2
+
             # ray-trace, time
             dataFile = f"proteus_{snap:03d}_n{n_x}_step{nsteps}.hdf5"
 
-            if path.isfile(dataFile):
+            if path.isfile(dataFile) and cache:
                 # load
                 with h5py.File(dataFile, "r") as f:
                     img = f["img"][()]
@@ -329,34 +375,59 @@ def vis_proteus(method="voro_slice", snaps=None):
                 # build tree
                 start_time = time.time()
 
-                # NextNode, length, center, sibling, nextnode = buildFullTree(pos, extent, pos.dtype)
-                # note: can use calcQuantReduction() with op='kernal_mean' and hsml const or variable
-                _, indices = calcHsml(pos, extent, posSearch=sample_pts, treePrec="double", nearest=True, nThreads=72)
+                boxSize = extent  # non-periodic if zero
 
-                indices = indices.reshape((n_x, n_y, nsteps))
+                if 0:
+                    # use nearest neighbor sampling
+                    _, inds = calcHsml(pos, boxSize, posSearch=sample_pts, treePrec="double", nearest=True, nThreads=72)
 
-                img = np.sum(emis[indices], axis=2) * step_size  # * np.exp(-tau)
+                    inds = inds.reshape((n_y, n_x, nsteps))
 
-                print(f"Raytrace took {time.time() - start_time:.1f} seconds.")
+                    emis[-1] = (
+                        0.0  # hack: sample points outside of box (due to rotation) given index -1, zero contribution
+                    )
 
-                with h5py.File(dataFile, "w") as f:
-                    f["img"] = img
-                    f.attrs["t"] = t
-                    f.attrs["snap"] = snap
+                    img = np.sum(emis[inds], axis=2) * step_size  # * np.exp(-tau)
+
+                else:
+                    # use kernel-weighted sampling, constant or adaptive search sizes
+                    hsml = step_size * 2.0  # significant smoothing if larger
+                    op = "kernel_mean"  # "nearest"
+                    vals = calcQuantReduction(
+                        pos, emis, hsml, op, boxSize, posSearch=sample_pts, treePrec="double", nThreads=72
+                    )
+                    vals = vals.reshape((n_y, n_x, nsteps))
+
+                    img = np.sum(vals, axis=2) * step_size  # * np.exp(-tau)
+
+                print(f" Raytrace took {time.time() - start_time:.1f} seconds.")
+
+                if cache:
+                    with h5py.File(dataFile, "w") as f:
+                        f["img"] = img
+                        f.attrs["t"] = t
+                        f.attrs["snap"] = snap
 
             # set color mapping (constant in time)
-            # img = np.log(img)
             # if snap == 0:
             #    vmm = np.percentile(img, [5, 95])
             # print(f" percs = {np.percentile(img, [5, 99])}")
             # vmm = [0.0, 0.03]
             vmm = np.percentile(img, [0.1, 99.9])
-            # vmm = [np.percentile(img, 99) - 10.0, np.percentile(img, 99)]  # avoid very low values in the log
-            # vmm = [-300.0, -3.0]
             # print(f"{vmm = }")
 
-            ax.imshow(img, origin="lower", vmin=vmm[0], vmax=vmm[1], cmap="inferno")
+            ax.imshow(img, origin="lower", extent=im_extent, vmin=vmm[0], vmax=vmm[1], cmap="inferno")
             ax.text(0.02, 0.02, f"t = {t:.3f}", fontsize=24, c="#fff", transform=ax.transAxes, ha="left", va="bottom")
+
+            # draw box edges
+            front_face = [0, 1, 3, 2, 0]
+            back_face = [4, 5, 7, 6, 4]
+            top_face = [2, 3, 7, 6, 2]
+            bottom_face = [0, 1, 5, 4, 0]
+            ax.plot(verts[front_face][:, 0], verts[front_face][:, 1], "-", color="#fff", alpha=0.2, lw=2)
+            ax.plot(verts[back_face][:, 0], verts[back_face][:, 1], "-", color="#fff", alpha=0.1, lw=2)
+            ax.plot(verts[top_face][:, 0], verts[top_face][:, 1], "-", color="#fff", alpha=0.2, lw=2)
+            ax.plot(verts[bottom_face][:, 0], verts[bottom_face][:, 1], "-", color="#fff", alpha=0.1, lw=2)
 
         fig.savefig(saveFilename, dpi=n_x / figsize[0])
         plt.close(fig)
