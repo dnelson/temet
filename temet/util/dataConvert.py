@@ -1218,6 +1218,7 @@ def splitSingleHDF5IntoChunks(snap=151):
 
 
 def splitSingleHDF5ICIntoChunks(set_ids=False):
+    """Split a single-file initial conditions HDF5 into chunks, optionally reassigning particle IDs."""
     fileName = "ics_zoom_TNG50-1_halo1958_L16_sf4.0.hdf5"
     fileNameOut = "ics_zoom_TNG50-1_halo1958_L16_sf4.0.%d.hdf5"
     numChunksSave = 8

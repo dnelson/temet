@@ -2308,7 +2308,7 @@ def paperPlots():
         # vis_fullbox_virtual(TNG_C, conf=5)
 
     # figure 3 - samples
-    if 1:
+    if 0:
         sample_halomasses_vs_redshift(sPs)
 
     # figure 4 - simulation meta-comparison
@@ -2320,7 +2320,7 @@ def paperPlots():
         for conf in range(11):
             vis_gallery(TNG_C, conf=conf, num=1)  # single
         vis_gallery(TNG_C, conf=1, num=72)  # gallery
-        # vis_gallery(TNG_C, conf=12, num=1) # AtLAST White Paper for Aurora/Luca
+        # vis_gallery(TNG_C, conf=12, num=1)  # AtLAST White Paper for Aurora/Luca
         # vis_gallery(TNG_C, conf=7, num=1) # Staffel+25 Fig 3
 
     # figure 7 - gas fractions
