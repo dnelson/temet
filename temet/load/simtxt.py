@@ -666,23 +666,44 @@ def sf_sn_details(sim, overwrite=False):
     if not isfile(file_sf):
         print("Concat sf_details*.txt...")
         files_sf = [f for f in os.listdir(path + "sf_details/") if f.startswith("sf_details_") and f.endswith(".txt")]
-        for f in files_sf:
+        # for f in files_sf:
+        #    # check for corrupt rows
+        #    result = subprocess.run(
+        #        "awk -F' ' '{print NF}' " + f + " | sort -nu",
+        #        cwd=path + "sf_details/",
+        #        shell=True,
+        #        capture_output=True,
+        #        text=True,
+        #    )
+
+        #    if result.stdout.count("\n") not in [0, 1]:
+        #        print(f"File [{f}] has inconsistent number of columns!")
+
+        # subprocess.run("cat sf_details_*.txt > sf_details.txt", cwd=path + "sf_details/", shell=True)
+        subprocess.run("awk -F' ' 'NF==17' sf_details_*.txt > sf_details.txt", cwd=path + "sf_details/", shell=True)
+
+    if not isfile(file_sf_ids):
+        print("Concat sf_details_ids*.txt...")
+        files_sf_ids = [
+            f for f in os.listdir(path + "sf_details_ids/") if f.startswith("sf_details_ids_") and f.endswith(".txt")
+        ]
+        for f in files_sf_ids:
             # check for corrupt rows
             result = subprocess.run(
                 "awk -F' ' '{print NF}' " + f + " | sort -nu",
-                cwd=path + "sf_details/",
+                cwd=path + "sf_details_ids/",
                 shell=True,
                 capture_output=True,
                 text=True,
             )
 
-            assert result.stdout.count("\n") in [0, 1], f"File [{f}] has inconsistent number of columns!"
+            if result.stdout.count("\n") not in [0, 1]:
+                print(f"File [{f}] has inconsistent number of columns!")
 
-        subprocess.run("cat sf_details_*.txt > sf_details.txt", cwd=path + "sf_details/", shell=True)
-
-    if not isfile(file_sf_ids):
-        print("Concat sf_details_ids*.txt...")
-        subprocess.run("cat sf_details_ids_*.txt > sf_details_ids.txt", cwd=path + "sf_details_ids/", shell=True)
+        # subprocess.run("cat sf_details_ids_*.txt > sf_details_ids.txt", cwd=path + "sf_details_ids/", shell=True)
+        subprocess.run(
+            "awk -F' ' 'NF==4' sf_details_ids_*.txt > sf_details_ids.txt", cwd=path + "sf_details_ids/", shell=True
+        )
 
     if not isfile(file_sn):
         print("Concat sn_details*.txt...")
