@@ -14,7 +14,8 @@ from scipy.ndimage import gaussian_filter
 from ..plot import in_notebook
 from ..plot.util import loadColorTable, setAxisColors
 from ..util.boxRemap import remapPositions
-from ..util.helper import pSplitRange
+from ..util.helper import iterable, hermite_interp, linear_interp, pSplitRange
+from ..util.match import match
 from ..util.rotation import rotateCoordinateArray
 from ..vis.quantities import gridOutputProcess
 from ..vis.render import defaultHsmlFac, gridBox
@@ -235,20 +236,72 @@ def addBoxMarkers(p, conf, ax, pExtent):
         # plotting N most massive child subhalos in visible area
         h = p["sP"].groupCatHeader()
 
-        if h["Ngroups_Total"] > 0:
-            haloInd = p["sP"].groupCatSingle(subhaloID=p["subhaloInd"])["SubhaloGrNr"]
-            halo = p["sP"].groupCatSingle(haloID=haloInd)
+        if h["Nsubgroups_Total"] > 0:
+            # haloInd = p["sP"].groupCatSingle(subhaloID=p["subhaloInd"])["SubhaloGrNr"]
+            # halo = p["sP"].groupCatSingle(haloID=haloInd)
 
-            if halo["GroupFirstSub"] != p["subhaloInd"]:
-                print("Warning: Rendering subhalo circles around a non-central subhalo!")
+            # if halo["GroupFirstSub"] != p["subhaloInd"]:
+            #    print("Warning: Rendering subhalo circles around a non-central subhalo!")
 
-            subInds = np.arange(halo["GroupFirstSub"] + 1, halo["GroupFirstSub"] + halo["GroupNsubs"])
+            # skip central:
+            # subInds = np.arange(halo["GroupFirstSub"] + 1, halo["GroupFirstSub"] + halo["GroupNsubs"])
+            # include central:
+            # subInds = np.arange(halo["GroupFirstSub"], halo["GroupFirstSub"] + halo["GroupNsubs"])
 
-            gc = p["sP"].groupCat(fieldsSubhalos=["SubhaloPos", "SubhaloHalfmassRad"])
-            gc["SubhaloPos"] = gc["SubhaloPos"][subInds, :]
-            gc["SubhaloHalfmassRad"] = gc["SubhaloHalfmassRad"][subInds]
+            # include all (within panel extent):
+            subInds = np.arange(h["Nsubgroups_Total"])
 
-            _addCirclesHelper(p, ax, gc["SubhaloPos"], gc["SubhaloHalfmassRad"], p["plotSubhalos"])
+            # include only (all) satellites (within panel extent):
+            # subInds = p["sP"].subhaloIndsSat
+
+            gc = p["sP"].groupCat(fieldsSubhalos=["SubhaloPos", "SubhaloHalfmassRad", "SubhaloMass"])
+            sub_pos = gc["SubhaloPos"][subInds, :]
+            sub_size = gc["SubhaloHalfmassRad"][subInds]
+
+            labelVals = None
+            if "labelSubhalos" in p and p["labelSubhalos"]:
+                # label N most massive subhalos with some properties
+                subhalo_mass_logmsun = p["sP"].units.codeMassToLogMsun(gc["SubhaloMass"][subInds])
+
+                subhalo_mstar_logmsun = p["sP"].groupCat(fieldsSubhalos=["mstar"])[subInds]
+
+                # construct dictionary of properties (one or more)
+                labelVals = {}
+                if "mstar" in p["labelSubhalos"]:  # label with M*
+                    labelVals[r"M$_\star$ = 10$^{%.1f}$ M$_\odot$"] = subhalo_mstar_logmsun
+                if "msubhalo" in p["labelSubhalos"]:  # label with total subhalo mass
+                    labelVals[r"%.1f"] = subhalo_mass_logmsun
+                if "id" in p["labelSubhalos"]:
+                    labelVals["[%d)"] = subInds  # subhalo_id
+
+            # time interpolation?
+            if "interpTime" in p:
+                sub_vel = p["sP"].subhalos("SubhaloVel")
+                mdbs = p["sP"].loadDescendants(subInds, fields=["SubhaloPos", "SubhaloVel", "SubhaloHalfmassRad"])
+
+                sub_pos_next = sub_pos.copy()
+                sub_vel_next = sub_vel.copy()
+                sub_size_next = sub_size.copy()
+
+                # if subhalo not in tree or has no descendant, constant pos and vel
+                for i, subInd in enumerate(subInds):
+                    if subInd in mdbs:
+                        sub_pos_next[i] = mdbs[subInd]["SubhaloPos"]
+                        sub_vel_next[i] = mdbs[subInd]["SubhaloVel"]
+                        sub_size_next[i] = mdbs[subInd]["SubhaloHalfmassRad"]
+
+                # hermite interpolate
+                t0, t1, a0, a1, dt, tau = p["interpSnapTimes"]
+
+                sub_vel *= p["sP"].HubbleParam * p["sP"].units.kmS_in_kpcGyr / a0
+                sub_vel_next *= p["sP"].HubbleParam * p["sP"].units.kmS_in_kpcGyr / a1
+
+                # overwrite smbh_pos with interpolated positions at interpTime
+                sub_pos = hermite_interp(sub_pos, sub_pos_next, sub_vel, sub_vel_next, tau, dt)
+
+                sub_size = linear_interp(sub_size, sub_size_next, tau)
+
+            _addCirclesHelper(p, ax, sub_pos, sub_size, p["plotSubhalos"], labelVals)
 
     if "plotBHs" in p and (str(p["plotBHs"]) == "all" or p["plotBHs"] > 0):
         # plotting N most massive PartType5 in visible area
@@ -257,8 +310,36 @@ def addBoxMarkers(p, conf, ax, pExtent):
             smbh_pos = p["sP"].snapshotSubset("bhs", "pos")
             smbh_mass = p["sP"].snapshotSubset("bhs", "BH_Mass")
 
+            # time interpolation?
+            if "interpTime" in p:
+                # load additional fields needed for matching to next snap
+                smbh_ids = p["sP"].snapshotSubset("bhs", "ids")
+                smbh_vel = p["sP"].snapshotSubset("bhs", "vel_ckpch_gyr")
+
+                # next snapshot
+                sP_next = p["sP"].copy()
+                if sP_next.snap < sP_next.lastSnap:
+                    sP_next.setSnap(p["sP"].snap + 1)
+
+                smbh_ids_next = sP_next.snapshotSubset("bhs", "ids")
+                smbh_pos_next = sP_next.snapshotSubset("bhs", "pos")
+                smbh_vel_next = sP_next.snapshotSubset("bhs", "vel_ckpch_gyr")
+
+                # note: if ID disappears in sP_next (merger), it will simply disappear one snap early
+                i0, i1 = match(smbh_ids, smbh_ids_next)
+
+                smbh_pos = smbh_pos[i0]
+                smbh_vel = smbh_vel[i0]
+                smbh_mass = smbh_mass[i0]
+
+                # hermite interpolation
+                t0, t1, a0, a1, dt, tau = p["interpSnapTimes"]
+
+                # overwrite smbh_pos with interpolated positions at interpTime
+                smbh_pos = hermite_interp(smbh_pos, smbh_pos_next, smbh_vel, smbh_vel_next, tau, dt)
+
             # simple size scaling for visibility: 2px + 1px per dex of log(m_smbh)
-            pxScale = p["boxSizeImg"][p["axes"][0]] / 1000
+            pxScale = p["boxSizeImg"][p["axes"][0]] / p["nPixels"][0]
             smbh_rad = (3 + p["sP"].units.codeMassToLogMsun(smbh_mass)) * pxScale
 
             _addCirclesHelper(p, ax, smbh_pos, smbh_rad, p["plotBHs"], alpha=0.7, lw=3, color="#fff", facecolor="#000")
@@ -430,12 +511,18 @@ def addBoxMarkers(p, conf, ax, pExtent):
         if p["labelZ"] == "tage":
             zStr = "%5.2f billion years after the Big Bang" % p["sP"].units.redshiftToAgeFlat(p["sP"].redshift)
 
+        if p["labelZ"] == "z_tage":
+            zStr = "z = %.2f\nt = %3.0f Myr" % (
+                p["sP"].redshift,
+                p["sP"].units.redshiftToAgeFlat(p["sP"].redshift) * 1000,
+            )
+
         xt = pExtent[1] - (pExtent[1] - pExtent[0]) * (0.01) * conf.nLinear  # upper right
         yt = pExtent[3] - (pExtent[3] - pExtent[2]) * (0.01) * conf.nLinear
         color = "white" if "textcolor" not in p else p["textcolor"]
 
         ax.text(
-            xt, yt, zStr, color=color, alpha=1.0, size=conf.fontsize, ha="right", va="top"
+            xt, yt, zStr, color=color, alpha=1.0, size=conf.fontsize, ha="right", va="top", linespacing=1.6
         )  # same size as legend text
 
     if "labelScale" in p and p["labelScale"]:
@@ -582,8 +669,13 @@ def addBoxMarkers(p, conf, ax, pExtent):
             legend_labels.append("z = %.1f, ID %d" % (p["sP"].redshift, subhalo["SubhaloGrNr"]))
 
     if "labelCustom" in p and p["labelCustom"]:
-        for label in p["labelCustom"]:
-            legend_labels.append(label)
+        for label in iterable(p["labelCustom"]):
+            if callable(label):
+                # e.g. user-defined callable function
+                legend_labels.append(label(p))
+            else:
+                # e.g. simple string
+                legend_labels.append(label)
 
     if "labelAge" in p and p["labelAge"]:
         # age of the universe
@@ -598,8 +690,8 @@ def addBoxMarkers(p, conf, ax, pExtent):
     # draw legend
     if len(legend_labels):
         # sort in order of string length, if first entry is longer than last
-        if len(legend_labels[0]) > len(legend_labels[-1]):
-            legend_labels.sort(key=lambda s: len(s))
+        # if len(legend_labels[0]) > len(legend_labels[-1]):
+        #    legend_labels.sort(key=lambda s: len(s))
 
         legend_lines = [plt.Line2D((0, 0), (0, 0), linestyle="") for _ in legend_labels]
         loc = p["legendLoc"] if "legendLoc" in p else "lower left"

@@ -920,7 +920,7 @@ class sps:
         return stellarMags
 
     def calcStellarLuminosities(self, sP, band, indRange=None, rotMatrix=None, rotCenter=None):
-        """Compute luminosities in the given band, using  snapshot-stored values or on-the-fly calculations.
+        """Compute luminosities in the given band, using snapshot-stored values or on-the-fly calculations.
 
         Note that wind is returned as NaN luminosity, assuming it is filtered out elsewhere, e.g. in gridBox().
 
@@ -1004,17 +1004,10 @@ class sps:
         else:
             # load age,Z,mass_ini, use FSPS on the fly
             assert band in self.bands
-            fields = ["initialmass", "sftime", "metallicity"]
 
-            stars = sP.snapshotSubset(partType="stars", fields=fields, indRange=indRange)
-
-            sftime = stars.get("GFM_StellarFormationTime", stars.get("StellarFormationTime"))
-            metal = stars.get("GFM_Metallicity", stars.get("Metallicity"))
-            imass = stars.get("GFM_InitialMass", stars.get("InitialMass"))
-
-            if metal.ndim == 2:
-                print("TODO REMOVE MCS ST9 HACK")
-                metal = np.squeeze(metal[:, 0])  # bug in io_fields.c
+            sftime = sP.stars("sftime")
+            metal = sP.stars("metallicity")
+            imass = sP.stars("initialmass")
 
             mags = self.mags_code_units(sP, band, sftime, metal, imass, retFullSize=True)
 

@@ -166,7 +166,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
     return fields
 
 
-def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projType, method=None):
+def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projType, method=None, vmmPercs=None):
     """Perform any final unit conversions on grid output and set field-specific plotting configuration."""
     config = {}
 
@@ -760,15 +760,18 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         if logMin:
             data_grid = logZeroNaN(grid) + gridOffset
             guess_grid = data_grid[np.isfinite(data_grid)]
-            config["vMM_guess"] = np.nanpercentile(guess_grid, [15, 99.5])
+            guess_percs = vmmPercs if vmmPercs is not None else [15, 99.5]
+            config["vMM_guess"] = np.nanpercentile(guess_grid, guess_percs)
         else:
             data_grid = grid.copy() + gridOffset
             guess_grid = data_grid[np.isfinite(data_grid)]
-            config["vMM_guess"] = np.nanpercentile(guess_grid, [5, 99.5])
+            guess_percs = vmmPercs if vmmPercs is not None else [5, 99.5]
+            config["vMM_guess"] = np.nanpercentile(guess_grid, guess_percs)
 
         if "stellarBand" in partField:
             guess_grid = data_grid[data_grid < 99.0]
-            config["vMM_guess"] = np.nanpercentile(guess_grid, [5, 99.5])
+            guess_percs = vmmPercs if vmmPercs is not None else [5, 99.5]
+            config["vMM_guess"] = np.nanpercentile(guess_grid, guess_percs)
 
         # handle requested log
         if logMin:

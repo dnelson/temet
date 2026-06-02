@@ -693,16 +693,17 @@ def snapshotSubset(
     # check memory cache (only simplest support at present, for indRange/full returns of global cache)
     if len(fields) == 1 and mdi[0] is None:
         cache_key = "snap%s_%s_%s" % (sP.snap, partType, fields[0].replace(" ", "_"))
+        # print(f"check {cache_key = } [{cache_key in sP.data}]")
         if cache_key in sP.data:
             # global? (or rather, whatever is in sP.data... be careful)
             if indRange is None:
-                print("CAUTION: Cached return [%s], and indRange is None, returning all of sP.data field." % cache_key)
+                # print("CAUTION: Cached return [%s], and indRange is None, returning all of sP.data field." % cache_key)
                 if sq:
                     return sP.data[cache_key]
                 else:
                     return {fields[0]: sP.data[cache_key]}
 
-            print("NOTE: Returning [%s] from cache, indRange [%d - %d]!" % (cache_key, indRange[0], indRange[1]))
+            # print("NOTE: Returning [%s] from cache, indRange [%d - %d]!" % (cache_key, indRange[0], indRange[1]))
             if sq:
                 return sP.data[cache_key][indRange[0] : indRange[1] + 1]
             else:

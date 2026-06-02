@@ -22,6 +22,7 @@ from temet.projects.mcst_vis import (
     vis_gallery_galaxy,
     vis_highres_region,
     vis_movie_mpbsm,
+    vis_movie_mpbsm_interp,
     vis_movie_mpbsm_multi,
     vis_parent_box,
     vis_single_galaxy,
@@ -2168,6 +2169,45 @@ def makeMovies():
         sim.setSnap(snap)
         vis_highres_region(sim, partType="gas")
         # vis_highres_region(sim, partType='dm')
+
+
+def makeMovieInterp(conf="gas", pSplit=None):
+    """Make interpolated movie frames (test)."""
+    sim = simParams(run="structures", res=16, hInd=219612, variant="ST15", redshift=5.5)
+
+    # debug plot of MPB position vs time
+    if 0:
+        quants = ["SubfindID", "SnapNum", "Group_R_Crit200", "SubhaloPos", "SubhaloVel"]
+        sub_ind = 0
+        mpb_sm = sim.quantMPB(sub_ind, quants=quants, add_ghosts=True, smooth=True)
+        mpb = sim.quantMPB(sub_ind, quants=quants, add_ghosts=True, smooth=False)
+
+        fig, axes = plt.subplots(nrows=3, figsize=figsize * np.array([1.0, 1.5]), sharex=True)
+        for i in range(3):
+            axes[i].set_ylabel(r"$\Delta$" + ["x", "y", "z"][i] + " [ckpc/h]")
+            axes[i].set_xlabel("SnapNum")
+
+            # additional smoothing
+            from scipy.signal import savgol_filter
+
+            mpb_sm["SubhaloPos"][:, i] = savgol_filter(mpb_sm["SubhaloPos"][:, i], 20, 1)
+
+            if 0:
+                # differential change per snap
+                dpos = np.diff(mpb["SubhaloPos"][:, i])
+                dpos_sm = np.diff(mpb_sm["SubhaloPos"][:, i])
+
+                axes[i].plot(mpb["SnapNum"][1:], dpos, "-", label="MPB")
+                axes[i].plot(mpb_sm["SnapNum"][1:], dpos_sm, "-", label="MPB smoothed")
+            else:
+                # global position
+                axes[i].plot(mpb["SnapNum"], mpb["SubhaloPos"][:, i], "-", label="MPB")
+                axes[i].plot(mpb_sm["SnapNum"], mpb_sm["SubhaloPos"][:, i], "-", label="MPB smoothed")
+
+            axes[i].legend()
+        fig.savefig("mpb_position_vs_time.pdf")
+
+    vis_movie_mpbsm_interp([sim], conf=conf, pSplit=pSplit)
 
 
 def makeMoviesMulti():

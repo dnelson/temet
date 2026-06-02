@@ -1733,6 +1733,7 @@ class units:
 
         Inversion of analytical formula from redshiftToAgeFlat().
         """
+        age = np.atleast_1d(np.array(age))
         with np.errstate(invalid="ignore"):  # ignore nan comparison RuntimeWarning
             w = np.where((age >= 0.0) & np.isfinite(age))
 

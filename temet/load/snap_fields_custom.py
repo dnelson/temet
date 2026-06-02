@@ -147,6 +147,24 @@ dt.limits = [1.0, 6.0]
 dt.limits_halo = [1.0, 5.0]
 dt.log = True
 
+
+@snap_field
+def vel_ckpch_gyr(sim, partType, field, args):
+    """Particle/cell velocity in ckpc/h/Gyr units (for interpolation)."""
+    vel = sim.snapshotSubset(partType, "vel", **args)
+
+    vel = vel * sim.HubbleParam / np.sqrt(sim.scalefac)  # comoving km/s h (make units consistent with pos)
+    vel *= sim.units.kmS_in_kpcGyr  # convert to (ckpc/h)/Gyr
+
+    return vel
+
+
+vel_ckpch_gyr.label = "[pt] Velocity"
+vel_ckpch_gyr.units = r"$\rm{ckpc/h/Gyr}$"
+vel_ckpch_gyr.limits = [-1000, 1000]
+vel_ckpch_gyr.limits_halo = [-1000, 1000]
+vel_ckpch_gyr.log = False
+
 # -------------------- gas ------------------------------------------------------------------------
 
 

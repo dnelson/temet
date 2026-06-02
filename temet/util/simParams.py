@@ -241,7 +241,7 @@ class simParams:
             )
 
         # attach various functions pre-specialized to this sP, for convenience
-        from ..cosmo.mergertree import loadMDB, loadMPB, loadMPBs, quantMPB, treeHasField
+        from ..cosmo.mergertree import loadDescendants, loadMDB, loadMPB, loadMPBs, quantMPB, treeHasField
         from ..cosmo.util import (
             cenSatSubhaloIndices,
             correctPeriodicDistVecs,
@@ -320,6 +320,7 @@ class simParams:
         self.groupCatFields = partial(groupCatFields, self)
         self.groupCat = partial(groupCat, sP=self)
         self.auxCat = partial(auxCat, self)
+        self.loadDescendants = partial(loadDescendants, self)
         self.loadMPB = partial(loadMPB, self)
         self.loadMDB = partial(loadMDB, self)
         self.loadMPBs = partial(loadMPBs, self)
@@ -1869,6 +1870,12 @@ class simParams:
         if "Nsubgroups_Total" in header:
             return header["Nsubgroups_Total"]
         return header["Nsubhalos_Total"]
+
+    @property
+    def lastSnap(self):
+        """Return snapshot number of final/last snapshot."""
+        snaps = self.validSnapList()
+        return snaps.max()
 
     @property
     def subhaloIndsCen(self):

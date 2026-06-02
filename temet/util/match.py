@@ -17,7 +17,7 @@ except ImportError:
 def match(ar1, ar2, firstSorted=False, parallel=True, debug=False):
     """Calculate the common elements between two arrays and their respective indices.
 
-    Returns index arrays i1,i2 of the matching elements between ar1 and ar2.While the elements of ar1
+    Returns index arrays i1,i2 of the matching elements between ar1 and ar2. While the elements of ar1
     must be unique, the elements of ar2 need not be. For every matched element of ar2, the return i1
     gives the index in ar1 where it can be found. For every matched element of ar1, the return i2 gives
     the index in ar2 where it can be found. Therefore, ar1[i1] = ar2[i2]. The order of ar2[i2] preserves

@@ -52,6 +52,16 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
         sfStr,
     )
 
+    # check in-memory cache
+    cache_key = "snap%s_%s_%s" % (sP.snap, partType, "hsml")
+    if cache_key in sP.data:
+        hsml = sP.data[cache_key]
+        print(" loaded from memory cache: [%s]" % cache_key)
+        if indRange is not None:
+            hsml = hsml[indRange[0] : indRange[1]]
+        return hsml.astype("float32")
+
+    # disk cache?
     if not isdir(sP.derivPath + "hsml/"):
         mkdir(sP.derivPath + "hsml/")
 
@@ -60,7 +70,6 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
         saveFilename = saveFilename.replace(".hdf5", "_%d_of_%d.hdf5" % (pSplit[0], pSplit[1]))
         print("Running pSplit! ", pSplit, saveFilename)
 
-    # cache?
     useCache = (sP.isPartType(partType, "stars") and (not useSnapHsml)) or (
         sP.isPartType(partType, "dm") and not sP.snapHasField(partType, "SubfindHsml")
     )
@@ -178,7 +187,7 @@ def defaultHsmlFac(partType):
     if partType == "bhs":
         return 1.0  # times BH_Hsml, currently unused
     if partType == "dm":
-        return 0.5  # times SubfindHsml or nNGB=64 CalcHsml search
+        return 1.0  # times SubfindHsml or nNGB=64 CalcHsml search
     if partType == "dmlowres":
         return 4.0
 
@@ -821,6 +830,100 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
     return mass, quant, normCol
 
 
+def _grid_filename(
+    sP,
+    method,
+    partType,
+    partField,
+    nPixels,
+    axes,
+    projType,
+    projParams,
+    boxCenter,
+    boxSizeImg,
+    hsmlFac,
+    rotMatrix,
+    rotCenter,
+    remapRatio,
+    forceRecalculate=False,
+    smoothFWHM=None,
+    snapHsmlForStars=False,
+    alsoSFRgasForStars=False,
+    excludeSubhaloFlag=False,
+    skipCellIndices=None,
+    ptRestrictions=None,
+    weightField="mass",
+    randomNoise=None,
+    vmmPercs=None,
+    **kwargs,
+):
+    """Helper. Generate a unique filename for a grid based on the input parameters, for caching purposes."""
+    optionalStr = ""
+    if projType != "ortho":
+        optionalStr += "_%s-%s" % (projType, "_".join([str(k) + "=" + str(v) for k, v in projParams.items()]))
+    if remapRatio is not None:
+        optionalStr += "_remap-%g-%g-%g" % (remapRatio[0], remapRatio[1], remapRatio[2])
+    if snapHsmlForStars:
+        optionalStr += "_snapHsmlForStars"
+    if alsoSFRgasForStars:
+        optionalStr += "_alsoSFRgasForStars"
+    if excludeSubhaloFlag:
+        optionalStr += "_excludeSubhaloFlag"
+    if skipCellIndices is not None:
+        optionalStr += "_skip-%s" % str(skipCellIndices)
+    if ptRestrictions is not None:
+        optionalStr += "_restrict-%s" % str(ptRestrictions)
+    if weightField != "mass":
+        optionalStr += "_wt-%s" % weightField
+    if rotCenter is not None:  # need to add rotCenter, post 17 Sep 2018
+        optionalStr += str(rotCenter)
+    if len(nPixels) == 3:
+        optionalStr += "grid3d-%d" % nPixels[2]
+    if "interpTime" in kwargs:
+        optionalStr += "_interpTime-%g" % kwargs["interpTime"]
+
+    hashstr = "nPx-%d-%d.cen-%g-%g-%g.size-%g-%g-%g.axes=%d%d.%g.rot-%s%s" % (
+        nPixels[0],
+        nPixels[1],
+        boxCenter[0],
+        boxCenter[1],
+        boxCenter[2],
+        boxSizeImg[0],
+        boxSizeImg[1],
+        boxSizeImg[2],
+        axes[0],
+        axes[1],
+        hsmlFac,
+        str(rotMatrix),
+        optionalStr,
+    )
+    hashval = hashlib.sha256(hashstr.encode("utf-8")).hexdigest()[::4]
+
+    _, sbStr, _ = sP.subboxVals()
+
+    if not isdir(sP.derivPath + "grids/"):
+        mkdir(sP.derivPath + "grids/")
+    if not isdir(sP.derivPath + "grids/%s" % sbStr.replace("_", "/")):
+        mkdir(sP.derivPath + "grids/%s" % sbStr.replace("_", "/"))
+
+    # if loaded/gridded data is the same, just processed differently, don't save twice
+    partFieldSave = partField.replace(" fracmass", " mass")
+    partFieldSave = partField.replace("_msunckpc2", "_msunkpc2")
+    partFieldSave = partFieldSave.replace(" ", "_")  # convention for filenames
+
+    saveFilename = sP.derivPath + "grids/%s/%s.%s%d.%s.%s.%s.hdf5" % (
+        sbStr.replace("_", "/"),
+        method,
+        sbStr,
+        sP.snap,
+        partType,
+        partFieldSave,
+        hashval,
+    )
+
+    return saveFilename
+
+
 def gridBox(
     sP,
     method,
@@ -845,69 +948,37 @@ def gridBox(
     ptRestrictions=None,
     weightField="mass",
     randomNoise=None,
+    vmmPercs=None,
     **kwargs,
 ):
     """Caching gridding/imaging of a simulation box."""
-    optionalStr = ""
-    if projType != "ortho":
-        optionalStr += "_%s-%s" % (projType, "_".join([str(k) + "=" + str(v) for k, v in projParams.items()]))
-    if remapRatio is not None:
-        optionalStr += "_remap-%g-%g-%g" % (remapRatio[0], remapRatio[1], remapRatio[2])
-    if snapHsmlForStars:
-        optionalStr += "_snapHsmlForStars"
-    if alsoSFRgasForStars:
-        optionalStr += "_alsoSFRgasForStars"
-    if excludeSubhaloFlag:
-        optionalStr += "_excludeSubhaloFlag"
-    if skipCellIndices is not None:
-        optionalStr += "_skip-%s" % str(skipCellIndices)
-    if ptRestrictions is not None:
-        optionalStr += "_restrict-%s" % str(ptRestrictions)
-    if weightField != "mass":
-        optionalStr += "_wt-%s" % weightField
-    if rotCenter is not None:  # need to add rotCenter, post 17 Sep 2018
-        optionalStr += str(rotCenter)
-    if len(nPixels) == 3:
-        optionalStr += "grid3d-%d" % nPixels[2]
-
-    hashstr = "nPx-%d-%d.cen-%g-%g-%g.size-%g-%g-%g.axes=%d%d.%g.rot-%s%s" % (
-        nPixels[0],
-        nPixels[1],
-        boxCenter[0],
-        boxCenter[1],
-        boxCenter[2],
-        boxSizeImg[0],
-        boxSizeImg[1],
-        boxSizeImg[2],
-        axes[0],
-        axes[1],
-        hsmlFac,
-        str(rotMatrix),
-        optionalStr,
-    )
-    hashval = hashlib.sha256(hashstr.encode("utf-8")).hexdigest()[::4]
-
-    _, sbStr, _ = sP.subboxVals()
-
-    # if loaded/gridded data is the same, just processed differently, don't save twice
-    partFieldSave = partField.replace(" fracmass", " mass")
-    partFieldSave = partField.replace("_msunckpc2", "_msunkpc2")
-    partFieldSave = partFieldSave.replace(" ", "_")  # convention for filenames
-
-    saveFilename = sP.derivPath + "grids/%s/%s.%s%d.%s.%s.%s.hdf5" % (
-        sbStr.replace("_", "/"),
+    saveFilename = _grid_filename(
+        sP,
         method,
-        sbStr,
-        sP.snap,
         partType,
-        partFieldSave,
-        hashval,
+        partField,
+        nPixels,
+        axes,
+        projType,
+        projParams,
+        boxCenter,
+        boxSizeImg,
+        hsmlFac,
+        rotMatrix,
+        rotCenter,
+        remapRatio,
+        forceRecalculate=False,
+        smoothFWHM=None,
+        snapHsmlForStars=False,
+        alsoSFRgasForStars=False,
+        excludeSubhaloFlag=False,
+        skipCellIndices=None,
+        ptRestrictions=None,
+        weightField="mass",
+        randomNoise=None,
+        vmmPercs=None,
+        **kwargs,
     )
-
-    if not isdir(sP.derivPath + "grids/"):
-        mkdir(sP.derivPath + "grids/")
-    if not isdir(sP.derivPath + "grids/%s" % sbStr.replace("_", "/")):
-        mkdir(sP.derivPath + "grids/%s" % sbStr.replace("_", "/"))
 
     # no particles of type exist? blank grid return (otherwise die in getHsml and wind removal)
     h = sP.snapshotHeader()
@@ -916,7 +987,7 @@ def gridBox(
         print("Skip empty: [%s]!" % saveFilename.split(sP.derivPath)[1])
         grid = np.zeros(nPixels, dtype="float32")
         grid, config, data_grid = gridOutputProcess(
-            sP, grid, partType, partField, boxSizeImg, nPixels, projType, method
+            sP, grid, partType, partField, boxSizeImg, nPixels, projType, method, vmmPercs
         )
         return grid, config, data_grid
 
@@ -1654,7 +1725,7 @@ def gridBox(
 
     # handle units and come up with units label
     grid_master, config, data_grid = gridOutputProcess(
-        sP, grid_master, partType, partField, boxSizeImg, nPixels, projType, method
+        sP, grid_master, partType, partField, boxSizeImg, nPixels, projType, method, vmmPercs
     )
 
     config["boxCenter"] = boxCenter

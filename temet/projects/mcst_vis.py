@@ -357,8 +357,8 @@ def vis_gallery_clusters(sims):
 
     class plotConfig:
         plotStyle = "edged"
-        colorbars = True if conf != 1 else False
-        saveFilename = "gallery_clusters_conf%d_%d.pdf" % (conf, len(sims))
+        colorbars = False
+        saveFilename = "gallery_clusters_%d.pdf" % len(sims)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -542,7 +542,7 @@ def vis_movie(sP, haloID=0, frame=None):
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
 
-def vis_movie_mpbsm(sims, haloID=0, conf=1):
+def vis_movie_mpbsm(sims, haloID=0, conf=2):
     """Render movie of a -single- zoom run using the final merger tree and MPB-smoothed halo tracking."""
     panels = []
 
@@ -571,6 +571,11 @@ def vis_movie_mpbsm(sims, haloID=0, conf=1):
         pt2 = "stars"
         pf2 = "stellarComp"  # ObsFrame
         vmm2 = None
+
+    if conf == 2:
+        pt1 = "dm"
+        pf1 = "coldens_msunkpc2"
+        vmm1 = dmMM
 
     # one run: gas and stars side-by-side
     sub_ind = sims[0].halo(haloID)["GroupFirstSub"]
@@ -608,6 +613,87 @@ def vis_movie_mpbsm(sims, haloID=0, conf=1):
         saveFileBase = "%s_evo_%s" % ("-".join([s.simName for s in sims]), conf)
 
     renderSingleHaloFrames(panels, plotConfig, locals())
+
+
+def vis_movie_mpbsm_interp(sims, haloID=0, conf="gas", pSplit=None):
+    """Render movie of a -single- zoom run using the final merger tree and MPB-smoothed halo tracking (interp test)."""
+    if pSplit is None:
+        pSplit = [0, 1]
+
+    panels = []
+
+    # panel selection
+    rVirFracs = []  # disabled
+    fracsType = "rHalfMassStars"
+    method = "sphMap_global"
+    nPixels = [1920, 1080]
+    size = 2.0 if np.max([s.hInd for s in sims]) > 20000 else 5.0
+    sizeType = "kpc"
+    axes = [0, 1]
+    plotBHs = "all"
+    labelZ = "z_tage"
+    labelScale = "physical"
+    labelSim = True
+    labelHalo = "mhalo,mstar"
+    relCoords = True
+    rotation = None
+    autoLimits = False  # disable auto-scaling of stellar band images across frames
+
+    if conf == "gas":
+        pt1 = "gas"
+        pf1 = "coldens_msunkpc2"
+        # vmm1 = [5.0, 7.5]
+
+    if conf == "dm":
+        pt1 = "dm"
+        pf1 = "coldens_msunkpc2"
+        # vmm1 = [6.0, 8.5]
+        plotSubhalos = 20
+        labelSubhalos = "msubhalo"
+
+    if conf == "stars":
+        pt1 = "stars"
+        pf1 = "stellarComp"  # ObsFrame
+
+    def _custom_sfr_label(panel):
+        sP = panel["sP"]
+        sfr = sP.halo(haloID)["GroupSFR"]  # Msun/yr
+
+        return r"SFR = %.3f $\rm{M_\odot\,yr^{-1}}$" % sfr
+
+    labelCustom = [_custom_sfr_label]
+
+    vmmPercs = [1, 99.9]  # automatic scaling per-frame
+
+    # one run: gas and stars side-by-side
+    sub_ind = sims[0].halo(haloID)["GroupFirstSub"]
+
+    panels.append(
+        {
+            "sP": sims[0],
+            "subhaloInd": sub_ind,
+            "partType": pt1,
+            "partField": pf1,
+            # "valMinMax": vmm1,
+            "labelScale": "physical",
+            "labelSim": True,
+        }
+    )
+
+    class plotConfig:
+        plotStyle = "edged"
+        rasterPx = nPixels
+        colorbars = False  # True
+        colorbarOverlay = True
+        fontsize = 24
+        savePath = ""
+        saveFileBase = "%s_evo_interp" % ("-".join([s.simName for s in sims]))
+
+        # movie config
+        # interpFac = 10
+        interpDt = 0.3  # Myr
+
+    renderSingleHaloFrames(panels, plotConfig, locals(), curTask=pSplit[0], numTasks=pSplit[1])
 
 
 def vis_movie_mpbsm_multi(sims, conf=1):

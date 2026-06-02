@@ -4,11 +4,15 @@ Visualizations for individual halos/subhalos from ..cosmological runs.
 
 from copy import deepcopy
 from getpass import getuser
+from numba import set_num_threads
 from os.path import isfile
+from scipy.signal import savgol_filter
 
 import numpy as np
+import time
 
-from ..util.helper import evenlySample
+from ..util.helper import evenlySample, hermite_interp, linear_interp, num_cpus, pSplit
+from ..util.match import match
 from ..util.rotation import (
     meanAngMomVector,
     momentOfInertiaTensor,
@@ -18,7 +22,7 @@ from ..util.rotation import (
 )
 from ..util.simParams import simParams
 from ..vis.common import renderMultiPanel
-from ..vis.render import defaultHsmlFac, gridBox
+from ..vis.render import _grid_filename, defaultHsmlFac, getHsmlForPartType, gridBox
 
 
 def haloImgSpecs(
@@ -101,6 +105,27 @@ def haloImgSpecs(
             galHalfMassRad = mpb["SubhaloHalfmassRad"][ind[0]]
             galHalfMassRadStars = mpb["SubhaloHalfmassRadType"][ind[0], sP.ptNum("stars")]
             galVel = mpb["SubhaloVel"][ind[0], :]
+
+        # time interpolation between snapshots?
+        if "interpTime" in kwargs and ind[0] > 0:
+            assert sP.snap >= mpb["SnapNum"].min()  # implement for interp before start of MPB
+
+            mpb_times = sP.units.redshiftToAgeFlat(mpb["redshift"])
+            inds = [ind[0], ind[0] - 1]  # mpb is ordered in increasing snapnum i.e. decreasing time
+            assert inds[1] >= 0, "Avoid this case, do not interp on last snap in general."
+
+            haloVirRad = np.interp(kwargs["interpTime"], mpb_times[inds], mpb["Group_R_Crit200"][inds])
+            boxCenter = np.array(
+                [np.interp(kwargs["interpTime"], mpb_times[inds], mpb["SubhaloPos"][inds, i]) for i in range(3)]
+            )
+            boxCenter = boxCenter[axes + [3 - axes[0] - axes[1]]]  # permute into axes ordering
+            galHalfMassRad = np.interp(kwargs["interpTime"], mpb_times[inds], mpb["SubhaloHalfmassRad"][inds])
+            galHalfMassRadStars = np.interp(
+                kwargs["interpTime"], mpb_times[inds], mpb["SubhaloHalfmassRadType"][inds, sP.ptNum("stars")]
+            )
+            galVel = np.array(
+                [np.interp(kwargs["interpTime"], mpb_times[inds], mpb["SubhaloVel"][inds, i]) for i in range(3)]
+            )
 
         # set refPos and refVel, used e.g. for halo-centric quantities
         sP.refPos = boxCenter.copy()
@@ -401,7 +426,7 @@ def renderSingleHalo(panels_in, plotConfig=None, localVars=None, skipExisting=Fa
     renderMultiPanel(panels, plotConfig)
 
 
-def renderSingleHaloFrames(panels_in, plotConfig=None, localVars=None, skipExisting=True):
+def renderSingleHaloFrames(panels_in, plotConfig=None, localVars=None, curTask=0, numTasks=1, skipExisting=True):
     """Render view(s) of a single halo, repeating across all snapshots using the smoothed MPB properties."""
     panels = deepcopy(panels_in)
 
@@ -469,6 +494,8 @@ def renderSingleHaloFrames(panels_in, plotConfig=None, localVars=None, skipExist
         minRedshift = 0.0  # ending redshift of frame sequence (we go forward in time)
         maxRedshift = 100.0  # starting redshift of frame sequence (we go forward in time)
         maxNumSnaps = None  # make at most this many evenly spaced frames, or None for all
+        interpFac = None  # interpolate in time between snapshots, adding N frames per original snapshot
+        interpDt = None  # interpolate in time between snapshots, adding frames with this constant time step (Myr)
 
     if plotConfig is None:
         plotConfig = plotConfigDefaults()
@@ -536,6 +563,10 @@ def renderSingleHaloFrames(panels_in, plotConfig=None, localVars=None, skipExist
         ]
         p["mpb"] = p["sP"].quantMPB(p["sP"].subhaloInd, quants=quants, add_ghosts=True, smooth=True)
 
+        # additional smoothing to remove short time-scale positional oscillations
+        for i in range(3):
+            p["mpb"]["SubhaloPos"][:, i] = savgol_filter(p["mpb"]["SubhaloPos"][:, i], 20, 1)
+
         if not isinstance(p["nPixels"], list):
             p["nPixels"] = [p["nPixels"], p["nPixels"]]
 
@@ -544,16 +575,166 @@ def renderSingleHaloFrames(panels_in, plotConfig=None, localVars=None, skipExist
     snapNums = p["sP"].validSnapList(
         maxNum=plotConfig.maxNumSnaps, minRedshift=plotConfig.minRedshift, maxRedshift=plotConfig.maxRedshift
     )
-    frameNum = 0
+    frameNums = np.arange(snapNums.size)
 
-    for snapNum in snapNums:
-        print("Frame [%d of %d] at snap %d:" % (frameNum, snapNums.size, snapNum))
-        # finalize panels list (all properties not set here are invariant in time)
+    # time interpolation? (constant number of frames per snap)
+    if plotConfig.interpFac is not None:
+        # new frame number <-> snapshot number mapping
+        frameNums = np.arange(0, (snapNums.size - 1) * plotConfig.interpFac + 1)
+
+        print(f"Time [interpFac = {plotConfig.interpFac}] gives {frameNums.size} frames from {snapNums.size} snaps.")
+
+        snapNums = np.repeat(snapNums, plotConfig.interpFac)[: -plotConfig.interpFac + 1]  # single frame on last snap
+
+        # set interpolation times
+        snapRedshift = p["sP"].snapNumToRedshift(all=True)
+        snapAges = p["sP"].units.redshiftToAgeFlat(snapRedshift)  # Gyr
+
+        frameTimesGyr = np.zeros(frameNums.size)
+        frameRedshifts = np.zeros(frameNums.size)
+
+        for i, frameNum in enumerate(frameNums):
+            snapNum0 = snapNums[i]
+            snapNum1 = snapNums[i + 1] if i < frameNums.size - 1 else snapNums[i]
+
+            t0 = snapAges[snapNum0]
+            t1 = snapAges[snapNum1]
+            z0 = snapRedshift[snapNum0]
+            z1 = snapRedshift[snapNum1]
+
+            frameTimesGyr[i] = (t1 - t0) / plotConfig.interpFac * (frameNum % plotConfig.interpFac) + t0
+            frameRedshifts[i] = (z1 - z0) / plotConfig.interpFac * (frameNum % plotConfig.interpFac) + z0
+
+        curInterpSnap0 = None
+
+    # time interpolation? (constant time step, independent of snapshot spacing)
+    if plotConfig.interpDt is not None:
+        # new frame number <-> snapshot number mapping
+        snapRedshift = p["sP"].snapNumToRedshift(all=True)
+        snapTimesMyr = p["sP"].units.redshiftToAgeFlat(snapRedshift) * 1000  # Myr
+
+        frameTimesMyr = np.arange(snapTimesMyr[0], snapTimesMyr[-1], plotConfig.interpDt)
+
+        frameNums = np.arange(frameTimesMyr.size)
+
+        print(f"Time [interpDt = {plotConfig.interpDt} Myr] gives {frameNums.size} frames from {snapNums.size} snaps.")
+
+        # find closest snap preceeding each frame time
+        snapNums = np.zeros(frameNums.size, dtype=np.int32) - 1
+        for i, t in enumerate(frameTimesMyr):
+            snapNums[i] = np.searchsorted(snapTimesMyr, t, side="right") - 1
+
+        assert snapNums.min() >= 0 and snapNums.max() < snapTimesMyr.size, "interpDt out of snap time bounds!"
+
+        curInterpSnap0 = None
+
+    # optionally parallelize over multiple tasks
+    numFramesTot = frameNums.size
+    frameCount = 0
+    frameNums = pSplit(frameNums, numTasks, curTask)
+    snapNums = pSplit(snapNums, numTasks, curTask)
+
+    print(
+        "Task [%d of %d] rendering [%d] frames of [%d] total (from %d to %d)..."
+        % (curTask, numTasks, len(frameNums), numFramesTot, np.min(frameNums), np.max(frameNums))
+    )
+
+    def _load_interp_data(panel_loc, snap_num):
+        partType = panel_loc["partType"]
+        sim = panel_loc["sP"].copy()
+        sim.setSnap(snap_num)
+
+        # load common fields, needed for all part types and vis fields
+        ids = sim.snapshotSubsetP(partType, "id")
+        pos = sim.snapshotSubsetP(partType, "pos")
+        vel = sim.snapshotSubsetP(partType, "vel_ckpch_gyr")  # units consistent with pos/Gyr
+
+        r = {"ids": ids, "pos": pos, "vel": vel, "time": sim.tage, "redshift": sim.redshift}
+
+        if not sim.isPartType(partType, "stars") or sim.star not in [2, 3]:
+            # hsml needed for both gas and dm, and also stars (unless point-like)
+            hsml = getHsmlForPartType(sim, partType)
+            r["hsml"] = hsml
+
+        if sim.isPartType(partType, "stars"):
+            r["sftime"] = sim.stars("sftime")
+            r["metallicity"] = sim.stars("metallicity")
+            r["initialmass"] = sim.stars("initialmass")
+
+        if not sim.isPartType(partType, "dm"):
+            mass = sim.snapshotSubsetP(partType, "mass")
+            r["mass"] = mass
+
+        if sim.isPartType(partType, "gas"):
+            dens = sim.snapshotSubsetP(partType, "density")
+            r["dens"] = dens
+
+        return r
+
+    for snapNum, frameNum in zip(snapNums, frameNums):
+        frameCount += 1
+        print("Frame [#%d] [%d of %d] at snap %d:" % (frameNum, frameCount, snapNums.size, snapNum))
+
+        # request render and save
+        plotConfig.saveFilename = plotConfig.savePath + plotConfig.saveFileBase + "_%03d.png" % (frameNum)
+
+        if skipExisting and isfile(plotConfig.saveFilename):
+            print("SKIP: %s" % plotConfig.saveFilename)
+            continue
+
+        # set redshift for all panels (overrides simParams and e.g. zeros simParams.data, so must be before interp)
         for p in panels:
-            # override simParams info at this snapshot
             p["sP"] = p["sP"].copy()
             p["sP"].setSnap(snapNum)
 
+        # time interpolation?
+        if plotConfig.interpFac is not None or plotConfig.interpDt is not None:
+            # identify time (Gyr) and redshift for this frame
+            if plotConfig.interpFac is not None:
+                # time_interp = dt / plotConfig.interpFac * (frameNum % plotConfig.interpFac) + t0  # Gyr
+                time_interp = frameTimesGyr[frameNum]
+                z_interp = frameRedshifts[frameNum]
+
+            if plotConfig.interpDt is not None:
+                time_interp = frameTimesMyr[frameNum] / 1000  # Gyr
+                z_interp = p["sP"].units.ageFlatToRedshift(time_interp)
+
+            p["interpTime"] = time_interp  # generates unique grid cache filename, triggers interp in vis overplots
+
+            sP_next = p["sP"].copy()
+            sP_next.setSnap(sP_next.snap + 1)
+
+            t0 = p["sP"].tage
+            t1 = sP_next.tage
+            dt = t1 - t0  # Gyr
+
+            z0 = p["sP"].redshift
+            z1 = sP_next.redshift
+            dz = z1 - z0
+
+            a0 = p["sP"].scalefac
+            a1 = sP_next.scalefac
+
+            assert time_interp >= t0 and time_interp < t1, "interpDt frame time out of current snap interval."
+
+            if frameNum == frameNums[-1]:
+                time_interp = t1
+
+            tau = (time_interp - t0) / dt  # [0,1]
+
+            print(f" {t0 = :.4f}, {t1 = :.4f}, {time_interp = :.4f}, factor tau = {tau:.2f}")
+
+            p["interpSnapTimes"] = [t0, t1, a0, a1, dt, tau]  # used in vis.common() for overplotting interp
+
+            # override sim.scalefac (e.g. physicalKpcToCodeLength)
+            for p in panels:
+                p["sP"].redshift = z_interp
+                p["sP"].units.scalefac = 1 / (1 + z_interp)
+
+        # finalize panels list (all properties not set here are invariant in time)
+        allGridsExist = True
+
+        for p in panels:
             # add imaging config for single halo view using MPB
             (
                 p["boxSizeImg"],
@@ -566,13 +747,147 @@ def renderSingleHaloFrames(panels_in, plotConfig=None, localVars=None, skipExist
                 p["rotCenter"],
             ) = haloImgSpecs(**p)
 
-        # request render and save
-        plotConfig.saveFilename = plotConfig.savePath + plotConfig.saveFileBase + "_%03d.png" % (frameNum)
-        frameNum += 1
+            # does cached grid file already exist? then no need to load snapshot data for possible interp
+            gridFilename = _grid_filename(**p)
+            if not isfile(gridFilename):
+                allGridsExist = False
 
-        if skipExisting and isfile(plotConfig.saveFilename):
-            print("SKIP: %s" % plotConfig.saveFilename)
-            continue
+        # time interpolation? load bracketing snapshots, cross-match, and interpolate positions and properties
+        if plotConfig.interpFac is not None or plotConfig.interpDt is not None and not allGridsExist:
+            assert len(panels) == 1  # otherwise generalize to multiple panels with potentially different pt/fields/runs
+            p = panels[0]
+            # print(f"Interpolating frame {frameNum} at snap {snapNum}...")
+
+            if curInterpSnap0 is None:
+                # init: load data for first and second snapshots
+                next_interp_data = _load_interp_data(p, snapNum)
+
+            if curInterpSnap0 != snapNum and frameNum != frameNums[-1]:
+                # we have moved to the next snapshot, move "next" data to "current" data, and load next snapshot
+                cur_interp_data = next_interp_data
+
+                next_interp_data = _load_interp_data(p, snapNum + 1)
+                curInterpSnap0 = snapNum
+                match_i0 = match_i1 = None  # reset match indices for new snapshot pair
+
+            # cross-match by ids
+            if match_i0 is None:
+                match_i0, match_i1 = match(cur_interp_data["ids"], next_interp_data["ids"])
+
+                # all particles matched? (DM)
+                if match_i0.size == cur_interp_data["ids"].size == next_interp_data["ids"].size:
+                    # re-shuffle 'first' snapshot data to be in same order
+                    for key in cur_interp_data.keys():
+                        # non-scalar i.e. all fields other than DM mass
+                        if cur_interp_data[key].size > 1:
+                            cur_interp_data[key] = cur_interp_data[key][match_i0]
+                    # if cur_interp_data["mass"].size > 1:
+                    #    cur_interp_data["mass"] = cur_interp_data["mass"][match_i0]
+                else:
+                    # not all particles matched, e.g. gas, create new arrays
+                    new_data_cur = {}
+                    new_data_next = {}
+                    for key in ["time", "redshift"]:
+                        new_data_cur[key] = cur_interp_data[key]
+                        new_data_next[key] = next_interp_data[key]
+
+                    # total unique
+                    n_match = match_i0.size
+                    n_unique = np.unique(np.concatenate([cur_interp_data["ids"], next_interp_data["ids"]])).size
+                    # print(f"  Total: {cur_interp_data['ids'].size} (cur), {next_interp_data['ids'].size} (next) snap.")
+                    # print(f"  Unique: {n_unique} total unique particles across the two snapshots.")
+
+                    # locate un-matched
+                    mask_cur = np.zeros(cur_interp_data["ids"].size, dtype=bool)
+                    mask_next = np.zeros(next_interp_data["ids"].size, dtype=bool)
+                    mask_cur[match_i0] = True
+                    mask_next[match_i1] = True
+                    w_unmatched_cur = np.where(~mask_cur)[0]
+                    w_unmatched_next = np.where(~mask_next)[0]
+                    # print(f"  Unmatched: {w_unmatched_cur.size} (cur), {w_unmatched_next.size} (next) snap.")
+
+                    for key in cur_interp_data:
+                        if key in ["time", "redshift"]:
+                            continue
+
+                        # create empty array of full size, structured as:
+                        # [0:n_matched] matched particles in same order
+                        # [n_matched:n_matched + w_unmatched_cur.size] current particles with no match in next
+                        # [n_matched + w_unmatched_cur.size:] next particles with no match in current
+                        shape = (n_unique, 3) if cur_interp_data[key].ndim == 2 else (n_unique,)
+                        new_data_cur[key] = np.zeros(shape, dtype=cur_interp_data[key].dtype)
+                        new_data_next[key] = np.zeros(shape, dtype=next_interp_data[key].dtype)
+
+                        # stamp matches (beginning of arrays)
+                        new_data_cur[key][0:n_match] = cur_interp_data[key][match_i0]
+                        new_data_next[key][0:n_match] = next_interp_data[key][match_i1]
+
+                        if key == "mass":
+                            # leave all masses at zero for unmatched subset (too many visual artifacts)
+                            continue
+
+                        # copy values for missing matches (unchanged for now)
+                        new_data_cur[key][n_match : n_match + w_unmatched_cur.size] = cur_interp_data[key][
+                            w_unmatched_cur
+                        ]
+                        new_data_cur[key][n_match + w_unmatched_cur.size :] = next_interp_data[key][w_unmatched_next]
+
+                        new_data_next[key][n_match : n_match + w_unmatched_cur.size] = cur_interp_data[key][
+                            w_unmatched_cur
+                        ]
+                        new_data_next[key][n_match + w_unmatched_cur.size :] = next_interp_data[key][w_unmatched_next]
+
+                    # set next_interp_data['pos'] for unmatched particles using constant vel assumption
+                    # note: currently does nothing as mass zeroed for unmatched subset
+                    dpos_cur = new_data_cur["vel"][w_unmatched_cur] * dt
+                    new_data_next["pos"][n_match : n_match + w_unmatched_cur.size] += dpos_cur  # ckpc/h
+
+                    dpos_next = new_data_next["vel"][w_unmatched_next] * dt
+                    new_data_cur["pos"][n_match + w_unmatched_cur.size :] -= dpos_next  # ckpc/h
+
+                    # set mass to zero for unmatched particles, on the other side of the interval, so they fade away/in
+                    # new_data_next["mass"][n_match : n_match + w_unmatched_cur.size] = 1e-10
+                    # new_data_cur["mass"][n_match + w_unmatched_cur.size :] = 1e-10
+
+                    # set data arrays to our new 'full' matching arrays
+                    cur_interp_data = new_data_cur
+                    next_interp_data = new_data_next
+
+                assert np.array_equal(cur_interp_data["ids"], next_interp_data["ids"]), "ID mismatch after sorting!"
+
+            # cubic hermite interpolation in time
+            pos0 = cur_interp_data["pos"]
+            pos1 = next_interp_data["pos"]
+            vel0 = cur_interp_data["vel"]
+            vel1 = next_interp_data["vel"]
+
+            nThreads = min(num_cpus() // 2, 36)  # determine threading automaticalyl (half of available, at most 36)
+            set_num_threads(nThreads)
+
+            pos_t = hermite_interp(pos0, pos1, vel0, vel1, tau, dt)
+
+            cache_key_prefix = "snap%d_%s_" % (snapNum, p["partType"])
+            p["sP"].data[cache_key_prefix + "Coordinates"] = pos_t
+
+            # linear interp other properties, and override data in panel with interpolated data
+            if not p["sP"].isPartType(p["partType"], "dm"):
+                # only for DM do we skip mass, which is a (constant) scalar
+                mass_t = linear_interp(cur_interp_data["mass"], next_interp_data["mass"], tau)
+                p["sP"].data[cache_key_prefix + "Masses"] = mass_t
+
+            if p["sP"].isPartType(p["partType"], "gas"):
+                dens_t = linear_interp(cur_interp_data["dens"], next_interp_data["dens"], tau)
+                p["sP"].data[cache_key_prefix + "Density"] = dens_t
+
+            if "hsml" in cur_interp_data:
+                hsml_t = linear_interp(cur_interp_data["hsml"], next_interp_data["hsml"], tau)
+                p["sP"].data[cache_key_prefix + "hsml"] = hsml_t
+
+            # three fields needed for stellar sps (light) are all constant after birth
+            if p["sP"].isPartType(p["partType"], "stars"):
+                p["sP"].data[cache_key_prefix + "StellarFormationTime"] = cur_interp_data["sftime"]  # constant
+                p["sP"].data[cache_key_prefix + "Metallicity"] = cur_interp_data["metallicity"]
+                p["sP"].data[cache_key_prefix + "InitialMass"] = cur_interp_data["initialmass"]
 
         renderMultiPanel(panels, plotConfig)
 

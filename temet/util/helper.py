@@ -12,7 +12,7 @@ from os.path import abspath, dirname, isfile
 
 import h5py
 import numpy as np
-from numba import jit
+from numba import jit, njit, prange
 from scipy.ndimage import gaussian_filter
 from scipy.optimize import least_squares, leastsq
 from scipy.stats import binned_statistic, gaussian_kde
@@ -38,7 +38,7 @@ def isUnique(x):
 def closest(array, value):
     """Return closest element of array to input value."""
     if isinstance(value, np.ndarray):
-        # value is actually an array, find closest for each element by expanding array to 2D, with each row a copy of 
+        # value is actually an array, find closest for each element by expanding array to 2D, with each row a copy of
         # the original array, and value to 2D with each column a copy of the original value
         array_expanded = np.tile(array, (value.size, 1)).T
         ind = np.nanargmin(np.abs(array_expanded - value), axis=0)
@@ -1504,6 +1504,55 @@ def faddeeva985(x, y):
     r = a0 + q * (a1 + q * (a2 + q * (a3 + q * (a4 + q * (a5 + q * a6)))))
     t = b0 + q * (b1 + q * (b2 + q * (b3 + q * (b4 + q * (b5 + q * (b6 + q))))))
     return (r / t).real
+
+
+@njit(parallel=True)
+def hermite_interp(pos0, pos1, vel0, vel1, tau, dt):
+    # hermite basis functions, given tau
+    h00 = 2 * tau**3 - 3 * tau**2 + 1
+    h10 = tau**3 - 2 * tau**2 + tau
+    h01 = -2 * tau**3 + 3 * tau**2
+    h11 = tau**3 - tau**2
+
+    # allocate
+    N = pos0.shape[0]
+
+    pos_t = np.zeros_like(pos0)
+
+    # for each particle, interpolate
+    for i in prange(N):
+        # cubic hermite interpolate in time, using positions and velocities, for new positions
+        p0 = pos0[i]
+        p1 = pos1[i]
+        v0 = vel0[i]
+        v1 = vel1[i]
+
+        # x,y,z coordinate directions separately
+        x_t = h00 * p0[0] + h10 * v0[0] * dt + h01 * p1[0] + h11 * v1[0] * dt
+        y_t = h00 * p0[1] + h10 * v0[1] * dt + h01 * p1[1] + h11 * v1[1] * dt
+        z_t = h00 * p0[2] + h10 * v0[2] * dt + h01 * p1[2] + h11 * v1[2] * dt
+
+        pos_t[i] = [x_t, y_t, z_t]
+
+    return pos_t
+
+
+@njit(parallel=True)
+def linear_interp(vals0, vals1, tau):
+    # allocate
+    N = vals0.shape[0]
+
+    vals_t = np.zeros_like(vals0)
+
+    # for each particle, interpolate
+    for i in prange(N):
+        # linear interpolate in other properties e.g. mass
+        v0 = vals0[i]
+        v1 = vals1[i]
+
+        vals_t[i] = v0 * (1 - tau) + v1 * tau
+
+    return vals_t
 
 
 # --- I/O ---
