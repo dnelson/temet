@@ -4,6 +4,7 @@ from . import (
     boxRemap,
     dataConvert,
     dataConvertSim,
+    delaunay,
     extern,
     helper,
     match,

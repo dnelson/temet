@@ -411,6 +411,14 @@ def renderSingleHalo(panels_in, plotConfig=None, localVars=None, skipExisting=Fa
         if p["rotMatrix"] is None:
             p["rotMatrix"], p["rotCenter"] = haloRotMatrix, haloRotCenter
 
+    # check for aspect ratio mismatch
+    raster_aspect = plotConfig.rasterPx[0] / plotConfig.rasterPx[1]
+    panel0_aspect = panels[0]["nPixels"][0] / panels[0]["nPixels"][1]
+
+    if len(panels) == 1 and abs(raster_aspect - panel0_aspect) > 1e-6:
+        print(f"WARNING: Fixing raster aspect ratio [{raster_aspect:.2f}] mismatch with panel [{panel0_aspect:.2f}].")
+        plotConfig.rasterPx[1] = int(plotConfig.rasterPx[0] / panel0_aspect)
+
     # attach any cached data to sP (testing)
     if "dataCache" in localVars:
         for key in localVars["dataCache"]:

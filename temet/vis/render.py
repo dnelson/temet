@@ -15,6 +15,7 @@ from ..cosmo.cloudy import cloudyEmission
 from ..cosmo.stellarPop import sps
 from ..spectra.spectrum import create_spectra_from_traced_rays
 from ..util.boxRemap import remapPositions
+from ..util.delaunay import render_tetra
 from ..util.helper import logZeroMin, pSplitRange
 from ..util.match import match
 from ..util.rotation import perspectiveProjection, rotateCoordinateArray
@@ -1024,7 +1025,7 @@ def gridBox(
         nChunks = 1
 
         # non-zoom simulation and subhaloInd specified (plotting around a single halo): do FoF restricted load
-        if not sP.isZoom and sP.subhaloInd is not None and "_global" not in method:
+        if not sP.isZoom and sP.subhaloInd is not None and "_global" not in method and "tetra" not in method:
             sh = sP.groupCatSingle(subhaloID=sP.subhaloInd)
             gr = sP.groupCatSingle(haloID=sh["SubhaloGrNr"])
 
@@ -1120,7 +1121,8 @@ def gridBox(
                 indRange = indRange2
 
             # load: 3D positions
-            pos = sP.snapshotSubsetP(partType, "pos", indRange=indRange)
+            if "tetra" not in method:
+                pos = sP.snapshotSubsetP(partType, "pos", indRange=indRange)
 
             # rotation? shift points to subhalo center, rotate, and shift back
             if rotMatrix is not None:
@@ -1132,7 +1134,8 @@ def gridBox(
                     if not sP.isZoom and sP.subhaloInd is None:
                         raise Exception("Rotation in periodic box must be about a halo center.")
 
-                pos, _ = rotateCoordinateArray(sP, pos, rotMatrix, rotCenter)
+                if "tetra" not in method:  # handled later in that case
+                    pos, _ = rotateCoordinateArray(sP, pos, rotMatrix, rotCenter)
 
             # cuboid remapping? transform points
             if remapRatio is not None:
@@ -1141,7 +1144,7 @@ def gridBox(
 
             # load: sizes (hsml) and manipulate as needed
             hsml = None
-            if (method != "histo") and ("voronoi" not in method):
+            if (method != "histo") and ("voronoi" not in method) and ("tetra" not in method):
                 pxScale = np.max(np.array(boxSizeImg)[axes] / nPixels)
 
                 if "stellarBand" in partField or (partType == "stars" and "coldens" in partField):
@@ -1679,6 +1682,35 @@ def gridBox(
                     result = rayTrace(sP, ray_pos, ray_dir, total_dl, pos, quant=quant, quant2=mass, mode=mode)
                     grid_q = result.reshape(nPixels).T
                     grid_d = np.ones(nPixels, dtype="float32").T  # dummy normalization
+
+            elif method in ["tetra_proj"]:
+                # Phase space tetrahedral based column density projection (DM only). Global.
+                assert axes == [0, 1]  # otherwise check
+                assert hsml_1 is None  # unsupported
+                assert ("_minIP" not in method) and ("_maxIP" not in method)  # need to add 'mode' support
+                assert "coldens" in partField
+                assert normCol  # we have effectively already done this in our integration
+                assert projType == "ortho"
+                assert indRange is None  # expect global
+
+                # define (x,y) pixel range
+                x0 = boxCenter[0] - boxSizeImg[0] / 2
+                x1 = boxCenter[0] + boxSizeImg[0] / 2
+
+                y0 = boxCenter[1] - boxSizeImg[1] / 2
+                y1 = boxCenter[1] + boxSizeImg[1] / 2
+
+                z0 = boxCenter[2] - boxSizeImg[2] / 2
+                z1 = boxCenter[2] + boxSizeImg[2] / 2
+
+                bounds = [x0, x1, y0, y1, z0, z1]
+
+                # z-direction hard-coded, cannot change!
+                ray_dir = np.array([0, 0, 1.0], dtype="float32")  # given axes
+
+                # ray-trace (note: requires GPU device!)
+                grid_d = render_tetra(sP, bounds, nPixels, rotMatrix=rotMatrix, rotCenter=rotCenter)
+                grid_q = np.zeros(nPixels, dtype="float32").T  # dummy
 
             else:
                 raise Exception("Method not implemented.")

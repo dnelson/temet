@@ -141,8 +141,9 @@ def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
             {
                 "partType": "dm",
                 "partField": "coldens_msunkpc2",
-                "valMinMax": [7.0, 9.5],
+                "valMinMax": [7.2, 10.0],
                 "rotation": "face-on",
+                "method": "tetra_proj",
                 "labelZ": False,
             }
         )
@@ -155,8 +156,9 @@ def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
             {
                 "partType": "dm",
                 "partField": "coldens_msunkpc2",
-                "valMinMax": [7.0, 9.5],
+                "valMinMax": [7.2, 10.0],
                 "rotation": "edge-on",
+                "method": "tetra_proj",
                 "labelSim": True,
             }
             | edge_opts
@@ -166,7 +168,7 @@ def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
         panels.append({"partField": "vmag", "valMinMax": [70, 350], "rotation": "edge-on"} | edge_opts)
 
     if conf == 3:
-        # comparison (second set): shocks, rad
+        # comparison (second set): rad_fuv, pres, LyA, [N/O]
         partType = "gas"
         edge_opts = {"nPixels": nPixels_e, "labelScale": False, "labelHalo": False, "labelZ": False}
 
@@ -192,7 +194,7 @@ def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
 
     class plotConfig:
         plotStyle = "edged"
-        colorbars = False  # True  # False
+        colorbars = False if conf == 0 else True
         fontsize = 34  # 28  # 24
         saveFilename = "galaxy_%s_%d_h%d_conf%d%s.pdf" % (
             sP.simName,

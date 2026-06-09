@@ -235,7 +235,7 @@ Broadly speaking, common options include:
 
 :valMinMax: (default: None) if not None (auto), then stretch colortable between 2-tuple [min,max] field values
 
-:method: (default: 'sphMap') sphMap[_subhalo,_global], sphMap_{min/max}IP, histo, voronoi_slice/proj[_subhalo]
+:method: (default: 'sphMap') sphMap[_subhalo,_global], sphMap_{min/max}IP, histo, voronoi_slice/proj[_subhalo], tetra_proj
 
 :nPixels: (default: [1920,1920]) [1400,1400] number of pixels for each dimension of images when projecting
 

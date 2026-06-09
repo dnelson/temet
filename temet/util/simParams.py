@@ -1624,7 +1624,7 @@ class simParams:
             if str(self.snap) == "ics":
                 # initial conditions
                 self.redshift = 127.0
-                assert self.run in ["tng", "tng_dm", "tng_zoom", "tng_zoom_dm"]  # otherwise generalize
+                assert self.run in ["tng", "tng_dm", "tng_zoom", "tng_zoom_dm", "structures"]  # otherwise generalize
             else:
                 # actual snapshot
                 if not self.comoving:
