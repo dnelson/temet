@@ -1527,6 +1527,44 @@ def hermite_interp(pos0, pos1, vel0, vel1, tau, dt):
         v0 = vel0[i]
         v1 = vel1[i]
 
+        if pos0.ndim == 1:
+            # just one i.e. radial coordinate
+            x_t = h00 * p0 + h10 * v0 * dt + h01 * p1 + h11 * v1 * dt
+
+            pos_t[i] = x_t
+
+        else:
+            # x,y,z coordinate directions separately
+            x_t = h00 * p0[0] + h10 * v0[0] * dt + h01 * p1[0] + h11 * v1[0] * dt
+            y_t = h00 * p0[1] + h10 * v0[1] * dt + h01 * p1[1] + h11 * v1[1] * dt
+            z_t = h00 * p0[2] + h10 * v0[2] * dt + h01 * p1[2] + h11 * v1[2] * dt
+
+            pos_t[i] = [x_t, y_t, z_t]
+
+    return pos_t
+
+
+@njit(parallel=True)
+def hermite_interp_vartau(pos0, pos1, vel0, vel1, tau, dt):
+    # allocate
+    N = pos0.shape[0]
+
+    pos_t = np.zeros_like(pos0)
+
+    # for each particle, interpolate
+    for i in prange(N):
+        # hermite basis functions, given tau
+        h00 = 2 * tau[i] ** 3 - 3 * tau[i] ** 2 + 1
+        h10 = tau[i] ** 3 - 2 * tau[i] ** 2 + tau[i]
+        h01 = -2 * tau[i] ** 3 + 3 * tau[i] ** 2
+        h11 = tau[i] ** 3 - tau[i] ** 2
+
+        # cubic hermite interpolate in time, using positions and velocities, for new positions
+        p0 = pos0[i]
+        p1 = pos1[i]
+        v0 = vel0[i]
+        v1 = vel1[i]
+
         # x,y,z coordinate directions separately
         x_t = h00 * p0[0] + h10 * v0[0] * dt + h01 * p1[0] + h11 * v1[0] * dt
         y_t = h00 * p0[1] + h10 * v0[1] * dt + h01 * p1[1] + h11 * v1[1] * dt

@@ -2144,16 +2144,16 @@ def makeMovies():
     """Make movie frames."""
     redshift = 5.5
 
-    sim = simParams(run="structures", res=15, hInd=73172, variant="ST15", redshift=redshift)
+    sim = simParams(run="structures", res=14, hInd=5072, variant="ST15", redshift=redshift)
 
     # # movie: galaxy-scale gas + stars vis (tree mpb manual search)
     # # vis_movie(sim, haloID=0)
 
     # movie: galaxy-scale gas + stars vis (final tree mpb smoothed)
-    # vis_movie_mpbsm([sim], conf=1)
+    vis_movie_mpbsm([sim], conf=1)
 
     # movie: halo-scale many fields (final tree mpb smoothed)
-    # vis_single_halo(sim, movie=True)
+    vis_single_halo(sim, movie=True)
 
     # # movie: galaxy-scale many fields (final tree mpb smoothed)
     # # vis_single_halo(sim, movie=True, galscale=True)
@@ -2207,7 +2207,7 @@ def makeMovieInterp(conf="gas", pSplit=None):
             axes[i].legend()
         fig.savefig("mpb_position_vs_time.pdf")
 
-    vis_movie_mpbsm_interp([sim], conf=conf, pSplit=pSplit)
+    vis_movie_mpbsm_interp(sim, conf=conf, pSplit=pSplit)
 
 
 def makeMoviesMulti():

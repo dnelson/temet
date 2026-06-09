@@ -277,7 +277,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
             # time interpolation?
             if "interpTime" in p:
                 sub_vel = p["sP"].subhalos("SubhaloVel")
-                mdbs = p["sP"].loadDescendants(subInds, fields=["SubhaloPos", "SubhaloVel", "SubhaloHalfmassRad"])
+                mdbs = p["sP"].loadDescendants(
+                    subInds, fields=["SubfindID", "SubhaloPos", "SubhaloVel", "SubhaloHalfmassRad"]
+                )
 
                 sub_pos_next = sub_pos.copy()
                 sub_vel_next = sub_vel.copy()
@@ -285,7 +287,12 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
                 # if subhalo not in tree or has no descendant, constant pos and vel
                 for i, subInd in enumerate(subInds):
-                    if subInd in mdbs:
+                    if subInd in mdbs and p["sP"].subhaloInd in mdbs:
+                        desc_is_central = mdbs[subInd]["SubfindID"] == mdbs[p["sP"].subhaloInd]["SubfindID"]
+
+                        if desc_is_central and subInd != p["sP"].subhaloInd:
+                            continue  # mergers into our main subhalo result in visual artifacts (rapidly growing circs)
+
                         sub_pos_next[i] = mdbs[subInd]["SubhaloPos"]
                         sub_vel_next[i] = mdbs[subInd]["SubhaloVel"]
                         sub_size_next[i] = mdbs[subInd]["SubhaloHalfmassRad"]

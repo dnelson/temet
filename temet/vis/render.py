@@ -56,7 +56,7 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
     cache_key = "snap%s_%s_%s" % (sP.snap, partType, "hsml")
     if cache_key in sP.data:
         hsml = sP.data[cache_key]
-        print(" loaded from memory cache: [%s]" % cache_key)
+        # print(" loaded from memory cache: [%s]" % cache_key)
         if indRange is not None:
             hsml = hsml[indRange[0] : indRange[1]]
         return hsml.astype("float32")
@@ -477,7 +477,7 @@ def stellar3BandCompositeImage(
             # new auto bounds
             band_vals = np.log10(band0_grid[band0_grid > 0])
 
-            percs = [20, 99.5]
+            percs = [1, 80]  # [20, 99.5]
             if isinstance(autoLimits, list) and len(autoLimits) == 2:
                 percs = autoLimits
 
@@ -489,6 +489,10 @@ def stellar3BandCompositeImage(
             else:
                 minValLog = [0, 0, 0]
                 maxValLog = [1, 1, 1]
+
+            for i in range(3):
+                minValLog[i] = np.clip(minValLog[i], maxValLog[i] - 4.0, np.inf)
+            print(" auto limits: ", percs, minValLog, maxValLog)
         else:
             minValLog = np.array([-1.7, -1.7, -1.7])
             maxValLog = np.array([1.2, 1.3, 1.0])
@@ -1088,7 +1092,7 @@ def gridBox(
         disableChunkLoad |= indRange is None and h["NumPart"][sP.ptNum(partType)] < 1e8
 
         if len(sP.data) and np.count_nonzero([key for key in sP.data.keys() if "snap%d" % sP.snap in key]):
-            print(" gridBox(): have fields in sP.data, disabling chunking (possible spatial subset already applied)")
+            # print(" gridBox(): have fields in sP.data, disabling chunking (possible spatial subset already applied)")
             disableChunkLoad = True
             sP.data["nThreads"] = 1  # disable parallel snapshot loading
 
