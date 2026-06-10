@@ -697,7 +697,7 @@ def snapshotSubset(
         if cache_key in sP.data:
             # global? (or rather, whatever is in sP.data... be careful)
             if indRange is None:
-                # print("CAUTION: Cached return [%s], and indRange is None, returning all of sP.data field." % cache_key)
+                # print("CAUTION: Cached return [%s], and indRange is None, returning full sP.data field." % cache_key)
                 if sq:
                     return sP.data[cache_key]
                 else:

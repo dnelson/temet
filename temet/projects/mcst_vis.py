@@ -658,7 +658,8 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None, getStats=Fals
     if conf == "dm":
         pt1 = "dm"
         pf1 = "coldens_msunkpc2"
-        vmm1 = [6.1, 8.6]
+        method = "tetra_proj"
+        vmm1 = [6.0, 9.0]  # [6.1, 8.6]
         plotSubhalos = 20
         labelSubhalos = "msubhalo"
         vmmEvo = 2.0

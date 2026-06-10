@@ -538,6 +538,20 @@ def quantMPB(sim, subhaloInd, quants, treeName=None, add_ghosts=False, z_vals=No
                     posShiftInds = sim.correctPeriodicPosBoxWrap(mpb["SubhaloPos"])
 
                 for i in range(vals.shape[1]):
+                    # sigma clip deltas for extreme outliers
+                    dvals = np.diff(vals[:, i])
+                    ww = np.where(np.abs(dvals - dvals.mean()) > 5 * np.std(dvals))
+
+                    for ind in ww[0]:
+                        # replace with linear interp over neighbors
+                        if ind == 0:
+                            vals[ind, i] = vals[1, i]
+                        elif ind == vals.shape[0] - 1:
+                            vals[ind, i] = vals[-2, i]
+                        else:
+                            vals[ind, i] = np.mean(vals[[ind - 1, ind + 1], i])
+
+                    # smooth
                     vals[:, i] = savgol_filter(vals[:, i], sKn, sKo)
 
                     if prop in ["pos", "subhalopos"] and i in posShiftInds:

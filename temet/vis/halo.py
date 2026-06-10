@@ -2,15 +2,15 @@
 Visualizations for individual halos/subhalos from ..cosmological runs.
 """
 
+import gc
 from copy import deepcopy
 from getpass import getuser
-from numba import set_num_threads
 from os.path import isfile
-from scipy.interpolate import make_interp_spline
-from scipy.signal import savgol_filter
 
 import numpy as np
-import time
+from numba import set_num_threads
+from scipy.interpolate import make_interp_spline
+from scipy.signal import savgol_filter
 
 from ..util.helper import evenlySample, hermite_interp, hermite_interp_vartau, linear_interp, num_cpus, pSplit
 from ..util.match import match
@@ -701,8 +701,15 @@ def renderSingleHaloFrames(
 
         r = {"ids": ids, "pos": pos, "vel": vel, "time": sim.tage, "redshift": sim.redshift}
 
+        loadHsml = False
         if not sim.isPartType(partType, "stars") or sim.star not in [2, 3]:
-            # hsml needed for both gas and dm, and also stars (unless point-like)
+            # hsml needed for both gas and dm (unless tetra method), and also stars (unless point-like)
+            loadHsml = True
+
+        if sim.isPartType(partType, "dm") and "tetra" in panel_loc["method"]:
+            loadHsml = False
+
+        if loadHsml:
             hsml = getHsmlForPartType(sim, partType)
             r["hsml"] = hsml
 
@@ -848,7 +855,7 @@ def renderSingleHaloFrames(
             # scale valMinMax (colorbar range) by redshift?
             if plotConfig.vmmEvoScalefac is not None and p["valMinMax"] is not None:
                 adjust_fac = p["sP"].scalefac * plotConfig.vmmEvoScalefac * p["sP"].units.scalefac
-                print(f"Scaling valMinMax by factor {adjust_fac:.3f} at redshift {p['sP'].redshift:.2f}.")
+                # print(f"Scaling valMinMax by factor {adjust_fac:.3f} at redshift {p['sP'].redshift:.2f}.")
                 p["valMinMax"] = [v + adjust_fac for v in p["valMinMaxOrig"]]
 
         if getStats:
@@ -875,21 +882,21 @@ def renderSingleHaloFrames(
                 next_interp_data = _load_interp_data(p, snapNum + 1)
                 curInterpSnap0 = snapNum
                 match_i0 = match_i1 = None  # reset match indices for new snapshot pair
+                gc.collect()  # python will not automatically gc when reaching a MemoryError, only occasionally
 
             # cross-match by ids
             if match_i0 is None:
                 match_i0, match_i1 = match(cur_interp_data["ids"], next_interp_data["ids"])
 
                 # all particles matched? (DM) (need the extended logic for e.g. stars even if all match)
-                # if match_i0.size == cur_interp_data["ids"].size == next_interp_data["ids"].size:
                 if p["sP"].isPartType(p["partType"], "dm"):
                     # re-shuffle 'first' snapshot data to be in same order
                     for key in cur_interp_data.keys():
-                        # non-scalar i.e. all fields other than DM mass
-                        if cur_interp_data[key].size not in [1, 3]:  # metadata
-                            cur_interp_data[key] = cur_interp_data[key][match_i0]
-                    # if cur_interp_data["mass"].size > 1:
-                    #    cur_interp_data["mass"] = cur_interp_data["mass"][match_i0]
+                        # skip metadata
+                        if key in ["time", "redshift", "sub_pos", "sub_vel", "sub_rel"]:
+                            continue
+
+                        cur_interp_data[key] = cur_interp_data[key][match_i0]
                 else:
                     # not all particles matched, e.g. gas, create new arrays
                     new_data_cur = {}
@@ -901,7 +908,7 @@ def renderSingleHaloFrames(
                     # total unique
                     n_match = match_i0.size
                     n_unique = np.unique(np.concatenate([cur_interp_data["ids"], next_interp_data["ids"]])).size
-                    # print(f"  Total: {cur_interp_data['ids'].size} (cur), {next_interp_data['ids'].size} (next) snap.")
+                    # print(f"  Tot: {cur_interp_data['ids'].size} (cur), {next_interp_data['ids'].size} (next) snap.")
                     # print(f"  Unique: {n_unique} total unique particles across the two snapshots.")
 
                     # locate un-matched
@@ -1059,7 +1066,7 @@ def renderSingleHaloFrames(
             vel0 = cur_interp_data["vel"]
             vel1 = next_interp_data["vel"]
 
-            nThreads = min(num_cpus() // 2, 36)  # determine threading automaticalyl (half of available, at most 36)
+            nThreads = np.clip(num_cpus() // 2, 1, 36)  # determine threading automatically
             set_num_threads(nThreads)
 
             # stars: add noise to tau to reduce correlated radial oscillation visual artifact
@@ -1169,6 +1176,10 @@ def renderSingleHaloFrames(
             if "hsml" in cur_interp_data:
                 hsml_t = linear_interp(cur_interp_data["hsml"], next_interp_data["hsml"], tau)
                 p["sP"].data[cache_key_prefix + "hsml"] = hsml_t
+
+            if p["sP"].isPartType(p["partType"], "dm") and "tetra" in p["method"]:
+                # for phase-space tetrahedral rendering of DM, need also the shuffled ids
+                p["sP"].data[cache_key_prefix + "IDs"] = cur_interp_data["ids"]
 
             # three fields needed for stellar sps (light) are all constant after birth
             if p["sP"].isPartType(p["partType"], "stars"):

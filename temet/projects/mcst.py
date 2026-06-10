@@ -2186,13 +2186,14 @@ def makeMovieInterp(conf="gas", pSplit=None):
         for i in range(3):
             axes[i].set_ylabel(r"$\Delta$" + ["x", "y", "z"][i] + " [ckpc/h]")
             axes[i].set_xlabel("SnapNum")
+            axes[i].set_xlim([0, 40])
 
             # additional smoothing
             from scipy.signal import savgol_filter
 
             mpb_sm["SubhaloPos"][:, i] = savgol_filter(mpb_sm["SubhaloPos"][:, i], 20, 1)
 
-            if 0:
+            if 1:
                 # differential change per snap
                 dpos = np.diff(mpb["SubhaloPos"][:, i])
                 dpos_sm = np.diff(mpb_sm["SubhaloPos"][:, i])
@@ -2206,6 +2207,7 @@ def makeMovieInterp(conf="gas", pSplit=None):
 
             axes[i].legend()
         fig.savefig("mpb_position_vs_time.pdf")
+        return
 
     vis_movie_mpbsm_interp(sim, conf=conf, pSplit=pSplit)
 

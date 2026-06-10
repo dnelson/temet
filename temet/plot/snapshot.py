@@ -1715,7 +1715,7 @@ def profilesStacked2d(
         "fontsize": 20,
         "va": "bottom",
         "ha": "center",
-        "bbox": dict(facecolor="black", alpha=0.15, pad=2),
+        "bbox": {"facecolor": "black", "alpha": 0.15, "pad": 2},
     }
 
     (l,) = ax.plot(r200c, "-", lw=lw + 2, color="black", alpha=0.6)  # under

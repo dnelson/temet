@@ -1752,6 +1752,7 @@ def gridBox(
 
     # add random noise level/floor, e.g. sky background level
     if randomNoise is not None:
+        hashval = saveFilename.split(".")[-2]
         seed = int(hashval[::2], base=16)
         np.random.seed(seed)
 

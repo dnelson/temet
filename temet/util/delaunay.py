@@ -372,44 +372,66 @@ def _get_tetra(sim):
     sim_ics = sim.copy()
     sim_ics.setSnap("ics")
 
-    cacheFile = sim.cachePath + "sorted_dm_tetra_ics.hdf5"
-    if not isfile(cacheFile):
-        # make new
-        dmIDs_ics = sim_ics.snapshotSubsetP("dm", "ids")
-
-        # sort
-        sort_inds = np.argsort(dmIDs_ics)
-
-        # load positions
-        pos_ics = sim_ics.dm("pos")[sort_inds]
-
-        # delaunay triangualation
-        start_time = time.time()
-
-        mesh = Delaunay(pos_ics)  # , qhull_options="QJ")
-        tetra_inds = mesh.simplices
-
-        print(" making cache: delaunay done, took [%g] sec." % (time.time() - start_time))
-
-        if mesh.coplanar.size > 0:
-            print(f"WARNING: Delaunay triangulation found {mesh.coplanar.size} coplanar points.")
-
-        with h5py.File(cacheFile, "w") as f:
-            f["tetra_inds"] = tetra_inds
-
-        dmIDs_ics = None
-        pos_ics = None
+    # load tetra, check memory cache (for time interp vis) and then disk cache
+    cache_key = "snap%s_dm_tetra_inds" % sim.snap
+    if cache_key in sim.data:
+        tetra_inds = sim.data[cache_key]
+        # print(" loaded from memory cache: [%s]" % cache_key)
     else:
-        # load from cache
-        with h5py.File(cacheFile, "r") as f:
-            tetra_inds = f["tetra_inds"][:]
+        # proceed to disk cache
+        cacheFile = sim.cachePath + "sorted_dm_tetra_ics.hdf5"
+        if not isfile(cacheFile):
+            # make new
+            dmIDs_ics = sim_ics.snapshotSubsetP("dm", "ids")
 
-    # load DM IDs at this snapshot
-    dm_ids = sim.snapshotSubsetP("dm", "ids")
+            # sort
+            sort_inds = np.argsort(dmIDs_ics)
 
-    sort_inds = np.argsort(dm_ids)
+            # load positions
+            pos_ics = sim_ics.dm("pos")[sort_inds]
+
+            # delaunay triangualation
+            start_time = time.time()
+
+            mesh = Delaunay(pos_ics)  # , qhull_options="QJ")
+            tetra_inds = mesh.simplices
+
+            print(" making cache: delaunay done, took [%g] sec." % (time.time() - start_time))
+
+            if mesh.coplanar.size > 0:
+                print(f"WARNING: Delaunay triangulation found {mesh.coplanar.size} coplanar points.")
+
+            with h5py.File(cacheFile, "w") as f:
+                f["tetra_inds"] = tetra_inds
+
+            dmIDs_ics = None
+            pos_ics = None
+        else:
+            # load from cache
+            with h5py.File(cacheFile, "r") as f:
+                tetra_inds = f["tetra_inds"][:]
+
+        # add to memory cache
+        sim.data[cache_key] = tetra_inds
+
+    # load DM IDs at this snapshot (memory caching for time interp vis)
+    cache_key = "snap%s_dm_IDs" % sim.snap
+    if cache_key in sim.data:
+        dm_ids = sim.data[cache_key]
+        # print(" loaded from memory cache: [%s]" % cache_key)
+    else:
+        dm_ids = sim.snapshotSubsetP("dm", "ids")
+
+    cache_key = "snap%s_dm_IDs_sort_inds" % sim.snap
+    if cache_key in sim.data:
+        sort_inds = sim.data[cache_key]
+        # print(" loaded from memory cache: [%s]" % cache_key)
+    else:
+        sort_inds = np.argsort(dm_ids)
+        sim.data[cache_key] = sort_inds
 
     # load DM positions at this snapshot and shuffle into sorted ID order
+    # note: could be 'loading' time-interpolated positions for vis
     pos = sim.dm("pos")[sort_inds]
 
     # tetra connectivity remains unchanged

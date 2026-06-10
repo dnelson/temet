@@ -185,6 +185,9 @@ def num_cpus():
     N = os.getenv("OMP_NUM_THREADS", None)
 
     if N is None:
+        N = os.getenv("SLURM_CPUS_PER_TASK", None)
+
+    if N is None:
         N = multiprocessing.cpu_count()
 
     N = int(N)
@@ -1508,6 +1511,7 @@ def faddeeva985(x, y):
 
 @njit(parallel=True)
 def hermite_interp(pos0, pos1, vel0, vel1, tau, dt):
+    """Hermite interpolation of positions given values and their derivatives (velocities) at interval endpoints."""
     # hermite basis functions, given tau
     h00 = 2 * tau**3 - 3 * tau**2 + 1
     h10 = tau**3 - 2 * tau**2 + tau
@@ -1546,6 +1550,7 @@ def hermite_interp(pos0, pos1, vel0, vel1, tau, dt):
 
 @njit(parallel=True)
 def hermite_interp_vartau(pos0, pos1, vel0, vel1, tau, dt):
+    """Hermite interpolation of positions given pos and vel (derivatives), at varying times per particle."""
     # allocate
     N = pos0.shape[0]
 
@@ -1577,6 +1582,7 @@ def hermite_interp_vartau(pos0, pos1, vel0, vel1, tau, dt):
 
 @njit(parallel=True)
 def linear_interp(vals0, vals1, tau):
+    """Linear interpolation of a large number of values (threaded)."""
     # allocate
     N = vals0.shape[0]
 

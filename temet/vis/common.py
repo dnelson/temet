@@ -14,7 +14,7 @@ from scipy.ndimage import gaussian_filter
 from ..plot import in_notebook
 from ..plot.util import loadColorTable, setAxisColors
 from ..util.boxRemap import remapPositions
-from ..util.helper import iterable, hermite_interp, linear_interp, pSplitRange
+from ..util.helper import hermite_interp, iterable, linear_interp, pSplitRange
 from ..util.match import match
 from ..util.rotation import rotateCoordinateArray
 from ..vis.quantities import gridOutputProcess

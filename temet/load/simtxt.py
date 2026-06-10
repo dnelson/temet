@@ -665,7 +665,7 @@ def sf_sn_details(sim, overwrite=False):
     # concat file is missing, check for individual files, run concat
     if not isfile(file_sf):
         print("Concat sf_details*.txt...")
-        files_sf = [f for f in os.listdir(path + "sf_details/") if f.startswith("sf_details_") and f.endswith(".txt")]
+        # files_sf = [f for f in os.listdir(path + "sf_details/") if f.startswith("sf_details_") and f.endswith(".txt")]
         # for f in files_sf:
         #    # check for corrupt rows
         #    result = subprocess.run(
