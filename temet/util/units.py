@@ -1474,6 +1474,22 @@ class units:
 
         return dtime
 
+    def codeTimeBinToYears(self, TimeBin):
+        """Convert an integer time bin number (e.g. from timebins.txt) to a physical time in years."""
+        # Timebase_interval = (log(All.TimeMax) - log(All.TimeBegin)) / TIMEBASE;
+        # TIMEBASE = 2**TIMEBINS
+        # TIMEBINS = 29 or 60 depenidng on ENLARGE_DYNAMIC_RANGE_IN_TIME
+        TIMEBINS = 60 if "ENLARGE_DYNAMIC_RANGE_IN_TIME" in self._sP.config else 29
+        TIMEBASE = 2**TIMEBINS
+        TimeMax = self._sP.params["TimeMax"]
+        TimeBegin = self._sP.params["TimeBegin"]
+        Timebase_interval = (np.log(TimeMax) - np.log(TimeBegin)) / TIMEBASE
+
+        dt_code = Timebase_interval * 2**TimeBin
+        dt_years = self.codeTimeStepToYears(dt_code)
+
+        return dt_years
+
     def scalefacToAgeLogGyr(self, scalefacs):
         """Convert scalefactors of formation (e.g. GFM_StellarFormationTime) to age in log(Gyr).
 

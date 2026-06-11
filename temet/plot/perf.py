@@ -4,15 +4,15 @@ Performance, scaling and timings analysis.
 
 from datetime import datetime, timedelta
 from glob import glob
-from os.path import expanduser
+from os.path import expanduser, isfile
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 from scipy.interpolate import interp1d
 
-from ..load.simtxt import loadCpuTxt, loadTimebinsTxt
-from ..plot.config import figsize
+from ..load.simtxt import getCpuTxtLastTimestep, loadCpuTxt, loadTimebinsTxt
+from ..plot.config import colors, figsize, markers
 from ..plot.util import _finish_plot, getWhiteBlackColors, setAxisColors
 from ..util.helper import closest
 from ..util.simParams import simParams
@@ -333,6 +333,74 @@ def plotCpuTimes(sims=None, xlim=(0.0, 1.0)):
     _finish_plot(fig, saveFilename + "_diff.pdf")
 
 
+def plotCpuHours(run, variant, hInds, resolutions, xQuant="mhalo", sizefac=0.8):
+    """Plot CPU hours per simulation."""
+    # plot
+    fig, ax = plt.subplots(figsize=(figsize[0] * sizefac, figsize[1] * sizefac))
+
+    ax.set_xlim([8.0, 11.0])
+    ax.set_ylim([1e3, 1e7])
+    ax.set_ylabel("CPU Hours")
+    ax.set_yscale("log")
+
+    ax.plot(ax.get_xlim(), [1e6, 1e6], ":", color="black", alpha=0.2)
+
+    # loop over each hInd
+    for hInd in hInds:
+        # loop over each resolution level
+        for res in resolutions:
+            try:
+                sim = simParams(run=run, variant=variant, hInd=hInd, res=res, redshift=5.5)
+            except Exception as e:
+                # print(f" Skip: {run}_{variant}_{hInd}_{res}: {e}")
+                continue
+
+            print(sim.simName)
+
+            # load CPU txt file
+            filePath = sim.arepoPath + "output/txt-files/cpu.txt"
+            if not isfile(filePath):
+                # print(f" Skip: {sim.simName} (no cpu.txt)")
+                continue
+
+            maxTime, maxSize, numCPUs, cpuHours = getCpuTxtLastTimestep(filePath)
+
+            if maxTime < sim.params["TimeMax"] - 0.01:
+                # print(f" Skip: {sim.simName} (not finished)")
+                continue
+
+            # x-axis config
+            xvals, xlabel, xlim, xlog = sim.simSubhaloQuantity(xQuant)
+            xval = xvals[sim.zoomSubhaloID]
+
+            if xlog:
+                xval = np.log10(xval)
+
+            # plot
+            c = colors[hInds.index(sim.hInd)]
+            marker = markers[resolutions.index(sim.res)]
+
+            ax.plot(xval, cpuHours, marker, color=c)
+
+    # make legend and finish
+    ax.set_xlabel(xlabel)
+
+    labels = [f"L{res}" for res in resolutions]
+    handles = [plt.Line2D([0], [0], lw=0, color="black", marker=markers[resolutions.index(res)]) for res in resolutions]
+    legend1 = ax.legend(handles, labels, loc="upper right")
+    ax.add_artist(legend1)
+
+    labels = [f"h{hInd}" for hInd in hInds]
+    handles = [plt.Line2D([0], [0], lw=0, color=colors[hInds.index(sim.hInd)]) for hInd in hInds]
+    legend2 = ax.legend(handles, labels, ncols=2, handlelength=0, columnspacing=0.5, fontsize=18, loc="lower right")
+    for i, text in enumerate(legend2.get_texts()):
+        text.set_color(colors[i])
+    ax.add_artist(legend2)
+
+    fig.savefig("cpu_hours.pdf")
+    plt.close(fig)
+
+
 def plotTimebins():
     """Plot analysis of timebins throughout the course of a run."""
     # run config and load/parse
@@ -471,6 +539,80 @@ def plotTimebins():
 
         fig.savefig(saveBase % "cpufrac_stack_%s" % sP.simName)
         plt.close(fig)
+
+
+def plotSmallestTimestepEvo(sizefac=0.8):
+    """Plot smallest timestep (in years) as a function of redshift."""
+    # config
+    num_pts = 500  # reduce time series down to N total points
+
+    sims = []
+    sims.append(simParams(run="structures", res=14, hInd=219612, variant="ST15", redshift=5.5, haloInd=0))
+    sims.append(simParams(run="structures", res=15, hInd=219612, variant="ST15", redshift=5.5, haloInd=0))
+    sims.append(simParams(run="structures", res=16, hInd=219612, variant="ST15", redshift=5.5, haloInd=0))
+
+    xlim = [0, 1]
+    xlim = [20.0, 5.5]
+
+    # load
+    data = []
+    for sim in sims:
+        data.append(loadTimebinsTxt(sim.arepoPath))
+
+    # plot
+    fig, ax = plt.subplots(figsize=(figsize[0] * sizefac, figsize[1] * sizefac))
+
+    ax.set_xlim(xlim)
+    ax.set_ylim([1e-1, 1e6])
+    ax.set_xlabel("Redshift")
+    ax.set_ylabel("Physical Timestep [ yr ]")
+    ax.set_yscale("log")
+
+    ax.plot(ax.get_xlim(), [100, 100], ":", color="black", alpha=0.2)
+    ax.plot(ax.get_xlim(), [1, 1], ":", color="black", alpha=0.2)
+
+    # loop over each run
+    for i, sim in enumerate(sims):
+        # only plot timesteps where this bin was occupied
+        print(sim.simName)
+
+        xx = data[i]["time"]
+        bin_dt = data[i]["bin_dt"]
+        yy = data[i]["active"]  # bools for each bin number for each timestep
+        yy = (~yy).argmin(axis=0)  # index of lowest timebin that is active at each timestep
+        yy = bin_dt[yy]  # dt of lowest timebin that is active at each timestep
+
+        # w = np.where(yy == 0.0)
+        # yy[w] = np.nan
+        # yy = np.nanmin(yy, axis=0)  # min avg_time per timestep, across any bin
+
+        # average to numPtsAvg, equal in scalefactor
+        amin = xx.min()
+        amax = xx.max()
+        da = (amax - amin) / num_pts
+        xx_avg = np.zeros(num_pts, dtype="float32")
+        yy_avg = np.zeros(num_pts, dtype="float32")
+
+        for j in range(num_pts):
+            x0 = amin + da * j
+            x1 = x0 + da
+            w = np.where((xx >= x0) & (xx < x1))
+            xx_avg[j] = xx[w].mean()  # np.nanmean(xx[w])
+            yy_avg[j] = yy[w].min()  # np.nanmin(yy[w])
+
+        # unit conversion
+        redshift = 1 / xx_avg - 1
+        dt_yr = sim.units.codeTimeStepToYears(yy_avg)
+
+        # plot
+        label = sim.simName
+        ax.plot(redshift, dt_yr, "-", label=label)
+
+    # make redshift axis, legend and finish
+    # _redshiftAxisHelper(ax)
+    ax.legend(loc="upper right")
+    fig.savefig("timestep_evo.pdf")
+    plt.close(fig)
 
 
 def plotTimebinsFrame(pStyle="white", conf=0, timesteps=None):

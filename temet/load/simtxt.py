@@ -280,6 +280,9 @@ def loadTimebinsTxt(basePath):
     """Load and parse Arepo timebins.txt, save into hdf5 format."""
     filePath = basePath + "output/timebins.txt"
 
+    if not isfile(filePath):
+        filePath = basePath + "output/txt-files/timebins.txt"
+
     saveFilename = basePath + "data.files/timebins.hdf5"
     if not isdir(basePath + "data.files/"):
         saveFilename = basePath + "postprocessing/timebins.hdf5"
@@ -301,7 +304,7 @@ def loadTimebinsTxt(basePath):
             if "bin=" in line:
                 binNums.append(int(line.split("bin=")[1].split()[0]))
 
-        binMin = np.min(binNums) - 10  # leave room in case true minimum not represented in final timestep
+        binMin = np.min(binNums) - 15  # leave room in case true minimum not represented in final timestep
         binMax = np.max(binNums) + 20  # leave room
         nBins = binMax - binMin + 1
         return maxStepAvail, maxTimeAvail, nBins, binMin
@@ -331,6 +334,7 @@ def loadTimebinsTxt(basePath):
         maxSize, lastTime, nBins, binMin = _getTimebinsLastTimestep()
 
         print("[%s] maxSize: %d lastTime: %.2f (nBins=%d), loading..." % (basePath, maxSize, lastTime, nBins))
+        assert maxSize > 0, "Failed to find timebins.txt file."
 
         r["step"] = np.zeros(maxSize, dtype="int32")
         r["time"] = np.zeros(maxSize, dtype="float32")
@@ -386,6 +390,10 @@ def loadTimebinsTxt(basePath):
                 line = line.replace("bin= ", "bin=")  # delete space if present
                 line = line.split()
 
+                if len(line) < 8:
+                    print('skip: "%s"' % line)
+                    continue  # corrupt line
+
                 active = False
                 offset = 0
                 if line[0] == "X":
@@ -406,7 +414,7 @@ def loadTimebinsTxt(basePath):
                     continue  # dt=0
 
                 saveInd = binNum - binMin
-                assert saveInd >= 0
+                assert saveInd >= 0, "Need to increase binMin padding above."
 
                 # per bin per step
                 r["active"][saveInd, step] = active

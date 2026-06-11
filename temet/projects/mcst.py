@@ -27,7 +27,6 @@ from temet.projects.mcst_vis import (
     vis_parent_box,
     vis_single_galaxy,
     vis_single_halo,
-    vis_single_large,
 )
 from temet.util import simParams
 from temet.util.helper import cache, logZeroNaN
@@ -1000,6 +999,7 @@ def gas_mzr(sims):
 
         # todo: https://arxiv.org/abs/2603.15761 (see Fig 6)
         # todo: https://arxiv.org/abs/2605.06770 (GLIMPSED, eight galaxies at M* < 8.2)
+        # todo: https://arxiv.org/abs/2606.11345
 
     subhalos_evo.scatter2d(
         sims,
@@ -2122,6 +2122,27 @@ def paperPlots(a=False):
             # blackhole_position_vs_time(sim, snap_based=True)
             # blackhole_position_vs_time(sim, snap_based=False)
 
+    # appendix: time steps
+    if 0 or a:
+        from temet.plot.perf import plotSmallestTimestepEvo
+
+        sims = []
+        for res in [14, 15, 16]:
+            sims.append(simParams("structures", hInd=219612, res=res, variant="ST15"))
+        plotSmallestTimestepEvo(sims)
+
+    # appendix: CPUhs per run
+    if 0 or a:
+        from temet.plot.perf import plotCpuHours
+
+        plotCpuHours(run="structures", variant="ST15", hInds=[268] + hInds, resolutions=res)
+
+    # diagnostic: CPU times in different code segments as a function of time
+    if 0 or a:
+        from temet.plot.perf import plotCpuTimes
+
+        plotCpuTimes(sims, xlim=[0.0, 0.25])
+
     # diagnostic: halo mass, virial radii, mpb-based mstar, rhalf/rvir ratio, all vs redshift
     if 0 or a:
         opts = {"xlim": [12.1, 5.5], "sizefac": 0.8, "f_selection": _zoomSubhaloIDsToPlot}
@@ -2132,12 +2153,6 @@ def paperPlots(a=False):
         subhalos_evo.tracks1d(sims, "rvir", ylim=[0.5, 2.0], parents=False, **opts)
         subhalos_evo.tracks1d(sims, "rhalf_stars", ylim=[-2.0, 0.5], parents=False, **opts)
         subhalos_evo.tracks1d(sims, "re_rvir_ratio", ylim=[-3.5, -0.5], parents=False, **opts)
-
-    # diagnostic: CPU times
-    if 0 or a:
-        from temet.plot.perf import plotCpuTimes
-
-        plotCpuTimes(sims, xlim=[0.0, 0.25])
 
 
 def makeMovies():
