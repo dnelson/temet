@@ -30,6 +30,7 @@ dependencies = [
     "healpy",
     "matplotlib",
     "numba",
+    "numba-cuda",
     "numpy",
     #"requests",
     #"requests-oathlib",
