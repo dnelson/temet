@@ -12,7 +12,15 @@ from numba import set_num_threads
 from scipy.interpolate import make_interp_spline
 from scipy.signal import savgol_filter
 
-from ..util.helper import evenlySample, hermite_interp, hermite_interp_vartau, linear_interp, num_cpus, pSplit
+from ..util.helper import (
+    evenlySample,
+    hermite_interp,
+    hermite_interp_3point,
+    hermite_interp_vartau,
+    linear_interp,
+    num_cpus,
+    pSplit,
+)
 from ..util.match import match
 from ..util.rotation import (
     meanAngMomVector,
@@ -801,11 +809,15 @@ def renderSingleHaloFrames(
             p["interpTime"] = time_interp  # generates unique grid cache filename, triggers interp in vis overplots
 
             sP_next = p["sP"].copy()
+            sP_next2 = p["sP"].copy()  # for stars 3-point interp
             if frameNum < numFramesTot - 1:
                 sP_next.setSnap(sP_next.snap + 1)
+            if p["sP"].snap + 2 < p["sP"].numSnaps:
+                sP_next2.setSnap(sP_next2.snap + 2)
 
             t0 = p["sP"].tage
             t1 = sP_next.tage
+            t2 = sP_next2.tage
             dt = t1 - t0  # Gyr
 
             z0 = p["sP"].redshift
@@ -822,9 +834,12 @@ def renderSingleHaloFrames(
 
             tau = (time_interp - t0) / dt  # [0,1]
 
-            print(f" {t0 = :.4f}, {t1 = :.4f}, {time_interp = :.4f}, factor tau = {tau:.2f}")
+            print(f" {t0 = :.4f}, {t1 = :.4f}, {time_interp = :.4f}, tau = {tau:.2f}, z = {z_interp:.2f}")
 
             p["interpSnapTimes"] = [t0, t1, a0, a1, dt, tau]  # used in vis.common() for overplotting interp
+
+            # do stars in a relative frame of reference?
+            make_rel = False
 
             # override sim.scalefac (e.g. physicalKpcToCodeLength)
             for p in panels:
@@ -872,33 +887,169 @@ def renderSingleHaloFrames(
             # print(f"Interpolating frame {frameNum} at snap {snapNum}...")
 
             if curInterpSnap0 is None:
-                # init: load data for first and second snapshots
+                # init: load data for first snapshot(s)
                 next_interp_data = _load_interp_data(p, snapNum)
 
-            if curInterpSnap0 != snapNum and frameNum != numFramesTot - 1:
+                # for stars, load a further next snapshot for 3 point interp
+                if p["sP"].isPartType(p["partType"], "stars") and p["sP"].snap + 2 <= p["sP"].numSnaps:
+                    next2_interp_data = _load_interp_data(p, snapNum + 1)
+
+            loadNextData = frameNum != numFramesTot - 1
+            if p["sP"].isPartType(p["partType"], "stars"):
+                loadNextData &= snapNum + 2 <= p["sP"].numSnaps
+
+            if curInterpSnap0 != snapNum and loadNextData:
                 # we have moved to the next snapshot, move "next" data to "current" data, and load next snapshot
                 cur_interp_data = next_interp_data
 
-                next_interp_data = _load_interp_data(p, snapNum + 1)
+                # for stars, load a further next snapshot for 3 point interp
+                if p["sP"].isPartType(p["partType"], "stars"):
+                    next_interp_data = next2_interp_data
+
+                    next2_interp_data = _load_interp_data(p, snapNum + 2)
+                else:
+                    next_interp_data = _load_interp_data(p, snapNum + 1)
+
+                # # reset match indices for new snapshot pair(s)
+                match_i0_snap, match_i0_global = None, None
+                match_i1_snap, match_i1_global = None, None
+                match_i2_snap, match_i2_global = None, None
+
                 curInterpSnap0 = snapNum
-                match_i0 = match_i1 = None  # reset match indices for new snapshot pair
-                gc.collect()  # python will not automatically gc when reaching a MemoryError, only occasionally
+
+            gc.collect()  # python will not automatically gc when reaching a MemoryError, only occasionally
 
             # cross-match by ids
-            if match_i0 is None:
-                match_i0, match_i1 = match(cur_interp_data["ids"], next_interp_data["ids"])
-
-                # all particles matched? (DM) (need the extended logic for e.g. stars even if all match)
+            if match_i0_snap is None:
+                # all particles will match? (DM) (simple logic)
                 if p["sP"].isPartType(p["partType"], "dm"):
+                    # cross-match
+                    match_i0_snap, match_i1_snap = match(cur_interp_data["ids"], next_interp_data["ids"])
+
                     # re-shuffle 'first' snapshot data to be in same order
                     for key in cur_interp_data.keys():
                         # skip metadata
                         if key in ["time", "redshift", "sub_pos", "sub_vel", "sub_rel"]:
                             continue
 
-                        cur_interp_data[key] = cur_interp_data[key][match_i0]
+                        cur_interp_data[key] = cur_interp_data[key][match_i0_snap]
+                elif p["sP"].isPartType(p["partType"], "stars"):
+                    # stars, 3-snap interp
+                    new_data_cur = {}
+                    new_data_next = {}
+                    new_data_next2 = {}
+                    for key in ["time", "redshift", "sub_pos", "sub_vel", "sub_rel"]:
+                        new_data_cur[key] = cur_interp_data[key]
+                        new_data_next[key] = next_interp_data[key]
+                        new_data_next2[key] = next2_interp_data[key]
+
+                    # define unique (total) id list, and then cross-match each snap to this master list
+                    ids_unique = np.hstack([cur_interp_data["ids"], next_interp_data["ids"], next2_interp_data["ids"]])
+                    ids_unique = np.unique(ids_unique)
+
+                    match_i0_snap, match_i0_global = match(cur_interp_data["ids"], ids_unique)
+                    match_i1_snap, match_i1_global = match(next_interp_data["ids"], ids_unique)
+                    match_i2_snap, match_i2_global = match(next2_interp_data["ids"], ids_unique)
+
+                    # statistics
+                    n0 = cur_interp_data["ids"].size
+                    n1 = next_interp_data["ids"].size
+                    n2 = next2_interp_data["ids"].size
+                    n_match0 = match_i0_snap.size
+                    n_match1 = match_i1_snap.size
+                    n_match2 = match_i2_snap.size
+                    n_unique = ids_unique.size
+
+                    # print(f"  Tot: {n0} (cur), {n1} (next), {n2} (next2) snap.")
+                    # print(f"  Unique: {n_unique} total unique particles across the three snapshots.")
+
+                    # locate un-matched
+                    mask_cur = np.zeros(n_unique, dtype=bool)
+                    mask_next = np.zeros(n_unique, dtype=bool)
+                    mask_next2 = np.zeros(n_unique, dtype=bool)
+                    mask_cur[match_i0_global] = True
+                    mask_next[match_i1_global] = True
+                    mask_next2[match_i2_global] = True
+                    n_unmatched_cur = np.count_nonzero(~mask_cur)
+                    n_unmatched_next = np.count_nonzero(~mask_next)
+                    n_unmatched_next2 = np.count_nonzero(~mask_next2)
+                    # print(f"  Unmatched: {n_unmatched_cur} (cur) snap to global.")
+                    # print(f"  Unmatched: {n_unmatched_next} (next) snap to global.")
+                    # print(f"  Unmatched: {n_unmatched_next2} (next2) snap to global.")
+
+                    w_disappearing_cur = np.where(mask_cur & ~mask_next)[0]
+                    w_appearing_next = np.where(mask_next & ~mask_cur)[0]
+                    w_disappearing_next = np.where(mask_next & ~mask_next2)[0]
+                    w_appearing_next2 = np.where(mask_next2 & ~mask_next)[0]
+                    # print(f"  Disappearing: {w_disappearing_cur.size} (cur), {w_disappearing_next.size} (next) snap.")
+                    # print(f"  Appearing: {w_appearing_next.size} (next), {w_appearing_next2.size} (next2) snap.")
+
+                    for key in cur_interp_data:
+                        if key in ["time", "redshift", "sub_pos", "sub_vel", "sub_rel"]:
+                            continue
+
+                        # create empty array of full size [n_unique], ordered as ids_unique
+                        shape = (n_unique, 3) if cur_interp_data[key].ndim == 2 else (n_unique,)
+                        new_data_cur[key] = np.zeros(shape, dtype=cur_interp_data[key].dtype)
+                        new_data_next[key] = np.zeros(shape, dtype=next_interp_data[key].dtype)
+                        new_data_next2[key] = np.zeros(shape, dtype=next2_interp_data[key].dtype)
+
+                        # stamp matches for current snap
+                        new_data_cur[key][match_i0_global] = cur_interp_data[key][match_i0_snap]
+                        new_data_next[key][match_i1_global] = next_interp_data[key][match_i1_snap]
+                        new_data_next2[key][match_i2_global] = next2_interp_data[key][match_i2_snap]
+
+                        # if key in ["mass", "initialmass"]:
+                        #    # leave all masses at zero for unmatched subset (too many visual artifacts) (NO)
+                        #    continue
+
+                        # current: fill in missing values with constant values from the later snaps
+                        inds_from_next = np.where((new_data_cur[key] == 0) & (new_data_next[key] != 0))
+                        new_data_cur[key][inds_from_next] = new_data_next[key][inds_from_next]
+                        inds_from_next2 = np.where((new_data_cur[key] == 0) & (new_data_next2[key] != 0))
+                        new_data_cur[key][inds_from_next2] = new_data_next2[key][inds_from_next2]
+
+                        assert new_data_cur[key].min() != 0
+
+                        # next: fill in missing values
+                        inds_from_next2 = np.where((new_data_next[key] == 0) & (new_data_next2[key] != 0))
+                        new_data_next[key][inds_from_next2] = new_data_next2[key][inds_from_next2]
+                        inds_from_cur = np.where((new_data_next[key] == 0) & (new_data_cur[key] != 0))
+                        new_data_next[key][inds_from_cur] = new_data_cur[key][inds_from_cur]
+
+                        assert new_data_next[key].min() != 0
+
+                        # next2: fill in missing values
+                        idns_from_next = np.where((new_data_next2[key] == 0) & (new_data_next[key] != 0))
+                        new_data_next2[key][idns_from_next] = new_data_next[key][idns_from_next]
+                        idns_from_cur = np.where((new_data_next2[key] == 0) & (new_data_cur[key] != 0))
+                        new_data_next2[key][idns_from_cur] = new_data_cur[key][idns_from_cur]
+
+                        assert new_data_next2[key].min() != 0
+
+                    # set next_interp_data['pos'] for unmatched particles using constant vel assumption
+                    # leads to 'pulsed collapse' visual artifacts for star clusters? lin interp of ~radial orbits?
+                    #  - would be better extrapolating hermite from an adjacent snapshot pair?
+                    # dpos_cur = cur_interp_data["vel"][w_unmatched_cur] * dt
+                    # new_data_next["pos"][n_match : n_match + w_unmatched_cur.size] += dpos_cur  # ckpc/h
+
+                    # dpos_next = next_interp_data["vel"][w_unmatched_next] * dt
+                    # new_data_cur["pos"][n_match + w_unmatched_cur.size :] -= dpos_next  # ckpc/h
+                    # TODO
+
+                    # set data arrays to our new 'full' matching arrays
+                    cur_interp_data = new_data_cur
+                    next_interp_data = new_data_next
+                    next2_interp_data = new_data_next2
+
                 else:
-                    # not all particles matched, e.g. gas, create new arrays
+                    # gas only
+                    assert not p["sP"].isPartType(p["partType"], "stars"), "Old method for stars."
+
+                    # cross-match gas, (de)refinement means both appearences and disappearances
+                    match_i0_snap, match_i1_snap = match(cur_interp_data["ids"], next_interp_data["ids"])
+
+                    # create new arrays
                     new_data_cur = {}
                     new_data_next = {}
                     for key in ["time", "redshift", "sub_pos", "sub_vel", "sub_rel"]:
@@ -906,7 +1057,7 @@ def renderSingleHaloFrames(
                         new_data_next[key] = next_interp_data[key]
 
                     # total unique
-                    n_match = match_i0.size
+                    n_match = match_i0_snap.size
                     n_unique = np.unique(np.concatenate([cur_interp_data["ids"], next_interp_data["ids"]])).size
                     # print(f"  Tot: {cur_interp_data['ids'].size} (cur), {next_interp_data['ids'].size} (next) snap.")
                     # print(f"  Unique: {n_unique} total unique particles across the two snapshots.")
@@ -914,8 +1065,8 @@ def renderSingleHaloFrames(
                     # locate un-matched
                     mask_cur = np.zeros(cur_interp_data["ids"].size, dtype=bool)
                     mask_next = np.zeros(next_interp_data["ids"].size, dtype=bool)
-                    mask_cur[match_i0] = True
-                    mask_next[match_i1] = True
+                    mask_cur[match_i0_snap] = True
+                    mask_next[match_i1_snap] = True
                     w_unmatched_cur = np.where(~mask_cur)[0]
                     w_unmatched_next = np.where(~mask_next)[0]
                     # print(f"  Unmatched: {w_unmatched_cur.size} (cur), {w_unmatched_next.size} (next) snap.")
@@ -943,8 +1094,8 @@ def renderSingleHaloFrames(
                         new_data_next[key] = np.zeros(shape, dtype=next_interp_data[key].dtype)
 
                         # stamp matches (beginning of arrays)
-                        new_data_cur[key][0:n_match] = cur_interp_data[key][match_i0]
-                        new_data_next[key][0:n_match] = next_interp_data[key][match_i1]
+                        new_data_cur[key][0:n_match] = cur_interp_data[key][match_i0_snap]
+                        new_data_next[key][0:n_match] = next_interp_data[key][match_i1_snap]
 
                         if key in ["mass", "initialmass"]:
                             # leave all masses at zero for unmatched subset (too many visual artifacts)
@@ -980,8 +1131,8 @@ def renderSingleHaloFrames(
 
                 assert np.array_equal(cur_interp_data["ids"], next_interp_data["ids"]), "ID mismatch after sorting!"
 
-                # test: frame of reference (stars only)
-                if p["sP"].isPartType(p["partType"], "stars"):
+                # shift to subhalo frame of reference (stars only)
+                if make_rel and p["sP"].isPartType(p["partType"], "stars"):
                     if not cur_interp_data["sub_rel"]:
                         cur_interp_data["pos"] -= cur_interp_data["sub_pos"]
                         cur_interp_data["vel"] -= cur_interp_data["sub_vel"]
@@ -994,12 +1145,27 @@ def renderSingleHaloFrames(
 
             # at this particular interpolation time, use actual birth times of stars, leading to instantaneous
             # appearence (by setting non-zero mass and initial mass) after formation
-            if p["sP"].isPartType(p["partType"], "stars") and w_unmatched_cur.size > 0:
+            if 0 and p["sP"].isPartType(p["partType"], "stars") and w_unmatched_cur.size > 0:
+                assert 0, "Old method for stars."
                 print(f"WARNING: {w_unmatched_cur.size} unmatched stars in current snap {snapNum} disappear.")
                 cur_interp_data["initialmass"][n_match : n_match + w_unmatched_cur.size] = 1e-20
                 next_interp_data["initialmass"][n_match : n_match + w_unmatched_cur.size] = 1e-20
 
-            if p["sP"].isPartType(p["partType"], "stars") and w_unmatched_next.size > 0:
+            if p["sP"].isPartType(p["partType"], "stars"):
+                if w_disappearing_cur.size > 0:
+                    # print(f"WARNING: {w_disappearing_cur.size} stars in current snap {snapNum} disappear.")
+                    cur_interp_data["initialmass"][w_disappearing_cur] = 1e-20
+                    next_interp_data["initialmass"][w_disappearing_cur] = 1e-20
+                    next2_interp_data["initialmass"][w_disappearing_cur] = 1e-20  # unused
+
+                if w_disappearing_next.size > 0:
+                    # print(f"WARNING: {w_disappearing_next.size} stars in next snap {snapNum + 1} disappear.")
+                    cur_interp_data["initialmass"][w_disappearing_next] = 1e-20
+                    next_interp_data["initialmass"][w_disappearing_next] = 1e-20
+                    next2_interp_data["initialmass"][w_disappearing_next] = 1e-20  # unused
+
+            if 0 and p["sP"].isPartType(p["partType"], "stars") and w_unmatched_next.size > 0:
+                assert 0, "Old method for stars."
                 # first, set vanishing small initial mass (zero causes error in sps for mags)
                 cur_interp_data["initialmass"][n_match + w_unmatched_cur.size :] = 1e-20
                 next_interp_data["initialmass"][n_match + w_unmatched_cur.size :] = 1e-20
@@ -1009,8 +1175,6 @@ def renderSingleHaloFrames(
                 sfz_next = 1 / sftime_next - 1
 
                 sfage_next = np.atleast_1d(p["sP"].units.redshiftToAgeFlat(sfz_next))
-                # if sfage_next.min() > t0 or sfage_next.max() < t1:
-                #    print(f" WARNING: sftime out of current interval. {sfage_next.min() = }, {sfage_next.max() = }")
 
                 # which stars have already formed by this interpolation time?
                 w_formed = np.where(sfage_next <= time_interp)
@@ -1020,11 +1184,28 @@ def renderSingleHaloFrames(
                     cur_interp_data[key][n_match + w_unmatched_cur.size :][w_formed] = mass_val
                     next_interp_data[key][n_match + w_unmatched_cur.size :][w_formed] = mass_val
 
-                print(f"  Stars: {w_formed[0].size} formed (of {w_unmatched_next.size}), appearing at interp time.")
+                # print(f"  Stars: {w_formed[0].size} formed (of {w_unmatched_next.size}), appearing at interp time.")
+
+            if p["sP"].isPartType(p["partType"], "stars") and w_appearing_next.size > 0:
+                # convert scale factor to age of the universe in Gyr
+                sftime_next = next_interp_data["sftime"][w_appearing_next]
+                sfz_next = 1 / sftime_next - 1
+                sfage_next = np.atleast_1d(p["sP"].units.redshiftToAgeFlat(sfz_next))
+
+                # which stars have -not yet- formed by this interpolation time?
+                w_unformed = np.where(sfage_next > time_interp)
+
+                for key in ["mass", "initialmass"]:
+                    cur_interp_data[key][w_appearing_next][w_unformed] = 1e-20
+                    next_interp_data[key][w_appearing_next][w_unformed] = 1e-20
+
+                # note: we don't care about w_appearing_next2 since we only render from cur to next, and then shift
+                print(f"  Stars: {w_unformed[0].size} unformed (of {w_appearing_next.size}) at interp time.")
 
             if p["sP"].isPartType(p["partType"], "stars"):
                 assert cur_interp_data["initialmass"].min() > 0, "Should not occur."
                 assert next_interp_data["initialmass"].min() > 0, "Should not occur."
+                assert next2_interp_data["initialmass"].min() > 0, "Should not occur."
 
             # for gas, randomly assign refinement (next cells with no match in current) and derefinement
             # (current cells with no match in next) times within the interval, and set mass to zero on the
@@ -1069,11 +1250,18 @@ def renderSingleHaloFrames(
             nThreads = np.clip(num_cpus() // 2, 1, 36)  # determine threading automatically
             set_num_threads(nThreads)
 
-            # stars: add noise to tau to reduce correlated radial oscillation visual artifact
             if p["sP"].isPartType(p["partType"], "stars"):
-                assert cur_interp_data["sub_rel"] and next_interp_data["sub_rel"], "Should have been set by now."
+                # 3-point
+                pos2 = next2_interp_data["pos"]
+                vel2 = next2_interp_data["vel"]
+                pos_t = hermite_interp_3point(pos0, pos1, pos2, vel0, vel1, vel2, time_interp, [t0, t1, t2])
+            else:
+                # normal
+                pos_t = hermite_interp(pos0, pos1, vel0, vel1, tau, dt)
 
-                # pos_t = hermite_interp(pos0, pos1, vel0, vel1, tau, dt)
+            # stars: subhalo frame of reference and possibly spherical coordinates for interpolation
+            if make_rel and p["sP"].isPartType(p["partType"], "stars"):
+                assert cur_interp_data["sub_rel"] and next_interp_data["sub_rel"], "Should have been set by now."
 
                 if 1:
                     # cartesian -> spherical coordinates
@@ -1098,7 +1286,7 @@ def renderSingleHaloFrames(
                     pos0_sph[:, 2] -= np.pi
                     pos1_sph[:, 2] -= np.pi
 
-                    # new random number generator with seed
+                    # stars: add noise to tau to reduce correlated radial oscillation visual artifact
                     rng = np.random.default_rng(seed=frameNum + n_match)
 
                     tau_indiv = tau + rng.uniform(low=-0.01, high=0.01, size=pos0.shape[0])
@@ -1156,10 +1344,7 @@ def renderSingleHaloFrames(
                 # undo frame of reference
                 pos_t += p["boxCenter"]
 
-            else:
-                # normal
-                pos_t = hermite_interp(pos0, pos1, vel0, vel1, tau, dt)
-
+            # save interpolated positions into dataCache (intercepted in snapshot loads during vis)
             cache_key_prefix = "snap%d_%s_" % (snapNum, p["partType"])
             p["sP"].data[cache_key_prefix + "Coordinates"] = pos_t
 

@@ -1549,6 +1549,56 @@ def hermite_interp(pos0, pos1, vel0, vel1, tau, dt):
 
 
 @njit(parallel=True)
+def hermite_interp_3point(pos0, pos1, pos2, vel0, vel1, vel2, tau, t_vals):
+    """Hermite interpolation (quintic) of positions given values and their derivatives (velocities) at 3 points."""
+    # Lagrangian polynomials and derivatives
+    denom0 = (t_vals[0] - t_vals[1]) * (t_vals[0] - t_vals[2])
+    denom1 = (t_vals[1] - t_vals[0]) * (t_vals[1] - t_vals[2])
+    denom2 = (t_vals[2] - t_vals[0]) * (t_vals[2] - t_vals[1])
+
+    L0 = ((tau - t_vals[1]) * (tau - t_vals[2])) / denom0
+    L1 = ((tau - t_vals[0]) * (tau - t_vals[2])) / denom1
+    L2 = ((tau - t_vals[0]) * (tau - t_vals[1])) / denom2
+
+    dL0 = 1.0 / (t_vals[0] - t_vals[1]) + 1.0 / (t_vals[0] - t_vals[2])
+    dL1 = 1.0 / (t_vals[1] - t_vals[0]) + 1.0 / (t_vals[1] - t_vals[2])
+    dL2 = 1.0 / (t_vals[2] - t_vals[0]) + 1.0 / (t_vals[2] - t_vals[1])
+
+    # Hermite components Ai(t) and Bi(t)
+    a0 = (1.0 - 2.0 * (tau - t_vals[0]) * dL0) * L0**2
+    a1 = (1.0 - 2.0 * (tau - t_vals[1]) * dL1) * L1**2
+    a2 = (1.0 - 2.0 * (tau - t_vals[2]) * dL2) * L2**2
+
+    b0 = (tau - t_vals[0]) * L0**2
+    b1 = (tau - t_vals[1]) * L1**2
+    b2 = (tau - t_vals[2]) * L2**2
+
+    # allocate
+    N = pos0.shape[0]
+
+    pos_t = np.zeros_like(pos0)
+
+    # for each particle, interpolate
+    for i in prange(N):
+        # quintic hermite interpolate in time, using positions and velocities (6 constraints), for new positions
+        p0 = pos0[i]
+        p1 = pos1[i]
+        p2 = pos2[i]
+        v0 = vel0[i]
+        v1 = vel1[i]
+        v2 = vel2[i]
+
+        # x,y,z coordinate directions separately
+        x_t = a0 * p0[0] + a1 * p1[0] + a2 * p2[0] + b0 * v0[0] + b1 * v1[0] + b2 * v2[0]
+        y_t = a0 * p0[1] + a1 * p1[1] + a2 * p2[1] + b0 * v0[1] + b1 * v1[1] + b2 * v2[1]
+        z_t = a0 * p0[2] + a1 * p1[2] + a2 * p2[2] + b0 * v0[2] + b1 * v1[2] + b2 * v2[2]
+
+        pos_t[i] = [x_t, y_t, z_t]
+
+    return pos_t
+
+
+@njit(parallel=True)
 def hermite_interp_vartau(pos0, pos1, vel0, vel1, tau, dt):
     """Hermite interpolation of positions given pos and vel (derivatives), at varying times per particle."""
     # allocate

@@ -126,7 +126,7 @@ class simParams:
     """Simulation instance: metadata, helper functions, and (optionally) a snapshot/redshift specification."""
 
     # paths and names
-    simPath = ""  #: path (root) containing 'output' directory with simulation snapshots and group catalogs
+    simPath = ""  #: path to directory with simulation snapshots and group catalogs (i.e. 'output/' directory)
     arepoPath = ""  #: path to Arepo binary, Config.sh and param.txt files of this run
     derivPath = ""  #: path to put derivative files ("data.files/")
     cachePath = ""  #: path to put cache files ("data.files/cache/")
@@ -900,6 +900,7 @@ class simParams:
 
             self.validResLevels = [13, 14, 15, 16]
             self.groupOrdered = True
+            self.numSnaps = 398
 
             # TNG50-1 zooms, mostly selected at z=5.5
             parentRes = 2160
