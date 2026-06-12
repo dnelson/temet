@@ -7,7 +7,6 @@ import glob
 import struct
 from io import BytesIO
 from os import mkdir, path, remove
-from os.path import isfile
 
 import h5py
 import numpy as np
@@ -960,7 +959,7 @@ def combineAuxCatSubdivisions():
         filePath_i = basePath + fileBase % (i, pSplitBig[2])
         print(filePath_i)
 
-        if not isfile(filePath_i):
+        if not path.isfile(filePath_i):
             allExist = False
             continue
 
@@ -1002,7 +1001,7 @@ def combineAuxCatSubdivisions():
     outPath = path.expanduser("~") + "/data/" + fileBase % (pSplitSm[0], pSplitSm[1])
     print("Write to: [%s]" % outPath)
 
-    assert not isfile(outPath)
+    assert not path.isfile(outPath)
     with h5py.File(outPath, "w") as f:
         f.create_dataset(field, data=new_r)
         f.create_dataset("subhaloIDs", data=subhaloIDs)
@@ -1010,7 +1009,7 @@ def combineAuxCatSubdivisions():
     print("Saved.")
 
     verifyPath = basePath + fileBase % (pSplitSm[0], pSplitSm[1])
-    if not isfile(verifyPath):
+    if not path.isfile(verifyPath):
         print("Verify does not exist, skip [%s]." % verifyPath)
         return
 
@@ -1972,3 +1971,70 @@ def parsec_v2():
         for Z_val, _ in data.items():
             for key in data[Z_val]:
                 f[f"Z_{Z_val}/{key}"] = data[Z_val][key]
+
+
+def snapSuppToCatalog(sim):
+    """Convert a series of re-written snapshots (i.e. from AREPO post-processing) into a single file (per snapshot) postprocessing catalog."""
+    snapPrefix = "potupdated"
+    postName = "StellarPotential"
+    ptNums = [4, 5]
+    fields = ["Acceleration", "Potential"]
+
+    if not path.isdir(f"{sim.postPath}{postName}"):
+        mkdir(f"{sim.postPath}{postName}")
+
+    # verify all files exist
+    for snap in sim.validSnapList():
+        read_path = sim.simPath + f"snapdir_{snap:03d}/"
+        num_orig = len(glob.glob(read_path + f"snap_{snap:03d}.*.hdf5"))
+        num_new = len(glob.glob(read_path + f"snap_{snapPrefix}_{snap:03d}.*.hdf5"))
+        assert num_orig == num_new > 0
+
+        # load new data
+        loc_data = {}
+
+        for ptNum in ptNums:
+            offset = 0
+
+            for i in range(num_new):
+                file = read_path + f"snap_{snapPrefix}_{snap:03d}.{i}.hdf5"
+                with h5py.File(file, "r") as f:
+                    total_size = f["Header"].attrs["NumPart_Total"][ptNum]
+                    loc_size = f["Header"].attrs["NumPart_ThisFile"][ptNum]
+
+                    # loop over requested fields
+                    for field in fields:
+                        # allocate if needed
+                        name = f"PartType{ptNum}/{field}"
+                        if name not in f:
+                            continue
+
+                        dset = f[name]
+
+                        if name not in loc_data:
+                            shape = list(dset.shape)
+                            shape[0] = total_size
+                            loc_data[name] = np.zeros(shape, dtype=dset.dtype)
+
+                        # read
+                        loc_data[name][offset : offset + loc_size] = dset[()]
+
+                    offset += loc_size
+
+        # write
+        outfile = f"{sim.postPath}{postName}/{postName}_{snap:03d}.hdf5"
+        print(outfile)
+
+        with h5py.File(outfile, "w") as f:
+            for ptNum in ptNums:
+                for field in fields:
+                    name = f"PartType{ptNum}/{field}"
+                    if name not in loc_data:
+                        continue
+
+                    # sanity check
+                    assert loc_data[name].min() != 0
+
+                    f[f"PartType{ptNum}/{field}"] = loc_data[name]
+
+    print("Done.")
