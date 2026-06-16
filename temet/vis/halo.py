@@ -15,9 +15,11 @@ from scipy.signal import savgol_filter
 from ..util.helper import (
     evenlySample,
     hermite_interp,
+    hermite_interp_2deriv,
     hermite_interp_3point,
     hermite_interp_vartau,
     linear_interp,
+    linear_interp_vartau,
     num_cpus,
     pSplit,
 )
@@ -679,6 +681,7 @@ def renderSingleHaloFrames(
         assert snapNums.min() >= 0 and snapNums.max() < snapTimesMyr.size, "interpDt out of snap time bounds!"
 
         curInterpSnap0 = None
+        match_i0_snap = None
 
     # optionally parallelize over multiple tasks
     numFramesTot = frameNums.size
@@ -691,12 +694,7 @@ def renderSingleHaloFrames(
         % (curTask, numTasks, len(frameNums), numFramesTot, np.min(frameNums), np.max(frameNums))
     )
 
-    # compute statistics across all frames?
-    if getStats:
-        frame_min = np.zeros(frameNums.size)
-        frame_max = np.zeros(frameNums.size)
-        frame_percs = np.zeros((frameNums.size, 2))
-
+    # helper functions
     def _load_interp_data(panel_loc, snap_num):
         partType = panel_loc["partType"]
         sim = panel_loc["sP"].copy()
@@ -705,11 +703,12 @@ def renderSingleHaloFrames(
         # load common fields, needed for all part types and vis fields
         ids = sim.snapshotSubsetP(partType, "id")
         pos = sim.snapshotSubsetP(partType, "pos")
-        vel = sim.snapshotSubsetP(partType, "vel_ckpch_gyr")  # units consistent with pos/Gyr
 
-        r = {"ids": ids, "pos": pos, "vel": vel, "time": sim.tage, "redshift": sim.redshift}
+        r = {"ids": ids, "pos": pos, "time": sim.tage, "redshift": sim.redshift}
 
+        # load hsml?
         loadHsml = False
+
         if not sim.isPartType(partType, "stars") or sim.star not in [2, 3]:
             # hsml needed for both gas and dm (unless tetra method), and also stars (unless point-like)
             loadHsml = True
@@ -721,15 +720,29 @@ def renderSingleHaloFrames(
             hsml = getHsmlForPartType(sim, partType)
             r["hsml"] = hsml
 
+        # load velocities?
+        loadVel = True
+
+        if sim.isPartType(partType, "stars") and star_interp_method == "linear":
+            loadVel = False
+
+        if loadVel:
+            r["vel"] = sim.snapshotSubsetP(partType, "vel_ckpch_gyr")  # units consistent with pos/Gyr
+
+        # stars
         if sim.isPartType(partType, "stars"):
             r["sftime"] = sim.stars("sftime")
             r["metallicity"] = sim.stars("metallicity")
             r["initialmass"] = sim.stars("initialmass")
+            if star_interp_method == "hermite_accel":
+                r["acc"] = sim.stars("accel_ckpch_gyr2")  # units consistent with pos/Gyr^2
 
+        # non-dm
         if not sim.isPartType(partType, "dm"):
             mass = sim.snapshotSubsetP(partType, "mass")
             r["mass"] = mass
 
+        # gas
         if sim.isPartType(partType, "gas"):
             dens = sim.snapshotSubsetP(partType, "density")
             r["dens"] = dens
@@ -800,10 +813,12 @@ def renderSingleHaloFrames(
             if plotConfig.interpFac is not None:
                 # time_interp = dt / plotConfig.interpFac * (frameNum % plotConfig.interpFac) + t0  # Gyr
                 time_interp = frameTimesGyr[frameNum]
+                time_interp_next = frameTimesGyr[frameNum + 1] if frameNum < numFramesTot - 1 else time_interp
                 z_interp = frameRedshifts[frameNum]
 
             if plotConfig.interpDt is not None:
                 time_interp = frameTimesMyr[frameNum] / 1000  # Gyr
+                time_interp_next = frameTimesMyr[frameNum + 1] / 1000 if frameNum < numFramesTot - 1 else time_interp
                 z_interp = p["sP"].units.ageFlatToRedshift(time_interp)
 
             p["interpTime"] = time_interp  # generates unique grid cache filename, triggers interp in vis overplots
@@ -812,8 +827,12 @@ def renderSingleHaloFrames(
             sP_next2 = p["sP"].copy()  # for stars 3-point interp
             if frameNum < numFramesTot - 1:
                 sP_next.setSnap(sP_next.snap + 1)
+                sP_next2.setSnap(sP_next.snap)
+            else:
+                # set to final snap
+                sP_next.setSnap(sP_next.numSnaps - 1)
             if p["sP"].snap + 2 < p["sP"].numSnaps:
-                sP_next2.setSnap(sP_next2.snap + 2)
+                sP_next2.setSnap(sP_next2.snap + 1)
 
             t0 = p["sP"].tage
             t1 = sP_next.tage
@@ -827,10 +846,11 @@ def renderSingleHaloFrames(
             a0 = p["sP"].scalefac
             a1 = sP_next.scalefac
 
-            assert time_interp >= t0 and time_interp < t1, "interpDt frame time out of current snap interval."
-
             if frameNum == numFramesTot - 1:
                 time_interp = t1
+                dt = time_interp - t0  # set tau = 1
+
+            assert time_interp >= t0 and time_interp <= t1, "interpDt frame time out of current snap interval."
 
             tau = (time_interp - t0) / dt  # [0,1]
 
@@ -838,8 +858,12 @@ def renderSingleHaloFrames(
 
             p["interpSnapTimes"] = [t0, t1, a0, a1, dt, tau]  # used in vis.common() for overplotting interp
 
-            # do stars in a relative frame of reference?
+            # do stars in a relative frame of reference? 2-snap or 3-snap? in spherical coords? with accelerations?
+            star_interp_method = "linear"  # hermite_2pt, hermite_3pt, hermite_accel
+            star_3snaps = True
+            stars_randomize_tau = False
             make_rel = False
+            sph_coordinates = False
 
             # override sim.scalefac (e.g. physicalKpcToCodeLength)
             for p in panels:
@@ -867,50 +891,65 @@ def renderSingleHaloFrames(
             if not isfile(gridFilename):
                 allGridsExist = False
 
+            if make_rel:
+                # also need the boxCenter of the next frame
+
+                # for times within actual MPB, use smoothed properties directly
+                ind = np.where(p["mpb"]["SnapNum"] == snapNums[frameCount])[0]
+                assert len(ind)
+                assert snapNums[frameCount] >= p["mpb"]["SnapNum"].min()  # implement for interp before start of MPB
+
+                mpb_times = p["sP"].units.redshiftToAgeFlat(p["mpb"]["redshift"])
+                inds = [ind[0], ind[0] - 1]  # mpb is ordered in increasing snapnum i.e. decreasing time
+                assert inds[1] >= 0, "Avoid this case, do not interp on last snap in general."
+
+                p["boxCenterNext"] = np.array(
+                    [np.interp(time_interp_next, mpb_times[inds], p["mpb"]["SubhaloPos"][inds, i]) for i in range(3)]
+                )
+                p["boxCenterNext"] = p["boxCenterNext"][p["axes"] + [3 - p["axes"][0] - p["axes"][1]]]  # axes ordering
+
+                # calculate derivative (velocity) of box motion
+                frame_dt = time_interp_next - time_interp
+                p["boxVelocity"] = (p["boxCenterNext"] - p["boxCenter"]) / frame_dt  # (ckpc/h)/Gyr
+
             # scale valMinMax (colorbar range) by redshift?
             if plotConfig.vmmEvoScalefac is not None and p["valMinMax"] is not None:
                 adjust_fac = p["sP"].scalefac * plotConfig.vmmEvoScalefac * p["sP"].units.scalefac
                 # print(f"Scaling valMinMax by factor {adjust_fac:.3f} at redshift {p['sP'].redshift:.2f}.")
                 p["valMinMax"] = [v + adjust_fac for v in p["valMinMaxOrig"]]
 
-        if getStats:
-            _, config, data_grid = gridBox(**panels[0])
-            frame_min[frameNum] = np.nanmin(data_grid)
-            frame_max[frameNum] = np.nanmax(data_grid)
-            frame_percs[frameNum] = np.nanpercentile(data_grid, [1, 99.9])
-            continue
-
         # time interpolation? load bracketing snapshots, cross-match, and interpolate positions and properties
         if plotConfig.interpFac is not None or plotConfig.interpDt is not None and not allGridsExist:
             assert len(panels) == 1  # otherwise generalize to multiple panels with potentially different pt/fields/runs
             p = panels[0]
-            # print(f"Interpolating frame {frameNum} at snap {snapNum}...")
 
             if curInterpSnap0 is None:
                 # init: load data for first snapshot(s)
                 next_interp_data = _load_interp_data(p, snapNum)
 
                 # for stars, load a further next snapshot for 3 point interp
-                if p["sP"].isPartType(p["partType"], "stars") and p["sP"].snap + 2 <= p["sP"].numSnaps:
+                if star_3snaps and p["sP"].isPartType(p["partType"], "stars") and p["sP"].snap + 2 <= p["sP"].numSnaps:
                     next2_interp_data = _load_interp_data(p, snapNum + 1)
 
             loadNextData = frameNum != numFramesTot - 1
             if p["sP"].isPartType(p["partType"], "stars"):
-                loadNextData &= snapNum + 2 <= p["sP"].numSnaps
+                loadNextData &= snapNum + 2 < p["sP"].numSnaps
 
-            if curInterpSnap0 != snapNum and loadNextData:
+            if curInterpSnap0 != snapNum:
                 # we have moved to the next snapshot, move "next" data to "current" data, and load next snapshot
                 cur_interp_data = next_interp_data
 
                 # for stars, load a further next snapshot for 3 point interp
-                if p["sP"].isPartType(p["partType"], "stars"):
+                if star_3snaps and p["sP"].isPartType(p["partType"], "stars"):
                     next_interp_data = next2_interp_data
 
-                    next2_interp_data = _load_interp_data(p, snapNum + 2)
+                    if loadNextData:
+                        next2_interp_data = _load_interp_data(p, snapNum + 2)
                 else:
-                    next_interp_data = _load_interp_data(p, snapNum + 1)
+                    if loadNextData:
+                        next_interp_data = _load_interp_data(p, snapNum + 1)
 
-                # # reset match indices for new snapshot pair(s)
+                # reset match indices for new snapshot pair(s)
                 match_i0_snap, match_i0_global = None, None
                 match_i1_snap, match_i1_global = None, None
                 match_i2_snap, match_i2_global = None, None
@@ -933,7 +972,7 @@ def renderSingleHaloFrames(
                             continue
 
                         cur_interp_data[key] = cur_interp_data[key][match_i0_snap]
-                elif p["sP"].isPartType(p["partType"], "stars"):
+                elif star_3snaps and p["sP"].isPartType(p["partType"], "stars"):
                     # stars, 3-snap interp
                     new_data_cur = {}
                     new_data_next = {}
@@ -1020,22 +1059,22 @@ def renderSingleHaloFrames(
                         assert new_data_next[key].min() != 0
 
                         # next2: fill in missing values
-                        idns_from_next = np.where((new_data_next2[key] == 0) & (new_data_next[key] != 0))
-                        new_data_next2[key][idns_from_next] = new_data_next[key][idns_from_next]
-                        idns_from_cur = np.where((new_data_next2[key] == 0) & (new_data_cur[key] != 0))
-                        new_data_next2[key][idns_from_cur] = new_data_cur[key][idns_from_cur]
+                        inds_from_next = np.where((new_data_next2[key] == 0) & (new_data_next[key] != 0))
+                        new_data_next2[key][inds_from_next] = new_data_next[key][inds_from_next]
+                        inds_from_cur = np.where((new_data_next2[key] == 0) & (new_data_cur[key] != 0))
+                        new_data_next2[key][inds_from_cur] = new_data_cur[key][inds_from_cur]
 
                         assert new_data_next2[key].min() != 0
 
-                    # set next_interp_data['pos'] for unmatched particles using constant vel assumption
-                    # leads to 'pulsed collapse' visual artifacts for star clusters? lin interp of ~radial orbits?
-                    #  - would be better extrapolating hermite from an adjacent snapshot pair?
-                    # dpos_cur = cur_interp_data["vel"][w_unmatched_cur] * dt
-                    # new_data_next["pos"][n_match : n_match + w_unmatched_cur.size] += dpos_cur  # ckpc/h
+                    # set leftmost pos for unmatched particles using extrapolation from subsequent snapshot interval
+                    if w_appearing_next.size > 0:
+                        tau_extrap = (time_interp - t1) / (t2 - t1)  # note: < 0
 
-                    # dpos_next = next_interp_data["vel"][w_unmatched_next] * dt
-                    # new_data_cur["pos"][n_match + w_unmatched_cur.size :] -= dpos_next  # ckpc/h
-                    # TODO
+                        new_pos = np.zeros((w_appearing_next.size, 3), dtype="float32")
+                        for i in range(3):
+                            pos1 = new_data_next["pos"][w_appearing_next, i]
+                            pos2 = new_data_next2["pos"][w_appearing_next, i]
+                            new_data_cur["pos"][w_appearing_next, i] = linear_interp(pos1, pos2, tau_extrap)
 
                     # set data arrays to our new 'full' matching arrays
                     cur_interp_data = new_data_cur
@@ -1043,8 +1082,7 @@ def renderSingleHaloFrames(
                     next2_interp_data = new_data_next2
 
                 else:
-                    # gas only
-                    assert not p["sP"].isPartType(p["partType"], "stars"), "Old method for stars."
+                    # gas, stars (old method)
 
                     # cross-match gas, (de)refinement means both appearences and disappearances
                     match_i0_snap, match_i1_snap = match(cur_interp_data["ids"], next_interp_data["ids"])
@@ -1070,6 +1108,8 @@ def renderSingleHaloFrames(
                     w_unmatched_cur = np.where(~mask_cur)[0]
                     w_unmatched_next = np.where(~mask_next)[0]
                     # print(f"  Unmatched: {w_unmatched_cur.size} (cur), {w_unmatched_next.size} (next) snap.")
+
+                    print(f"WARNING: {w_unmatched_cur.size} unmatched stars in current snap {snapNum} disappear.")
 
                     # need to preserve mass and initial mass of unmatched stars and gas for logic below
                     if p["sP"].isPartType(p["partType"], "stars"):
@@ -1131,27 +1171,35 @@ def renderSingleHaloFrames(
 
                 assert np.array_equal(cur_interp_data["ids"], next_interp_data["ids"]), "ID mismatch after sorting!"
 
-                # shift to subhalo frame of reference (stars only)
-                if make_rel and p["sP"].isPartType(p["partType"], "stars"):
-                    if not cur_interp_data["sub_rel"]:
-                        cur_interp_data["pos"] -= cur_interp_data["sub_pos"]
-                        cur_interp_data["vel"] -= cur_interp_data["sub_vel"]
-                        cur_interp_data["sub_rel"] = True
-
-                    if not next_interp_data["sub_rel"]:
-                        next_interp_data["pos"] -= next_interp_data["sub_pos"]
-                        next_interp_data["vel"] -= next_interp_data["sub_vel"]
-                        next_interp_data["sub_rel"] = True
-
             # at this particular interpolation time, use actual birth times of stars, leading to instantaneous
             # appearence (by setting non-zero mass and initial mass) after formation
-            if 0 and p["sP"].isPartType(p["partType"], "stars") and w_unmatched_cur.size > 0:
-                assert 0, "Old method for stars."
-                print(f"WARNING: {w_unmatched_cur.size} unmatched stars in current snap {snapNum} disappear.")
-                cur_interp_data["initialmass"][n_match : n_match + w_unmatched_cur.size] = 1e-20
-                next_interp_data["initialmass"][n_match : n_match + w_unmatched_cur.size] = 1e-20
+            if (not star_3snaps) and p["sP"].isPartType(p["partType"], "stars"):
+                if w_unmatched_cur.size > 0:
+                    cur_interp_data["initialmass"][n_match : n_match + w_unmatched_cur.size] = 1e-20
+                    next_interp_data["initialmass"][n_match : n_match + w_unmatched_cur.size] = 1e-20
 
-            if p["sP"].isPartType(p["partType"], "stars"):
+                if w_unmatched_next.size > 0:
+                    # first, set vanishing small initial mass (zero causes error in sps for mags)
+                    cur_interp_data["initialmass"][n_match + w_unmatched_cur.size :] = 1e-20
+                    next_interp_data["initialmass"][n_match + w_unmatched_cur.size :] = 1e-20
+
+                    # convert scale factor to age of the universe in Gyr
+                    sftime_next = next_interp_data["sftime"][n_match + w_unmatched_cur.size :]
+                    sfz_next = 1 / sftime_next - 1
+
+                    sfage_next = np.atleast_1d(p["sP"].units.redshiftToAgeFlat(sfz_next))
+
+                    # which stars have already formed by this interpolation time?
+                    w_formed = np.where(sfage_next <= time_interp)
+
+                    for key in ["mass", "initialmass"]:
+                        mass_val = next_unmatched_data[key][w_formed]
+                        cur_interp_data[key][n_match + w_unmatched_cur.size :][w_formed] = mass_val
+                        next_interp_data[key][n_match + w_unmatched_cur.size :][w_formed] = mass_val
+
+                    # print(f"  Stars: {w_formed[0].size} formed (of {w_unmatched_next.size}), appearing at interp time.")
+
+            if star_3snaps and p["sP"].isPartType(p["partType"], "stars"):
                 if w_disappearing_cur.size > 0:
                     # print(f"WARNING: {w_disappearing_cur.size} stars in current snap {snapNum} disappear.")
                     cur_interp_data["initialmass"][w_disappearing_cur] = 1e-20
@@ -1164,48 +1212,40 @@ def renderSingleHaloFrames(
                     next_interp_data["initialmass"][w_disappearing_next] = 1e-20
                     next2_interp_data["initialmass"][w_disappearing_next] = 1e-20  # unused
 
-            if 0 and p["sP"].isPartType(p["partType"], "stars") and w_unmatched_next.size > 0:
-                assert 0, "Old method for stars."
-                # first, set vanishing small initial mass (zero causes error in sps for mags)
-                cur_interp_data["initialmass"][n_match + w_unmatched_cur.size :] = 1e-20
-                next_interp_data["initialmass"][n_match + w_unmatched_cur.size :] = 1e-20
+                if w_appearing_next.size > 0:
+                    # convert scale factor to age of the universe in Gyr
+                    sftime_next = next_interp_data["sftime"][w_appearing_next]
+                    sfz_next = 1 / sftime_next - 1
+                    sfage_next = np.atleast_1d(p["sP"].units.redshiftToAgeFlat(sfz_next))
 
-                # convert scale factor to age of the universe in Gyr
-                sftime_next = next_interp_data["sftime"][n_match + w_unmatched_cur.size :]
-                sfz_next = 1 / sftime_next - 1
+                    # which stars have -not yet- formed by this interpolation time?
+                    w_unformed = np.where(sfage_next > time_interp)
 
-                sfage_next = np.atleast_1d(p["sP"].units.redshiftToAgeFlat(sfz_next))
+                    for key in ["mass", "initialmass"]:
+                        cur_interp_data[key][w_appearing_next][w_unformed] = 1e-20
+                        next_interp_data[key][w_appearing_next][w_unformed] = 1e-20
 
-                # which stars have already formed by this interpolation time?
-                w_formed = np.where(sfage_next <= time_interp)
+                    # note: we don't care about w_appearing_next2 since we only render from cur to next, and then shift
+                    print(f"  Stars: {w_unformed[0].size} unformed (of {w_appearing_next.size}) at interp time.")
 
+                # although the following negates some of the logic above, leads to the best visual result, with
+                # neither streak-ins due to bulk SubhaloVel through the box, nor blue implosions of star clusters
                 for key in ["mass", "initialmass"]:
-                    mass_val = next_unmatched_data[key][w_formed]
-                    cur_interp_data[key][n_match + w_unmatched_cur.size :][w_formed] = mass_val
-                    next_interp_data[key][n_match + w_unmatched_cur.size :][w_formed] = mass_val
+                    cur_interp_data[key][w_appearing_next] = 1e-20
+                    cur_interp_data[key][w_appearing_next2] = 1e-20
+                    cur_interp_data[key][w_disappearing_cur] = 1e-20
+                    cur_interp_data[key][w_disappearing_next] = 1e-20
 
-                # print(f"  Stars: {w_formed[0].size} formed (of {w_unmatched_next.size}), appearing at interp time.")
-
-            if p["sP"].isPartType(p["partType"], "stars") and w_appearing_next.size > 0:
-                # convert scale factor to age of the universe in Gyr
-                sftime_next = next_interp_data["sftime"][w_appearing_next]
-                sfz_next = 1 / sftime_next - 1
-                sfage_next = np.atleast_1d(p["sP"].units.redshiftToAgeFlat(sfz_next))
-
-                # which stars have -not yet- formed by this interpolation time?
-                w_unformed = np.where(sfage_next > time_interp)
-
-                for key in ["mass", "initialmass"]:
-                    cur_interp_data[key][w_appearing_next][w_unformed] = 1e-20
-                    next_interp_data[key][w_appearing_next][w_unformed] = 1e-20
-
-                # note: we don't care about w_appearing_next2 since we only render from cur to next, and then shift
-                print(f"  Stars: {w_unformed[0].size} unformed (of {w_appearing_next.size}) at interp time.")
+                    next_interp_data[key][w_appearing_next] = 1e-20
+                    next_interp_data[key][w_appearing_next2] = 1e-20
+                    next_interp_data[key][w_disappearing_cur] = 1e-20
+                    next_interp_data[key][w_disappearing_next] = 1e-20
 
             if p["sP"].isPartType(p["partType"], "stars"):
                 assert cur_interp_data["initialmass"].min() > 0, "Should not occur."
                 assert next_interp_data["initialmass"].min() > 0, "Should not occur."
-                assert next2_interp_data["initialmass"].min() > 0, "Should not occur."
+                if star_3snaps:
+                    assert next2_interp_data["initialmass"].min() > 0, "Should not occur."
 
             # for gas, randomly assign refinement (next cells with no match in current) and derefinement
             # (current cells with no match in next) times within the interval, and set mass to zero on the
@@ -1244,105 +1284,135 @@ def renderSingleHaloFrames(
             # cubic hermite interpolation in time
             pos0 = cur_interp_data["pos"]
             pos1 = next_interp_data["pos"]
-            vel0 = cur_interp_data["vel"]
-            vel1 = next_interp_data["vel"]
+            if "vel" in cur_interp_data:
+                vel0 = cur_interp_data["vel"]
+                vel1 = next_interp_data["vel"]
 
             nThreads = np.clip(num_cpus() // 2, 1, 36)  # determine threading automatically
             set_num_threads(nThreads)
 
+            # frame of reference? make copies not views! (potentially reused for next frame)
+            if make_rel:
+                # pos0 = pos0 - p["boxCenter"]
+                # vel0 = vel0 - p["boxVelocity"]
+                # pos1 = pos1 - p["boxCenter"]  # NEXT??
+                # vel1 = vel1 - p["boxVelocity"]  # assume constant box velocity across interval
+
+                pos0 = pos0 - cur_interp_data["sub_pos"]  # shift to subhalo frame of reference
+                vel0 = vel0 - cur_interp_data["sub_vel"]
+                if "vel" in cur_interp_data:
+                    pos1 = pos1 - next_interp_data["sub_pos"]  # NEXT??
+                    vel1 = vel1 - next_interp_data["sub_vel"]  # assume constant box velocity across interval
+
+            if sph_coordinates:
+                assert make_rel
+
+                # cartesian -> spherical coordinates
+                pos0_sph, vel0_sph = _cart_to_sph(pos0, vel0)
+                pos1_sph, vel1_sph = _cart_to_sph(pos1, vel1)
+
+                # handle periodic wrapping
+                dist_theta = pos1_sph[:, 1] - pos0_sph[:, 1]
+
+                w = np.where(dist_theta > np.pi / 2)[0]
+                pos1_sph[w, 1] -= np.pi
+                w = np.where(dist_theta < -np.pi / 2)[0]
+                pos1_sph[w, 1] += np.pi
+
+                pos0_sph[:, 2] += np.pi
+                pos1_sph[:, 2] += np.pi
+                dist_phi = pos1_sph[:, 2] - pos0_sph[:, 2]
+                w = np.where(dist_phi > np.pi)[0]
+                pos1_sph[w, 2] -= 2 * np.pi
+                w = np.where(dist_phi < -np.pi)[0]
+                pos1_sph[w, 2] += 2 * np.pi
+                pos0_sph[:, 2] -= np.pi
+                pos1_sph[:, 2] -= np.pi
+
+                pos0 = pos0_sph
+                vel0 = vel0_sph
+                pos1 = pos1_sph
+                vel1 = vel1_sph
+
+            # test:
+            if 0 and sph_coordinates:
+                # interpolate 1d radius
+                r0 = np.linalg.norm(pos0, axis=1)
+                r1 = np.linalg.norm(pos1, axis=1)
+
+                r0 = np.clip(r0, 1e-10, None)  # eps
+                r1 = np.clip(r1, 1e-10, None)
+
+                dr0_dt = np.sum(pos0 * vel0, axis=1) / r0
+                dr1_dt = np.sum(pos1 * vel1, axis=1) / r1
+
+                rad_t_sph = hermite_interp(r0, r1, dr0_dt, dr1_dt, tau, dt)
+
+                # 'direction vector interpolation' i.e. hermite on unit vectors
+                dir0 = pos0 / r0[:, np.newaxis]
+                dir1 = pos1 / r1[:, np.newaxis]
+
+                # calculate angular velocity vectors (omega = r x v / r^2)
+                omega0 = np.cross(pos0, vel0) / r0[:, np.newaxis] ** 2
+                omega1 = np.cross(pos1, vel1) / r1[:, np.newaxis] ** 2
+
+                # calculate direction derivatives (ddir/dt = omega x dir)
+                ddir0_dt = np.cross(omega0, dir0)
+                ddir1_dt = np.cross(omega1, dir1)
+
+                # interpolate the unit direction vectors
+                dir_t = hermite_interp(dir0, dir1, ddir0_dt, ddir1_dt, tau, dt)
+
+                # re-normalize direction vectors
+                dir_t /= np.linalg.norm(dir_t, axis=1)[:, np.newaxis]
+
+                pos_t_sph = dir_t * rad_t_sph[:, np.newaxis]
+
+                # spherical -> cartesian coordinates
+                pos_t = _sph_to_cart(pos_t_sph)
+
             if p["sP"].isPartType(p["partType"], "stars"):
-                # 3-point
-                pos2 = next2_interp_data["pos"]
-                vel2 = next2_interp_data["vel"]
-                pos_t = hermite_interp_3point(pos0, pos1, pos2, vel0, vel1, vel2, time_interp, [t0, t1, t2])
+                # stars: add noise to tau to reduce correlated radial oscillation visual artifact
+                if stars_randomize_tau:
+                    rng = np.random.default_rng(seed=frameNum + pos0.size + pos1.size)
+
+                    tau_indiv = tau + rng.uniform(low=-0.02, high=0.02, size=pos0.shape[0])
+                    assert star_interp_method == "linear", "Need to change hermite interp funcs to vartau versions."
+
+                # different interpolation methods for stars
+                if star_interp_method == "hermite_2pt":
+                    # 2-points with first derivatives (velocities) (cubic)
+                    pos_t = hermite_interp(pos0, pos1, vel0, vel1, tau, dt)
+                elif star_interp_method == "linear":
+                    # linear in each of x,y,z
+                    pos_t = np.zeros_like(pos0)
+                    for i in range(3):
+                        pos_t[:, i] = linear_interp(pos0[:, i], pos1[:, i], tau)
+                        # pos_t[:, i] = linear_interp_vartau(pos0[:, i], pos1[:, i], tau_indiv)
+                elif star_interp_method == "hermite_accel":
+                    # 2-points also with second derivatives (accelerations) (quintic)
+                    acc0 = cur_interp_data["acc"] * p["sP"].scalefac ** 4
+                    acc1 = next_interp_data["acc"] * p["sP"].scalefac ** 4
+                    pos_t = hermite_interp_2deriv(pos0, pos1, vel0, vel1, acc0, acc1, tau, dt)
+                elif star_interp_method == "hermite_3pt":
+                    # 3-point with first derivatives (quintic)
+                    assert star_3snaps
+                    pos2 = next2_interp_data["pos"]
+                    vel2 = next2_interp_data["vel"]
+                    pos_t = hermite_interp_3point(pos0, pos1, pos2, vel0, vel1, vel2, time_interp, [t0, t1, t2])
             else:
-                # normal
+                # normal 2-pt hermite for gas and dm
                 pos_t = hermite_interp(pos0, pos1, vel0, vel1, tau, dt)
 
-            # stars: subhalo frame of reference and possibly spherical coordinates for interpolation
-            if make_rel and p["sP"].isPartType(p["partType"], "stars"):
-                assert cur_interp_data["sub_rel"] and next_interp_data["sub_rel"], "Should have been set by now."
-
-                if 1:
-                    # cartesian -> spherical coordinates
-                    pos0_sph, vel0_sph = _cart_to_sph(pos0, vel0)
-                    pos1_sph, vel1_sph = _cart_to_sph(pos1, vel1)
-
-                    # handle periodic wrapping
-                    dist_theta = pos1_sph[:, 1] - pos0_sph[:, 1]
-
-                    w = np.where(dist_theta > np.pi / 2)[0]
-                    pos1_sph[w, 1] -= np.pi
-                    w = np.where(dist_theta < -np.pi / 2)[0]
-                    pos1_sph[w, 1] += np.pi
-
-                    pos0_sph[:, 2] += np.pi
-                    pos1_sph[:, 2] += np.pi
-                    dist_phi = pos1_sph[:, 2] - pos0_sph[:, 2]
-                    w = np.where(dist_phi > np.pi)[0]
-                    pos1_sph[w, 2] -= 2 * np.pi
-                    w = np.where(dist_phi < -np.pi)[0]
-                    pos1_sph[w, 2] += 2 * np.pi
-                    pos0_sph[:, 2] -= np.pi
-                    pos1_sph[:, 2] -= np.pi
-
-                    # stars: add noise to tau to reduce correlated radial oscillation visual artifact
-                    rng = np.random.default_rng(seed=frameNum + n_match)
-
-                    tau_indiv = tau + rng.uniform(low=-0.01, high=0.01, size=pos0.shape[0])
-
-                    # interp
-                    pos_t_sph = hermite_interp_vartau(pos0_sph, pos1_sph, vel0_sph, vel1_sph, tau_indiv, dt)
-                    # pos_t_sph = hermite_interp(pos0_sph, pos1_sph, vel0_sph, vel1_sph, tau, dt)
-
-                    # spherical -> cartesian coordinates
-                    pos_t = _sph_to_cart(pos_t_sph)
-
-                # test:
-                if 0:
-                    # interpolate 1d radius
-                    r0 = np.linalg.norm(pos0, axis=1)
-                    r1 = np.linalg.norm(pos1, axis=1)
-
-                    r0 = np.clip(r0, 1e-10, None)  # eps
-                    r1 = np.clip(r1, 1e-10, None)
-
-                    dr0_dt = np.sum(pos0 * vel0, axis=1) / r0
-                    dr1_dt = np.sum(pos1 * vel1, axis=1) / r1
-
-                    rad_t_sph = hermite_interp(r0, r1, dr0_dt, dr1_dt, tau, dt)
-
-                    # 'direction vector interpolation' i.e. hermite on unit vectors
-                    dir0 = pos0 / r0[:, np.newaxis]
-                    dir1 = pos1 / r1[:, np.newaxis]
-
-                    # calculate angular velocity vectors (omega = r x v / r^2)
-                    omega0 = np.cross(pos0, vel0) / r0[:, np.newaxis] ** 2
-                    omega1 = np.cross(pos1, vel1) / r1[:, np.newaxis] ** 2
-
-                    # calculate direction derivatives (ddir/dt = omega x dir)
-                    ddir0_dt = np.cross(omega0, dir0)
-                    ddir1_dt = np.cross(omega1, dir1)
-
-                    # interpolate the unit direction vectors
-                    dir_t = hermite_interp(dir0, dir1, ddir0_dt, ddir1_dt, tau, dt)
-
-                    # re-normalize direction vectors
-                    dir_t /= np.linalg.norm(dir_t, axis=1)[:, np.newaxis]
-
-                    pos_t_sph = dir_t * rad_t_sph[:, np.newaxis]
-
-                    # spherical -> cartesian coordinates
-                    pos_t = _sph_to_cart(pos_t_sph)
-
-                    import pdb
-
-                    pdb.set_trace()
-
+            if sph_coordinates:
+                # spherical -> cartesian coordinates
+                pos_t = _sph_to_cart(pos_t)
                 assert np.count_nonzero(np.isnan(pos_t)) == 0, "NaN in interpolated positions!"
 
+            if make_rel:
                 # undo frame of reference
-                pos_t += p["boxCenter"]
+                # pos_t += p["boxCenter"]
+                pos_t += cur_interp_data["sub_pos"]
 
             # save interpolated positions into dataCache (intercepted in snapshot loads during vis)
             cache_key_prefix = "snap%d_%s_" % (snapNum, p["partType"])
@@ -1373,9 +1443,6 @@ def renderSingleHaloFrames(
                 p["sP"].data[cache_key_prefix + "InitialMass"] = cur_interp_data["initialmass"]
 
         renderMultiPanel(panels, plotConfig)
-
-    if getStats:
-        return frame_min, frame_max, frame_percs
 
 
 def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=None, selType="linear"):

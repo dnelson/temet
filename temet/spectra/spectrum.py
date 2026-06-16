@@ -1038,11 +1038,11 @@ def create_spectra_from_traced_rays(
     lsf_mode, lsf, _ = lsf_matrix(instrument)
 
     if 0:
+        # debugging only: single ray check
         indiv_index = 10910
         rays_len = rays_len[indiv_index : indiv_index + 10]
         rays_off = rays_off[indiv_index : indiv_index + 10]
         n_rays = rays_len.size
-        print("TODO REMOVE SINGLE RAY DEBUG!!!")
 
     # single-threaded
     if nThreads == 1 or n_rays < nThreads:

@@ -667,16 +667,27 @@ class units:
         assert self._sP.redshift is not None
 
         x_phys = x * np.sqrt(self.scalefac)
-        x_phys *= 1.0e5 / self.UnitVelocity_in_cm_per_s  # account for non-km/s code units
+        x_phys *= self.km_in_cm / self.UnitVelocity_in_cm_per_s  # account for non-km/s code units
 
         return x_phys.astype("float32")
+
+    def particleCodeAccelerationToKms2Kpc(self, a):
+        """Convert acceleration field (for cells/particles) into physical km^2/s^2/kpc."""
+        assert self._sP.redshift is not None
+
+        a_phys = np.array(a, dtype="float32") / self.scalefac  # comoving -> physical
+        a_phys *= self._sP.HubbleParam  # remove little h factor
+        a_phys /= self.UnitLength_in_cm / self.kpc_in_cm  # account for non-kpc code lengths
+        a_phys *= (self.km_in_cm / self.UnitVelocity_in_cm_per_s) ** 2  # account for non-km/s code units
+
+        return a_phys.astype("float32")
 
     def groupCodeVelocityToKms(self, x):
         """Convert velocity vector (for groups, not subhalos nor particles) into km/s."""
         assert self._sP.redshift is not None
 
         x_phys = np.array(x, dtype="float32") / self.scalefac
-        x_phys *= 1.0e5 / self.UnitVelocity_in_cm_per_s  # account for non-km/s code units
+        x_phys *= self.km_in_cm / self.UnitVelocity_in_cm_per_s  # account for non-km/s code units
 
         return x_phys
 
@@ -685,7 +696,7 @@ class units:
         assert self._sP.redshift is not None
 
         x_phys = np.array(x, dtype="float32")
-        x_phys *= 1.0e5 / self.UnitVelocity_in_cm_per_s  # account for non-km/s code units
+        x_phys *= self.km_in_cm / self.UnitVelocity_in_cm_per_s  # account for non-km/s code units
 
         return x_phys
 
@@ -694,7 +705,7 @@ class units:
         assert self._sP.redshift is not None
 
         x_phys = np.array(x, dtype="float32") / self._sP.HubbleParam
-        x_phys *= 1.0e5 / self.UnitVelocity_in_cm_per_s  # account for non-km/s code units
+        x_phys *= self.km_in_cm / self.UnitVelocity_in_cm_per_s  # account for non-km/s code units
 
         return x_phys
 

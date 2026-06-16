@@ -133,6 +133,42 @@ vesc.limits_halo = [200, 1000]
 vesc.log = False
 
 
+@snap_field(alias="gravaccel")
+def accel(sim, partType, field, args):
+    """Gravitational acceleration (from stored value in snapshot, or StellarPotential catalog)."""
+    filepath = sim.postPath + f"StellarPotential/StellarPotential_{sim.snap:03d}.hdf5"
+
+    if sim.snapHasField(partType, "Acceleration"):
+        acc = sim.snapshotSubset(partType, "Acceleration", **args)
+    elif isfile(filepath):
+        with h5py.File(filepath, "r") as f:
+            ptNum = sim.ptNum(partType)
+            acc = f[f"PartType{ptNum}"]["Acceleration"][()]
+    else:
+        raise Exception("No gravitational acceleration field found in snapshot or StellarPotential catalog.")
+
+    return sim.units.particleCodeAccelerationToKms2Kpc(acc)
+
+
+accel.label = "Gravitational Acceleration"
+accel.units = r"$\rm{(km/s)^2/kpc}$"
+accel.limits = [-1e6, 1e5]
+accel.limits_halo = [-1e6, -1e2]
+accel.log = False
+
+
+@snap_field
+def accel_ckpch_gyr2(sim, partType, field, args):
+    """Particle/cell acceleration in ckpc/h/Gyr^2 units (for interpolation)."""
+    acc = sim.snapshotSubset(partType, "gravaccel", **args)  # physical (km/s)^2/kpc
+
+    acc *= sim.units.kmS_in_kpcGyr**2  # (kpc/Gyr)^2/kpc = kpc/Gyr^2
+    acc *= sim.HubbleParam / sim.scalefac  # (ckpc/h)/Gyr^2 (make units consistent with pos)
+    assert 0 # units do not seem correct, accelerations are roughly 1/a^4 too large (at z~10)
+
+    return acc
+
+
 @snap_field(alias="dt_yr")
 def dt(sim, partType, field, args):
     """Particle/cell total actual/effective timestep, from stored snapshot value."""
@@ -151,9 +187,9 @@ dt.log = True
 @snap_field
 def vel_ckpch_gyr(sim, partType, field, args):
     """Particle/cell velocity in ckpc/h/Gyr units (for interpolation)."""
-    vel = sim.snapshotSubset(partType, "vel", **args)
+    vel = sim.snapshotSubset(partType, "vel", **args)  # km/s/sqrt(a), i.e. multiply by sqrt(a) to get physical km/s
 
-    vel = vel * sim.HubbleParam / np.sqrt(sim.scalefac)  # comoving km/s h (make units consistent with pos)
+    vel = vel * sim.HubbleParam / np.sqrt(sim.scalefac)  # comoving km/s / h (make units consistent with pos)
     vel *= sim.units.kmS_in_kpcGyr  # convert to (ckpc/h)/Gyr
 
     return vel

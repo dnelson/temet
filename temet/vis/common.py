@@ -524,7 +524,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
                 p["sP"].units.redshiftToAgeFlat(p["sP"].redshift) * 1000,
             )
 
-        xt = pExtent[1] - (pExtent[1] - pExtent[0]) * (0.01) * conf.nLinear  # upper right
+        aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf, "rasterPx") else 1.0
+        xfac = 0.01 / (aspect / 1.8) if aspect > 1.8 else 0.01  # adjust for ultra-wide
+        xt = pExtent[1] - (pExtent[1] - pExtent[0]) * (xfac) * conf.nLinear  # upper right
         yt = pExtent[3] - (pExtent[3] - pExtent[2]) * (0.01) * conf.nLinear
         color = "white" if "textcolor" not in p else p["textcolor"]
 
@@ -546,6 +548,10 @@ def addBoxMarkers(p, conf, ax, pExtent):
             extent = p["sP"].units.physicalMpcToCodeLength(extent)
 
         scaleBarLen = (extent[1] - extent[0]) * 0.10  # 10% of plot width
+        aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf, "rasterPx") else 1.0
+        if aspect > 1.8:  # adjust for ultra-wide
+            scaleBarLen /= aspect / 1.8
+
         scaleBarLen /= p["sP"].HubbleParam  # ckpc/h -> ckpc (or cMpc/h -> cMpc)
 
         # if scale bar is more than (less than) 30% (20%) of width, reduce (increase)

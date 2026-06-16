@@ -12,6 +12,8 @@ import numpy as np
 from temet.vis.box import renderBox
 from temet.vis.halo import renderSingleHalo, renderSingleHaloFrames
 
+from ..util.rotation import rotationMatrixFromAngleDirection
+
 
 def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
     """Visualization: single image (or gallery of fields) of a single galaxy, with both face-on and edge-on views.
@@ -619,7 +621,7 @@ def vis_movie_mpbsm(sims, haloID=0, conf=2):
     renderSingleHaloFrames(panels, plotConfig, locals())
 
 
-def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None, getStats=False):
+def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
     """Render movie of a -single- zoom run using the final merger tree and MPB-smoothed halo tracking (interp test)."""
     if pSplit is None:
         pSplit = [0, 1]
@@ -631,21 +633,22 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None, getStats=Fals
     fracsType = "rHalfMassStars"
     method = "sphMap_global"
     nPixels = [1920, 1080]
+    # nPixels = [5120, 1440] # ultra-wide test
     size = 2.0 if sim.hInd > 20000 else 5.0
     sizeType = "kpc"
     axes = [0, 1]
-    plotBHs = "all"
-    labelZ = "z_tage"
-    labelScale = "physical"
-    labelSim = True
-    labelHalo = "mhalo,mstar"
+    plotBHs = "all" if "_ clean" not in conf else False
+    labelZ = "z_tage" if "_clean" not in conf else False
+    labelScale = "physical" if "_clean" not in conf else False
+    labelSim = True if "_clean" not in conf else False
+    labelHalo = "mhalo,mstar" if "_clean" not in conf else False
     relCoords = True
     rotation = None
     autoLimits = False  # disable auto-scaling of stellar band images across frames
 
     keyf = None
 
-    if conf == "gas":
+    if conf.startswith("gas"):
         pt1 = "gas"
         pf1 = "coldens_msunkpc2"
         vmm1 = [5.1, 7.6]
@@ -654,46 +657,35 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None, getStats=Fals
         if sim.hInd == 219612 and sim.res == 16:
             # slow-down first starburst at z ~ 11.8 - 11.2
             keyf = [[12.0, 0.3], [11.8, 0.05], [11.2, 0.05], [11.0, 0.3]]
+        # if sim.hInd == 311384 and sim.res == 16:
+        #    # slow-down one starburst (of many) at z ~ 11.8 - 11.2
+        #    keyf = [[7.0, 0.3], [6.8, 0.05], [6.5, 0.05], [6.4, 0.3]]
 
-    if conf == "dm":
+    if conf.startswith("dm"):
         pt1 = "dm"
         pf1 = "coldens_msunkpc2"
         method = "tetra_proj"
         vmm1 = [6.0, 9.0]  # [6.1, 8.6]
-        plotSubhalos = 20
+        plotSubhalos = 20 if "_clean" not in conf else False
         labelSubhalos = "msubhalo"
-        vmmEvo = 2.0
+        vmmEvo = 6.0
 
-    if conf == "stars":
+    if conf.startswith("stars"):
         pt1 = "stars"
         pf1 = "stellarComp"  # ObsFrame
         vmm1 = None
         vmmEvo = None
 
-    def _custom_sfr_label(panel):
-        sP = panel["sP"]
-        sfr = sP.halo(haloID)["GroupSFR"]  # Msun/yr
-
-        return r"SFR = %.3f $\rm{M_\odot\,yr^{-1}}$" % sfr
-
-    labelCustom = [_custom_sfr_label]
-
-    # vmmPercs = [1, 99.9]  # automatic scaling per-frame
+    # def _custom_sfr_label(panel):
+    #    sP = panel["sP"]
+    #    sfr = sP.halo(haloID)["GroupSFR"]  # Msun/yr
+    #    return r"SFR = %.3f $\rm{M_\odot\,yr^{-1}}$" % sfr
+    # labelCustom = [_custom_sfr_label]
 
     # target subhalo
     sub_ind = sim.halo(haloID)["GroupFirstSub"]
 
-    panels.append(
-        {
-            "sP": sim,
-            "subhaloInd": sub_ind,
-            "partType": pt1,
-            "partField": pf1,
-            "valMinMax": vmm1,
-            "labelScale": "physical",
-            "labelSim": True,
-        }
-    )
+    panels.append({"sP": sim, "subhaloInd": sub_ind, "partType": pt1, "partField": pf1, "valMinMax": vmm1})
 
     class plotConfig:
         plotStyle = "edged"
@@ -710,37 +702,26 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None, getStats=Fals
         vmmEvoScalefac = vmmEvo  # shift valMinMax by this factor times the scalefactor at each frame
         keyframeDt = keyf
 
-    # normal render
-    if not getStats:
-        renderSingleHaloFrames(panels, plotConfig, locals(), curTask=pSplit[0], numTasks=pSplit[1], getStats=getStats)
+    # render time evolution
+    if not conf.endswith("endrot"):
+        renderSingleHaloFrames(panels, plotConfig, locals(), curTask=pSplit[0], numTasks=pSplit[1])
+    else:
+        # render rotation (frozen in time) at final snapshot
+        numFramesPerRot = 360 * 4
+        rotDirVec = [0.0, 1.0, 0.0]  # horizontal seeming spin
 
-    # plot statistics
-    if getStats:
-        import matplotlib.pyplot as plt
+        panels[0]["sP"].setSnap(sim.numSnaps - 1)
 
-        r = renderSingleHaloFrames(panels, plotConfig, locals(), curTask=pSplit[0], numTasks=pSplit[1], getStats=True)
-        frame_min, frame_max, frame_percs = r
+        for frameNum in np.arange(numFramesPerRot):
+            # rotation matrix
+            rotAngleDeg = 360.0 * (frameNum / numFramesPerRot)
+            rotCenter = sim.halo(haloID)["GroupPos"]
+            rotMatrix = rotationMatrixFromAngleDirection(rotAngleDeg, rotDirVec)
 
-        # print statistics
-        print("frame_min = ", frame_min.min())
-        print("frame_max = ", frame_max.max())
-        print("frame_percs = ", np.mean(frame_percs, axis=0))
+            plotConfig.saveFilename = f"h{sim.hInd}_L{sim.res}_{sim.variant}_{conf}_{frameNum:03d}.png"
 
-        # plot
-        fig, ax = plt.subplots()
-        ax.set_xlabel("Snapshot Number")
-        ax.set_ylabel("Value")
-        ax.plot(frame_percs[:, 0], label="1st Percentile")
-        ax.plot(frame_percs[:, 1], label="99.9th Percentile")
-        ax.plot(frame_min, label="Min")
-        ax.plot(frame_max, label="Max")
-        ax.legend()
-        fig.savefig("evo_interp_stats.pdf")
-        plt.close(fig)
-
-        import pdb
-
-        pdb.set_trace()
+            # render
+            renderSingleHalo(panels, plotConfig, locals())
 
 
 def vis_movie_mpbsm_multi(sims, conf=1):

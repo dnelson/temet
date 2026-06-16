@@ -1549,6 +1549,52 @@ def hermite_interp(pos0, pos1, vel0, vel1, tau, dt):
 
 
 @njit(parallel=True)
+def hermite_interp_2deriv(pos0, pos1, vel0, vel1, acc0, acc1, tau, dt):
+    """Hermite interpolation of positions given values, first derivatives, and second derivatives (acc) at endpoints."""
+    # hermite basis functions, given tau
+    h0 = 1 - 10 * tau**3 + 15 * tau**4 - 6 * tau**5
+    h1 = 10 * tau**3 - 15 * tau**4 + 6 * tau**5
+    h2 = tau - 6 * tau**3 + 8 * tau**4 - 3 * tau**5
+    h3 = -4 * tau**3 + 7 * tau**4 - 3 * tau**5  # -(tau**3) + 2 * tau**2 - tau**5
+    h4 = 0.5 * tau**2 - 1.5 * tau**3 + 1.5 * tau**4 - 0.5 * tau**5
+    h5 = 0.5 * tau**3 - tau**4 + 0.5 * tau**5
+
+    h4_dt2 = h4 * dt**2
+    h5_dt2 = h5 * dt**2
+
+    # allocate
+    N = pos0.shape[0]
+
+    pos_t = np.zeros_like(pos0)
+
+    # for each particle, interpolate
+    for i in prange(N):
+        # cubic hermite interpolate in time, using positions and velocities, for new positions
+        p0 = pos0[i]
+        p1 = pos1[i]
+        v0 = vel0[i]
+        v1 = vel1[i]
+        a0 = acc0[i]
+        a1 = acc1[i]
+
+        if pos0.ndim == 1:
+            # just one i.e. radial coordinate
+            x_t = h0 * p0 + h1 * p1 + h2 * v0 * dt + h3 * v1 * dt + h4_dt2 * a0 + h5_dt2 * a1
+
+            pos_t[i] = x_t
+
+        else:
+            # x,y,z coordinate directions separately
+            x_t = h0 * p0[0] + h1 * p1[0] + h2 * v0[0] * dt + h3 * v1[0] * dt + h4_dt2 * a0[0] + h5_dt2 * a1[0]
+            y_t = h0 * p0[1] + h1 * p1[1] + h2 * v0[1] * dt + h3 * v1[1] * dt + h4_dt2 * a0[1] + h5_dt2 * a1[1]
+            z_t = h0 * p0[2] + h1 * p1[2] + h2 * v0[2] * dt + h3 * v1[2] * dt + h4_dt2 * a0[2] + h5_dt2 * a1[2]
+
+            pos_t[i] = [x_t, y_t, z_t]
+
+    return pos_t
+
+
+@njit(parallel=True)
 def hermite_interp_3point(pos0, pos1, pos2, vel0, vel1, vel2, tau, t_vals):
     """Hermite interpolation (quintic) of positions given values and their derivatives (velocities) at 3 points."""
     # Lagrangian polynomials and derivatives
@@ -1640,11 +1686,22 @@ def linear_interp(vals0, vals1, tau):
 
     # for each particle, interpolate
     for i in prange(N):
-        # linear interpolate in other properties e.g. mass
-        v0 = vals0[i]
-        v1 = vals1[i]
+        vals_t[i] = vals0[i] * (1 - tau) + vals1[i] * tau
 
-        vals_t[i] = v0 * (1 - tau) + v1 * tau
+    return vals_t
+
+
+@njit(parallel=True)
+def linear_interp_vartau(vals0, vals1, tau):
+    """Linear interpolation of a large number of values (threaded)."""
+    # allocate
+    N = vals0.shape[0]
+
+    vals_t = np.zeros_like(vals0)
+
+    # for each particle, interpolate
+    for i in prange(N):
+        vals_t[i] = vals0[i] * (1 - tau[i]) + vals1[i] * tau[i]
 
     return vals_t
 

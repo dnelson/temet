@@ -12,7 +12,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from numba import cuda, njit
 from scipy.spatial import Delaunay
 
-from ..util.helper import logZeroMin
+from ..util.helper import logZeroMin, pSplit
 from ..util.rotation import rotateCoordinateArray
 
 # --- gpu kernels ---
@@ -205,6 +205,7 @@ def _render_gpu(
     bucket_offsets,
     bucket_lengths,
     bucket_contents,
+    numSplits,
 ):
     """
     Executes the orthographic pipeline to compute line-of-sight quantity integrals.
@@ -218,7 +219,7 @@ def _render_gpu(
     d_tetra = cuda.to_device(tetra_indices)
     d_quantities = cuda.to_device(quantities)
     d_bucket_offsets = cuda.to_device(bucket_offsets)
-    d_bucket_lengths = cuda.to_device(bucket_lengths)
+    # d_bucket_lengths = cuda.to_device(bucket_lengths)
     d_bucket_contents = cuda.to_device(bucket_contents)
     d_image = cuda.to_device(h_image)
 
@@ -228,29 +229,44 @@ def _render_gpu(
     blocks_per_grid = (blocks_x, blocks_y)
 
     # print(f"Launching kernel {blocks_per_grid = }, {threads_per_block = }.")
+    assert numSplits == 1, "Not actually saving memory yet, need to send only a subset of bucket_contents."
 
-    _orthographic_integral_kernel[blocks_per_grid, threads_per_block](
-        bounds[0],  # xmin
-        bounds[1],  # xmax
-        bounds[2],  # ymin
-        bounds[3],  # ymax
-        bounds[4],  # zmin
-        bounds[5],  # zmax
-        npixels[0],  # x
-        npixels[1],  # y
-        voxel_size[0],  # x
-        voxel_size[1],  # y
-        ngrid,
-        d_points,
-        d_tetra,
-        d_quantities,
-        d_bucket_offsets,
-        d_bucket_lengths,
-        d_bucket_contents,
-        d_image,
-    )
+    # process tetra in potentially multiple passes (to save memory)
+    for i in range(numSplits):
+        bucket_inds = pSplit(np.arange(bucket_lengths.size), numSplits, i)
 
-    return d_image.copy_to_host()
+        split_mask = np.zeros_like(bucket_lengths, dtype=np.bool_)
+        split_mask[bucket_inds] = True
+
+        d_bucket_lengths = cuda.to_device(bucket_lengths * split_mask)
+
+        # print(f"Pass {i + 1}/{numSplits}: {split_mask.sum()} buckets.")
+
+        _orthographic_integral_kernel[blocks_per_grid, threads_per_block](
+            bounds[0],  # xmin
+            bounds[1],  # xmax
+            bounds[2],  # ymin
+            bounds[3],  # ymax
+            bounds[4],  # zmin
+            bounds[5],  # zmax
+            npixels[0],  # x
+            npixels[1],  # y
+            voxel_size[0],  # x
+            voxel_size[1],  # y
+            ngrid,
+            d_points,
+            d_tetra,
+            d_quantities,
+            d_bucket_offsets,
+            d_bucket_lengths,
+            d_bucket_contents,
+            d_image,
+        )
+
+        # transfer back and accumulate
+        h_image += d_image.copy_to_host()
+
+    return h_image
 
 
 # --- cpu jitted helpers ---
@@ -289,7 +305,7 @@ def _tetra_volumes(pos, inds):
 
 
 @njit
-def _build_2d_grid(points, tets_indices, nx, ny, grid_min, voxel_size):
+def _build_2d_grid(points, tets_indices, nx, ny, grid_min, grid_max, voxel_size):
     """
     Builds the 2D uniform grid bucket structures on the CPU.
     """
@@ -297,6 +313,7 @@ def _build_2d_grid(points, tets_indices, nx, ny, grid_min, voxel_size):
 
     # step 1: count number of tetra that overlap each bucket (2D cell column, z-axis aligned)
     grid_counts = np.zeros(nx * ny, dtype=np.int32)
+    mask = np.zeros(num_tets, dtype=np.bool_)
 
     for i in range(num_tets):
         # four point indices for this tetra
@@ -306,10 +323,17 @@ def _build_2d_grid(points, tets_indices, nx, ny, grid_min, voxel_size):
         idx3 = tets_indices[i, 3]
 
         # spatial coordinates of these vertices
-        x0, y0 = points[idx0, 0], points[idx0, 1]
-        x1, y1 = points[idx1, 0], points[idx1, 1]
-        x2, y2 = points[idx2, 0], points[idx2, 1]
-        x3, y3 = points[idx3, 0], points[idx3, 1]
+        x0, y0, z0 = points[idx0, 0], points[idx0, 1], points[idx0, 2]
+        x1, y1, z1 = points[idx1, 0], points[idx1, 1], points[idx1, 2]
+        x2, y2, z2 = points[idx2, 0], points[idx2, 1], points[idx2, 2]
+        x3, y3, z3 = points[idx3, 0], points[idx3, 1], points[idx3, 2]
+
+        # overlap grid in z-direction?
+        min_z = min(z0, z1, z2, z3)
+        max_z = max(z0, z1, z2, z3)
+
+        if max_z < grid_min[2] or min_z > grid_max[2]:
+            continue
 
         # calculate AABB bounding box (2d)
         min_x = min(x0, x1, x2, x3)
@@ -327,14 +351,23 @@ def _build_2d_grid(points, tets_indices, nx, ny, grid_min, voxel_size):
             for g_x in range(start_x, end_x + 1):
                 cell_1d = g_x + g_y * nx
                 grid_counts[cell_1d] += 1
+                mask[i] = True
 
     # cumulative sum for offsets
     grid_offsets = np.zeros(nx * ny + 1, dtype=np.int64)
     grid_offsets[1:] = np.cumsum(grid_counts)
 
+    # subset tetra to those that overlap at least one bucket (to save memory)
+    print("Fraction of tetra that overlap grid:", mask.sum() / num_tets)
+
+    tets_indices = tets_indices[mask]
+    num_tets = tets_indices.shape[0]
+
     # step 2: record tetra indices in each bucket
     working_counts = np.zeros(nx * ny, dtype=np.int32)
     bucket_content = np.zeros(grid_offsets[-1], dtype=np.int32)
+
+    # n_buckets = np.zeros(num_tets, dtype=np.int32)
 
     for i in range(num_tets):
         idx0 = tets_indices[i, 0]
@@ -342,11 +375,19 @@ def _build_2d_grid(points, tets_indices, nx, ny, grid_min, voxel_size):
         idx2 = tets_indices[i, 2]
         idx3 = tets_indices[i, 3]
 
-        x0, y0 = points[idx0, 0], points[idx0, 1]
-        x1, y1 = points[idx1, 0], points[idx1, 1]
-        x2, y2 = points[idx2, 0], points[idx2, 1]
-        x3, y3 = points[idx3, 0], points[idx3, 1]
+        x0, y0, z0 = points[idx0, 0], points[idx0, 1], points[idx0, 2]
+        x1, y1, z1 = points[idx1, 0], points[idx1, 1], points[idx1, 2]
+        x2, y2, z2 = points[idx2, 0], points[idx2, 1], points[idx2, 2]
+        x3, y3, z3 = points[idx3, 0], points[idx3, 1], points[idx3, 2]
 
+        # overlap grid in z-direction?
+        min_z = min(z0, z1, z2, z3)
+        max_z = max(z0, z1, z2, z3)
+
+        if max_z < grid_min[2] or min_z > grid_max[2]:
+            continue
+
+        # AABB bounding box (2d)
         min_x = min(x0, x1, x2, x3)
         max_x = max(x0, x1, x2, x3)
         min_y = min(y0, y1, y2, y3)
@@ -357,14 +398,19 @@ def _build_2d_grid(points, tets_indices, nx, ny, grid_min, voxel_size):
         start_y = max(0, int((min_y - grid_min[1]) / voxel_size[1]))
         end_y = min(ny - 1, int((max_y - grid_min[1]) / voxel_size[1]))
 
+        # todo: can count how many buckets this tetra is added to
+        # if it's a large number >> 1, we could instead add it (only) to a special bucket, that all rays must consider
         for g_y in range(start_y, end_y + 1):
             for g_x in range(start_x, end_x + 1):
                 cell_1d = g_x + g_y * nx
                 slot = working_counts[cell_1d]
                 working_counts[cell_1d] += 1
                 bucket_content[grid_offsets[cell_1d] + slot] = i
+                # n_buckets[i] += 1
+                # mask[i] = True
 
-    return grid_offsets, grid_counts, bucket_content
+    # print("Maximum number of buckets for a single tetra: ", n_buckets.max())
+    return grid_offsets, grid_counts, bucket_content, mask
 
 
 def _get_tetra(sim):
@@ -438,7 +484,7 @@ def _get_tetra(sim):
     return pos, tetra_inds
 
 
-def render_tetra(sim, bounds, npixels, rotMatrix=None, rotCenter=None, verbose=False):
+def render_tetra(sim, bounds, npixels, rotMatrix=None, rotCenter=None, verbose=True):
     """Main renderer."""
     xmin, xmax, ymin, ymax, zmin, zmax = bounds
 
@@ -473,17 +519,42 @@ def render_tetra(sim, bounds, npixels, rotMatrix=None, rotCenter=None, verbose=F
     ngrid = np.clip(ngrid, 10, 100)  # sanity limits
 
     # build acceleration grid
-    grid_min = np.array([xmin, ymin], dtype=np.float32)
-    grid_max = np.array([xmax, ymax], dtype=np.float32)
-    voxel_size = (grid_max - grid_min) / np.array([ngrid, ngrid], dtype=np.float32)
+    grid_min = np.array([xmin, ymin, zmin], dtype=np.float32)
+    grid_max = np.array([xmax, ymax, zmax], dtype=np.float32)
+    voxel_size = (grid_max[0:2] - grid_min[0:2]) / np.array([ngrid, ngrid], dtype=np.float32)
 
-    bucket_offsets, bucket_lengths, bucket_contents = _build_2d_grid(
-        points_data, tetra_data, ngrid, ngrid, grid_min, voxel_size
+    bucket_offsets, bucket_lengths, bucket_contents, mask = _build_2d_grid(
+        points_data, tetra_data, ngrid, ngrid, grid_min, grid_max, voxel_size
     )
+
+    # subset tetra to those that overlap grid
+    tetra_data = tetra_data[mask]
+    quant_data = quant_data[mask]
+
+    # estimate total memory that will be needed on the GPU
+    total_bytes_needed = (
+        points_data.nbytes
+        + tetra_data.nbytes
+        + quant_data.nbytes
+        + bucket_offsets.nbytes
+        + bucket_lengths.nbytes
+        + bucket_contents.nbytes
+        + (npixels[0] * npixels[1] * 4)  # output image, float32
+    )
+
+    # check available GPU memory, decide if we need to split the work
+    context = cuda.current_context()
+    free_bytes, total_bytes = context.get_memory_info()
+
+    numSplits = np.clip(int(np.ceil(total_bytes_needed * 1.1 / free_bytes)), 1, 64)  # sanity limits
 
     if verbose:
         print(f"Bucketing [{ngrid}x{ngrid}] completed in {time.time() - start_time:.2f} seconds.")
         print(f"Bucket <size>: [{bucket_lengths.mean():.1f}] dupe_frac = [{bucket_lengths.sum() / volumes.size:.2f}]")
+
+        print(f"Total GPU memory needed: {total_bytes_needed / 1024**3:.2f} GB")
+        print(f"GPU memory available: {free_bytes / 1024**3:.2f} GB free out of {total_bytes / 1024**3:.2f} GB total")
+
         start_time = time.time()
 
     # render (GPU)
@@ -498,6 +569,7 @@ def render_tetra(sim, bounds, npixels, rotMatrix=None, rotCenter=None, verbose=F
         bucket_offsets,
         bucket_lengths,
         bucket_contents,
+        numSplits,
     )
 
     if verbose:

@@ -293,7 +293,7 @@ def stellar3BandCompositeImage(
     ptRestrictions,
     weightField,
     randomNoise,
-    autoLimits,
+    **kwargs,
 ):
     """Generate 3-band RGB composite using starlight in three different passbands. Work in progress."""
     bands, label = _stellar_3bands(partField)
@@ -329,6 +329,7 @@ def stellar3BandCompositeImage(
             ptRestrictions,
             weightField,
             randomNoise,
+            **kwargs,
         )
         band_grids.append(grid_loc)
 
@@ -473,6 +474,8 @@ def stellar3BandCompositeImage(
 
             maxValLog = np.log10((10.0**maxValLog) * (pxArea / pxArea0 * resFac))
             # print('pxArea*res mod: ',(pxArea/pxArea0*resFac))
+
+        autoLimits = kwargs["autoLimits"] if "autoLimits" in kwargs else False
 
         if autoLimits:
             # new auto bounds
@@ -1001,11 +1004,10 @@ def gridBox(
 
     # generate a 3-band composite stellar image from 3 bands
     if "stellarComp" in partField or "stellarCompObsFrame" in partField:
-        autoLimits = True if "autoLimits" not in kwargs else kwargs["autoLimits"]
         return stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, projParams, boxCenter,
             boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate,
             smoothFWHM, snapHsmlForStars, alsoSFRgasForStars, excludeSubhaloFlag,
-            skipCellIndices, ptRestrictions, weightField, randomNoise, autoLimits)  # fmt: skip
+            skipCellIndices, ptRestrictions, weightField, randomNoise, **kwargs)  # fmt: skip
 
     # map
     if not forceRecalculate and isfile(saveFilename):
