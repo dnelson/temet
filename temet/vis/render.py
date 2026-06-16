@@ -1224,12 +1224,11 @@ def gridBox(
                 print("WARNING: excludeSubhaloFlag only implemented for method == sphMap!")
 
             if projType in ["perspective"]:
-                assert len(projParams) == 6  # 6 parameters for perspectiveProjection()
                 assert projParams["n"] != 0.0
 
                 # instead of specifying (l,r,b,t) could specify FOV
                 if "fov" in projParams:
-                    assert 0  # check
+                    assert "l" not in projParams, "If specifying FOV, should not specify (l,r,b,t) separately."
                     tangent = np.tan(np.deg2rad(projParams["fov"] / 2))  # tangent of half vertical FOV angle
                     halfHeight = projParams["n"] * tangent  # half height of near plane
                     halfWidth = halfHeight * (nPixels[0] / nPixels[1])  # half width of near plane (ar = w/h)
@@ -1238,9 +1237,10 @@ def gridBox(
                     projParams["r"] = -halfWidth
                     projParams["t"] = halfHeight
                     projParams["b"] = -halfHeight
+                    del projParams["fov"]
                 else:
                     tangent = (projParams["t"] - projParams["b"]) / projParams["n"]
-                    # fov = np.rad2deg(np.arctan(tangent) * 2.0)
+                    fov = np.rad2deg(np.arctan(tangent) * 2.0)
                     # print('fov: %.1f' % fov)
 
                 # shift pos to boxCenter
@@ -1252,11 +1252,14 @@ def gridBox(
 
                 sP.correctPeriodicDistVecs(pos)
 
+                # switch to camera-frame; currently assumes that camera is centered in front of the image space,
+                # adjustable via an additive shift along the projection axis, projParams["camera_z"]
                 cameraShift = boxSizeImg[2] / 2
-                pos[:, axis_proj] -= (
-                    cameraShift  # switch to camera-frame; currently assumes that camera is exactly in front
-                )
-                # of the image domain, but maybe should be passed in projParams?
+                if "camera_z" in projParams:
+                    cameraShift += projParams["camera_z"]
+
+                pos[:, axis_proj] -= cameraShift
+
                 sP.correctPeriodicDistVecs(pos)
 
                 if hsml is None:

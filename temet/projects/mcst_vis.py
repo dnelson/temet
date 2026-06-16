@@ -702,6 +702,31 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
         vmmEvoScalefac = vmmEvo  # shift valMinMax by this factor times the scalefactor at each frame
         keyframeDt = keyf
 
+    # perspective rendering with keyframed camera position that moves in at z~14.5
+    if conf.endswith("_perspective"):
+        # size = 2.0  # note: overwritten by keyframe
+        projType = "perspective"
+        projParams = {}
+        if 1:
+            # adaptive (e.g. large to small zoom)
+            # note: overwritten by keyframe
+            projParams["n"] = 10.0 * (size / 2)  # effectively sets zoom?
+            projParams["f"] = 15.0 * (size / 2)
+        else:
+            # normal config for size = 2
+            projParams["n"] = 10.0  # effectively sets zoom? 10 ~ normal, 20 ~ zoomed in, <5 distorted wide angle
+            projParams["f"] = 15.0
+
+        projParams["fov"] = 90.0  # no impact?
+        projParams["camera_z"] = 0.0  # camera pos offset [code units] in los direction (>1 pulls out, <1 moves in)
+
+        if sim.hInd == 219612 and sim.res == 16:
+            # slow-down first starburst at z ~ 11.8 - 11.2
+            # for our perspective test movie, also for stars! (for compositing)
+            plotConfig.keyf = [[12.0, 0.3], [11.8, 0.05], [11.2, 0.05], [11.0, 0.3]]
+
+        plotConfig.keyframeCamera = [[15.0, 50.0], [14.0, 2.0]]  # [z0, size0], [z1, size1]
+
     # render time evolution
     if not conf.endswith("endrot"):
         renderSingleHaloFrames(panels, plotConfig, locals(), curTask=pSplit[0], numTasks=pSplit[1])

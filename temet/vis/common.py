@@ -26,6 +26,38 @@ savePathDefault = expanduser("~") + "/"  # for testing/quick outputs
 savePathBase = expanduser("~") + "/data/frames/"  # for large outputs
 
 
+def easeQuant(current: float, start: float, end: float, target_start: float, target_end: float) -> float:
+    """
+    Maps a value from an input range to an eased output range.
+
+    Args:
+      current (float): The current step/time/value to be mapped.
+      start (float): The starting boundary of the input range (e.g., frame 0).
+      end (float): The ending boundary of the input range (e.g., frame 60).
+      target_start (float): The starting position/property of your object.
+      target_end (float): The final position/property of your object.
+
+    Return:
+        float: The eased value corresponding to the current input, mapped from the target range.
+    """
+    if end == start:
+        return target_end
+
+    # Normalize current input to [0, 1]
+    t = (current - start) / (end - start)
+
+    # apply cubic ease-in-out function
+    t = max(0.0, min(1.0, t))
+
+    if t < 0.5:
+        eased_t = 4 * t * t * t
+    else:
+        eased_t = 1 - ((-2 * t + 2) ** 3) / 2
+
+    # linear interpolation between targets using eased progress
+    return target_start + (target_end - target_start) * eased_t
+
+
 def addBoxMarkers(p, conf, ax, pExtent):
     """Factor out common annotation/markers to overlay."""
 
@@ -555,11 +587,12 @@ def addBoxMarkers(p, conf, ax, pExtent):
         scaleBarLen /= p["sP"].HubbleParam  # ckpc/h -> ckpc (or cMpc/h -> cMpc)
 
         # if scale bar is more than (less than) 30% (20%) of width, reduce (increase)
-        while scaleBarLen >= 0.3 * (extent[1] - extent[0]):
-            scaleBarLen /= 1.4
+        # works well for code units sizes, but not for physical kpc panel sizes (in both cases, code axis units)
+        # while scaleBarLen >= 0.3 * (extent[1] - extent[0]):
+        #    scaleBarLen /= 1.4
 
-        while scaleBarLen < 0.20 * (extent[1] - extent[0]):
-            scaleBarLen *= 1.4
+        # while scaleBarLen < 0.20 * (extent[1] - extent[0]):
+        #    scaleBarLen *= 1.4
 
         # if scale bar is more than X Mpc/kpc, round to nearest X Mpc/kpc
         mpcFac = 1000.0 if p["sP"].mpcUnits else 1.0

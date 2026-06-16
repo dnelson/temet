@@ -32,7 +32,7 @@ from ..util.rotation import (
     rotationMatrixFromVec,
 )
 from ..util.simParams import simParams
-from ..vis.common import renderMultiPanel
+from ..vis.common import easeQuant, renderMultiPanel
 from ..vis.render import _grid_filename, defaultHsmlFac, getHsmlForPartType, gridBox
 
 
@@ -518,6 +518,7 @@ def renderSingleHaloFrames(
         interpFac = None  # interpolate in time between snapshots, adding N frames per original snapshot
         interpDt = None  # interpolate in time between snapshots, adding frames with this constant time step (Myr)
         keyframeDt = None  # list of 2-tuples of [redshift,dt] to keyframe variable frame time spacing
+        keyframeCamera = None  # list of 2-tuples of [redshift, camera_z] to keyframe camera configuration changes
         vmmEvoScalefac = None  # shift valMinMax by this factor times the scalefactor at each frame
 
     if plotConfig is None:
@@ -870,6 +871,30 @@ def renderSingleHaloFrames(
                 p["sP"].redshift = z_interp
                 p["sP"].units.scalefac = 1 / (1 + z_interp)
 
+        # keyframes?
+        if plotConfig.keyframeCamera is not None:
+            for panel in panels:
+                assert panel["projType"] == "perspective"
+
+                # current redshift
+                cur_redshift = panel["sP"].redshift
+                if plotConfig.interpFac is not None or plotConfig.interpDt is not None:
+                    cur_redshift = z_interp
+
+                # derive current size
+                (kf_z0, kf_size0), (kf_z1, kf_size1) = plotConfig.keyframeCamera
+
+                # current: float, start: float, end: float, target_start: float, target_end: float
+                cur_size = easeQuant(cur_redshift, kf_z0, kf_z1, kf_size0, kf_size1)
+
+                panel["size"] = cur_size
+
+                print(f" Keyframe camera config at redshift {cur_redshift:.2f}, setting size to {cur_size:.2f}.")
+
+                # set adaptive projection parameters
+                panel["projParams"]["n"] = 10.0 * (cur_size / 2)  # effectively sets zoom?
+                panel["projParams"]["f"] = 15.0 * (cur_size / 2)
+
         # finalize panels list (all properties not set here are invariant in time)
         allGridsExist = True
 
@@ -891,7 +916,7 @@ def renderSingleHaloFrames(
             if not isfile(gridFilename):
                 allGridsExist = False
 
-            if make_rel:
+            if 0:  # make_rel
                 # also need the boxCenter of the next frame
 
                 # for times within actual MPB, use smoothed properties directly
@@ -1109,7 +1134,7 @@ def renderSingleHaloFrames(
                     w_unmatched_next = np.where(~mask_next)[0]
                     # print(f"  Unmatched: {w_unmatched_cur.size} (cur), {w_unmatched_next.size} (next) snap.")
 
-                    print(f"WARNING: {w_unmatched_cur.size} unmatched stars in current snap {snapNum} disappear.")
+                    # print(f"WARNING: {w_unmatched_cur.size} unmatched stars in current snap {snapNum} disappear.")
 
                     # need to preserve mass and initial mass of unmatched stars and gas for logic below
                     if p["sP"].isPartType(p["partType"], "stars"):
@@ -1226,7 +1251,7 @@ def renderSingleHaloFrames(
                         next_interp_data[key][w_appearing_next][w_unformed] = 1e-20
 
                     # note: we don't care about w_appearing_next2 since we only render from cur to next, and then shift
-                    print(f"  Stars: {w_unformed[0].size} unformed (of {w_appearing_next.size}) at interp time.")
+                    # print(f"  Stars: {w_unformed[0].size} unformed (of {w_appearing_next.size}) at interp time.")
 
                 # although the following negates some of the logic above, leads to the best visual result, with
                 # neither streak-ins due to bulk SubhaloVel through the box, nor blue implosions of star clusters
@@ -1268,7 +1293,7 @@ def renderSingleHaloFrames(
                 cur_interp_data["mass"][n_match : n_match + w_unmatched_cur.size][w_cur] = mass_val
                 next_interp_data["mass"][n_match : n_match + w_unmatched_cur.size][w_cur] = mass_val
 
-                print(f"  Gas: {w_cur[0].size} derefining (of {w_unmatched_cur.size}), still visible at interp time.")
+                # print(f"  Gas: {w_cur[0].size} derefining (of {w_unmatched_cur.size}), still visible at interp time.")
 
                 # which gas cells (that are appearing due to refinement) are already present?
                 w_next = np.where(gas_tform_next < time_interp)
@@ -1279,7 +1304,7 @@ def renderSingleHaloFrames(
                 cur_interp_data["mass"][n_match + w_unmatched_cur.size :][w_next] = mass_val
                 next_interp_data["mass"][n_match + w_unmatched_cur.size :][w_next] = mass_val
 
-                print(f"  Gas: {w_next[0].size} refining (of {w_unmatched_next.size}), now visible at interp time.")
+                # print(f"  Gas: {w_next[0].size} refining (of {w_unmatched_next.size}), now visible at interp time.")
 
             # cubic hermite interpolation in time
             pos0 = cur_interp_data["pos"]
