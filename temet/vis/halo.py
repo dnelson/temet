@@ -409,7 +409,7 @@ def renderSingleHalo(panels_in, plotConfig=None, localVars=None, skipExisting=Fa
 
         (
             p["boxSizeImg"],
-            p["boxCenter"],
+            boxCenter_halo,
             p["extent"],
             p["haloVirRad"],
             p["galHalfMass"],
@@ -417,6 +417,9 @@ def renderSingleHalo(panels_in, plotConfig=None, localVars=None, skipExisting=Fa
             haloRotMatrix,
             haloRotCenter,
         ) = haloImgSpecs(**p)
+
+        if p["boxCenter"] is None:
+            p["boxCenter"] = boxCenter_halo
 
         if p["rotMatrix"] is None:
             p["rotMatrix"], p["rotCenter"] = haloRotMatrix, haloRotCenter
@@ -496,6 +499,7 @@ def renderSingleHaloFrames(
     rotation    = None            # 'face-on', 'edge-on', or None
     inclination = None            # inclination angle (degrees, about the x-axis) (0=unchanged)
     remapRatio  = None            # [x,y,z] periodic->cuboid remapping ratios, always None for single halos
+    numFramesPerRot = None        # if not None, then add a camera rotation that takes this many frames per full 360
     # fmt: on
 
     # defaults (global plot configuration options)
@@ -581,17 +585,18 @@ def renderSingleHaloFrames(
             p["sP"].subhaloInd = p["subhaloInd"]
 
         # load MPB once per panel
-        quants = [
-            "SubfindID",
-            "SnapNum",
-            "Group_R_Crit200",
-            "SubhaloPos",
-            "SubhaloVel",
-            "SubhaloHalfmassRad",
-            "SubhaloHalfmassRadType",
-        ]
-        p["mpb"] = p["sP"].quantMPB(p["sP"].subhaloInd, quants=quants, add_ghosts=True, smooth=True)
-        p["mpb_unsmoothed"] = p["sP"].quantMPB(p["sP"].subhaloInd, quants=quants, add_ghosts=True)
+        if "mpb" not in p:
+            quants = [
+                "SubfindID",
+                "SnapNum",
+                "Group_R_Crit200",
+                "SubhaloPos",
+                "SubhaloVel",
+                "SubhaloHalfmassRad",
+                "SubhaloHalfmassRadType",
+            ]
+            p["mpb"] = p["sP"].quantMPB(p["sP"].subhaloInd, quants=quants, add_ghosts=True, smooth=True)
+            p["mpb_unsmoothed"] = p["sP"].quantMPB(p["sP"].subhaloInd, quants=quants, add_ghosts=True)  # for make_rel
 
         # additional smoothing to remove short time-scale positional oscillations
         for i in range(3):
@@ -640,7 +645,7 @@ def renderSingleHaloFrames(
     # time interpolation? (constant time step, independent of snapshot spacing)
     if plotConfig.interpDt is not None:
         # new frame number <-> snapshot number mapping
-        snapRedshift = p["sP"].snapNumToRedshift(all=True)
+        snapRedshift = p["sP"].snapNumToRedshift(snapNums)  # already restricted to [minRedshift, maxRedshift]
         snapTimesMyr = p["sP"].units.redshiftToAgeFlat(snapRedshift) * 1000  # Myr
 
         # constant timestep
@@ -683,6 +688,10 @@ def renderSingleHaloFrames(
 
         curInterpSnap0 = None
         match_i0_snap = None
+
+    # return frame sequence info if requested
+    if getStats:
+        return frameNums, snapNums
 
     # optionally parallelize over multiple tasks
     numFramesTot = frameNums.size
@@ -748,14 +757,23 @@ def renderSingleHaloFrames(
             dens = sim.snapshotSubsetP(partType, "density")
             r["dens"] = dens
 
-        # get subhalo frame of reference at this snapshot
-        mpb_ind = np.where(p["mpb_unsmoothed"]["SnapNum"] == snap_num)[0]
-        assert len(mpb_ind)
+        # additional fields
+        if panel_loc["ptRestrictions"] is not None:
+            # mappings for 'requested field' to 'field that needs to be available in data cache to load'
+            remaps = {"highres_massfrac": "HighResGasMass"}
+            for field in panel_loc["ptRestrictions"]:
+                fieldLoad = remaps[field] if field in remaps else field
+                r[fieldLoad] = sim.snapshotSubsetP(partType, fieldLoad)
 
-        r["sub_pos"] = p["mpb_unsmoothed"]["SubhaloPos"][mpb_ind[0], :]
-        r["sub_vel"] = p["mpb_unsmoothed"]["SubhaloVel"][mpb_ind[0], :]
-        r["sub_vel"] *= panel_loc["sP"].HubbleParam * panel_loc["sP"].units.kmS_in_kpcGyr / sim.scalefac
-        r["sub_rel"] = False  # whether sub_pos and sub_vel are relative to subhalo
+        # get subhalo frame of reference at this snapshot
+        if make_rel:
+            mpb_ind = np.where(p["mpb_unsmoothed"]["SnapNum"] == snap_num)[0]
+            assert len(mpb_ind)
+
+            r["sub_pos"] = p["mpb_unsmoothed"]["SubhaloPos"][mpb_ind[0], :]
+            r["sub_vel"] = p["mpb_unsmoothed"]["SubhaloVel"][mpb_ind[0], :]
+            r["sub_vel"] *= panel_loc["sP"].HubbleParam * panel_loc["sP"].units.kmS_in_kpcGyr / sim.scalefac
+            r["sub_rel"] = False  # whether sub_pos and sub_vel are relative to subhalo
 
         return r
 
@@ -851,7 +869,7 @@ def renderSingleHaloFrames(
                 time_interp = t1
                 dt = time_interp - t0  # set tau = 1
 
-            assert time_interp >= t0 and time_interp <= t1, "interpDt frame time out of current snap interval."
+            assert time_interp >= t0 - 1e-6 and time_interp <= t1, "interpDt frame time out of current snap interval."
 
             tau = (time_interp - t0) / dt  # [0,1]
 
@@ -882,7 +900,21 @@ def renderSingleHaloFrames(
                     cur_redshift = z_interp
 
                 # derive current size
-                (kf_z0, kf_size0), (kf_z1, kf_size1) = plotConfig.keyframeCamera
+                n_keyframes = len(plotConfig.keyframeCamera)
+                assert n_keyframes >= 2, "Need at least 2 keyframes for keyframeCamera config."
+                assert plotConfig.keyframeCamera[1][0] < plotConfig.keyframeCamera[0][0], "decreasing redshift order."
+
+                # loop over keyframe pairs and find which one we are in
+                for kf_i in range(n_keyframes - 1):
+                    kf_z0, _ = plotConfig.keyframeCamera[kf_i]
+                    kf_z1, _ = plotConfig.keyframeCamera[kf_i + 1]
+
+                    if cur_redshift >= kf_z1:
+                        break
+
+                kf_z0, kf_size0 = plotConfig.keyframeCamera[kf_i]
+                kf_z1, kf_size1 = plotConfig.keyframeCamera[kf_i + 1]
+                # (kf_z0, kf_size0), (kf_z1, kf_size1) = plotConfig.keyframeCamera
 
                 # current: float, start: float, end: float, target_start: float, target_end: float
                 cur_size = easeQuant(cur_redshift, kf_z0, kf_z1, kf_size0, kf_size1)
@@ -911,12 +943,26 @@ def renderSingleHaloFrames(
                 p["rotCenter"],
             ) = haloImgSpecs(**p)
 
+            if p["numFramesPerRot"] is not None:
+                rotDirVec = [0.0, 1.0, 0.0]  # horizontal seeming spin
+
+                p["rotCenter"] = p["boxCenter"]
+
+                rotAngleDeg = 360.0 * (frameNum / p["numFramesPerRot"])
+                locRotMatrix = rotationMatrixFromAngleDirection(rotAngleDeg, rotDirVec)
+
+                # if rotMatrix already exists, multiply ours in
+                if p["rotMatrix"] is not None:
+                    p["rotMatrix"] = np.dot(locRotMatrix, p["rotMatrix"])
+                else:
+                    p["rotMatrix"] = locRotMatrix
+
             # does cached grid file already exist? then no need to load snapshot data for possible interp
             gridFilename = _grid_filename(**p)
             if not isfile(gridFilename):
                 allGridsExist = False
 
-            if 0:  # make_rel
+            if 0 and make_rel:
                 # also need the boxCenter of the next frame
 
                 # for times within actual MPB, use smoothed properties directly
@@ -1003,9 +1049,10 @@ def renderSingleHaloFrames(
                     new_data_next = {}
                     new_data_next2 = {}
                     for key in ["time", "redshift", "sub_pos", "sub_vel", "sub_rel"]:
-                        new_data_cur[key] = cur_interp_data[key]
-                        new_data_next[key] = next_interp_data[key]
-                        new_data_next2[key] = next2_interp_data[key]
+                        if key in cur_interp_data:
+                            new_data_cur[key] = cur_interp_data[key]
+                            new_data_next[key] = next_interp_data[key]
+                            new_data_next2[key] = next2_interp_data[key]
 
                     # define unique (total) id list, and then cross-match each snap to this master list
                     ids_unique = np.hstack([cur_interp_data["ids"], next_interp_data["ids"], next2_interp_data["ids"]])
@@ -1116,8 +1163,9 @@ def renderSingleHaloFrames(
                     new_data_cur = {}
                     new_data_next = {}
                     for key in ["time", "redshift", "sub_pos", "sub_vel", "sub_rel"]:
-                        new_data_cur[key] = cur_interp_data[key]
-                        new_data_next[key] = next_interp_data[key]
+                        if key in cur_interp_data:
+                            new_data_cur[key] = cur_interp_data[key]
+                            new_data_next[key] = next_interp_data[key]
 
                     # total unique
                     n_match = match_i0_snap.size
@@ -1453,13 +1501,16 @@ def renderSingleHaloFrames(
                 dens_t = linear_interp(cur_interp_data["dens"], next_interp_data["dens"], tau)
                 p["sP"].data[cache_key_prefix + "Density"] = dens_t
 
-            if "hsml" in cur_interp_data:
-                hsml_t = linear_interp(cur_interp_data["hsml"], next_interp_data["hsml"], tau)
-                p["sP"].data[cache_key_prefix + "hsml"] = hsml_t
-
             if p["sP"].isPartType(p["partType"], "dm") and "tetra" in p["method"]:
                 # for phase-space tetrahedral rendering of DM, need also the shuffled ids
                 p["sP"].data[cache_key_prefix + "IDs"] = cur_interp_data["ids"]
+
+            # any additional fields for linear interp, if present
+            extraFields = ["hsml", "HighResGasMass"]
+            for field in extraFields:
+                if field in cur_interp_data:
+                    hr_gas_mass_t = linear_interp(cur_interp_data[field], next_interp_data[field], tau)
+                    p["sP"].data[cache_key_prefix + field] = hr_gas_mass_t
 
             # three fields needed for stellar sps (light) are all constant after birth
             if p["sP"].isPartType(p["partType"], "stars"):

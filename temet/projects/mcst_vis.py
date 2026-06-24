@@ -8,11 +8,15 @@ from os.path import isfile
 
 import h5py
 import numpy as np
+from scipy.signal import savgol_filter
 
+from temet.util.simParams import simParams
 from temet.vis.box import renderBox
 from temet.vis.halo import renderSingleHalo, renderSingleHaloFrames
 
+from ..util.helper import pSplit as pSplitArr
 from ..util.rotation import rotationMatrixFromAngleDirection
+from ..vis.common import easeQuant
 
 
 def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
@@ -676,6 +680,10 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
         vmm1 = None
         vmmEvo = None
 
+        if sim.hInd == 219612 and sim.res == 16 and "_perspective" in conf:
+            # we will make a compositive movie with gas, stay consistent in timing
+            keyf = [[12.0, 0.3], [11.8, 0.05], [11.2, 0.05], [11.0, 0.3]]
+
     # def _custom_sfr_label(panel):
     #    sP = panel["sP"]
     #    sfr = sP.halo(haloID)["GroupSFR"]  # Msun/yr
@@ -703,8 +711,8 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
         keyframeDt = keyf
 
     # perspective rendering with keyframed camera position that moves in at z~14.5
-    if conf.endswith("_perspective"):
-        # size = 2.0  # note: overwritten by keyframe
+    if "_perspective" in conf:
+        # size = 30.0  # note: overwritten by keyframe
         projType = "perspective"
         projParams = {}
         if 1:
@@ -717,15 +725,71 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
             projParams["n"] = 10.0  # effectively sets zoom? 10 ~ normal, 20 ~ zoomed in, <5 distorted wide angle
             projParams["f"] = 15.0
 
-        projParams["fov"] = 90.0  # no impact?
+        projParams["fov"] = 90.0  # no impact
         projParams["camera_z"] = 0.0  # camera pos offset [code units] in los direction (>1 pulls out, <1 moves in)
+
+        if conf.startswith("gas") or conf.startswith("dm"):
+            vmm1[0] += 0.5
+            vmm1[1] += 0.1
+
+        # add a slow rotation with time
+        numFramesPerRot = 360 * 4
 
         if sim.hInd == 219612 and sim.res == 16:
             # slow-down first starburst at z ~ 11.8 - 11.2
             # for our perspective test movie, also for stars! (for compositing)
             plotConfig.keyf = [[12.0, 0.3], [11.8, 0.05], [11.2, 0.05], [11.0, 0.3]]
 
-        plotConfig.keyframeCamera = [[15.0, 50.0], [14.0, 2.0]]  # [z0, size0], [z1, size1]
+        if "_parent" in conf:
+            # size keyframes: parent box (TBD)
+            # plotConfig.keyframeCamera = [[17.0, 500], [16.5, 500], [15.5, 500], [15.0, 30], [14.5, 30.0], [14.0, 2.0]]
+            print("TODO")
+            plotConfig.keyf = [[12.0, 0.3], [11.8, 0.05], [11.2, 0.05], [11.0, 0.3]]  # same as above for testing
+        else:
+            # size keyframes: rapid zoom-in near z ~ 14.5
+            plotConfig.keyframeCamera = [[14.5, 30.0], [14.0, 2.0]]  # [z0, size0], [z1, size1]
+
+            # for such a zoomed-out view, do not show low-res and buffer gas
+            if conf.startswith("gas"):
+                ptRestrictions = {"highres_massfrac": ["gt", 0.7]}
+
+    mpb_quants = [
+        "SubfindID",
+        "SnapNum",
+        "Group_R_Crit200",
+        "SubhaloPos",
+        "SubhaloVel",
+        "SubhaloHalfmassRad",
+        "SubhaloHalfmassRadType",
+    ]
+
+    # parent box or zoom?
+    if "_parent" in conf:
+        # load MPB of zoom simulation target subhalo (for consistent boxCenter)
+        panels[0]["mpb"] = sim.quantMPB(sub_ind, quants=mpb_quants, add_ghosts=True, smooth=True)
+
+        # restore global position of zoom halo
+        panels[0]["mpb"]["SubhaloPos"] -= panels[0]["mpb"]["SubhaloPos"][0]  # position at z=5.5 in zoom
+        panels[0]["mpb"]["SubhaloPos"] += sim.sP_parent.halo(sim.hInd)["GroupPos"]  # position at z=5.5 in TNG50
+
+        # match redshift bounds
+        plotConfig.minRedshift = sim.sP_parent.redshift
+
+        # change target simulation from zoom to parent box
+        panels[0]["subhaloInd"] = sim.hInd
+        sim = simParams("tng50-2", redshift=sim.sP_parent.redshift)
+        print("TODO: switch to TNG50-1")
+        panels[0]["sP"] = sim
+        labelHalo = False
+
+        # testing:
+        # size = 2000  # 30  # 500 # 2000
+        # assert size < sim.units.codeLengthToKpc(sim.boxSize)
+
+        # large sizes need bounds adjustment for column density
+        if size >= 500:
+            vmm1[0] += 1.5
+            vmm1[1] += 1.0
 
     # render time evolution
     if not conf.endswith("endrot"):
@@ -735,18 +799,56 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
         numFramesPerRot = 360 * 4
         rotDirVec = [0.0, 1.0, 0.0]  # horizontal seeming spin
 
-        panels[0]["sP"].setSnap(sim.numSnaps - 1)
+        snap = sim.numSnaps - 1
+        panels[0]["sP"].setSnap(snap)
 
-        for frameNum in np.arange(numFramesPerRot):
-            # rotation matrix
+        # get center position consistent with interpolated frames
+        mpb_loc = sim.quantMPB(sub_ind, quants=["SnapNum", "SubhaloPos"], add_ghosts=True, smooth=True)
+        for i in range(3):
+            mpb_loc["SubhaloPos"][:, i] = savgol_filter(mpb_loc["SubhaloPos"][:, i], 20, 1)
+        mpb_ind = np.where(mpb_loc["SnapNum"] == snap)[0][0]
+        rotCenter = mpb_loc["SubhaloPos"][mpb_ind, :]
+
+        panels[0]["boxCenter"] = rotCenter
+
+        frameNums = np.arange(numFramesPerRot)
+        frameNums = pSplitArr(frameNums, pSplit[1], pSplit[0])
+        print(f"Rendering rotation frames [{frameNums[0]} - {frameNums[-1]}] of {numFramesPerRot}")
+
+        for frameNum in frameNums:
+            # rotation amount
             rotAngleDeg = 360.0 * (frameNum / numFramesPerRot)
-            rotCenter = sim.halo(haloID)["GroupPos"]
-            rotMatrix = rotationMatrixFromAngleDirection(rotAngleDeg, rotDirVec)
 
-            plotConfig.saveFilename = f"h{sim.hInd}_L{sim.res}_{sim.variant}_{conf}_{frameNum:03d}.png"
+            # slow zoom-out? only if perspective
+            if "_perspective" in conf:
+                # zoom-out from size=2 to size=10
+                kf_frame0 = 30 * 5  # start after 5 seconds
+                kf_frame1 = 30 * 5 + int(numFramesPerRot / 2)  # slow zoom for half the remaining time (~20 sec)
+                kf_size0 = size
+                kf_size1 = size * 5.0
+
+                cur_size = easeQuant(frameNum, kf_frame0, kf_frame1, kf_size0, kf_size1)
+
+                panels[0]["size"] = cur_size
+
+                # set adaptive projection parameters
+                projParams["n"] = 10.0 * (cur_size / 2)
+                projParams["f"] = 15.0 * (cur_size / 2)
+
+                # add 'initial' rotation at the end of the time-evolving sequence
+                evo_frameNums, _ = renderSingleHaloFrames(panels, plotConfig, locals(), getStats=True)
+                frameNumTotal = evo_frameNums.size
+
+                rotAngle0 = 360.0 * (frameNumTotal / numFramesPerRot)
+                rotAngleDeg += rotAngle0
+
+            # rotation matrix
+            panels[0]["rotMatrix"] = rotationMatrixFromAngleDirection(rotAngleDeg, rotDirVec)
 
             # render
-            renderSingleHalo(panels, plotConfig, locals())
+            plotConfig.saveFilename = f"h{sim.hInd}_L{sim.res}_{sim.variant}_{conf}_{frameNum:03d}.png"
+
+            renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
 
 def vis_movie_mpbsm_multi(sims, conf=1):

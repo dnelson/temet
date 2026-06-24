@@ -298,8 +298,6 @@ def stellar3BandCompositeImage(
     """Generate 3-band RGB composite using starlight in three different passbands. Work in progress."""
     bands, label = _stellar_3bands(partField)
 
-    assert projType == "ortho"
-
     fieldPrefix = "stellarBandObsFrame-" if "ObsFrame" in partField else "stellarBand-"
 
     # print('Generating stellar composite with %s [%s %s %s]' % (fieldPrefix,bands[0],bands[1],bands[2]))
@@ -975,16 +973,16 @@ def gridBox(
         rotMatrix,
         rotCenter,
         remapRatio,
-        forceRecalculate=False,
-        smoothFWHM=None,
-        snapHsmlForStars=False,
-        alsoSFRgasForStars=False,
-        excludeSubhaloFlag=False,
-        skipCellIndices=None,
-        ptRestrictions=None,
-        weightField="mass",
-        randomNoise=None,
-        vmmPercs=None,
+        forceRecalculate,
+        smoothFWHM,
+        snapHsmlForStars,
+        alsoSFRgasForStars,
+        excludeSubhaloFlag,
+        skipCellIndices,
+        ptRestrictions,
+        weightField,
+        randomNoise,
+        vmmPercs,
         **kwargs,
     )
 
@@ -1276,6 +1274,9 @@ def gridBox(
                     hsml,
                     np.array(axes),
                 )
+
+                # do not include points behind camera
+                mass[hsml < 0] = 0.0
 
                 # switch back from camera-frame
                 pos[:, axis_proj] += cameraShift
