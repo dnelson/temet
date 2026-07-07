@@ -17,9 +17,7 @@ from ..util.helper import (
     hermite_interp,
     hermite_interp_2deriv,
     hermite_interp_3point,
-    hermite_interp_vartau,
     linear_interp,
-    linear_interp_vartau,
     num_cpus,
     pSplit,
 )
@@ -1299,7 +1297,7 @@ def renderSingleHaloFrames(
                         cur_interp_data[key][n_match + w_unmatched_cur.size :][w_formed] = mass_val
                         next_interp_data[key][n_match + w_unmatched_cur.size :][w_formed] = mass_val
 
-                    # print(f"  Stars: {w_formed[0].size} formed (of {w_unmatched_next.size}), appearing at interp time.")
+                    # print(f"  Stars: {w_formed[0].size} formed (of {w_unmatched_next.size}), appear at interp time.")
 
             if star_3snaps and p["sP"].isPartType(p["partType"], "stars"):
                 if w_disappearing_cur.size > 0:

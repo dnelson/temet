@@ -407,7 +407,7 @@ def_fields = {
         rad="r015vir_galaxy",
         ptRestrictions={"temp": ["lt", 100]},
     ),
-    # masses (MCST)
+    # masses (VESTRAL)
     "Subhalo_Gas_Mass_2rhalfstarsFoF": partial(
         subhaloRadialReduction, ptType="gas", ptProperty="mass", op="sum", rad="2rhalfstars", scope="fof"
     ),

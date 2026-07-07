@@ -856,7 +856,7 @@ class cloudyEmission:
                     el_mass_fraction[el_mass_fraction < 0.0] = 0.0  # clip -eps values at zero
 
             elif sP.snapHasField("gas", "ElementFraction"):
-                # MCST-related models
+                # VESTRAL-related models
                 # # note: sP.metals[0] == 'H' and sP.metals[1] == 'He', although these are stored separately for gas
                 if sym == "H":
                     el_mass_fraction = sP.snapshotSubset("gas", "h_massfrac", indRange=indRange)

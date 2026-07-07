@@ -1120,7 +1120,7 @@ metaldens_.log = True
 
 @snap_field
 def h_massfrac(sim, partType, field, args):
-    """Total hydrogen (H) mass fraction. This is a custom helper for MCST runs where this value
+    """Total hydrogen (H) mass fraction. This is a custom helper for VESTRAL runs where this value
     is not directly stored for gas, but is split based on sub-species and ionization state."""
     assert sim.isPartType(partType, "gas")
     assert sim.snapHasField(partType, "ElementFraction")
@@ -1143,7 +1143,7 @@ h_massfrac.log = False
 
 @snap_field
 def he_massfrac(sim, partType, field, args):
-    """Total helium (He) mass fraction. This is a custom helper for MCST runs where this value
+    """Total helium (He) mass fraction. This is a custom helper for VESTRAL runs where this value
     is not directly stored for gas, but is split based on sub-species and ionization state."""
     assert sim.isPartType(partType, "gas")
     assert sim.snapHasField(partType, "ElementFraction")
@@ -2016,7 +2016,7 @@ wind_eta.limits = [-2.0, 2.0]
 wind_eta.limits_halo = [-1.0, 1.5]
 wind_eta.log = True
 
-# -------------------- gas (mcst model) -----------------------------------------------------------
+# -------------------- gas (VESTRAL model) -----------------------------------------------------------
 
 
 @snap_field(aliases=["raddens_fuv", "rad_fuv_habing", "raddens_fuv_habing"])
@@ -2277,12 +2277,12 @@ z_form.units = ""  # dimensionless
 z_form.limits = lambda sim, pt, f: [np.clip(np.floor(sim.redshift), 0, 5), 6.0]
 z_form.log = False
 
-# -------------------- stars (MCST) ---------------------------------------------------------------
+# -------------------- stars (VESTRAL) ------------------------------------------------------------
 
 
 @snap_field
 def stellar_masshist(sim, partType, field, args):
-    """Stellar mass histogram (binned by mass) for a given snapshot. MCST model."""
+    """Stellar mass histogram (binned by mass) for a given snapshot. VESTRAL model."""
     assert 0  # needs verification
     StellarArray = sim.snapshotSubset(partType, "StellarArray", **args)
 
@@ -2317,9 +2317,9 @@ stellar_masshist.log = False
 
 @snap_field(aliases=["remnant_type", "remnant_mass"])
 def stellar_remnant(sim, partType, field, args):
-    """Stellar remnant type. MCST model.
+    """Stellar remnant type. VESTRAL model.
     (-1=still star (single or low-mass pop), 0=none, 1=white dwarf, 2=neutron star, 3=black hole)."""
-    assert sim.star == 3  # MCST solo star method only (could be generalized to non-solo)
+    assert sim.star == 3  # VESTRAL solo star method only (could be generalized to non-solo)
 
     AgeAtNextDeath = sim.snapshotSubset(partType, "AgeAtNextDeath", **args)
     InitialSoloMass = sim.snapshotSubset(partType, "InitialSoloMass", **args)

@@ -1974,7 +1974,7 @@ def parsec_v2():
 
 
 def snapSuppToCatalog(sim):
-    """Convert a series of re-written snapshots (i.e. from AREPO post-processing) into a single file (per snapshot) postprocessing catalog."""
+    """Convert re-written snapshots (i.e. from AREPO post-processing) into a single file postprocessing catalog."""
     snapPrefix = "potupdated"
     postName = "StellarPotential"
     ptNums = [4, 5]

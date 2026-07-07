@@ -1365,7 +1365,7 @@ def compareEOSFiles(doTempNotPres=False):
 
 
 def simHighZComparison():
-    """Meta plot: place MCST into its context of (res,halo mass) similar simulations."""
+    """Meta plot: place VESTRAL into its context of (res,halo mass) similar simulations."""
     msize = 10.0  # marker size
     fs1 = 15  # diagonal lines, cost labels, legend
     fs2 = 17  # sim name labels, particle number text
@@ -1386,7 +1386,7 @@ def simHighZComparison():
     ax.set_xlabel(r"Baryon Mass Resolution [ M$_{\odot}$ ]")
     ax.set_ylabel(r"Halo Mass at $z=%d$ [ M$_{\odot}$ ]" % redshift)
 
-    # MCST halos (z=6)
+    # VESTRAL halos (z=6)
     st_h73172 = [9.2]
     st_h219612 = [8.7]
     st_h311384 = [8.5]
@@ -1397,25 +1397,25 @@ def simHighZComparison():
     st_h5072 = [10.0, 9.4]
     st_h1958 = [10.4]
 
-    mcst_halos = [st_h1958, st_h5072, st_h15581, st_h23908, st_h31619, st_h73172, st_h219612, st_h311384, st_h844537]
+    vestral_halos = [st_h1958, st_h5072, st_h15581, st_h23908, st_h31619, st_h73172, st_h219612, st_h311384, st_h844537]
 
-    mcst_mhalo = []
-    mcst_mgas = []
+    vestral_mhalo = []
+    vestral_mgas = []
 
     # L16 maybe
-    mcst_L16 = st_h844537 + st_h311384 + st_h219612 + st_h73172 + st_h31619 + st_h23908 + st_h15581
-    mcst_mhalo += mcst_L16
-    mcst_mgas += [3] * len(mcst_L16)
+    vestral_L16 = st_h844537 + st_h311384 + st_h219612 + st_h73172 + st_h31619 + st_h23908 + st_h15581
+    vestral_mhalo += vestral_L16
+    vestral_mgas += [3] * len(vestral_L16)
 
     # L15 probably
-    mcst_L15 = st_h844537 + st_h311384 + st_h219612 + st_h73172 + st_h31619 + st_h23908 + st_h15581 + st_h5072
-    mcst_mhalo += mcst_L15
-    mcst_mgas += [24] * len(mcst_L15)
+    vestral_L15 = st_h844537 + st_h311384 + st_h219612 + st_h73172 + st_h31619 + st_h23908 + st_h15581 + st_h5072
+    vestral_mhalo += vestral_L15
+    vestral_mgas += [24] * len(vestral_L15)
 
     # L14
-    for halo in mcst_halos:
-        mcst_mhalo += halo
-        mcst_mgas += [180] * len(halo)
+    for halo in vestral_halos:
+        vestral_mhalo += halo
+        vestral_mgas += [180] * len(halo)
 
     # SERRA (the actual number of halos, and their mass distribution, is unclear) (Pallottini+22)
     rng = np.random.default_rng(424242)
@@ -1577,7 +1577,7 @@ def simHighZComparison():
 
     # set simulation data (for zoom simulations)
     zooms = [
-        {"name": "MCST", "M_halo": mcst_mhalo, "m_gas": mcst_mgas},
+        {"name": "VESTRAL", "M_halo": vestral_mhalo, "m_gas": vestral_mgas},
         {"name": "LYRA", "M_halo": lyra_mhalo, "m_gas": lyra_mgas},
         {"name": "EDGE", "M_halo": edge_mhalo, "m_gas": edge_mgas},
         {"name": "EDGE2", "M_halo": edge2_mhalo, "m_gas": edge2_mgas},
@@ -1756,7 +1756,7 @@ def simHighZComparison():
         x = np.zeros(y.size) + sim["m_gas"]
 
         if i in [10, 19]:
-            ax.plot([], [])  # skip first color i.e. red (given to MCST) to avoid confusion
+            ax.plot([], [])  # skip first color i.e. red (given to VESTRAL) to avoid confusion
         marker_normal = "D" if i < 11 else "s"  # colors start to repeat
 
         marker = "o" if sim["name"] in models_ismeos else marker_normal
@@ -1786,7 +1786,7 @@ def simHighZComparison():
             y = 10.0 ** rng.uniform(low=ylim[0] + y_pad, high=ylim[0] + y_pad * y_fac, size=y.size)
             x += rng.uniform(-0.1, 0.1, size=x.size) * sim["m_gas"]  # to avoid overplotting multiple sims
 
-        if sim["name"] == "MCST":
+        if sim["name"] == "VESTRAL":
             opts["zorder"] = 10
             opts["ms"] += 2
             # opts['markeredgewidth'] = 1

@@ -340,7 +340,7 @@ def hubbleMCT_emissionTrends(simname="tng50-1", cQuant=None):
                 # pixels in this annulus
                 w = np.where((dist >= distBin[0]) & (dist < distBin[1]))
 
-                # MCST: OVI doublet map and CIII map separately
+                # VESTRAL: OVI doublet map and CIII map separately
                 # OVI_map = np.log10(10.0**grids['sb_OVI_ergs'][:,:,i] + 10.0**grids['sb_O--6-1037.62A_ergs'][:,:,i])
                 # CIII_map = grids['sb_CIII_ergs'][:,:,i]
 
@@ -388,7 +388,7 @@ def hubbleMCT_emissionTrends(simname="tng50-1", cQuant=None):
 
     for i, distBin in enumerate(distBins):
         # start figure
-        # fig, ax = plt.subplots(figsize=figsize) # MCST
+        # fig, ax = plt.subplots(figsize=figsize) # VESTRAL
         fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(figsize[0] * nrows, figsize[1] * ncols))  # MAGIC-2
 
         for species_name, ax in zip(species, axes.flatten()):  # MAGIC-2
@@ -411,7 +411,7 @@ def hubbleMCT_emissionTrends(simname="tng50-1", cQuant=None):
             count = 0
 
             # for i, distBin in enumerate(distBins):
-            # for line, label in zip(['OVI','CIII'], ['OVI 1032+1038','CIII 977']): # MCST
+            # for line, label in zip(['OVI','CIII'], ['OVI 1032+1038','CIII 977']): # VESTRAL
             for line in sb_percs.keys():  # MAGIC-2
                 if species_name + "-" not in line:  # MAGIC-2
                     continue  # MAGIC-2

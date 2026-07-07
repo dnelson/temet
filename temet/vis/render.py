@@ -1238,7 +1238,7 @@ def gridBox(
                     del projParams["fov"]
                 else:
                     tangent = (projParams["t"] - projParams["b"]) / projParams["n"]
-                    fov = np.rad2deg(np.arctan(tangent) * 2.0)
+                    # fov = np.rad2deg(np.arctan(tangent) * 2.0)
                     # print('fov: %.1f' % fov)
 
                 # shift pos to boxCenter

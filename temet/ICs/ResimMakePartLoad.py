@@ -662,7 +662,7 @@ def generate_set():
         sizeFac = 4.0
 
     if 1:
-        # TNG50 dwarf zooms (MCST)
+        # TNG50 dwarf zooms (VESTRAL)
         # sP = simParams(run='tng50-1', redshift=3.0)
         # haloIDs = [1242] # Milky Way progenitors at z=3
         # haloIDs = [302, 437, 556, 600, 627, 684, 730, 793, 869] # mstar = 1e9 at z=3
@@ -677,7 +677,7 @@ def generate_set():
         # haloIDs += [1142, 1289] # z=5.5 grnr[np.where( (mhalo>10.0) & (mhalo<10.01) )[0][0:5]]
         # haloIDs += [167, 347] # z=5.5 grnr[np.where( (mhalo>10.5) & (mhalo<10.51) )[0][0:5]]
 
-        # see mcst.select_ics()
+        # see projects.vestral.select_ics()
         # haloIDs = [844537, 848864, 836397, 857253, 768227] # mhalo = 8.0
         # haloIDs += [219612, 199174, 224856, 311384, 323459] # mhalo = 8.5
         # haloIDs += [73172, 72077, 66262, 73547, 62879] # mhalo = 9.0
@@ -691,7 +691,7 @@ def generate_set():
         sizeFac = 4.0  # 4, 6, 8
 
     if 0:
-        # testing MCST for z=0 Milky Way
+        # testing VESTRAL for z=0 Milky Way
         sP = simParams(run="tng50-1", redshift=0.0)
         haloIDs = [268]  # randomly chosen from MW/M31 sample as looking like a big disk
         sizeFac = 4.0

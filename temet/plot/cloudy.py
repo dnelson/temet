@@ -835,7 +835,7 @@ def uvbEnergyDens():
         uvbs_z.append(z_local)
         uvbs_u.append(u_local)
 
-    # write HDF5 file (used for MCST i.e. SFR_MCS model project)
+    # write HDF5 file (used for VESTRAL i.e. SFR_MCS model project)
     with h5py.File("uvb_energydens.hdf5", "w") as f:
         for i, uvb_name in enumerate(uvb_names):
             f["%s/Redshift" % uvb_name] = uvbs_z[i].astype("float32")

@@ -1,5 +1,5 @@
 """
-MCST: stellar clusters paper.
+VESTRAL: stellar clusters paper.
 
 https://arxiv.org/abs/xxxx.xxxxx
 """
@@ -17,8 +17,8 @@ from temet.util import simParams
 from temet.util.helper import running_median
 from temet.vis.halo import renderSingleHalo
 
-from .mcst import _get_existing_sims, _zoomSubhaloIDsToPlot, phase_diagram
-from .mcst_vis import vis_gallery_clusters, vis_single_galaxy
+from .vestral import _zoomSubhaloIDsToPlot, phase_diagram
+from .vestral_vis import vis_gallery_clusters, vis_single_galaxy
 
 
 mass_label = r"Star Cluster Mass [ log M$_{\odot}$ ]"
@@ -1706,7 +1706,7 @@ def size_mass_evo_clusters(color=None):
     subhalos_evo.tracks1d([sim], quant="surfdens_stars_pc", **opts_surfdens)
 
 
-def vis_evo_clusters(partField="metal_solar"):
+def vis_evo_clusters(partField="radvel"):
     """Time evolution of star clusters on the size-mass plane, compared to model tracks."""
     # vis config
     partType = "gas"
@@ -1821,12 +1821,12 @@ def vis_evo_clusters(partField="metal_solar"):
 
 
 def paperPlots(a=False):
-    """Plots for MCST intro paper. (if a == True, make all figures)."""
+    """Plots for VESTRAL star clusters paper. (if a == True, make all figures)."""
     # list of sims to include
-    variants = ["ST15"]  # ['ST15c','ST15m','ST15s']
-    res = [14, 15, 16]
-    hInds = [1958, 5072, 15581, 23908, 31619, 73172, 219612, 311384, 446076, 539722, 844537]
-    redshift = 5.5
+    # variants = ["ST15"]  # ['ST15c','ST15m','ST15s']
+    # res = [14, 15, 16]
+    # hInds = [1958, 5072, 15581, 23908, 31619, 73172, 219612, 311384, 446076, 539722, 844537]
+    # redshift = 5.5
 
     # if (all == False), only dz < 0.1 matches
     # if (single == True), only the highest available res of each halo

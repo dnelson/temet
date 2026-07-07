@@ -8,9 +8,6 @@ from . import (
     color,
     color_analysis,
     lrg,
-    mcst,
-    mcst_clusters,
-    mcst_vis,
     mg2emission,
     mockspec,
     outflows,
@@ -18,5 +15,8 @@ from . import (
     oxygen,
     rshock,
     tngcluster,
+    vestral,
+    vestral_clusters,
+    vestral_vis,
     xray_scattering,
 )

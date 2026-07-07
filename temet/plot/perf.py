@@ -352,7 +352,7 @@ def plotCpuHours(run, variant, hInds, resolutions, xQuant="mhalo", sizefac=0.8):
             try:
                 sim = simParams(run=run, variant=variant, hInd=hInd, res=res, redshift=5.5)
             except Exception as e:
-                # print(f" Skip: {run}_{variant}_{hInd}_{res}: {e}")
+                print(f" Skip: {run}_{variant}_{hInd}_{res}: {e}")
                 continue
 
             print(sim.simName)

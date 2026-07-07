@@ -35,10 +35,10 @@ def _grackle_chemistry(density, metallicity, redshift, uvb, ssm, PE, PE_temp):
     my_chemistry = chemistry_data()
     my_chemistry.use_grackle = 1
     my_chemistry.with_radiative_cooling = 1
-    my_chemistry.primordial_chemistry = 1  # MCST value = 1
+    my_chemistry.primordial_chemistry = 1  # VESTRAL value = 1
     my_chemistry.metal_cooling = 1
     my_chemistry.UVbackground = 1
-    my_chemistry.self_shielding_method = ssm  # MCST value = 3
+    my_chemistry.self_shielding_method = ssm  # VESTRAL value = 3
     my_chemistry.H2_self_shielding = 0
 
     # set UV background
@@ -53,10 +53,10 @@ def _grackle_chemistry(density, metallicity, redshift, uvb, ssm, PE, PE_temp):
             basepath + "grackle/grackle_data_files/input/CloudyData_UVB=HM2012_shielded.h5", "utf-8"
         )
     elif uvb == "fg20_shielded":
-        # new MCST tables (production)
+        # new VESTRAL tables (production)
         grackle_data_file = bytearray(basepath + "arepo8_setups/grid_cooling_UVB=FG20_ext.hdf5", "utf-8")
     elif uvb == "fg20_unshielded":
-        # new MCST tables (testing)
+        # new VESTRAL tables (testing)
         grackle_data_file = bytearray(
             "/u/dnelson/temet/temet/tables/cloudy/grid_cooling_UVB=FG20_unshielded.hdf5", "utf-8"
         )
@@ -563,7 +563,7 @@ def grackle_equil(ssm=3, PE=True):
     metallicity = 0.1  # linear solar
     redshift = 6.0
 
-    # ssm = 1 # grackle.self_shielding_method (MCST value = 3)
+    # ssm = 1 # grackle.self_shielding_method (VESTRAL value = 3)
 
     # load
     temp, pres, densities, uvbs = _load_equil_curves(metallicity, redshift, ssm, PE)
@@ -610,7 +610,7 @@ def grackle_equil_vs_Zz():
     redshifts = [0.0, 6.0]
     metallicities = [1.0, 0.1, 0.001]  # linear solar
 
-    ssm = 1  # 3  # grackle.self_shielding_method (MCST value = 3)
+    ssm = 1  # 3  # grackle.self_shielding_method (VESTRAL value = 3)
     PE = True  # photoelectric heating
     uvb = "fg20_shielded"
 
@@ -658,12 +658,13 @@ def grackle_equil_vs_Zz():
     fig.savefig(f"equil_vs_dens_{uvb}_ssm{ssm}_PE{int(PE)}.pdf")
     plt.close(fig)
 
+
 def grackle_equil_vs_Zz_1panel():
     """Plot equilibrium temperature curve as a function of density (varying Z, z) at fixed UVB/SSM."""
     redshifts = [0.0, 6.0]
     metallicities = [1.0, 0.1, 0.001]  # linear solar
 
-    ssm = 1  # 3  # grackle.self_shielding_method (MCST value = 3)
+    ssm = 1  # 3  # grackle.self_shielding_method (VESTRAL value = 3)
     PE = True  # photoelectric heating
     uvb = "fg20_shielded"
 
@@ -685,7 +686,6 @@ def grackle_equil_vs_Zz_1panel():
             temp, pres, densities, _ = _load_equil_curves(metallicity, redshift, ssm, PE)
 
             T = np.log10(temp[uvb])
-            P = np.log10(pres[uvb] / units.boltzmann)  # dyn/cm^2 / (dyn*cm/K) = K/cm^3
 
             label = r"log(Z/Z$_{\rm sun}$) = %.0f" % (np.log10(metallicity)) if i == 0 else ""
             ls = linestyles[i * 2]

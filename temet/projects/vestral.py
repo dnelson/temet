@@ -1,5 +1,5 @@
 """
-MCST: exploratory plots / intro paper.
+VESTRAL: exploratory plots / intro paper.
 
 https://arxiv.org/abs/xxxx.xxxxx
 """
@@ -18,7 +18,7 @@ from temet.plot.config import colors, figsize, linestyles, lw, markers
 from temet.plot.cosmoMisc import simHighZComparison
 from temet.plot.subhalos import addUniverseAgeAxis
 from temet.plot.util import colored_line
-from temet.projects.mcst_vis import (
+from temet.projects.vestral_vis import (
     vis_gallery_galaxy,
     vis_highres_region,
     vis_movie_mpbsm,
@@ -411,7 +411,7 @@ def mbh_vs_mhalo(sims: list[simParams]) -> None:
     yQuant = "mass_smbh"  # largest BH_Mass in each subhalo
     # yQuant = 'BH_mass' # sum of all BH_Mass in each subhalo
     xlim = [8.0, 11.25]  # mhalo
-    ylim = [2.8, 7.0]  # msmbh, MCST seeds at 1e3, TNG seeds at ~1e6
+    ylim = [2.8, 7.0]  # msmbh, VESTRAL seeds at 1e3, TNG seeds at ~1e6
 
     def _draw_data(ax, sims):
         xlim = ax.get_xlim()
@@ -437,12 +437,12 @@ def mbh_vs_mhalo(sims: list[simParams]) -> None:
         ax.plot(z21["mhalo"], z21["mbh"], "--", color="#444", alpha=0.8, label=z21["label"])
         ax.fill_between(z21["mhalo"], z21["mbh_p16"], z21["mbh_p84"], color="#444", alpha=0.4)
 
-        # MCST seed mass from parameter file
+        # VESTRAL seed mass from parameter file
         SeedBlackHoleMass = 6.774e-08  # 1000 Msun
-        MinFoFMassForNewSeed_MCST = 6.774e-3  # 1e8 Msun
+        MinFoFMassForNewSeed_VESTRAL = 6.774e-3  # 1e8 Msun
         MinFoFMassForNewSeed_TNG = 5.0  # ~5e10 Msun
         mbh_seed = sim_parent.units.codeMassToLogMsun(SeedBlackHoleMass)
-        mhalo_seed = sim_parent.units.codeMassToLogMsun(MinFoFMassForNewSeed_MCST)
+        mhalo_seed = sim_parent.units.codeMassToLogMsun(MinFoFMassForNewSeed_VESTRAL)
 
         ax.plot([xlim[0], (xlim[1] + xlim[0]) / 2], [mbh_seed, mbh_seed], ":", color="#444", alpha=0.8)
         label = r"$M_{\rm BH,seed}$ (@ M$_{\rm FoF} = 10^{%.1f}$ M$_{\rm sun}$)" % mhalo_seed
@@ -481,11 +481,11 @@ def mbh_vs_mstar(sims: list[simParams]) -> None:
         # ylim = ax.get_ylim()
         sim_parent = sims[0].sP_parent
 
-        # MCST seed mass from parameter file
+        # VESTRAL seed mass from parameter file
         SeedBlackHoleMass = 6.774e-08  # 1000 Msun
-        MinFoFMassForNewSeed_MCST = 6.774e-3  # 1e8 Msun
+        MinFoFMassForNewSeed_VESTRAL = 6.774e-3  # 1e8 Msun
         mbh_seed = sim_parent.units.codeMassToLogMsun(SeedBlackHoleMass)
-        mhalo_seed = sim_parent.units.codeMassToLogMsun(MinFoFMassForNewSeed_MCST)
+        mhalo_seed = sim_parent.units.codeMassToLogMsun(MinFoFMassForNewSeed_VESTRAL)
 
         ax.plot([xlim[0], (xlim[1] + xlim[0]) / 2], [mbh_seed, mbh_seed], ":", color="#444", alpha=0.8)
         label = r"$M_{\rm BH,seed}$ (@ M$_{\rm FoF} = 10^{%.1f}$ M$_{\rm sun}$)" % mhalo_seed
@@ -566,8 +566,8 @@ def mbh_vs_mstar(sims: list[simParams]) -> None:
     def _add_kjaco_models(ax, sims, **kwargs):
         # add post-processing model results from Kiara
         # /bondi_evolution_live/446076_15_15_1018178170_seed1e+03/Mbh [snap_index]
-        # filepath = "cache/MCST_BH_models_bondi_live.h5"  # temporary (/vera/u/kjaco/thesis_files/data_files/)
-        filepath = "cache/MCST_BH_models_freefall_live.h5"  # temporary
+        # filepath = "cache/VESTRAL_BH_models_bondi_live.h5"  # temporary (/vera/u/kjaco/thesis_files/data_files/)
+        filepath = "cache/VESTRAL_BH_models_freefall_live.h5"  # temporary
         modelname = "freefall_live_hsml"  # "bondi_evolution_live"
         paramsets = ["hsml_seed1e+03_eff0.01", "hsml_seed1e+03_eff0.1"]  # , "hsml_seed1e+03_eff1"]
 
@@ -1911,7 +1911,7 @@ def run_table_latex():
 
 
 def paperPlots(a=False):
-    """Plots for MCST intro paper. (if a == True, make all figures)."""
+    """Plots for VESTRAL intro paper. (if a == True, make all figures)."""
     # list of sims to include
     variants = ["ST15"]  # ['ST15c','ST15m','ST15s']
     res = [14, 15, 16]
@@ -1937,7 +1937,7 @@ def paperPlots(a=False):
 
     # fig 1: equilibrium curves of new grackle tables
     if 0:
-        from temet.cosmo.cooling import grackle_equil_vs_Zz, grackle_equil_vs_Zz_1panel
+        from temet.cosmo.cooling import grackle_equil_vs_Zz_1panel
 
         # grackle_equil_vs_Zz()
         grackle_equil_vs_Zz_1panel()

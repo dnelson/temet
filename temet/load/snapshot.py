@@ -561,7 +561,7 @@ def snapshotSubset(
                 fields[i] = toLabel
 
     # handle non-GFM runs which have the same fields without the name prefix
-    # e.g. GFM_InitialMass -> InitialMass (also: StellarFormationTime, Metallicity) (MCST)
+    # e.g. GFM_InitialMass -> InitialMass (also: StellarFormationTime, Metallicity) (VESTRAL)
     for i, field in enumerate(fields):
         if field.startswith("GFM_"):
             if not snapHasField(sP, partType, field) and snapHasField(sP, partType, field.replace("GFM_", "")):

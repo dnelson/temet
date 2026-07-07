@@ -193,9 +193,9 @@ class simParams:
     # physical models: GFM and other indications of optional snapshot fields
     metals = None  # list of string labels for runs saving abundances by species
     eEOS = False  # >0 if star-forming gas on effective equation of state (1=Illustris/TNG, 2=EAGLE, 3=SIMBA)
-    star = False  # >0 for USE_SFR (1=Illustris/TNG type i.e. SSPs, 2=MCST normal, 3=MCST solo stars)
-    BHs = False  # >0 for BLACK_HOLES (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=MCST model)
-    winds = False  # >0 for GFM_WINDS or SN feedback (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=MCST model)
+    star = False  # >0 for USE_SFR (1=Illustris/TNG type i.e. SSPs, 2=VESTRAL normal, 3=VESTRAL solo stars)
+    BHs = False  # >0 for BLACK_HOLES (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=VESTRAL model)
+    winds = False  # >0 for GFM_WINDS or SN feedback (1=Illustris Model, 2=TNG Model, 3=Auriga model, 4=VESTRAL model)
 
     def __init__(
         self,
@@ -467,14 +467,14 @@ class simParams:
 
         # model parameters
         if "GFM_Metals" in gas_fields:
-            # assume tng model
+            # assume TNG model
             self.metals = ["H", "He", "C", "N", "O", "Ne", "Mg", "Si", "Fe", "total"]
             self.eEOS = 1
             self.star = 1
             self.winds = 2
             self.BHs = 2
         if "ElementFraction" in gas_fields:
-            # assume mcst model
+            # assume VESTRAL model
             self.metals = [ "H", "He", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar",
                            "K", "Ca", "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "other"]  # fmt: skip
             self.winds = 4
@@ -936,8 +936,8 @@ class simParams:
                 # todo: double-check order
                 # note: 'ElementFraction' is larger in shape[0] by 2 for stars than for gas, since it includes H,He
                 # whereas for gas these values are in the separate Grackle fields. the above is for stars.
-                self.winds = 4  # MCST fiducial
-                self.BHs = 4  # MCST fiducial
+                self.winds = 4  # VESTRAL fiducial
+                self.BHs = 4  # VESTRAL fiducial
 
                 self.star = 2
                 if self.res >= 15:

@@ -1,5 +1,5 @@
 """
-MCST: visualizations / intro paper.
+VESTRAL: visualizations / intro paper.
 
 https://arxiv.org/abs/xxxx.xxxxx
 """
@@ -8,7 +8,6 @@ from os.path import isfile
 
 import h5py
 import numpy as np
-from scipy.signal import savgol_filter
 
 from temet.util.simParams import simParams
 from temet.vis.box import renderBox

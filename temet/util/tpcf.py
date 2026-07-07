@@ -343,16 +343,18 @@ def quantReductionInRad(pos_search, pos_target, radial_bins, quants, reduce_op, 
 
     In each case, consider all target points falling within a 3D periodic search radius.
 
-    pos_search[N,3] : array of 3-coordinates for the galaxies/points to search from
-    pos_target[M,3] : array of the 3-coordiantes of the galaxies/points to search over
-    radial_bins[M]  : array of bin edges in radial distance (code units)
-    quants[M]/[M,P] : 1d or P-d array of quantities, one per pos_target, to process
-    reduce_op[str]  : one of 'min', 'max', 'sum'
-    boxSizeSim[1]   : the physical size of the simulation box for periodic wrapping (0=non periodic)
-    nThreads (int): if >1, do multithreaded calculation.
-      if None, determine automatically from available CPU count. If 1, do single-threaded calculation.
+    Args:
+      pos_search (ndarray[N,3]): array of 3-coordinates for the galaxies/points to search from
+      pos_target (ndarray[M,3]): array of the 3-coordiantes of the galaxies/points to search over
+      radial_bins (ndarray[M]): array of bin edges in radial distance (code units)
+      quants (ndarray[M]/[M,P]): 1d or P-d array of quantities, one per pos_target, to process
+      reduce_op (str): one of 'min', 'max', 'sum'
+      boxSizeSim (float): the physical size of the simulation box for periodic wrapping (0=non periodic)
+      nThreads (int): if >1, do multithreaded calculation.
+        if None, determine automatically from available CPU count. If 1, do single-threaded calculation.
 
-    return is reduced_quants[N,M-1]/[N,M-1,P]
+    Return:
+      reduced_quants[N,M-1]/[N,M-1,P]
     """
     # input sanity checks
     if pos_search.ndim != 2 or pos_search.shape[1] != 3:

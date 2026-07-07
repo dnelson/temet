@@ -261,7 +261,7 @@ def validSnapList(
                     # handle different criterion/simulation types
                     if "TNG" in sP.simName:
                         fullSnap = "/PartType0/MagneticField" in f
-                    elif sP.winds == 4:  # MCST
+                    elif sP.winds == 4:  # VESTRAL
                         fullSnap = "/PartType0/GrackleCoolTime" in f
                     else:
                         assert 0, "Unhandled case for determining full snaps."

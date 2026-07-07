@@ -561,7 +561,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config["plawScale"] = 1.0  # 0.7
         logMin = False
 
-    # mcst
+    # VESTRAL
     if partField in ["rad_FUV", "rad_LW"]:
         grid = grid  # units already in erg/cm^3
         bandStr = "FUV" if partField == "rad_FUV" else "LW"

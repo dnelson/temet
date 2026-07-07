@@ -433,7 +433,7 @@ def vis_proteus(method="voro_slice", snaps=None, cache=True, rotate=True):
         plt.close(fig)
 
 
-def mcst_smbh_mdot():
+def smbh_mdot_check():
     """Check if we can reproduce the BH_Mdot field from the other fields."""
     sim = simParams(run="structures", hInd=219612, res=15, variant="ST15", redshift=5.5)
 
