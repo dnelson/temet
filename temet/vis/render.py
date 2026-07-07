@@ -758,7 +758,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
     normCol = False
 
     if (
-        partFieldLoad in volDensityFields + colDensityFields + totSumFields
+        partFieldLoad in colDensityFields + totSumFields
         or " " in partFieldLoad
         or "metals_" in partFieldLoad
         or "stellarBand-" in partFieldLoad
@@ -771,7 +771,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         if partField != "mass" and "coldens" not in partField:
             assert mass.sum() != massTot, "Error! Mass array not replaced by [%s]!" % partField
 
-        if partFieldLoad in volDensityFields + colDensityFields or (
+        if partFieldLoad in colDensityFields or (
             " " in partFieldLoad and "mass" not in partFieldLoad and "frac" not in partFieldLoad
         ):
             normCol = True

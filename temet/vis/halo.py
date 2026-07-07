@@ -9,7 +9,7 @@ from os.path import isfile
 
 import numpy as np
 from numba import set_num_threads
-from scipy.interpolate import make_interp_spline
+from scipy.interpolate import interp1d, make_interp_spline
 from scipy.signal import savgol_filter
 
 from ..util.helper import (
@@ -285,6 +285,7 @@ def renderSingleHalo(panels_in, plotConfig=None, localVars=None, skipExisting=Fa
     method      = 'sphMap'      # sphMap[_subhalo,_global], sphMap_{min/max}IP, histo, voronoi_slice/proj[_subhalo]
     nPixels     = [1920,1920]   # [1400,1400] number of pixels for each dimension of images when projecting
     cenShift    = [0,0,0]       # [x,y,z] coordinates to shift default box center location by
+    boxCenter   = None          # [x,y,z] absolute coordinates of box center (overrides cenShift)
     size        = 3.0           # side-length specification of imaging box around halo/galaxy center
     depthFac    = 1.0           # projection depth, relative to size (1.0=same depth as width and height)
     sizeType    = 'rVirial'     # size units [rVirial,r500,rHalfMass,rHalfMassStars,codeUnits,kpc,arcsec,arcmin,deg]
@@ -309,6 +310,7 @@ def renderSingleHalo(panels_in, plotConfig=None, localVars=None, skipExisting=Fa
     ctName      = None          # if not None (automatic based on field), specify colormap name
     plotSubhalos = False        # plot halfmass circles for the N most massive subhalos in this (sub)halo
     plotBHs     = False         # plot markers for the N most massive SMBHs in this (sub)halo
+    plotStars   = False         # plot markers for individual massive stars
     relCoords   = True          # if plotting x,y,z coordinate labels, make them relative to box/halo center
     projType    = 'ortho'       # projection type, 'ortho', 'equirectangular', 'mollweide'
     projParams  = {}            # dictionary of parameters associated to this projection type
@@ -448,6 +450,28 @@ def renderSingleHalo(panels_in, plotConfig=None, localVars=None, skipExisting=Fa
     renderMultiPanel(panels, plotConfig)
 
 
+def _smooth_mpb_pos(sP, mpb):
+    """Additional smoothing on a MPB position, to avoid jitters and edge effects."""
+    SubhaloPos = mpb["SubhaloPos"].copy()
+
+    for i in range(3):
+        sg_size = 20
+        pos_1d = SubhaloPos[:, i].copy()  # time backwards
+        # to avoid edge effects, linearly interpolate forward in time first
+        mpb_times = sP.units.redshiftToAgeFlat(mpb["redshift"])[::-1]  # time forwards
+        N_add = sg_size // 2 + 1
+        dt = mpb_times[-1] - mpb_times[-2]
+        mpb_times_new = mpb_times[-1] + np.linspace(dt, dt * N_add, num=N_add)
+        f_pos = interp1d(mpb_times, pos_1d[::-1], kind="linear", fill_value="extrapolate")
+        new_pos_1d = f_pos(mpb_times_new)
+        # savgol smooth
+        pos_1d_b = np.hstack((new_pos_1d[::-1], pos_1d))  # time backwards
+        pos_1d_b_sm = savgol_filter(pos_1d_b, sg_size, 1)[N_add:]
+        SubhaloPos[:, i] = pos_1d_b_sm
+
+    return SubhaloPos
+
+
 def renderSingleHaloFrames(
     panels_in, plotConfig=None, localVars=None, curTask=0, numTasks=1, skipExisting=True, getStats=False
 ):
@@ -493,6 +517,7 @@ def renderSingleHaloFrames(
     ctName      = None            # if not None (automatic based on field), specify colormap name
     plotSubhalos = False          # plot halfmass circles for the N most massive subhalos in this (sub)halo
     plotBHs     = False           # plot markers for the N most massive SMBHs in this (sub)halo
+    plotStars   = False         # plot markers for individual massive stars
     relCoords   = True            # if plotting x,y,z coordinate labels, make them relative to box/halo center
     projType    = 'ortho'         # projection type, 'ortho', 'equirectangular', 'mollweide'
     projParams  = {}              # dictionary of parameters associated to this projection type
@@ -599,8 +624,7 @@ def renderSingleHaloFrames(
             p["mpb_unsmoothed"] = p["sP"].quantMPB(p["sP"].subhaloInd, quants=quants, add_ghosts=True)  # for make_rel
 
         # additional smoothing to remove short time-scale positional oscillations
-        for i in range(3):
-            p["mpb"]["SubhaloPos"][:, i] = savgol_filter(p["mpb"]["SubhaloPos"][:, i], 20, 1)
+        p["mpb"]["SubhaloPos"] = _smooth_mpb_pos(p["sP"], p["mpb"])
 
         if not isinstance(p["nPixels"], list):
             p["nPixels"] = [p["nPixels"], p["nPixels"]]
@@ -1028,6 +1052,11 @@ def renderSingleHaloFrames(
                 curInterpSnap0 = snapNum
 
             gc.collect()  # python will not automatically gc when reaching a MemoryError, only occasionally
+
+            if isinstance(cur_interp_data, dict) and isinstance(cur_interp_data["ids"], dict):
+                # no particles of this type (yet), dict['count'] == 0
+                renderMultiPanel(panels, plotConfig)  # empty
+                continue
 
             # cross-match by ids
             if match_i0_snap is None:

@@ -1937,9 +1937,10 @@ def paperPlots(a=False):
 
     # fig 1: equilibrium curves of new grackle tables
     if 0:
-        from temet.cosmo.cooling import grackle_equil_vs_Zz
+        from temet.cosmo.cooling import grackle_equil_vs_Zz, grackle_equil_vs_Zz_1panel
 
-        grackle_equil_vs_Zz()
+        # grackle_equil_vs_Zz()
+        grackle_equil_vs_Zz_1panel()
 
     # fig 2: simulation comparison meta-plot
     if 0:
@@ -2186,11 +2187,11 @@ def makeMovies():
         # vis_highres_region(sim, partType='dm')
 
 
-def makeMovieInterp(conf="gas", hInd=311384, pSplit=None):
+def makeMovieInterp(conf="gas", hInd=311384, haloID=0, pSplit=None):
     """Make interpolated movie frames (test)."""
     sim = simParams(run="structures", res=16, hInd=hInd, variant="ST15", redshift=5.5)
 
-    vis_movie_mpbsm_interp(sim, conf=conf, pSplit=pSplit)
+    vis_movie_mpbsm_interp(sim, haloID=haloID, conf=conf, pSplit=pSplit)
 
 
 def makeMoviesMulti():

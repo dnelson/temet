@@ -12,7 +12,7 @@ from scipy.signal import savgol_filter
 
 from temet.util.simParams import simParams
 from temet.vis.box import renderBox
-from temet.vis.halo import renderSingleHalo, renderSingleHaloFrames
+from temet.vis.halo import _smooth_mpb_pos, renderSingleHalo, renderSingleHaloFrames
 
 from ..util.helper import pSplit as pSplitArr
 from ..util.rotation import rotationMatrixFromAngleDirection
@@ -650,7 +650,8 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
     rotation = None
     autoLimits = False  # disable auto-scaling of stellar band images across frames
 
-    keyf = None
+    # gradually slow down to final time
+    keyf = [[5.6, 0.3], [5.5, 0.01]]
 
     if conf.startswith("gas"):
         pt1 = "gas"
@@ -660,7 +661,7 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
 
         if sim.hInd == 219612 and sim.res == 16:
             # slow-down first starburst at z ~ 11.8 - 11.2
-            keyf = [[12.0, 0.3], [11.8, 0.05], [11.2, 0.05], [11.0, 0.3]]
+            keyf = [[12.0, 0.3], [11.8, 0.05], [11.2, 0.05], [11.0, 0.3], [5.6, 0.3], [5.5, 0.01]]
         # if sim.hInd == 311384 and sim.res == 16:
         #    # slow-down one starburst (of many) at z ~ 11.8 - 11.2
         #    keyf = [[7.0, 0.3], [6.8, 0.05], [6.5, 0.05], [6.4, 0.3]]
@@ -682,7 +683,7 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
 
         if sim.hInd == 219612 and sim.res == 16 and "_perspective" in conf:
             # we will make a compositive movie with gas, stay consistent in timing
-            keyf = [[12.0, 0.3], [11.8, 0.05], [11.2, 0.05], [11.0, 0.3]]
+            keyf = [[12.0, 0.3], [11.8, 0.05], [11.2, 0.05], [11.0, 0.3], [5.6, 0.3], [5.5, 0.01]]
 
     # def _custom_sfr_label(panel):
     #    sP = panel["sP"]
@@ -735,16 +736,11 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
         # add a slow rotation with time
         numFramesPerRot = 360 * 4
 
-        if sim.hInd == 219612 and sim.res == 16:
-            # slow-down first starburst at z ~ 11.8 - 11.2
-            # for our perspective test movie, also for stars! (for compositing)
-            plotConfig.keyf = [[12.0, 0.3], [11.8, 0.05], [11.2, 0.05], [11.0, 0.3]]
-
         if "_parent" in conf:
             # size keyframes: parent box (TBD)
             # plotConfig.keyframeCamera = [[17.0, 500], [16.5, 500], [15.5, 500], [15.0, 30], [14.5, 30.0], [14.0, 2.0]]
             print("TODO")
-            plotConfig.keyf = [[12.0, 0.3], [11.8, 0.05], [11.2, 0.05], [11.0, 0.3]]  # same as above for testing
+            plotConfig.keyframeDt = [[12.0, 0.3], [11.8, 0.05], [11.2, 0.05], [11.0, 0.3]]  # same as above for testing
         else:
             # size keyframes: rapid zoom-in near z ~ 14.5
             plotConfig.keyframeCamera = [[14.5, 30.0], [14.0, 2.0]]  # [z0, size0], [z1, size1]
@@ -792,7 +788,7 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
             vmm1[1] += 1.0
 
     # render time evolution
-    if not conf.endswith("endrot"):
+    if "_endrot" not in conf:
         renderSingleHaloFrames(panels, plotConfig, locals(), curTask=pSplit[0], numTasks=pSplit[1])
     else:
         # render rotation (frozen in time) at final snapshot
@@ -804,10 +800,9 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
 
         # get center position consistent with interpolated frames
         mpb_loc = sim.quantMPB(sub_ind, quants=["SnapNum", "SubhaloPos"], add_ghosts=True, smooth=True)
-        for i in range(3):
-            mpb_loc["SubhaloPos"][:, i] = savgol_filter(mpb_loc["SubhaloPos"][:, i], 20, 1)
+        SubhaloPos = _smooth_mpb_pos(sim, mpb_loc)
         mpb_ind = np.where(mpb_loc["SnapNum"] == snap)[0][0]
-        rotCenter = mpb_loc["SubhaloPos"][mpb_ind, :]
+        rotCenter = SubhaloPos[mpb_ind, :]
 
         panels[0]["boxCenter"] = rotCenter
 
@@ -819,13 +814,18 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
             # rotation amount
             rotAngleDeg = 360.0 * (frameNum / numFramesPerRot)
 
-            # slow zoom-out? only if perspective
+            # slow zoom-in/out during final rotation (only if perspective)
             if "_perspective" in conf:
-                # zoom-out from size=2 to size=10
                 kf_frame0 = 30 * 5  # start after 5 seconds
                 kf_frame1 = 30 * 5 + int(numFramesPerRot / 2)  # slow zoom for half the remaining time (~20 sec)
                 kf_size0 = size
-                kf_size1 = size * 5.0
+                kf_size1 = size
+                if sim.hInd <= 219612:
+                    # zoom-out from size=2 to size=8
+                    kf_size1 = size * 4.0
+                if sim.hInd in [311384, 446076]:
+                    # zoom-in from size=2 to size=0.5
+                    kf_size1 = size * 0.25
 
                 cur_size = easeQuant(frameNum, kf_frame0, kf_frame1, kf_size0, kf_size1)
 

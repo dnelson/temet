@@ -610,21 +610,22 @@ def grackle_equil_vs_Zz():
     redshifts = [0.0, 6.0]
     metallicities = [1.0, 0.1, 0.001]  # linear solar
 
-    ssm = 0  # 3  # grackle.self_shielding_method (MCST value = 3)
+    ssm = 1  # 3  # grackle.self_shielding_method (MCST value = 3)
     PE = True  # photoelectric heating
     uvb = "fg20_shielded"
 
     # plot
     fig, (ax1, ax2) = plt.subplots(figsize=(figsize[0] * 0.75, figsize[1] * 1.5), nrows=2)
-    ax1.set_xlabel(r"Density [log cm$^{-3}$]")
-    ax1.set_ylabel(r"Temperature [log K]")
-    ax1.set_ylim([0.4, 4.1])
-    ax1.set_xlim([-3.0, 3.0])
 
     ax2.set_xlabel(r"Density [log cm$^{-3}$]")
     ax2.set_ylabel(r"P / k$_{\rm B}$ [log K cm$^{-3}$]")
     ax2.set_ylim([0.7, 5.5])
     ax2.set_xlim([-3.0, 3.0])
+
+    ax1.set_xlabel(r"Density [log cm$^{-3}$]")
+    ax1.set_ylabel(r"Temperature [log K]")
+    ax1.set_ylim([0.4, 4.1])
+    ax1.set_xlim([-3.0, 3.0])
 
     _add_temp_curves(ax1)
     _add_pres_curves(ax2)
@@ -642,6 +643,7 @@ def grackle_equil_vs_Zz():
 
             label = r"log(Z/Z$_{\rm sun}$) = %.0f" % (np.log10(metallicity)) if i == 0 else ""
             ls = linestyles[i * 2]
+
             ax1.plot(densities, T, ls=ls, lw=lw + 1)
             ax2.plot(densities, P, ls=ls, lw=lw + 1, label=label)
 
@@ -650,6 +652,52 @@ def grackle_equil_vs_Zz():
     labels += ["z = %s" % z for z in redshifts]
 
     ax2.legend(handles, labels, loc="upper left")
+
+    ax1.legend(loc="lower left")
+
+    fig.savefig(f"equil_vs_dens_{uvb}_ssm{ssm}_PE{int(PE)}.pdf")
+    plt.close(fig)
+
+def grackle_equil_vs_Zz_1panel():
+    """Plot equilibrium temperature curve as a function of density (varying Z, z) at fixed UVB/SSM."""
+    redshifts = [0.0, 6.0]
+    metallicities = [1.0, 0.1, 0.001]  # linear solar
+
+    ssm = 1  # 3  # grackle.self_shielding_method (MCST value = 3)
+    PE = True  # photoelectric heating
+    uvb = "fg20_shielded"
+
+    # plot
+    fig, ax1 = plt.subplots(figsize=(figsize[0] * 0.8, figsize[1] * 0.8))
+
+    ax1.set_xlabel(r"Density [log cm$^{-3}$]")
+    ax1.set_ylabel(r"Temperature [log K]")
+    ax1.set_ylim([0.4, 4.1])
+    ax1.set_xlim([-3.0, 3.0])
+
+    _add_temp_curves(ax1)
+
+    # loop over metallicities and redshifts
+    for i, redshift in enumerate(redshifts):
+        ax1.set_prop_cycle(None)
+
+        for _j, metallicity in enumerate(metallicities):
+            temp, pres, densities, _ = _load_equil_curves(metallicity, redshift, ssm, PE)
+
+            T = np.log10(temp[uvb])
+            P = np.log10(pres[uvb] / units.boltzmann)  # dyn/cm^2 / (dyn*cm/K) = K/cm^3
+
+            label = r"log(Z/Z$_{\rm sun}$) = %.0f" % (np.log10(metallicity)) if i == 0 else ""
+            ls = linestyles[i * 2]
+
+            ax1.plot(densities, T, ls=ls, lw=lw + 1, label=label)
+
+    # add second legend to single panel
+    handles = [plt.Line2D([0], [0], color="black", ls=linestyles[i * 2]) for i in range(len(redshifts))]
+    labels = ["z = %s" % z for z in redshifts]
+    legend = ax1.legend(handles, labels, loc="upper right", handlelength=0)
+    ax1.add_artist(legend)
+
     ax1.legend(loc="lower left")
 
     fig.savefig(f"equil_vs_dens_{uvb}_ssm{ssm}_PE{int(PE)}.pdf")
