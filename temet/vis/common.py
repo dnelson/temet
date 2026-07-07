@@ -85,6 +85,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
             circOpts["facecolor"] = facecolor
 
         countAdded = 0
+        indsAdded = []
         gcInd = 0
 
         if p["rotMatrix"] is not None:
@@ -126,6 +127,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
             ):
                 # draw and count
                 countAdded += 1
+                indsAdded.append(gcInd)
 
                 xPos = pos[gcInd, p["axes"][0]]
                 yPos = pos[gcInd, p["axes"][1]]
@@ -232,6 +234,8 @@ def addBoxMarkers(p, conf, ax, pExtent):
             ax.plot([0, p["sP"].boxSize], [0, 0], "-", lw=1.0, color="orange", alpha=0.8)
             ax.plot([0, p["sP"].boxSize], [gridSizeCode, gridSizeCode], "-", lw=1.0, color="orange", alpha=0.8)
             ax.plot([0, p["sP"].boxSize], [-gridSizeCode, -gridSizeCode], "--", lw=1.0, color="orange", alpha=0.8)
+
+        return np.array(indsAdded)
 
     if "plotHalos" in p and p["plotHalos"] > 0:
         # plotting N most massive halos in visible area
@@ -382,6 +386,43 @@ def addBoxMarkers(p, conf, ax, pExtent):
             smbh_rad = (3 + p["sP"].units.codeMassToLogMsun(smbh_mass)) * pxScale
 
             _addCirclesHelper(p, ax, smbh_pos, smbh_rad, p["plotBHs"], alpha=0.7, lw=3, color="#fff", facecolor="#000")
+
+    if "plotStars" in p and (str(p["plotStars"]) == "all" or p["plotStars"] > 0):
+        # plotting N most massive PartType4 in visible area
+        if p["sP"].numPart[p["sP"].ptNum("stars")] > 0:
+            # global load entire snapshot
+            star_pos = p["sP"].snapshotSubset("stars", "pos")
+            star_mass = p["sP"].snapshotSubset("stars", "Mass")
+
+            # simple size scaling for visibility: 2px + 1px per dex of log(m_smbh)
+            pxScale = p["boxSizeImg"][p["axes"][0]] / p["nPixels"][0]
+            star_rad = (0.6 + p["sP"].units.codeMassToLogMsun(star_mass)) * pxScale
+
+            inds = _addCirclesHelper(
+                p, ax, star_pos, star_rad, p["plotStars"], alpha=0.7, lw=1.0, color="#fff", facecolor="#fff"
+            )
+
+            N_SN_tot = 0
+            if len(inds):
+                N_SN = p["sP"].snapshotSubset("stars", "NumberOfSupernovae", inds=inds)
+                N_SN_tot = np.sum(N_SN)
+
+            if N_SN_tot > 0:
+                w = np.where(N_SN > 0)[0]
+                inds_SN = inds[w]
+                inds = _addCirclesHelper(
+                    p, ax, star_pos[inds_SN], star_rad[inds_SN], p["plotStars"], alpha=1.0, lw=1.0, color="red"
+                )
+
+            newLabels = [r"$N_{\star} = %d, N_{\rm SN} = %d$" % (len(inds), N_SN_tot)]
+
+            if "labelCustom" in p and p["labelCustom"] is not None:
+                if isinstance(p["labelCustom"], list):
+                    p["labelCustom"] += newLabels
+                else:
+                    p["labelCustom"] = [p["labelCustom"]] + newLabels
+            else:
+                p["labelCustom"] = newLabels
 
     if "plotHaloIDs" in p:
         # plotting halos/groups specified by ID, in visible area
@@ -542,6 +583,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
         if p["sP"].redshift >= 0.99 or np.abs(np.round(10 * p["sP"].redshift) / 10 - p["sP"].redshift) < 1e-2:
             zStr = r"z$\,$=$\,$%.1f" % p["sP"].redshift
         else:
+            zStr = r"z$\,$=$\,$%.2f" % p["sP"].redshift
+
+        if p["labelZ"] == "2digits":
             zStr = r"z$\,$=$\,$%.2f" % p["sP"].redshift
 
         if p["sP"].redshift < 1e-3:
@@ -1023,8 +1067,8 @@ def addCustomColorbars(
 
     height *= heightFac
 
-    # if hasattr(conf, "fontsize"):  # and conf.nCols == 1:
-    #    height *= (np.clip(conf.fontsize, 9, 32) / 9) ** (1 / 2)
+    if conf.nCols > 1:
+        height *= conf.nCols ** (1 / 3)
 
     if barAreaTop == 0.0:
         # bottom
@@ -1402,6 +1446,9 @@ def renderMultiPanel(panels, conf):
 
         if not conf.colorbars:
             barAreaHeight = 0.0
+
+        if nCols > 2:
+            barAreaHeight *= nCols ** (1 / 2)
 
         # check uniqueness of panel (partType,partField,valMinMax)'s
         pPartTypes = set()

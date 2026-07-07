@@ -7,6 +7,7 @@ https://arxiv.org/abs/xxxx.xxxxx
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from scipy.interpolate import make_interp_spline
 
 from temet.load.groupcat import catalog_field
 from temet.plot import snapshot, subhalos_evo
@@ -14,6 +15,7 @@ from temet.plot.config import colors, figsize, linestyles
 from temet.plot.util import colored_line, tableau10_colors
 from temet.util import simParams
 from temet.util.helper import running_median
+from temet.vis.halo import renderSingleHalo
 
 from .mcst import _get_existing_sims, _zoomSubhaloIDsToPlot, phase_diagram
 from .mcst_vis import vis_gallery_clusters, vis_single_galaxy
@@ -444,13 +446,11 @@ def star_cluster_histogram(sims, quant, nbins=30, sizefac=1.0):
         # plot histogram of evolved stack
         if quant == "mass":
             h = np.histogram(np.log10(masses_evo), bins=nbins, range=xlim)
-
-            # skip for mass
         if quant == "size":
             h = np.histogram(np.log10(sizes_evo), bins=nbins, range=xlim)
 
-            h = [h[0] / len(sims), h[1]]  # mean
-            ax.stairs(*h, fill=False, edgecolor="#000", lw=lw + 0.5, linestyle=":", alpha=0.8, label="Evolved")
+        h = [h[0] / len(sims), h[1]]  # mean
+        ax.stairs(*h, fill=False, edgecolor="#000", lw=lw + 0.5, linestyle=":", alpha=0.8, label="Evolved")
 
     # overplot resolution lines
     legend_loc = "upper right"
@@ -1608,8 +1608,8 @@ def size_mass_evo_clusters(color=None):
 
                 print(f"{mass_check = :.2f} Msun, {size_check = :.2f} pc")
 
-                acField = "Subhalo_Stars_Mass_SubLink_gal_Max"
-                ac = sim.auxCat(acField)
+                # acField = "Subhalo_Stars_Mass_SubLink_gal_Max"
+                # ac = sim.auxCat(acField)
 
                 print(f"{masses_evo[0] = :.2f} Msun, {sizes_evo[0] = :.2f} pc")
 
@@ -1706,6 +1706,117 @@ def size_mass_evo_clusters(color=None):
     subhalos_evo.tracks1d([sim], quant="surfdens_stars_pc", **opts_surfdens)
 
 
+def vis_evo_clusters(partField="metal_solar"):
+    """Time evolution of star clusters on the size-mass plane, compared to model tracks."""
+    # vis config
+    partType = "gas"
+    # partField = "temp"  # "density"  # "coldens_msunkpc2"
+
+    if partField == "dens":
+        valMinMax = [0.0, 4.5]  # None
+    if partField == "temp":
+        valMinMax = [2.0, 5.0]
+    if partField == "metal_solar":
+        valMinMax = [-3.0, -1.5]
+
+    # todo: radVel, confirm refPos and refVel working
+    # todo: "rad_FUV", "rad_LW", ionizing rad, t_freefall based on gasdens
+
+    # subhalo config
+    sim = simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5)
+
+    subIDs = [90, 91, 283, 364, 433, 472, 505, 560, 563, 661, 685]
+    subID = subIDs[0]
+
+    # plot config
+    labelSim = False
+    labelHalo = False
+    labelZ = "2digits"
+    labelScale = "physical"
+    method = "voronoi_slice"
+    nPixels = [400, 400]
+
+    plotStars = "all"  # individual markers
+
+    size = 10.0
+    sizeType = "pc"
+
+    # load MPB of a cluster (subhalo)
+    mpb = sim.loadMPB(subID, treeName="SubLink_gal")
+
+    stars_aform = sim.snapshotSubset("stars", "sftime", subhaloID=subID)  # member star (at z=5.5) mean age
+    stars_zform = 1 / stars_aform - 1
+    form_stars0 = sim.units.redshiftToAgeFlat(stars_zform.max())
+    form_stars1 = sim.units.redshiftToAgeFlat(stars_zform.min())
+
+    form_tage = sim.units.redshiftToAgeFlat(mpb["Redshift"][-1])  # first snap where cluster exists in tree
+
+    # identify some (snap,id) pairs to visualize, near the beginning of the tree
+    N_prior = 2
+    N = 3
+
+    snaps = mpb["SnapNum"][-N:][::-1]  # forward in time
+    sub_ids = mpb["SubfindID"][-N:][::-1]
+    redshifts = mpb["Redshift"][-N:][::-1]
+
+    # setup panels
+    panels = []
+
+    # N_prior panels prior to MPB existing (before star cluster forms)
+    pos_t = []
+    times = []
+    times_prior = []
+    snaps_prior = np.arange(snaps[0] - N_prior, snaps[0])
+
+    for snap, sub_ind in zip(snaps, sub_ids):
+        sim_loc = sim.copy()
+        sim_loc.setSnap(snap)
+        sub = sim_loc.subhalo(sub_ind)
+
+        pos_t.append(sub["SubhaloPos"])
+        times.append(sim_loc.tage)
+
+    pos_t = np.array(pos_t)
+
+    for i, snap in enumerate(snaps_prior):
+        sim_loc = sim.copy()
+        sim_loc.setSnap(snap)
+
+        # fit cubic spline and extrapolate to this time for pre-birth position
+        pos_prior = [make_interp_spline(times, pos_t[:, i], k=2)(sim_loc.tage) for i in range(3)]
+
+        dt0 = (sim_loc.tage - form_stars0) * 1000.0  # Myr
+        dt1 = (sim_loc.tage - form_stars1) * 1000.0  # Myr
+
+        label = r"$\Delta t_0 = %.1f$ Myr, $\Delta t_{\rm f} = %.1f$ Myr" % (dt0, dt1)
+        print(sim_loc.redshift, snap, sub_ind, pos_prior)
+
+        panels.append({"sP": sim_loc, "subhaloInd": sub_ind, "boxCenter": pos_prior, "labelCustom": label})
+
+    # N panels after MPB exists
+    for snap, sub_ind, redshift in zip(snaps, sub_ids, redshifts):
+        sim_loc = sim.copy()
+        sim_loc.setSnap(snap)
+
+        dt0 = (sim_loc.tage - form_stars0) * 1000.0  # Myr
+        dt1 = (sim_loc.tage - form_stars1) * 1000.0  # Myr
+        label = r"$\Delta t_0 = %.1f$ Myr, $\Delta t_{\rm f} = %.1f$ Myr" % (dt0, dt1)
+        print(redshift, snap, sub_ind, sim_loc.subhalo(sub_ind)["SubhaloPos"])
+
+        panels.append({"sP": sim_loc, "subhaloInd": sub_ind, "labelCustom": label})
+
+    # request render
+    class plotConfig:
+        plotStyle = "edged"
+        colorbars = True
+        rasterPx = nPixels
+        # fontsize = 36
+        nRows = 1
+        saveFilename = f"star_cluster_evo_{sim.simName}_{sim.snap}_{subID}_{partField}.pdf"
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
+
+
 # -------------------------------------------------------------------------------------------------
 
 
@@ -1723,11 +1834,11 @@ def paperPlots(a=False):
 
     sims = []
     # sims.append(simParams("structures", hInd=1958, res=14, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=5072, res=14, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=15581, res=14, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=23908, res=14, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5))
-    sims.append(simParams("structures", hInd=73172, res=15, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=5072, res=14, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=15581, res=14, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=23908, res=14, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5))
+    # sims.append(simParams("structures", hInd=73172, res=15, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=446076, res=16, variant="ST15", redshift=5.5))
@@ -1738,8 +1849,8 @@ def paperPlots(a=False):
 
     # fig 1: single large galaxy image
     if 0:
-        sim = simParams("structures", hInd=23908, res=14, variant="ST14", redshift=5.5, haloInd=0)  # original
-        # sim = simParams("structures", hInd=23908, res=15, variant="ST15", redshift=10.0, haloInd=0)
+        # sim = simParams("structures", hInd=23908, res=14, variant="ST14", redshift=5.5, haloInd=0)  # original
+        sim = simParams("structures", hInd=219612, res=16, variant="ST15", redshift=6.1, haloInd=0)
         vis_single_galaxy(sim)
 
     # fig 2: clusters: mass function
@@ -1890,23 +2001,29 @@ def paperPlots(a=False):
 
     # fig 12: evolution tracks on size-mass plane (color by age, redshift, or fgas)
     # TODO: alternate model approach ~RAPSTER (https://github.com/Kkritos/Rapster) (https://arxiv.org/abs/2210.10055)
+    # see also https://arxiv.org/abs/2202.06961 (Section 3.2)
+    # see also https://arxiv.org/abs/2606.14852 (incl. Appendix B)
     if 0 or a:
         size_mass_evo_clusters()
         size_mass_evo_clusters(color="redshift")
 
-    # fig 13: kennicut-schmidt relation (global)
-    # fig todo: Sigma_SFR (e.g. Ceverino+26 shows JWST data comparisons)
-
-    # fig 13: kennicut-schmidt relation (local/spatially resolved)
+    # fig 13: time evolution vis sequence, from pre-birth to post-birth (gas dens, vrad, tff_local, Q, stars, ...)
+    if 1 or a:
+        # todo: see Taylor+ Nature fig, and Ma+ figs (and movies) for ideas
+        vis_evo_clusters()
 
     # fig todo: radius and radial velocity at formation time (use birth values of member stars?) (or just tree?)
-
-    # vis todo: time evolution from pre-birth to post-birth (gas dens, vrad, tff_local, Q, stars, ...)
 
     # fig todo: quantitative assessment of reason for formation (e.g. self-grav instability, compression, ...)
 
     # fig todo: any cluster population stat, e.g. mass func slope, size-mass slope, vs. halo mass (color by redshift)
     #  "universality" or not?
+    # see https://arxiv.org/abs/2605.27509 (Fig 5, Eqn 11)
+
+    # any mergers i.e. hierarchical assembly?
+
+    # any disruption?
+    # tidal tails: https://arxiv.org/abs/2606.06248
 
     # ---
 

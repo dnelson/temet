@@ -188,7 +188,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     if partField in ["dens", "density", "dmdens"]:
         grid = sP.units.codeDensToPhys(grid, cgs=True, numDens=True)
-        config["label"] = r"Mean %s Volume Density [log cm$^{-3}$]" % ptStr
+        config["label"] = r"%s Density [log cm$^{-3}$]" % ptStr
         config["ctName"] = "jet"
         if sP.isPartType(partType, "dm"):
             config["ctName"] = "dmdens_tng"
