@@ -410,7 +410,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
             if N_SN_tot > 0:
                 w = np.where(N_SN > 0)[0]
                 inds_SN = inds[w]
-                inds = _addCirclesHelper(
+                _addCirclesHelper(
                     p, ax, star_pos[inds_SN], star_rad[inds_SN], p["plotStars"], alpha=1.0, lw=1.0, color="red"
                 )
 

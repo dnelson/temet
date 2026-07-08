@@ -17,8 +17,9 @@ from ..util.rotation import rotateCoordinateArray
 
 
 try:
+    from cuda.pathfinder import DynamicLibNotFoundError
     from numba import cuda
-except ImportError:
+except (ImportError, DynamicLibNotFoundError):
     print("Warning: Numba CUDA not available. Tetrahedral rendering requires CUDA.")
 
 # --- gpu kernels ---

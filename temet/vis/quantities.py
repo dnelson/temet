@@ -70,6 +70,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
         "HI_BR",
         "HI_GK",
         "HI_KMT",
+        "xhi",
         "xray",
         "xray_lum",
         "sz_yparam",
@@ -358,6 +359,18 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         if "dust" in partField:
             config["label"] = r"N$_{\rm dust}$ [log cm$^{-2}$]"
             config["ctName"] = "copper"
+
+    if partField in ["xhi"]:
+        grid = grid
+        logMin = False
+
+        config["label"] = r"Neutral Hydrogen Fraction x$_{\rm HI}$"
+        config["ctName"] = "copper"
+
+    if partField in ["tff_local"]:
+        grid = grid
+        config["label"] = r"Local Free-fall Timescale [log Myr]"
+        config["ctName"] = "turbo"
 
     if partField in ["xray", "xray_lum", "xray_lum_05-2kev", "xray_lum_0.5-2.0kev", "xray_lum_0.5-5.0kev"]:
         grid = sP.units.codeColDensToPhys(grid, totKpc2=True)
@@ -751,9 +764,11 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     assert np.count_nonzero(np.isnan(grid)) == 0, "ERROR: Final grid contains NaN."
 
     if np.min(grid) == 0 and np.max(grid) == 0:
-        # this is also a catastropic failure (i.e. mis-centering, but return blank image)
+        # this is perhaps a catastropic failure (i.e. mis-centering) or true (e.g. xhi == 0), return blank image
         # print('Warning: Final grid is uniformly zero.')
         data_grid = grid.copy()
+        if logMin:
+            grid -= 99  # off the bottom edge of any colorbar
         config["vMM_guess"] = [0.0, 1.0]
     else:
         # compute a guess for an adaptively clipped heuristic [min,max] bound

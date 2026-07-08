@@ -164,7 +164,7 @@ def accel_ckpch_gyr2(sim, partType, field, args):
 
     acc *= sim.units.kmS_in_kpcGyr**2  # (kpc/Gyr)^2/kpc = kpc/Gyr^2
     acc *= sim.HubbleParam / sim.scalefac  # (ckpc/h)/Gyr^2 (make units consistent with pos)
-    assert 0 # units do not seem correct, accelerations are roughly 1/a^4 too large (at z~10)
+    assert 0  # units do not seem correct, accelerations are roughly 1/a^4 too large (at z~10)
 
     return acc
 

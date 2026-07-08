@@ -2104,9 +2104,6 @@ def paperPlots(a=False):
         vis_single_galaxy(sim, size=4.0, conf=2)
         vis_single_galaxy(sim, size=4.0, conf=3)
 
-        # for i in range(1, 14):
-        #    vis_single_large(sim, size=4.0, conf=i)
-
         # vis_single_galaxy(sim, noSats=True)
         # vis_single_halo(sim, haloID=0)
         # vis_gallery_manyfields(sim, haloID=0)

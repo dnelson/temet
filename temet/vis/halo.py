@@ -76,7 +76,6 @@ def haloImgSpecs(
     else:
         # use the smoothed MPB properties to get halo properties at this snapshot
         assert sizeType not in ["rHalfMass", "r500", "rHalfMassStars"]  # not implemented
-        assert (sP.refPos is None) and (sP.refPos is None)  # will overwrite
 
         if sP.snap < mpb["SnapNum"].min():
             # for very early times, linearly interpolate properties at start of tree back to t=0
@@ -136,9 +135,11 @@ def haloImgSpecs(
                 [np.interp(kwargs["interpTime"], mpb_times[inds], mpb["SubhaloVel"][inds, i]) for i in range(3)]
             )
 
-        # set refPos and refVel, used e.g. for halo-centric quantities
-        sP.refPos = boxCenter.copy()
-        sP.refVel = galVel.copy()
+        # set refPos and refVel (unless already user-specified), used e.g. for halo-centric quantities
+        if sP.refPos is None:
+            sP.refPos = boxCenter.copy()
+        if sP.refVel is None:
+            sP.refVel = galVel.copy()
 
     boxCenter += np.array(cenShift)
 
@@ -420,6 +421,8 @@ def renderSingleHalo(panels_in, plotConfig=None, localVars=None, skipExisting=Fa
 
         if p["boxCenter"] is None:
             p["boxCenter"] = boxCenter_halo
+        else:
+            print("Warning: Overriding halo boxCenter with user-specified value.")
 
         if p["rotMatrix"] is None:
             p["rotMatrix"], p["rotCenter"] = haloRotMatrix, haloRotCenter

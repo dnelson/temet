@@ -1718,9 +1718,14 @@ def vis_evo_clusters(partField="radvel"):
         valMinMax = [2.0, 5.0]
     if partField == "metal_solar":
         valMinMax = [-3.0, -1.5]
-
-    # todo: radVel, confirm refPos and refVel working
-    # todo: "rad_FUV", "rad_LW", ionizing rad, t_freefall based on gasdens
+    if partField == "radvel":
+        valMinMax = [-10, 10]
+    if partField == "rad_FUV":
+        valMinMax = [-10.7, -8.3]
+    if partField == "xhi":
+        valMinMax = [0.0, 0.75]  # None  # [-0.3, 0.0]
+    if partField == "tff_local":
+        valMinMax = [-1.0, 1.0]
 
     # subhalo config
     sim = simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5)
@@ -1764,8 +1769,8 @@ def vis_evo_clusters(partField="radvel"):
 
     # N_prior panels prior to MPB existing (before star cluster forms)
     pos_t = []
+    vel_t = []
     times = []
-    times_prior = []
     snaps_prior = np.arange(snaps[0] - N_prior, snaps[0])
 
     for snap, sub_ind in zip(snaps, sub_ids):
@@ -1774,24 +1779,31 @@ def vis_evo_clusters(partField="radvel"):
         sub = sim_loc.subhalo(sub_ind)
 
         pos_t.append(sub["SubhaloPos"])
+        vel_t.append(sub["SubhaloVel"])
         times.append(sim_loc.tage)
 
     pos_t = np.array(pos_t)
+    vel_t = np.array(vel_t)
 
     for i, snap in enumerate(snaps_prior):
         sim_loc = sim.copy()
         sim_loc.setSnap(snap)
 
         # fit cubic spline and extrapolate to this time for pre-birth position
-        pos_prior = [make_interp_spline(times, pos_t[:, i], k=2)(sim_loc.tage) for i in range(3)]
+        loc_pos = np.array([make_interp_spline(times, pos_t[:, i], k=2)(sim_loc.tage) for i in range(3)])
+        loc_vel = np.array([make_interp_spline(times, vel_t[:, i], k=2)(sim_loc.tage) for i in range(3)])
 
         dt0 = (sim_loc.tage - form_stars0) * 1000.0  # Myr
         dt1 = (sim_loc.tage - form_stars1) * 1000.0  # Myr
 
         label = r"$\Delta t_0 = %.1f$ Myr, $\Delta t_{\rm f} = %.1f$ Myr" % (dt0, dt1)
-        print(sim_loc.redshift, snap, sub_ind, pos_prior)
+        print(sim_loc.redshift, snap, sub_ind, loc_pos)
 
-        panels.append({"sP": sim_loc, "subhaloInd": sub_ind, "boxCenter": pos_prior, "labelCustom": label})
+        panel = {"sP": sim_loc, "subhaloInd": sub_ind, "boxCenter": loc_pos, "labelCustom": label}
+        panel["sP"].refPos = loc_pos
+        panel["sP"].refVel = loc_vel
+
+        panels.append(panel)
 
     # N panels after MPB exists
     for snap, sub_ind, redshift in zip(snaps, sub_ids, redshifts):
@@ -1803,7 +1815,15 @@ def vis_evo_clusters(partField="radvel"):
         label = r"$\Delta t_0 = %.1f$ Myr, $\Delta t_{\rm f} = %.1f$ Myr" % (dt0, dt1)
         print(redshift, snap, sub_ind, sim_loc.subhalo(sub_ind)["SubhaloPos"])
 
-        panels.append({"sP": sim_loc, "subhaloInd": sub_ind, "labelCustom": label})
+        panel = {"sP": sim_loc, "subhaloInd": sub_ind, "labelCustom": label}
+
+        # set reference pos/vel e.g. for radial velocity
+        sub = panel["sP"].subhalo(panel["subhaloInd"])
+
+        panel["sP"].refPos = sub["SubhaloPos"]
+        panel["sP"].refVel = sub["SubhaloVel"]
+
+        panels.append(panel)
 
     # request render
     class plotConfig:
@@ -2008,9 +2028,14 @@ def paperPlots(a=False):
         size_mass_evo_clusters(color="redshift")
 
     # fig 13: time evolution vis sequence, from pre-birth to post-birth (gas dens, vrad, tff_local, Q, stars, ...)
-    if 1 or a:
-        # todo: see Taylor+ Nature fig, and Ma+ figs (and movies) for ideas
-        vis_evo_clusters()
+    if 0 or a:
+        vis_evo_clusters("dens")
+        vis_evo_clusters("temp")
+        vis_evo_clusters("metal_solar")
+        vis_evo_clusters("radvel")
+        vis_evo_clusters("rad_FUV")
+        vis_evo_clusters("xhi")
+        vis_evo_clusters("tff_local")
 
     # fig todo: radius and radial velocity at formation time (use birth values of member stars?) (or just tree?)
 

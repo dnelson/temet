@@ -494,7 +494,7 @@ def stellar3BandCompositeImage(
 
             for i in range(3):
                 minValLog[i] = np.clip(minValLog[i], maxValLog[i] - 4.0, np.inf)
-            print(" auto limits: ", percs, minValLog, maxValLog)
+            # print(" auto limits: ", percs, minValLog, maxValLog)
         else:
             minValLog = np.array([-1.7, -1.7, -1.7])
             maxValLog = np.array([1.2, 1.3, 1.0])
