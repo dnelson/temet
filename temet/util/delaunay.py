@@ -20,11 +20,11 @@ try:
     from cuda.pathfinder import DynamicLibNotFoundError
     from numba import cuda
 except (ImportError, DynamicLibNotFoundError):
-    print("Warning: Numba CUDA not available. Tetrahedral rendering requires CUDA.")
 
-    def cuda(f):
+    def cuda(f, device=None):
         """Dummy decorator."""
-        return f
+        raise Exception("Error: Numba CUDA not available. Tetrahedral rendering requires CUDA.")
+
     cuda.jit = cuda
 
 # --- gpu kernels ---
