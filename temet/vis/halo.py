@@ -497,16 +497,38 @@ def _smooth_mpb_pos(sP, mpb, plot=False):
     sigmoid = np.hstack((sigmoid[::-1], np.zeros(SubhaloPos.shape[0] - sigmoid.size)))
     SubhaloPosNew = (1 - sigmoid[:, None]) * SubhaloPos + sigmoid[:, None] * SubhaloPosOrig
 
+    # adjust means to match
+    orig_meanpos = np.mean(SubhaloPosOrig, axis=0)
+    new_meanpos = np.mean(SubhaloPosNew, axis=0)
+    SubhaloPosNew2 = SubhaloPosNew + (orig_meanpos - new_meanpos)
+
+    # fit line to original (for each direction), remove this linear trend from new
+    SubhaloPosNew3 = SubhaloPosNew2.copy()
+
+    for i in range(3):
+        diff_i = SubhaloPosNew2[::-1, i] - SubhaloPosOrig[::-1, i]
+        f_pos = np.poly1d(np.polyfit(mpb["SnapNum"], diff_i, deg=1))
+        new_diff_i = f_pos(mpb["SnapNum"])  # - orig_meanpos[i]
+
+        # remove linear trend from new
+        SubhaloPosNew3[:, i] -= new_diff_i[::-1]
+
+    # re-mix with original (make sure we end up at the right place)
+    SubhaloPosNew4 = (1 - sigmoid[:, None]) * SubhaloPosNew3 + sigmoid[:, None] * SubhaloPosOrig
+
     if plot:
         # debugging
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots(3, 1, figsize=(16, 20))
-        w = np.where(mpb_times >= 1.0)
+        w = np.where(mpb_times > 0)  # np.where(mpb_times >= 1.0)
         for i in range(3):
             ax[i].plot(mpb_times[w], SubhaloPosOrig[::-1, i][w] - sP.boxSize / 2, label="orig")
             ax[i].plot(mpb_times[w], SubhaloPos[::-1, i][w] - sP.boxSize / 2, label="smoothed")
             ax[i].plot(mpb_times[w], SubhaloPosNew[::-1, i][w] - sP.boxSize / 2, label="mixed")
+            ax[i].plot(mpb_times[w], SubhaloPosNew2[::-1, i][w] - sP.boxSize / 2, label="mixed2")
+            ax[i].plot(mpb_times[w], SubhaloPosNew3[::-1, i][w] - sP.boxSize / 2, label="mixed3")
+            ax[i].plot(mpb_times[w], SubhaloPosNew4[::-1, i][w] - sP.boxSize / 2, label="mixed4")
             ax[i].set_ylabel(f"pos[{i}] - boxcen")
             ax[i].legend()
 
@@ -517,6 +539,9 @@ def _smooth_mpb_pos(sP, mpb, plot=False):
         for i in range(3):
             ax[i].plot(mpb_times, SubhaloPos[::-1, i] - SubhaloPosOrig[::-1, i], label="smoothed - orig")
             ax[i].plot(mpb_times, SubhaloPosNew[::-1, i] - SubhaloPosOrig[::-1, i], label="mixed - orig")
+            ax[i].plot(mpb_times, SubhaloPosNew2[::-1, i] - SubhaloPosOrig[::-1, i], label="mixed2 - orig")
+            ax[i].plot(mpb_times, SubhaloPosNew3[::-1, i] - SubhaloPosOrig[::-1, i], label="mixed3 - orig")
+            ax[i].plot(mpb_times, SubhaloPosNew4[::-1, i] - SubhaloPosOrig[::-1, i], label="mixed4 - orig")
             ax[i].set_ylabel(f"delta pos[{i}]")
             ax[i].legend()
 
@@ -528,13 +553,16 @@ def _smooth_mpb_pos(sP, mpb, plot=False):
             ax[i].plot(mpb_times[1:], np.diff(SubhaloPosOrig[::-1, i]), label="orig")
             ax[i].plot(mpb_times[1:], np.diff(SubhaloPos[::-1, i]), label="smoothed")
             ax[i].plot(mpb_times[1:], np.diff(SubhaloPosNew[::-1, i]), label="mixed")
+            ax[i].plot(mpb_times[1:], np.diff(SubhaloPosNew2[::-1, i]), label="mixed2")
+            ax[i].plot(mpb_times[1:], np.diff(SubhaloPosNew3[::-1, i]), label="mixed3")
+            ax[i].plot(mpb_times[1:], np.diff(SubhaloPosNew4[::-1, i]), label="mixed4")
             ax[i].set_ylabel(f"delta pos[{i}]")
             ax[i].legend()
 
         fig.savefig("mpb_pos_debug3.pdf")
         plt.close(fig)
 
-    return SubhaloPosNew  # mixed
+    return SubhaloPosNew4
 
 
 def renderSingleHaloFrames(

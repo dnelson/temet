@@ -562,7 +562,7 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
     size = 2.0
     if sim.hInd < 100000:
         size = 3.0
-    if sim.hInd < 20000:
+    if sim.hInd < 40000: # could move to 20000 for L16 i.e. perhaps zoom back in to 3.0 for h31619_L16
         size = 4.0
     if sim.hInd < 6000:
         size = 5.0

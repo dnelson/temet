@@ -21,7 +21,7 @@ try:
     from numba import cuda
 except (ImportError, DynamicLibNotFoundError):
 
-    def cuda(f, device=None):
+    def cuda(device=None):
         """Dummy decorator."""
         raise Exception("Error: Numba CUDA not available. Tetrahedral rendering requires CUDA.")
 

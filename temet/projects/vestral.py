@@ -2283,9 +2283,9 @@ def makeMovies():
         # vis_highres_region(sim, partType='dm')
 
 
-def makeMovieInterp(conf="gas", hInd=311384, haloID=0, pSplit=None):
+def makeMovieInterp(conf="gas", hInd=311384, res=16, haloID=0, pSplit=None):
     """Make interpolated movie frames (test)."""
-    sim = simParams(run="structures", res=16, hInd=hInd, variant="ST15", redshift=5.5)
+    sim = simParams(run="structures", res=res, hInd=hInd, variant="ST15", redshift=5.5)
 
     vis_movie_mpbsm_interp(sim, haloID=haloID, conf=conf, pSplit=pSplit)
 
