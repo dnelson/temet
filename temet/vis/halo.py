@@ -9,7 +9,7 @@ from os.path import isfile
 
 import numpy as np
 from numba import set_num_threads
-from scipy.interpolate import interp1d, make_interp_spline
+from scipy.interpolate import make_interp_spline
 from scipy.signal import savgol_filter
 
 from ..util.helper import (
@@ -72,7 +72,7 @@ def haloImgSpecs(
         haloR500 = gr["Group_R_Crit500"]
         galHalfMassRad = sh["SubhaloHalfmassRad"]
         galHalfMassRadStars = sh["SubhaloHalfmassRadType"][sP.ptNum("stars")]
-        boxCenter = sh["SubhaloPos"][axes + [3 - axes[0] - axes[1]]]  # permute into axes ordering
+        boxCenter = sh["SubhaloPos"]
     else:
         # use the smoothed MPB properties to get halo properties at this snapshot
         assert sizeType not in ["rHalfMass", "r500", "rHalfMassStars"]  # not implemented
@@ -82,24 +82,38 @@ def haloImgSpecs(
             if rotation is not None:
                 raise Exception("Cannot use rotation (or any group-ordered load) prior to mpb start.")
 
-            fitSize = np.max([int(mpb["SnapNum"].size * 0.02), 3])
+            fitSize = np.max([int(mpb["SnapNum"].size * 0.1), 3])
             fitN = 1  # polynomial order, 1=linear, 2=quadratic
 
-            fitX = mpb["SnapNum"][-fitSize:]
+            tage = sP.units.redshiftToAgeFlat(mpb["redshift"])
+            fitX = tage[-fitSize:]
 
             sP.subhaloInd = 0
-            haloVirRad = np.poly1d(np.polyfit(fitX, mpb["Group_R_Crit200"][-fitSize:], fitN))(sP.snap)
-            galHalfMassRad = np.poly1d(np.polyfit(fitX, mpb["SubhaloHalfmassRad"][-fitSize:], fitN))(sP.snap)
-            galHalfMassRadStars = np.poly1d(
+
+            t_interp = kwargs["interpTime"] if "interpTime" in kwargs else sP.tage
+
+            fit_r200 = np.poly1d(np.polyfit(fitX, mpb["Group_R_Crit200"][-fitSize:], fitN))
+            haloVirRad = np.clip(fit_r200(t_interp), 0, None)
+
+            fit_rhalf = np.poly1d(np.polyfit(fitX, mpb["SubhaloHalfmassRad"][-fitSize:], fitN))
+            galHalfMassRad = np.clip(fit_rhalf(t_interp), 0, None)
+
+            fit_rhalfstars = np.poly1d(
                 np.polyfit(fitX, mpb["SubhaloHalfmassRadType"][-fitSize:, sP.ptNum("stars")], fitN)
-            )(sP.snap)
+            )
+            galHalfMassRadStars = np.clip(fit_rhalfstars(t_interp), 0, None)
 
             boxCenter = np.zeros(3, dtype="float32")
             galVel = np.zeros(3, dtype="float32")
 
             for i in range(3):
-                boxCenter[i] = np.poly1d(np.polyfit(fitX, mpb["SubhaloPos"][-fitSize:, i], fitN))(sP.snap)
-                galVel[i] = np.poly1d(np.polyfit(fitX, mpb["SubhaloVel"][-fitSize:, i], fitN))(sP.snap)
+                fit_pos = np.poly1d(np.polyfit(fitX, mpb["SubhaloPos"][-fitSize:, i], fitN))
+                boxCenter[i] = fit_pos(t_interp)
+
+                fit_vel = np.poly1d(np.polyfit(fitX, mpb["SubhaloVel"][-fitSize:, i], fitN))
+                galVel[i] = fit_vel(t_interp)
+
+            sP.correctPeriodicPosVecs(boxCenter)
 
         else:
             # for times within actual MPB, use smoothed properties directly
@@ -109,37 +123,36 @@ def haloImgSpecs(
             sP.subhaloInd = mpb["SubfindID"][ind[0]]
             haloVirRad = mpb["Group_R_Crit200"][ind[0]]
             boxCenter = mpb["SubhaloPos"][ind[0], :]
-            boxCenter = boxCenter[axes + [3 - axes[0] - axes[1]]]  # permute into axes ordering
             galHalfMassRad = mpb["SubhaloHalfmassRad"][ind[0]]
             galHalfMassRadStars = mpb["SubhaloHalfmassRadType"][ind[0], sP.ptNum("stars")]
             galVel = mpb["SubhaloVel"][ind[0], :]
 
-        # time interpolation between snapshots?
-        if "interpTime" in kwargs and ind[0] > 0:
-            assert sP.snap >= mpb["SnapNum"].min()  # implement for interp before start of MPB
+            # time interpolation between snapshots?
+            assert ind[0] > 0 or sP.snap == sP.numSnaps - 1, "Avoid this case, do not interp on last snap."
 
-            mpb_times = sP.units.redshiftToAgeFlat(mpb["redshift"])
-            inds = [ind[0], ind[0] - 1]  # mpb is ordered in increasing snapnum i.e. decreasing time
-            assert inds[1] >= 0, "Avoid this case, do not interp on last snap in general."
+            if "interpTime" in kwargs and ind[0] > 0:
+                mpb_times = sP.units.redshiftToAgeFlat(mpb["redshift"])
+                inds = [ind[0], ind[0] - 1]  # mpb is ordered in increasing snapnum i.e. decreasing time
 
-            haloVirRad = np.interp(kwargs["interpTime"], mpb_times[inds], mpb["Group_R_Crit200"][inds])
-            boxCenter = np.array(
-                [np.interp(kwargs["interpTime"], mpb_times[inds], mpb["SubhaloPos"][inds, i]) for i in range(3)]
-            )
-            boxCenter = boxCenter[axes + [3 - axes[0] - axes[1]]]  # permute into axes ordering
-            galHalfMassRad = np.interp(kwargs["interpTime"], mpb_times[inds], mpb["SubhaloHalfmassRad"][inds])
-            galHalfMassRadStars = np.interp(
-                kwargs["interpTime"], mpb_times[inds], mpb["SubhaloHalfmassRadType"][inds, sP.ptNum("stars")]
-            )
-            galVel = np.array(
-                [np.interp(kwargs["interpTime"], mpb_times[inds], mpb["SubhaloVel"][inds, i]) for i in range(3)]
-            )
+                haloVirRad = np.interp(kwargs["interpTime"], mpb_times[inds], mpb["Group_R_Crit200"][inds])
+                boxCenter = np.array(
+                    [np.interp(kwargs["interpTime"], mpb_times[inds], mpb["SubhaloPos"][inds, i]) for i in range(3)]
+                )
+                galHalfMassRad = np.interp(kwargs["interpTime"], mpb_times[inds], mpb["SubhaloHalfmassRad"][inds])
+                galHalfMassRadStars = np.interp(
+                    kwargs["interpTime"], mpb_times[inds], mpb["SubhaloHalfmassRadType"][inds, sP.ptNum("stars")]
+                )
+                galVel = np.array(
+                    [np.interp(kwargs["interpTime"], mpb_times[inds], mpb["SubhaloVel"][inds, i]) for i in range(3)]
+                )
 
         # set refPos and refVel (unless already user-specified), used e.g. for halo-centric quantities
         if sP.refPos is None:
             sP.refPos = boxCenter.copy()
         if sP.refVel is None:
             sP.refVel = galVel.copy()
+
+    boxCenter = boxCenter[axes + [3 - axes[0] - axes[1]]]  # permute into axes ordering
 
     boxCenter += np.array(cenShift)
 
@@ -451,26 +464,77 @@ def renderSingleHalo(panels_in, plotConfig=None, localVars=None, skipExisting=Fa
     renderMultiPanel(panels, plotConfig)
 
 
-def _smooth_mpb_pos(sP, mpb):
+def _smooth_mpb_pos(sP, mpb, plot=False):
     """Additional smoothing on a MPB position, to avoid jitters and edge effects."""
+    sg_size = 20
+
+    SubhaloPosOrig = mpb["SubhaloPos"].copy()
     SubhaloPos = mpb["SubhaloPos"].copy()
 
+    # to avoid edge effects, linearly extrapolate forward in time first
+    mpb_times = sP.units.redshiftToAgeFlat(mpb["redshift"])[::-1]  # time forwards
+    N_add = sg_size // 2 + 1
+    dt = mpb_times[-1] - mpb_times[-2]  # use constant "future snapshot spacing"
+
+    mpb_times_new = mpb_times[-1] + np.linspace(dt, dt * N_add, num=N_add)
+
     for i in range(3):
-        sg_size = 20
-        pos_1d = SubhaloPos[:, i].copy()  # time backwards
-        # to avoid edge effects, linearly interpolate forward in time first
-        mpb_times = sP.units.redshiftToAgeFlat(mpb["redshift"])[::-1]  # time forwards
-        N_add = sg_size // 2 + 1
-        dt = mpb_times[-1] - mpb_times[-2]
-        mpb_times_new = mpb_times[-1] + np.linspace(dt, dt * N_add, num=N_add)
-        f_pos = interp1d(mpb_times, pos_1d[::-1], kind="linear", fill_value="extrapolate")
+        pos_1d = SubhaloPosOrig[:, i].copy()  # time backwards
+        pos_1d = pos_1d[::-1]  # time forwards
+
+        f_pos = np.poly1d(np.polyfit(mpb_times[-N_add:], pos_1d[-N_add:], deg=1))
         new_pos_1d = f_pos(mpb_times_new)
+
         # savgol smooth
-        pos_1d_b = np.hstack((new_pos_1d[::-1], pos_1d))  # time backwards
+        pos_1d_b = np.hstack((new_pos_1d[::-1], SubhaloPos[:, i]))  # time backwards
         pos_1d_b_sm = savgol_filter(pos_1d_b, sg_size, 1)[N_add:]
         SubhaloPos[:, i] = pos_1d_b_sm
 
-    return SubhaloPos
+    # now mix the smoothed and unsmoothed positions together, with a sigmoid transition
+    # near the end (when sg filter window size causes boundary effects)
+    x = np.linspace(0, 1, sg_size // 2)
+    sigmoid = 1 / (1 + np.exp(-10 * (x - 0.5)))
+    sigmoid = np.hstack((sigmoid[::-1], np.zeros(SubhaloPos.shape[0] - sigmoid.size)))
+    SubhaloPosNew = (1 - sigmoid[:, None]) * SubhaloPos + sigmoid[:, None] * SubhaloPosOrig
+
+    if plot:
+        # debugging
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots(3, 1, figsize=(16, 20))
+        w = np.where(mpb_times >= 1.0)
+        for i in range(3):
+            ax[i].plot(mpb_times[w], SubhaloPosOrig[::-1, i][w] - sP.boxSize / 2, label="orig")
+            ax[i].plot(mpb_times[w], SubhaloPos[::-1, i][w] - sP.boxSize / 2, label="smoothed")
+            ax[i].plot(mpb_times[w], SubhaloPosNew[::-1, i][w] - sP.boxSize / 2, label="mixed")
+            ax[i].set_ylabel(f"pos[{i}] - boxcen")
+            ax[i].legend()
+
+        fig.savefig("mpb_pos_debug.pdf")
+        plt.close(fig)
+
+        fig, ax = plt.subplots(3, 1, figsize=(16, 20))
+        for i in range(3):
+            ax[i].plot(mpb_times, SubhaloPos[::-1, i] - SubhaloPosOrig[::-1, i], label="smoothed - orig")
+            ax[i].plot(mpb_times, SubhaloPosNew[::-1, i] - SubhaloPosOrig[::-1, i], label="mixed - orig")
+            ax[i].set_ylabel(f"delta pos[{i}]")
+            ax[i].legend()
+
+        fig.savefig("mpb_pos_debug2.pdf")
+        plt.close(fig)
+
+        fig, ax = plt.subplots(3, 1, figsize=(16, 20))
+        for i in range(3):
+            ax[i].plot(mpb_times[1:], np.diff(SubhaloPosOrig[::-1, i]), label="orig")
+            ax[i].plot(mpb_times[1:], np.diff(SubhaloPos[::-1, i]), label="smoothed")
+            ax[i].plot(mpb_times[1:], np.diff(SubhaloPosNew[::-1, i]), label="mixed")
+            ax[i].set_ylabel(f"delta pos[{i}]")
+            ax[i].legend()
+
+        fig.savefig("mpb_pos_debug3.pdf")
+        plt.close(fig)
+
+    return SubhaloPosNew  # mixed
 
 
 def renderSingleHaloFrames(
@@ -518,7 +582,7 @@ def renderSingleHaloFrames(
     ctName      = None            # if not None (automatic based on field), specify colormap name
     plotSubhalos = False          # plot halfmass circles for the N most massive subhalos in this (sub)halo
     plotBHs     = False           # plot markers for the N most massive SMBHs in this (sub)halo
-    plotStars   = False         # plot markers for individual massive stars
+    plotStars   = False           # plot markers for individual massive stars
     relCoords   = True            # if plotting x,y,z coordinate labels, make them relative to box/halo center
     projType    = 'ortho'         # projection type, 'ortho', 'equirectangular', 'mollweide'
     projParams  = {}              # dictionary of parameters associated to this projection type
@@ -837,6 +901,7 @@ def renderSingleHaloFrames(
 
     for snapNum, frameNum in zip(snapNums, frameNums):
         frameCount += 1
+
         print("Frame [#%d] [%d of %d] at snap %d:" % (frameNum, frameCount, snapNums.size, snapNum))
 
         # request render and save
@@ -896,7 +961,11 @@ def renderSingleHaloFrames(
 
             assert time_interp >= t0 - 1e-6 and time_interp <= t1, "interpDt frame time out of current snap interval."
 
-            tau = (time_interp - t0) / dt  # [0,1]
+            if dt == 0:  # final frame
+                dt = p["sP"].tage / p["sP"].numSnaps
+                tau = 1.0
+            else:
+                tau = (time_interp - t0) / dt  # [0,1]
 
             print(f" {t0 = :.4f}, {t1 = :.4f}, {time_interp = :.4f}, tau = {tau:.2f}, z = {z_interp:.2f}")
 
@@ -971,7 +1040,8 @@ def renderSingleHaloFrames(
             if p["numFramesPerRot"] is not None:
                 rotDirVec = [0.0, 1.0, 0.0]  # horizontal seeming spin
 
-                p["rotCenter"] = p["boxCenter"]
+                # rotation center is in box coordinates
+                p["rotCenter"] = p["boxCenter"][[p["axes"][0], p["axes"][1], 3 - np.sum(p["axes"])]]
 
                 rotAngleDeg = 360.0 * (frameNum / p["numFramesPerRot"])
                 locRotMatrix = rotationMatrixFromAngleDirection(rotAngleDeg, rotDirVec)
@@ -1019,9 +1089,15 @@ def renderSingleHaloFrames(
             assert len(panels) == 1  # otherwise generalize to multiple panels with potentially different pt/fields/runs
             p = panels[0]
 
+            if frameNum == len(frameNums) - 1 and snapNum == p["sP"].numSnaps - 1:
+                # final frame, no interp
+                renderMultiPanel(panels, plotConfig)
+                continue
+
             if curInterpSnap0 is None:
                 # init: load data for first snapshot(s)
                 next_interp_data = _load_interp_data(p, snapNum)
+                # print(f" load {snapNum = } into next_interp_data")
 
                 # for stars, load a further next snapshot for 3 point interp
                 if star_3snaps and p["sP"].isPartType(p["partType"], "stars") and p["sP"].snap + 2 <= p["sP"].numSnaps:
@@ -1034,6 +1110,7 @@ def renderSingleHaloFrames(
             if curInterpSnap0 != snapNum:
                 # we have moved to the next snapshot, move "next" data to "current" data, and load next snapshot
                 cur_interp_data = next_interp_data
+                # print(" moved to next snapshot, moving next_interp_data to cur_interp_data")
 
                 # for stars, load a further next snapshot for 3 point interp
                 if star_3snaps and p["sP"].isPartType(p["partType"], "stars"):
@@ -1044,6 +1121,7 @@ def renderSingleHaloFrames(
                 else:
                     if loadNextData:
                         next_interp_data = _load_interp_data(p, snapNum + 1)
+                        # print(f" load {snapNum + 1 = } into next_interp_data")
 
                 # reset match indices for new snapshot pair(s)
                 match_i0_snap, match_i0_global = None, None
@@ -1211,8 +1289,6 @@ def renderSingleHaloFrames(
                     w_unmatched_cur = np.where(~mask_cur)[0]
                     w_unmatched_next = np.where(~mask_next)[0]
                     # print(f"  Unmatched: {w_unmatched_cur.size} (cur), {w_unmatched_next.size} (next) snap.")
-
-                    # print(f"WARNING: {w_unmatched_cur.size} unmatched stars in current snap {snapNum} disappear.")
 
                     # need to preserve mass and initial mass of unmatched stars and gas for logic below
                     if p["sP"].isPartType(p["partType"], "stars"):

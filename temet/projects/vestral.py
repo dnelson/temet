@@ -9,7 +9,6 @@ from os.path import isfile
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import Normalize
 from matplotlib.ticker import ScalarFormatter
 from scipy.stats import binned_statistic_2d
 
@@ -1935,24 +1934,19 @@ def plotSmallestCellSizes(sims, sizefac=0.8):
     ax.set_yscale("log")
     ax.set_xlim([4.5, 9.0])
 
-    cmap = plt.cm.ScalarMappable(norm=Normalize(vmin=5.5, vmax=12.0), cmap="inferno")
-
     # loop over simulations
     for sim in sims:
         # load smallest cell size
         min_cell_sizes = _smallest_cell_size(sim)
         min_cell_size = np.min(min_cell_sizes) * 1e3  # kpc -> pc
         mean_cell_size = np.mean(min_cell_sizes) * 1e3  # kpc -> pc
-        # min_cell_index = np.argmin(min_cell_sizes)
-        # min_cell_redshift = sim.snapNumToRedshift(sim.validSnapList()[min_cell_index])
 
         # get final stellar mass
         mstar = sim.subhalos("mstar_log")[0]
 
         # plot, use redshift as color
         label = sim.simName.replace("_ST15", "")
-        # c = cmap.to_rgba(min_cell_redshift)
-        (l,) = ax.plot(mstar, min_cell_size, marker="o", linestyle="None", label=label)  # color=c,
+        (l,) = ax.plot(mstar, min_cell_size, marker="o", linestyle="None", label=label)
         ax.plot(mstar, mean_cell_size, marker="s", color=l.get_color())
 
     # add second legend that identifies the marker shapes as min vs mean
@@ -1965,8 +1959,6 @@ def plotSmallestCellSizes(sims, sizefac=0.8):
 
     # legend, colorbar and save plot
     ax.legend(loc="upper right", ncols=2)
-    # cbar = plt.colorbar(cmap, ax=ax)
-    # cbar.set_label("Redshift")
 
     fig.savefig("smallest_cell_size_vs_mstar.pdf")
 

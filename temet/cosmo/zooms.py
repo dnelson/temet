@@ -218,8 +218,8 @@ def contamination_profiles(sims=None, sizefac=0.8):
         run = "tng50_zoom"
 
         sims = []
-        for i, hInd in enumerate(hInds):
-            for j, variant in enumerate(variants):
+        for hInd in hInds:
+            for variant in variants:
                 sPz = simParams(res=zoomRes, run=run, hInd=hInd, redshift=redshift, variant=variant)
                 sims.append(sPz)
 

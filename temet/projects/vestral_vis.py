@@ -558,7 +558,17 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
     method = "sphMap_global"
     nPixels = [1920, 1080]
     # nPixels = [5120, 1440] # ultra-wide test
-    size = 2.0 if sim.hInd > 20000 else 5.0
+
+    size = 2.0
+    if sim.hInd < 100000:
+        size = 3.0
+    if sim.hInd < 20000:
+        size = 4.0
+    if sim.hInd < 6000:
+        size = 5.0
+    if sim.hInd < 5000:
+        size = 6.0
+
     sizeType = "kpc"
     axes = [0, 1]
     plotBHs = "all" if "_ clean" not in conf else False
@@ -626,7 +636,6 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
         saveFileBase = f"{sim.simName}_evo_interp"
 
         # movie config
-        # interpFac = 10
         interpDt = 0.3  # Myr
         vmmEvoScalefac = vmmEvo  # shift valMinMax by this factor times the scalefactor at each frame
         keyframeDt = keyf

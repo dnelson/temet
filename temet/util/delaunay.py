@@ -25,6 +25,7 @@ except (ImportError, DynamicLibNotFoundError):
     def cuda(f):
         """Dummy decorator."""
         return f
+    cuda.jit = cuda
 
 # --- gpu kernels ---
 
