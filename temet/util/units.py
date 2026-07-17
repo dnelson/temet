@@ -737,6 +737,16 @@ class units:
             vesc = np.sqrt(-2.0 * pot_phys)
         return vesc
 
+    def codeMassRadiusToEscapeVel(self, mass_code, radius_code):
+        """Convert a (mass,radius) pair in code units into an escape velocity [km/s]."""
+        mass_1e10_msun = self.codeMassToMsun(mass_code) / 1e10
+        radius_kpc = self.codeLengthToKpc(radius_code)
+
+        # [G] = [ kpc (km/s)**2 / 1e10 msun ]
+        vesc = np.sqrt(2.0 * self.G * mass_1e10_msun / radius_kpc)
+
+        return vesc
+
     def particleAngMomVecInKpcKmS(self, pos, vel, mass, haloPos, haloVel):
         """Calculate particle angular momentum 3-vector in [Msun*kpc km/s].
 
@@ -810,8 +820,8 @@ class units:
         Includes Hubble correction.
         """
         # make copies of input arrays
-        gas_pos = pos.astype("float32")
-        gas_vel = vel.astype("float32")
+        gas_pos = pos.astype("float64")
+        gas_vel = vel.astype("float64")
 
         if gas_pos.size == 3:  # single particle
             gas_pos = np.reshape(gas_pos, (1, 3))
@@ -840,7 +850,7 @@ class units:
                 gas_vel[:, i] -= subhaloVel[:, i]
 
         # correct velocities for hubble flow (neglect mass growth term)
-        np.clip(rad, self._sP.gravSoft, None)  # avoid division by zero
+        rad = np.clip(rad, 1e-16, None)  # avoid division by zero
 
         # radial velocity (km/s), negative=inwards
         vrad = (gas_vel[:, 0] * xyz[:, 0] + gas_vel[:, 1] * xyz[:, 1] + gas_vel[:, 2] * xyz[:, 2]) / rad

@@ -34,8 +34,9 @@ def histogram1d(
     ctName=None,
     ctProp=None,
     colorbar=False,
+    f_pre=None,
+    f_post=None,
     saveFilename=None,
-    pdf=None,
 ):
     """Simple 1D histogram/PDF of some quantity, for the whole box or one or more halos/subhalos.
 
@@ -59,7 +60,10 @@ def histogram1d(
       ctName(str or None): If ctName not None, sample from this colormap to choose line color per object.
       ctProp(str): use this property to assign colors.
       colorbar (bool): if not False, then use this field (string) to display a colorbar mapping.
-      pdf (PdfPages or None): if not None, then save to this multipage PDF object.
+      f_pre (function): if not None, this 'custom' function hook is called just before plotting.
+        It must accept two arguments: the figure axis, and a list of simulation objects)
+      f_post (function): if not None, this 'custom' function hook is called just after plotting.
+        It must accept two arguments (the figure axis, and a list of simulation objects), and **kwargs (x and y).
       saveFilename (str or None): if not None, save the figure to this filename. Automatic if None.
     """
     # config
@@ -108,6 +112,9 @@ def histogram1d(
     ax.set_xlim(xlim)
     if ylim is not None:
         ax.set_ylim(ylim)
+
+    if f_pre is not None:
+        f_pre(ax)
 
     # loop over simulations
     for i, sP in enumerate(sPs):
@@ -206,6 +213,7 @@ def histogram1d(
 
                 # histogram
                 yy, xx = np.histogram(vals, bins=bins, weights=weights, density=True)
+                xx_mid = (xx[1:] + xx[:-1]) / 2
 
                 if ylog:
                     yy = logZeroNaN(yy)
@@ -227,7 +235,7 @@ def histogram1d(
                     color = cmap.to_rgba(cmap_props[j])  # color = colors[j]
 
                 if medianPDF != "only":
-                    ax.plot(xx, yy, lw=lw_loc, color=color, label=label)
+                    ax.plot(xx_mid, yy, lw=lw_loc, color=color, label=label)
 
             # add mean?
             if len(sP_objIDs) > 1 and medianPDF:
@@ -245,6 +253,9 @@ def histogram1d(
                 # ax.plot(xx, yy1, linestyle='-', color='black', lw=lw, alpha=0.8, label='mean')
                 # ax.plot(xx, yy3, linestyle='-', color='black', lw=lw, alpha=0.8, label='middle')
                 ax.plot(xx, yy2, linestyle="-", color="black", lw=lw, alpha=1.0, label="median")
+
+    if f_post is not None:
+        f_post(ax)
 
     # legend and colorbar
     if legend:
@@ -266,7 +277,7 @@ def histogram1d(
 
     saveNameDefault = "histo1D_%s_%s_%s_wt-%s_%s.pdf" % (sPstr, ptType, ptProperty, ptWeight, hStr)
 
-    _finish_plot(fig, saveFilename, saveNameDefault, pdf)
+    _finish_plot(fig, saveFilename, saveNameDefault)
 
 
 def _draw_special_lines(sP, ax, ptProperty):

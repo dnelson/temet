@@ -2647,7 +2647,8 @@ def rad(sim, partType, field, args):
         if current_process().name == "MainProcess":
             print(f"Note: Using refPos to compute [{field}]!")
         haloPos = sim.refPos
-        halo = sim.halo(sim.refSubhalo["SubhaloGrNr"])
+        if "_rvir" in field or "_r500" in field:
+            halo = sim.halo(sim.refSubhalo["SubhaloGrNr"])
     else:
         haloID = args["haloID"]
         if args["subhaloID"] is not None:
@@ -2703,6 +2704,20 @@ rad_kpc.units = r"$\rm{kpc}$"
 rad_kpc.limits = lambda sim, pt, f: [0.0, 5.0] if "_linear" not in f else [0.0, 5000]
 rad_kpc.limits_halo = lambda sim, pt, f: [0.0, 3.0] if "_linear" not in f else [0.0, 800]
 rad_kpc.log = lambda sim, pt, f: True if "_linear" not in f else False
+
+
+@snap_field(aliases=["halo_rad_pc"])
+def rad_pc(sim, partType, field, args):
+    """3D radial distance from (parent) halo center in [pc]."""
+    rr = sim.snapshotSubset(partType, "halo_rad", **args)
+    return sim.units.codeLengthToPc(rr)
+
+
+rad_pc.label = "[pt] Radial Distance"
+rad_pc.units = r"$\rm{pc}$"
+rad_pc.limits = [3.0, 9.0]
+rad_pc.limits_halo = [0.0, 6.0]
+rad_pc.log = True
 
 
 @snap_field(aliases=["subhalo_rad_kpc", "subhalo_rad_pc"])

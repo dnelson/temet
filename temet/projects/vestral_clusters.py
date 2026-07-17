@@ -2037,6 +2037,72 @@ def paperPlots(a=False):
         vis_evo_clusters("xhi")
         vis_evo_clusters("tff_local")
 
+    # fig test: radial velocity distribution of star members
+    if 1 or a:
+        # subhalo config
+        from temet.plot.snapshot import histogram1d
+
+        sim = simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5)
+
+        subIDs = [29, 33, 90, 91, 115, 155, 157, 172, 177, 200, 283, 364, 433, 472, 505, 560, 563, 661, 685]
+        subID = subIDs[2]
+
+        # load MPB and request at first snapshot where star cluster exists
+        mpb = sim.loadMPB(subID, treeName="SubLink_gal")
+        ind_offset = 1
+        sim.setSnap(mpb["SnapNum"][-ind_offset])
+        subID = mpb["SubfindID"][-ind_offset]
+
+        print(f"Showing radvel of stars for subhalo {subID} at snap {sim.snap} (z={sim.redshift:.2f})")
+
+        # get all stars within 10 pc
+        sub = sim.subhalo(subID)
+        sim.refPos = sub["SubhaloPos"]
+        sim.refVel = sub["SubhaloVel"]
+        stars_dist = sim.stars("rad_pc")
+        stars_radvel = sim.stars("radvel")
+
+        ww = np.where(stars_dist < 50.0)[0]
+        stars_dist = stars_dist[ww]
+        stars_radvel = stars_radvel[ww]
+
+        print(f"Found {len(stars_dist)} stars within X pc of subhalo {subID} at snap {sim.snap} (z={sim.redshift:.2f})")
+
+        print(f"Maximum radial velocity of stars: {np.max(stars_radvel):.2f} km/s")
+        # ww = np.where(stars_radvel > 15.69)
+        # print(f"Stars with radial velocity > 15.69 km/s: {len(ww[0])} / {len(stars_radvel)}")
+
+        print(sub["SubhaloLenType"][4], "stars in subhalo")
+
+        def _draw_vesc(ax):
+            # draw escape velocity
+
+            mstar = sub["SubhaloMassType"][4]  # Msun
+            rhalf = sub["SubhaloHalfmassRadType"][4]  # code units
+
+            vesc = sim.units.codeMassRadiusToEscapeVel(mstar, rhalf)[0]  # km/s
+
+            print(f"{mstar = :.2e}, {rhalf = :.3f}, {vesc = :.2f} km/s")
+
+            ax.axvline(-vesc, color="k", ls="--", lw=1.5, alpha=0.5)
+            ax.axvline(vesc, color="k", ls="--", lw=1.5, alpha=0.5)
+            ax.text(vesc - 1, ax.get_ylim()[1] * 0.7, r"$v_{\rm esc}$", fontsize=16, alpha=0.5, ha="right")
+
+        histogram1d(
+            [sim],
+            ptType="stars",
+            ptProperty="radvel",
+            subhaloIDs=[subID],
+            ylog=True,
+            ylim=None,
+            xlim=[-40, 40],
+            nBins=100,
+            medianPDF=False,
+            legend=True,
+            f_post=_draw_vesc,
+            saveFilename="test.pdf",
+        )
+
     # fig todo: radius and radial velocity at formation time (use birth values of member stars?) (or just tree?)
 
     # fig todo: quantitative assessment of reason for formation (e.g. self-grav instability, compression, ...)
