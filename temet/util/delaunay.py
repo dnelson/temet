@@ -22,6 +22,10 @@ try:
 except (ImportError, DynamicLibNotFoundError):
     print("Warning: Numba CUDA not available. Tetrahedral rendering requires CUDA.")
 
+    def cuda(f):
+        """Dummy decorator."""
+        return f
+
 # --- gpu kernels ---
 
 

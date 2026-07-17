@@ -12,7 +12,7 @@ from matplotlib.ticker import MultipleLocator, ScalarFormatter
 from scipy.signal import savgol_filter
 
 from ..load.simtxt import getCpuTxtLastTimestep
-from ..plot.config import colors, linestyles, lw, markers, sKn, sKo
+from ..plot.config import colors, figsize, lw, markers, sKn, sKo
 from ..plot.util import _finish_plot
 from ..util.helper import logZeroNaN, running_median
 from ..util.simParams import simParams
@@ -120,7 +120,7 @@ def calculate_contamination(sPzoom, rVirFacs=(1, 2, 3, 4, 5, 10), verbose=False)
 
     # calculate radial profiles
     rlim = [0.0, np.max(rVirFacs) * r200]
-    nbins = 50
+    nbins = int(sPzoom.numPart[1] ** (1 / 3) / 2)
 
     r_count_hr, rr = np.histogram(dists_hr, bins=nbins, range=rlim)
     r_count_lr, _ = np.histogram(dists_lr, bins=nbins, range=rlim)
@@ -208,52 +208,58 @@ def contamination_profile(sim: simParams, haloID: int = 0):
     _finish_plot(fig, "contamination_profile_%s_%d.pdf" % (sim.simName, sim.snap))
 
 
-def contamination_compare_profiles():
+def contamination_profiles(sims=None, sizefac=0.8):
     """Compare contamination radial profiles between runs."""
-    zoomRes = 11
-    hInds = [11]
-    redshift = 6.0
-    variants = ["sf8", "sf32"]
-    run = "tng50_zoom"
+    if sims is None:
+        zoomRes = 11
+        hInds = [11]
+        redshift = 6.0
+        variants = ["sf8", "sf32"]
+        run = "tng50_zoom"
+
+        sims = []
+        for i, hInd in enumerate(hInds):
+            for j, variant in enumerate(variants):
+                sPz = simParams(res=zoomRes, run=run, hInd=hInd, redshift=redshift, variant=variant)
+                sims.append(sPz)
 
     # start plot
-    fig, ax = plt.subplots()
-    ylim = [-5.0, 0.0]
+    fig, ax = plt.subplots(figsize=np.array(figsize) * sizefac)
+    ylim = [1e-6, 1e-2]
 
     ax.set_xlabel(r"Distance [$R_{\rm 200,crit}$]")
-    ax.set_ylabel("Low-res DM Contamination Fraction [log]")
-    ax.set_xlim([0.0, 10.0])
+    ax.set_ylabel("Low-res DM Contamination Fraction")
+    ax.set_xlim([0.0, 5.0])
     ax.set_ylim(ylim)
+    ax.set_yscale("log")
 
     # load: loop over hInd/variant combination
-    for i, hInd in enumerate(hInds):
-        for j, variant in enumerate(variants):
-            # load zoom: group catalog
-            sPz = simParams(res=zoomRes, run=run, hInd=hInd, redshift=redshift, variant=variant)
+    for sim in sims:
+        # load zoom: group catalog
+        halo_zoom = sim.groupCatSingle(haloID=0)
 
-            halo_zoom = sPz.groupCatSingle(haloID=0)
+        # load contamination statistics and plot
+        contam = calculate_contamination(sim, verbose=True)
+        rr = contam["rr"] / halo_zoom["Group_R_Crit200"]
+        halo_r200_pMpc = sim.units.codeLengthToMpc(halo_zoom["Group_R_Crit200"])
+        min_dist_lr = contam["min_dist_lr"] / halo_r200_pMpc
 
-            # load contamination statistics and plot
-            contam = calculate_contamination(sPz, verbose=True)
-            rr = contam["rr"] / halo_zoom["Group_R_Crit200"]
-            halo_r200_pMpc = sPz.units.codeLengthToMpc(halo_zoom["Group_R_Crit200"])
-            min_dist_lr = contam["min_dist_lr"] / halo_r200_pMpc
+        label = sim.simName
+        if sim.run == "structures":
+            label = "h%d" % sim.hInd
+        (l,) = ax.plot(rr, contam["r_frac"], label=label)
 
-            (l,) = ax.plot(
-                rr, logZeroNaN(contam["r_frac"]), linestyles[j], color=colors[i], label="h%d_%s" % (hInd, variant)
-            )
-            # l, = ax.plot(rr, logZeroNaN(contam['r_massfrac']), '--', color=colors[i])
+        yy = [ylim[1] * 0.8, ylim[1]]  # [ylim[1] - 0.3, ylim[1]]
+        ax.plot([min_dist_lr, min_dist_lr], yy, color=l.get_color(), lw=3, alpha=1.0)
+        print(sim, min_dist_lr, halo_r200_pMpc)
 
-            ax.plot([min_dist_lr, min_dist_lr], [ylim[1] - 0.3, ylim[1]], linestyles[j], color=l.get_color(), alpha=0.5)
-            print(hInd, variant, min_dist_lr, halo_r200_pMpc)
-
-    ax.plot([0, rr[-1]], [-1.0, -1.0], "-", color="#888888", alpha=0.4, label="10%")
-    ax.plot([0, rr[-1]], [-2.0, -2.0], "-", color="#bbbbbb", alpha=0.4, label="1%")
+    ax.plot([0, rr[-1]], [-1.0, -1.0], "-", color="#888888", alpha=0.4)
+    ax.plot([0, rr[-1]], [-2.0, -2.0], "-", color="#bbbbbb", alpha=0.4)
     ax.plot([1.0, 1.0], ylim, "-", color="#bbbbbb", alpha=0.2)
     ax.plot([2.0, 2.0], ylim, "-", color="#bbbbbb", alpha=0.2)
 
     ax.legend(loc="upper left")
-    fig.savefig("contamination_profiles_L%d_hN%d_%s.pdf" % (zoomRes, len(hInds), "-".join(variants)))
+    fig.savefig("contamination_profiles.pdf")
     plt.close(fig)
 
 

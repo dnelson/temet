@@ -64,6 +64,8 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
             # marker set by variant
             marker = markers[variants.index(variant)]
             ms = (r - 10) * 2.5 + 4
+            if ax.get_figure().get_size_inches()[0] < figsize[0]:  # sizefac < 1
+                ms -= 6
 
             handles.append(plt.Line2D([0], [0], color="black", lw=0, marker=marker, ms=ms))
             labels.append("L%d_%s" % (r, variant))
@@ -346,6 +348,8 @@ def scatter2d(
 
             if markerstyle is None:
                 ms_loc = (sim.res - 10) * 2.5 + 4
+                if sizefac < 1:
+                    ms_loc -= 6
                 # lw_loc = sim.res - 10
 
                 # filled for main target, open for additional halos

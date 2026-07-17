@@ -9,6 +9,7 @@ from os.path import isfile
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import Normalize
 from matplotlib.ticker import ScalarFormatter
 from scipy.stats import binned_statistic_2d
 
@@ -1018,7 +1019,7 @@ def stellar_mzr(sims):
     """Diagnostic plot of stellar mass-metallicity relation (MZR)."""
     xQuant = "mstar2_log"
     yQuant = "Z_stars"  # Z_stars is cat/tree (<2rhalf), while Z_stars_masswt is aux (subhalo)
-    ylim = [-2.6, 0.0]  # log pkpc
+    ylim = [-2.6, 0.0]  # log solar
     xlim = [4.0, 9.0]  # log mstar
 
     def _draw_data(ax, sims):
@@ -1907,6 +1908,69 @@ def run_table_latex():
             print(s)
 
 
+@cache
+def _smallest_cell_size(sim):
+    """Calculate smallest gas cell size (in any snapshot) for a simulation."""
+    sim_loc = sim.copy()
+
+    snap_list = sim.validSnapList()
+    min_cell_size = np.zeros(len(snap_list), dtype="float32") + np.nan
+
+    for i, snap in enumerate(snap_list):
+        sim_loc.setSnap(snap)
+
+        cell_sizes = sim_loc.gas("cellsize_kpc")  # physical kpc
+        min_cell_size[i] = np.min(cell_sizes)
+
+    return min_cell_size
+
+
+def plotSmallestCellSizes(sims, sizefac=0.8):
+    """Calculate smallest gas cell size (in any snapshot) for simulations, and plot versus (final) stellar mass."""
+    # start plot
+    fig, ax = plt.subplots(figsize=np.array(figsize) * sizefac)
+
+    ax.set_xlabel("Stellar Mass [ log M$_{\\odot}$ ]")
+    ax.set_ylabel("Minimum Gas Cell Size [ pc ]")
+    ax.set_yscale("log")
+    ax.set_xlim([4.5, 9.0])
+
+    cmap = plt.cm.ScalarMappable(norm=Normalize(vmin=5.5, vmax=12.0), cmap="inferno")
+
+    # loop over simulations
+    for sim in sims:
+        # load smallest cell size
+        min_cell_sizes = _smallest_cell_size(sim)
+        min_cell_size = np.min(min_cell_sizes) * 1e3  # kpc -> pc
+        mean_cell_size = np.mean(min_cell_sizes) * 1e3  # kpc -> pc
+        # min_cell_index = np.argmin(min_cell_sizes)
+        # min_cell_redshift = sim.snapNumToRedshift(sim.validSnapList()[min_cell_index])
+
+        # get final stellar mass
+        mstar = sim.subhalos("mstar_log")[0]
+
+        # plot, use redshift as color
+        label = sim.simName.replace("_ST15", "")
+        # c = cmap.to_rgba(min_cell_redshift)
+        (l,) = ax.plot(mstar, min_cell_size, marker="o", linestyle="None", label=label)  # color=c,
+        ax.plot(mstar, mean_cell_size, marker="s", color=l.get_color())
+
+    # add second legend that identifies the marker shapes as min vs mean
+    handles = [
+        plt.Line2D([0], [0], marker="o", color="black", label="Minimum", linestyle=""),
+        plt.Line2D([0], [0], marker="s", color="black", label="Mean", linestyle=""),
+    ]
+    legend2 = ax.legend(handles=handles, loc="lower right")
+    ax.add_artist(legend2)
+
+    # legend, colorbar and save plot
+    ax.legend(loc="upper right", ncols=2)
+    # cbar = plt.colorbar(cmap, ax=ax)
+    # cbar.set_label("Redshift")
+
+    fig.savefig("smallest_cell_size_vs_mstar.pdf")
+
+
 # -------------------------------------------------------------------------------------------------
 
 
@@ -2120,7 +2184,7 @@ def paperPlots(a=False):
             # blackhole_position_vs_time(sim, snap_based=True)
             # blackhole_position_vs_time(sim, snap_based=False)
 
-    # appendix: time steps
+    # appendix A: time steps (vs redshift)
     if 0 or a:
         from temet.plot.perf import plotSmallestTimestepEvo
 
@@ -2129,11 +2193,54 @@ def paperPlots(a=False):
             sims.append(simParams("structures", hInd=219612, res=res, variant="ST15"))
         plotSmallestTimestepEvo(sims)
 
-    # appendix: CPUhs per run
+    # appendix A: CPUhs per run (vs halo mass)
     if 0 or a:
         from temet.plot.perf import plotCpuHours
 
         plotCpuHours(run="structures", variant="ST15", hInds=[268] + hInds, resolutions=res)
+
+    # appendix A: plot smallest gas cell sizes (vs stellar mass)
+    if 1 or a:
+        plotSmallestCellSizes(sims)
+
+    # appendix A: contamination profiles
+    if 0 or a:
+        from temet.cosmo.zooms import contamination_profiles
+
+        contamination_profiles(sims)
+
+    # appendix B: resolution convergence panels
+    if 0 or a:
+        sims = []
+        for res in [14, 15, 16]:
+            for hInd in [219612, 311384, 446076, 539722, 844537]:
+                sims.append(simParams("structures", hInd=hInd, res=res, variant="ST15", redshift=5.5))
+
+        mhalo_lim = [7.3, 10.3]
+
+        quants = {
+            "mstar2_log": [4.0, 8.5],
+            "sfr_100myr": [-4.5, 1.5],
+            "Z_gas_sfrwt": [-2.6, 0.0],
+            "Z_stars": [-2.6, 0.0],
+            "rhalf_stars": [-2.7, 1.5],
+            "size_halpha_em": [-1.8, 1.8],
+        }
+
+        for quant, ylim in quants.items():
+            subhalos_evo.scatter2d(
+                sims,
+                xQuant="mhalo_200_log",
+                yQuant=quant,
+                xlim=mhalo_lim,
+                ylim=ylim,
+                parents=False,
+                tracks=False,
+                legend="dev",
+                sizefac=0.8,
+                vs_sim=None,
+                f_selection=_zoomSubhaloIDsToPlot,
+            )
 
     # diagnostic: CPU times in different code segments as a function of time
     if 0 or a:
