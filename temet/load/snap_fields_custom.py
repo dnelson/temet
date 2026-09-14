@@ -59,7 +59,10 @@ def highres_massfrac(sim, partType, field, args):
     mass = sim.snapshotSubset(partType, "mass", **args)
     mass_highres = sim.snapshotSubset(partType, "HighResGasMass", **args)
 
-    return mass_highres / mass
+    frac = np.zeros(mass.size, dtype="float32")
+    w = np.where(mass > 0)  # e.g. set to 0 for vis or during interp
+    frac[w] = mass_highres[w] / mass[w]
+    return frac
 
 
 mass.label = "High-Res Mass Fraction"
@@ -243,7 +246,7 @@ temp_old.log = True
 def temp_sfcold(sim, partType, field, args):
     """Gas temperature, where star-forming gas is set to the sub-grid (constant)
     cold-phase temperature, instead of eEOS 'effective' temperature."""
-    assert sim.eEOS in [1, 2]
+    assert sim.eEOS in [1, 2, 3]
 
     temp = sim.snapshotSubset(partType, "temp", **args)
     sfr = sim.snapshotSubset(partType, "sfr", **args)
@@ -253,6 +256,8 @@ def temp_sfcold(sim, partType, field, args):
         temp[w] = sim.units.sh03_T_c
     elif sim.eEOS == 2:
         temp[w] = 1e4  # K (see Rahmati+16, Wijers+19, i.e. accepted EAGLE eEOS convention)
+    elif sim.eEOS == 3:
+        temp[w] = 1e4  # K (see Appleby+, pygad, i.e. typical SIMBA eEOS convention?)
 
     return temp
 
@@ -703,6 +708,21 @@ cellsize_kpc.units = r"$\rm{kpc}$"
 cellsize_kpc.limits = [-2.0, 3.0]
 cellsize_kpc.limits_halo = [-2.0, 1.0]
 cellsize_kpc.log = True
+
+
+@snap_field(alias="cellrad_kpc")
+def cellsize_pc(sim, partType, field, args):
+    """Gas cell size [pc]."""
+    rcell = sim.snapshotSubset(partType, "cellsize", **args)
+
+    return sim.units.codeLengthToPc(rcell)
+
+
+cellsize_pc.label = "Gas Cell Size"
+cellsize_pc.units = r"$\rm{pc}$"
+cellsize_pc.limits = [0.0, 5.0]
+cellsize_pc.limits_halo = [-1.0, 3.0]
+cellsize_pc.log = True
 
 
 @snap_field(alias="cellrad_ckpc")

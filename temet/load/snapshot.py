@@ -344,10 +344,10 @@ def haloOrSubhaloSubset(sP, haloID=None, subhaloID=None):
     return subset
 
 
-def _global_indices_zoomorig(sP, partType, origZoomID=None):
+def _global_indices_zoomorig(sP, partType, origZoomID=None, subhaloInd=None):
     """Helper function for TNG-Cluster to calculate indices for a global zoom original load.
 
-    If origZoomID is None, then determine from sP.subhaloInd.
+    If origZoomID is None, then determine from subhaloInd or sP.subhaloInd.
     Returns two index ranges, one for the original zoom FoFs, and one for the outer fuzz.
     """
     pt = sP.ptNum(partType)
@@ -361,7 +361,9 @@ def _global_indices_zoomorig(sP, partType, origZoomID=None):
         lengths2 = f["OriginalZooms/OuterFuzzTotalLengthByType"][()]
 
     if origZoomID is None:
-        origZoomID = sP.groupCatSingle(subhaloID=sP.subhaloInd)["SubhaloOrigHaloID"]
+        if subhaloInd is None:
+            subhaloInd = sP.subhaloInd
+        origZoomID = sP.groupCatSingle(subhaloID=subhaloInd)["SubhaloOrigHaloID"]
 
     origZoomInd = np.where(origIDs == origZoomID)[0][0]
 

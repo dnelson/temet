@@ -1248,7 +1248,7 @@ class simParams:
             self.simNameAlt = "Simba-L" + bs + "n" + str(res) + "FP"
 
             if res == 1024:
-                self.simName = "Simba100"
+                self.simName = "Simba100-1"
 
         # MTNG
         if run in ["mtng", "mtng_dm"]:
