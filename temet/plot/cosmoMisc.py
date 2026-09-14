@@ -1403,12 +1403,14 @@ def simHighZComparison():
     vestral_mgas = []
 
     # L16 maybe
-    vestral_L16 = st_h844537 + st_h311384 + st_h219612 + st_h73172 + st_h31619 + st_h23908 + st_h15581
+    vestral_L16 = st_h844537 + st_h311384 + st_h219612 + st_h73172 + st_h31619 + st_h23908 + st_h15581 + st_h5072
     vestral_mhalo += vestral_L16
     vestral_mgas += [3] * len(vestral_L16)
 
     # L15 probably
-    vestral_L15 = st_h844537 + st_h311384 + st_h219612 + st_h73172 + st_h31619 + st_h23908 + st_h15581 + st_h5072
+    vestral_L15 = (
+        st_h844537 + st_h311384 + st_h219612 + st_h73172 + st_h31619 + st_h23908 + st_h15581 + st_h5072 + st_h1958
+    )
     vestral_mhalo += vestral_L15
     vestral_mgas += [24] * len(vestral_L15)
 
@@ -1472,6 +1474,10 @@ def simHighZComparison():
     # Go+25 (https://arxiv.org/abs/2411.14683 Table 1) (z=0 values!) (see also Jeon+26)
     go25_mhalo = np.log10([1.8e8, 4.2e8, 6.0e8, 7.9e8, 11.7e8, 12.7e9])
     go25_mgas = 60
+
+    # RIGEL (https://arxiv.org/abs/2609.09267 Table 1) (z=z_reion~6 values)
+    rigel26_mhalo = np.log10([1.32e8, 1.93e8, 0.5e8, 0.39e8, 0.42e8, 0.76e8, 0.53e8, 0.05e8])
+    rigel26_mgas = 17.8
 
     # Garcia+25 (https://arxiv.org/abs/2503.08779) "refinement when gas mass exceeds 160 Msun, which is ~8x the
     # initial mean gas mass per high-res cell" although "initial DM mass resolution is 800 msun"
@@ -1579,10 +1585,11 @@ def simHighZComparison():
     zooms = [
         {"name": "VESTRAL", "M_halo": vestral_mhalo, "m_gas": vestral_mgas},
         {"name": "LYRA", "M_halo": lyra_mhalo, "m_gas": lyra_mgas},
+        {"name": "EDGE-INFERNO", "M_halo": edgei_mhalo, "m_gas": edgei_mgas},
         {"name": "EDGE", "M_halo": edge_mhalo, "m_gas": edge_mgas},
         {"name": "EDGE2", "M_halo": edge2_mhalo, "m_gas": edge2_mgas},
-        {"name": "EDGE-INFERNO", "M_halo": edgei_mhalo, "m_gas": edgei_mgas},
         {"name": "Go+25", "M_halo": go25_mhalo, "m_gas": go25_mgas},
+        {"name": "RIGEL", "M_halo": rigel26_mhalo, "m_gas": rigel26_mgas},
         {"name": "FIRE-2", "M_halo": f2_mhalo, "m_gas": f2_mgas},
         {"name": "Auriga", "M_halo": au_mhalo, "m_gas": au_mgas},
         {"name": "SERRA", "M_halo": serra_mhalo, "m_gas": serra_mgas},
@@ -1600,7 +1607,7 @@ def simHighZComparison():
     ]
 
     models_ismeos = ["Auriga"]
-    models_z0 = ["LYRA", "EDGE", "EDGE2", "Go+25"]
+    models_z0 = ["LYRA", "EDGE", "EDGE2", "Go+25", "RIGEL"]
 
     # load individual symbols for tng50-1
     sim = simParams(run="tng50-1", redshift=redshift)
@@ -1760,7 +1767,7 @@ def simHighZComparison():
         marker_normal = "D" if i < 11 else "s"  # colors start to repeat
 
         marker = "o" if sim["name"] in models_ismeos else marker_normal
-        opts = {"ms": msize, "zorder": 1}
+        opts = {"ms": msize, "zorder": 5}
 
         # outline all markers in white
         # opts['markeredgewidth'] = 1
@@ -1839,6 +1846,7 @@ def simHighZComparison():
         "fancybox": False,
     }
     ax.legend(loc="upper right", **legParams)
+    # ax.set_facecolor("#000")
 
     fig.savefig("sim_comparison.pdf")
     plt.close(fig)
