@@ -2,6 +2,8 @@
 Global plot-related configuration which can be imported into other plotting submodules.
 """
 
+import pathlib
+
 import matplotlib.pyplot as plt
 
 
@@ -18,19 +20,17 @@ figsize_sm = [figsize[0] * sizefac, figsize[1] * sizefac]
 
 lw = 2.5  # default line width
 
-linestyles = [
-    "-",
-    ":",
-    "--",
-    "-.",
-    (0, (3, 2, 1, 2, 1, 2)),
-    "--",
-    "-.",
-    ":",
-    "--",
-]  # 9 linestyles to alternate through (custom is dashdotdot)
+# 9 linestyles to alternate through (custom is dashdotdot)
+linestyles = ["-", ":", "--", "-.", (0, (3, 2, 1, 2, 1, 2)), "--", "-.", ":", "--"]
+
+# colors to cycle through (set by style file)
+style_path = pathlib.Path(__file__).parent.resolve()
+plt.style.use(str(style_path / "mpl.style"))
+
 colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-markers = ["o", "s", "D", "p", "H", "*", "v", "8", "^", "P", "X", ">", "<", "d"]  # marker symbols to alternate through
+
+# markers to cycle through
+markers = ["o", "s", "D", "p", "H", "*", "v", "8", "^", "P", "X", ">", "<", "d"]
 
 linestyles += linestyles
 colors += colors
