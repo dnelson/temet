@@ -154,8 +154,8 @@ def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
             }
         )
         panels.append({"partField": "coldens_dust", "valMinMax": [17.0, 20.0], "rotation": "face-on", "labelZ": False})
-        panels.append({"partField": "temp", "valMinMax": [3.5, 5.5], "rotation": "face-on", "labelZ": False})
-        panels.append({"partField": "vmag", "valMinMax": [70, 350], "rotation": "face-on", "labelZ": False})
+        panels.append({"partField": "temp", "valMinMax": [3.5, 5.0], "rotation": "face-on", "labelZ": False})
+        panels.append({"partField": "vmag", "valMinMax": [70, 250], "rotation": "face-on", "labelZ": False})
 
         # edge-on
         panels.append(
@@ -170,8 +170,8 @@ def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
             | edge_opts
         )
         panels.append({"partField": "coldens_dust", "valMinMax": [17.0, 20.0], "rotation": "edge-on"} | edge_opts)
-        panels.append({"partField": "temp", "valMinMax": [3.5, 5.5], "rotation": "edge-on"} | edge_opts)
-        panels.append({"partField": "vmag", "valMinMax": [70, 350], "rotation": "edge-on"} | edge_opts)
+        panels.append({"partField": "temp", "valMinMax": [3.5, 5.0], "rotation": "edge-on"} | edge_opts)
+        panels.append({"partField": "vmag", "valMinMax": [70, 250], "rotation": "edge-on"} | edge_opts)
 
     if conf == 3:
         # comparison (second set): rad_fuv, pres, LyA, [N/O]
@@ -187,7 +187,7 @@ def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
         # panels.append(
         #    {"partField": "sb_[OII]3729_ergs", "valMinMax": [-22, -19], "rotation": "face-on", "labelZ": False}
         # )
-        panels.append({"partField": "massratio_N_O", "valMinMax": [-1.6, -1.0], "rotation": "face-on", "labelZ": False})
+        panels.append({"partField": "massratio_N_O", "valMinMax": [-1.4, -1.0], "rotation": "face-on", "labelZ": False})
 
         # edge-on
         panels.append(
@@ -196,7 +196,7 @@ def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
         panels.append({"partField": "P_gas", "valMinMax": [3, 6], "rotation": "edge-on"} | edge_opts)
         panels.append({"partField": "sb_Lyman-alpha_ergs", "valMinMax": [-20, -17], "rotation": "edge-on"} | edge_opts)
         # panels.append({"partField": "sb_[OII]3729_ergs", "valMinMax": [-22, -19], "rotation": "edge-on"} | edge_opts)
-        panels.append({"partField": "massratio_N_O", "valMinMax": [-1.6, -1.0], "rotation": "edge-on"} | edge_opts)
+        panels.append({"partField": "massratio_N_O", "valMinMax": [-1.4, -1.0], "rotation": "edge-on"} | edge_opts)
 
     class plotConfig:
         plotStyle = "edged"
@@ -238,13 +238,18 @@ def vis_gallery_galaxy(sims, conf=0):
         partType = "stars"
         partField = "stellarCompObsFrame"
         valMinMax = None
+        autoLimits = [1, 99.5]  # percentiles for auto-scaling of stellar band images
 
     panels = []
 
     for sim in sims:
-        # face-on + edge-on pairs
+        # face-on, adaptive size
         sub_ind = sim.halo(sim.haloInd)["GroupFirstSub"]
-        size_loc = 1.0 if sim.hInd < 300000 else 0.5
+        size_loc = 0.5
+        if sim.hInd < 30000:
+            size_loc = 1.0
+        if sim.hInd < 10000:
+            size_loc = 2.0
 
         panels.append({"sP": sim, "subhaloInd": sub_ind, "rotation": "face-on", "size": size_loc})
 
@@ -254,6 +259,10 @@ def vis_gallery_galaxy(sims, conf=0):
         colorbars = True
         fontsize = 32
         saveFilename = "gallery_galaxy_conf%d_%d.pdf" % (conf, len(sims))
+
+    if len(sims) == 12:
+        plotConfig.nCols = 3  # 3x4 tall layout for paper
+        plotConfig.nRows = 4
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -562,7 +571,7 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
     size = 2.0
     if sim.hInd < 100000:
         size = 3.0
-    if sim.hInd < 40000: # could move to 20000 for L16 i.e. perhaps zoom back in to 3.0 for h31619_L16
+    if sim.hInd < 40000:  # could move to 20000 for L16 i.e. perhaps zoom back in to 3.0 for h31619_L16
         size = 4.0
     if sim.hInd < 6000:
         size = 5.0
@@ -587,6 +596,10 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
         pt1 = "gas"
         pf1 = "coldens_msunkpc2"
         vmm1 = [5.1, 7.6]
+        if sim.hInd < 50000:
+            vmm1 = [5.5, 8.0]
+        if sim.hInd < 10000:
+            vmm1 = [5.9, 8.4]
         vmmEvo = 3.0
 
         if sim.hInd == 219612 and sim.res == 16:
@@ -752,9 +765,12 @@ def vis_movie_mpbsm_interp(sim, haloID=0, conf="gas", pSplit=None):
                 if sim.hInd <= 219612:
                     # zoom-out from size=2 to size=8
                     kf_size1 = size * 4.0
-                if sim.hInd in [311384, 446076]:
+                if sim.hInd in [311384, 446076, 844537]:
                     # zoom-in from size=2 to size=0.5
                     kf_size1 = size * 0.25
+                if sim.hInd in [31619]:
+                    # test: nuclear stellar disc
+                    kf_size1 = size * 0.04
 
                 cur_size = easeQuant(frameNum, kf_frame0, kf_frame1, kf_size0, kf_size1)
 

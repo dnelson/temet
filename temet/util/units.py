@@ -1481,12 +1481,14 @@ class units:
             return np.log10(metal_solar)
         return metal_solar
 
-    def codeTimeStepToYears(self, TimeStep, Gyr=False):
+    def codeTimeStepToYears(self, TimeStep, H2_z=None, Gyr=False):
         """Convert a TimeStep/TimeStepHydro/TimeStepGrav for a comoving run to a physical time in years.
 
         Note: these inputs are an integer times All.Timebase_interval.
         """
-        dtime = TimeStep / (np.sqrt(self.H2_z_fact) * self.H0_h1_s)
+        if H2_z is None:
+            H2_z = self.H2_z_fact
+        dtime = TimeStep / (np.sqrt(H2_z) * self.H0_h1_s)
         dtime /= self._sP.HubbleParam
         dtime /= self.s_in_yr
 

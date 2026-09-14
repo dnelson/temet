@@ -148,7 +148,7 @@ def generate_rays_voronoi_fullbox(
     # spatial decomposition
     nRaysPerDimOrig = nRaysPerDim
 
-    if pSplit is not None and raysType != "sample_localized":
+    if pSplit is not None and (raysType != "sample_localized" and raysType != "voronoi_rndzoomhalos"):
         nPerDimErr = np.abs(np.sqrt(pSplit[1]) - np.round(np.sqrt(pSplit[1])))
         assert nPerDimErr < 1e-6, "pSplitSpatial: Total number of jobs should have integer sqroot, e.g. 9, 16, 25, 64."
         nPerDim = int(np.sqrt(pSplit[1]))
@@ -182,6 +182,7 @@ def generate_rays_voronoi_fullbox(
 
         xpts = np.linspace(xmin, xmax, nRaysPerDim + 1)[:-1]
         ypts = np.linspace(ymin, ymax, nRaysPerDim + 1)[:-1]
+        zpts = np.zeros(numrays, dtype="float32")
 
         xpts, ypts = np.meshgrid(xpts, ypts, indexing="ij")
 
@@ -193,6 +194,50 @@ def generate_rays_voronoi_fullbox(
 
         xpts = rng.uniform(low=xmin, high=xmax, size=nRaysPerDim**2)
         ypts = rng.uniform(low=ymin, high=ymax, size=nRaysPerDim**2)
+        zpts = np.zeros(numrays, dtype="float32")
+
+    if raysType == "voronoi_rndzoomhalos":
+        # random, around a set of zoom halos (e.g. TNG-Cluster primary targets)
+        assert subhaloIDs is None, "Error: For [voronoi_rndzoomhalos], do not specify subhaloIDs."
+
+        # load PrimaryZoomTargets
+        haloIDs = np.where(sP.halos("GroupPrimaryZoomTarget") > 0)[0]
+        subhaloIDs = sP.halos("GroupFirstSub")[haloIDs]
+
+        assert pSplit is not None
+        assert pSplit[1] == len(subhaloIDs), "Error: pSplit size needs to equal number of zoom halos."
+
+        subhaloID = subhaloIDs[pSplit[0]]  # this job's target halo
+        haloID = sP.subhalo(subhaloID)["SubhaloGrNr"]
+
+        # config
+        numrays = nRaysPerDim**2 * 1  # one halo per job
+        virRadFactor = 2.0  # out to this factor times r200c in impact parameter
+
+        # load subhalo metadata
+        SubhaloPos = sP.subhalos("SubhaloPos")
+        r200c = sP.halos("Group_R_Crit200")[haloID]
+
+        total_dl = sP.units.physicalMpcToCodeLength(10.0)  # 2 * virRadFactor * r200c # could be variable
+
+        # define ray positions
+        rng = np.random.default_rng(424242 + nRaysPerDim + sP.snap + sP.res)
+
+        xpts = np.zeros(numrays, dtype="float32")
+        ypts = np.zeros(numrays, dtype="float32")
+        zpts = np.zeros(numrays, dtype="float32")
+
+        randomAngle = rng.uniform(0, 2 * np.pi, nRaysPerDim**2)
+        randomDistance = rng.uniform(0, virRadFactor * r200c, nRaysPerDim**2)
+
+        xpts = randomDistance * np.cos(randomAngle)
+        ypts = randomDistance * np.sin(randomAngle)
+
+        xpts += SubhaloPos[subhaloID, inds[0]]
+        ypts += SubhaloPos[subhaloID, inds[1]]
+
+        zpts = np.zeros(numrays, dtype="float32")
+        zpts += SubhaloPos[subhaloID, projAxis] - total_dl / 2
 
     if raysType == "sample_localized" and pSplit is None:
         # localized (e.g. <= rvir) sightlines around a given sample of subhalos, specified by a list of
@@ -282,12 +327,12 @@ def generate_rays_voronoi_fullbox(
 
     ray_pos[:, inds[0]] = xpts.ravel()
     ray_pos[:, inds[1]] = ypts.ravel()
-    ray_pos[:, projAxis] = zpts.ravel() if raysType == "sample_localized" else 0.0
+    ray_pos[:, projAxis] = zpts.ravel()
 
     sP.correctPeriodicPosVecs(ray_pos)
 
     # determine spatial mask (cuboid with long side equal to boxlength in line-of-sight direction)
-    if pSplit is not None:
+    if pSplit is not None and sP.simName != "TNG-Cluster":
         mask = np.zeros(sP.numPart[sP.ptNum("gas")], dtype="int8")
         mask += 1  # all required
 
@@ -326,6 +371,14 @@ def generate_rays_voronoi_fullbox(
         cell_inds = np.arange(sP.numPart[sP.ptNum("gas")])
 
     # load (reduced) cell spatial positions
+    if sP.simName == "TNG-Cluster":
+        from ..load.snapshot import _global_indices_zoomorig
+
+        indRange, indRange2 = _global_indices_zoomorig(sP, "gas", subhaloInd=subhaloID)
+
+        # expand and then combine two index ranges
+        cell_inds = np.hstack([np.arange(indRange[0], indRange[1]), np.arange(indRange2[0], indRange2[1])])
+
     cell_pos = sP.snapshotSubsetC("gas", "pos", inds=cell_inds, verbose=True)
 
     # ray-trace and compute/save integral only
@@ -1020,8 +1073,7 @@ def create_spectra_from_traced_rays(
     f, gamma, wave0, ion_amu, ion_mass = line_params(line)
 
     # assign sP.redshift to the front intersection (beginning) of the box
-    z_vals = np.linspace(sP.redshift, sP.redshift + 0.2, 400)
-    assert sP.boxSize <= 100000, "Increase 0.2 factor above for boxes larger than TNG100."
+    z_vals = np.linspace(sP.redshift, sP.redshift + sP.dz, 800)
 
     z_lengths = sP.units.redshiftToComovingDist(z_vals) - sP.units.redshiftToComovingDist(sP.redshift)
 

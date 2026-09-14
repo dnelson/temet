@@ -1959,7 +1959,7 @@ def paperPlots(a=False):
         age_vs_tcross_clusters(sims)
 
     # fig 8b: age spread (1sigma)
-    if 0 or a:
+    if 1 or a:
         age_spread_clusters(sims)
 
     # --- formation ---
@@ -2038,7 +2038,7 @@ def paperPlots(a=False):
         vis_evo_clusters("tff_local")
 
     # fig test: radial velocity distribution of star members
-    if 1 or a:
+    if 0 or a:
         # subhalo config
         from temet.plot.snapshot import histogram1d
 

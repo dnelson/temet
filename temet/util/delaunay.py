@@ -23,7 +23,7 @@ except (ImportError, DynamicLibNotFoundError):
 
     def cuda(device=None):
         """Dummy decorator."""
-        raise Exception("Error: Numba CUDA not available. Tetrahedral rendering requires CUDA.")
+        print("Warning: Numba CUDA not available. Tetrahedral rendering requires CUDA.")
 
     cuda.jit = cuda
 

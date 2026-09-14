@@ -369,7 +369,7 @@ def scatter2d(
                 dz = 0.2
                 min_mstar = 4.5
 
-                if isinstance(tracks, (int, float)):
+                if not isinstance(tracks, bool):
                     dz = tracks
 
                 # sample at a number of discrete redshifts
@@ -698,7 +698,10 @@ def tracks1d(
         if f_selection is not None:
             subhaloIDs = f_selection(sim)
         else:
-            subhaloIDs = [sim.zoomSubhaloID]
+            if sim.haloInd is None:
+                subhaloIDs = [sim.zoomSubhaloID]
+            else:
+                subhaloIDs = [sim.halo(sim.haloInd)["GroupFirstSub"]]
 
         # load
         vals, _, _, valLog = sim.simSubhaloQuantity(quant)
@@ -840,6 +843,8 @@ def tracks1d(
         _add_legends_simple(ax, hInds, res, variants, leg_colors, lineplot=True, locs=legend_locs, ncols=legend_ncols)
 
     hStr = "" if len(set(hInds)) > 1 else "_h%d" % hInds[0]
+    if sim.haloInd == 1:
+        hStr += "b"
     tStr = "_tree" if sfh_treebased else ""
     saveNameDefault = f"tracks1d_evo_{quant}-vs-redshift{hStr}{tStr}.pdf"
 

@@ -338,8 +338,8 @@ def plotCpuHours(run, variant, hInds, resolutions, xQuant="mhalo", sizefac=0.8):
     # plot
     fig, ax = plt.subplots(figsize=(figsize[0] * sizefac, figsize[1] * sizefac))
 
-    ax.set_xlim([8.0, 11.0])
-    ax.set_ylim([1e3, 1e7])
+    ax.set_xlim([8.0, 10.5])
+    ax.set_ylim([1e3, 3e7])
     ax.set_ylabel("CPU Hours")
     ax.set_yscale("log")
 
@@ -381,6 +381,10 @@ def plotCpuHours(run, variant, hInds, resolutions, xQuant="mhalo", sizefac=0.8):
             marker = markers[resolutions.index(sim.res)]
 
             ax.plot(xval, cpuHours, marker, color=c)
+
+    # draw a suggestive line
+    ax.plot([8.1, 9.0], [1e5, 2e7], "--", color="black", alpha=0.1)
+    ax.plot([8.1, 9.7], [3e3, 2e7], "--", color="black", alpha=0.1)
 
     # make legend and finish
     ax.set_xlabel(xlabel)
@@ -541,15 +545,10 @@ def plotTimebins():
         plt.close(fig)
 
 
-def plotSmallestTimestepEvo(sizefac=0.8):
+def plotSmallestTimestepEvo(sims, sizefac=0.8):
     """Plot smallest timestep (in years) as a function of redshift."""
     # config
     num_pts = 500  # reduce time series down to N total points
-
-    sims = []
-    sims.append(simParams(run="structures", res=14, hInd=219612, variant="ST15", redshift=5.5, haloInd=0))
-    sims.append(simParams(run="structures", res=15, hInd=219612, variant="ST15", redshift=5.5, haloInd=0))
-    sims.append(simParams(run="structures", res=16, hInd=219612, variant="ST15", redshift=5.5, haloInd=0))
 
     xlim = [0, 1]
     xlim = [20.0, 5.5]
@@ -602,10 +601,11 @@ def plotSmallestTimestepEvo(sizefac=0.8):
 
         # unit conversion
         redshift = 1 / xx_avg - 1
-        dt_yr = sim.units.codeTimeStepToYears(yy_avg)
+        H2_z = sim.omega_m * (1 + redshift) ** 3.0 + sim.omega_L + sim.omega_k * (1 + redshift) ** 2.0
+        dt_yr = sim.units.codeTimeStepToYears(yy_avg, H2_z=H2_z)
 
         # plot
-        label = sim.simName
+        label = f"L{sim.res} (h{sim.hInd})"  # sim.simName
         ax.plot(redshift, dt_yr, "-", label=label)
 
     # make redshift axis, legend and finish

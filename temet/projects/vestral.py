@@ -393,7 +393,7 @@ def sfr_10_100_ratio(sims):
         xQuant=xQuant,
         yQuant=yQuant,
         xlim=[4.5, 9.0],
-        ylim=[-1.2, 2.0],
+        ylim=[-1.5, 2.5],
         sizefac=0.8,
         parents=False,
         legend="simple",
@@ -473,7 +473,7 @@ def mbh_vs_mstar(sims: list[simParams]) -> None:
 
     xQuant = "mstar2_log"
     yQuant = "mass_smbh"  # largest BH_Mass in each subhalo
-    xlim = [4.5, 10.0]  # mstar
+    xlim = [4.5, 10.5]  # mstar
     ylim = [2.8, 7.0]  # msmbh
 
     def _draw_data(ax, sims):
@@ -1600,16 +1600,16 @@ def blackhole_position_vs_time(sim, snap_based=True):
         plt.close(fig)
 
 
-def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0):
+def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0, show2d=False):
     """Plot PDFs of gas properties at the sites and moments of star formation (or supernovae)."""
     # config
     z_bins = [[5.5, 8.0], [8.0, 15.0]]  # [[5.5, 8.0], [8.0, 10.0], [10.0, 15.0]]
     if not split_z:
         z_bins = [[5.5, 15.0]]
 
-    dens_lim = [1, 8] if not supernovae else [-6, 8]  # log cm^-3
-    temp_lim = [1, 5.5] if not supernovae else [1, 9.5]  # log K
-    metallicity_lim = [-5.1, 1.0] if not supernovae else [-5.1, 2]  # log Z/Z_solar
+    dens_lim = [1, 11.5] if not supernovae else [-6, 9]  # log cm^-3
+    temp_lim = [0.5, 7.5] if not supernovae else [1, 10.5]  # log K
+    metallicity_lim = [-4.1, 2.0] if not supernovae else [-5.1, 3]  # log Z/Z_solar
 
     dens_label = "Ambient Gas Density [ log cm$^{-3}$ ]"
     temp_label = "Ambient Gas Temperature [ log K ]"
@@ -1655,6 +1655,7 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
                 # [log K]
                 temp = data["Temperature"]
                 temp[temp <= 0] = temp[temp > 0].min()  # zeros rarely occur
+                temp[np.isinf(temp)] = temp[np.isfinite(temp)].max()  # rarely inf
                 vals = np.log10(temp)
 
             if field == "Metallicity":
@@ -1673,7 +1674,6 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
 
                 # plot hist
                 label = f"h{sim.hInd}" if j == 0 else ""  # sim.simName
-                label = sim.simName
 
                 c = colors[i % len(colors)]
 
@@ -1692,11 +1692,14 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0)
 
         # finish plot
         hInds = sorted({sim.hInd for sim in sims})
-        ax.legend(loc="upper right")
+        ax.legend(loc="upper right", ncols=2, fontsize=14)  # for short hX labels
         fig.savefig(f"{'sn' if supernovae else 'sf'}_{field}{'_h' + str(hInds[0]) if len(hInds) == 1 else ''}.pdf")
         plt.close(fig)
 
     # two-dimensional density-temperature diagram at star formation sites
+    if not show2d:
+        return
+
     for sim in sims:
         # load
         data, data_sn = sf_sn_details(sim)
@@ -1862,8 +1865,8 @@ def run_table_latex():
     """Helper to generate LaTeX tables of simulation parameters."""
     # list of sims to include
     variants = ["ST15"]
-    res = [14, 15, 16]
-    hInds = [1958, 5072, 15581, 23908, 31619, 73172, 219612, 311384, 446076, 539722, 844537]
+    res = [13, 14, 15, 16]
+    hInds = [268, 1958, 5072, 15581, 23908, 31619, 73172, 219612, 311384, 446076, 539722, 844537]
     redshift = 5.5
 
     sims = _get_existing_sims(variants, res, hInds, redshift, all=True, single=True)
@@ -1954,11 +1957,11 @@ def plotSmallestCellSizes(sims, sizefac=0.8):
         plt.Line2D([0], [0], marker="o", color="black", label="Minimum", linestyle=""),
         plt.Line2D([0], [0], marker="s", color="black", label="Mean", linestyle=""),
     ]
-    legend2 = ax.legend(handles=handles, loc="lower right")
+    legend2 = ax.legend(handles=handles, loc="upper right")
     ax.add_artist(legend2)
 
     # legend, colorbar and save plot
-    ax.legend(loc="upper right", ncols=2)
+    ax.legend(loc="lower left", ncols=2)
 
     fig.savefig("smallest_cell_size_vs_mstar.pdf")
 
@@ -1991,18 +1994,11 @@ def paperPlots(a=False):
 
     # ------------
 
-    # fig 1: equilibrium curves of new grackle tables
-    if 0:
-        from temet.cosmo.cooling import grackle_equil_vs_Zz_1panel
-
-        # grackle_equil_vs_Zz()
-        grackle_equil_vs_Zz_1panel()
-
-    # fig 2: simulation comparison meta-plot
+    # fig 1: simulation comparison meta-plot
     if 0:
         simHighZComparison()
 
-    # fig 3: composite vis (i) parent box dm, (ii) halo-scale gas, (iii) galaxy-scale gas+stars
+    # fig 2: composite vis (i) parent box dm, (ii) halo-scale gas, (iii) galaxy-scale gas+stars
     if 0:
         sim_parent = simParams("tng50-1", redshift=6.0)  # z=5.5 is a mini snap, no DM hsml
         vis_parent_box(sim_parent)
@@ -2010,59 +2006,71 @@ def paperPlots(a=False):
         vis_single_halo(sims[0])
         vis_single_galaxy(sims[0])
 
-    # figs 4,5: multi-sim galleries
+    # figs 3,4: multi-sim galleries
     if 0:
         # sims_loc = sims[0:9] # limit to first N sims for layout
         sims_loc = []
-        v = "ST14"
-        sims_loc.append(simParams("structures", hInd=5072, res=14, variant=v, snap=346, haloInd=0))
-        sims_loc.append(simParams("structures", hInd=15581, res=14, variant=v, redshift=5.8, haloInd=0))
-        sims_loc.append(simParams("structures", hInd=23908, res=14, variant=v, redshift=5.5, haloInd=0))
-        sims_loc.append(simParams("structures", hInd=31619, res=14, variant=v, redshift=5.5, haloInd=0))
-        sims_loc.append(simParams("structures", hInd=31619, res=14, variant=v, redshift=5.5, haloInd=1))
-        sims_loc.append(simParams("structures", hInd=73172, res=14, variant=v, redshift=5.5, haloInd=0))
-        sims_loc.append(simParams("structures", hInd=219612, res=15, variant=v, redshift=5.5, haloInd=0))
-        sims_loc.append(simParams("structures", hInd=311384, res=15, variant=v, redshift=6.0, haloInd=0))
-        sims_loc.append(simParams("structures", hInd=844537, res=15, variant=v, redshift=5.5, haloInd=0))
+        v = "ST15"
+        sims_loc.append(simParams("structures", hInd=1958, res=14, variant=v, redshift=5.5, haloInd=0))
+        sims_loc.append(simParams("structures", hInd=5072, res=14, variant=v, redshift=5.5, haloInd=0))
+        sims_loc.append(simParams("structures", hInd=5072, res=14, variant=v, redshift=5.5, haloInd=1))
+        sims_loc.append(simParams("structures", hInd=15581, res=14, variant=v, redshift=5.5, haloInd=0))
+        sims_loc.append(simParams("structures", hInd=23908, res=15, variant=v, redshift=5.5, haloInd=0))
+        sims_loc.append(simParams("structures", hInd=31619, res=15, variant=v, redshift=5.5, haloInd=0))
+        sims_loc.append(simParams("structures", hInd=31619, res=15, variant=v, redshift=5.5, haloInd=1))
+        # sims_loc.append(simParams("structures", hInd=73172, res=16, variant=v, redshift=10.2, haloInd=0))
+        sims_loc.append(simParams("structures", hInd=73172, res=15, variant=v, redshift=7.5, haloInd=0))
+        sims_loc.append(simParams("structures", hInd=219612, res=16, variant=v, redshift=6.0, haloInd=0))
+        sims_loc.append(simParams("structures", hInd=311384, res=16, variant=v, redshift=6.0, haloInd=0))
+        sims_loc.append(simParams("structures", hInd=446076, res=16, variant=v, redshift=6.0, haloInd=0))
+        sims_loc.append(simParams("structures", hInd=539722, res=16, variant=v, redshift=5.5, haloInd=0))
 
-        vis_gallery_galaxy(sims_loc, conf=0)
+        # vis_gallery_galaxy(sims_loc, conf=0)
         vis_gallery_galaxy(sims_loc, conf=1)
 
-    # fig 6a: sfr vs mstar relation
+    # fig 5a: sfr vs mstar relation
     if 0 or a:
         sfr_vs_mstar(sims, yQuant="sfr_100myr")
         sfr_vs_mstar(sims, yQuant="sfr_10myr")
 
-    # fig 6b: star formation history (using stellar histo) (all halos in one panel)
+    # fig 5b: star formation history (using stellar histo) (all halos in one panel)
     if 0 or a:
         quant = "sfr2"
-        opts = {"xlim": [12.5, 5.5], "ylim": [-5.5, 0.5], "sizefac": [1.3, 0.7], "legend": "simple"}
+        opts = {"xlim": [12.5, 5.5], "ylim": [-5.5, 1.0], "sizefac": [1.3, 0.7], "legend": "simple"}
 
         subhalos_evo.tracks1d(sims, quant, sfh_lin=False, sfh_treebased=False, parents=False, **opts)
 
-    # fig 6b: star formation history (using stellar histo) (one plot per halo, i.e. gallery of small panels)
+    # fig 5b: star formation history (using stellar histo) (one plot per halo, i.e. gallery of small panels)
     if 0 or a:
         quant = "sfr2"
-        opts = {"xlim": [12.5, 5.5], "ylim": [-5.5, 0.5], "sizefac": 0.6, "legend": "simple"}
+        opts = {"xlim": [12.5, 5.5], "ylim": [-5.5, 1.0], "sizefac": 0.6, "legend": "simple"}
         # opts["f_selection"] = _zoomSubhaloIDsToPlot  # plot additional (uncontamined) galaxies as faint lines
 
         for i, sim in enumerate(sims):
             opts["color"] = colors[i]
+            opts["legend_locs"] = ["upper left", "lower right"] if sim.hInd < 30000 else ["lower right", "upper left"]
             subhalos_evo.tracks1d([sim], quant, sfh_lin=False, sfh_treebased=False, parents=False, **opts)
 
-    # fig 7: sfr burstyness (10/100 myr ratios) vs redshift
+            if sim.hInd <= 31619:
+                # show second halo as well (todo: need to add "b" to legends)
+                sim_b = simParams(
+                    run="structures", res=sim.res, hInd=sim.hInd, variant=sim.variant, haloInd=1, redshift=sim.redshift
+                )
+                subhalos_evo.tracks1d([sim_b], quant, sfh_lin=False, sfh_treebased=False, parents=False, **opts)
+
+    # fig 6: sfr burstyness (10/100 myr ratios) vs redshift
     if 0 or a:
         sfr_10_100_ratio(sims)
 
-    # fig 8a: smhm relation
+    # fig 7a: smhm relation
     if 0 or a:
         smhm_relation(sims)
 
-    # fig 8b: stellar mass vs redshift evo (using stellar histo)
+    # fig 7b: stellar mass vs redshift evo (using stellar histo)
     if 0 or a:
         quant = "mstar2_log"
         xlim = [12.5, 5.5]
-        ylim = [4.0, 9.0]
+        ylim = [4.0, 9.5]
 
         opts = {
             "xlim": xlim,
@@ -2077,13 +2085,13 @@ def paperPlots(a=False):
         subhalos_evo.tracks1d(sims, quant, sfh_treebased=False, parents=False, **opts)
         # subhalos_evo.tracks1d(sims, quant='mgas2_log', **opts)
 
-    # fig 8c: density, temperature, and metallicity PDFs at star formation and supernovae sites
+    # fig 7c: density, temperature, and metallicity PDFs at star formation and supernovae sites
     if 0 or a:
         split_z = True
         starformation_diagnostics(sims, split_z=split_z, sizefac=0.8)
         starformation_diagnostics(sims, supernovae=True, split_z=split_z, sizefac=0.8)
 
-    # fig 9: phase space diagrams (show one halo)
+    # fig 8: phase space diagrams (show one halo)
     if 0 or a:
         sims = [simParams("structures", hInd=219612, res=16, variant="ST15", snap=375)]
         for sim in sims:
@@ -2092,19 +2100,19 @@ def paperPlots(a=False):
             phase_diagram(sim, cQuant="vrad")
             phase_diagram(sim, cQuant="rad_rvir")
 
-    # fig 10a - gas metallicity
+    # fig 9a - gas metallicity
     if 0 or a:
         gas_mzr(sims)
 
-    # fig 10b - stellar metallicity
+    # fig 9b - stellar metallicity
     if 0 or a:
         stellar_mzr(sims)
 
-    # fig 10c - metallicity vs time evolution
+    # fig 9c - metallicity vs time evolution
     if 0 or a:
         opts = {
             "xlim": [14.1, 5.5],
-            "ylim": [-4.3, 1.0],
+            "ylim": [-4.3, 1.5],
             "parents": False,
             "smooth": False,
             "monotonic": True,
@@ -2123,11 +2131,11 @@ def paperPlots(a=False):
         ## subhalos_evo.tracks1d(sims, quant='Z_stars_1kpc_masswt', **opts) # aux
         ## subhalos_evo.tracks1d(sims, quant='Z_stars_fof_masswt', **opts) # aux
 
-    # fig 11a - stellar sizes
+    # fig 10a - stellar sizes
     if 0 or a:
         sizes_vs_mstar(sims)
 
-    # fig 11b - stellar size evo
+    # fig 10b - stellar size evo
     if 0 or a:
         opts = {
             "xlim": [14.1, 5.5],
@@ -2145,17 +2153,17 @@ def paperPlots(a=False):
         subhalos_evo.tracks1d(sims, quant="size_stars_log", **opts)
         # subhalos_evo.tracks1d(sims, quant='rhalf_stars_fof', **opts)
 
-    # fig 11c - gas sizes
+    # fig 10c - gas sizes
     if 0 or a:
         size_halpha_vs_mstar(sims)
 
     # fig X: ratio of (stellar/Halpha) size
     # fig X: CII-sizes (e.g. use low-T selection), compare to H-alpha sizes (Ikeda+25, CRISTAL)
 
-    # fig 12: vis of single galaxy, gallery of fields
+    # fig 11: vis of single galaxy, gallery of fields
     if 0:
-        sim = simParams("structures", hInd=23908, res=14, variant="ST14", redshift=5.5, haloInd=0)  # original
-        # sim = simParams("structures", hInd=23908, res=15, variant="ST15", redshift=10.0, haloInd=0)
+        # sim = simParams("structures", hInd=23908, res=14, variant="ST14", redshift=5.5, haloInd=0)  # original
+        sim = simParams("structures", hInd=23908, res=15, variant="ST15", redshift=5.5, haloInd=0)
         vis_single_galaxy(sim, size=4.0, conf=1)
         vis_single_galaxy(sim, size=4.0, conf=2)
         vis_single_galaxy(sim, size=4.0, conf=3)
@@ -2164,12 +2172,12 @@ def paperPlots(a=False):
         # vis_single_halo(sim, haloID=0)
         # vis_gallery_manyfields(sim, haloID=0)
 
-    # fig 13a - smbh vs mhalo and mstar relations
+    # fig 12a - smbh vs mhalo and mstar relations
     if 0 or a:
         # mbh_vs_mhalo(sims)
         mbh_vs_mstar(sims)
 
-    # fig 13b - black hole time evolution
+    # fig X - black hole time evolution
     if 0 or a:
         for sim in sims:
             blackhole_properties_vs_time(sim)
@@ -2192,7 +2200,7 @@ def paperPlots(a=False):
         plotCpuHours(run="structures", variant="ST15", hInds=[268] + hInds, resolutions=res)
 
     # appendix A: plot smallest gas cell sizes (vs stellar mass)
-    if 1 or a:
+    if 0 or a:
         plotSmallestCellSizes(sims)
 
     # appendix A: contamination profiles
@@ -2200,6 +2208,41 @@ def paperPlots(a=False):
         from temet.cosmo.zooms import contamination_profiles
 
         contamination_profiles(sims)
+
+    # appendix A: resolution as a function of density, and resolution histograms (in-halo)
+    if 0 or a:
+        from temet.plot.snapshot import histogram1d, median
+
+        sims = []
+
+        # pick a snapshot for each res level where a high density is achieved
+        sims.append(simParams("structures", hInd=219612, res=14, variant="ST15", snap=354))
+        sims.append(simParams("structures", hInd=219612, res=15, variant="ST15", snap=354))
+        sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", snap=377))
+
+        for sim in sims:
+            sim.simName = f"L{sim.res} (h{sim.hInd})"
+
+        haloIDs = [0, 0, 0]  # only plot the main halo of each res level
+
+        xlim = [-4, 11]
+        ylim = [-3.5, 2.5]
+
+        def f_pre(ax):
+            ax.plot([-2.5, 12], [1.0, 1.0], "-", color="#ccc")
+            ax.plot([0, 12], [0.0, 0.0], "-", color="#ccc")
+            ax.plot([2, 12], [-1.0, -1.0], "-", color="#ccc")
+            ax.plot([5, 12], [-2.0, -2.0], "-", color="#ccc")
+
+            ax.text(xlim[1] - 0.3, 1.1, "10 pc", color="#bbb", fontsize=12, ha="right", va="bottom")
+            ax.text(xlim[1] - 0.3, 0.1, "1 pc", color="#bbb", fontsize=12, ha="right", va="bottom")
+            ax.text(xlim[1] - 0.3, -0.9, "0.1 pc", color="#bbb", fontsize=12, ha="right", va="bottom")
+            ax.text(xlim[1] - 0.3, -1.9, "0.01 pc", color="#bbb", fontsize=12, ha="right", va="bottom")
+
+            ax.plot([6.0, 6.0], [-5, -0.5], "--", color="#ccc")
+
+        median(sims, xQuant="nh", yQuant="cellsize_pc", haloIDs=haloIDs, f_pre=f_pre, xlim=xlim, ylim=ylim, sizefac=0.8)
+        histogram1d(sims, ptProperty="cellsize_pc", haloIDs=haloIDs, xlim=ylim, ylim=[-3.2, 0.2], sizefac=0.8)
 
     # appendix B: resolution convergence panels
     if 0 or a:
@@ -2233,6 +2276,13 @@ def paperPlots(a=False):
                 vs_sim=None,
                 f_selection=_zoomSubhaloIDsToPlot,
             )
+
+    # diagnostic: equilibrium curves of new grackle tables
+    if 0:
+        from temet.cosmo.cooling import grackle_equil_vs_Zz_1panel
+
+        # grackle_equil_vs_Zz()
+        grackle_equil_vs_Zz_1panel()
 
     # diagnostic: CPU times in different code segments as a function of time
     if 0 or a:

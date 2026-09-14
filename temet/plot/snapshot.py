@@ -34,6 +34,7 @@ def histogram1d(
     ctName=None,
     ctProp=None,
     colorbar=False,
+    sizefac: float = 1.0,
     f_pre=None,
     f_post=None,
     saveFilename=None,
@@ -105,7 +106,7 @@ def histogram1d(
         xlim = xlim_quant
 
     # start plot
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=figsize * np.array(sizefac))
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
@@ -227,7 +228,7 @@ def histogram1d(
 
                 label = "%s [%d]" % (sP.simName, objID) if len(sPs) > 1 else str(objID)
                 if len(sP_objIDs) == 1:
-                    label = str(sP)
+                    label = str(sP.simName)
                 lw_loc = lw - 1 if (len(sP_objIDs) > 1 and len(sP_objIDs) < 10) else lw
 
                 color = colors[i]
@@ -909,6 +910,11 @@ def median(
             sim_yvals = _load_all_halos(sP, partType, yQuant, haloIDsLoc)
             # if ylog: sim_yvals = logZeroNaN(sim_yvals) # apply after statistics
 
+            if xlim is None:
+                xlim = xlim2
+            if ylim is None:
+                ylim = ylim2
+
             if "log 10$^{30}$ " in ylabel:
                 # units special case
                 sim_yvals = sim_yvals.astype("float32") + 30.0
@@ -929,12 +935,12 @@ def median(
                     if ylim is None:
                         ylim = [-2.0, 0.0]
                     ylabel = ylabel + " [log]"
-                    ax.plot(xlim, [-1.0, -1.0], "-", color="#aaaaaa", alpha=0.1)
+                    # ax.plot(xlim, [-1.0, -1.0], "-", color="#aaaaaa", alpha=0.1)
                 else:
                     # linear y-axis
                     if ylim is None:
                         ylim = [0.0, 1.0]
-                    ax.plot(xlim, [0.1, 0.1], "-", color="#aaaaaa", alpha=0.1)
+                    # ax.plot(xlim, [0.1, 0.1], "-", color="#aaaaaa", alpha=0.1)
 
                 if totalCumBoundsX is not None:
                     ax.fill_between(totalCumBoundsX, ylim[0], ylim[1], color="#aaaaaa", alpha=0.2)
@@ -942,10 +948,6 @@ def median(
                 ax.set_xlabel(xlabel)
                 ax.set_ylabel(ylabel)
 
-                if xlim is None:
-                    xlim = xlim2
-                if ylim is None:
-                    ylim = ylim2
                 ax.set_xlim(xlim)
                 ax.set_ylim(ylim)
 
@@ -968,7 +970,7 @@ def median(
             label = ""
             if isinstance(haloIDs[i], dict):
                 label = list(haloIDs[i].keys())[j]
-            if len(sPs) > 1:
+            elif len(sPs) > 1:
                 label += " %s" % sP.simName
 
             # compute statistic: total, cumulative total, or median

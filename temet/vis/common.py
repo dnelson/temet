@@ -640,7 +640,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
         # if scale bar is more than X Mpc/kpc, round to nearest X Mpc/kpc
         mpcFac = 1000.0 if p["sP"].mpcUnits else 1.0
-        roundScales = np.array([10000.0, 1000.0, 1000.0, 100.0, 10.0, 1.0, 0.1]) / mpcFac
+        roundScales = np.array([10000.0, 1000.0, 1000.0, 100.0, 10.0, 1.0, 0.1, 0.05, 0.02, 0.01]) / mpcFac
 
         for roundScale in roundScales:
             if scaleBarLen >= roundScale:
@@ -1259,6 +1259,8 @@ def renderMultiPanel(panels, conf):
     conf.nCols = nCols
     conf.nRows = nRows
 
+    assert nCols * nRows == len(panels), "Recently added check. Currently need to set both nRows and nCols (todo)."
+
     # approximate font-size invariance with changing rasterPx
     conf.nLinear = conf.nCols if conf.nCols > conf.nRows else conf.nRows
     min_fontsize = 14 if "edged" in conf.plotStyle else 12
@@ -1448,7 +1450,9 @@ def renderMultiPanel(panels, conf):
             barAreaHeight = 0.0
 
         if nCols > 2:
-            barAreaHeight *= nCols ** (1 / 2)
+            barAreaHeight *= (nCols / nRows) ** (1 / 2)
+        if nRows > nCols:
+            barAreaHeight *= (nCols / nRows) ** 3
 
         # check uniqueness of panel (partType,partField,valMinMax)'s
         pPartTypes = set()
@@ -1495,7 +1499,10 @@ def renderMultiPanel(panels, conf):
         nShortRows = nShortPanels / nCols
 
         # height of colorbar is this value times a constant (as a fraction of the figure size)
-        heightFac = 1.0 * conf.nLinear**0.4
+        heightFac = 1.0 * (conf.nCols / conf.nRows) ** 0.4
+
+        if nRows > nCols:
+            heightFac *= (nCols / nRows) ** 2
 
         if nRows == 2 and not oneGlobalColorbar and not varRowHeights:
             # two rows, special case, colors on top and bottom, every panel can be different
