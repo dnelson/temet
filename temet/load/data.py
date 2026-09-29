@@ -4280,6 +4280,47 @@ def weidner13():
     return r
 
 
+def xu26():
+    """Load abundance matching SMHM relation from Xu+26 (2603.29331 DESI PAC)."""
+    path = dataBasePath + "xu/smhm_z0_cen.txt"
+    # 4 rows: mhalo [vir, Msun/h], h_70 mstar/mh, mhalo, h_70 mstar/mh (upper/lower band?)
+    data = np.genfromtxt(path, comments="#", dtype=None, encoding=None)
+
+    # debug plot
+    if 0:
+        import matplotlib.pyplot as plt
+
+        fig = plt.figure(figsize=(9, 6.4))
+        ax = fig.add_subplot(111)
+
+        ax.set_xlabel(r"Halo Mass [$h^{-1} M_\odot$]")
+        ax.set_ylabel(r"$h_{70} M_*/M_h$")
+
+        mhalo = data[0, :]
+        smhm = data[1, :]
+
+        ax.plot(mhalo, smhm)
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_ylim([3e-4, 2e-1])
+        ax.set_xlim([1e8, 2e15])
+        fig.savefig("xu26_debug.pdf")
+        plt.close(fig)
+
+    mhalo = data[0, :] / 0.7  # assume h=0.7, remove factor [msun]
+    mstar = data[1, :] * mhalo  # [msun]
+    mhalo /= 1.2  # mvir -> m200c rough adjustment
+
+    r = {
+        "haloMass": np.log10(mhalo),  # log msun
+        "stellarMass": np.log10(mstar),  # log msun
+        "smhmRatio": data[:, 1],  # h70 m*/mh (linear) ratio
+        "label": "Xu+26 DESI PAC ($z=0$)",
+    }
+
+    return r
+
+
 def loadSDSSData(loadFields=None, redshiftBounds=(0.0, 0.1), petro=False):
     """Load some CSV->HDF5 files dumped from the SkyServer."""
     # SELECT

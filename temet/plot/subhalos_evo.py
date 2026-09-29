@@ -74,13 +74,15 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
     ax.add_artist(legend2)
 
 
-def _add_legends_simple(ax, hInds, res, variants, colors, lineplot=False, locs=None, ncols=None):
+def _add_legends_simple(ax, hInds, res, variants, colors, lineplot=False, locs=None, ncols=None, fill=True):
     """Plot helper to add two legends: one showing simulations i.e. hInds (colored markers), one showing other/obs.
 
     This is a simplified version of _add_legends, for e.g. scatter2d where we do not want to differentiate by
     resolution or variant (assuming all are the same).
     """
-    legParams = {"frameon": 1, "framealpha": 0.7, "fancybox": False}  # add white background
+    legParams = {}
+    if fill:
+        legParams = {"frameon": 1, "framealpha": 0.7, "fancybox": False}  # add white background
 
     if locs is None:
         locs = ["upper left", "lower right"]
@@ -140,6 +142,7 @@ def scatter2d(
     legend: str = "dev",
     legend_locs: list[str] = None,
     legend_ncols: list[int] = None,
+    legend_fill: bool = True,
     verbose: bool = False,
     f_selection: Callable = None,
     f_pre: Callable = None,
@@ -166,6 +169,7 @@ def scatter2d(
       legend : either 'dev' (default),  'simple', or 'none', to determine how legend(s) are shown.
       legend_locs: if not None, a list of two strings indicating the locations of the two legends.
       legend_ncols: if not None, a list of two integers indicating the number of columns for the two legends.
+      legend_fill: if True, fill the legend background with a white box (default). If False, no background.
       verbose: if True, print warnings about points that are out of bounds or NaN, and how they are handled.
       sizefac: multiplier on figure size, can be scalar or 2-tuple.
       markerstyle: if not None, a dictionary of keyword arguments to pass to the scatter plot for all points.
@@ -487,7 +491,7 @@ def scatter2d(
     if legend == "dev":
         _add_legends(ax, hInds, res, variants, colors)
     elif legend == "simple" and cQuant is None:
-        _add_legends_simple(ax, hInds, res, variants, colors, locs=legend_locs, ncols=legend_ncols)
+        _add_legends_simple(ax, hInds, res, variants, colors, locs=legend_locs, ncols=legend_ncols, fill=legend_fill)
 
     cStr = f"-c-{cQuant}" if cQuant is not None else ""
     saveNameDefault = f"scatter2d_evo_{xQuant}-vs-{yQuant}{cStr}.pdf"

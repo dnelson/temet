@@ -20,8 +20,8 @@ figsize_sm = [figsize[0] * sizefac, figsize[1] * sizefac]
 
 lw = 2.5  # default line width
 
-# 9 linestyles to alternate through (custom is dashdotdot)
-linestyles = ["-", ":", "--", "-.", (0, (3, 2, 1, 2, 1, 2)), "--", "-.", ":", "--"]
+# 9 linestyles to alternate through (customs are dashdotdot, dashdotdotdot)
+linestyles = ["-", ":", "--", "-.", (0, (3, 2, 1, 2, 1, 2)), (0, (2, 2, 1, 2, 1, 2, 1, 2)), "--", "-.", ":", "--"]
 
 # colors to cycle through (set by style file)
 style_path = pathlib.Path(__file__).parent.resolve()

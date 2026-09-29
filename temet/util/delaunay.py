@@ -9,23 +9,12 @@ from os.path import isfile
 import h5py
 import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from numba import njit
+from numba import cuda, njit
 from scipy.spatial import Delaunay
 
 from ..util.helper import logZeroMin, pSplit
 from ..util.rotation import rotateCoordinateArray
 
-
-try:
-    from cuda.pathfinder import DynamicLibNotFoundError
-    from numba import cuda
-except (ImportError, DynamicLibNotFoundError):
-
-    def cuda(device=None):
-        """Dummy decorator."""
-        print("Warning: Numba CUDA not available. Tetrahedral rendering requires CUDA.")
-
-    cuda.jit = cuda
 
 # --- gpu kernels ---
 

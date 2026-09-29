@@ -124,12 +124,12 @@ def _zoomSubhaloIDsToPlot(sim, min_mhalo=7.5, verbose=False):
 
 def smhm_relation(sims):
     """Stellar mass vs halo mass including empirical constraints."""
-    from temet.load.data import behrooziUM  # paquereau25
+    from temet.load.data import behrooziUM  # xu26,  paquereau25
 
     xQuant = "mhalo_200_log"
     yQuant = "mstar2_log"
     xlim = [7.3, 10.3]
-    ylim = [4.0, 8.5]  # log mstar
+    ylim = [4.0, 9.0]  # log mstar
 
     def _draw_data(ax, sims):
         # Behroozi+2019 (UniverseMachine) stellar mass-halo mass relation
@@ -140,6 +140,24 @@ def smhm_relation(sims):
         ax.fill_between(b19_um["haloMass"], b19_um["mstar_low"], b19_um["mstar_high"], color="#ccc", alpha=0.3)
         # ax.plot(b19_um["haloMass"], b19_um["mstar_low"], "--", color="#ccc", alpha=0.8)
         # ax.plot(b19_um["haloMass"], b19_um["mstar_high"], "--", color="#ccc", alpha=0.8)
+
+        # Xu+26 (DESI PAC z=0, with large upturn of low-mass SMF)
+        # x26 = xu26()
+        # ax.plot(x26["haloMass"], x26["stellarMass"], "-", color="#000", alpha=0.8, label=x26["label"])
+
+        # JADES (Wu+26) dynamical pairs, z~7
+        label = r"Wu+26 JADES (z$\simeq$6-7)"
+
+        w26_alpha = 1.4
+        w26_mstar0 = 9.0
+        w26_mhalo0_dyn = 11.06  # +0.21, -0.20
+        w26_mhalo0_vel = 10.93  # +0.31, -0.29
+        w26_mhalo = np.linspace(9.0, 12.0, 20)
+        w26_mstar_dyn = np.log10((10.0**w26_mhalo / 10.0**w26_mhalo0_dyn) ** w26_alpha * 10.0**w26_mstar0)
+        w26_mstar_vel = np.log10((10.0**w26_mhalo / 10.0**w26_mhalo0_vel) ** w26_alpha * 10.0**w26_mstar0)
+
+        ax.plot(w26_mhalo, w26_mstar_dyn, ls=linestyles[5], color="#777", alpha=0.8, label=label)
+        ax.plot(w26_mhalo, w26_mstar_vel, ls=linestyles[5], color="#777", alpha=0.8)
 
         # MEGATRON (Katz+26) - Figure 6 (upper panel)
         k26_mhalo = [7.01, 7.29, 7.66, 7.85, 8.09, 8.29, 8.72, 9.28, 9.69, 10.11]  # log msun (median)
@@ -165,12 +183,25 @@ def smhm_relation(sims):
 
         ax.plot(k25_mhalo, k25_mstar, "s", color="#999", alpha=0.8, label=k25_label)
 
-        # SIRIUS (Lin+26 - Table 4) ("end" at t=1.2 Gyr)
-        l26_mhalo = [1.3e9, 6.3e7, 7.9e7, 1.3e8, 1.0e9, 7.9e7, 8.0e8, 5.0e8]
-        l26_mstar = [3.2e6, 6.7e4, 1.3e5, 5.6e4, 2.4e6, 9.6e4, 1.8e6, 1.0e6]
-        l26_label = "Lin+26 SIRIUS (z=5)"
+        # SPHINX20
+        path = "/virgotng/mpia/SPHINX/SPHINX-20-data/data/all_basic_data.csv"
+        data = np.genfromtxt(path, delimiter=",", names=True)
 
-        ax.plot(np.log10(l26_mhalo), np.log10(l26_mstar), "D", color="#777", alpha=0.8, label=l26_label)
+        w = np.where(data["redshift"] == 6)  # 4.64, 5, 6, 7, 8, 9, 10 available
+        s20_mhalo = data["mvir"][w]
+        s20_mstar = data["stellar_mass"][w]
+
+        ax.plot(
+            s20_mhalo,
+            s20_mstar,
+            lw=0,
+            marker="x",
+            ms=5,
+            mec="#777",
+            mew=1,
+            alpha=0.6,
+            label="Rosdahl+22 SPHINX20 (z=6)",
+        )
 
         # SPICE (Bhagwat+24) - Figure 5 (bursty and smooth models)
         b24_mhalo1 = [1.3e8, 2.3e8, 4.8e8, 9.2e8, 1.9e9, 7.3e9, 1.5e10, 3.0e10, 6.0e10, 1.2e11, 2.4e11]  # log msun
@@ -191,6 +222,19 @@ def smhm_relation(sims):
         c25_label = "Chaikan+25 COLIBRE (z=5)"
 
         ax.plot(np.log10(c25_mhalo), np.log10(c25_mstar), ls=linestyles[4], color="#777", alpha=0.8, label=c25_label)
+
+        # SIRIUS (Lin+26 - Table 4) ("end" at t=1.2 Gyr)
+        l26_mhalo = [1.3e9, 6.3e7, 7.9e7, 1.3e8, 1.0e9, 7.9e7, 8.0e8, 5.0e8]
+        l26_mstar = [3.2e6, 6.7e4, 1.3e5, 5.6e4, 2.4e6, 9.6e4, 1.8e6, 1.0e6]
+        l26_label = "Lin+26 SIRIUS (z=5)"
+
+        ax.plot(np.log10(l26_mhalo), np.log10(l26_mstar), "D", color="#777", alpha=0.8, label=l26_label)
+
+        # KANG+26 (Table 2, z=6)
+        k26_mhalo = [1.21e10, 1.18e10]  # msun
+        k26_mstar = [6.80e8, 2.15e8]  # msun (GTT, SINK)
+
+        ax.plot(np.log10(k26_mhalo), np.log10(k26_mstar), "p", color="#777", alpha=0.8, label="Kang+26 (z=6)")
 
         # todo: flares? (cannot find the paper)
 
@@ -215,6 +259,7 @@ def smhm_relation(sims):
         ylim=ylim,
         parents=False,
         legend="simple",
+        legend_fill=False,
         f_pre=_draw_data,
         f_selection=_zoomSubhaloIDsToPlot,
     )
@@ -2000,11 +2045,12 @@ def paperPlots(a=False):
 
     # fig 2: composite vis (i) parent box dm, (ii) halo-scale gas, (iii) galaxy-scale gas+stars
     if 0:
-        sim_parent = simParams("tng50-1", redshift=6.0)  # z=5.5 is a mini snap, no DM hsml
-        vis_parent_box(sim_parent)
-        sims[0].haloInd = 0
-        vis_single_halo(sims[0])
-        vis_single_galaxy(sims[0])
+         sim_parent = simParams("tng50-1", redshift=6.0)  # z=5.5 is a mini snap, no DM hsml
+         vis_parent_box(sim_parent)
+        sim = simParams("structures", hInd=31619, res=15, variant="ST15", redshift=6.0, haloInd=0)
+        vis_single_galaxy(sim, conf=6)
+        sim = simParams("structures", hInd=23908, res=15, variant="ST15", redshift=5.6, haloInd=0)
+        vis_single_galaxy(sim, conf=5)
 
     # figs 3,4: multi-sim galleries
     if 0:

@@ -61,6 +61,7 @@ def histogram1d(
       ctName(str or None): If ctName not None, sample from this colormap to choose line color per object.
       ctProp(str): use this property to assign colors.
       colorbar (bool): if not False, then use this field (string) to display a colorbar mapping.
+      sizefac (float): overrides the default plot sizefac.
       f_pre (function): if not None, this 'custom' function hook is called just before plotting.
         It must accept two arguments: the figure axis, and a list of simulation objects)
       f_post (function): if not None, this 'custom' function hook is called just after plotting.

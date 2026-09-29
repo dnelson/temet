@@ -2,9 +2,12 @@
 General helper and utility functions related to plotting.
 """
 
+import cmocean
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import LineCollection
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.pyplot import colormaps, get_cmap
 
 from ..util.helper import iterable, logZeroNaN, running_median
 from .config import linestyles, lw
@@ -123,8 +126,6 @@ def setColorbarColors(cb, color2):
 
 def validColorTableNames():
     """Return a list of whitelisted colormap names."""
-    from matplotlib.pyplot import colormaps
-
     names1 = colormaps()  # matplotlib
     names1 = [n.replace("cmo.", "") for n in names1]  # cmocean
     names2 = [
@@ -172,10 +173,6 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
         return None
 
     import copy  # cannot modify default cmap, must make copy, e.g. for cmap.set_bad()
-
-    import cmocean
-    from matplotlib.colors import LinearSegmentedColormap
-    from matplotlib.pyplot import colormaps, get_cmap
 
     cmap = None
 
@@ -841,8 +838,6 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
 
 def sampleColorTable(ctName, num, bounds=None):
     """Grab a sequence of colors, evenly spaced, from a given colortable."""
-    from matplotlib.pyplot import colormaps, get_cmap
-
     # cmocean
     if "cmo.%s" % ctName in colormaps():
         ctName = "cmo.%s" % ctName

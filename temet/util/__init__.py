@@ -4,7 +4,6 @@ from . import (
     boxRemap,
     dataConvert,
     dataConvertSim,
-    delaunay,
     extern,
     helper,
     match,
@@ -19,3 +18,13 @@ from . import (
 )
 from .simParams import simParams
 from .units import units
+
+
+# avoid GPU errors on github CI runners
+try:
+    from cuda.pathfinder import DynamicLibNotFoundError
+    from numba import cuda
+
+    from . import delaunay
+except (ImportError, DynamicLibNotFoundError):
+    print("Warning: Numba CUDA not available. Tetrahedral rendering requires CUDA.")

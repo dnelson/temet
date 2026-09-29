@@ -1387,29 +1387,64 @@ def simHighZComparison():
     ax.set_ylabel(r"Halo Mass at $z=%d$ [ M$_{\odot}$ ]" % redshift)
 
     # VESTRAL halos (z=6)
-    st_h73172 = [9.2]
-    st_h219612 = [8.7]
-    st_h311384 = [8.5]
     st_h844537 = [8.0]
+    st_h539722 = [8.3]
+    st_h446076 = [8.1]
+    st_h311384 = [8.5]
+    st_h219612 = [8.7]
+    st_h73172 = [9.2]
     st_h31619 = [9.1, 9.0, 8.38]
     st_h23908 = [9.5, 8.4]
     st_h15581 = [9.6, 8.1]
     st_h5072 = [10.0, 9.4]
     st_h1958 = [10.4]
 
-    vestral_halos = [st_h1958, st_h5072, st_h15581, st_h23908, st_h31619, st_h73172, st_h219612, st_h311384, st_h844537]
+    vestral_halos = [
+        st_h1958,
+        st_h5072,
+        st_h15581,
+        st_h23908,
+        st_h31619,
+        st_h73172,
+        st_h219612,
+        st_h311384,
+        st_h446076,
+        st_h539722,
+        st_h844537,
+    ]
 
     vestral_mhalo = []
     vestral_mgas = []
 
-    # L16 maybe
-    vestral_L16 = st_h844537 + st_h311384 + st_h219612 + st_h73172 + st_h31619 + st_h23908 + st_h15581 + st_h5072
+    # L16
+    vestral_L16 = (
+        st_h844537
+        + st_h539722
+        + st_h446076
+        + st_h311384
+        + st_h219612
+        + st_h73172
+        + st_h31619
+        + st_h23908
+        + st_h15581
+        + st_h5072
+    )
     vestral_mhalo += vestral_L16
     vestral_mgas += [3] * len(vestral_L16)
 
-    # L15 probably
+    # L15
     vestral_L15 = (
-        st_h844537 + st_h311384 + st_h219612 + st_h73172 + st_h31619 + st_h23908 + st_h15581 + st_h5072 + st_h1958
+        st_h844537
+        + st_h539722
+        + st_h446076
+        + st_h311384
+        + st_h219612
+        + st_h73172
+        + st_h31619
+        + st_h23908
+        + st_h15581
+        + st_h5072
+        + st_h1958
     )
     vestral_mhalo += vestral_L15
     vestral_mgas += [24] * len(vestral_L15)
@@ -1800,6 +1835,19 @@ def simHighZComparison():
             # opts['markeredgecolor'] = 'black'
 
         (l,) = ax.plot(x, y, ls="None", marker=marker, label=sim["name"], **opts)
+
+        if sim["name"] == "VESTRAL":
+            # mark still in progress sims visually
+            opts["hatch"] = "/////"  # "...."
+            opts["hatchcolor"] = "#fff"
+            opts["s"] = opts["ms"] ** 2  # units are linear vs area
+            del opts["ms"]
+
+            w_L16 = np.where((np.log10(y) >= 9.0) & (x == 3))  # h73172 and higher (Oct 2026)
+            ax.scatter(x[w_L16], y[w_L16], color=l.get_color(), ls="None", marker=marker, **opts)
+
+            w_L16 = np.where((np.log10(y) >= 10.0) & (x == 24))  # h1958 and h5072 (Oct 2026)
+            ax.scatter(x[w_L16], y[w_L16], color=l.get_color(), ls="None", marker=marker, **opts)
 
         if sim["name"] == "SIRIUS":
             # add Kaneko+26 galaxy (upper limit) manually

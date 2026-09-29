@@ -198,10 +198,53 @@ def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
         # panels.append({"partField": "sb_[OII]3729_ergs", "valMinMax": [-22, -19], "rotation": "edge-on"} | edge_opts)
         panels.append({"partField": "massratio_N_O", "valMinMax": [-1.4, -1.0], "rotation": "edge-on"} | edge_opts)
 
+    if conf == 4:
+        # full widescreen single image (TNG vs VESTRAL comparison for talks)
+        nPixels = [1920, 1080]
+        rVirFracs = [2.0]
+        labelZ = False
+        labelHalo = "mhalo"
+        panels.append({"partType": "stars", "partField": "stellarComp", "rotation": "face-on"})
+
+    if conf == 5:
+        # for galaxy-scale composite (Fig 1)
+        rVirFracs = [2.0]
+        autoLimits = [0, 99.9]  # percentiles for auto-scaling of stellar band images
+        labelHalo = "mhalo,mstar"
+
+        gas_field = "coldens_msunkpc2"
+        stars_field = "stellarComp"
+
+        gas_mm = [6.3, 8.4]  # [19.4, 21.0] for HI
+        panels.append(
+            {
+                "partType": "gas",
+                "partField": gas_field,
+                "valMinMax": gas_mm,
+                "size": 2.0,
+                "ctName": "viridis",  # "thermal",
+                "rotation": "face-on",
+                "labelZ": False,
+            }
+        )
+        panels.append({"partType": "stars", "partField": stars_field, "size": 1.0, "rotation": "face-on"})
+
+    if conf == 6:
+        # for halo-scale composite (Fig 1)
+        plotBHs = False
+        rVirFracs = [1.0]
+        fracsType = "rVirial"
+
+        size = 3.5
+        sizeType = "rVirial"
+        # depthFac = 0.1
+
+        panels.append({"partType": "gas", "partField": "coldens_msunkpc2", "valMinMax": [4.2, 7.4]})
+
     class plotConfig:
         plotStyle = "edged"
-        colorbars = False if conf == 0 else True
-        fontsize = 34  # 28  # 24
+        colorbars = False if conf in [0, 4] else True
+        fontsize = 34 if conf != 4 else 16
         saveFilename = "galaxy_%s_%d_h%d_conf%d%s.pdf" % (
             sP.simName,
             sP.snap,
