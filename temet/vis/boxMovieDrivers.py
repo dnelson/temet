@@ -548,9 +548,10 @@ def subbox_movie_tng_galaxyevo_frame(
 
     if gal == "three":
         # third movie, Milky Way (sbSnaps 0 - ...)
-        sP_par = simParams(res=2160, run="tng", snap=90)
+        sP_par = simParams(res=2160, run="tng", snap=99)
         sbNum = 0
-        subhaloID = 481167  # halo 359, snap 90
+        # subhaloID = 481167 # halo 359, snap 90 (old, pre-fix group cats)
+        subhaloID = 577125  # re-located at z=0
         refVel = np.array([-10.29, -13.75, 74.17])  # snap 40, z=1.5
 
         mm7 = [50, 300]
@@ -646,7 +647,7 @@ def subbox_movie_tng_galaxyevo_frame(
     labelZ = True  #'tage'
     plotHalos = False
 
-    nPixels = [1920, 1080]  # [3840,2160]
+    nPixels = [3840, 2160]  # [1920, 1080]
     nPixelsSq = [540, 540]
     nPixelsSm = [960, 540]
 
@@ -660,7 +661,7 @@ def subbox_movie_tng_galaxyevo_frame(
     boxCenter = subhalo_pos[sbSnapNum, :]
 
     # panel config
-    if conf in ["one", "six", "seven", "eight", "nine", "ten", "eleven", "fifteen", "nineteen"]:
+    if conf in ["one", "six", "seven", "eight", "nine", "ten", "eleven", "fifteen", "nineteen", "twenty"]:
         # main panel: gas density on intermediate scales
         boxSizeImg = [int(boxSizeLg * aspect), boxSizeLg, boxSizeLg]
         loc = [0.003, 0.26]
@@ -720,6 +721,8 @@ def subbox_movie_tng_galaxyevo_frame(
             panels.append({"partType": "gas", "partField": "sfr_halpha", "valMinMax": mm10, "legendLoc": loc})
         if conf == "eleven":
             panels.append({"partType": "gas", "partField": "bmag_uG", "valMinMax": [-1.0, 1.6], "legendLoc": loc})
+        if conf == "twenty":
+            panels.append({"partType": "stars", "partField": "stellarComp-jwst_f200w-jwst_f115w-jwst_f070w"})
 
         # add custom label of subbox time resolution galaxy properties if extended info is available
         if conf == "one" and "SubhaloStars_Mass" in cat and 0:  # disabled
@@ -849,14 +852,10 @@ def subbox_movie_tng_galaxyevo_frame(
     if conf == "nineteen":
         ptRestrictions = {"temp_log": ["gt", 5.5]}
 
-    if 0:
-        # SWR
-        nPixels = [1200, 1200]  # square
+    if 1:
         labelScale = False
         labelZ = False
         labelCustom = None
-        if conf == "one":
-            boxSizeImg = [boxSizeLg, boxSizeLg, boxSizeLg]
 
     extent = [
         boxCenter[0] - 0.5 * boxSizeImg[0],
@@ -877,7 +876,7 @@ def subbox_movie_tng_galaxyevo_frame(
     if conf in ["two", "three", "four", "five"]:
         plotConfig.fontsize = 13
 
-    renderBox(panels, plotConfig, locals())
+    renderBox(panels, plotConfig, locals(), skipExisting=True)
 
 
 def subbox_movie_tng_galaxyevo(gal="one", conf="one"):
@@ -907,9 +906,12 @@ def subbox_movie_tng_galaxyevo(gal="one", conf="one"):
 
     # pre-load subbox cat (optional, must be correct for gal!)
     cat = None
-    if 1:
-        assert gal == "one"  #'two'
-        cat = subboxSubhaloCat(simParams(run="tng50-1", redshift=0.0), sbNum=0)  # 2)
+    if gal in ["one", "three"]:
+        sbNum = 0
+    elif gal in ["two"]:
+        sbNum = 2
+
+    cat = subboxSubhaloCat(simParams(run="tng50-1", redshift=0.0), sbNum=sbNum)
 
     # normal render
     for i, sbSnapNum in enumerate(sbSnapNums):

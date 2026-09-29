@@ -1551,6 +1551,9 @@ def dNdz_evolution(sim_in, redshifts, line="MgII 2796", instrument="SDSS-BOSS", 
     # config
     z13 = zhu13mgii()
     # EW_thresholds = [0.3,1.0,3.0] # thresholds for EW for vs. redshift plot
+    ylog = True
+    ylim = None
+
     if "MgII" in line:
         EW_thresholds = z13["EW0"]  # match to obs data
         xlim = [0.0, 6.0]
@@ -1561,10 +1564,17 @@ def dNdz_evolution(sim_in, redshifts, line="MgII 2796", instrument="SDSS-BOSS", 
         xlim = [np.min(redshifts) - 0.1, np.max(redshifts) + 0.1]
         ylim = [1e-4, 10.0]
 
+    if "NaI" in line:
+        # Anand+26
+        EW_thresholds = [[0.95, 3.5], [0.95, 1.41], [1.41, 3.5]]
+        xlim = [0.0, np.max(redshifts) + 0.05]
+        # ylim = [0.3e-2, 4.5e-2]
+        ylog = False
+
     # load: loop over all available redshifts
     zz = []
-    dNdz = {thresh: [] for thresh in EW_thresholds}
-    dNdX = {thresh: [] for thresh in EW_thresholds}
+    dNdz = [[] for thresh in EW_thresholds]
+    dNdX = [[] for thresh in EW_thresholds]
 
     for redshift in redshifts:
         sim.setRedshift(redshift)
@@ -1589,8 +1599,13 @@ def dNdz_evolution(sim_in, redshifts, line="MgII 2796", instrument="SDSS-BOSS", 
         EWs /= 1 + sim.redshift
 
         # loop over requested thresholds
-        for EW_thresh in EW_thresholds:
-            num = len(np.where(EWs >= EW_thresh)[0])
+        for i, EW_thresh in enumerate(EW_thresholds):
+            if isinstance(EW_thresh, float):
+                # lower limit
+                num = len(np.where(EWs >= EW_thresh)[0])
+            else:
+                # 2-tuple, lower and upper limits
+                num = len(np.where((EWs >= EW_thresh[0]) & (EWs < EW_thresh[1]))[0])
 
             # normalize by dz = total redshift path length = N_sightlines * boxSizeInDeltaRedshift
             num_dz = float(num) / (count * sim.dz)
@@ -1599,8 +1614,8 @@ def dNdz_evolution(sim_in, redshifts, line="MgII 2796", instrument="SDSS-BOSS", 
             num_dX = float(num) / (count * sim.dX)
 
             # store
-            dNdz[EW_thresh].append(num_dz)
-            dNdX[EW_thresh].append(num_dX)
+            dNdz[i].append(num_dz)
+            dNdX[i].append(num_dX)
 
         zz.append(redshift)
 
@@ -1609,15 +1624,18 @@ def dNdz_evolution(sim_in, redshifts, line="MgII 2796", instrument="SDSS-BOSS", 
     ax = fig.add_subplot(111)
 
     ax.set_xlim(xlim)
-    ax.set_ylim(ylim)
+    if ylim is not None:
+        ax.set_ylim(ylim)
     ax.set_xlabel("Redshift")
     ax.set_ylabel("d$N$/d$z$ (%s)" % line)
-    ax.set_yscale("log")
+
+    if ylog:
+        ax.set_yscale("log")
 
     # plot the simulation dN/dz for each EW threshold
     colors = []
-    for EW_thresh in EW_thresholds:
-        (l,) = ax.plot(zz, dNdz[EW_thresh], "-")
+    for i, _ in enumerate(EW_thresholds):
+        (l,) = ax.plot(zz, dNdz[i], "-")
         colors.append(l.get_color())
 
     # observational data
@@ -1701,7 +1719,10 @@ def dNdz_evolution(sim_in, redshifts, line="MgII 2796", instrument="SDSS-BOSS", 
     labels = []
 
     for i, EW_thresh in enumerate(EW_thresholds):
-        label = r"EW > %.1f$\,\rm{\AA}$" % EW_thresh
+        if isinstance(EW_thresh, float):
+            label = r"EW > %.1f$\,\rm{\AA}$" % EW_thresh
+        else:
+            label = r"%.1f$\,\rm{\AA}$ < EW < %.1f$\,\rm{\AA}$" % (EW_thresh[0], EW_thresh[1])
         handles.append(plt.Line2D([0], [0], color=colors[i], ls="-"))
         labels.append(label)
 
@@ -1724,13 +1745,15 @@ def dNdz_evolution(sim_in, redshifts, line="MgII 2796", instrument="SDSS-BOSS", 
     ax = fig.add_subplot(111)
 
     ax.set_xlim(xlim)
-    ax.set_ylim(ylim)
+    if ylim is not None:
+        ax.set_ylim(ylim)
     ax.set_xlabel("Redshift")
     ax.set_ylabel("d$N$/d$X$ (%s)" % line)
-    ax.set_yscale("log")
+    if ylog:
+        ax.set_yscale("log")
 
-    for EW_thresh in EW_thresholds:
-        ax.plot(zz, dNdX[EW_thresh], "-")
+    for i, _ in enumerate(EW_thresholds):
+        ax.plot(zz, dNdX[i], "-")
 
     # observational data
     if line == "MgII 2796":
