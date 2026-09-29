@@ -8,7 +8,7 @@ from os.path import isdir, isfile
 
 import h5py
 import numpy as np
-from numba import jit
+from numba import jit, prange
 from scipy.interpolate import interp1d
 from scipy.ndimage import map_coordinates
 
@@ -167,7 +167,7 @@ def _dust_tau_model_lum(
     return obs_lum
 
 
-@jit(nopython=True, nogil=True, cache=True)
+@jit(nopython=True, nogil=True, parallel=True, cache=True)
 def _dust_tau_model_lum_indiv(
     N_H,
     Z_g,
@@ -191,13 +191,13 @@ def _dust_tau_model_lum_indiv(
     """Helper for sps.dust_tau_model_mags(). Cannot JIT a class member function, so it sits here."""
     # accumulate per star attenuated luminosity (wavelength dependent):
     obs_lum_indiv = np.zeros((N_H.size, wave.size), dtype=np.float32)
-    atten = np.zeros(wave.size, dtype=np.float32)
+    # atten = np.zeros(wave.size, dtype=np.float32) # move inside prange
     gamma_term = np.zeros(wave.size, dtype=np.float32)
 
     gamma_w_lt200 = np.where(wave_ang < 2000.0)
     gamma_w_gt200 = np.where(wave_ang >= 2000.0)
 
-    for i in range(N_H.size):
+    for i in prange(N_H.size):
         # taking np.power() using gamma as a full array does ~6000 powers, need to avoid for efficiency
         gamma_val_lt200 = np.power(Z_g[i] / Z_solar, 1.35)
         gamma_val_gt200 = np.power(Z_g[i] / Z_solar, 1.6)
@@ -211,8 +211,7 @@ def _dust_tau_model_lum_indiv(
         tau_lambda = tau_a * f_scattering
 
         # attenuation as a function of wavelength
-        atten *= 0.0
-        atten += 1.0  # reset to one
+        atten = np.ones(wave.size, dtype=np.float32)
 
         if calzetti_case == 3:
             # 'uniform scattering slab'
@@ -321,7 +320,7 @@ class sps:
     imfTypes = {"salpeter": 0, "chabrier": 1, "kroupa": 2}
     isoTracks = ["mist", "padova07", "parsec", "basti", "geneva"]
     stellarLib = ["miles", "basel", "csk"]  # unused herein, but we tend to assume MILES selected in FSPS
-    dustModels = ["none", "cf00", "cf00_res_eff", "cf00b_res_conv", "cf00_res_conv", "cf00_res3_conv"]
+    dustModels = ["none", "cf00", "cf00_res_eff", "none_vis", "cf00b_res_conv", "cf00_res_conv", "cf00_res3_conv"]
 
     def __init__(
         self, sP, iso="padova07", imf="chabrier", dustModel="cf00_res_conv", order=3, redshifted=False, emlines=False
@@ -589,7 +588,7 @@ class sps:
 
     def prep_dust_models(self):
         """Do possibly expensive pre-calculations for (resolved) dust model."""
-        if "_res" not in self.dustModel:
+        if "_res" not in self.dustModel and "_vis" not in self.dustModel:
             return
 
         self.lambda_nm = {}
@@ -601,11 +600,12 @@ class sps:
         self.N_H0 = 2.1e21  # neutral hydrogen column density [cm^-2]
 
         for band in self.bands:
-            if "suprimecam" in band:
-                continue  # missing transmission data
+            # missing transmission data
+            if band not in self.lambda_eff or np.isnan(self.lambda_eff[band]):
+                continue
 
             # get wavelength array
-            if "_eff" in self.dustModel:
+            if "_eff" in self.dustModel or "_vis" in self.dustModel:
                 # get single (lambda_eff) luminosity attenuation factor for each star
                 lambda_nm = np.array([self.lambda_eff[band]])
 
@@ -725,9 +725,6 @@ class sps:
         self.wave_ang = self.wave * 10.0
 
         for band in self.bands:
-            if "suprimecam" in band or "ps1_" in band or "roman_f184" in band:
-                continue  # missing transmission data
-
             f = fsps.get_filter(band)
 
             # get filter general properties
@@ -939,7 +936,7 @@ class sps:
             stars["GFM_StellarPhotometrics"][wWind] = np.nan
 
             mags = stars["GFM_StellarPhotometrics"]
-        elif "_dustC" in band:
+        elif "_dustC" in band or "_vis" in self.dustModel:
             # view direction dependent dust attenuation calculation on the fly
             from ..cosmo.hydrogen import hydrogenMass
 
@@ -968,6 +965,18 @@ class sps:
             fields = ["initialmass", "sftime", "metallicity", "pos"]
             stars = sP.snapshotSubset(partType="stars", fields=fields, indRange=indRange)
 
+            if "_dustC" not in band:
+                assert "_vis" in self.dustModel
+                # FSPS on the fly, before we override these datasets with various unit conversions
+                mags = self.mags_code_units(
+                    sP,
+                    band,
+                    stars["GFM_StellarFormationTime"],
+                    stars["GFM_Metallicity"],
+                    stars["GFM_InitialMass"],
+                    retFullSize=True,
+                )
+
             stars["GFM_StellarFormationTime"] = sP.units.scalefacToAgeLogGyr(stars["GFM_StellarFormationTime"])
             stars["GFM_InitialMass"] = sP.units.codeMassToMsun(stars["GFM_InitialMass"])
 
@@ -993,10 +1002,27 @@ class sps:
             )
 
             # compute stellar magnitudes, reshape back into full PT4 size
-            bands = [band.replace("_dustC", "")]
+            if "_dustC" in band:
+                bands = [band.replace("_dustC", "")]
 
-            magsStars = self.dust_tau_model_mags(bands, N_H, Z_g, ages_logGyr, metals_log, masses_msun, ret_indiv=True)
-            magsStars = magsStars[bands[0]]
+                magsStars = self.dust_tau_model_mags(
+                    bands, N_H, Z_g, ages_logGyr, metals_log, masses_msun, ret_indiv=True
+                )
+                magsStars = magsStars[bands[0]]
+            else:
+                # approximate, non-physical, for visualization purposes only
+                assert "_vis" in self.dustModel
+                assert N_H.size == mags.size
+
+                # heuristic attenuation
+                gamma = 1.6  # for lambda > 200 nm, 1.35 for lambda < 200 nm
+                A_fac = self.A_lambda_sol[band] ** (1 / 3)  # power to reduce variation between bands
+                N_fac = 1.0
+
+                tau = A_fac * np.power(1 + sP.redshift, self.beta) * gamma * (N_H / self.N_H0) ** N_fac
+                tau_mags = 2.5 * np.log10(np.e) * tau
+
+                magsStars = mags + tau_mags
 
             mags = np.zeros(stars["GFM_StellarFormationTime"].size, dtype=magsStars.dtype)
             mags.fill(np.nan)
@@ -1005,9 +1031,9 @@ class sps:
             # load age,Z,mass_ini, use FSPS on the fly
             assert band in self.bands
 
-            sftime = sP.stars("sftime")
-            metal = sP.stars("metallicity")
-            imass = sP.stars("initialmass")
+            sftime = sP.stars("sftime", indRange=indRange)
+            metal = sP.stars("metallicity", indRange=indRange)
+            imass = sP.stars("initialmass", indRange=indRange)
 
             mags = self.mags_code_units(sP, band, sftime, metal, imass, retFullSize=True)
 
@@ -1155,7 +1181,8 @@ class sps:
 
         for band in bands:
             if "_eff" in self.dustModel:
-                assert ret_indiv is False
+                assert ret_indiv is False  # no support for individual spectra with effective wavelength model
+                assert rel_vel is None  # no support for individual spectra with effective wavelength model
                 # the aggregate spectrum is band-dependent, but its calculation is very fast since
                 # the lambda_nm is a single value instead of a ~6000 element array
                 obs_lum = _dust_tau_model_lum(

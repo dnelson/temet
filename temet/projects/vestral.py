@@ -2045,8 +2045,8 @@ def paperPlots(a=False):
 
     # fig 2: composite vis (i) parent box dm, (ii) halo-scale gas, (iii) galaxy-scale gas+stars
     if 0:
-         sim_parent = simParams("tng50-1", redshift=6.0)  # z=5.5 is a mini snap, no DM hsml
-         vis_parent_box(sim_parent)
+        sim_parent = simParams("tng50-1", redshift=6.0)  # z=5.5 is a mini snap, no DM hsml
+        vis_parent_box(sim_parent)
         sim = simParams("structures", hInd=31619, res=15, variant="ST15", redshift=6.0, haloInd=0)
         vis_single_galaxy(sim, conf=6)
         sim = simParams("structures", hInd=23908, res=15, variant="ST15", redshift=5.6, haloInd=0)

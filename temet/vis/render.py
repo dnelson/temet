@@ -15,7 +15,6 @@ from ..cosmo.cloudy import cloudyEmission
 from ..cosmo.stellarPop import sps
 from ..spectra.spectrum import create_spectra_from_traced_rays
 from ..util.boxRemap import remapPositions
-from ..util.delaunay import render_tetra
 from ..util.helper import logZeroMin, pSplitRange
 from ..util.match import match
 from ..util.rotation import perspectiveProjection, rotateCoordinateArray
@@ -298,7 +297,11 @@ def stellar3BandCompositeImage(
     """Generate 3-band RGB composite using starlight in three different passbands. Work in progress."""
     bands, label = _stellar_3bands(partField)
 
-    fieldPrefix = "stellarBandObsFrame-" if "ObsFrame" in partField else "stellarBand-"
+    fieldPrefix = "stellarBand"
+    if "Dust" in partField:
+        fieldPrefix += "Dust"
+    if "ObsFrame" in partField:
+        fieldPrefix += "ObsFrame"
 
     # print('Generating stellar composite with %s [%s %s %s]' % (fieldPrefix,bands[0],bands[1],bands[2]))
     band_grids = []  # in mags
@@ -307,7 +310,7 @@ def stellar3BandCompositeImage(
             sP,
             method,
             "stars",
-            fieldPrefix + bands[i],
+            fieldPrefix + "-" + bands[i],
             nPixels,
             axes,
             projType,
@@ -738,11 +741,13 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         # mass[mass < 0] = 0.0 # clip -eps values to 0.0
 
     # single stellar band, replace mass array with linear luminosity of each star particle
-    if "stellarBand-" in partField or "stellarBandObsFrame-" in partField:
+    if "stellarBand" in partField:
         bands = partField.split("-")[1:]
         assert len(bands) == 1
 
-        pop = sps(sP, redshifted=("ObsFrame" in partField), dustModel="none")
+        dustModel = "none_vis" if "Dust" in partField else "none"  # no birth cloud, only hueristic/vis resolved atten
+        pop = sps(sP, redshifted=("ObsFrame" in partField), dustModel=dustModel)
+
         mass = pop.calcStellarLuminosities(sP, bands[0], indRange=indRange, rotMatrix=rotMatrix, rotCenter=rotCenter)
 
     # quantity relies on a non-trivial computation / load of another quantity
@@ -761,8 +766,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         partFieldLoad in colDensityFields + totSumFields
         or " " in partFieldLoad
         or "metals_" in partFieldLoad
-        or "stellarBand-" in partFieldLoad
-        or "stellarBandObsFrame-" in partFieldLoad
+        or "stellarBand" in partFieldLoad
         or "sb_" in partFieldLoad
     ):
         # distribute 'mass' and calculate column/volume density grid
@@ -775,7 +779,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
             " " in partFieldLoad and "mass" not in partFieldLoad and "frac" not in partFieldLoad
         ):
             normCol = True
-        # if 'stellarBand-' in partFieldLoad or 'stellarBandObsFrame-' in partFieldLoad and method == 'histo':
+        # if 'stellarBand' in partFieldLoad and method == 'histo':
         #    normCol = True
     else:
         # distribute a mass-weighted quantity and calculate mean value grid
@@ -991,7 +995,7 @@ def gridBox(
 
     def emptyReturn():
         print("Skip empty: [%s]!" % saveFilename.split(sP.derivPath)[1])
-        grid = np.zeros(nPixels, dtype="float32")
+        grid = np.zeros((nPixels[1], nPixels[0]), dtype="float32")  # np.zeros(nPixels, dtype="float32")
         grid, config, data_grid = gridOutputProcess(
             sP, grid, partType, partField, boxSizeImg, nPixels, projType, method, vmmPercs
         )
@@ -1715,6 +1719,8 @@ def gridBox(
                 ray_dir = np.array([0, 0, 1.0], dtype="float32")  # given axes
 
                 # ray-trace (note: requires GPU device!)
+                from ..util.delaunay import render_tetra
+
                 grid_d = render_tetra(sP, bounds, nPixels, rotMatrix=rotMatrix, rotCenter=rotCenter)
                 grid_q = np.zeros(nPixels, dtype="float32").T  # dummy
 

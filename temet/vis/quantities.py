@@ -690,19 +690,19 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config["ctName"] = "blgrrd_black0"
         logMin = False
 
-    if "stellarBand-" in partField:
+    if "stellarBand" in partField:
         # convert linear luminosities back to magnitudes
         ww = np.where(grid == 0.0)
         w2 = np.where(grid > 0.0)
         grid[w2] = sP.units.lumToAbsMag(grid[w2])
         grid[ww] = 99.0
 
-        bandName = partField.split("stellarBand-")[1]
+        bandName = partField.replace("stellarBand-", "").replace("stellarBandDust-", "")
         config["label"] = r"Stellar %s Luminosity [abs AB mag]" % bandName
         config["ctName"] = "gray_r"
         logMin = False
 
-    if "stellarBandObsFrame-" in partField:
+    if "stellarBandObsFrame" in partField:
         # convert linear luminosities back to magnitudes
         ww = np.where(grid == 0.0)
         w2 = np.where(grid > 0.0)
@@ -713,7 +713,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
         grid[ww] = 99.0
 
-        bandName = partField.split("stellarBandObsFrame-")[1]
+        bandName = partField.replace("stellarBandObsFrame-", "")
         config["label"] = r"Stellar %s Luminosity [mag / arcsec$^2$]" % bandName
         config["ctName"] = "gray_r"
         logMin = False
