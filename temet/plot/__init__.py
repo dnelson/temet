@@ -63,5 +63,6 @@ try:
 except FileNotFoundError:
     pass
 
-# disable fontTools timestamp warnings
+# disable fontTools timestamp and weight warnings
 logging.getLogger("fontTools.ttLib.tables").setLevel(logging.ERROR)
+logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
