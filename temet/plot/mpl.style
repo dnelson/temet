@@ -210,12 +210,8 @@ axes.axisbelow      : False   # whether axis gridlines and ticks are below
                                # rather than hyphen.  See
                                # http://en.wikipedia.org/wiki/Plus_and_minus_signs#Character_codes
 
-#axes.prop_cycle    : cycler('color', 'bgrcmyk')
-
-#axes.prop_cycle     : cycler('color',['1F77B4','FF7F0E','2CA02C','D62728','9467BD','8C564B','E377C2','BCBD22','17BECF','7F7F7F','AEC7E8','FFBB78','98DF8A','FF9896','C5B0D5','C49C94','F7B6D2','DBDB8D','9EDAE5','C7C7C7']) # tableau10 then tableau20 other 10
-
-#axes.prop_cycle : cycler('color',['4E79A5','5AA155','AF7AA0','E0585B','F18F3B','77B7B2','9C7561','EDC958','FE9EA8','BAB0AC']) # new tableau10 2016 (shuffled)
-axes.prop_cycle : cycler('color',['E0585B','4E79A5','5AA155','F18F3B','AF7AA0','77B7B2','9C7561','EDC958','FE9EA8','BAB0AC']) # new tableau10 2016
+# new tableau10 2016 (shuffled order), remove last gray, and add some from observable10
+axes.prop_cycle : cycler('color',['E0585B','4E79A5','5AA155','F18F3B','AF7AA0','77B7B2','9C7561','EDC958','FE9EA8','D17CD9','E46B56','97A951','BD9C63'])
 
 #axes.prop_cycle     : cycler('color',['1F77B4','2CA02C','D62728']) # L75n1820TNG, 910TNG, 455TNG
 #axes.prop_cycle     : cycler('color',['FF7F0E','9467BD','8C564B']) # L75n1820FP, 910FP, 455FP
@@ -278,8 +274,8 @@ legend.labelspacing  : 0.0    # the vertical space between the legend entries in
 legend.handlelength  : 2.0     # the length of the legend lines in fraction of fontsize
 #legend.handleheight  : 0.7     # the height of the legend handle in fraction of fontsize
 legend.handletextpad : 0.5    # the space between the legend line and legend text in fraction of fontsize
-legend.borderaxespad  : 0.3   # the border between the axes and legend edge in fraction of fontsize
-legend.columnspacing : 1.5    # the border between the axes and legend edge in fraction of fontsize
+legend.borderaxespad  : 0.4   # the border between the axes and legend edge in fraction of fontsize
+legend.columnspacing : 1.5    # horizontal spacing
 #legend.shadow        : False
 legend.frameon       : False   # whether or not to draw a frame around legend
 legend.framealpha    : 0.6    # opacity of of legend frame

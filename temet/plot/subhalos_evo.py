@@ -600,6 +600,7 @@ def tracks1d(
     legend: str = "dev",
     legend_locs: list[str] = None,
     legend_ncols: list[int] = None,
+    legend_fill: bool = True,
     f_selection: Callable = None,
     f_pre: Callable = None,
     f_post: Callable = None,
@@ -626,6 +627,7 @@ def tracks1d(
       legend : either 'dev' (default),  'simple', or 'none', to determine how legend(s) are shown.
       legend_locs: if not None, a list of two strings indicating the locations of the two legends.
       legend_ncols: if not None, a list of two integers indicating the number of columns for the two legends.
+      legend_fill: if True, fill the legend background with a white box (default). If False, no background.
       f_selection: if not None, this 'custom' function hook is called to determine which
         subhalo IDs to plot for each sim. It must accept a single argument: the simulation object,
         and return a list of subhalo IDs to plot. If None, defaults to sim.zoomSubhaloID only.
@@ -844,7 +846,9 @@ def tracks1d(
         _add_legends(ax, hInds, res, variants, colors, lineplot=True)
     elif legend == "simple":
         leg_colors = colors if not color else [color]
-        _add_legends_simple(ax, hInds, res, variants, leg_colors, lineplot=True, locs=legend_locs, ncols=legend_ncols)
+        _add_legends_simple(
+            ax, hInds, res, variants, leg_colors, lineplot=True, locs=legend_locs, ncols=legend_ncols, fill=legend_fill
+        )
 
     hStr = "" if len(set(hInds)) > 1 else "_h%d" % hInds[0]
     if sim.haloInd == 1:
@@ -872,6 +876,7 @@ def tracks2d(
     legend: str = "dev",
     legend_locs: list[str] = None,
     legend_ncols: list[int] = None,
+    legend_fill: bool = True,
     f_selection: Callable = None,
     f_pre: Callable = None,
     f_post: Callable = None,
@@ -896,6 +901,7 @@ def tracks2d(
       legend : either 'dev' (default),  'simple', or 'none', to determine how legend(s) are shown.
       legend_locs: if not None, a list of two strings indicating the locations of the two legends.
       legend_ncols: if not None, a list of two integers indicating the number of columns for the two legends.
+      legend_fill: if True, fill the legend background with a white box (default). If False, no background.
       f_selection: if not None, this 'custom' function hook is called to determine which
         subhalo IDs to plot for each sim. It must accept a single argument: the simulation object,
         and return a list of subhalo IDs to plot. If None, defaults to sim.zoomSubhaloID only.
@@ -1066,7 +1072,9 @@ def tracks2d(
         _add_legends(ax, hInds, res, variants, colors, lineplot=True)
     elif legend == "simple":
         leg_colors = colors if not color else [color]
-        _add_legends_simple(ax, hInds, res, variants, leg_colors, lineplot=True, locs=legend_locs, ncols=legend_ncols)
+        _add_legends_simple(
+            ax, hInds, res, variants, leg_colors, lineplot=True, locs=legend_locs, ncols=legend_ncols, fill=legend_fill
+        )
 
     hStr = "" if len(set(hInds)) > 1 else "_h%d" % hInds[0]
     saveNameDefault = f"tracks2d_evo_{xquant}-vs-{yquant}-{color}{hStr}.pdf"

@@ -679,7 +679,7 @@ def sizes_vs_mstar(sims):
     xQuant = "mstar2_log"
     yQuant = "rhalf_stars"
     ylim = [-2.7, 1.5]  # log pkpc
-    xlim = [4.5, 9.0]  # log mstar
+    xlim = [4.5, 9.4]  # log mstar
 
     def _draw_data(ax, sims):
         # Thesan-Zoom (McClymont+26 Figure 2 https://arxiv.org/abs/2503.04894)
@@ -820,7 +820,7 @@ def sizes_vs_mstar(sims):
         ylim=ylim,
         parents=False,
         legend="simple",
-        legend_ncols=[2, 2],
+        legend_ncols=[2, 1],
         legend_locs=["upper left", "lower right"],
         f_pre=_draw_data,
         f_selection=_zoomSubhaloIDsToPlot,
@@ -899,8 +899,9 @@ def size_halpha_vs_mstar(sims):
         ylim=ylim,
         parents=False,
         legend="simple",
-        legend_ncols=[1, 3],
-        legend_locs=["lower right", "upper left"],
+        legend_fill=True,
+        legend_ncols=[1, 4],
+        legend_locs=["lower left", "upper left"],
         f_pre=_draw_data,
         f_post=_draw_psf,
         f_selection=_zoomSubhaloIDsToPlot,
@@ -914,7 +915,7 @@ def gas_mzr(sims):
 
     xQuant = "mstar2_log"
     yQuant = "Z_gas_sfrwt"
-    ylim = [-2.6, 0.0]  # log pkpc
+    ylim = [-2.6, 0.4]  # log Z/Zsun
     xlim = [4.0, 9.0]  # log mstar
 
     def _draw_data(ax, sims):
@@ -1054,6 +1055,7 @@ def gas_mzr(sims):
         ylim=ylim,
         parents=False,
         legend="simple",
+        legend_fill=False,
         f_pre=_draw_data,
         f_selection=_zoomSubhaloIDsToPlot,
     )
@@ -1063,7 +1065,7 @@ def stellar_mzr(sims):
     """Diagnostic plot of stellar mass-metallicity relation (MZR)."""
     xQuant = "mstar2_log"
     yQuant = "Z_stars"  # Z_stars is cat/tree (<2rhalf), while Z_stars_masswt is aux (subhalo)
-    ylim = [-2.6, 0.0]  # log solar
+    ylim = [-2.6, 0.4]  # log Z/Zsun
     xlim = [4.0, 9.0]  # log mstar
 
     def _draw_data(ax, sims):
@@ -1111,7 +1113,7 @@ def stellar_mzr(sims):
         # THESAN-ZOOM z=6 (McClymont+26 Figure 3)
         m26_mstar = [6.0, 7.0, 8.0, 9.0, 10.0, 11.0]  # log mstar
         m26_z = [-1.83, -1.50, -1.19, -0.90, -0.63, -0.39]  # log Z/Zsun
-        m26_label = "McClymont+26 (THESAN-ZOOM)"
+        m26_label = "McClymont+26"
 
         m26_z_solar = 0.02  # Sec 2.3 last paragraph
         fac = m26_z_solar / sims[0].units.Z_solar
@@ -1168,6 +1170,7 @@ def stellar_mzr(sims):
         parents=False,
         legend="simple",
         legend_ncols=[1, 3],
+        legend_fill=False,
         f_pre=_draw_data,
         f_selection=_zoomSubhaloIDsToPlot,
     )
@@ -1652,9 +1655,9 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0,
     if not split_z:
         z_bins = [[5.5, 15.0]]
 
-    dens_lim = [1, 11.5] if not supernovae else [-6, 9]  # log cm^-3
-    temp_lim = [0.5, 7.5] if not supernovae else [1, 10.5]  # log K
-    metallicity_lim = [-4.1, 2.0] if not supernovae else [-5.1, 3]  # log Z/Z_solar
+    dens_lim = [1, 7.7] if not supernovae else [-6, 9]  # log cm^-3
+    temp_lim = [0.5, 9.5] if not supernovae else [1, 10.5]  # log K
+    metallicity_lim = [-4.1, 3.0] if not supernovae else [-5.1, 3]  # log Z/Z_solar
 
     dens_label = "Ambient Gas Density [ log cm$^{-3}$ ]"
     temp_label = "Ambient Gas Temperature [ log K ]"
@@ -1696,6 +1699,10 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0,
                 dens[~np.isfinite(dens)] = dens[np.isfinite(dens)].max()  # rarely inf
                 vals = np.log10(dens)
 
+                if not supernovae:
+                    # clip to 1e6 as per the ST16 SF threshold
+                    vals[vals > 6.0] = 6.0
+
             if field == "Temperature":
                 # [log K]
                 temp = data["Temperature"]
@@ -1723,8 +1730,10 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0,
                 c = colors[i % len(colors)]
 
                 # use numpy for histogram
-                hist, bins = np.histogram(vals[w], bins=40)
-                ax.step(bins[:-1], hist, where="post", color=c, linestyle=linestyles[j], label=label)
+                # hist, bins = np.histogram(vals[w], bins=40)
+                # ax.step(bins[:-1], hist, where="post", color=c, linestyle=linestyles[j], label=label)
+                h = np.histogram(vals[w], bins=40)
+                ax.stairs(*h, color=c, lw=lw, linestyle=linestyles[j], label=label)
 
         # second legend
         if split_z:
@@ -1737,7 +1746,7 @@ def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0,
 
         # finish plot
         hInds = sorted({sim.hInd for sim in sims})
-        ax.legend(loc="upper right", ncols=2, fontsize=14)  # for short hX labels
+        ax.legend(loc="upper right", ncols=1)  # for short hX labels
         fig.savefig(f"{'sn' if supernovae else 'sf'}_{field}{'_h' + str(hInds[0]) if len(hInds) == 1 else ''}.pdf")
         plt.close(fig)
 
@@ -2005,6 +2014,8 @@ def plotSmallestCellSizes(sims, sizefac=0.8):
     legend2 = ax.legend(handles=handles, loc="upper right")
     ax.add_artist(legend2)
 
+    ax.plot([5.0, 8.5], [1e0, 5e-3], "--", color="#000", alpha=0.2)
+
     # legend, colorbar and save plot
     ax.legend(loc="lower left", ncols=2)
 
@@ -2077,7 +2088,7 @@ def paperPlots(a=False):
     # fig 5a: sfr vs mstar relation
     if 0 or a:
         sfr_vs_mstar(sims, yQuant="sfr_100myr")
-        sfr_vs_mstar(sims, yQuant="sfr_10myr")
+        # sfr_vs_mstar(sims, yQuant="sfr_10myr")
 
     # fig 5b: star formation history (using stellar histo) (all halos in one panel)
     if 0 or a:
@@ -2126,6 +2137,7 @@ def paperPlots(a=False):
             "legend_locs": ["lower right", "upper left"],
             "legend_ncols": [1, 4],
             "f_selection": _zoomSubhaloIDsToPlot,
+            "legend_fill": False,
         }
 
         subhalos_evo.tracks1d(sims, quant, sfh_treebased=False, parents=False, **opts)
@@ -2164,7 +2176,8 @@ def paperPlots(a=False):
             "monotonic": True,
             "legend": "simple",
             "legend_locs": ["lower right", "upper left"],
-            "legend_ncols": [1, 3],
+            "legend_ncols": [1, 4],
+            "legend_fill": False,
             "sizefac": 0.8,
             "f_selection": _zoomSubhaloIDsToPlot,
         }
@@ -2192,6 +2205,7 @@ def paperPlots(a=False):
             "legend": "simple",
             "legend_ncols": [4, 4],
             "legend_locs": ["lower right", "upper left"],
+            "legend_fill": False,
             "sizefac": 0.8,
             "f_selection": _zoomSubhaloIDsToPlot,
         }
@@ -2243,7 +2257,7 @@ def paperPlots(a=False):
     if 0 or a:
         from temet.plot.perf import plotCpuHours
 
-        plotCpuHours(run="structures", variant="ST15", hInds=[268] + hInds, resolutions=res)
+        plotCpuHours(run="structures", variant="ST15", hInds=hInds, resolutions=res)
 
     # appendix A: plot smallest gas cell sizes (vs stellar mass)
     if 0 or a:
@@ -2297,15 +2311,15 @@ def paperPlots(a=False):
             for hInd in [219612, 311384, 446076, 539722, 844537]:
                 sims.append(simParams("structures", hInd=hInd, res=res, variant="ST15", redshift=5.5))
 
-        mhalo_lim = [7.3, 10.3]
+        mhalo_lim = [7.4, 9.1]  # [7.3, 10.3]
 
         quants = {
-            "mstar2_log": [4.0, 8.5],
-            "sfr_100myr": [-4.5, 1.5],
-            "Z_gas_sfrwt": [-2.6, 0.0],
-            "Z_stars": [-2.6, 0.0],
-            "rhalf_stars": [-2.7, 1.5],
-            "size_halpha_em": [-1.8, 1.8],
+            "mstar2_log": [3.8, 7.2],  # [4.0, 8.5],
+            "sfr_100myr": [-5.7, -0.8],  # [-4.5, 1.5],
+            "Z_gas_sfrwt": [-3.3, -0.8],  # [-2.6, 0.0],
+            "Z_stars": [-3.3, 0.0],
+            "rhalf_stars": [-2.7, -0.4],  # [-2.7, 1.5],
+            "size_halpha_em": [-0.6, 0.9],  # [-1.1, 1.8],
         }
 
         for quant, ylim in quants.items():
@@ -2321,6 +2335,7 @@ def paperPlots(a=False):
                 sizefac=0.8,
                 vs_sim=None,
                 f_selection=_zoomSubhaloIDsToPlot,
+                saveFilename=f"scatter2d_res_convergence_{quant}.pdf",
             )
 
     # diagnostic: equilibrium curves of new grackle tables
