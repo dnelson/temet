@@ -12,7 +12,7 @@ from matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 
-from ..plot.config import figsize, linestyles, sKn, sKo
+from ..plot.config import colors, figsize, linestyles, sKn, sKo
 from ..plot.util import getWhiteBlackColors, loadColorTable, sampleColorTable, setAxisColors
 from ..spectra.analysis import absorber_catalog, load_spectra_subset, wave_to_dv
 from ..spectra.spectrum import (
@@ -1302,14 +1302,12 @@ def EW_distribution(
         ax.set_xscale("log")
 
     # loop over requested redshifts
-    colors = []
     labels = []
 
-    for redshift in EWs.keys():
+    for i, redshift in enumerate(EWs.keys()):
         # load
         sim.setRedshift(redshift)
         x = EWs[redshift]
-
         # histogram
         hh, bin_edges = np.histogram(x, bins=nBins, range=xlim)
 
@@ -1327,8 +1325,7 @@ def EW_distribution(
 
         hh /= dW_norm
 
-        l = ax.stairs(hh, edges=bin_edges)
-        colors.append(l.get_edgecolor())
+        l = ax.stairs(hh, edges=bin_edges, lw=2, color=colors[i])
         labels.append("z = %.1f" % sim.redshift)
 
     # plot obs data
@@ -1416,7 +1413,7 @@ def EW_distribution(
         ax.errorbar(h20z_W, h20z_n, yerr=h20z_n_err, xerr=h20z_W_err, label=h20z_label, **opts)
 
     # simulation legend
-    handles = [plt.Line2D([0], [0], color=color, ls="-") for color in colors]
+    handles = [plt.Line2D([0], [0], color=colors[i], ls="-") for i in range(len(EWs.keys()))]
     legend2 = ax.legend(handles, labels, loc="lower left")
     ax.add_artist(legend2)
 

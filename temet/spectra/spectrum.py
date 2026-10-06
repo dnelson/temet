@@ -33,13 +33,9 @@ from ..util.voronoiRay import rayTrace
 
 
 # default configuration for ray generation
-# projAxis_def = 2
-# nRaysPerDim_def = 2000 # 10000 for frm_los
-# raysType_def = 'voronoi_rndfullbox'
-
 projAxis_def = 2
-nRaysPerDim_def = 1000
-raysType_def = "voronoi_fullbox"
+nRaysPerDim_def = 1000  # 2000
+raysType_def = "voronoi_fullbox"  # "voronoi_rndfullbox" # "sample_localized" # "voronoi_rndzoomhalos"
 
 
 def generate_rays_voronoi_fullbox(
@@ -388,7 +384,10 @@ def generate_rays_voronoi_fullbox(
         if loadQuant.endswith("_los"):
             loadQuant = loadQuant.replace("_los", "") + "_" + ["x", "y", "z"][projAxis]
 
-        cell_values = sP.snapshotSubsetC("gas", loadQuant, inds=cell_inds, verbose=True)  # units unchanged
+        if pSplit is None:
+            cell_values = sP.gas(loadQuant)  # parallel, global
+        else:
+            cell_values = sP.snapshotSubsetC("gas", loadQuant, inds=cell_inds, verbose=True)  # units unchanged
 
         # integrate
         result = rayTrace(sP, ray_pos, ray_dir, total_dl, cell_pos, quant=cell_values, mode="quant_dx_sum")
@@ -397,10 +396,12 @@ def generate_rays_voronoi_fullbox(
         if integrateQuant == "frm_los":
             # unit conversion [code length] -> [pc] for pathlengths, such that the FRM is in [rad m^-2]
             result *= sP.units.codeLengthToPc(1.0)
+            result /= (1 + sP.redshift) ** 2  # redshift correction for FRM
 
         # save
+        saveQuant = integrateQuant.replace("_los", "")  # remove _los suffix for saving
         path = spectra_filepath(
-            sP, ion=integrateQuant, projAxis=projAxis, nRaysPerDim=nRaysPerDimOrig, raysType=raysType, pSplit=pSplit
+            sP, ion=saveQuant, projAxis=projAxis, nRaysPerDim=nRaysPerDimOrig, raysType=raysType, pSplit=pSplit
         )
         with h5py.File(path, "w") as f:
             f["result"] = result
@@ -410,6 +411,9 @@ def generate_rays_voronoi_fullbox(
             f.attrs["projAxis"] = projAxis
             f.attrs["ray_dir"] = ray_dir
             f.attrs["total_dl"] = total_dl
+
+            if integrateQuant == "frm_los":
+                f.attrs["units"] = "rad m^-2"
 
         print("Saved: [%s]" % path)
 

@@ -1229,7 +1229,7 @@ def frm_x(sim, partType, field, args):
     projDir = field.split("_")[1]
 
     # Heesen+2023 Eqn. 2: RM = 0.81 * los_integral( (ne/cm^3) * (b_parallel/uG) * (dr/pc) ) in [rad m^-2]
-    # see Prochaska+2019 Eqn S17: want a (1+z)^-2 factor for z>0?
+    # note: Prochaska+2019 Eqn S17: (1+z)^-2 factor for z>0 is included in generate_rays_voronoi_fullbox()
     b = sim.snapshotSubset(partType, "b_%s" % projDir, **args)
     b = sim.units.particleCodeBFieldToGauss(b) * 1e6  # uG
 
@@ -1244,6 +1244,25 @@ frm_x.units = r"$\rm{rad m^{-2}}$"
 frm_x.limits = [-2.0, 2.0]
 frm_x.limits_halo = [-4.0, -4.0]
 frm_x.log = True
+
+
+@snap_field
+def dm(sim, partType, field, args):
+    """Dispersion measure -integrand- (ne/(1+z)) in [cm^-3]. Must be integrated through
+    all cells along a line of sight, as sum(integrand*dl) where dl is the pathlength through each cell in pc."""
+    # e.g. Walker+23 Eqn 1, Konietzka+25 Eqn 11, only contributions from hot-phase/ionized SFing gas
+
+    ne = sim.snapshotSubset(partType, "ne_twophase", **args)  # cm^-3
+
+    dm_int = ne / (1 + sim.redshift)
+    return dm_int
+
+
+dm.label = "Dispersion Measure"
+dm.units = r"$\rm{cm^{-3}}$"
+dm.limits = [0.0, 10.0]
+dm.limits_halo = [0.0, 10.0]
+dm.log = True
 
 
 @snap_field(aliases=["p_sync_ska", "p_sync_ska_eta43", "p_sync_ska_alpha15", "p_sync_vla"])

@@ -1085,8 +1085,8 @@ def ion_redshift_coverage(sim, single=False, all=True, lowz=False):
     ax.set_ylabel("Redshift")
 
     if lowz:  # low-z focused (log-log)
-        xlim = [700, 11500]  # [950, 10000]
-        xticks = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 10000]
+        xlim = [400, 12500]  # [700, 11500]
+        xticks = [500, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 10000]
         ylim = [0.07, 7]  # [0.08, 6] # z=0.1 minimum currently used
         yticks = [0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
         ax.set_yscale("log")
@@ -1124,7 +1124,8 @@ def ion_redshift_coverage(sim, single=False, all=True, lowz=False):
 
             label = ion if j == 0 else ""
             ls = linestyles[i // len(colors)]
-            (l,) = ax.plot(wave_z, z, ls, lw=1, c=colors[i], alpha=line_alpha, zorder=0)  # , label=label)
+            c = colors[i % len(colors)]
+            (l,) = ax.plot(wave_z, z, ls, lw=1, c=c, alpha=line_alpha, zorder=0)  # , label=label)
 
     # loop over datasets
     labels = []
@@ -1156,20 +1157,35 @@ def ion_redshift_coverage(sim, single=False, all=True, lowz=False):
                 z_display += 0.5 * (ions.index(ion) - len(ions) / 2)
                 _, z_plot = ax.transData.inverted().transform((wave_z, z_display))
 
-            ax.plot(wave_z, z_plot, marker, c=colors[ion], label=label, zorder=1, **style)
+            c = colors[ions.index(ion) % len(colors)]
+            ax.plot(wave_z, z_plot, marker, c=c, label=label, zorder=1, **style)
 
     # second legend (instrument markers)
-    j_off = 1 if single else 0
-    handles = [plt.Line2D([0], [0], color="black", lw=0, marker=markers[j + j_off]) for j in range(len(insts))]
-    labels = insts
+    if 0:
+        j_off = 1 if single else 0
+        handles = [plt.Line2D([0], [0], color="black", lw=0, marker=markers[j + j_off]) for j in range(len(insts))]
+        labels = insts
 
-    legend2 = ax.legend(handles, labels, loc="lower right")
-    ax.add_artist(legend2)
+        legend2 = ax.legend(handles, labels, loc="lower right")
+        ax.add_artist(legend2)
 
     # first legend
-    handles = [plt.Line2D([0], [0], color=colors[i], ls=linestyles[i // len(colors)]) for i in range(len(ions))]
+    handles = [
+        plt.Line2D([0], [0], color=colors[i % len(colors)], ls=linestyles[i // len(colors)]) for i in range(len(ions))
+    ]
     labels = ions
-    ax.legend(handles, labels, ncols=4 if lowz else 2, handlelength=1.3, columnspacing=0.8, loc="upper left")
+
+    if lowz:
+        # three manual columns with manual placement
+        N = 18
+        l1 = ax.legend(handles[0:N], labels[0:N], ncols=1, loc=(0.02, 0.04))
+        ax.add_artist(l1)
+        l2 = ax.legend(handles[N : 2 * N - 1], labels[N : 2 * N - 1], ncols=1, loc=(0.13, 0.09))
+        ax.add_artist(l2)
+        l3 = ax.legend(handles[2 * N - 1 :], labels[2 * N - 1 :], ncols=1, loc=(0.24, 0.55))
+        ax.add_artist(l3)
+    else:
+        ax.legend(handles, labels, ncols=2, loc="upper left")
 
     fig.savefig(
         "ion_redshift_inst_coverage_%s%s%s%s.pdf"
@@ -1270,12 +1286,12 @@ def paperPlots():
 
     # fig 7: CIV EW distributions (dN/DW) and absorber incidence vs redshift (dN/dz) vs. data
     if 0:
-        sim = simParams(run="tng50-1")
+        sim = simParams(run="tng50-1")  # also "eagle" and "simba"
         line = "CIV 1548"
-        inst = "SDSS-BOSS"
+        inst = "SDSS-BOSS"  # "DESI" for eagle and simba
         redshifts = [1.5, 2.0, 3.0, 4.0, 5.0]
         indivEWs = False
-        opts = {"xlim": [0.1, 2.5], "solar": False, "dX": True, "log": False}
+        opts = {"xlim": [0.0, 2.5], "solar": False, "dX": True, "log": False}
 
         EW_distribution(sim, line=line, instrument=inst, redshifts=redshifts, indivEWs=indivEWs, **opts)
         dNdz_evolution(sim, line=line, instrument=inst, redshifts=redshifts, solar=opts["solar"])
