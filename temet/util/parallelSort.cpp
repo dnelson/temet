@@ -1,4 +1,4 @@
-// c++ -O3 -Wall -shared -std=c++11 -fopenmp -D_GLIBCXX_PARALLEL -fPIC $(python3 -m pybind11 --includes) parallelSort.cpp -o parallelSort.so
+#include <stdexcept>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <parallel/algorithm>
@@ -6,32 +6,39 @@
 
 namespace py = pybind11;
 
-template<typename T> void sort(py::array_t<T> array) {
+template<typename T> void sort(py::array_t<T, py::array::c_style> array) {
     // get array data buffer
     py::buffer_info buf = array.request();
 
-    //std::cout << "Size: " << buf.size << std::endl;
+    if (buf.ndim != 1)
+        throw std::invalid_argument("parallelSort: array must be 1-dimensional");
+    if (buf.size <= 0)
+        return;
 
     // sort input array directly
     __gnu_parallel::sort((T*)buf.ptr, (T*)buf.ptr + buf.size);
 }
 
-template<typename T> py::array_t<long int> argsort(py::array_t<T> array) {
+template<typename T> py::array_t<long int> argsort(py::array_t<T, py::array::c_style> array) {
     // get array data buffer
     py::buffer_info buf = array.request();
-    T* data = (T*)buf.ptr;
 
-    //std::cout << "Size: " << buf.size << std::endl;
-    //std::cout << "OMP threads: " << omp_get_num_threads() << " (max = "
-    //          << omp_get_max_threads() << ")" << std::endl;
+    if (buf.ndim != 1)
+        throw std::invalid_argument("parallelSort: array must be 1-dimensional");
+    if (buf.size < 0)
+        throw std::invalid_argument("parallelSort: invalid buffer size");
 
     // allocate output buffer
     py::array_t<long int> inds = py::array_t<long int>(buf.size);
+    if (buf.size == 0)
+        return inds;
+
     py::buffer_info output_buf = inds.request();
     long int* inds_ptr = (long int*) output_buf.ptr;
+    T* data = (T*)buf.ptr;
 
     // fill output buffer with ascending indices to start
-    for(auto i = 0; i < buf.size; i++)
+    for (ssize_t i = 0; i < buf.size; i++)
         inds_ptr[i] = i;
 
     // sort index array, using a lambda comparator which compares elements of array[]

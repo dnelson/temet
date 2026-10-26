@@ -588,7 +588,9 @@ def radialMassFluxes(
       v200norm (bool): if True, then all velocities are binned in thresholds which are fractions of v200 of
         the halo, rather than in absolute physical [km/s] units.
     """
+    import json
     import pickle
+    import warnings
 
     validQuants = ["temp", "temp_sfcold", "z_solar", "numdens", "theta", "vrad", "vlos"]
     assert ptType in ["Gas", "Wind"]
@@ -662,9 +664,32 @@ def radialMassFluxes(
             flux = f["mdot"][()]
             mstar = f["mstar"][()]
             subhaloIDs = f["subhaloIDs"][()]
-            binConfig = pickle.loads(f["binConfig"][()], encoding="latin1")
-            numBins = pickle.loads(f["numBins"][()], encoding="latin1")
             vcut_vals = f["vcut_vals"][()]
+
+            # safe JSON deserialization
+            if "binConfig_json" in f and "numBins_json" in f:
+                raw_bc = f["binConfig_json"][()]
+                raw_nb = f["numBins_json"][()]
+                bc_str = raw_bc.decode("utf-8") if isinstance(raw_bc, bytes) else raw_bc
+                nb_str = raw_nb.decode("utf-8") if isinstance(raw_nb, bytes) else raw_nb
+                binConfig = OrderedDict((k, np.array(v)) for k, v in json.loads(bc_str).items())
+                numBins = OrderedDict(json.loads(nb_str))
+            else:
+                raw_bc = f["binConfig"][()]
+                raw_nb = f["numBins"][()]
+                try:
+                    bc_str = raw_bc.decode("utf-8") if isinstance(raw_bc, bytes) else str(raw_bc)
+                    nb_str = raw_nb.decode("utf-8") if isinstance(raw_nb, bytes) else str(raw_nb)
+                    binConfig = OrderedDict((k, np.array(v)) for k, v in json.loads(bc_str).items())
+                    numBins = OrderedDict(json.loads(nb_str))
+                except Exception:
+                    warnings.warn(
+                        "Loading legacy pickled binConfig from cache file; re-saving with JSON is recommended.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    binConfig = pickle.loads(raw_bc, encoding="latin1")
+                    numBins = pickle.loads(raw_nb, encoding="latin1")
 
         print("Loading from cached [%s]." % cacheFile)
         return flux, mstar, subhaloIDs, binConfig, numBins, vcut_vals
@@ -790,13 +815,16 @@ def radialMassFluxes(
     mstar = sP.groupCat(fieldsSubhalos=["mstar_30pkpc_log"])
     mstar = mstar[gc_inds]
 
-    # save cache
+    # save cache (use JSON for safe serialization)
     with h5py.File(cacheFile, "w") as f:
         f["mdot"] = flux  # note: should be called 'flux', can be of mass, energy, or momentum
         f["mstar"] = mstar
         f["subhaloIDs"] = ac["subhaloIDs"]
-        f["binConfig"] = np.void(pickle.dumps(binConfig))
-        f["numBins"] = np.void(pickle.dumps(numBins))
+        binConfig_serializable = {k: v.tolist() if hasattr(v, "tolist") else v for k, v in binConfig.items()}
+        f["binConfig_json"] = json.dumps(binConfig_serializable)
+        f["numBins_json"] = json.dumps(numBins)
+        f["binConfig"] = json.dumps(binConfig_serializable).encode("utf-8")
+        f["numBins"] = json.dumps(numBins).encode("utf-8")
         f["vcut_vals"] = vcut_vals
 
     print("Saved cached [%s]." % cacheFile)

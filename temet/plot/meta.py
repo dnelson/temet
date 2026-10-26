@@ -454,9 +454,18 @@ def plotCpuTimeEstimates():
 
 def periodic_slurm_status(machine="vera", nosave=False):
     """Collect current statistics from the SLURM scheduler, save some data, make some plots."""
+    import re
+
+    if not re.match(r"^[a-zA-Z0-9_-]+$", machine):
+        raise ValueError(f"Invalid machine name: {machine}")
+
     import os
-    import pwd
     import subprocess
+
+    try:
+        import pwd
+    except ImportError:
+        pwd = None
 
     import h5py
     import pyslurm
@@ -555,7 +564,9 @@ def periodic_slurm_status(machine="vera", nosave=False):
                 print("WARNING: Node [%s] already has a job from [%s]." % (nodeName, nodes[nodeName]["cur_job_owner"]))
 
             # nodes[nodeName]['cur_job_user'] = subprocess.check_output('id -nu %d'%job['user_id'], shell=True).strip()
-            nodes[nodeName]["cur_job_owner"] = pwd.getpwuid(job["user_id"])[4].split(",")[0]
+            nodes[nodeName]["cur_job_owner"] = (
+                pwd.getpwuid(job["user_id"])[4].split(",")[0] if pwd else str(job["user_id"])
+            )
             nodes[nodeName]["cur_job_name"] = job["name"]
             nodes[nodeName]["cur_job_runtime"] = job["run_time"]
 
@@ -570,7 +581,9 @@ def periodic_slurm_status(machine="vera", nosave=False):
 
     if "Resources" in pending_reasons:
         next_job_starting = jobs_pending[pending_reasons.index("Resources")]  # always just 1?
-        next_job_starting["user_name"] = pwd.getpwuid(next_job_starting["user_id"])[0]
+        next_job_starting["user_name"] = (
+            pwd.getpwuid(next_job_starting["user_id"])[0] if pwd else str(next_job_starting["user_id"])
+        )
     else:
         next_job_starting = None
 
@@ -990,12 +1003,12 @@ def periodic_slurm_status(machine="vera", nosave=False):
     #    ax.annotate(nextJobsStr, [0.73, 0.906], xycoords='figure fraction', fontsize=20.0, ha='right', va='center')
 
     # disk usage text
-    df = (
-        str(subprocess.check_output("df -h /virgotng /%s/u /%s/ptmp" % (machine, machine), shell=True))
-        .replace("b'", "")
-        .strip()
-        .split("\\n")
-    )
+    try:
+        df_cmd = ["df", "-h", "/virgotng", f"/{machine}/u", f"/{machine}/ptmp"]
+        df_raw = subprocess.check_output(df_cmd, stderr=subprocess.DEVNULL)
+        df = df_raw.decode("utf-8", errors="replace").strip().split("\n")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        df = []
     for i, line in enumerate(df):
         if line in ["", "'"]:
             continue

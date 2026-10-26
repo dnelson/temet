@@ -1202,12 +1202,14 @@ def scida_sdss_spectra():
     plt.savefig("sdss-dr17-spectra.png", dpi=150)
 
 
-def plotSingleResult(ind, sps=None, doSim=None):
+def plotSingleResult(ind, sps=None, doSim=None, allow_pickle=False):
     """Examine and visualize the results of a single MCMC fit.
 
     Load the results of a single MCMC fit, print the answer, render a corner plot of the joint
     PDFs of all the parameters, and show the original spectrum as well as some ending model spectra.
     """
+    import warnings
+
     from prospect.models import sedmodel
     from prospect.sources import CSPSpecBasis
 
@@ -1236,13 +1238,84 @@ def plotSingleResult(ind, sps=None, doSim=None):
         wave = f["obs"]["wavelength"][()]
         spec = f["obs"]["spectrum"][()]
 
-        # variable-length null-terminated ASCII string pickles
-        model_params = pickle.loads(f.attrs["model_params"])
-        run_params = f.attrs["run_params"]
-        if run_params[0] == "(":
-            run_params = pickle.loads(run_params)  # pickled
+        # safe JSON deserialization by default; legacy pickle requires explicit allow_pickle=True
+        raw_model = f.attrs["model_params"]
+        if isinstance(raw_model, np.void):
+            raw_model = raw_model.tobytes()
+        if isinstance(raw_model, bytes):
+            try:
+                raw_model_str = raw_model.decode("utf-8")
+            except UnicodeDecodeError:
+                raw_model_str = None
+        elif isinstance(raw_model, str):
+            raw_model_str = raw_model
         else:
-            run_params = json.loads(run_params)  # json encoded
+            raw_model_str = None
+
+        model_params = None
+        if raw_model_str is not None:
+            try:
+                model_params = json.loads(raw_model_str)
+            except (json.JSONDecodeError, TypeError):
+                model_params = None
+
+        if model_params is None:
+            if not allow_pickle:
+                raise ValueError(
+                    "model_params in HDF5 file appears to be stored as a legacy Python pickle, "
+                    "which is disabled by default for security. Re-save with JSON or pass allow_pickle=True."
+                ) from None
+            warnings.warn(
+                "Loading legacy pickled model_params from HDF5 attribute; "
+                "re-saving with JSON encoding is strongly recommended.",
+                UserWarning,
+                stacklevel=2,
+            )
+            model_bytes = (
+                raw_model
+                if isinstance(raw_model, bytes)
+                else (raw_model.encode("latin1") if isinstance(raw_model, str) else bytes(raw_model))
+            )
+            model_params = pickle.loads(model_bytes)
+
+        raw_run = f.attrs["run_params"]
+        if isinstance(raw_run, np.void):
+            raw_run = raw_run.tobytes()
+        if isinstance(raw_run, bytes):
+            try:
+                raw_run_str = raw_run.decode("utf-8")
+            except UnicodeDecodeError:
+                raw_run_str = None
+        elif isinstance(raw_run, str):
+            raw_run_str = raw_run
+        else:
+            raw_run_str = None
+
+        run_params = None
+        if raw_run_str is not None:
+            try:
+                run_params = json.loads(raw_run_str)
+            except (json.JSONDecodeError, TypeError):
+                run_params = None
+
+        if run_params is None:
+            if not allow_pickle:
+                raise ValueError(
+                    "run_params in HDF5 file appears to be stored as a legacy Python pickle, "
+                    "which is disabled by default for security. Re-save with JSON or pass allow_pickle=True."
+                ) from None
+            warnings.warn(
+                "Loading legacy pickled run_params from HDF5 attribute; "
+                "re-saving with JSON encoding is strongly recommended.",
+                UserWarning,
+                stacklevel=2,
+            )
+            run_bytes = (
+                raw_run
+                if isinstance(raw_run, bytes)
+                else (raw_run.encode("latin1") if isinstance(raw_run, str) else bytes(raw_run))
+            )
+            run_params = pickle.loads(run_bytes)
         # rstate = pickle.loads(f["sampling"].attrs["rstate"])
 
         # string encoded list

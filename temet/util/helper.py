@@ -1718,33 +1718,29 @@ def xypairs_to_np(s):
 
 
 def curRepoVersion():
-    """Return a hash of the current state of the mercurial python repo."""
+    """Return a hash of the current state of the git repo or package version."""
     import subprocess
     from getpass import getuser
-    from os import chdir, getcwd
     from pathlib import Path
 
-    oldCwd = getcwd()
-    if getuser() != "wwwrun":
-        chdir(Path(__file__).parent.parent.absolute())
-    else:
-        chdir("/var/www/python/")
+    target_dir = Path("/var/www/python/") if getuser() == "wwwrun" else Path(__file__).parent.parent.absolute()
 
     repoRevStr = ""
 
     try:
         # git repo i.e. editable installation
         command = ["git", "rev-parse", "--short", "HEAD"]
-        repoRevStr = subprocess.check_output(command, stderr=subprocess.DEVNULL).strip()
-    except subprocess.CalledProcessError:
+        repoRevBytes = subprocess.check_output(command, cwd=target_dir, stderr=subprocess.DEVNULL).strip()
+        repoRevStr = repoRevBytes.decode("utf-8", errors="replace")
+    except (subprocess.CalledProcessError, FileNotFoundError):
         try:
             # pip installation
             command = ["pip", "show", "temet"]
-            pip_info_str = subprocess.check_output(command, stderr=subprocess.DEVNULL).strip()
-            repoRevStr = "v" + pip_info_str.split()[3].decode()
-        except subprocess.CalledProcessError:
+            pip_info_bytes = subprocess.check_output(command, cwd=target_dir, stderr=subprocess.DEVNULL).strip()
+            pip_parts = pip_info_bytes.split()
+            if len(pip_parts) > 3:
+                repoRevStr = "v" + pip_parts[3].decode("utf-8", errors="replace")
+        except (subprocess.CalledProcessError, FileNotFoundError, IndexError):
             pass
-
-    chdir(oldCwd)
 
     return repoRevStr

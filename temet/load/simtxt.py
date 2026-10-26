@@ -4,13 +4,29 @@ Load AREPO .txt diagnostic and output files (by converting and cachine to HDF5).
 
 import glob
 import os
+import shutil
 import subprocess
+import tarfile
 from os.path import expanduser, isdir, isfile
 
 import h5py
 import numpy as np
 
 from ..util.helper import evenlySample, tail
+
+
+def _safe_extract_tar(tar_path, dest_dir):
+    """Safely extract tar archive with path traversal protection."""
+    dest_dir_abs = os.path.abspath(dest_dir)
+    with tarfile.open(tar_path, "r:gz") as tar:
+        if hasattr(tarfile, "data_filter"):
+            tar.extractall(path=dest_dir_abs, filter="data")
+        else:
+            for member in tar.getmembers():
+                target_path = os.path.abspath(os.path.join(dest_dir_abs, member.name))
+                if os.path.commonpath([dest_dir_abs, target_path]) != dest_dir_abs:
+                    raise RuntimeError(f"Path traversal detected in archive member: {member.name}")
+            tar.extractall(path=dest_dir_abs)
 
 
 def sfrTxt(sim):
@@ -521,9 +537,9 @@ def blackhole_details_mergers(sim, overwrite=False):
             # have write permission?
             # if not os.access(path, os.W_OK | os.X_OK):
             print("Decompressing blackhole_details.tar.gz...")
-            subprocess.run(["tar", "-xzf", "blackhole_details.tar.gz"], cwd=path)
+            _safe_extract_tar(path + "blackhole_details.tar.gz", path)
             print("Decompressing blackhole_mergers.tar.gz...")
-            subprocess.run(["tar", "-xzf", "blackhole_mergers.tar.gz"], cwd=path)
+            _safe_extract_tar(path + "blackhole_mergers.tar.gz", path)
             decompressed = True
 
         # concat file is missing, check for individual files
@@ -608,8 +624,8 @@ def blackhole_details_mergers(sim, overwrite=False):
     if decompressed:
         assert "txt-files/" in path
         print("Deleting decompressed files...")
-        subprocess.run(["rm", "-r", "blackhole_details"], cwd=path)
-        subprocess.run(["rm", "-r", "blackhole_mergers"], cwd=path)
+        shutil.rmtree(os.path.join(path, "blackhole_details"), ignore_errors=True)
+        shutil.rmtree(os.path.join(path, "blackhole_mergers"), ignore_errors=True)
 
     # add mergers to return
     smbhs["mergers"] = {"times": merger_times, "ids": merger_ids}
@@ -663,11 +679,11 @@ def sf_sn_details(sim, overwrite=False):
             assert "txt-files/" in path  # should not occur otherwise
 
             print("Decompressing sf_details.tar.gz...")
-            subprocess.run(["tar", "-xzf", "sf_details.tar.gz"], cwd=path)
+            _safe_extract_tar(path + "sf_details.tar.gz", path)
             print("Decompressing sf_details_ids.tar.gz...")
-            subprocess.run(["tar", "-xzf", "sf_details_ids.tar.gz"], cwd=path)
+            _safe_extract_tar(path + "sf_details_ids.tar.gz", path)
             print("Decompressing sn_details.tar.gz...")
-            subprocess.run(["tar", "-xzf", "sn_details.tar.gz"], cwd=path)
+            _safe_extract_tar(path + "sn_details.tar.gz", path)
             decompressed = True
 
     # concat file is missing, check for individual files, run concat
@@ -842,8 +858,8 @@ def sf_sn_details(sim, overwrite=False):
     if decompressed:
         assert "txt-files/" in path
         print("Deleting decompressed files...")
-        subprocess.run(["rm", "-r", "sf_details"], cwd=path)
-        subprocess.run(["rm", "-r", "sf_details_ids"], cwd=path)
-        subprocess.run(["rm", "-r", "sn_details"], cwd=path)
+        shutil.rmtree(os.path.join(path, "sf_details"), ignore_errors=True)
+        shutil.rmtree(os.path.join(path, "sf_details_ids"), ignore_errors=True)
+        shutil.rmtree(os.path.join(path, "sn_details"), ignore_errors=True)
 
     return stars, supernovae

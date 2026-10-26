@@ -32,6 +32,9 @@ def match(ar1, ar2, firstSorted=False, parallel=True, debug=False):
         ar2 = np.array(ar2)
     assert ar1.ndim == ar2.ndim == 1
 
+    ar1 = np.ascontiguousarray(ar1)
+    ar2 = np.ascontiguousarray(ar2)
+
     if debug:
         start = time.time()
         assert np.unique(ar1).size == len(ar1)

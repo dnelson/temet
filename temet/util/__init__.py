@@ -22,9 +22,13 @@ from .units import units
 
 # avoid GPU errors on github CI runners
 try:
-    from cuda.pathfinder import DynamicLibNotFoundError
     from numba import cuda
+    try:
+        from cuda.pathfinder import DynamicLibNotFoundError
+        _cuda_errs = (ImportError, DynamicLibNotFoundError)
+    except ImportError:
+        _cuda_errs = (ImportError,)
 
     from . import delaunay
-except (ImportError, DynamicLibNotFoundError):
+except _cuda_errs:
     print("Warning: Numba CUDA not available. Tetrahedral rendering requires CUDA.")
