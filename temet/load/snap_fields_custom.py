@@ -1755,7 +1755,11 @@ def _cloudy_load(sim, partType, field, args):
         createCache = False
 
     sbStr = "sb%d_" % sim.subbox if sim.subbox is not None else ""
-    cacheFile = sim.cachePath + "cached_%s_%s_%s%d.hdf5" % (partType, field.replace(" ", "-"), sbStr, sim.snap)
+    cache_field = field.replace(" ", "-")
+    if prop in ("lum", "lum2phase", "flux"):
+        # Distinguish caches calculated with the corrected Cloudy abundance scaling.
+        cache_field += "_abundance_v2"
+    cacheFile = sim.cachePath + "cached_%s_%s_%s%d.hdf5" % (partType, cache_field, sbStr, sim.snap)
     indRangeAll = [0, sim.numPart[sim.ptNum(partType)]]
 
     if useCache:
