@@ -640,7 +640,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
         # if scale bar is more than X Mpc/kpc, round to nearest X Mpc/kpc
         mpcFac = 1000.0 if p["sP"].mpcUnits else 1.0
-        roundScales = np.array([10000.0, 1000.0, 1000.0, 100.0, 10.0, 1.0, 0.1, 0.05, 0.02, 0.01]) / mpcFac
+        roundScales = (
+            np.array([10000.0, 1000.0, 1000.0, 100.0, 10.0, 1.0, 0.1, 0.05, 0.02, 0.01, 0.001, 0.0001]) / mpcFac
+        )
 
         for roundScale in roundScales:
             if scaleBarLen >= roundScale:

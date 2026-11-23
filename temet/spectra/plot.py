@@ -1325,7 +1325,7 @@ def EW_distribution(
 
         hh /= dW_norm
 
-        l = ax.stairs(hh, edges=bin_edges, lw=2, color=colors[i])
+        ax.stairs(hh, edges=bin_edges, lw=2, color=colors[i])
         labels.append("z = %.1f" % sim.redshift)
 
     # plot obs data

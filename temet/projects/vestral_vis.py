@@ -271,6 +271,8 @@ def vis_gallery_galaxy(sims, conf=0):
     relCoords = True
     axes = [0, 1]
 
+    rotation = "face-on"
+
     # panels (can vary hInd, variant, res)
     if conf == 0:
         partType = "gas"
@@ -283,23 +285,68 @@ def vis_gallery_galaxy(sims, conf=0):
         valMinMax = None
         autoLimits = [1, 99.5]  # percentiles for auto-scaling of stellar band images
 
+    if conf == 2:
+        partType = "gas"
+        partField = "coldens_msunkpc2"
+        valMinMax = [6.5, 8.5]
+        rotation = "face-on"
+        ctName = "inferno"
+
+    if conf == 3:
+        partType = "gas"
+        partField = "coldens_msunkpc2"
+        valMinMax = [6.5, 8.5]
+        rotation = "edge-on"
+        ctName = "inferno"
+        azimuth = 13
+
+    if conf == 4:
+        partType = "stars"
+        partField = "stellarComp"
+        rotation = "face-on"
+        autoLimits = [10, 99]
+
+    if conf in [5, 6]:
+        partType = "stars"
+        partField = "stellarComp"
+        rotation = "edge-on-stars"
+        azimuth = 13
+        autoLimits = [10, 99]
+
+    if conf >= 2:
+        plotBHs = False
+        size_loc = 0.3  # 300 pc
+        labelZ = False
+        labelSim = False
+        labelHalo = False
+        labelScale = False
+        rVirFracs = None  # [0.5, 1.0]
+
+    if conf == 6:
+        labelScale = "physical"
+        autoLimits = [10, 99.9]
+        size_loc = 0.01  # zoom inset panel
+        azimuth = -3
+
     panels = []
 
     for sim in sims:
-        # face-on, adaptive size
         sub_ind = sim.halo(sim.haloInd)["GroupFirstSub"]
-        size_loc = 0.5
-        if sim.hInd < 30000:
-            size_loc = 1.0
-        if sim.hInd < 10000:
-            size_loc = 2.0
 
-        panels.append({"sP": sim, "subhaloInd": sub_ind, "rotation": "face-on", "size": size_loc})
+        # adaptive size
+        if conf in [0, 1]:
+            size_loc = 0.5
+            if sim.hInd < 30000:
+                size_loc = 1.0
+            if sim.hInd < 10000:
+                size_loc = 2.0
+
+        panels.append({"sP": sim, "subhaloInd": sub_ind, "size": size_loc})
 
     class plotConfig:
         plotStyle = "edged"
         rasterPx = 1000
-        colorbars = True
+        colorbars = True if conf <= 1 else False
         fontsize = 32
         saveFilename = "gallery_galaxy_conf%d_%d.pdf" % (conf, len(sims))
 

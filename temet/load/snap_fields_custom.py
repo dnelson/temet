@@ -343,14 +343,26 @@ ne.log = True
 def ne_twophase(sim, partType, field, args):
     """Electron number density, where for star-forming gas cells we override the naive snapshot value,
     which is unphysically high, with a value based on the SH03 hot-phase mass only."""
-    assert sim.eEOS == 1
+    assert sim.eEOS in [1, 2, 3]
 
     ne = sim.snapshotSubset(partType, "ne", **args)
 
-    # compute hot-phase fraction (is 1.0 for SFR==0 cells, and of order ~0.1 for SFR>0 cells)
-    hot_frac = 1.0 - sim.snapshotSubset(partType, "twophase_coldfrac", **args)
+    if sim.eEOS == 1:
+        # compute hot-phase fraction (is 1.0 for SFR==0 cells, and of order ~0.1 for SFR>0 cells)
+        hot_frac = 1.0 - sim.snapshotSubset(partType, "twophase_coldfrac", **args)
 
-    return ne * hot_frac
+        ne *= hot_frac  # override SFR>0 cells with hot-phase only value
+
+    elif sim.eEOS in [2, 3]:
+        # EAGLE: (see Rahmati+16, Wijers+19, i.e. accepted EAGLE eEOS convention is constant 1e4 K)
+        # SIMBA: (see Appleby+, pygad, i.e. typical SIMBA eEOS convention? is constant 1e4 K)
+        # we assume this is dominated by the warm neutral medium, with x_e ~ 1e-3 - 0.1 or so
+        # use TNG100-1 z=0 value of hot fraction of all SFR>0 gas (== 0.1)
+        w = np.where(sim.snapshotSubset(partType, "sfr", **args) > 0.0)
+
+        ne[w] *= 0.1
+
+    return ne
 
 
 ne_twophase.label = r"Hot-phase Electron Number Density $\rm{n_e}$"
@@ -2282,7 +2294,7 @@ metalmass_.log = True
 # -------------------- stars ----------------------------------------------------------------------
 
 
-@snap_field(alias="stellar_age")
+@snap_field(aliases=["stellar_age", "age"])
 def star_age(sim, partType, field, args):
     """Age of stellar population (conversion of GFM_StellarFormationTime)."""
     birthTime = sim.snapshotSubset(partType, "birthtime", **args)

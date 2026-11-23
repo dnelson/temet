@@ -26,18 +26,18 @@ from ..util.helper import faddeeva985
 lines = {
     "HI 1215": {"f": 0.4164, "gamma": 6.26e8, "wave0": 1215.670, "ion": "H I", "Elow": 0},  # Lyman-alpha
     "HI 1025": {"f": 0.0791, "gamma": 1.67e8, "wave0": 1025.7223, "ion": "H I", "Elow": 0},  # Lyman-beta
-    "HI 972": {"f": 0.0290, "gamma": 6.82e7, "wave0": 972.5367, "ion": "H I", "Elow": 0},
+    "HI 972": {"f": 0.0290, "gamma": 6.82e7, "wave0": 972.5367, "ion": "H I", "Elow": 0},  # Lyman-gamma
     "HI 949": {"f": 1.395e-2, "gamma": 3.43e7, "wave0": 949.7430, "ion": "H I", "Elow": 0},
     "HI 937": {"f": 7.803e-3, "gamma": 1.97e7, "wave0": 937.8034, "ion": "H I", "Elow": 0},
     "HI 930": {"f": 4.814e-3, "gamma": 1.24e7, "wave0": 930.7482, "ion": "H I", "Elow": 0},
-    "HI 926": {"f": 3.183e-3, "gamma": 8.27e6, "wave0": 926.22564, "ion": "H I", "Elow": 0},
-    "HI 923": {"f": 2.216e-3, "gamma": 5.79e6, "wave0": 923.1503, "ion": "H I", "Elow": 0},
-    "HI 920": {"f": 1.605e-3, "gamma": 4.19e6, "wave0": 920.9630, "ion": "H I", "Elow": 0},
-    "HI 919": {"f": 1.20e-3, "gamma": 7.83e4, "wave0": 919.3514, "ion": "H I", "Elow": 0},
-    #'HI 918'     : {'f':9.21e-4,  'gamma':5.06e4,  'wave0':918.1293,  'ion':'H I', 'Elow':0},
-    #'HI 917'     : {'f':7.226e-4, 'gamma':3.39e4,  'wave0':917.1805,  'ion':'H I', 'Elow':0},
-    #'HI 916'     : {'f':5.77e-4,  'gamma':2.34e4,  'wave0':916.4291,  'ion':'H I', 'Elow':0},
-    #'HI 915'     : {'f':4.69e-4,  'gamma':1.66e4,  'wave0':915.8238,  'ion':'H I', 'Elow':0},
+    # "HI 926": {"f": 3.183e-3, "gamma": 8.27e6, "wave0": 926.22564, "ion": "H I", "Elow": 0},
+    # "HI 923": {"f": 2.216e-3, "gamma": 5.79e6, "wave0": 923.1503, "ion": "H I", "Elow": 0},
+    # "HI 920": {"f": 1.605e-3, "gamma": 4.19e6, "wave0": 920.9630, "ion": "H I", "Elow": 0},
+    # "HI 919": {"f": 1.20e-3, "gamma": 7.83e4, "wave0": 919.3514, "ion": "H I", "Elow": 0},
+    # "HI 918": {'f':9.21e-4,  'gamma':5.06e4,  'wave0':918.1293,  'ion':'H I', 'Elow':0},
+    # "HI 917": {'f':7.226e-4, 'gamma':3.39e4,  'wave0':917.1805,  'ion':'H I', 'Elow':0},
+    # "HI 916": {'f':5.77e-4,  'gamma':2.34e4,  'wave0':916.4291,  'ion':'H I', 'Elow':0},
+    # "HI 915": {'f':4.69e-4,  'gamma':1.66e4,  'wave0':915.8238,  'ion':'H I', 'Elow':0},
     "CI 1656": {"f": 6.21e-2, "gamma": 9.06e7, "wave0": 1656.929, "ion": "C I", "Elow": 0},
     "CI 1560": {"f": 7.74e-2, "gamma": 7.07e7, "wave0": 1560.309, "ion": "C I", "Elow": 0},
     "CI 1328": {"f": 7.58e-2, "gamma": 9.54e7, "wave0": 1328.833, "ion": "C I", "Elow": 0},

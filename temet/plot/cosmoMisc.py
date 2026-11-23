@@ -1569,14 +1569,14 @@ def simHighZComparison():
     k25_mhalo = [9.0, 9.0] + list(rng.uniform(low=8.9, high=9.1, size=23))
     k25_mgas = [4.0e4, 653] + [5.2e3] * 23
 
-    # Vintegatan (note: is FIRE m12i halo) and Vintegatan-GM
+    # Vintergatan (note: is FIRE m12i halo) and Vintergatan-GM
     vint_mhalo = [10.3]  # 12.1 at z=0, approx, taking typical MPBs from TNG50
     vint_mgas = [7070]  # Agertz+21
     vintgm_mhalo = [10.6, 10.0, 10.2, 10.3, 10.4]  # approx, taking typical MPBs from TNG50
     vintgm_mgas = [3.6e4] * len(vintgm_mhalo)  # Joshi+24 (https://arxiv.org/abs/2307.02206)
 
-    vintegatan_mhalo = vint_mhalo + vintgm_mhalo
-    vintegatan_mgas = vint_mgas + vintgm_mgas
+    vintergatan_mhalo = vint_mhalo + vintgm_mhalo
+    vintergatan_mgas = vint_mgas + vintgm_mgas
 
     # THESAN-ZOOM: IDs are group IDs from Thesan-Dark-1 at z=3, convert to z=6 halo masses
     thesanzoom_ids = [2, 39, 205, 578, 1163, 5760, 10304, 33206, 37591, 137030, 500531, 519761, 2274036, 5229300]
@@ -1632,7 +1632,7 @@ def simHighZComparison():
         {"name": "VELA-6", "M_halo": vela_mhalo, "m_gas": vela_mgas},
         {"name": "MEGATRON", "M_halo": k25_mhalo, "m_gas": k25_mgas},
         {"name": "THESAN-ZOOM", "M_halo": tzoom_mhalo, "m_gas": tzoom_mgas},
-        {"name": "Vintegatan", "M_halo": vintegatan_mhalo, "m_gas": vintegatan_mgas},
+        {"name": "Vintergatan", "M_halo": vintergatan_mhalo, "m_gas": vintergatan_mgas},
         {"name": "Azahar", "M_halo": 11.3, "m_gas": 7.6e4},  # Yuan+24
         {"name": "Pandora", "M_halo": [np.log10(8e8 / 1.2)], "m_gas": 255},  # Martin-Alvazez+23 (dwarf 1 of Smith+19)
         {"name": "SIRIUS", "M_halo": sirius_mhalo, "m_gas": sirius_mgas},

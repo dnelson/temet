@@ -1719,7 +1719,7 @@ class simParams:
     @property
     def hasMergerTree(self):
         """Has the default merger tree (SubLink) available?"""
-        return path.exists(self.postPath + "trees/SubLink")
+        return path.exists(self.postPath + "trees/SubLink/tree_extended.hdf5")
 
     @property
     def partTypes(self):

@@ -278,8 +278,8 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None, op=None):
                 star_rad = sP2.snapshotSubset("stars", "subhalo_rad_pc", subhaloID=mpbs[i]["SubfindID"][ind_max])
                 star_mass = sP2.snapshotSubset("stars", "mass", subhaloID=mpbs[i]["SubfindID"][ind_max])
 
-                # if isinstance(star_rad, dict) and star_rad["count"] == 0:
-                #    continue  # skip if no star particles found (shouldn't happen since mstar > 0, but just in case)
+                if isinstance(star_rad, dict) and star_rad["count"] == 0:
+                    continue  # skip if no star particles found (shouldn't happen since mstar > 0, but just in case)
 
                 r[i] = findHalfLightRadius(star_rad, star_mass, mags=False)
 

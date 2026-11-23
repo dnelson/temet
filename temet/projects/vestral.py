@@ -17,7 +17,7 @@ from temet.plot import snapshot, subhalos_evo
 from temet.plot.config import colors, figsize, linestyles, lw, markers
 from temet.plot.cosmoMisc import simHighZComparison
 from temet.plot.subhalos import addUniverseAgeAxis
-from temet.plot.util import colored_line
+from temet.plot.util import colored_line, tableau10_colors
 from temet.projects.vestral_vis import (
     vis_gallery_galaxy,
     vis_highres_region,
@@ -215,11 +215,11 @@ def smhm_relation(sims):
         ax.plot(np.log10(b24_mhalo1), np.log10(b24_mstar1), ":", color="#777", alpha=0.8, label=b24_label)
         ax.plot(np.log10(b24_mhalo2), np.log10(b24_mstar2), ":", color="#777", alpha=0.8)
 
-        # COLIBRE (Chaikan+25, Fig 3, L25/L25m5, z=5)
+        # COLIBRE (Chaikin+25, Fig 3, L25/L25m5, z=5)
         c25_mhalo = [3.02e9, 4.94e9, 7.43e9, 1.98e10, 2.75e10, 4.98e10, 1.25e11, 1.96e11, 3.20e11, 5.12e11]  # log msun
         c25_ratio = [4.47e-4, 5.51e-4, 7.31e-4, 1.40e-3, 2.06e-3, 2.85e-3, 6.99e-7, 7.60e-3, 9.19e-3, 1.34e-2]  # ratio
         c25_mstar = np.array(c25_mhalo) * c25_ratio
-        c25_label = "Chaikan+25 COLIBRE (z=5)"
+        c25_label = "Chaikin+25 COLIBRE (z=5)"
 
         ax.plot(np.log10(c25_mhalo), np.log10(c25_mstar), ls=linestyles[4], color="#777", alpha=0.8, label=c25_label)
 
@@ -1043,9 +1043,11 @@ def gas_mzr(sims):
         # Sanders+25 (https://arxiv.org/abs/2508.10099) - skip (mention)
         # Nishigaki+25 (https://arxiv.org/abs/2512.12983) - skip, mostly M* > 8 (mention)
 
-        # todo: https://arxiv.org/abs/2603.15761 (see Fig 6)
-        # todo: https://arxiv.org/abs/2605.06770 (GLIMPSED, eight galaxies at M* < 8.2)
-        # todo: https://arxiv.org/abs/2606.11345
+        # new obs, could be added:
+        # https://arxiv.org/abs/2603.15761 (see Fig 6)
+        # https://arxiv.org/abs/2605.06770 (GLIMPSED, eight galaxies at M* < 8.2)
+        # https://arxiv.org/abs/2606.11345
+        # https://arxiv.org/abs/2611.24630
 
     subhalos_evo.scatter2d(
         sims,
@@ -1648,6 +1650,79 @@ def blackhole_position_vs_time(sim, snap_based=True):
         plt.close(fig)
 
 
+def gas_phase_fractions(sims, frac_type="Mass"):
+    """Create a bar chart showing the fractions of gas in different phases (multi-phase ISM)."""
+    # config
+    subhaloID = 0
+
+    ylim = [1e-4, 5.0]
+
+    acFieldBase = f"Subhalo_{frac_type}_r015rvir_Gas_"  # r < 0.15rvir is the spatial definition for the 'galaxy'/'ISM'
+
+    phases = ["Total", "Hot", "Warm_Ionized", "Warm_Neutral", "Cool", "Cold"]  # "Warm"
+    colors = [tableau10_colors[n] for n in ["gray", "red", "orange", "orange_dark", "lightblue", "blue"]]
+
+    # start plot
+    fig, ax = plt.subplots(figsize=(figsize[0] * 1.2, figsize[1] * 0.5))
+    ax.set_ylabel(f"ISM {frac_type} Fraction")
+    ax.set_yscale("log")
+    ax.set_ylim(ylim)
+
+    ax.set_xlim([-0.5, len(sims) + 0.5])
+    ax.set_xticks(range(len(sims) + 1))
+    ax.set_xticklabels(["stack"] + [f"h{sim.hInd}" for sim in sims])
+
+    # build dataset
+    assert phases[0] == "Total"
+    data = {}
+
+    for phase in phases:
+        data[phase] = np.zeros(len(sims) + 1, dtype="float32")  # +1 for stack
+
+    # loop over simulations, load fractions (auxCat)
+    for i, sim in enumerate(sims):
+        for phase in phases:
+            phase_fracs = sim.auxCat(f"{acFieldBase}{phase}")[f"{acFieldBase}{phase}"]
+            frac = np.clip(phase_fracs[subhaloID], 1e-10, np.inf)  # avoid zero if absolutely no gas at all
+
+            # normalize by total to get fractions
+            if phase != "Total":
+                frac /= data["Total"][i + 1]
+
+            data[phase][i + 1] = frac
+
+    # calculate stack
+    for phase in phases:
+        data[phase][0] = np.mean(data[phase][1:])
+
+        # clip to make all visible
+        data[phase] = np.clip(data[phase], ylim[0] * 1.2, np.inf)
+
+    # plot barchart
+    width = 1 / len(phases)  # * 1.0
+
+    x = np.arange(len(sims) + 1) - width * (len(phases) / 2)  # center label locations
+
+    for i, (phase_name, phase_fracs) in enumerate(data.items()):
+        if i == 0:
+            continue  # skip Total
+
+        label = phase_name.replace("_", " ")
+        ax.bar(x + (width * i), phase_fracs, width, color=colors[i], label=label)
+
+    # finish plot
+    ax.plot([0.5, 0.5], ax.get_ylim(), ":", color="black", alpha=0.3)
+    ax.legend(loc="upper right", ncols=len(phases))
+
+    if len(sims) == 1:
+        saveFilename = f"gas_phase_fracs_{frac_type}_{sim.simName}_{sim.snap}.pdf"
+    else:
+        saveFilename = f"gas_phase_fracs_{frac_type}_n{len(sims)}.pdf"
+
+    fig.savefig(saveFilename)
+    plt.close(fig)
+
+
 def starformation_diagnostics(sims, supernovae=False, split_z=True, sizefac=1.0, show2d=False):
     """Plot PDFs of gas properties at the sites and moments of star formation (or supernovae)."""
     # config
@@ -2082,7 +2157,7 @@ def paperPlots(a=False):
         sims_loc.append(simParams("structures", hInd=446076, res=16, variant=v, redshift=6.0, haloInd=0))
         sims_loc.append(simParams("structures", hInd=539722, res=16, variant=v, redshift=5.5, haloInd=0))
 
-        # vis_gallery_galaxy(sims_loc, conf=0)
+        vis_gallery_galaxy(sims_loc, conf=0)
         vis_gallery_galaxy(sims_loc, conf=1)
 
     # fig 5a: sfr vs mstar relation
@@ -2109,7 +2184,7 @@ def paperPlots(a=False):
             subhalos_evo.tracks1d([sim], quant, sfh_lin=False, sfh_treebased=False, parents=False, **opts)
 
             if sim.hInd <= 31619:
-                # show second halo as well (todo: need to add "b" to legends)
+                # show second halo as well ("b" in legend)
                 sim_b = simParams(
                     run="structures", res=sim.res, hInd=sim.hInd, variant=sim.variant, haloInd=1, redshift=sim.redshift
                 )
@@ -2151,7 +2226,8 @@ def paperPlots(a=False):
 
     # fig 8: phase space diagrams (show one halo)
     if 0 or a:
-        sims = [simParams("structures", hInd=219612, res=16, variant="ST15", snap=375)]
+        # sims = [simParams("structures", hInd=219612, res=16, variant="ST15", snap=375)] # old
+        sims = [simParams("structures", hInd=73172, res=16, variant="ST15", redshift=9.0)]
         for sim in sims:
             phase_diagram(sim)  # mass
             phase_diagram(sim, cQuant="Z_solar")
@@ -2232,7 +2308,12 @@ def paperPlots(a=False):
         # vis_single_halo(sim, haloID=0)
         # vis_gallery_manyfields(sim, haloID=0)
 
-    # fig 12a - smbh vs mhalo and mstar relations
+    # fig 12: gas mass fraction of ISM gas in different phases, at e.g. z=10 and z=6 (bar plots?)
+    if 0 or a:
+        gas_phase_fractions(sims, frac_type="Mass")
+        gas_phase_fractions(sims, frac_type="Vol")
+
+    # fig 13 - smbh vs mhalo and mstar relations
     if 0 or a:
         # mbh_vs_mhalo(sims)
         mbh_vs_mstar(sims)
@@ -2361,6 +2442,12 @@ def paperPlots(a=False):
         subhalos_evo.tracks1d(sims, "rvir", ylim=[0.5, 2.0], parents=False, **opts)
         subhalos_evo.tracks1d(sims, "rhalf_stars", ylim=[-2.0, 0.5], parents=False, **opts)
         subhalos_evo.tracks1d(sims, "re_rvir_ratio", ylim=[-3.5, -0.5], parents=False, **opts)
+
+    # Anirudh+ paper (Fig 1)
+    if 1:
+        sim = simParams("structures", hInd=23908, res=15, variant="ST15", redshift=6.24, haloInd=0)
+        for conf in [2, 3, 4, 5, 6]:
+            vis_gallery_galaxy([sim], conf=conf)
 
 
 def makeMovies():

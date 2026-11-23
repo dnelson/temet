@@ -1607,13 +1607,13 @@ def profilesStacked2d(
     # metadata
     mpb_a = 1 / (1 + mpb["Redshift"][w])
     r200c = sim.units.codeLengthToComovingKpc(mpb["Group_R_Crit200"][w]) * mpb_a  # pkpc
-    rhalf = sim.units.codeLengthToComovingKpc(mpb["SubhaloHalfmassRadType"][w, 4]) * mpb_a  # pkpc
+    rgal = sim.units.codeLengthToComovingKpc(mpb["SubhaloHalfmassRadType"][w, 4]) * mpb_a  # pkpc
     if rlog:
         r200c = np.log10(r200c)
-        rhalf = np.log10(rhalf)
+        rgal = np.log10(2 * rgal)
     if smooth_sizes:
         r200c = savgol_filter(r200c, sKn, sKo)
-        rhalf = savgol_filter(rhalf, sKn, sKo)
+        rgal = savgol_filter(rgal, sKn, sKo)
 
     zvals = sim.snapNumToRedshift(snaps)
 
@@ -1734,11 +1734,15 @@ def profilesStacked2d(
 
     (l,) = ax.plot(r200c, "-", lw=lw + 2, color="black", alpha=0.6)  # under
     (l,) = ax.plot(r200c, "--", lw=lw, color="white", zorder=2)
-    ax.text(snaps.size - 10, r200c[-10] + 0.1, r"r$_{200c}$", **text_opts)
+    yy = np.max(r200c[-15:-5]) + 0.1
+    if yy < rlim[1]:
+        ax.text(snaps.size - 10, yy, r"r$_{200c}$", **text_opts)
 
-    (l,) = ax.plot(rhalf, "-", lw=lw + 2, color="black", alpha=0.6)  # under
-    (l,) = ax.plot(rhalf, "--", lw=lw, color="white", zorder=2)
-    ax.text(snaps.size - 10, rhalf[-10] + 0.3, r"r$_{\rm 1/2\star}$", **text_opts)
+    (l,) = ax.plot(rgal, "-", lw=lw + 2, color="black", alpha=0.6)  # under
+    (l,) = ax.plot(rgal, "--", lw=lw, color="white", zorder=2)
+    yy = np.max(rgal[-15:-5]) + 0.2
+    if yy < rlim[1]:
+        ax.text(snaps.size - 10, yy, r"2r$_{\rm 1/2\star}$", **text_opts)
 
     # contour lines in the color quantity
     # for cval in [-1.0, 0.0, 1.0]:

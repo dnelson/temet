@@ -12,12 +12,12 @@ from scipy.interpolate import make_interp_spline
 from temet.load.groupcat import catalog_field
 from temet.plot import snapshot, subhalos_evo
 from temet.plot.config import colors, figsize, linestyles
-from temet.plot.util import colored_line, tableau10_colors
+from temet.plot.util import colored_line
 from temet.util import simParams
 from temet.util.helper import running_median
 from temet.vis.halo import renderSingleHalo
 
-from .vestral import _zoomSubhaloIDsToPlot, phase_diagram
+from .vestral import _get_existing_sims, _zoomSubhaloIDsToPlot
 from .vestral_vis import vis_gallery_clusters, vis_single_galaxy
 
 
@@ -26,237 +26,49 @@ size_label = r"Star Cluster Size $R_{1/2}$ [ pc ]"  # always show tick labels in
 age_label = r"Star Cluster Age [ Myr ]"
 
 mass_lim = [1.5, 4.0]  # log msun
-size_lim = [-1.8, 1.0]  # log pc, [-0.5, 1.8] for L15
+size_lim = [-2.0, 1.4]  # log pc, [-0.5, 1.8] for L15
 sigma_lim = [0.0, 6.0]  # log msun/pc^2, [0.5, 4.0] for L15
 age_lim = [-0.6, 3.0]  # log Myr
 
-sizeticks_lin = [0.05, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0]  # pc
+sizeticks_lin = [0.02, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0]  # pc
 ageticks_lin = [0.25, 1, 2.5, 10, 25, 50, 100, 250, 500, 1000]  # Myr
 
 
-def _starClusterSubhaloIDs(sim):
+def _starClusterSubhaloIDs(sim, dmfree=False):
     """Define a common rule for which subhalo(s) are identified as star clusters."""
     # all satellites of the first halo with non-zero stellar mass
     halo_id = sim.subhalos("halo_id")
     cen_flag = sim.subhalos("cen_flag")
     mstar = sim.subhalos("mstar_tot")
-    # mdm = sim.subhalos("mdm_tot")
+    if dmfree:
+        mdm = sim.subhalos("mdm_tot")
+        mgas = sim.subhalos("mgas_tot")
+        rhalf = sim.subhalos("size_stars_pc")  # pc
 
-    subhaloIDs = np.where((halo_id == 0) & (cen_flag == 0) & (mstar > 0))[0]  # mdm == 0
+    if dmfree:
+        subhaloIDs = np.where((halo_id == 0) & (cen_flag == 0) & (mstar > 0) & (mdm == 0))[0]
+    else:
+        subhaloIDs = np.where((halo_id == 0) & (cen_flag == 0) & (mstar > 0))[0]
 
-    print(f"[{sim}] Showing {len(subhaloIDs)} subhalos.")
+    detail_str = ""
+    if len(subhaloIDs) > 0:
+        mstar_range = np.log10([mstar[subhaloIDs].min(), mstar[subhaloIDs].max()])
+        detail_str += f" [mstar = {mstar_range[0]:.2f} - {mstar_range[1]:.2f}]"
+
+        if dmfree:
+            rhalf_range = [rhalf[subhaloIDs].min(), rhalf[subhaloIDs].max()]
+            detail_str += f" [rhalf = {rhalf_range[0]:.2f} - {rhalf_range[1]:.2f}]"
+
+            frac_nodm = len(np.where(mdm[subhaloIDs] == 0)[0]) / len(subhaloIDs) * 100
+            frac_gasfree = len(np.where(mgas[subhaloIDs] == 0)[0]) / len(subhaloIDs) * 100
+            detail_str += f" [frac nodm = {frac_nodm:.1f}%, frac gasfree = {frac_gasfree:.1f}%]"
+
+            num_massive = np.count_nonzero(mstar[subhaloIDs] > 1e5)
+            detail_str += f" [# > 1e5 Msun = {num_massive}]"
+
+    print(f"[{sim}] Showing {len(subhaloIDs)} subhalos.{detail_str}")
 
     return subhaloIDs
-
-
-def diagnostic_sfr_jeans_mass(sims, haloID=0):
-    """Check that the per-cell Jeans mass is being calculated correctly during the simulation.
-
-    Load all gas properties, convert to proper, calculate the jeans mass and
-    cell diameter yourself, calculate SFR yourself, plot against what the code is reporting
-    (what is in the snap), should be 1-to-1, if not may be a factor of a or h missing.
-    """
-    # AREPO/SFR_MCS calculation:
-    # dens = SphP[i].Density;
-    # Sfr = 0.0;
-
-    # /* Used for only SF when local Jeans mass < All.SfrCritJeansMassN * mcell */
-    # All.SfrCritFactor  = pow(GAMMA, 1.5) * pow(M_PI, 2.5) / (6.0 * pow(All.G, 1.5) * All.SfrCritJeansMassN);
-
-    # if((P[i].Mass * dens * dens * sqrt(All.cf_a3inv) / pow(SphP[i].Pressure, 1.5)) < All.SfrCritFactor)
-    #   continue;
-
-    # All.cf_a3inv    = 1 / (All.Time * All.Time * All.Time);
-    # All.G = GRAVITY / pow(All.UnitLength_in_cm, 3) * All.UnitMass_in_g * pow(All.UnitTime_in_s, 2);
-    # so All.G is G in code units (no cosmo factors)
-    # t_ff = sqrt(3.0 * M_PI / (32.0 * All.G * dens * All.cf_a3inv)); # code time
-
-    # Sfr = All.SfrEfficiency * P[i].Mass / t_ff; # [code mass/code time]
-    # SphP[i].Sfr *= (All.UnitMass_in_g / SOLAR_MASS) / (All.UnitTime_in_s / SEC_PER_YEAR); # msun/yr units
-
-    for sim in sims:
-        # parameters
-        print(sim)
-
-        eps_sf = sim.params["SfrEfficiency"]
-        N_J = sim.params["SfrCritJeansMassN"]
-        N_J_crit = sim.params["SfrForceJeansMassN"]  # all these runs have SFR_MCS_FORCE==0
-
-        # load
-        M_J = sim.snapshotSubset("gas", "mjeans", haloID=haloID)  # msun
-
-        mass = sim.snapshotSubset("gas", "mass_msun", haloID=haloID)  # msun
-        dens = sim.snapshotSubset("gas", "dens", haloID=haloID)  # code
-        dens = sim.units.codeDensToPhys(dens, cgs=True, numDens=True)  # physical [1/cm^3]
-
-        rad_rvir = sim.snapshotSubset("gas", "rad_rvir", haloID=haloID)
-
-        tff = sim.snapshotSubset("gas", "tff_local", haloID=haloID) / 1e6  # yr
-
-        # calculate SFR that we would expect
-        sfr_calc = np.zeros(mass.size, dtype="float32")
-
-        w = np.where(M_J < N_J * mass)[0]
-        sfr_calc[w] = eps_sf * (mass[w] / tff[w])  # msun/yr
-
-        if "SFR_MCS_FORCE" in sim.config:
-            assert sim.config["SFR_MCS_FORCE"] == 0  # set efficiency to 1.0
-            w = np.where(M_J < N_J_crit * mass)[0]
-            sfr_calc[w] = 1.0 * (mass[w] / tff[w])
-
-        # sfr_calc = eps_sf * (mass / tff) # msun/yr
-
-        # if M_J > N_J * m_cell, then SFR = 0 (handled above)
-        # ww = np.where(M_J > N_J * mass)[0]
-        # frac = len(ww) / len(mass)
-        # print('Have [%d/%d] cells (%.2f%%) with M_J > N_J*m_cell (not star-forming).' % (len(ww),len(mass),frac*100))
-        # sfr_calc[ww] = 0.0
-
-        # compare to SFR in snapshot
-        sfr_snap = sim.snapshotSubset("gas", "sfr", haloID=haloID)  # msun/yr
-
-        print("Number of SFRs>0: snap = [%d], calc = [%d]" % (np.count_nonzero(sfr_snap), np.count_nonzero(sfr_calc)))
-
-        w1 = np.where(sfr_calc == 0)[0]
-        w2 = np.where(sfr_snap == 0)[0]
-        print("Entries that are zero agree: ", np.array_equal(w1, w2))
-
-        w3 = np.where(sfr_calc > 0)[0]
-
-        if len(w3) > 0:
-            diff = sfr_calc[w3] - sfr_snap[w3]
-            ratio = sfr_calc[w3] / sfr_snap[w3]
-            print("SFR diff calc vs snap: min = %g, max = %g, mean = %g" % (diff.min(), diff.max(), diff.mean()))
-            print("SFR ratio calc vs snap: min = %g, max = %g, mean = %g" % (ratio.min(), ratio.max(), ratio.mean()))
-        print("All close: ", np.allclose(sfr_calc, sfr_snap))
-        print("All non-zero close: ", np.allclose(sfr_calc[w3], sfr_snap[w3]))
-
-        # plot
-        fig, ax = plt.subplots()
-        ax.set_yscale("log")
-        ax.set_xlabel("log( M$_{\\rm Jeans}$ / M$_{\\rm cell}$ )")
-        ax.set_ylabel("N")
-
-        for rad_cut in [1.0, 0.1, 0.02]:
-            # select
-            w_rad = np.where(rad_rvir < rad_cut)
-            M_J_loc = M_J[w_rad]
-            mass_loc = mass[w_rad]
-
-            # calc
-            N_J_realized = M_J_loc / mass_loc
-
-            w_N1 = np.where(N_J_realized < 1.0)
-            w_N8 = np.where(N_J_realized < 8.0)
-            frac_N1 = np.sum(mass_loc[w_N1]) / np.sum(mass_loc)
-            frac_N8 = np.sum(mass_loc[w_N8]) / np.sum(mass_loc)
-
-            N_J_realized = np.log10(N_J_realized)
-
-            # plot hist
-            label = "(r/r200 < %.2f) frac$_{<1}$: %.3f, frac$_{<8}$: %.3f" % (rad_cut, frac_N1, frac_N8)
-            ax.hist(N_J_realized, bins=100, histtype="step", label=label)
-
-        # select dens
-        if 1:
-            dens_cut = 1.0
-            w_dens = np.where(dens > dens_cut)
-            M_J_loc = M_J[w_dens]
-            mass_loc = mass[w_dens]
-
-            # calc
-            N_J_realized = M_J_loc / mass_loc
-
-            w_N1 = np.where(N_J_realized < 1.0)
-            w_N8 = np.where(N_J_realized < 8.0)
-            frac_N1 = np.sum(mass_loc[w_N1]) / np.sum(mass_loc)
-            frac_N8 = np.sum(mass_loc[w_N8]) / np.sum(mass_loc)
-
-            N_J_realized = np.log10(N_J_realized)
-
-            # plot hist
-            label = "(dens > %.1f) frac$_{<1}$: %.3f, frac$_{<8}$: %.3f" % (dens_cut, frac_N1, frac_N8)
-            ax.hist(N_J_realized, bins=100, histtype="step", label=label)
-
-        ax.plot(np.log10([1.0, 1.0]), [0, np.max(ax.get_ylim()) * 0.6], "-", color="black", alpha=0.3)
-        ax.plot(np.log10([8.0, 8.0]), [0, np.max(ax.get_ylim()) * 0.6], "-", color="black", alpha=0.3)
-
-        ax.legend(loc="best")
-        fig.savefig("mjeans_%s.pdf" % sim)
-        plt.close(fig)
-
-    # plot cumulative fraction of mass with N_J > x
-    fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(13, 7))
-    ylim = [1e-6, 1e-0]
-    ax1.set_ylim(ylim)
-    ax1.set_xlim([-2, 2])
-    ax1.set_yscale("log")
-    ax1.set_xlabel("log( M$_{\\rm Jeans}$ / M$_{\\rm cell}$ )")
-    ax1.set_ylabel("Fraction of Mass with N$_{\\rm J}$ < x-axis")
-
-    ax1.plot(np.log10([1.0, 1.0]), ylim, "-", color="black", alpha=0.3)
-    ax1.plot(np.log10([8.0, 8.0]), ylim, "-", color="black", alpha=0.3)
-
-    for sim in sims:
-        # load
-        M_J = sim.snapshotSubset("gas", "mjeans", haloID=haloID)  # msun
-        mass = sim.snapshotSubset("gas", "mass_msun", haloID=haloID)  # msun
-
-        # rad_rvir = sim.snapshotSubset('gas', 'rad_rvir', haloID=haloID) # little impact
-        # w = np.where(rad_rvir < 1.0)
-        # M_J = M_J[w]
-        # mass = mass[w]
-
-        # calc
-        N_J_realized = M_J / mass
-
-        inds = np.argsort(N_J_realized)
-        N_J_realized = N_J_realized[inds]
-        mass = mass[inds]
-
-        cum_mass = np.cumsum(mass)
-        cum_mass /= np.sum(mass)
-
-        ax1.plot(np.log10(N_J_realized), cum_mass, "-", label=sim)
-
-    ax1.legend(loc="lower right")
-
-    # plot cumulative mass
-    ylim = [1e2, 1e8]
-    ax2.set_ylim(ylim)
-    ax2.set_yscale("log")
-    ax2.set_xlim([-2, 2])
-    ax2.set_xlabel("log( M$_{\\rm Jeans}$ / M$_{\\rm cell}$ )")
-    ax2.set_ylabel("Total Gas Mass with N$_{\\rm J}$ < x-axis [M$_{\\rm sun}$]")
-
-    ax2.plot(np.log10([1.0, 1.0]), ylim, "-", color="black", alpha=0.3)
-    ax2.plot(np.log10([8.0, 8.0]), ylim, "-", color="black", alpha=0.3)
-
-    for sim in sims:
-        # load
-        M_J = sim.snapshotSubset("gas", "mjeans", haloID=haloID)  # msun
-        mass = sim.snapshotSubset("gas", "mass_msun", haloID=haloID)  # msun
-
-        # rad_rvir = sim.snapshotSubset('gas', 'rad_rvir', haloID=haloID)
-        # w = np.where(rad_rvir < 1.0)
-        # M_J = M_J[w]
-        # mass = mass[w]
-
-        # calc
-        N_J_realized = M_J / mass
-
-        inds = np.argsort(N_J_realized)
-        N_J_realized = N_J_realized[inds]
-        mass = mass[inds]
-
-        cum_mass = np.cumsum(mass)
-
-        ax2.plot(np.log10(N_J_realized), cum_mass, "-", label=sim)
-
-    ax2.legend(loc="lower right")
-
-    fig.savefig("mjeans_cumsum_n%d_z%d.pdf" % (len(sims), sims[0].redshift))
-    plt.close(fig)
 
 
 def stellar_remnants(sims, haloID=0, sizefac=0.8):
@@ -365,7 +177,7 @@ def star_cluster_histogram(sims, quant, nbins=30, sizefac=1.0):
         xlabel = mass_label
 
     if quant == "size":
-        xlim = [size_lim[0], size_lim[1] + 0.4]
+        xlim = size_lim
         xlabel = size_label
 
     if quant == "age":
@@ -416,6 +228,10 @@ def star_cluster_histogram(sims, quant, nbins=30, sizefac=1.0):
         sizes_evo = []
 
         for sim in sims:
+            # skip in-progress sims without trees
+            if not sim.hasMergerTree:
+                continue
+
             # load
             subIDs = _starClusterSubhaloIDs(sim)
             mstar = sim.subhalos("mstar_tot")[subIDs]  # Msun
@@ -458,24 +274,14 @@ def star_cluster_histogram(sims, quant, nbins=30, sizefac=1.0):
     ylim = ax.get_ylim()
     yy = [ylim[1] / 1.5, ylim[1]]
 
-    for sim in sims:
-        if quant == "mass":
-            min_mass = np.log10(20 * sim.units.codeMassToMsun(sim.targetGasMass))
-            ax.plot([min_mass, min_mass], yy, color="#444", linestyle="-", lw=lw, alpha=0.8)
+    # custom plot behaviors
+    sim = sims[-1]
 
-        if quant == "size":
-            grav_soft_stars = {13: 0.0244, 14: 0.0122, 15: 0.0061, 16: 0.003}
-            grav_soft_code = grav_soft_stars[sim.res]
-            grav_soft_logpc = np.log10(sim.units.codeLengthToPc(grav_soft_code))
-            ax.plot([grav_soft_logpc, grav_soft_logpc], yy, color="#444", linestyle="-", lw=lw, alpha=0.8)
-
-            # add another higher redshift (earliest where clusters really form)
-            scalefac = 1 / (1 + 14.0)
-            grav_soft_logpc = np.log10(sim.units.codeLengthToComovingKpc(grav_soft_code) * 1000 * scalefac)
-            ax.plot([grav_soft_logpc, grav_soft_logpc], yy, color="#666", linestyle="-", lw=lw, alpha=0.8)
-
-    # custom behavior
     if quant == "mass":
+        # plot subfind limit
+        min_mass = np.log10(20 * sim.units.codeMassToMsun(sim.targetGasMass))
+        ax.plot([min_mass, min_mass], yy, color="#444", linestyle="-", alpha=0.8)
+
         # add mass function slope of -2
         x = np.array([2.7, 3.3])  # np.array(xlim) + [0.1, -0.1]
         y = 10 ** (x * -2.0)
@@ -483,28 +289,53 @@ def star_cluster_histogram(sims, quant, nbins=30, sizefac=1.0):
         y *= ymax / y[0]  # * 1.2  # shift to match the top of the stacked histogram
         ax.plot(x, y, "--", color="#000", alpha=0.8, label=r"$dN/dM \propto M^{-2}$")
 
+    if quant == "size":
+        # mark gravitational softening length
+        assert sim.params["SofteningTypeOfPartType4"] == 1  # otherwise unexpected
+        grav_soft_code = sim.params["SofteningComovingType1"]
+        xx = np.log10(sim.units.codeLengthToPc(grav_soft_code))
+        ax.plot([xx, xx], yy, color="#555", linestyle="-", alpha=0.8)
+
+        # add another higher redshift (earliest where clusters really form)
+        scalefac = 1 / (1 + 14.0)
+        xx = np.log10(sim.units.codeLengthToComovingKpc(grav_soft_code) * 1000 * scalefac)
+        ax.plot([xx, xx], yy, color="#555", linestyle="-", alpha=0.8)
+
+        # set custom ticks
+        # tick_vals = [0.02] + sizeticks_lin + [20.0]
+        sizeticks_log = np.log10(sizeticks_lin)
+        ax.set_xticks(sizeticks_log)
+        ax.set_xticklabels(sizeticks_lin)
+
+        # overplot Brown+21 data from LEGUS (https://arxiv.org/abs/2106.12420)
+        # from temet.load.data import brown21
+        # b21 = brown21()
+        # h_b21 = np.histogram(np.log10(b21["r_eff"]), bins=nbins, range=xlim)
+        # ax.stairs(*h_b21, fill=False, edgecolor="#000", lw=lw, linestyle="-.", alpha=0.3, label="Brown+21")
+
     if quant == "age":
         # vertical lines at lookback times to specific redshifts
-        redshifts = [5.7, 6.0, 8.0, 14]
+        redshifts = [6.0, 7.0, 8.0, 14]
         for z in redshifts:
             age_z = np.log10((sim.tage - sim.units.redshiftToAgeFlat(z)) * 1000)
             yy = [ylim[0], ylim[0] * 10]
             ax.plot([age_z, age_z], yy, color="#444", linestyle=":", alpha=1.0)
-            ax.text(age_z - 0.02, yy[1], f"z={z:.0f}", rotation=90, va="top", ha="right", color="#444", alpha=1.0)
+            ax.text(
+                age_z - 0.02 + 0.1 * (z >= 8),
+                yy[1],
+                f"z={z:.0f}",
+                rotation=90,
+                va="top",
+                ha="right",
+                color="#444",
+                alpha=1.0,
+            )
 
         # set custom ticks
         ageticks_log = np.log10(ageticks_lin)
         ax.set_xticks(ageticks_log)
         ax.set_xticklabels(ageticks_lin)
         legend_loc = "upper left"
-
-    if quant == "size":
-        # set custom ticks
-        sizeticks_log = np.log10(sizeticks_lin)
-        ax.set_xticks(sizeticks_log)
-        ax.set_xticklabels(sizeticks_lin)
-
-        # todo: overplot Brown+21 data
 
     ax.legend(loc=legend_loc)
 
@@ -523,6 +354,9 @@ def _plot_evolved_properties(ax, sims, **kwargs):
         subIDs = _starClusterSubhaloIDs(sim)
 
         if subIDs.size == 0:
+            continue
+
+        if not sim.hasMergerTree:
             continue
 
         mstar_ini = sim.subhalos("mstar_max")[subIDs]  # Msun
@@ -561,12 +395,12 @@ def _plot_evolved_properties(ax, sims, **kwargs):
             ax.plot(x_fit, y_fit, "-", color=l.get_color(), alpha=0.9)
 
 
-def size_vs_mass(sims: list[simParams]) -> None:
+def size_vs_mass(sims: list[simParams], sizefac=1.0) -> None:
     """Size-mass relation for star clusters."""
     xQuant = "mstar_tot"
     yQuant = "rhalf_stars_pc"
     xlim = mass_lim
-    ylim = [size_lim[0], 1.3]
+    ylim = size_lim  # [size_lim[0], 1.3]
 
     def _f_pre(ax, sims):
         # set custom axis and tick labels
@@ -592,7 +426,7 @@ def size_vs_mass(sims: list[simParams]) -> None:
             x_fit = np.array(xlim) + [0.2, -0.2]
             y_fit = np.polyval(coeffs, x_fit)
 
-            ax.plot(x_fit, y_fit, "-", color="#000", alpha=0.9)
+            ax.plot(x_fit, y_fit, ":", color="#000", alpha=0.9)
 
         # Brown+21 LEGUS (https://arxiv.org/abs/2106.12420)
         b21 = brown21()
@@ -650,11 +484,11 @@ def size_vs_mass(sims: list[simParams]) -> None:
         vs_sim=None,
         parents=False,
         tracks=False,
-        sizefac=1.0,
+        sizefac=sizefac,
         # markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.5, "zorder": -11},  # rasterize for zorder<-10
         markerstyle={"ms": 5.0, "fillstyle": "none", "mew": 1.5, "alpha": 0.3, "zorder": -11},
         legend="simple",
-        legend_locs=["lower right", "upper left"],
+        legend_locs=["upper left", "lower right"],
         legend_ncols=[1, 1],
         f_pre=_f_pre,
         f_post=_f_post,
@@ -774,6 +608,8 @@ def cluster_formation_efficiency(sim, field):
             print(" Warning: CFE should be <= 1.0, but max is %.4f" % np.nanmax(cfe))
         cfe = np.clip(cfe, 0, 1)  # can exceed unity due to mismatch between particle and mean subhalo ages
 
+    print(f"{sim}, {field}, {cfe[0] = }")
+
     return cfe
 
 
@@ -799,12 +635,15 @@ def cfe_galaxies(sims: list[simParams], dt=10, xQuant="mstar2_log", cfr=False) -
         ylim = [-5.5, 0.0]  # log msun/yr
 
     if xQuant in ["mstar2_log", "mstar_log"]:
-        xlim = [4.5, 8.5]  # log mstar
+        xlim = [4.5, 7.5]  # log mstar
+        legend_ncols = [1, 1]
     if xQuant in ["sfr_10myr", "sfr_100myr"]:
-        xlim = [-5.5, -1.0]
+        xlim = [-5.5, 0.0]
+        legend_ncols = [2, 2]
     if "surfdens" in xQuant:
-        xlim = [-4, 6]  # log msun/yr/kpc^2
-        ylim = [4e-3, 1.0]
+        xlim = [-4.0, 4.0]  # log msun/yr/kpc^2
+        ylim = [1e-2, 1.0]
+        legend_ncols = [1, 2]
 
     def _f_pre(ax, sims):
         if not cfr and "surfdens" in xQuant:
@@ -831,6 +670,9 @@ def cfe_galaxies(sims: list[simParams], dt=10, xQuant="mstar2_log", cfr=False) -
         # print some statistics
         mean_yval = np.nanmean(kwargs["y"])
         print(f"Mean {yQuant} across all galaxies: {mean_yval:.3f}")
+
+        if "surfdens" not in xQuant:
+            return
 
         # Cook+23 (https://arxiv.org/pdf/2212.07519 Fig 12, Table 6, binned data points for Ha and 1-10 Myr)
         c23_label = r"Cook+23"
@@ -861,6 +703,12 @@ def cfe_galaxies(sims: list[simParams], dt=10, xQuant="mstar2_log", cfr=False) -
         # xm, ym, _, pm = running_median(kwargs["x"], kwargs["y"], binSize=0.5, percs=[16, 50, 84])
         # ax.plot(xm, ym, "-", color="#000", alpha=0.8)
 
+    legend_locs = ["lower left", "upper right"]
+    if "surfdens" in xQuant:
+        legend_locs = ["lower left", "lower right"]
+    if cfr:
+        legend_locs = ["lower right", "upper left"]
+
     subhalos_evo.scatter2d(
         sims,
         xQuant=xQuant,
@@ -874,8 +722,8 @@ def cfe_galaxies(sims: list[simParams], dt=10, xQuant="mstar2_log", cfr=False) -
         tracks=0.1,  # 'all'
         sizefac=0.8,
         legend="simple",
-        legend_locs=["lower left", "upper right"] if not cfr else ["lower right", "upper left"],
-        legend_ncols=[1, 1],
+        legend_locs=legend_locs,
+        legend_ncols=legend_ncols,
         f_pre=_f_pre,
         f_post=_f_post,
         f_selection=_zoomSubhaloIDsToPlot,
@@ -1066,79 +914,6 @@ def sigma_star_vs_size_clusters(sims: list[simParams]) -> None:
     )
 
 
-def gas_phase_fractions(sims, frac_type="Mass"):
-    """Create a bar chart showing the fractions of gas in different phases (multi-phase ISM)."""
-    # config
-    subhaloID = 0
-
-    ylim = [1e-4, 5.0]
-
-    acFieldBase = f"Subhalo_{frac_type}_r015rvir_Gas_"  # r < 0.15rvir is the spatial definition for the 'galaxy'/'ISM'
-
-    phases = ["Total", "Hot", "Warm_Ionized", "Warm_Neutral", "Cool", "Cold"]  # "Warm"
-    colors = [tableau10_colors[n] for n in ["gray", "red", "orange", "orange_dark", "lightblue", "blue"]]
-
-    # start plot
-    fig, ax = plt.subplots(figsize=(figsize[0] * 1.2, figsize[1] * 0.5))
-    ax.set_ylabel(f"ISM {frac_type} Fraction")
-    ax.set_yscale("log")
-    ax.set_ylim(ylim)
-
-    ax.set_xlim([-0.5, len(sims) + 0.5])
-    ax.set_xticks(range(len(sims) + 1))
-    ax.set_xticklabels(["stack"] + [f"h{sim.hInd}" for sim in sims])
-
-    # build dataset
-    assert phases[0] == "Total"
-    data = {}
-
-    for phase in phases:
-        data[phase] = np.zeros(len(sims) + 1, dtype="float32")  # +1 for stack
-
-    # loop over simulations, load fractions (auxCat)
-    for i, sim in enumerate(sims):
-        for phase in phases:
-            phase_fracs = sim.auxCat(f"{acFieldBase}{phase}")[f"{acFieldBase}{phase}"]
-            frac = np.clip(phase_fracs[subhaloID], 1e-10, np.inf)  # avoid zero if absolutely no gas at all
-
-            # normalize by total to get fractions
-            if phase != "Total":
-                frac /= data["Total"][i + 1]
-
-            data[phase][i + 1] = frac
-
-    # calculate stack
-    for phase in phases:
-        data[phase][0] = np.mean(data[phase][1:])
-
-        # clip to make all visible
-        data[phase] = np.clip(data[phase], ylim[0] * 1.2, np.inf)
-
-    # plot barchart
-    width = 1 / len(phases)  # * 1.0
-
-    x = np.arange(len(sims) + 1) - width * (len(phases) / 2)  # center label locations
-
-    for i, (phase_name, phase_fracs) in enumerate(data.items()):
-        if i == 0:
-            continue  # skip Total
-
-        label = phase_name.replace("_", " ")
-        ax.bar(x + (width * i), phase_fracs, width, color=colors[i], label=label)
-
-    # finish plot
-    ax.plot([0.5, 0.5], ax.get_ylim(), ":", color="black", alpha=0.3)
-    ax.legend(loc="upper right", ncols=len(phases))
-
-    if len(sims) == 1:
-        saveFilename = f"gas_phase_fracs_{frac_type}_{sim.simName}_{sim.snap}.pdf"
-    else:
-        saveFilename = f"gas_phase_fracs_{frac_type}_n{len(sims)}.pdf"
-
-    fig.savefig(saveFilename)
-    plt.close(fig)
-
-
 def gasfrac_vs_age_clusters(sims: list[simParams]) -> None:
     """The gas fraction (M_gas / (M_gas+M_stars)) of star clusters, as a function of cluster age."""
     yQuant = "fgas2_fof"  # auxcat-based recomputation within 2rhalf, but full fof-scope
@@ -1303,7 +1078,7 @@ def age_vs_tcross_clusters(sims: list[simParams]) -> None:
 
     def _f_pre(ax, sims):
         # set custom ticks and tick labels
-        ax.set_xlabel(age_label)
+        ax.set_xlabel(age_label.replace("Myr", "log Myr"))  # leave tick labels as logged values
         # ageticks_log = np.log10(ageticks_lin)
         # ax.set_xticks(ageticks_log)
         # ax.set_xticklabels(ageticks_lin)
@@ -1319,6 +1094,16 @@ def age_vs_tcross_clusters(sims: list[simParams]) -> None:
         ax.text(xlim[0] + t_pos - t_pad, xlim[0] + t_pos + t_pad, "Unbound", **opts)
         ax.text(xlim[0] + t_pos + t_pad, xlim[0] + t_pos - t_pad, "Bound", **opts)
 
+        # print unbound fraction statistics, binned in age (x)
+        x = 10.0 ** kwargs["x"]
+        y = kwargs["y"]
+        bins = [[0, 0.1], [0, 0.5], [0, 1], [1, 5], [1, 10], [10, 100], [100, 1000]]
+
+        for loc_bin in bins:
+            w = np.where((x >= loc_bin[0]) & (x < loc_bin[1]))[0]
+            unbound_frac = np.sum(y[w] > x[w]) / len(w)
+            print(f"[{loc_bin[0]:.1f} - {loc_bin[1]:.1f}] Unbound fraction: {unbound_frac}")
+
     subhalos_evo.scatter2d(
         sims,
         xQuant=xQuant,
@@ -1331,8 +1116,8 @@ def age_vs_tcross_clusters(sims: list[simParams]) -> None:
         sizefac=0.8,
         markerstyle={"ms": 6.0, "fillstyle": "full", "alpha": 0.8, "zorder": -11},  # rasterize for zorder<-10
         legend="simple",
-        # legend_locs=["upper left", "upper right"],
-        # legend_ncols=[1, 1],
+        legend_locs=["upper left", "upper left"],
+        legend_ncols=[2, 2],
         f_pre=_f_pre,
         f_post=_f_post,
         f_selection=_starClusterSubhaloIDs,
@@ -1855,34 +1640,50 @@ def paperPlots(a=False):
     sims = []
     # sims.append(simParams("structures", hInd=1958, res=14, variant="ST15", redshift=5.5))
     # sims.append(simParams("structures", hInd=5072, res=14, variant="ST15", redshift=5.5))
-    # sims.append(simParams("structures", hInd=15581, res=14, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=15581, res=16, variant="ST15", redshift=10.3))
     # sims.append(simParams("structures", hInd=23908, res=14, variant="ST15", redshift=5.5))
-    # sims.append(simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5))
-    # sims.append(simParams("structures", hInd=73172, res=15, variant="ST15", redshift=5.5))
+    sims.append(simParams("structures", hInd=31619, res=16, variant="ST15", redshift=10.3))
+    sims.append(simParams("structures", hInd=73172, res=16, variant="ST15", redshift=9.0))
     sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=446076, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=539722, res=16, variant="ST15", redshift=5.5))
     sims.append(simParams("structures", hInd=844537, res=16, variant="ST15", redshift=5.5))
 
+    # info only: check existence of high-mass clusters
+    if 0:
+        variants = ["ST15"]
+        res = [14, 15, 16]
+        hInds = [1958, 5072, 15581, 23908, 31619, 73172, 219612, 311384, 446076, 539722, 844537]
+        redshift = 5.5
+        sims = _get_existing_sims(variants, res, hInds, redshift, all=False, single=True)
+
+        for sim in sims:
+            _starClusterSubhaloIDs(sim, dmfree=True)
+        return
+
     # --- cluster demographics & properties ---
 
     # fig 1: single large galaxy image
     if 0:
         # sim = simParams("structures", hInd=23908, res=14, variant="ST14", redshift=5.5, haloInd=0)  # original
-        sim = simParams("structures", hInd=219612, res=16, variant="ST15", redshift=6.1, haloInd=0)
+        sim = simParams("structures", hInd=15581, res=15, variant="ST15", redshift=6.1, haloInd=0)
+        # sim = simParams("structures", hInd=219612, res=16, variant="ST15", redshift=5.5, haloInd=0)  # 6.1
         vis_single_galaxy(sim)
 
     # fig 2: clusters: mass function
     if 0 or a:
         star_cluster_histogram(sims, quant="mass")
-        star_cluster_histogram(sims, quant="size", sizefac=0.8)
 
-    # fig 3: clusters: size-mass relation, size distribution
+    # fig 3a: clusters: size-mass relation
     if 0 or a:
         # TODO: add Hunter+03 (cluster masses 1e1-1e3) and Gatto+21 (1e2-1e4) (both Magellanic clouds)
         # https://ui.adsabs.harvard.edu/abs/2009ApJ...691..946M/abstract
-        size_vs_mass(sims)
+        size_vs_mass(sims, sizefac=0.8)
+
+    # fig 3b: clusters: size distribution
+    if 0 or a:
+        star_cluster_histogram(sims, quant="size", sizefac=0.8)
 
     # fig 4: gallery of clusters (~10pc stamps?)
     if 0 or a:
@@ -1936,6 +1737,7 @@ def paperPlots(a=False):
         z_extra = [6.5, 6.3, 6.0, 5.9, 5.8, 5.7, 5.6]
         for z in z_extra:
             sims.append(simParams("structures", hInd=539722, res=16, variant="ST15", redshift=z))
+            sims.append(simParams("structures", hInd=446076, res=16, variant="ST15", redshift=z))
             sims.append(simParams("structures", hInd=311384, res=16, variant="ST15", redshift=z))
             sims.append(simParams("structures", hInd=219612, res=16, variant="ST15", redshift=z))
 
@@ -1953,22 +1755,49 @@ def paperPlots(a=False):
     if 0 or a:
         # i.e. histogram of cluster formation redshifts (with respect to important events/starbursts/mergers)
         star_cluster_histogram(sims, quant="age", nbins=100, sizefac=[1.4, 0.8])
-        ## age_vs_mass_clusters(sims)
 
         # crossing time (Brown+21 eqn 21, Fig 14, Fig 15) (Claeyssens+22 Fig 10) (also: fraction of bound clusters)
         age_vs_tcross_clusters(sims)
 
     # fig 8b: age spread (1sigma)
-    if 1 or a:
+    if 0 or a:
         age_spread_clusters(sims)
+
+    # fig todo: star cluster mass vs. galaxy stellar mass
+    # fig todo: star cluster mass vs. host halo mass
+    #  -- use it to show the (rare) cases of star clusters > 1e4 Msun, label as proto-GCs?
+    # fig todo: fraction of total galaxy stellar mass in bound clusters, as a function of stellar mass
+
+    # fig todo: metallicity, abundances
+
+    # fig todo: redshift evolution for the star cluster formation efficiency?
+    #   -- important to check and say if VESTRAL predicts it
+
+    # fig todo: are the star clusters virialized?
+
+    # fig todo: Can we assess the distribution of the gas surface density of galaxies,
+    # on a spatially-resolved manner, and show at what overdensities our star clusters form?
+    # This can then be used to understand the main issue above and to understand comparison to
+    # other projects/simulations and across resolutions.
 
     # --- formation ---
 
-    # fig 9: 2d spacetime radial profiles
+    # fig 9: time evolution vis sequence, from pre-birth to post-birth (gas dens, vrad, tff_local, Q, stars, ...)
+    if 0 or a:
+        vis_evo_clusters("dens")
+        vis_evo_clusters("temp")
+        vis_evo_clusters("metal_solar")
+        vis_evo_clusters("radvel")
+        vis_evo_clusters("rad_FUV")
+        vis_evo_clusters("xhi")
+        vis_evo_clusters("tff_local")
+
+    # fig 10: 2d spacetime radial profiles
     if 0 or a:
         # evo
-        # opts = {"haloID": 0, "max_z": 10.0, "rlog": True, "rlim": [-2.0, 1.0], "smooth_sizes": True}
-        opts = {"haloID": 0, "max_z": 10.0, "rlog": True, "rlim": [-3.0, 0.0], "smooth_sizes": True}
+        opts = {"haloID": 0, "max_z": 10.0, "rlog": True, "smooth_sizes": True}  # [-3.0, 0.0]
+
+        sims = [simParams("structures", hInd=311384, res=16, variant="ST15", redshift=5.5)]
 
         for sim in sims:
             snapshot.profilesStacked2d(
@@ -1979,6 +1808,7 @@ def paperPlots(a=False):
                 clog=True,
                 scope="global",
                 ctName="magma",
+                rlim=[-2.0, 1.0],
                 **opts,
             )
 
@@ -1990,6 +1820,7 @@ def paperPlots(a=False):
                 clog=False,
                 scope="global",
                 ctName="curl",
+                rlim=[-2.0, 1.0],
                 **opts,
             )
 
@@ -2001,13 +1832,9 @@ def paperPlots(a=False):
                 clog=True,
                 scope="global",
                 ctName="inferno",
+                rlim=[-3.0, 0.0],
                 **opts,
             )
-
-    # fig 10: gas mass fraction of ISM gas in different phases, at e.g. z=10 and z=6 (bar plots?)
-    if 0 or a:
-        gas_phase_fractions(sims, frac_type="Mass")
-        gas_phase_fractions(sims, frac_type="Vol")
 
     # fig 11: cluster formation efficiency (Gamma), vs galaxy M* and SFR
     if 0 or a:
@@ -2027,16 +1854,7 @@ def paperPlots(a=False):
         size_mass_evo_clusters()
         size_mass_evo_clusters(color="redshift")
 
-    # fig 13: time evolution vis sequence, from pre-birth to post-birth (gas dens, vrad, tff_local, Q, stars, ...)
-    if 0 or a:
-        vis_evo_clusters("dens")
-        vis_evo_clusters("temp")
-        vis_evo_clusters("metal_solar")
-        vis_evo_clusters("radvel")
-        vis_evo_clusters("rad_FUV")
-        vis_evo_clusters("xhi")
-        vis_evo_clusters("tff_local")
-
+    # fig todo: radius and radial velocity at formation time (use birth values of member stars?) (or just tree?)
     # fig test: radial velocity distribution of star members
     if 0 or a:
         # subhalo config
@@ -2103,60 +1921,12 @@ def paperPlots(a=False):
             saveFilename="test.pdf",
         )
 
-    # fig todo: radius and radial velocity at formation time (use birth values of member stars?) (or just tree?)
-
     # fig todo: quantitative assessment of reason for formation (e.g. self-grav instability, compression, ...)
 
     # fig todo: any cluster population stat, e.g. mass func slope, size-mass slope, vs. halo mass (color by redshift)
     #  "universality" or not?
     # see https://arxiv.org/abs/2605.27509 (Fig 5, Eqn 11)
 
-    # any mergers i.e. hierarchical assembly?
+    # future: mergers i.e. hierarchical assembl
 
-    # any disruption?
-    # tidal tails: https://arxiv.org/abs/2606.06248
-
-    # ---
-
-    # pressure vs. rho phase space diagrams
-    if 0 or a:
-        xlim = [0.0, 5.0]
-        sim = simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5)
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant=None, ext="pdf")
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="vrad", ext="pdf")
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="csnd", ext="pdf")
-        phase_diagram(sim, yQuant="pres", xlim=xlim, cQuant="tff_local", ext="pdf")
-
-    # radial profiles - halo comparisons
-    if 0 or a:
-        haloIDs = [0] * len(sims)  # assume first
-        opts = {"haloIDs": haloIDs, "xlog": True, "xlim": [-2.0, 1.5], "ylog": True}
-
-        snapshot.profile(sims, ptType="gas", ptProperty="numdens", ylim=[-4.5, 4.0], scope="global", **opts)
-
-        snapshot.profile(sims, ptType="stars", ptProperty="dens", ylim=[2.5, 11.0], scope="global", **opts)
-
-        snapshot.profile(sims, ptType="gas", ptProperty="cellsize_kpc", ylim=[-3.5, -0.5], scope="global", **opts)
-
-    # diagnostic: mass fraction of PartType4 in stellar remnants
-    if 0 or a:
-        # note: only L15/L16 since require solo stars for remnant_type calculation
-        subhalos_evo.scatter2d(
-            sims,
-            xQuant="mhalo_200_log",
-            yQuant="remnant_massfrac",
-            xlim=[7.0, 10.5],
-            ylim=[0, 0.5],
-            vs_sim=None,
-            tracks=False,
-            parents=False,
-            legend="simple",
-            legend_ncols=[1, 1],
-            legend_locs=["upper right", "upper right"],
-            f_selection=_zoomSubhaloIDsToPlot,
-            sizefac=0.8,
-        )
-
-    # diagnostic: SFR debug
-    if 0:
-        diagnostic_sfr_jeans_mass(sims, haloID=0)
+    # future: disruption (e.g., tidal stripping, tidal tails: https://arxiv.org/abs/2606.06248)

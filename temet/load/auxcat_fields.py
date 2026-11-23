@@ -349,7 +349,7 @@ def_fields = {
         ptProperty="mass",
         op="sum",
         rad="r015vir_galaxy",
-        ptRestrictions={"temp": ["between", [5e3, 5e4]], "xhi": ["ge", 1e-2]},
+        ptRestrictions={"temp": ["between", [5e3, 5e4]], "xhi": ["lt", 1e-2]},
     ),
     "Subhalo_Mass_r015rvir_Gas_Warm_Neutral": partial(
         subhaloRadialReduction,
@@ -357,7 +357,7 @@ def_fields = {
         ptProperty="mass",
         op="sum",
         rad="r015vir_galaxy",
-        ptRestrictions={"temp": ["between", [5e3, 5e4]], "xhi": ["lt", 1e-2]},
+        ptRestrictions={"temp": ["between", [5e3, 5e4]], "xhi": ["ge", 1e-2]},
     ),
     "Subhalo_Vol_r015rvir_Gas_Warm_Ionized": partial(
         subhaloRadialReduction,
@@ -365,7 +365,7 @@ def_fields = {
         ptProperty="vol",
         op="sum",
         rad="r015vir_galaxy",
-        ptRestrictions={"temp": ["between", [5e3, 5e4]], "xhi": ["ge", 1e-2]},
+        ptRestrictions={"temp": ["between", [5e3, 5e4]], "xhi": ["lt", 1e-2]},
     ),
     "Subhalo_Vol_r015rvir_Gas_Warm_Neutral": partial(
         subhaloRadialReduction,
@@ -373,7 +373,7 @@ def_fields = {
         ptProperty="vol",
         op="sum",
         rad="r015vir_galaxy",
-        ptRestrictions={"temp": ["between", [5e3, 5e4]], "xhi": ["lt", 1e-2]},
+        ptRestrictions={"temp": ["between", [5e3, 5e4]], "xhi": ["ge", 1e-2]},
     ),
     "Subhalo_Mass_r015rvir_Gas_Cool": partial(
         subhaloRadialReduction,

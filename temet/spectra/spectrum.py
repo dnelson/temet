@@ -68,7 +68,7 @@ def generate_rays_voronoi_fullbox(
         mkdir(sP.derivPath + "rays")
 
     iqStr = "_%s" % integrateQuant if integrateQuant is not None else ""
-    filename = "%s%s_n%dd%d_%03d.hdf5" % (raysType, iqStr, nRaysPerDim, projAxis, sP.snap)
+    filename = "%s_%s%s_n%dd%d_%03d.hdf5" % (raysType, sP.simName, iqStr, nRaysPerDim, projAxis, sP.snap)
 
     if pSplit is not None:
         filename = "%s%s_n%dd%d_%03d-split-%d-%d.hdf5" % (

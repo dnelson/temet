@@ -43,6 +43,7 @@ def haloImgSpecs(
     relCoords,
     rotation,
     inclination,
+    azimuth,
     mpb,
     cenShift,
     depthFac,
@@ -262,6 +263,8 @@ def haloImgSpecs(
             rotMatrices = rotationMatricesFromInertiaTensor(I)
             rotMatrix = rotMatrices[rotName]
 
+        assert rotMatrix is not None, "Unrecognized rotation request: %s" % rotation
+
     if inclination is not None:
         # derive additional rotation matrix for inclination angle request
         incRotMatrix = rotationMatrixFromAngleDirection(inclination, [1, 0, 0])
@@ -271,6 +274,16 @@ def haloImgSpecs(
             rotMatrix = np.dot(incRotMatrix, rotMatrix)
         else:
             rotMatrix = incRotMatrix
+
+    if azimuth is not None:
+        # derive additional rotation matrix for azimuth angle request
+        aziRotMatrix = rotationMatrixFromAngleDirection(azimuth, [0, 0, 1])
+
+        # if rotMatrix already exists, multiply our azimuth rotation matrix in
+        if rotMatrix is not None:
+            rotMatrix = np.dot(aziRotMatrix, rotMatrix)
+        else:
+            rotMatrix = aziRotMatrix
 
     return boxSizeImg, boxCenter, extent, haloVirRad, galHalfMassRad, galHalfMassRadStars, rotMatrix, rotCenter
 
@@ -328,6 +341,7 @@ def renderSingleHalo(panels_in, plotConfig=None, localVars=None, skipExisting=Fa
     projParams  = {}            # dictionary of parameters associated to this projection type
     rotation    = None          # 'face-on', 'edge-on', 'edge-on-stars', or None
     inclination = None          # inclination angle (degrees, about the x-axis) (0=unchanged)
+    azimuth     = None          # azimuth angle (degrees, about the z-axis) (0=unchanged)
     rotMatrix   = None          # rotation matrix, i.e. manually specify if rotation is None
     rotCenter   = None          # rotation center, i.e. manually specify if rotation is None
     mpb         = None          # use None for non-movie/single frame
@@ -616,6 +630,7 @@ def renderSingleHaloFrames(
     projParams  = {}              # dictionary of parameters associated to this projection type
     rotation    = None            # 'face-on', 'edge-on', or None
     inclination = None            # inclination angle (degrees, about the x-axis) (0=unchanged)
+    azimuth     = None            # azimuth angle (degrees, about the z-axis) (0=unchanged)
     remapRatio  = None            # [x,y,z] periodic->cuboid remapping ratios, always None for single halos
     numFramesPerRot = None        # if not None, then add a camera rotation that takes this many frames per full 360
     # fmt: on

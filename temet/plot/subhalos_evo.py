@@ -74,7 +74,9 @@ def _add_legends(ax, hInds, res, variants, colors, lineplot=False):
     ax.add_artist(legend2)
 
 
-def _add_legends_simple(ax, hInds, res, variants, colors, lineplot=False, locs=None, ncols=None, fill=True):
+def _add_legends_simple(
+    ax, hInds, res, variants, colors, lineplot=False, locs=None, ncols=None, fill=True, haloInd=None
+):
     """Plot helper to add two legends: one showing simulations i.e. hInds (colored markers), one showing other/obs.
 
     This is a simplified version of _add_legends, for e.g. scatter2d where we do not want to differentiate by
@@ -120,6 +122,8 @@ def _add_legends_simple(ax, hInds, res, variants, colors, lineplot=False, locs=N
             handles.append(plt.Line2D([0], [0], color=c, lw=0, marker=marker, ms=12))
 
         labels.append("h%d" % hInd)
+        if haloInd is not None and haloInd > 0:
+            labels[-1] += chr(ord("a") + haloInd)  # 0->a, 1->b, and so on
 
     legend2 = ax.legend(handles, labels, loc=locs[1], ncols=ncols[1], **legParams)
     ax.add_artist(legend2)
@@ -369,7 +373,7 @@ def scatter2d(
 
             if tracks and sim.hasMergerTree:
                 # various criterion for how far back to go
-                max_z = 10.0
+                max_z = max(10.0, sim.redshift + 2.0)
                 dz = 0.2
                 min_mstar = 4.5
 
@@ -531,7 +535,7 @@ def _load_sfh(sim, quant, subhaloInd, maxpts=1000, dt_sfh=1.0):
 
         # bin and convert to rate
         # nbins_sfh = int(np.round(sim.units.redshiftToAgeFlat(sim.redshift) * 1e3 / 10))
-        tbins = np.arange(0.0, sim.units.redshiftToAgeFlat(sim.redshift), dt_sfh / 1000)
+        tbins = np.arange(0.0, sim.units.redshiftToAgeFlat(sim.redshift), dt_sfh / 1000)  # Gyr
         dt_Myr = (tbins[1] - tbins[0]) * 1e3  # Myr
         tbins_cen = 0.5 * (tbins[1:] + tbins[:-1])
         zbins_cen = sim.units.ageFlatToRedshift(tbins_cen)
@@ -770,20 +774,36 @@ def tracks1d(
                     print(f"[{sim}] no stars in {subhaloID = }, skipping [{quant}].")
                     continue
 
-                sfh = _load_sfh(sim, quant, subhaloID)
+                sfh = _load_sfh(sim, quant, subhaloID)  # 1 Myr by default
+                sfh_10 = _load_sfh(sim, quant, subhaloID, dt_sfh=10.0)  # 10 Myr bins
+                sfh_10["z"] += 0.05  # correct bin offset
+
                 if "instant" in ylabel:
                     ax.set_ylabel(ylabel.replace("instant", r"\Delta t = %d Myr" % sfh["dt_Myr"]))
+
+                    if len(hInds) == 1:
+                        ax.set_ylabel(ylabel.replace("instant", ""))
+
                 if sfh_lin:
                     sfh["mass_or_sfr"] = 10.0 ** sfh["mass_or_sfr"]
+                    sfh_10["mass_or_sfr"] = 10.0 ** sfh_10["mass_or_sfr"]
 
                 w = np.where(sfh["z"] < xMinMax[0])
-                ax.plot(sfh["z"][w], sfh["mass_or_sfr"][w], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=alpha)
+                w_10 = np.where(sfh_10["z"] < xMinMax[0])
+                c = l.get_color()
+
+                if len(hInds) == 1 and hInds[0] < 800000:
+                    # overplot 1 Myr and 10 Myr
+                    ax.plot(sfh["z"][w], sfh["mass_or_sfr"][w], ls=linestyle, lw=lw_loc, color=c, alpha=0.7)
+                    ax.plot(sfh_10["z"][w_10], sfh_10["mass_or_sfr"][w_10], ls=linestyle, lw=lw_loc, color=c, alpha=1.0)
+                else:
+                    ax.plot(sfh["z"][w], sfh["mass_or_sfr"][w], ls=linestyle, lw=lw_loc, color=c, alpha=alpha)
 
                 # extend to symbol
                 if len(w[0]) > 0:
                     x = sfh["z"][w][-1]
                     y = sfh["mass_or_sfr"][w][-1]
-                    ax.plot([x, sim.redshift], [y, y], ls=linestyle, lw=lw_loc, color=l.get_color(), alpha=0.2)
+                    ax.plot([x, sim.redshift], [y, y], ls=linestyle, lw=lw_loc, color=c, alpha=0.2)
             else:
                 # general case
                 mpb = sim.quantMPB(subhaloID, quants=[quant], smooth=smooth, treeName=treeName)
@@ -846,8 +866,18 @@ def tracks1d(
         _add_legends(ax, hInds, res, variants, colors, lineplot=True)
     elif legend == "simple":
         leg_colors = colors if not color else [color]
+        haloInd = sims[0].haloInd if len(sims) == 1 else None
         _add_legends_simple(
-            ax, hInds, res, variants, leg_colors, lineplot=True, locs=legend_locs, ncols=legend_ncols, fill=legend_fill
+            ax,
+            hInds,
+            res,
+            variants,
+            leg_colors,
+            lineplot=True,
+            locs=legend_locs,
+            ncols=legend_ncols,
+            fill=legend_fill,
+            haloInd=haloInd,
         )
 
     hStr = "" if len(set(hInds)) > 1 else "_h%d" % hInds[0]
