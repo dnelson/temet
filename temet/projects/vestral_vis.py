@@ -258,6 +258,9 @@ def vis_single_galaxy(sP, conf=0, size=None, noSats=False):
 
 def vis_gallery_galaxy(sims, conf=0):
     """Visualization: gallery of images of galaxies (one per run)."""
+    # conf in [0,1] - Nelson+ cluster paper
+    # conf in [2,3,4,5,6] - Anirudh+ disk paper
+    # conf >= 7 - Pillepich+ NSC paper
     rVirFracs = [1.0]
     fracsType = "rhalf_stars_fof"  #'rHalfMassStars'
     nPixels = [960, 960]
@@ -313,7 +316,7 @@ def vis_gallery_galaxy(sims, conf=0):
         azimuth = 13
         autoLimits = [10, 99]
 
-    if conf >= 2:
+    if conf in [2, 3, 4, 5, 6]:
         plotBHs = False
         size_loc = 0.3  # 300 pc
         labelZ = False
@@ -327,6 +330,65 @@ def vis_gallery_galaxy(sims, conf=0):
         autoLimits = [10, 99.9]
         size_loc = 0.01  # zoom inset panel
         azimuth = -3
+
+    if conf in [7, 8, 9, 10]:
+        plotBHs = False
+        rotation = None
+        labelSim = False
+        axes = [1, 0]
+        rVirFracs = None
+
+        # if conf >= 8:
+        #    # rotate all zoom-in panels face-on?
+        #   axes = [0, 1]
+        #    rotation = "face-on"
+
+    if conf == 7:
+        method = "sphMap_global"
+        ctName = "Spectral_r"  # jet
+        plawScale = 0.7
+        nPixels = [1920, 720]  # [1920, 1080]
+        size_loc = 30.0  # 65.0
+        partType = "gas"
+        partField = "coldens_msunkpc2"  # 'HI'
+        valMinMax = [4.7, 8.0]
+
+        labelHalo = False
+        labelCustom = f"VESTRAL\nh{sims[0].hInd}_L{sims[0].res}"
+
+        # center half-way between first two halos (31619a and 31619b)
+        assert sims[0].hInd == 31619 and len(sims) == 1
+        halo_a = sims[0].halo(sims[0].haloInd)
+        halo_b = sims[0].halo(sims[0].haloInd + 1)
+        boxCenter = 0.5 * (halo_a["GroupPos"] + halo_b["GroupPos"])
+        boxCenter = boxCenter[[axes[0], axes[1], 3 - axes[0] - axes[1]]]  # permute to axes order
+
+    if conf == 8:
+        method = "sphMap_global"
+        # ctName = "Spectral_r"  # jet
+        size_loc = 4.0 if sims[0].haloInd == 0 else 2.0
+        partType = "gas"
+        partField = "coldens_msunkpc2"
+        valMinMax = [5.0, 8.5]
+        labelZ = False
+        labelCustom = "VESTRAL " + sims[0].simName.replace(f"_{sims[0].variant}", "")
+        labelCustom += "a" if sims[0].haloInd == 0 else ""
+
+    if conf == 9:
+        partType = "stars"
+        partField = "stellarComp"
+        autoLimits = [10, 99.9]
+        labelZ = False
+        labelHalo = False
+        size_loc = 2.0 if sims[0].haloInd == 0 else 1.0
+
+    if conf == 10:
+        partType = "stars"
+        partField = "stellarComp"
+        labelZ = False
+        labelHalo = False
+        autoLimits = [0, 99]
+        size_loc = 0.02 if sims[0].haloInd == 0 else 0.01  # zoom inset panel
 
     panels = []
 
@@ -345,10 +407,11 @@ def vis_gallery_galaxy(sims, conf=0):
 
     class plotConfig:
         plotStyle = "edged"
-        rasterPx = 1000
-        colorbars = True if conf <= 1 else False
+        rasterPx = 1000 if conf != 7 else 2000
+        colorbars = True if conf in [0, 1, 7] else False
+        colorbarOverlay = True if conf in [7] else False
         fontsize = 32
-        saveFilename = "gallery_galaxy_conf%d_%d.pdf" % (conf, len(sims))
+        saveFilename = "gallery_galaxy_conf%d_%d.pdf" % (conf, sims[0].haloInd)
 
     if len(sims) == 12:
         plotConfig.nCols = 3  # 3x4 tall layout for paper

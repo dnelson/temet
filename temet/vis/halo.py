@@ -310,7 +310,7 @@ def renderSingleHalo(panels_in, plotConfig=None, localVars=None, skipExisting=Fa
     method      = 'sphMap'      # sphMap[_subhalo,_global], sphMap_{min/max}IP, histo, voronoi_slice/proj[_subhalo]
     nPixels     = [1920,1920]   # [1400,1400] number of pixels for each dimension of images when projecting
     cenShift    = [0,0,0]       # [x,y,z] coordinates to shift default box center location by
-    boxCenter   = None          # [x,y,z] absolute coordinates of box center (overrides cenShift)
+    boxCenter   = None          # [x,y,z] absolute coordinates of box center, overrides cenShift (must be in axes order)
     size        = 3.0           # side-length specification of imaging box around halo/galaxy center
     depthFac    = 1.0           # projection depth, relative to size (1.0=same depth as width and height)
     sizeType    = 'rVirial'     # size units [rVirial,r500,rHalfMass,rHalfMassStars,codeUnits,kpc,arcsec,arcmin,deg]

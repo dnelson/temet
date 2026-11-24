@@ -2444,10 +2444,19 @@ def paperPlots(a=False):
         subhalos_evo.tracks1d(sims, "re_rvir_ratio", ylim=[-3.5, -0.5], parents=False, **opts)
 
     # Anirudh+ paper (Fig 1)
-    if 1:
+    if 0:
         sim = simParams("structures", hInd=23908, res=15, variant="ST15", redshift=6.24, haloInd=0)
         for conf in [2, 3, 4, 5, 6]:
             vis_gallery_galaxy([sim], conf=conf)
+
+    # Pillepich+ paper (Fig 1)
+    if 0:
+        sim_a = simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5, haloInd=0)
+        sim_b = simParams("structures", hInd=31619, res=15, variant="ST15", redshift=5.5, haloInd=1)
+        vis_gallery_galaxy([sim_a], conf=7)  # overview
+        for conf in [8, 9, 10]:
+            vis_gallery_galaxy([sim_a], conf=conf)
+            vis_gallery_galaxy([sim_b], conf=conf)
 
 
 def makeMovies():
