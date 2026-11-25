@@ -764,7 +764,7 @@ class cloudyEmission:
           line (str): name of line (species, ion number, and wavelength triplet) (or abbreviation).
           indRange (2-tuple): if not None, the usual particle/cell-level index range to load.
           dustDepletion (bool): apply a dust-depletion model for a given species.
-          solarAbunds (bool): assume solar abundances (metal ratios), thereby ignoring GFM_Metals field.
+          solarAbunds (bool): use the scaled-solar abundance pattern in the Cloudy table.
           solarMetallicity (bool): assume solar metallicity, thereby ignoring GFM_Metallicity field.
           sfGasTemp (str): must be 'cold' (i.e. 1000 K), 'hot' (i.e. 5.73e7 K), 'effective' (snapshot value),
             or 'both', in which case abundances from both cold and hot phases are combined, each given fractional
@@ -829,15 +829,14 @@ class cloudyEmission:
             # normal: each gas cell is assumed to be single-phase (constant dens, temp)
             emissivity = 10.0 ** self.emis(line, dens, metal_logSolar, temp, sP.redshift)
 
-        # total luminosity of gas cell is (where e_l is the volume emissivity from CLOUDY for line L)
-        #   L_l = e_l(z,Z,T,n) * (mass/rho) * (X_j/X_j_solar) = e_l * cell_volume * (X_j/X_j_solar)
-        #   where X_j is the mass fraction of element j, and e_l has assumed solar abundances
+        # Cloudy emissivities already include the scaled-solar metal abundances at the lookup metallicity.
         element = line[0:2].strip()
         if line == "Blnd 2798.00A":
             element = "Mg"
         if element == "Bl":
             raise Exception("Handle blend.")
 
+        measured_abundance = False
         if solarAbunds:
             # use X_j_solar for the mass fraction of this element
             el_mass_fraction = ion._solarMetalAbundanceMassRatio(element)
@@ -854,6 +853,7 @@ class cloudyEmission:
                     fieldName = "metals_" + sym
                     el_mass_fraction = sP.snapshotSubset("gas", fieldName, indRange=indRange)
                     el_mass_fraction[el_mass_fraction < 0.0] = 0.0  # clip -eps values at zero
+                    measured_abundance = True
 
             elif sP.snapHasField("gas", "ElementFraction"):
                 # VESTRAL-related models
@@ -866,6 +866,7 @@ class cloudyEmission:
                     fieldName = "metals_" + sym
                     el_mass_fraction = sP.snapshotSubset("gas", fieldName, indRange=indRange)
                 el_mass_fraction[el_mass_fraction < 0.0] = 0.0  # clip -eps values at zero
+                measured_abundance = True
 
             else:
                 print("WARNING: (em) individual abundances not available (mini-snap). Assuming solar abundances.")
@@ -897,8 +898,12 @@ class cloudyEmission:
         volume = sP.snapshotSubset("gas", "vol", indRange=indRange)
         volume = sP.units.codeVolumeToCm3(volume)
 
-        el_mass_fraction_rel_solar = el_mass_fraction / ion._solarMetalAbundanceMassRatio(element)
+        abundance_factor = el_mass_fraction / ion._solarMetalAbundanceMassRatio(element)
+        if measured_abundance and element not in ("H", "He"):
+            # Divide by the metal scaling used by the table, including clamping at the grid edges.
+            lookup_log_metal = np.clip(metal_logSolar, *self.range["metal"])
+            abundance_factor /= 10.0**lookup_log_metal
 
-        line_lum = emissivity * volume * el_mass_fraction_rel_solar
+        line_lum = emissivity * volume * abundance_factor
 
         return line_lum
