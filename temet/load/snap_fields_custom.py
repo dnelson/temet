@@ -1769,8 +1769,8 @@ def _cloudy_load(sim, partType, field, args):
     sbStr = "sb%d_" % sim.subbox if sim.subbox is not None else ""
     cache_field = field.replace(" ", "-")
     if prop in ("lum", "lum2phase", "flux"):
-        # Distinguish caches calculated with the corrected Cloudy abundance scaling.
-        cache_field += "_abundance_v2"
+        # distinguish caches calculated with the corrected Cloudy abundance scaling.
+        cache_field += "_v2"
     cacheFile = sim.cachePath + "cached_%s_%s_%s%d.hdf5" % (partType, cache_field, sbStr, sim.snap)
     indRangeAll = [0, sim.numPart[sim.ptNum(partType)]]
 
@@ -2401,7 +2401,7 @@ def stellar_remnant(sim, partType, field, args):
 
     Z_vals = np.array(Z_vals)
 
-    # need InitialMetallicity... (double-check if the "Metallicity" field evolves with time)
+    # this is "InitialMetallicity" (does not evolve with time for PT4)
     Metallicity = sim.snapshotSubset(partType, "Metallicity", **args)
 
     # allocate

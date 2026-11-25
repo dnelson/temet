@@ -160,7 +160,7 @@ class cloudyIon:
               "XXIX": 29, "XXX": 30, "XXXI": 31}  # fmt: skip
     _romanInv = {v: k for k, v in _roman.items()}
 
-    def __init__(self, sP, el=None, res="lg_c17", redshiftInterp=False, order=3): # lg_c24
+    def __init__(self, sP, el=None, res="lg_c24", redshiftInterp=False, order=3):  # lg_c17
         """Load the table, optionally only for a given element(s)."""
         if sP is None:
             return  # instantiate only for misc methods
@@ -519,16 +519,13 @@ class cloudyIon:
             w_sfr = np.where(coldfrac > 0)[0]
 
             if len(w_sfr) > 0:
+                dens_cold = dens[w_sfr] + np.log10(coldfrac[w_sfr])  # log
+                dens_hot = dens[w_sfr] + np.log10(1 - coldfrac[w_sfr])
                 ion_fraction[w_sfr] = 10.0 ** self.frac(
-                    element, ionNum, dens[w_sfr] * coldfrac[w_sfr], metal_logSolar[w_sfr], temp[w_sfr], sP.redshift
+                    element, ionNum, dens_cold, metal_logSolar[w_sfr], temp[w_sfr], sP.redshift
                 )
                 ion_fraction[w_sfr] += 10.0 ** self.frac(
-                    element,
-                    ionNum,
-                    dens[w_sfr] * (1 - coldfrac[w_sfr]),
-                    metal_logSolar[w_sfr],
-                    temp_hot[w_sfr],
-                    sP.redshift,
+                    element, ionNum, dens_hot, metal_logSolar[w_sfr], temp_hot[w_sfr], sP.redshift
                 )
 
             # compute normal single contribution for non-starforming gas
@@ -811,11 +808,11 @@ class cloudyEmission:
             w_sfr = np.where(coldfrac > 0)[0]
 
             if len(w_sfr) > 0:
-                emissivity[w_sfr] = 10.0 ** self.emis(
-                    line, dens[w_sfr] * coldfrac[w_sfr], metal_logSolar[w_sfr], temp[w_sfr], sP.redshift
-                )
+                dens_cold = dens[w_sfr] + np.log10(coldfrac[w_sfr])  # log
+                dens_hot = dens[w_sfr] + np.log10(1 - coldfrac[w_sfr])
+                emissivity[w_sfr] = 10.0 ** self.emis(line, dens_cold, metal_logSolar[w_sfr], temp[w_sfr], sP.redshift)
                 emissivity[w_sfr] += 10.0 ** self.emis(
-                    line, dens[w_sfr] * (1 - coldfrac[w_sfr]), metal_logSolar[w_sfr], temp_hot[w_sfr], sP.redshift
+                    line, dens_hot, metal_logSolar[w_sfr], temp_hot[w_sfr], sP.redshift
                 )
 
             # compute normal single contribution for non-starforming gas
